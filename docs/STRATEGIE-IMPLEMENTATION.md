@@ -85,9 +85,18 @@ logiciel d'origine transmise par **extraits progressifs en conversation**
   organisation, immutabilité à la validation, libellés de statuts) ;
 - code .NET d'origine décompressé et gelé dans `legacy/dotnet-0.2.0-preview.1/`.
 
-**Prochaine tranche (1) :** adaptateur IndexedDB du `StoragePort` + coquille PWA
-(prévisualisation live du parcours Lot 1), puis numérotation automatique par journal,
-édition contrôlée des brouillons et audit exposé à l'écran.
+**Tranche 1 livrée le 13/10/2026 :** adaptateur `IndexedDbStorage` du `StoragePort`
+(base `perfecto-next`, amorçage automatique du jeu de démonstration, montants sérialisés
+en décimal exact, testé sous `fake-indexeddb`) et coquille PWA Preact complète :
+tableau de bord, accueil comptable, plan comptable (recherche + création), journaux,
+pièces (filtres, détail, validation d'un brouillon), saisie multiligne avec contrôle
+d'équilibre bloquant, balance, journal des écritures, grand livre à solde progressif et
+périodes ouvrables/clôturables. Le tout servi en prévisualisation live (`npm run dev`),
+hors ligne prêt via service worker. 38 tests verts, typecheck strict OK.
+
+**Prochaine tranche (2) :** numérotation automatique par journal et exercice, édition
+contrôlée des brouillons avec audit exposé à l'écran, puis tiers à fiche unique
+(P0 du cadrage) avec contrôle effectif de `requiresThirdParty` à la saisie.
 
 **Mise à jour du 13/10/2026 (documentation d'origine) :** le dossier Google Drive
 « Créer un Prototype de Logiciel de Comptabilité Windows » a été intégralement lu via le

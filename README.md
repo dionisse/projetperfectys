@@ -19,8 +19,9 @@ PWA, le futur hôte desktop et l'API.
 
 ```bash
 npm install
-npm test          # 35 tests vitest : domaine, noyau, états, outbox
+npm test          # 38 tests vitest : domaine, noyau, états, outbox, IndexedDB
 npm run typecheck # tsc --noEmit, strict
+npm run dev       # PWA en prévisualisation (http://localhost:5173)
 ```
 
 ## Architecture du noyau TypeScript
@@ -32,6 +33,10 @@ npm run typecheck # tsc --noEmit, strict
 - `packages/application` — catalogue SYSCOHADA, états (journal, grand livre, balance),
   `AccountingKernel` (une seule implémentation des règles), port `StoragePort`
   (IndexedDB / SQLite / mémoire), outbox de synchronisation idempotente.
+- `packages/pwa` — coquille PWA Preact : dix écrans du Lot 1 (tableau de bord, accueil
+  comptable, plan, journaux, pièces + saisie, balance, journal, grand livre, périodes),
+  adaptateur `IndexedDbStorage` du `StoragePort` (testé sous fake-indexeddb), service
+  worker hors ligne, manifeste installable.
 
 Chaque règle portée cite son fichier C# d'origine en commentaire d'en-tête.
 

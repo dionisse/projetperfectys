@@ -10,6 +10,8 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
+    "dev": "npm run dev -w @perfecto/pwa",
+    "build:pwa": "npm run build -w @perfecto/pwa",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

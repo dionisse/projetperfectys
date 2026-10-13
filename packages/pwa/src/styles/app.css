@@ -1,0 +1,28 @@
+/* Compléments propres à la PWA TypeScript (le reste vient de perfecto.css). */
+
+.boot-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  background: var(--canvas);
+}
+.boot-screen img { width: 64px; height: 64px; }
+.boot-screen strong { letter-spacing: .08em; }
+.boot-screen span { color: var(--muted); font-size: .85rem; }
+
+.link-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: #8397b0;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.link-button:hover { color: #fff; }
+
+.selectable-table tbody tr { cursor: pointer; }
+.account-number { font-variant-numeric: tabular-nums; }
+.empty-state { padding: 60px 0; }

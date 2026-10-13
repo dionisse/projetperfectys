@@ -1,0 +1,20 @@
+{
+  "name": "@perfecto/pwa",
+  "version": "0.3.0-dev",
+  "private": true,
+  "type": "module",
+  "description": "PWA PERFECTO : coquille web du noyau partagé, stockage IndexedDB hors ligne",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "preact": "^10.25.4"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.9.3",
+    "fake-indexeddb": "^6.0.0",
+    "vite": "^6.0.7"
+  }
+}
