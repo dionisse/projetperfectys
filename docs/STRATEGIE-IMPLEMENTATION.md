@@ -88,3 +88,19 @@ logiciel d'origine transmise par **extraits progressifs en conversation**
 **Prochaine tranche (1) :** adaptateur IndexedDB du `StoragePort` + coquille PWA
 (prévisualisation live du parcours Lot 1), puis numérotation automatique par journal,
 édition contrôlée des brouillons et audit exposé à l'écran.
+
+**Mise à jour du 13/10/2026 (documentation d'origine) :** le dossier Google Drive
+« Créer un Prototype de Logiciel de Comptabilité Windows » a été intégralement lu via le
+connecteur Drive (100+ fichiers : binaires WinDev de l'original, archive `PERFECTO.WDZ`,
+14 notes d'exploration, captures, et les deux documents maîtres de cadrage). La synthèse
+fonctionnelle est dans `docs/specs/SPEC-ORIGINAL-PERFECTO.md` et le registre des sources
+dans `docs/specs/INDEX.md`. Conséquences directes sur le backlog :
+
+- les entités et parcours P0 du cadrage (tiers à fiche unique, pièces jointes avec
+  empreinte, verrou de période indépendant, numérotation par journal) deviennent les
+  tranches 2 et 3 ;
+- les règles produit R-ORG-1 à R-ORG-4 (pas de dépendance imprimante, base unique,
+  navigation moderne, pas de mécanismes obsolètes) sont des critères de sortie
+  transverses ;
+- le critère d'acceptation du prototype (parcours facture fournisseur → PDF) est adopté
+  comme définition de fini du Lot 1.
