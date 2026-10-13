@@ -59,3 +59,32 @@ Dans tous les cas, je tiens à jour un registre `docs/specs/INDEX.md` (source �
 
 - Si **B** : squelette du monorepo + portage du domaine + les 20 tests repris + prévisualisation live du parcours existant (équivalent fonctionnel du Lot 1) en première tranche, avant toute nouvelle fonction.
 - Si **A** : PR de correction du publish PWA + workflow CI (build Release, tests, publication PWA en artifact Pages) + branchement SQLite de l'hôte Windows, puis Tranche 1 du backlog.
+
+---
+
+## 6. Décisions actées et avancement (mise à jour du 13/10/2026)
+
+**Arbitrages reçus :** pile **TypeScript (option B)** ; priorité de la première tranche
+laissée au jugement de l'agent → **fondations + cœur du Lot 1** ; documentation du
+logiciel d'origine transmise par **extraits progressifs en conversation**
+(registre : `docs/specs/INDEX.md`).
+
+**Tranche 0 livrée ce jour (`packages/`) :**
+
+- monorepo npm workspaces + `vitest` + `tsc --noEmit` strict : **35 tests verts** ;
+- `@perfecto/domain` : montants exacts en `bigint` (arrondi au plus pair identique à
+  `MidpointRounding.ToEven`), dates civiles typées, organisation, exercice, pièce
+  comptable avec extourne préparée (`markReversed`), audit ;
+- `@perfecto/contracts` : statuts typés (`draft/posted/reversed` + libellés français),
+  `organizationId` sur tous les agrégats, montants DTO en décimal exact ;
+- `@perfecto/application` : catalogue SYSCOHADA en source unique, états (journal, grand
+  livre, balance), `AccountingKernel` où la validation repasse **toujours** par
+  l'agrégat domaine (correction du défaut n°3), port `StoragePort` + adaptateur mémoire,
+  outbox idempotente, jeu de démonstration unique (`createDemoState`) ;
+- les 20 tests C# d'origine sont repris et étendus (audit, cloisonnement par
+  organisation, immutabilité à la validation, libellés de statuts) ;
+- code .NET d'origine décompressé et gelé dans `legacy/dotnet-0.2.0-preview.1/`.
+
+**Prochaine tranche (1) :** adaptateur IndexedDB du `StoragePort` + coquille PWA
+(prévisualisation live du parcours Lot 1), puis numérotation automatique par journal,
+édition contrôlée des brouillons et audit exposé à l'écran.

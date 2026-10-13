@@ -1,0 +1,16 @@
+<Router AppAssembly="@typeof(Routes).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="routeData" DefaultLayout="@typeof(Layout.MainLayout)" />
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="@typeof(Layout.MainLayout)">
+            <section class="empty-state">
+                <span class="eyebrow">Navigation</span>
+                <h1>Page introuvable</h1>
+                <p>Cette fonction n’existe pas encore ou son adresse a changé.</p>
+                <a class="button button-primary" href="/">Retour au tableau de bord</a>
+            </section>
+        </LayoutView>
+    </NotFound>
+</Router>

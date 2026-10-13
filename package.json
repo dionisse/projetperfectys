@@ -1,0 +1,23 @@
+{
+  "name": "perfecto-next",
+  "private": true,
+  "version": "0.3.0-dev",
+  "description": "PERFECTO Nouvelle Génération — suite de gestion modulaire SYSCOHADA (noyau TypeScript partagé PWA / desktop / API)",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

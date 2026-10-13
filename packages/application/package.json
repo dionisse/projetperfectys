@@ -1,0 +1,8 @@
+{
+  "name": "@perfecto/application",
+  "version": "0.3.0-dev",
+  "private": true,
+  "type": "module",
+  "description": "Cas d'usage, catalogue SYSCOHADA, états comptables et noyau transactionnel (portage TypeScript de Perfecto.Application)",
+  "main": "./src/index.ts"
+}

@@ -1,0 +1,16 @@
+<article class="kpi-card @Tone">
+    <div class="kpi-icon">@Icon</div>
+    <div>
+        <span>@Label</span>
+        <strong>@Value</strong>
+        <small>@Hint</small>
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Value { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Hint { get; set; } = string.Empty;
+    [Parameter] public string Icon { get; set; } = "•";
+    [Parameter] public string Tone { get; set; } = "blue";
+}

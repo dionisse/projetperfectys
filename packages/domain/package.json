@@ -1,0 +1,8 @@
+{
+  "name": "@perfecto/domain",
+  "version": "0.3.0-dev",
+  "private": true,
+  "type": "module",
+  "description": "Entités et invariants métier PERFECTO, indépendants de toute technologie (portage TypeScript de Perfecto.Domain)",
+  "main": "./src/index.ts"
+}
