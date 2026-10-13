@@ -1,0 +1,61 @@
+# Stratégie d'implémentation — comment je reprends le projet
+
+**Date :** 13 octobre 2026 · Complément de `docs/ANALYSE-ETAT-DES-LIEUX.md`.
+Ce document décrit ma méthode de travail, les options de pile technique soumises à décision, et le backlog des prochaines tranches. Rien n'est engagé avant votre arbitrage (§2).
+
+---
+
+## 1. Méthode de travail (valable quelle que soit la pile)
+
+1. **Tranches verticales courtes.** Chaque incrément livre une fonction complète : règle métier + test automatisé + écran + mise à jour de la doc de lot. Jamais de « couche » isolée sans parcours utilisateur visible.
+2. **Le domaine reste la source de vérité.** Toute règle (équilibre, immutabilité, période clôturée, numéro unique) vit dans une seule implémentation, testée unitairement ; les adaptateurs de stockage (IndexedDB, SQLite, API) ne contiennent **que** de la persistance, jamais de la règle. Cela corrige les duplications constatées (§4.2 et §4.3 de l'analyse).
+3. **Définition de fini explicite par incrément** : tests verts, parcours vérifié dans la prévisualisation, messages métier en français, doc + notes de release mises à jour, aucune régression sur les parcours existants.
+4. **Traçabilité** : chaque incrément = un commit/PR sur la branche de session, avec référence au lot concerné ; les décisions d'architecture sont écrites dans `docs/` (jamais seulement en conversation).
+5. **Comptabilité d'abord, toujours SYSCOHADA révisé / XOF** : les montants restent des décimaux exacts (pas de flottants), affichage sans décimales pour XOF mais stockage à 2 décimales, politique unique définie une fois.
+6. **Rien de cassé en route** : les parcours validés du Lot 1 (saisie, validation, balance, journal, grand livre, périodes) sont couverts par des tests de non-régression avant d'ajouter quoi que ce soit.
+
+## 2. Décision à prendre : pile technique
+
+### Option A — Poursuivre en .NET 10 / Blazor (continuité totale)
+- **Garde** : WPF + BlazorWebView, setup NSIS, code existant, compétences déjà investies.
+- **Perd** : aucune compilation/test/exécution possible dans ce sandbox (voir analyse §5). Je code, une CI GitHub Actions compile et teste à chaque push, vous regardez les checks et une éventuelle publication GitHub Pages. Boucle lente (minutes par essai), débogage UI impossible pour moi, prévisualisation Arena indisponible.
+- **À faire immédiatement dans cette option** : corriger le défaut de publication PWA (analyse §4.1), ajouter la CI, brancher SQLite côté Windows.
+
+### Option B — Portage TypeScript full-stack (ma recommandation)
+- Monorepo `packages/` miroir de l'architecture actuelle : `domain`, `contracts`, `application`, `infrastructure`, `ui`, `pwa`, `api`. Règles métier portées 1:1 depuis `Perfecto.Domain`/`Application` avec leurs 20 tests repris et étendus (vitest). PWA Vite + service worker + IndexedDB (index et transactions cette fois). API Node + SQLite. Hôte Windows plus tard via Tauri ou Electron **en réutilisant exactement la même application web** (même promesse de noyau partagé, sans WPF).
+- **Gagne** : boucle complète ici (build, tests, prévisualisation live dans votre navigateur à chaque incrément), coût d'itération quasi nul, écosystème web pour exports PDF/Excel, tableaux denses, offline.
+- **Perd** : le code C# existant devient référence gelée (conservé dans `legacy/`), le setup Windows NSIS/WPF est remplacé par un installeur Tauri/Electron à recréer.
+- Le volume à porter est faible (~2 500 lignes d'application) et je peux produire un équivalent fonctionnel du Lot 1, testé et prévisualisable, en quelques tranches.
+
+### Option C — Hybride (TS pour le web maintenant, .NET gardé pour Windows plus tard)
+- Deux bases de code pour les règles métier = le risque de divergence que vos propres notes écartent. Je ne la recommande que si l'hôte WPF/NSIS est une exigence commerciale à court terme.
+
+**Ma recommandation : B**, avec `legacy/` conservé et une passerelle documentaire (chaque règle portée cite son fichier C# d'origine). Si le binaire Windows signé/NSIS est un engagement client ferme pour 2026, alors **A** et je m'organise autour de la CI.
+
+## 3. Backlog proposé (Lot 1 → au-delà), tranches verticales
+
+**Tranche 1 — Fondations robustes** : statuts en enum typés, `OrganizationId` partout, édition contrôlée des brouillons, numérotation automatique par journal et exercice, audit horodaté de chaque mutation, CI (build + tests) sur chaque push.
+**Tranche 2 — Tiers et auxiliaires** : entité Tiers (clients/fournisseurs), comptes auxiliaires rattachés, **contrôle effectif** de `RequiresThirdParty` à la saisie, saisie assistée (recherche tiers), soldes par tiers.
+**Tranche 3 — Corrections et contre-passations** : extourne automatique d'une pièce validée (usage de `Reversed`), lettrage manuel puis automatique des comptes de tiers, rapprochement bancaire avec pointage.
+**Tranche 4 — Sorties imprimables** : exports PDF et Excel (balance, journal, grand livre, piece), mise en page d'impression, états financiers SYSCOHADA (bilan, compte de résultat) à partir du plan de comptes.
+**Tranche 5 — Exercices et clôtures réelles** : multi-exercices, à-nouveaux, clôture annuelle avec génération des reports, journal d'ouverture.
+**Tranche 6 — Compte multi-utilisateur** : authentification, rôles (saisie / validation / administration), API + synchro hors-ligne basée sur l'outbox existant, politique de conflits écrite avant codage.
+**Transverses** : montée en charge (requêtes paginées/indexées au lieu de `getAll`), attachments, imports CSV bancaires, i18n des libellés techniques.
+
+Les lots 2→5 du produit (analytique, ventes-stocks, courriers, paie) ne démarrent qu'après stabilisation du Lot 1, conformément à vos notes.
+
+## 4. Vos 333 Mo de documentation : comment me les transmettre
+
+GitHub **peut** les héberger : la limite est **100 Mo par fichier**, pas par dépôt ; 333 Mo répartis en fichiers < 100 Mo passent sans problème (push éventuellement lent, c'est tout). Procédure recommandée :
+
+1. Créer une branche `docs/references` (ou un dossier `references/` sur la branche de session) et y pousser les fichiers originaux (PDF, DOCX, XLSX, images).
+2. Je les analyse localement : extraction de texte PDF/DOCX/XLSX outillée ici (PyPI accessible), puis je produis un `docs/SPEC-SYNTHESE.md` indexé par module (règles de gestion, champs, écrans, calculs, références réglementaires).
+3. Seule limite : les **scans sans couche texte** nécessitent de l'OCR que je ne peux pas installer ici — pour ceux-là, soit une version PDF textuelle, soit un envoi des extraits utiles en conversation.
+4. À défaut de push : m'envoyer progressivement en conversation les chapitres decisifs (manuel du logiciel d'origine, plan comptable complet, règles de paie par pays) ; je les structure au fil de l'eau dans `docs/specs/`.
+
+Dans tous les cas, je tiens à jour un registre `docs/specs/INDEX.md` (source → module → règles extraites → statut d'implémentation) pour que chaque règle du logiciel d'origine soit traçable jusqu'au code qui l'applique.
+
+## 5. Prochain geste technique après arbitrage
+
+- Si **B** : squelette du monorepo + portage du domaine + les 20 tests repris + prévisualisation live du parcours existant (équivalent fonctionnel du Lot 1) en première tranche, avant toute nouvelle fonction.
+- Si **A** : PR de correction du publish PWA + workflow CI (build Release, tests, publication PWA en artifact Pages) + branchement SQLite de l'hôte Windows, puis Tranche 1 du backlog.

@@ -1,0 +1,30 @@
+# Espace de travail local de l'agent (extraction des archives, brouillons)
+.arena/
+
+# .NET
+**/bin/
+**/obj/
+*.user
+*.suo
+.vs/
+
+# Node / outillage web
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Bases locales et logs
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# Secrets
+.env
+.env.*
+!*.example
+
+# OS / éditeurs
+.DS_Store
+Thumbs.db
