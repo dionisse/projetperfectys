@@ -17,7 +17,8 @@ function balancedRequest(reference: string): CreateAccountingEntryRequest {
     postImmediately: false,
     lines: [
       { accountCode: "601100", label: "Charge", debit: "100000", credit: 0 },
-      { accountCode: "401100", label: "Fournisseur", debit: 0, credit: "100000" }
+      // 401100 est un compte auxiliaire : le tiers est obligatoire (tranche 2).
+      { accountCode: "401100", label: "Fournisseur", debit: 0, credit: "100000", thirdPartyCode: "FOU001" }
     ]
   };
 }

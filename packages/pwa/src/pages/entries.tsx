@@ -1,8 +1,21 @@
 import { useState } from "preact/hooks";
 import type { AccountingEntryDto } from "@perfecto/contracts";
-import { amountFromDecimal, type Amount } from "@perfecto/domain";
+import { formatCivilDateFr } from "@perfecto/domain";
 import { DEMO_ORGANIZATION_ID, getKernel } from "../kernel";
-import { ErrorNote, Link, Loading, PageHero, StatusBadge, money, navigate, useAsync } from "../ui";
+import {
+  AuditTrailFor,
+  EntryNumber,
+  ErrorNote,
+  Link,
+  Loading,
+  PageHero,
+  StatusBadge,
+  TierChip,
+  money,
+  navigate,
+  useAsync
+} from "../ui";
+import { EntryForm, emptyLine, type EntryFormValues } from "./entry-form";
 
 const FILTERS = ["Toutes", "posted", "draft"] as const;
 const FILTER_LABELS: Record<(typeof FILTERS)[number], string> = {
@@ -24,7 +37,7 @@ export function Entries() {
     if (!selected) return;
     try {
       const posted = await getKernel().postEntry(selected.id);
-      setMessage(`La pièce ${posted.reference} a été validée.`);
+      setMessage(`La pièce ${posted.number} (${posted.reference}) a été validée.`);
       setSelectedId(posted.id);
       reload();
     } catch (cause) {
@@ -34,7 +47,11 @@ export function Entries() {
 
   return (
     <>
-      <PageHero eyebrow="Comptabilité générale" title="Pièces comptables" subtitle="Écritures de l'exercice 2026, brouillons et pièces validées.">
+      <PageHero
+        eyebrow="Comptabilité générale"
+        title="Pièces comptables"
+        subtitle="Écritures de l'exercice 2026, numérotées automatiquement par journal."
+      >
         <Link href="/comptabilite/pieces/nouvelle" class="button button-primary">Nouvelle pièce</Link>
       </PageHero>
       {message ? <div class="form-message success wide-message">{message}</div> : null}
@@ -47,7 +64,12 @@ export function Entries() {
             <div class="table-toolbar">
               <div class="filter-tabs">
                 {FILTERS.map((value) => (
-                  <button key={value} type="button" class={filter === value ? "active" : undefined} onClick={() => setFilter(value)}>
+                  <button
+                    key={value}
+                    type="button"
+                    class={filter === value ? "active" : undefined}
+                    onClick={() => setFilter(value)}
+                  >
                     {FILTER_LABELS[value]}
                   </button>
                 ))}
@@ -56,11 +78,27 @@ export function Entries() {
             </div>
             <div class="responsive-table">
               <table class="data-table selectable-table">
-                <thead><tr><th>Date</th><th>Journal</th><th>Référence</th><th>Libellé</th><th>Statut</th><th class="number">Débit</th><th class="number">Crédit</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>N°</th>
+                    <th>Date</th>
+                    <th>Journal</th>
+                    <th>Référence</th>
+                    <th>Libellé</th>
+                    <th>Statut</th>
+                    <th class="number">Débit</th>
+                    <th class="number">Crédit</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {entries.map((entry) => (
-                    <tr key={entry.id} class={selectedId === entry.id ? "selected" : undefined} onClick={() => setSelectedId(entry.id)}>
-                      <td>{entry.entryDate.split("-").reverse().join("/")}</td>
+                    <tr
+                      key={entry.id}
+                      class={selectedId === entry.id ? "selected" : undefined}
+                      onClick={() => setSelectedId(entry.id)}
+                    >
+                      <td><EntryNumber value={entry.number} /></td>
+                      <td>{formatCivilDateFr(entry.entryDate)}</td>
                       <td><span class="code-badge">{entry.journalCode}</span></td>
                       <td><strong>{entry.reference}</strong></td>
                       <td>{entry.description}</td>
@@ -74,7 +112,7 @@ export function Entries() {
             </div>
           </section>
 
-          {selected ? <EntryDetail entry={selected} onPost={postSelected} /> : null}
+          {selected ? <EntryDetail key={selected.id} entry={selected} onPost={postSelected} /> : null}
         </>
       )}
     </>
@@ -83,163 +121,194 @@ export function Entries() {
 
 function EntryDetail(props: { entry: AccountingEntryDto; onPost: () => void }) {
   const { entry } = props;
+  const isDraft = entry.status === "draft";
   return (
     <section class="panel entry-detail">
       <div class="panel-heading">
-        <div><span class="eyebrow">Détail de la pièce</span><h2>{entry.reference} · {entry.description}</h2></div>
+        <div>
+          <span class="eyebrow">Détail de la pièce</span>
+          <h2>
+            <EntryNumber value={entry.number} /> {entry.reference} · {entry.description}
+          </h2>
+          <p class="detail-meta">
+            Journal {entry.journalCode} · {formatCivilDateFr(entry.entryDate)}
+            {entry.updatedAt ? ` · révisée le ${formatCivilDateFr(entry.updatedAt.slice(0, 10))}` : ""}
+            {entry.postedAt ? ` · validée le ${formatCivilDateFr(entry.postedAt.slice(0, 10))}` : ""}
+          </p>
+        </div>
         <div class="accounting-actions">
           <StatusBadge status={entry.status} />
-          {entry.status === "draft" ? (
-            <button class="button button-primary" type="button" onClick={props.onPost}>Valider la pièce</button>
-          ) : null}
+          {isDraft ? (
+            <>
+              <Link href={`/comptabilite/pieces/${entry.id}/modifier`} class="button button-secondary">
+                Modifier le brouillon
+              </Link>
+              <button class="button button-primary" type="button" onClick={props.onPost}>
+                Valider la pièce
+              </button>
+            </>
+          ) : (
+            <span class="muted">Pièce validée : immuable, correction par extourne.</span>
+          )}
         </div>
       </div>
       <div class="responsive-table">
         <table class="data-table">
-          <thead><tr><th>Compte</th><th>Intitulé</th><th>Libellé</th><th class="number">Débit</th><th class="number">Crédit</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Compte</th>
+              <th>Intitulé</th>
+              <th>Libellé</th>
+              <th>Tiers</th>
+              <th class="number">Débit</th>
+              <th class="number">Crédit</th>
+            </tr>
+          </thead>
           <tbody>
             {entry.lines.map((line) => (
               <tr key={line.id}>
                 <td><strong>{line.accountCode}</strong></td>
                 <td>{line.accountLabel}</td>
                 <td>{line.label}</td>
+                <td><TierChip code={line.thirdPartyCode} name={line.thirdPartyName} /></td>
                 <td class="number">{money(line.debit)}</td>
                 <td class="number">{money(line.credit)}</td>
               </tr>
             ))}
           </tbody>
-          <tfoot><tr><th colspan={3}>Totaux</th><th class="number">{money(entry.totalDebit)}</th><th class="number">{money(entry.totalCredit)}</th></tr></tfoot>
+          <tfoot>
+            <tr>
+              <th colspan={4}>Totaux</th>
+              <th class="number">{money(entry.totalDebit)}</th>
+              <th class="number">{money(entry.totalCredit)}</th>
+            </tr>
+          </tfoot>
         </table>
       </div>
+      <AuditTrailFor entityId={entry.id} title="Piste d'audit de la pièce" limit={8} />
     </section>
   );
 }
 
-interface LineDraft {
-  accountCode: string;
-  label: string;
-  debit: string;
-  credit: string;
-}
-
-const emptyLine = (): LineDraft => ({ accountCode: "", label: "", debit: "", credit: "" });
-
-function parseAmount(value: string): Amount {
-  try {
-    return value.trim() === "" ? 0n : amountFromDecimal(value);
-  } catch {
-    return 0n;
-  }
-}
-
 export function NewEntry() {
-  const { data: refs, error } = useAsync(async () => {
-    const kernel = getKernel();
-    const [accounts, journals] = await Promise.all([kernel.getAccounts(), kernel.getJournals()]);
-    return { accounts, journals };
-  });
-
-  const [journalCode, setJournalCode] = useState("OD");
-  const [entryDate, setEntryDate] = useState("2026-02-15");
-  const [reference, setReference] = useState("");
-  const [description, setDescription] = useState("");
-  const [lines, setLines] = useState<LineDraft[]>([emptyLine(), emptyLine()]);
-  const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
-
-  const totalDebit = lines.reduce((sum, line) => sum + parseAmount(line.debit), 0n);
-  const totalCredit = lines.reduce((sum, line) => sum + parseAmount(line.credit), 0n);
-  const isBalanced = lines.length >= 2 && totalDebit > 0n && totalDebit === totalCredit;
-
-  const updateLine = (index: number, patch: Partial<LineDraft>) =>
-    setLines(lines.map((line, position) => (position === index ? { ...line, ...patch } : line)));
-
-  const save = async (post: boolean) => {
-    try {
-      const saved = await getKernel().saveEntry({
-        organizationId: DEMO_ORGANIZATION_ID,
-        journalCode,
-        entryDate,
-        reference,
-        description,
-        postImmediately: post,
-        lines: lines.map((line) => ({
-          accountCode: line.accountCode,
-          label: line.label,
-          debit: line.debit === "" ? 0 : line.debit,
-          credit: line.credit === "" ? 0 : line.credit
-        }))
-      });
-      setMessage({ text: `La pièce ${saved.reference} a été ${post ? "validée" : "enregistrée en brouillon"}.`, isError: false });
-      window.setTimeout(() => navigate("/comptabilite/pieces"), 400);
-    } catch (cause) {
-      setMessage({ text: cause instanceof Error ? cause.message : String(cause), isError: true });
-    }
+  const initial: EntryFormValues = {
+    journalCode: "OD",
+    entryDate: "2026-02-15",
+    reference: "",
+    description: "",
+    lines: [emptyLine(), emptyLine()]
   };
 
   return (
-    <>
-      <PageHero eyebrow="Saisie des écritures" title="Nouvelle pièce comptable" subtitle="La validation est impossible tant que les débits et crédits ne sont pas équilibrés.">
-        <Link href="/comptabilite/pieces" class="button button-secondary">Annuler</Link>
-      </PageHero>
-      {message ? <div class={`form-message ${message.isError ? "error" : "success"} wide-message`}>{message.text}</div> : null}
-      <ErrorNote message={error} />
-      {refs ? (
-        <section class="panel entry-form-panel">
-          <div class="entry-header-fields">
-            <label class="field"><span>Journal</span>
-              <select value={journalCode} onChange={(event) => setJournalCode(event.currentTarget.value)}>
-                {refs.journals.map((journal) => <option key={journal.code} value={journal.code}>{journal.code} · {journal.label}</option>)}
-              </select>
-            </label>
-            <label class="field"><span>Date</span><input type="date" value={entryDate} onInput={(event) => setEntryDate(event.currentTarget.value)} /></label>
-            <label class="field"><span>Référence</span><input maxlength={80} placeholder="Ex. OD-2026-002" value={reference} onInput={(event) => setReference(event.currentTarget.value)} /></label>
-            <label class="field field-wide"><span>Libellé de la pièce</span><input maxlength={180} placeholder="Objet de l'opération" value={description} onInput={(event) => setDescription(event.currentTarget.value)} /></label>
-          </div>
+    <EntryForm
+      eyebrow="Saisie des écritures"
+      title="Nouvelle pièce comptable"
+      subtitle="Le numéro est attribué automatiquement dans la séquence du journal ; la validation exige l'équilibre et le tiers des comptes auxiliaires."
+      initial={initial}
+      entryNumber={null}
+      cancelHref="/comptabilite/pieces"
+      onSubmit={async (values, post) => {
+        await getKernel().saveEntry({
+          organizationId: DEMO_ORGANIZATION_ID,
+          journalCode: values.journalCode,
+          entryDate: values.entryDate,
+          reference: values.reference,
+          description: values.description,
+          postImmediately: post,
+          lines: values.lines.map((line) => ({
+            accountCode: line.accountCode,
+            label: line.label,
+            debit: line.debit === "" ? 0 : line.debit,
+            credit: line.credit === "" ? 0 : line.credit,
+            thirdPartyCode: line.thirdPartyCode.trim() === "" ? null : line.thirdPartyCode.trim()
+          }))
+        });
+        // La liste des pièces se recharge à la navigation : confirmation immédiate.
+        window.setTimeout(() => navigate("/comptabilite/pieces"), 250);
+      }}
+    />
+  );
+}
 
-          <div class="entry-lines-heading">
-            <div><span class="eyebrow">Mouvements</span><h2>Lignes comptables</h2></div>
-            <button class="button button-secondary" type="button" onClick={() => setLines([...lines, emptyLine()])}>Ajouter une ligne</button>
-          </div>
+/** Révision d'un brouillon : le numéro et le journal restent inchangés. */
+export function EditEntry(props: { entryId: string }) {
+  const { data, error } = useAsync(async () => {
+    const kernel = getKernel();
+    const entry = await kernel.getEntry(props.entryId);
+    return entry;
+  }, [props.entryId]);
 
-          <div class="responsive-table">
-            <table class="data-table entry-lines-table">
-              <thead><tr><th>Compte général</th><th>Libellé de ligne</th><th class="number">Débit</th><th class="number">Crédit</th><th></th></tr></thead>
-              <tbody>
-                {lines.map((line, index) => (
-                  <tr key={index}>
-                    <td>
-                      <select value={line.accountCode} onChange={(event) => updateLine(index, { accountCode: event.currentTarget.value })}>
-                        <option value="">Sélectionner…</option>
-                        {refs.accounts.map((account) => <option key={account.code} value={account.code}>{account.code} · {account.label}</option>)}
-                      </select>
-                    </td>
-                    <td><input maxlength={160} placeholder="Libellé" value={line.label} onInput={(event) => updateLine(index, { label: event.currentTarget.value })} /></td>
-                    <td><input class="amount-input" inputmode="decimal" placeholder="0" value={line.debit} onInput={(event) => updateLine(index, { debit: event.currentTarget.value })} /></td>
-                    <td><input class="amount-input" inputmode="decimal" placeholder="0" value={line.credit} onInput={(event) => updateLine(index, { credit: event.currentTarget.value })} /></td>
-                    <td>
-                      <button class="icon-button danger" type="button" title="Supprimer" disabled={lines.length <= 2} onClick={() => setLines(lines.filter((_, position) => position !== index))}>×</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot><tr><th colspan={2}>Totaux de la pièce</th><th class="number">{money(totalDebit.toString())}</th><th class="number">{money(totalCredit.toString())}</th><th></th></tr></tfoot>
-            </table>
-          </div>
+  if (error) {
+    return (
+      <>
+        <PageHero eyebrow="Saisie des écritures" title="Révision d'un brouillon" />
+        <ErrorNote message={error} />
+        <Link href="/comptabilite/pieces" class="button button-secondary">Retour aux pièces</Link>
+      </>
+    );
+  }
+  if (!data) return <Loading label="Chargement de la pièce…" />;
 
-          <div class="entry-footer">
-            <div class={`balance-indicator ${isBalanced ? "balanced" : "unbalanced"}`}>
-              <span>{isBalanced ? "Pièce équilibrée" : "Écart à corriger"}</span>
-              <strong>{money((totalDebit > totalCredit ? totalDebit - totalCredit : totalCredit - totalDebit).toString())}</strong>
-            </div>
-            <div class="action-row">
-              <button class="button button-secondary" type="button" onClick={() => save(false)}>Enregistrer le brouillon</button>
-              <button class="button button-primary" type="button" disabled={!isBalanced} onClick={() => save(true)}>Valider la pièce</button>
-            </div>
+  if (data.status !== "draft") {
+    return (
+      <>
+        <PageHero eyebrow="Saisie des écritures" title="Pièce non révisable" subtitle={`${data.number} · ${data.reference}`} />
+        <section class="panel info-panel">
+          <strong>Une pièce validée est immuable</strong>
+          <p>
+            La pièce {data.number} est {data.status === "posted" ? "validée" : "extournée"} : elle ne peut plus être
+            modifiée. Pour la corriger, créez une écriture d'extourne (tranche 3) ou saisissez une nouvelle pièce.
+          </p>
+          <div class="action-row">
+            <Link href="/comptabilite/pieces" class="button button-primary">Retour aux pièces</Link>
+            <Link href="/comptabilite/pieces/nouvelle" class="button button-secondary">Nouvelle pièce</Link>
           </div>
         </section>
-      ) : (
-        <Loading />
-      )}
-    </>
+      </>
+    );
+  }
+
+  const initial: EntryFormValues = {
+    journalCode: data.journalCode,
+    entryDate: data.entryDate,
+    reference: data.reference,
+    description: data.description,
+    lines: data.lines.map((line) => ({
+      accountCode: line.accountCode,
+      label: line.label,
+      debit: line.debit === "0" ? "" : line.debit,
+      credit: line.credit === "0" ? "" : line.credit,
+      thirdPartyCode: line.thirdPartyCode ?? ""
+    }))
+  };
+
+  return (
+    <EntryForm
+      key={data.id}
+      eyebrow="Saisie des écritures"
+      title="Réviser le brouillon"
+      subtitle="Le numéro et le journal sont conservés ; chaque révision est tracée dans la piste d'audit."
+      initial={initial}
+      journalLocked
+      entryNumber={data.number}
+      cancelHref="/comptabilite/pieces"
+      onSubmit={async (values, post) => {
+        await getKernel().updateEntry(data.id, {
+          organizationId: DEMO_ORGANIZATION_ID,
+          entryDate: values.entryDate,
+          reference: values.reference,
+          description: values.description,
+          postImmediately: post,
+          lines: values.lines.map((line) => ({
+            accountCode: line.accountCode,
+            label: line.label,
+            debit: line.debit === "" ? 0 : line.debit,
+            credit: line.credit === "" ? 0 : line.credit,
+            thirdPartyCode: line.thirdPartyCode.trim() === "" ? null : line.thirdPartyCode.trim()
+          }))
+        });
+        window.setTimeout(() => navigate("/comptabilite/pieces"), 250);
+      }}
+    />
   );
 }

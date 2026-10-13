@@ -5,14 +5,24 @@
  * SQLite/HTTP (API, desktop) ou mémoire (tests, démo) s'y branchent sans toucher
  * aux règles métier. Corrige la duplication constatée entre DemoAccountingService,
  * IndexedDbAccountingService et perfecto-db.js.
+ *
+ * Tranche 2 : l'état porte le fichier unique des tiers et les séquences de
+ * numérotation par journal + exercice.
  */
 
 import type {
   AccountingJournalDto,
   AccountingPeriodDto,
-  GeneralAccountDto
+  GeneralAccountDto,
+  ThirdPartyDto
 } from "@perfecto/contracts";
-import { frenchMonthLabel, type AccountingEntryStatus, type Amount, type CivilDate } from "@perfecto/domain";
+import {
+  frenchMonthLabel,
+  type AccountingEntryStatus,
+  type Amount,
+  type CivilDate,
+  type EntryNumberSequence
+} from "@perfecto/domain";
 import { SYSCOHADA_STARTER_ACCOUNTS, STARTER_JOURNALS } from "./catalog";
 
 export interface StoredEntryLine {
@@ -22,23 +32,33 @@ export interface StoredEntryLine {
   label: string;
   debit: Amount;
   credit: Amount;
+  thirdPartyCode: string | null;
 }
 
 export interface StoredEntry {
   id: string;
   organizationId: string;
   fiscalYearId: string;
+  /** Numéro automatique : `JOURNAL-AAAA-NNNN`, attribué à l'enregistrement. */
+  number: string;
   journalCode: string;
   entryDate: CivilDate;
   reference: string;
   description: string;
   status: AccountingEntryStatus;
   createdAt: string;
+  /** ISO 8601, ou `null` tant que la pièce n'a jamais été révisée. */
+  updatedAt: string | null;
   postedAt: string | null;
   lines: StoredEntryLine[];
 }
 
 export interface AuditRecord {
+  /**
+   * Rang d'écriture dans la piste d'audit, strictement croissant. Indispensable
+   * pour ordonner deux événements horodatés dans la même milliseconde.
+   */
+  sequence: number;
   id: string;
   organizationId: string;
   actor: string;
@@ -54,6 +74,10 @@ export interface AccountingState {
   fiscalYearId: string;
   accounts: GeneralAccountDto[];
   journals: AccountingJournalDto[];
+  /** Fichier unique des tiers, partagé par tous les modules. */
+  thirdParties: ThirdPartyDto[];
+  /** Dernier numéro attribué par journal et par exercice. */
+  entrySequences: EntryNumberSequence[];
   entries: StoredEntry[];
   periods: AccountingPeriodDto[];
   audit: AuditRecord[];
@@ -82,6 +106,8 @@ export function createEmptyState(organizationId: string, fiscalYearId: string, y
     fiscalYearId,
     accounts: SYSCOHADA_STARTER_ACCOUNTS.map((account) => ({ ...account })),
     journals: STARTER_JOURNALS.map((journal) => ({ ...journal })),
+    thirdParties: [],
+    entrySequences: [],
     entries: [],
     periods: createOpenPeriods(year),
     audit: []

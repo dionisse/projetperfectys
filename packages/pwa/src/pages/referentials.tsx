@@ -1,6 +1,6 @@
 import { useState } from "preact/hooks";
 import { getKernel, DEMO_ORGANIZATION_ID } from "../kernel";
-import { ErrorNote, Loading, PageHero, useAsync } from "../ui";
+import { EntryNumber, ErrorNote, Loading, PageHero, useAsync } from "../ui";
 
 export function ChartOfAccounts() {
   const [search, setSearch] = useState("");
@@ -83,7 +83,12 @@ export function ChartOfAccounts() {
 }
 
 export function Journals() {
-  const { data, error } = useAsync(() => getKernel().getJournals());
+  const { data, error } = useAsync(async () => {
+    const kernel = getKernel();
+    const [journals, numbering] = await Promise.all([kernel.getJournals(), kernel.getJournalNumbering()]);
+    return { journals, numbering };
+  });
+  const sequenceOf = (code: string) => data?.numbering.find((item) => item.journalCode === code);
   return (
     <>
       <PageHero eyebrow="Comptabilité générale" title="Journaux comptables" subtitle="Organisation des écritures par cycle et par moyen de trésorerie." />
@@ -93,21 +98,30 @@ export function Journals() {
       ) : (
         <>
           <section class="journal-grid">
-            {data.map((journal) => (
+            {data.journals.map((journal) => (
               <article key={journal.code} class="panel journal-card">
                 <div class="journal-code">{journal.code}</div>
                 <div>
                   <span class="eyebrow">{journal.journalType}</span>
                   <h2>{journal.label}</h2>
                   <p>{journal.counterpartAccount ? `Compte de contrepartie : ${journal.counterpartAccount}` : "Contrepartie définie à la saisie"}</p>
+                  <p class="journal-sequence">
+                    Dernier numéro : <strong>{sequenceOf(journal.code)?.lastNumber ?? 0}</strong> · Prochaine pièce :{" "}
+                    <EntryNumber value={sequenceOf(journal.code)?.nextNumber ?? "—"} />
+                  </p>
                 </div>
                 <span class="status-badge success">Actif</span>
               </article>
             ))}
           </section>
           <section class="panel info-panel">
-            <strong>Règle du noyau</strong>
-            <p>Chaque pièce appartient à un journal. Les journaux de banque et de caisse portent un compte de contrepartie par défaut. La numérotation automatique par journal arrive à la tranche suivante.</p>
+            <strong>Numérotation automatique</strong>
+            <p>
+              Chaque journal tient sa propre suite de numéros pour l'exercice, au format
+              <code> JOURNAL-AAAA-NNNN</code>. Le numéro est attribué au moment de l'enregistrement : une pièce
+              refusée par le noyau ne consomme aucun numéro, la suite reste donc continue et sans trou. Le journal
+              d'une pièce ne se change jamais, y compris en révision de brouillon.
+            </p>
           </section>
         </>
       )}

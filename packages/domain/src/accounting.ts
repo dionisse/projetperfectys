@@ -7,6 +7,12 @@
  *  - une pièce valide compte au moins deux lignes et débits == crédits ;
  *  - une pièce validée est immuable (toute correction passera par une extourne) ;
  *  - les montants sont des {@link Amount} exacts, arrondis au plus pair à 2 décimales.
+ *
+ * Ajouts tranche 2 :
+ *  - la pièce porte son NUMÉRO automatique (séquence par journal et par exercice) ;
+ *  - un brouillon est RÉVISABLE (en-tête et lignes) tant qu'il n'est pas validé,
+ *    avec horodatage `updatedAt` pour l'audit ;
+ *  - une ligne peut porter un tiers (comptes auxiliaires 4011xx / 4111xx).
  */
 
 import { DomainRuleError, type CivilDate } from "./core";
@@ -32,13 +38,24 @@ export interface AccountingEntryLineData {
   readonly label: string;
   readonly debit: Amount;
   readonly credit: Amount;
+  /** Code tiers rattaché à la ligne, ou `null` si la ligne n'en porte pas. */
+  readonly thirdPartyCode: string | null;
+}
+
+export interface EntryLineInput {
+  readonly accountCode: string;
+  readonly label: string;
+  readonly debit: Amount;
+  readonly credit: Amount;
+  readonly thirdPartyCode?: string | null | undefined;
 }
 
 export function createEntryLine(
   accountCode: string,
   label: string,
   debit: Amount,
-  credit: Amount
+  credit: Amount,
+  thirdPartyCode?: string | null
 ): AccountingEntryLineData {
   const code = accountCode.trim();
   if (code.length === 0) {
@@ -54,45 +71,80 @@ export function createEntryLine(
   if ((debit === 0n && credit === 0n) || (debit > 0n && credit > 0n)) {
     throw new DomainRuleError("Une ligne doit porter un débit ou un crédit, exclusivement.");
   }
-  return { id: crypto.randomUUID(), accountCode: code, label: lineLabel, debit, credit };
+  const tier = thirdPartyCode?.trim() ?? "";
+  return {
+    id: crypto.randomUUID(),
+    accountCode: code,
+    label: lineLabel,
+    debit,
+    credit,
+    thirdPartyCode: tier.length > 0 ? tier.toUpperCase() : null
+  };
+}
+
+export interface AccountingEntryInput {
+  readonly fiscalYearId: string;
+  readonly organizationId: string;
+  readonly journalCode: string;
+  readonly entryDate: CivilDate;
+  readonly reference: string;
+  /** Numéro automatique attribué par le noyau (ex. `ACH-2026-0001`). */
+  readonly number: string;
+  readonly now: Date;
+}
+
+export interface AccountingEntryRevision {
+  readonly entryDate?: CivilDate | undefined;
+  readonly reference?: string | undefined;
+  readonly lines?: readonly EntryLineInput[] | undefined;
 }
 
 export class AccountingEntry {
   readonly id: string;
   readonly fiscalYearId: string;
   readonly organizationId: string;
-  readonly journalCode: string;
-  readonly entryDate: CivilDate;
-  readonly reference: string;
+  readonly number: string;
+  #journalCode: string;
+  #entryDate: CivilDate;
+  #reference: string;
   readonly createdAt: Date;
+  #updatedAt: Date;
   #status: AccountingEntryStatus;
   #postedAt: Date | null = null;
-  readonly #lines: AccountingEntryLineData[] = [];
+  #lines: AccountingEntryLineData[] = [];
 
-  private constructor(
-    fiscalYearId: string,
-    organizationId: string,
-    journalCode: string,
-    entryDate: CivilDate,
-    reference: string,
-    now: Date
-  ) {
-    if (fiscalYearId.trim().length === 0) {
+  private constructor(input: AccountingEntryInput, lines: readonly AccountingEntryLineData[] = []) {
+    if (input.fiscalYearId.trim().length === 0) {
       throw new DomainRuleError("L'exercice est obligatoire.");
     }
-    if (organizationId.trim().length === 0) {
+    if (input.organizationId.trim().length === 0) {
       throw new DomainRuleError("L'organisation est obligatoire.");
     }
     this.id = crypto.randomUUID();
-    this.fiscalYearId = fiscalYearId;
-    this.organizationId = organizationId;
-    this.journalCode = requireText(journalCode, "Le journal est obligatoire.").toUpperCase();
-    this.entryDate = entryDate;
-    this.reference = requireText(reference, "La référence de pièce est obligatoire.");
+    this.fiscalYearId = input.fiscalYearId;
+    this.organizationId = input.organizationId;
+    this.number = requireText(input.number, "Le numéro de pièce est obligatoire.");
+    this.#journalCode = requireText(input.journalCode, "Le journal est obligatoire.").toUpperCase();
+    this.#entryDate = input.entryDate;
+    this.#reference = requireText(input.reference, "La référence de pièce est obligatoire.");
     this.#status = AccountingEntryStatus.Draft;
-    this.createdAt = now;
+    this.createdAt = input.now;
+    this.#updatedAt = input.now;
+    this.#lines = [...lines];
   }
 
+  get journalCode(): string {
+    return this.#journalCode;
+  }
+  get entryDate(): CivilDate {
+    return this.#entryDate;
+  }
+  get reference(): string {
+    return this.#reference;
+  }
+  get updatedAt(): Date {
+    return this.#updatedAt;
+  }
   get status(): AccountingEntryStatus {
     return this.#status;
   }
@@ -115,20 +167,65 @@ export class AccountingEntry {
     return this.#lines.length >= 2 && amountCompare(this.totalDebit, this.totalCredit) === 0;
   }
 
-  static create(
-    fiscalYearId: string,
-    organizationId: string,
-    journalCode: string,
-    entryDate: CivilDate,
-    reference: string,
-    now: Date
-  ): AccountingEntry {
-    return new AccountingEntry(fiscalYearId, organizationId, journalCode, entryDate, reference, now);
+  static create(input: AccountingEntryInput): AccountingEntry {
+    return new AccountingEntry(input);
   }
 
-  addLine(accountCode: string, label: string, debit: Amount, credit: Amount): void {
+  /**
+   * Reconstruit un agrégat à partir de données persistées (statut, validation,
+   * lignes et horodatages compris). Utilisé par le noyau pour repasser par les
+   * règles du domaine avant toute mutation d'une pièce existante.
+   */
+  static restore(input: {
+    entry: AccountingEntryInput;
+    status: AccountingEntryStatus;
+    postedAt: Date | null;
+    updatedAt?: Date | undefined;
+    lines: readonly AccountingEntryLineData[];
+  }): AccountingEntry {
+    const restored = new AccountingEntry(input.entry, input.lines);
+    restored.#status = input.status;
+    restored.#postedAt = input.postedAt;
+    restored.#updatedAt = input.updatedAt ?? input.entry.now;
+    return restored;
+  }
+
+  addLine(
+    accountCode: string,
+    label: string,
+    debit: Amount,
+    credit: Amount,
+    thirdPartyCode?: string | null,
+    now?: Date
+  ): void {
     this.ensureDraft();
-    this.#lines.push(createEntryLine(accountCode, label, debit, credit));
+    this.#lines.push(createEntryLine(accountCode, label, debit, credit, thirdPartyCode));
+    if (now) {
+      this.touch(now);
+    }
+  }
+
+  /**
+   * Révise un brouillon : date, référence et/ou remplacement complet des lignes.
+   * Refusée sur toute pièce validée ou extournée (immutabilité garantie).
+   */
+  revise(revision: AccountingEntryRevision, now: Date): void {
+    this.ensureDraft();
+    if (revision.entryDate !== undefined) {
+      this.#entryDate = revision.entryDate;
+    }
+    if (revision.reference !== undefined) {
+      this.#reference = requireText(revision.reference, "La référence de pièce est obligatoire.");
+    }
+    if (revision.lines !== undefined) {
+      if (revision.lines.length === 0) {
+        throw new DomainRuleError("Une pièce doit contenir au moins une ligne.");
+      }
+      this.#lines = revision.lines.map((line) =>
+        createEntryLine(line.accountCode, line.label, line.debit, line.credit, line.thirdPartyCode ?? null)
+      );
+    }
+    this.touch(now);
   }
 
   post(now: Date): void {
@@ -138,6 +235,7 @@ export class AccountingEntry {
     }
     this.#status = AccountingEntryStatus.Posted;
     this.#postedAt = now;
+    this.touch(now);
   }
 
   /**
@@ -151,6 +249,11 @@ export class AccountingEntry {
     }
     this.#status = AccountingEntryStatus.Reversed;
     this.#postedAt = now;
+    this.touch(now);
+  }
+
+  private touch(now: Date): void {
+    this.#updatedAt = now;
   }
 
   private ensureDraft(): void {

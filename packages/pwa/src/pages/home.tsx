@@ -1,8 +1,8 @@
 import { getKernel } from "../kernel";
-import { Link, Loading, ErrorNote, PageHero, money, StatusBadge, useAsync } from "../ui";
+import { EntryNumber, ErrorNote, Link, Loading, PageHero, StatusBadge, money, useAsync } from "../ui";
 
 const MODULES = [
-  { code: "CG", name: "Comptabilité générale", description: "Plan, journaux, pièces et balance SYSCOHADA.", status: "Lot 1 en cours", href: "/comptabilite", progress: 52 },
+  { code: "CG", name: "Comptabilité générale", description: "Plan, journaux, tiers, pièces numérotées et balance SYSCOHADA.", status: "Lot 1 · tranche 2", href: "/comptabilite", progress: 68 },
   { code: "AN", name: "Comptabilité analytique", description: "Axes, sections, budgets et clés de répartition.", status: "Planifié", href: "/", progress: 8 },
   { code: "VS", name: "Ventes, stocks & facturation", description: "Cycle commercial, inventaire et factures.", status: "Planifié", href: "/", progress: 4 },
   { code: "CO", name: "Gestion des courriers", description: "Registres entrants et sortants, affectations.", status: "Planifié", href: "/", progress: 3 },
@@ -35,11 +35,12 @@ export function Dashboard() {
         </div>
       </section>
 
-      <section class="kpi-grid" aria-label="Indicateurs clés">
+      <section class="kpi-grid kpi-grid-wide" aria-label="Indicateurs clés">
         <article class="kpi-card blue"><div class="kpi-icon">✎</div><div><span>Brouillons</span><strong>{snapshot.draftEntryCount}</strong><small>Pièces à contrôler</small></div></article>
         <article class="kpi-card green"><div class="kpi-icon">✓</div><div><span>Pièces validées</span><strong>{snapshot.postedEntryCount}</strong><small>Écritures immuables</small></div></article>
         <article class="kpi-card amber"><div class="kpi-icon">◷</div><div><span>Périodes ouvertes</span><strong>{openPeriods}</strong><small>Exercice 2026</small></div></article>
-        <article class="kpi-card violet"><div class="kpi-icon">§</div><div><span>Référentiel</span><strong>CR</strong><small>SYSCOHADA révisé</small></div></article>
+        <article class="kpi-card violet"><div class="kpi-icon">◉</div><div><span>Fichier tiers</span><strong>{snapshot.thirdPartyCount}</strong><small>Fiches uniques partagées</small></div></article>
+        <article class="kpi-card blue"><div class="kpi-icon">§</div><div><span>Référentiel</span><strong>CR</strong><small>SYSCOHADA révisé</small></div></article>
       </section>
 
       <div class="dashboard-grid">
@@ -69,10 +70,11 @@ export function Dashboard() {
           </div>
           <div class="responsive-table">
             <table class="data-table">
-              <thead><tr><th>Date</th><th>Journal</th><th>Référence</th><th>Statut</th><th class="number">Montant</th></tr></thead>
+              <thead><tr><th>N°</th><th>Date</th><th>Journal</th><th>Référence</th><th>Statut</th><th class="number">Montant</th></tr></thead>
               <tbody>
                 {snapshot.recentEntries.map((entry) => (
                   <tr key={entry.id}>
+                    <td><EntryNumber value={entry.number} /></td>
                     <td>{entry.entryDate.split("-").reverse().join("/")}</td>
                     <td><span class="code-badge">{entry.journalCode}</span></td>
                     <td><strong>{entry.reference}</strong></td>
@@ -90,6 +92,7 @@ export function Dashboard() {
         <div><span class="eyebrow">Accès rapide</span><h2>Commencer une opération</h2></div>
         <div class="action-row">
           <Link href="/comptabilite/pieces/nouvelle" class="button button-primary">Nouvelle pièce</Link>
+          <Link href="/comptabilite/tiers" class="button button-secondary">Fichier des tiers</Link>
           <Link href="/comptabilite/plan" class="button button-secondary">Consulter le plan comptable</Link>
           <Link href="/comptabilite/periodes" class="button button-ghost">Gérer les périodes</Link>
         </div>
@@ -110,7 +113,9 @@ export function AccountingHome() {
     { n: "04", title: "Balance générale", text: "Vérifier les mouvements et les soldes des comptes.", href: "/comptabilite/balance" },
     { n: "05", title: "Journal des écritures", text: "Mouvements validés dans l'ordre chronologique.", href: "/comptabilite/etats/journal" },
     { n: "06", title: "Grand livre", text: "Détail et solde cumulé de chaque compte.", href: "/comptabilite/etats/grand-livre" },
-    { n: "07", title: "Périodes comptables", text: "Contrôler l'ouverture mensuelle de la saisie.", href: "/comptabilite/periodes" }
+    { n: "07", title: "Périodes comptables", text: "Contrôler l'ouverture mensuelle de la saisie.", href: "/comptabilite/periodes" },
+    { n: "08", title: "Fichier des tiers", text: "Clients, fournisseurs, salariés : fiches uniques et relevés auxiliaires.", href: "/comptabilite/tiers" },
+    { n: "09", title: "Piste d'audit", text: "Historique horodaté des saisies, révisions et validations.", href: "/comptabilite/audit" }
   ];
 
   return (
@@ -120,11 +125,12 @@ export function AccountingHome() {
         <Link href="/comptabilite/pieces/nouvelle" class="button button-primary">Nouvelle pièce</Link>
       </PageHero>
 
-      <section class="kpi-grid accounting-kpis">
+      <section class="kpi-grid kpi-grid-wide accounting-kpis">
         <article class="kpi-card blue"><div class="kpi-icon">≡</div><div><span>Comptes actifs</span><strong>{data.accountCount}</strong><small>Plan SYSCOHADA initial</small></div></article>
-        <article class="kpi-card violet"><div class="kpi-icon">J</div><div><span>Journaux</span><strong>{data.journalCount}</strong><small>Achats, ventes, banque…</small></div></article>
+        <article class="kpi-card violet"><div class="kpi-icon">J</div><div><span>Journaux</span><strong>{data.journalCount}</strong><small>Numérotation automatique</small></div></article>
+        <article class="kpi-card violet"><div class="kpi-icon">◉</div><div><span>Tiers</span><strong>{data.thirdPartyCount}</strong><small>Fichier unique</small></div></article>
         <article class="kpi-card green"><div class="kpi-icon">✓</div><div><span>Pièces validées</span><strong>{data.postedEntryCount}</strong><small>Écritures immuables</small></div></article>
-        <article class="kpi-card amber"><div class="kpi-icon">✎</div><div><span>Brouillons</span><strong>{data.draftEntryCount}</strong><small>À vérifier</small></div></article>
+        <article class="kpi-card amber"><div class="kpi-icon">✎</div><div><span>Brouillons</span><strong>{data.draftEntryCount}</strong><small>Révisables et tracés</small></div></article>
       </section>
 
       <section class="accounting-nav-grid">
@@ -145,10 +151,11 @@ export function AccountingHome() {
           </div>
           <div class="responsive-table">
             <table class="data-table">
-              <thead><tr><th>Date</th><th>Journal</th><th>Référence</th><th>Libellé</th><th>Statut</th><th class="number">Montant</th></tr></thead>
+              <thead><tr><th>N°</th><th>Date</th><th>Journal</th><th>Référence</th><th>Libellé</th><th>Statut</th><th class="number">Montant</th></tr></thead>
               <tbody>
                 {data.recentEntries.map((entry) => (
                   <tr key={entry.id}>
+                    <td><EntryNumber value={entry.number} /></td>
                     <td>{entry.entryDate.split("-").reverse().join("/")}</td>
                     <td><span class="code-badge">{entry.journalCode}</span></td>
                     <td><strong>{entry.reference}</strong></td>

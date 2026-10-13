@@ -11,10 +11,30 @@ import {
 const NOW = new Date("2026-01-15T09:00:00.000Z");
 
 function balancedEntry(reference = "FAC-001"): AccountingEntry {
-  const entry = AccountingEntry.create("fy-1", "org-1", "ACH", civilDate(2026, 1, 15), reference, NOW);
+  const entry = AccountingEntry.create({
+    fiscalYearId: "fy-1",
+    organizationId: "org-1",
+    journalCode: "ACH",
+    entryDate: civilDate(2026, 1, 15),
+    reference,
+    number: "ACH-2026-0001",
+    now: NOW
+  });
   entry.addLine("601100", "Achat de marchandises", amountFromDecimal("100000"), 0n);
-  entry.addLine("401100", "Fournisseur", 0n, amountFromDecimal("100000"));
+  entry.addLine("401100", "Fournisseur", 0n, amountFromDecimal("100000"), "FOU001");
   return entry;
+}
+
+function draftEntry(reference: string, number: string): AccountingEntry {
+  return AccountingEntry.create({
+    fiscalYearId: "fy-1",
+    organizationId: "org-1",
+    journalCode: "OD",
+    entryDate: civilDate(2026, 2, 1),
+    reference,
+    number,
+    now: NOW
+  });
 }
 
 describe("AccountingEntry (portage de AccountingEntryTests.cs)", () => {
@@ -30,7 +50,7 @@ describe("AccountingEntry (portage de AccountingEntryTests.cs)", () => {
   });
 
   it("refuse la validation d'une pièce déséquilibrée", () => {
-    const entry = AccountingEntry.create("fy-1", "org-1", "OD", civilDate(2026, 2, 1), "OD-001", NOW);
+    const entry = draftEntry("OD-001", "OD-2026-0002");
     entry.addLine("601100", "Charge", amountFromDecimal("25000"), 0n);
     entry.addLine("401100", "Fournisseur", 0n, amountFromDecimal("20000"));
 
@@ -43,7 +63,7 @@ describe("AccountingEntry (portage de AccountingEntryTests.cs)", () => {
     ["0", "0"],
     ["-1", "0"]
   ])("rejette la paire débit/crédit (%s, %s)", (debit, credit) => {
-    const entry = AccountingEntry.create("fy-1", "org-1", "OD", civilDate(2026, 2, 1), "OD-002", NOW);
+    const entry = draftEntry("OD-002", "OD-2026-0003");
     expect(() => entry.addLine("601100", "Ligne", amountFromDecimal(debit), amountFromDecimal(credit))).toThrow(
       DomainRuleError
     );

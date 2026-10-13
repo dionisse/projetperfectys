@@ -108,12 +108,12 @@ applications distinctes. **R-REF-2 :** un profil validé n'est jamais modifié r
 | Organization | identité, IFU, contacts centralisés | ✔ (`Organization`, IFU présent) |
 | FiscalYear / AccountingPeriod | cycle + verrou indépendant par période | ✔ exercice + périodes ; verrou = `isClosed` |
 | Account | code unique par profil, hiérarchie | ✔ plat ; **hiérarchie/fusion à ajouter** |
-| ThirdParty | fiche unique typée (client, fournisseur, salarié…) | ✗ tranche 2 |
+| ThirdParty | fiche unique typée (client, fournisseur, salarié…) | ✔ tranche 2 : fiche unique typée, code proposé, relevé auxiliaire, désactivation sans suppression |
 | Journal | code unique par organisation | ✔ |
-| Entry / EntryLine | équilibre, immutabilité, tiers/échéance/devise/axes | ✔ base ; **tiers, échéance, devise, axes à ajouter** |
+| Entry / EntryLine | équilibre, immutabilité, numéro par journal, tiers/échéance/devise/axes | ✔ base + numéro automatique + tiers sur ligne + brouillon révisable ; **échéance, devise, axes à ajouter** |
 | Attachment | empreinte, MIME, stockage contrôlé | ✗ |
 | Reconciliation | lettrage/rapprochement traçables | ✗ tranche 3 |
-| AuditEvent | ajout seulement, horodaté, attribué | ✔ |
+| AuditEvent | ajout seulement, horodaté, attribué | ✔ ajout seulement, rang monotone, exposé à l'écran (piste d'audit globale et par pièce) |
 | PeriodLock | interdit mutations après clôture | ✔ (message métier conservé) |
 
 ## 7. Cadrage produit v2 (décisions qui nous lient)

@@ -94,9 +94,43 @@ d'équilibre bloquant, balance, journal des écritures, grand livre à solde pro
 périodes ouvrables/clôturables. Le tout servi en prévisualisation live (`npm run dev`),
 hors ligne prêt via service worker. 38 tests verts, typecheck strict OK.
 
-**Prochaine tranche (2) :** numérotation automatique par journal et exercice, édition
-contrôlée des brouillons avec audit exposé à l'écran, puis tiers à fiche unique
-(P0 du cadrage) avec contrôle effectif de `requiresThirdParty` à la saisie.
+**Tranche 2 livrée le 13/10/2026 :** trois exigences P0 du cadrage sont désormais
+appliquées par le noyau, pas seulement affichées.
+
+1. **Numérotation automatique par journal et exercice** (`JOURNAL-AAAA-NNNN`). La
+   séquence est tenue dans l'état (`entrySequences`) et le numéro n'est attribué qu'une
+   fois toutes les règles passées : une pièce refusée ne consomme aucun numéro, la suite
+   reste continue et sans trou (exigence de piste d'audit OHADA). L'écran annonce le
+   numéro avant enregistrement (`peekEntryNumber`, lecture seule) et l'écran des journaux
+   affiche le dernier numéro et le prochain de chaque journal.
+2. **Édition contrôlée des brouillons.** `updateEntry` révise date, référence, libellé et
+   lignes d'un brouillon en repassant par l'agrégat domaine : une pièce validée est
+   refusée (« Utilisez une extourne pour la corriger »), le numéro et le journal sont
+   conservés, `updatedAt` est horodaté, chaque révision est tracée. La piste d'audit est
+   exposée à l'écran : page dédiée `#/comptabilite/audit` (filtres par entité) et
+   chronologie dans le détail de chaque pièce. Un rang monotone (`sequence`) garantit
+   l'ordre même quand deux événements tombent dans la même milliseconde.
+3. **Tiers à fiche unique.** Entité `ThirdParty` typée (client, fournisseur, salarié,
+   État, autre), code proposé par type (`FOU003`), unicité par code ET par
+   nom + type replié (accents, casse, ponctuation) : un même tiers ne peut pas être
+   créé deux fois, quel que soit le module. Le contrôle `requiresThirdParty` est
+   effectif à la saisie, à la révision et à la validation : compte auxiliaire sans
+   tiers = refus, tiers inconnu ou désactivé = refus, message français précisant la
+   ligne en cause. Aucun tiers n'est supprimable (désactivation seulement), le type est
+   verrouillé dès qu'une ligne validée l'utilise, et un relevé auxiliaire (mouvements
+   validés + solde progressif) alimente la fiche tiers.
+
+La PWA compte treize routes (tiers, piste d'audit et révision de brouillon ajoutées), le
+formulaire de saisie est partagé entre création et révision, et **la migration d'une base
+locale écrite par la tranche 1 est automatique** : à la lecture, les numéros manquants
+sont attribués chronologiquement par la règle du domaine et les séquences reconstruites,
+sans reset utilisateur. 110 tests verts (dont 17 tests de rendu réel de l'app sous jsdom,
+toutes routes), typecheck strict OK, build de production OK.
+
+**Prochaine tranche (3) :** extourne d'une pièce validée (contre-passation automatique
+avec lien pièce d'origine ↔ pièce d'extourne), lettrage/rapprochement des comptes de
+tiers, puis pièces jointes avec empreinte (P0 du cadrage : justificatif rattaché à la
+facture fournisseur du critère d'acceptation).
 
 **Mise à jour du 13/10/2026 (documentation d'origine) :** le dossier Google Drive
 « Créer un Prototype de Logiciel de Comptabilité Windows » a été intégralement lu via le

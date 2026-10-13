@@ -1,8 +1,11 @@
 /**
- * États comptables : journal, grand livre, balance.
+ * États comptables : journal, grand livre, balance, relevé par tiers.
  * Portage de Perfecto.Application/Accounting/AccountingReportBuilder.cs.
  * Seules les pièces VALIDÉES alimentent les états ; les montants sortants sont
  * sérialisés en décimal exact.
+ *
+ * Tranche 2 : les lignes d'états portent le numéro de pièce et le tiers, ce qui
+ * rend possible le relevé auxiliaire par tiers (écran « Tiers » → fiche).
  */
 
 import type {
@@ -10,6 +13,7 @@ import type {
   JournalLineDto,
   LedgerAccountDto,
   LedgerLineDto,
+  ThirdPartyStatementLineDto,
   TrialBalanceLineDto
 } from "@perfecto/contracts";
 import {
@@ -33,18 +37,21 @@ export function buildJournal(entries: readonly StoredEntry[]): JournalLineDto[] 
       (left, right) =>
         left.entryDate.localeCompare(right.entryDate) ||
         left.journalCode.localeCompare(right.journalCode) ||
+        left.number.localeCompare(right.number) ||
         left.reference.localeCompare(right.reference)
     )
     .flatMap((entry) =>
       entry.lines.map((line) => ({
         entryDate: entry.entryDate,
         journalCode: entry.journalCode,
+        entryNumber: entry.number,
         reference: entry.reference,
         accountCode: line.accountCode,
         accountLabel: line.accountLabel,
         label: line.label,
         debit: amountToDecimal(line.debit),
-        credit: amountToDecimal(line.credit)
+        credit: amountToDecimal(line.credit),
+        thirdPartyCode: line.thirdPartyCode
       }))
     );
 }
@@ -67,17 +74,21 @@ export function buildGeneralLedger(entries: readonly StoredEntry[]): LedgerAccou
         .slice()
         .sort(
           (left, right) =>
-            left.entryDate.localeCompare(right.entryDate) || left.reference.localeCompare(right.reference)
+            left.entryDate.localeCompare(right.entryDate) ||
+            left.entryNumber.localeCompare(right.entryNumber) ||
+            left.reference.localeCompare(right.reference)
         )
         .map((line) => {
           running = amountAdd(running, amountAdd(amountFromDto(line.debit), -amountFromDto(line.credit)));
           return {
             entryDate: line.entryDate,
             journalCode: line.journalCode,
+            entryNumber: line.entryNumber,
             reference: line.reference,
             label: line.label,
             debit: line.debit,
             credit: line.credit,
+            thirdPartyCode: line.thirdPartyCode,
             runningBalance: amountToDecimal(running)
           };
         });
@@ -119,6 +130,45 @@ export function buildTrialBalance(
     })
     .filter((line) => line.debitMovements !== "0" || line.creditMovements !== "0")
     .sort((left, right) => left.accountCode.localeCompare(right.accountCode));
+}
+
+/**
+ * Relevé auxiliaire d'un tiers : mouvements validés, solde progressif et totaux.
+ * Alimente la fiche tiers de l'écran « Tiers » (fonction « éditions par tiers »
+ * du menu CR de l'original).
+ */
+export function buildThirdPartyStatement(
+  entries: readonly StoredEntry[],
+  thirdPartyCode: string
+): ThirdPartyStatementLineDto[] {
+  const code = thirdPartyCode.trim().toUpperCase();
+  let running: Amount = AMOUNT_ZERO;
+
+  return postedEntries(entries)
+    .flatMap((entry) =>
+      entry.lines
+        .filter((line) => (line.thirdPartyCode ?? "").toUpperCase() === code)
+        .map((line) => ({ entry, line }))
+    )
+    .sort(
+      (left, right) =>
+        left.entry.entryDate.localeCompare(right.entry.entryDate) ||
+        left.entry.number.localeCompare(right.entry.number)
+    )
+    .map(({ entry, line }) => {
+      running = amountAdd(running, amountAdd(line.debit, -line.credit));
+      return {
+        entryDate: entry.entryDate,
+        entryNumber: entry.number,
+        journalCode: entry.journalCode,
+        reference: entry.reference,
+        accountCode: line.accountCode,
+        label: line.label,
+        debit: amountToDecimal(line.debit),
+        credit: amountToDecimal(line.credit),
+        runningBalance: amountToDecimal(running)
+      };
+    });
 }
 
 /** Les montants DTO proviennent du noyau (amountToDecimal) : conversion exacte. */

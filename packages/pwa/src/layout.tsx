@@ -5,10 +5,13 @@ const NAV_ITEMS: { href: string; icon: string; label: string }[] = [
   { href: "/", icon: "⌂", label: "Tableau de bord" },
   { href: "/comptabilite", icon: "≡", label: "Comptabilité générale" },
   { href: "/comptabilite/plan", icon: "0", label: "Plan comptable" },
+  { href: "/comptabilite/journaux", icon: "J", label: "Journaux" },
+  { href: "/comptabilite/tiers", icon: "◉", label: "Tiers" },
   { href: "/comptabilite/pieces", icon: "✓", label: "Pièces" },
   { href: "/comptabilite/balance", icon: "=", label: "Balance" },
   { href: "/comptabilite/etats/grand-livre", icon: "▤", label: "Grand livre" },
-  { href: "/comptabilite/periodes", icon: "◷", label: "Périodes" }
+  { href: "/comptabilite/periodes", icon: "◷", label: "Périodes" },
+  { href: "/comptabilite/audit", icon: "§", label: "Piste d'audit" }
 ];
 
 export function Shell(props: { onReset: () => void; children: ComponentChildren }) {
@@ -29,7 +32,11 @@ export function Shell(props: { onReset: () => void; children: ComponentChildren 
             <NavItem key={item.href} item={item} route={route} />
           ))}
           <span class="nav-heading">Comptabilité SYSCOHADA</span>
-          {NAV_ITEMS.slice(1).map((item) => (
+          {NAV_ITEMS.slice(1, 9).map((item) => (
+            <NavItem key={item.href} item={item} route={route} />
+          ))}
+          <span class="nav-heading">Contrôle</span>
+          {NAV_ITEMS.slice(9).map((item) => (
             <NavItem key={item.href} item={item} route={route} />
           ))}
         </nav>
@@ -65,7 +72,9 @@ export function Shell(props: { onReset: () => void; children: ComponentChildren 
 }
 
 function NavItem(props: { item: { href: string; icon: string; label: string }; route: string }) {
-  const active = props.route === props.item.href;
+  const active =
+    props.route === props.item.href ||
+    (props.item.href === "/comptabilite/pieces" && props.route.startsWith("/comptabilite/pieces/"));
   return (
     <Link href={props.item.href} class={active ? "active" : undefined}>
       <span class="nav-icon">{props.item.icon}</span>

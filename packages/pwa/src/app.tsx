@@ -3,8 +3,10 @@ import { resetDemoData } from "./kernel";
 import { useRoute } from "./ui";
 import { AccountingHome, Dashboard } from "./pages/home";
 import { ChartOfAccounts, Journals } from "./pages/referentials";
-import { Entries, NewEntry } from "./pages/entries";
+import { EditEntry, Entries, NewEntry } from "./pages/entries";
 import { Balance, GeneralLedger, JournalReport } from "./pages/reports";
+import { ThirdParties } from "./pages/third-parties";
+import { AuditLog } from "./pages/audit";
 import { Periods } from "./pages/periods";
 
 export function App() {
@@ -21,7 +23,15 @@ export function App() {
   return <Shell onReset={handleReset}>{selectPage(route)}</Shell>;
 }
 
+/** Route de révision d'un brouillon : `/comptabilite/pieces/{id}/modifier`. */
+const EDIT_ROUTE = /^\/comptabilite\/pieces\/([^/]+)\/modifier$/;
+
 function selectPage(route: string) {
+  const edit = EDIT_ROUTE.exec(route);
+  if (edit && edit[1] !== "nouvelle") {
+    return <EditEntry entryId={edit[1]!} />;
+  }
+
   switch (route) {
     case "/":
       return <Dashboard />;
@@ -31,6 +41,8 @@ function selectPage(route: string) {
       return <ChartOfAccounts />;
     case "/comptabilite/journaux":
       return <Journals />;
+    case "/comptabilite/tiers":
+      return <ThirdParties />;
     case "/comptabilite/pieces":
       return <Entries />;
     case "/comptabilite/pieces/nouvelle":
@@ -43,6 +55,8 @@ function selectPage(route: string) {
       return <GeneralLedger />;
     case "/comptabilite/periodes":
       return <Periods />;
+    case "/comptabilite/audit":
+      return <AuditLog />;
     default:
       return (
         <section class="empty-state">
