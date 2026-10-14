@@ -26,12 +26,26 @@ import {
 } from "@perfecto/domain";
 import type { StoredEntry } from "./state";
 
+/** Pièces validées : servent aux compteurs (validées, extournées…). */
 export function postedEntries(entries: readonly StoredEntry[]): StoredEntry[] {
   return entries.filter((entry) => entry.status === AccountingEntryStatus.Posted);
 }
 
+/**
+ * Pièces qui alimentent les états comptables : validées ET extournées.
+ * Une pièce extournée reste dans les livres — c'est sa contre-passation, elle
+ * aussi validée, qui l'annule. Exclure l'origine déséquilibrerait le journal,
+ * la balance et le grand livre.
+ */
+export function reportableEntries(entries: readonly StoredEntry[]): StoredEntry[] {
+  return entries.filter(
+    (entry) =>
+      entry.status === AccountingEntryStatus.Posted || entry.status === AccountingEntryStatus.Reversed
+  );
+}
+
 export function buildJournal(entries: readonly StoredEntry[]): JournalLineDto[] {
-  return postedEntries(entries)
+  return reportableEntries(entries)
     .slice()
     .sort(
       (left, right) =>
@@ -111,7 +125,7 @@ export function buildTrialBalance(
   accounts: readonly GeneralAccountDto[],
   entries: readonly StoredEntry[]
 ): TrialBalanceLineDto[] {
-  const lines = postedEntries(entries).flatMap((entry) => entry.lines);
+  const lines = reportableEntries(entries).flatMap((entry) => entry.lines);
 
   return accounts
     .map((account) => {
@@ -137,14 +151,28 @@ export function buildTrialBalance(
  * Alimente la fiche tiers de l'écran « Tiers » (fonction « éditions par tiers »
  * du menu CR de l'original).
  */
+/** Rapprochement d'une ligne -> lettre attribuée. */
+export interface LineReconciliation {
+  readonly id: string;
+  readonly label: string;
+  readonly lineIds: readonly string[];
+}
+
 export function buildThirdPartyStatement(
   entries: readonly StoredEntry[],
-  thirdPartyCode: string
+  thirdPartyCode: string,
+  reconciliations: readonly LineReconciliation[] = []
 ): ThirdPartyStatementLineDto[] {
   const code = thirdPartyCode.trim().toUpperCase();
+  const letters = new Map<string, LineReconciliation>();
+  for (const reconciliation of reconciliations) {
+    for (const lineId of reconciliation.lineIds) {
+      letters.set(lineId, reconciliation);
+    }
+  }
   let running: Amount = AMOUNT_ZERO;
 
-  return postedEntries(entries)
+  return reportableEntries(entries)
     .flatMap((entry) =>
       entry.lines
         .filter((line) => (line.thirdPartyCode ?? "").toUpperCase() === code)
@@ -157,7 +185,10 @@ export function buildThirdPartyStatement(
     )
     .map(({ entry, line }) => {
       running = amountAdd(running, amountAdd(line.debit, -line.credit));
+      const lettered = letters.get(line.id);
       return {
+        lineId: line.id,
+        entryId: entry.id,
         entryDate: entry.entryDate,
         entryNumber: entry.number,
         journalCode: entry.journalCode,
@@ -166,7 +197,9 @@ export function buildThirdPartyStatement(
         label: line.label,
         debit: amountToDecimal(line.debit),
         credit: amountToDecimal(line.credit),
-        runningBalance: amountToDecimal(running)
+        runningBalance: amountToDecimal(running),
+        reconciliationLabel: lettered?.label ?? null,
+        reconciliationId: lettered?.id ?? null
       };
     });
 }

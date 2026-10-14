@@ -62,6 +62,16 @@ export interface AccountingEntryDto {
   createdAt: string;
   updatedAt: string | null;
   postedAt: string | null;
+  /** Date de contre-passation, `null` si la pièce n'a pas été extournée. */
+  reversedAt: string | null;
+  /** Pièce d'origine lorsque celle-ci est une extourne. */
+  reversalOfEntryId: string | null;
+  reversalOfNumber: string | null;
+  /** Pièce d'extourne lorsque celle-ci a été contre-passée. */
+  reversedByEntryId: string | null;
+  reversedByNumber: string | null;
+  /** Nombre de justificatifs rattachés. */
+  attachmentCount: number;
   lines: AccountingEntryLineDto[];
 }
 
@@ -123,6 +133,9 @@ export interface AccountingSnapshot {
   thirdPartyCount: number;
   draftEntryCount: number;
   postedEntryCount: number;
+  reversedEntryCount: number;
+  attachmentCount: number;
+  reconciliationCount: number;
   totalDebitMovements: string;
   totalCreditMovements: string;
   recentEntries: AccountingEntryDto[];
@@ -170,6 +183,9 @@ export interface UpdateThirdPartyRequest {
 }
 
 export interface ThirdPartyStatementLineDto {
+  /** Identifiant de la ligne : sert à la sélection pour le lettrage. */
+  lineId: string;
+  entryId: string;
   entryDate: CivilDate;
   entryNumber: string;
   journalCode: string;
@@ -179,6 +195,23 @@ export interface ThirdPartyStatementLineDto {
   debit: string;
   credit: string;
   runningBalance: string;
+  /** Lettre de rapprochement, `null` si le mouvement n'est pas lettré. */
+  reconciliationLabel: string | null;
+  reconciliationId: string | null;
+}
+
+export interface ReconciliationDto {
+  id: string;
+  label: string;
+  scope: string;
+  key: string;
+  keyLabel: string;
+  lineIds: string[];
+  totalDebit: string;
+  totalCredit: string;
+  comment: string;
+  createdAt: string;
+  createdBy: string;
 }
 
 export interface ThirdPartyStatementDto {
@@ -187,6 +220,25 @@ export interface ThirdPartyStatementDto {
   totalDebit: string;
   totalCredit: string;
   closingBalance: string;
+  reconciliations: ReconciliationDto[];
+  letteredLineCount: number;
+  unletteredLineCount: number;
+  /** Solde des mouvements non lettrés : reste à rapprocher ou à relancer. */
+  unreconciledBalance: string;
+}
+
+/* ------------------------- Justificatifs ------------------------- */
+
+export type AttachmentDto = import("@perfecto/domain").AttachmentData;
+
+export interface AttachDocumentRequest {
+  organizationId: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  /** Contenu binaire : haché par le noyau, stocké par l'hôte, jamais sérialisé. */
+  bytes: Uint8Array;
+  notes?: string | null | undefined;
 }
 
 /* ---------------------------- Audit ---------------------------- */
@@ -213,6 +265,11 @@ export const auditActionLabels: Record<string, string> = {
   "accounting.entry.updated": "Brouillon modifié",
   "accounting.entry.posted": "Pièce validée",
   "accounting.entry.reversed": "Pièce extournée",
+  "accounting.entry.reversal": "Contre-passation créée",
+  "accounting.attachment.added": "Justificatif rattaché",
+  "accounting.attachment.removed": "Justificatif détaché",
+  "accounting.reconciliation.created": "Lettrage créé",
+  "accounting.reconciliation.cancelled": "Lettrage annulé",
   "accounting.account.created": "Compte général créé",
   "accounting.period.closed": "Période clôturée",
   "accounting.period.reopened": "Période rouverte",
@@ -274,6 +331,34 @@ export interface UpdateAccountingEntryRequest {
   /** `true` pour enchaîner révision puis validation dans la même transaction. */
   postImmediately?: boolean | undefined;
   lines: AccountingEntryLineInput[];
+}
+
+/**
+ * Contre-passation d'une pièce validée : le noyau crée la pièce inverse
+ * (débits et crédits permutés), la valide, et marque l'origine comme extournée.
+ * La pièce d'origine n'est jamais modifiée.
+ */
+export interface ReverseAccountingEntryRequest {
+  organizationId: string;
+  /** Date de la contre-passation ; la période correspondante doit être ouverte. */
+  reversalDate: CivilDate;
+  /** Référence proposée ; à défaut le noyau génère `EXT-<référence d'origine>`. */
+  reference?: string | undefined;
+  description?: string | undefined;
+}
+
+/** Résultat d'une contre-passation : l'origine marquée extournée et son inverse. */
+export interface ReversalResultDto {
+  original: AccountingEntryDto;
+  reversal: AccountingEntryDto;
+}
+
+export interface ReconcileThirdPartyRequest {
+  organizationId: string;
+  thirdPartyCode: string;
+  /** Identifiants des lignes à rapprocher (au moins deux, totaux égaux). */
+  lineIds: string[];
+  comment?: string | null | undefined;
 }
 
 export interface CreateGeneralAccountRequest {

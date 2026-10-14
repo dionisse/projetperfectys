@@ -21,6 +21,8 @@ import type {
   AccountingJournalDto,
   AccountingPeriodDto,
   AccountingSnapshot,
+  AttachmentDto,
+  AttachDocumentRequest,
   AuditEventDto,
   CreateAccountingEntryRequest,
   CreateGeneralAccountRequest,
@@ -28,6 +30,10 @@ import type {
   CreateThirdPartyRequest,
   GeneralAccountDto,
   JournalNumberingDto,
+  ReconciliationDto,
+  ReconcileThirdPartyRequest,
+  ReverseAccountingEntryRequest,
+  ReversalResultDto,
   ThirdPartyDto,
   ThirdPartyStatementDto,
   ThirdPartyUsageDto,
@@ -40,20 +46,28 @@ import {
   AccountingEntry,
   AccountingEntryStatus,
   DomainRuleError,
+  ReconciliationScope,
   allocateEntryNumber,
   amountAdd,
   amountFromDecimal,
   amountToDecimal,
   civilMonth,
   civilYear,
+  assertAttachmentSize,
+  createAttachment,
   createThirdParty,
+  formatByteSize,
+  nextReconciliationLabel,
+  normalizeMimeType,
   parseThirdPartyType,
   peekEntryNumber as peekEntryNumberFor,
   recordAuditEvent,
+  shortFingerprint,
   suggestThirdPartyCode,
   thirdPartyIdentityKey,
   thirdPartyTypeLabel,
   updateThirdParty,
+  validateReconcilableLines,
   type Amount,
   type EntryLineInput
 } from "@perfecto/domain";
@@ -62,14 +76,30 @@ import {
   buildJournal,
   buildThirdPartyStatement,
   buildTrialBalance,
-  postedEntries
+  postedEntries,
+  reportableEntries
 } from "./reports";
-import type { AccountingState, AuditRecord, StoragePort, StoredEntry, StoredEntryLine } from "./state";
+import { sha256Hex } from "./crypto";
+import type {
+  AccountingState,
+  AttachmentBytesPort,
+  AuditRecord,
+  ReconciliationRecord,
+  StoragePort,
+  StoredEntry,
+  StoredEntryLine
+} from "./state";
 
 export interface KernelOptions {
   clock?: () => Date;
   actor?: string;
   storageMode?: string;
+  /**
+   * Stockage des justificatifs. Sans lui, le noyau refuse le rattachement de
+   * fichiers (il n'acceptera jamais d'enregistrer une empreinte dont le contenu
+   * serait perdu) mais tout le reste fonctionne.
+   */
+  fileStorage?: AttachmentBytesPort | undefined;
 }
 
 export interface AuditLogQuery {
@@ -94,6 +124,7 @@ export class AccountingKernel {
   readonly #clock: () => Date;
   readonly #actor: string;
   readonly #storageMode: string;
+  readonly #fileStorage: AttachmentBytesPort | null;
   #chain: Promise<unknown> = Promise.resolve();
 
   constructor(storage: StoragePort, options: KernelOptions = {}) {
@@ -101,6 +132,7 @@ export class AccountingKernel {
     this.#clock = options.clock ?? (() => new Date());
     this.#actor = options.actor ?? "utilisateur";
     this.#storageMode = options.storageMode ?? "Noyau partagé";
+    this.#fileStorage = options.fileStorage ?? null;
   }
 
   /* --------------------------- Lectures --------------------------- */
@@ -111,7 +143,7 @@ export class AccountingKernel {
     const totalDebit = balance.reduce((sum, line) => sum + amountFromDecimal(line.debitMovements), 0n);
     const totalCredit = balance.reduce((sum, line) => sum + amountFromDecimal(line.creditMovements), 0n);
     const posted = postedEntries(state.entries);
-    const tiers = thirdPartyNames(state);
+    const ctx = entryContext(state);
 
     return {
       organizationId: state.organizationId,
@@ -120,9 +152,12 @@ export class AccountingKernel {
       thirdPartyCount: state.thirdParties.length,
       draftEntryCount: state.entries.filter((entry) => entry.status === AccountingEntryStatus.Draft).length,
       postedEntryCount: posted.length,
+      reversedEntryCount: state.entries.filter((entry) => entry.status === AccountingEntryStatus.Reversed).length,
+      attachmentCount: state.attachments.length,
+      reconciliationCount: state.reconciliations.length,
       totalDebitMovements: amountToDecimal(totalDebit),
       totalCreditMovements: amountToDecimal(totalCredit),
-      recentEntries: sortEntries(state.entries).slice(0, 5).map((entry) => toEntryDto(entry, tiers)),
+      recentEntries: sortEntries(state.entries).slice(0, 5).map((entry) => toEntryDto(entry, ctx)),
       trialBalance: balance,
       storageMode: this.#storageMode
     };
@@ -147,8 +182,7 @@ export class AccountingKernel {
 
   async getEntries(): Promise<AccountingEntryDto[]> {
     const state = await this.#storage.read();
-    const tiers = thirdPartyNames(state);
-    return sortEntries(state.entries).map((entry) => toEntryDto(entry, tiers));
+    return sortEntries(state.entries).map((entry) => toEntryDto(entry, entryContext(state)));
   }
 
   async getEntry(entryId: string): Promise<AccountingEntryDto> {
@@ -157,7 +191,7 @@ export class AccountingKernel {
     if (!stored) {
       throw new DomainRuleError("La pièce demandée n'existe pas.");
     }
-    return toEntryDto(stored, thirdPartyNames(state));
+    return toEntryDto(stored, entryContext(state));
   }
 
   async getJournalLines() {
@@ -249,21 +283,269 @@ export class AccountingKernel {
     return usage;
   }
 
-  /** Fiche tiers complète : coordonnées + relevé des mouvements validés. */
+  /**
+   * Fiche tiers complète : coordonnées, relevé des mouvements comptabilisés,
+   * lettres de rapprochement et solde non lettré (reste à relancer).
+   */
   async getThirdPartyStatement(code: string): Promise<ThirdPartyStatementDto> {
     const state = await this.#storage.read();
     const thirdParty = await this.getThirdParty(code);
-    const lines = buildThirdPartyStatement(state.entries, thirdParty.code);
+    const own = state.reconciliations.filter(
+      (item) => item.scope === ReconciliationScope.ThirdParty && item.key === thirdParty.code
+    );
+    const lines = buildThirdPartyStatement(state.entries, thirdParty.code, own);
+
     const totalDebit = lines.reduce((sum, line) => amountAdd(sum, amountFromDecimal(line.debit)), AMOUNT_ZERO);
     const totalCredit = lines.reduce((sum, line) => amountAdd(sum, amountFromDecimal(line.credit)), AMOUNT_ZERO);
-    const closing = totalDebit - totalCredit;
+    const unreconciled = lines
+      .filter((line) => line.reconciliationLabel === null)
+      .reduce(
+        (sum, line) => amountAdd(sum, amountFromDecimal(line.debit) - amountFromDecimal(line.credit)),
+        AMOUNT_ZERO
+      );
+
     return {
       thirdParty,
       lines,
       totalDebit: amountToDecimal(totalDebit),
       totalCredit: amountToDecimal(totalCredit),
-      closingBalance: amountToDecimal(closing)
+      closingBalance: amountToDecimal(totalDebit - totalCredit),
+      reconciliations: own
+        .slice()
+        .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+        .map((item) => toReconciliationDto(item, thirdParty.name)),
+      letteredLineCount: lines.filter((line) => line.reconciliationLabel !== null).length,
+      unletteredLineCount: lines.filter((line) => line.reconciliationLabel === null).length,
+      unreconciledBalance: amountToDecimal(unreconciled)
     };
+  }
+
+  /* ------------------------- Lettrage / rapprochement ------------------------- */
+
+  async getReconciliations(thirdPartyCode?: string): Promise<ReconciliationDto[]> {
+    const state = await this.#storage.read();
+    const key = thirdPartyCode?.trim().toUpperCase();
+    const names = thirdPartyNames(state);
+    return state.reconciliations
+      .filter((item) => (key ? item.key === key : true))
+      .slice()
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      .map((item) => toReconciliationDto(item, names.get(item.key) ?? item.key));
+  }
+
+  /**
+   * Rapproche des mouvements d'un même tiers et leur attribue la lettre suivante.
+   * Règles : au moins deux mouvements, totaux débit/crédit égaux, mouvements du
+   * tiers, non déjà lettrés, issus de pièces comptabilisées.
+   */
+  async reconcileThirdParty(request: ReconcileThirdPartyRequest): Promise<ReconciliationDto> {
+    return this.#run(async () => {
+      const state = await this.#storage.read();
+      this.#ensureOrganization(request.organizationId, state);
+      const now = this.#clock();
+      const tier = this.#findThirdParty(state, request.thirdPartyCode);
+
+      const wanted = new Set(request.lineIds.map((id) => id.trim()));
+      if (wanted.size < 2) {
+        throw new DomainRuleError("Un lettrage doit rapprocher au moins deux mouvements.");
+      }
+
+      const candidates = new Map<string, StoredEntryLine>();
+      for (const entry of reportableEntries(state.entries)) {
+        for (const line of entry.lines) {
+          if ((line.thirdPartyCode ?? "").toUpperCase() === tier.code.toUpperCase()) {
+            candidates.set(line.id, line);
+          }
+        }
+      }
+      for (const lineId of wanted) {
+        if (!candidates.has(lineId)) {
+          throw new DomainRuleError(
+            "Le mouvement sélectionné n'appartient pas au relevé comptabilisé de ce tiers."
+          );
+        }
+      }
+
+      const already = state.reconciliations.find((item) => item.lineIds.some((id) => wanted.has(id)));
+      if (already) {
+        throw new DomainRuleError(
+          `Un des mouvements sélectionnés est déjà lettré (lettre ${already.label}). Annulez ce lettrage avant de le refaire.`
+        );
+      }
+
+      const selected = [...wanted].map((id) => candidates.get(id)!);
+      const totals = validateReconcilableLines(selected);
+
+      const label = nextReconciliationLabel(
+        state.reconciliations
+          .filter((item) => item.scope === ReconciliationScope.ThirdParty && item.key === tier.code)
+          .map((item) => item.label)
+      );
+      const record: ReconciliationRecord = {
+        id: crypto.randomUUID(),
+        organizationId: state.organizationId,
+        label,
+        scope: ReconciliationScope.ThirdParty,
+        key: tier.code,
+        lineIds: [...wanted],
+        totalDebit: totals.totalDebit,
+        totalCredit: totals.totalCredit,
+        comment: request.comment?.trim() ?? "",
+        createdAt: now.toISOString(),
+        createdBy: this.#actor
+      };
+      state.reconciliations.push(record);
+      this.#audit(
+        state,
+        now,
+        "accounting.reconciliation.created",
+        "ThirdParty",
+        tier.code,
+        `Lettre ${label} · ${record.lineIds.length} mouvement(s) · ${amountToDecimal(totals.totalDebit)}`
+      );
+      await this.#storage.write(state);
+      return toReconciliationDto(record, tier.name);
+    });
+  }
+
+  /** Annule un lettrage : les mouvements redeviennent disponibles, l'acte est tracé. */
+  async cancelReconciliation(reconciliationId: string): Promise<void> {
+    return this.#run(async () => {
+      const state = await this.#storage.read();
+      const now = this.#clock();
+      const record = state.reconciliations.find((item) => item.id === reconciliationId);
+      if (!record) {
+        throw new DomainRuleError("Le lettrage demandé n'existe pas.");
+      }
+      state.reconciliations = state.reconciliations.filter((item) => item.id !== reconciliationId);
+      this.#audit(
+        state,
+        now,
+        "accounting.reconciliation.cancelled",
+        "ThirdParty",
+        record.key,
+        `Lettre ${record.label} · ${record.lineIds.length} mouvement(s)`
+      );
+      await this.#storage.write(state);
+    });
+  }
+
+  /* --------------------------- Justificatifs --------------------------- */
+
+  async getAttachments(entryId: string): Promise<AttachmentDto[]> {
+    const state = await this.#storage.read();
+    return state.attachments
+      .filter((item) => item.entryId === entryId)
+      .slice()
+      .sort((left, right) => left.uploadedAt.localeCompare(right.uploadedAt));
+  }
+
+  /**
+   * Rattache un justificatif à une pièce : l'empreinte SHA-256 est calculée par
+   * le noyau, les octets vont au stockage contrôlé de l'hôte, la métadonnée est
+   * tracée dans l'état comptable. Un même fichier ne peut pas être rattaché
+   * deux fois à la même pièce.
+   */
+  async attachDocument(entryId: string, request: AttachDocumentRequest): Promise<AttachmentDto> {
+    return this.#run(async () => {
+      const state = await this.#storage.read();
+      const entry = state.entries.find((item) => item.id === entryId);
+      if (!entry) {
+        throw new DomainRuleError("La pièce demandée n'existe pas.");
+      }
+      this.#ensureOrganization(request.organizationId, state);
+      if (!this.#fileStorage) {
+        throw new DomainRuleError(
+          "Aucun stockage de fichiers n'est disponible sur cet hôte : le justificatif ne peut pas être conservé."
+        );
+      }
+      // Les métadonnées sont contrôlées AVANT le hachage : un type refusé ou une
+      // taille hors bornes ne mérite pas un calcul d'empreinte (jusqu'à 15 Mo).
+      normalizeMimeType(request.mimeType);
+      assertAttachmentSize(request.sizeBytes);
+      if (request.bytes.byteLength !== request.sizeBytes) {
+        throw new DomainRuleError("La taille déclarée ne correspond pas au contenu transmis.");
+      }
+      const now = this.#clock();
+      const sha256 = await sha256Hex(request.bytes);
+      const duplicate = state.attachments.find((item) => item.entryId === entryId && item.sha256 === sha256);
+      if (duplicate) {
+        throw new DomainRuleError(
+          `Ce fichier est déjà rattaché à la pièce : ${duplicate.fileName} (empreinte identique).`
+        );
+      }
+
+      const attachment = createAttachment({
+        organizationId: state.organizationId,
+        entryId,
+        fileName: request.fileName,
+        mimeType: request.mimeType,
+        sizeBytes: request.sizeBytes,
+        sha256,
+        notes: request.notes ?? null,
+        uploadedAt: now.toISOString(),
+        uploadedBy: this.#actor
+      });
+
+      await this.#fileStorage.put(attachment.id, request.bytes, attachment.mimeType);
+      state.attachments.push(attachment);
+      this.#audit(
+        state,
+        now,
+        "accounting.attachment.added",
+        "AccountingEntry",
+        entryId,
+        `${entry.number} · ${attachment.fileName} · ${formatByteSize(attachment.sizeBytes)} · ${shortFingerprint(
+          attachment.sha256
+        )}`
+      );
+      await this.#storage.write(state);
+      return attachment;
+    });
+  }
+
+  /** Contenu d'un justificatif, pour consultation ou téléchargement. */
+  async getAttachmentContent(attachmentId: string): Promise<{ attachment: AttachmentDto; bytes: Uint8Array }> {
+    const state = await this.#storage.read();
+    const attachment = state.attachments.find((item) => item.id === attachmentId);
+    if (!attachment) {
+      throw new DomainRuleError("Le justificatif demandé n'existe pas.");
+    }
+    if (!this.#fileStorage) {
+      throw new DomainRuleError("Aucun stockage de fichiers n'est disponible sur cet hôte.");
+    }
+    const stored = await this.#fileStorage.get(attachmentId);
+    if (!stored) {
+      throw new DomainRuleError(
+        `Le contenu du justificatif ${attachment.fileName} est introuvable dans le stockage local.`
+      );
+    }
+    return { attachment, bytes: stored.bytes };
+  }
+
+  /** Détache un justificatif : métadonnée et contenu sont supprimés, l'acte est tracé. */
+  async removeAttachment(attachmentId: string): Promise<void> {
+    return this.#run(async () => {
+      const state = await this.#storage.read();
+      const now = this.#clock();
+      const attachment = state.attachments.find((item) => item.id === attachmentId);
+      if (!attachment) {
+        throw new DomainRuleError("Le justificatif demandé n'existe pas.");
+      }
+      if (this.#fileStorage) {
+        await this.#fileStorage.delete(attachmentId);
+      }
+      state.attachments = state.attachments.filter((item) => item.id !== attachmentId);
+      this.#audit(
+        state,
+        now,
+        "accounting.attachment.removed",
+        "AccountingEntry",
+        attachment.entryId,
+        `${attachment.fileName} · ${shortFingerprint(attachment.sha256)}`
+      );
+      await this.#storage.write(state);
+    });
   }
 
   /* --------------------------- Écritures -------------------------- */
@@ -314,7 +596,7 @@ export class AccountingKernel {
         `${stored.number} · ${stored.reference}`
       );
       await this.#storage.write(state);
-      return toEntryDto(stored, thirdPartyNames(state));
+      return toEntryDto(stored, entryContext(state));
     });
   }
 
@@ -374,7 +656,7 @@ export class AccountingKernel {
         this.#audit(state, now, "accounting.entry.posted", "AccountingEntry", stored.id, `${stored.number} · ${stored.reference}`);
       }
       await this.#storage.write(state);
-      return toEntryDto(stored, thirdPartyNames(state));
+      return toEntryDto(stored, entryContext(state));
     });
   }
 
@@ -387,7 +669,7 @@ export class AccountingKernel {
         throw new DomainRuleError("La pièce demandée n'existe pas.");
       }
       if (stored.status === AccountingEntryStatus.Posted) {
-        return toEntryDto(stored, thirdPartyNames(state));
+        return toEntryDto(stored, entryContext(state));
       }
       this.#ensureOrganization(stored.organizationId, state);
       this.#ensurePeriodOpen(state, stored.entryDate);
@@ -403,7 +685,116 @@ export class AccountingKernel {
       stored.updatedAt = now.toISOString();
       this.#audit(state, now, "accounting.entry.posted", "AccountingEntry", stored.id, `${stored.number} · ${stored.reference}`);
       await this.#storage.write(state);
-      return toEntryDto(stored, thirdPartyNames(state));
+      return toEntryDto(stored, entryContext(state));
+    });
+  }
+
+  /**
+   * Contre-passe une pièce validée : crée la pièce inverse (débits et crédits
+   * permutés, mêmes comptes et mêmes tiers), la valide, puis marque l'origine
+   * comme extournée. Les deux pièces restent dans les livres : leur somme est
+   * nulle, l'histoire comptable est préservée.
+   */
+  async reverseEntry(entryId: string, request: ReverseAccountingEntryRequest): Promise<ReversalResultDto> {
+    return this.#run(async () => {
+      const state = await this.#storage.read();
+      const original = state.entries.find((entry) => entry.id === entryId);
+      if (!original) {
+        throw new DomainRuleError("La pièce demandée n'existe pas.");
+      }
+      this.#ensureOrganization(request.organizationId, state);
+      this.#ensureOrganization(original.organizationId, state);
+      const now = this.#clock();
+
+      if (original.status === AccountingEntryStatus.Reversed) {
+        const previous = state.entries.find((entry) => entry.id === original.reversedByEntryId);
+        throw new DomainRuleError(
+          `Cette pièce a déjà été extournée par ${previous?.number ?? "une autre pièce"}.`
+        );
+      }
+      if (original.status !== AccountingEntryStatus.Posted) {
+        throw new DomainRuleError(
+          "Seule une pièce validée peut être extournée. Corrigez le brouillon avant validation."
+        );
+      }
+      this.#ensurePeriodOpen(state, request.reversalDate);
+
+      // Un tiers désactivé depuis ne bloque pas la contre-passation : on corrige
+      // une écriture passée, on n'ouvre pas de nouvel engagement.
+      const resolved = this.#resolveLines(
+        state,
+        original.lines.map((line) => ({
+          accountCode: line.accountCode,
+          label: line.label,
+          debit: amountToDecimal(line.credit),
+          credit: amountToDecimal(line.debit),
+          thirdPartyCode: line.thirdPartyCode
+        })),
+        { allowInactiveThirdParty: true }
+      );
+
+      const reference = this.#reversalReference(state, original.reference, request.reference);
+      const allocated = allocateEntryNumber(
+        state.entrySequences,
+        original.journalCode,
+        state.fiscalYearId,
+        civilYear(request.reversalDate)
+      );
+
+      const reversal = AccountingEntry.create({
+        fiscalYearId: state.fiscalYearId,
+        organizationId: state.organizationId,
+        journalCode: original.journalCode,
+        entryDate: request.reversalDate,
+        reference,
+        number: allocated.number,
+        now
+      });
+      for (const line of resolved) {
+        reversal.addLine(line.accountCode, line.label, line.debit, line.credit, line.thirdPartyCode, now);
+      }
+      reversal.post(now);
+
+      // L'origine repasse par l'agrégat : le domaine refuse une double extourne.
+      restoreAggregate(original).markReversed(now);
+
+      state.entrySequences = [...allocated.sequences];
+      const storedReversal = toStoredEntry(
+        reversal,
+        state,
+        request.description?.trim() || `Extourne de ${original.number} (${original.reference})`
+      );
+      storedReversal.reversalOfEntryId = original.id;
+      state.entries.push(storedReversal);
+
+      original.status = AccountingEntryStatus.Reversed;
+      original.reversedAt = now.toISOString();
+      original.reversedByEntryId = storedReversal.id;
+      original.updatedAt = now.toISOString();
+
+      this.#audit(
+        state,
+        now,
+        "accounting.entry.reversal",
+        "AccountingEntry",
+        storedReversal.id,
+        `${storedReversal.number} · contre-passation de ${original.number}`
+      );
+      this.#audit(
+        state,
+        now,
+        "accounting.entry.reversed",
+        "AccountingEntry",
+        original.id,
+        `${original.number} · extournée par ${storedReversal.number}`
+      );
+      await this.#storage.write(state);
+
+      const ctx = entryContext(state);
+      return {
+        original: toEntryDto(original, ctx),
+        reversal: toEntryDto(storedReversal, ctx)
+      };
     });
   }
 
@@ -602,6 +993,34 @@ export class AccountingKernel {
     }
   }
 
+  /**
+   * Référence de la contre-passation : `EXT-<origine>` par défaut, suffixée si
+   * nécessaire. Une référence explicitement demandée doit être libre.
+   */
+  #reversalReference(state: AccountingState, originalReference: string, requested?: string): string {
+    const taken = (candidate: string) =>
+      state.entries.some((entry) => entry.reference.toLowerCase() === candidate.trim().toLowerCase());
+
+    const explicit = requested?.trim() ?? "";
+    if (explicit.length > 0) {
+      if (taken(explicit)) {
+        throw new DomainRuleError("Cette référence de pièce existe déjà.");
+      }
+      return explicit;
+    }
+    const base = `EXT-${originalReference}`;
+    if (!taken(base)) {
+      return base;
+    }
+    for (let suffix = 2; suffix < 100; suffix += 1) {
+      const candidate = `${base}-${suffix}`;
+      if (!taken(candidate)) {
+        return candidate;
+      }
+    }
+    throw new DomainRuleError("Impossible de générer une référence d'extourne unique pour cette pièce.");
+  }
+
   #findThirdParty(state: AccountingState, code: string): ThirdPartyDto {
     const normalized = code.trim().toUpperCase();
     const found = state.thirdParties.find((item) => item.code.toUpperCase() === normalized);
@@ -636,7 +1055,11 @@ export class AccountingKernel {
    * Convertit les lignes demandées en montants exacts et applique le contrôle
    * des tiers : compte auxiliaire => tiers obligatoire, actif et existant.
    */
-  #resolveLines(state: AccountingState, lines: readonly AccountingEntryLineInput[]): LineDraft[] {
+  #resolveLines(
+    state: AccountingState,
+    lines: readonly AccountingEntryLineInput[],
+    options: { allowInactiveThirdParty?: boolean } = {}
+  ): LineDraft[] {
     if (lines.length === 0) {
       throw new DomainRuleError("Une pièce doit contenir au moins une ligne.");
     }
@@ -646,7 +1069,7 @@ export class AccountingKernel {
       const requested = line.thirdPartyCode?.trim() ?? "";
       if (requested.length > 0) {
         const tier = this.#findThirdParty(state, requested);
-        if (!tier.isActive) {
+        if (!tier.isActive && !options.allowInactiveThirdParty) {
           throw new DomainRuleError(
             `Le tiers ${tier.name} (${tier.code}) est désactivé : réactivez-le ou choisissez un autre tiers.`
           );
@@ -778,6 +1201,7 @@ function restoreAggregate(stored: StoredEntry): AccountingEntry {
     },
     status: stored.status,
     postedAt: stored.postedAt ? new Date(stored.postedAt) : null,
+    reversedAt: stored.reversedAt ? new Date(stored.reversedAt) : null,
     updatedAt: stored.updatedAt ? new Date(stored.updatedAt) : undefined,
     lines: stored.lines.map((line) => ({
       id: line.id,
@@ -818,11 +1242,50 @@ function toStoredEntry(entry: AccountingEntry, state: AccountingState, descripti
     createdAt: entry.createdAt.toISOString(),
     updatedAt: entry.updatedAt.getTime() === entry.createdAt.getTime() ? null : entry.updatedAt.toISOString(),
     postedAt: entry.postedAt ? entry.postedAt.toISOString() : null,
+    reversedAt: entry.reversedAt ? entry.reversedAt.toISOString() : null,
+    reversalOfEntryId: null,
+    reversedByEntryId: null,
     lines
   };
 }
 
-function toEntryDto(stored: StoredEntry, tiers: ReadonlyMap<string, string> = new Map()): AccountingEntryDto {
+/** Tout ce dont le mappage DTO a besoin, préparé une fois par lecture d'état. */
+interface EntryDtoContext {
+  readonly tiers: ReadonlyMap<string, string>;
+  readonly numbers: ReadonlyMap<string, string>;
+  readonly attachmentCounts: ReadonlyMap<string, number>;
+}
+
+function entryContext(state: AccountingState): EntryDtoContext {
+  const counts = new Map<string, number>();
+  for (const attachment of state.attachments) {
+    counts.set(attachment.entryId, (counts.get(attachment.entryId) ?? 0) + 1);
+  }
+  return {
+    tiers: thirdPartyNames(state),
+    numbers: new Map(state.entries.map((entry) => [entry.id, entry.number] as const)),
+    attachmentCounts: counts
+  };
+}
+
+function toReconciliationDto(record: ReconciliationRecord, keyLabel: string): ReconciliationDto {
+  return {
+    id: record.id,
+    label: record.label,
+    scope: record.scope,
+    key: record.key,
+    keyLabel,
+    lineIds: record.lineIds.slice(),
+    totalDebit: amountToDecimal(record.totalDebit),
+    totalCredit: amountToDecimal(record.totalCredit),
+    comment: record.comment,
+    createdAt: record.createdAt,
+    createdBy: record.createdBy
+  };
+}
+
+function toEntryDto(stored: StoredEntry, context: EntryDtoContext): AccountingEntryDto {
+  const tiers = context.tiers;
   const lines: AccountingEntryLineDto[] = stored.lines.map((line) => {
     const code = line.thirdPartyCode;
     return {
@@ -853,6 +1316,14 @@ function toEntryDto(stored: StoredEntry, tiers: ReadonlyMap<string, string> = ne
     createdAt: stored.createdAt,
     updatedAt: stored.updatedAt,
     postedAt: stored.postedAt,
+    reversedAt: stored.reversedAt,
+    reversalOfEntryId: stored.reversalOfEntryId,
+    reversalOfNumber: stored.reversalOfEntryId
+      ? (context.numbers.get(stored.reversalOfEntryId) ?? null)
+      : null,
+    reversedByEntryId: stored.reversedByEntryId,
+    reversedByNumber: stored.reversedByEntryId ? (context.numbers.get(stored.reversedByEntryId) ?? null) : null,
+    attachmentCount: context.attachmentCounts.get(stored.id) ?? 0,
     lines
   };
 }

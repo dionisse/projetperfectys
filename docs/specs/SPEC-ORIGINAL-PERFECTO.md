@@ -110,9 +110,9 @@ applications distinctes. **R-REF-2 :** un profil validé n'est jamais modifié r
 | Account | code unique par profil, hiérarchie | ✔ plat ; **hiérarchie/fusion à ajouter** |
 | ThirdParty | fiche unique typée (client, fournisseur, salarié…) | ✔ tranche 2 : fiche unique typée, code proposé, relevé auxiliaire, désactivation sans suppression |
 | Journal | code unique par organisation | ✔ |
-| Entry / EntryLine | équilibre, immutabilité, numéro par journal, tiers/échéance/devise/axes | ✔ base + numéro automatique + tiers sur ligne + brouillon révisable ; **échéance, devise, axes à ajouter** |
-| Attachment | empreinte, MIME, stockage contrôlé | ✗ |
-| Reconciliation | lettrage/rapprochement traçables | ✗ tranche 3 |
+| Entry / EntryLine | équilibre, immutabilité, numéro par journal, tiers/échéance/devise/axes | ✔ base + numéro automatique + tiers sur ligne + brouillon révisable + extourne automatique (statut `Reversed`, lien origine ↔ contre-passation, tranche 3) ; **échéance, devise, axes à ajouter** |
+| Attachment | empreinte, MIME, stockage contrôlé | ✔ tranche 3 : empreinte SHA-256, whitelist MIME, plafond 15 Mo, doublon refusé, octets dans le magasin IndexedDB `files` (port `AttachmentBytesPort`), détachement tracé |
+| Reconciliation | lettrage/rapprochement traçables | ✔ tranche 3 : lettrage manuel par tiers (lettres A…Z, AA), équilibre strict contrôlé, délettrage tracé, solde non lettré affiché ; **lettrage automatique et rapprochement bancaire à ajouter** |
 | AuditEvent | ajout seulement, horodaté, attribué | ✔ ajout seulement, rang monotone, exposé à l'écran (piste d'audit globale et par pièce) |
 | PeriodLock | interdit mutations après clôture | ✔ (message métier conservé) |
 
@@ -145,6 +145,13 @@ applications distinctes. **R-REF-2 :** un profil validé n'est jamais modifié r
   les mouvements au grand livre et à la balance, exporter ces deux états en PDF ;
   interdire écriture déséquilibrée, date hors exercice, modification d'une pièce validée ;
   tracer user/heure/nature de chaque changement ; démarrer sans imprimante ni admin.
+
+  **Couverture au 14/10/2026 (tranche 3)** : tout le parcours est appliqué par le noyau —
+  facture fournisseur équilibrée avec tiers obligatoire, justificatif rattaché et haché,
+  validation (pièce validée immuable, correction par extourne), grand livre et balance à
+  solde exact, verrou de période, audit attribué et horodaté. Le P1 « pièces jointes,
+  lettrage/délettrage tracé » est livré. **Reste** : l'export PDF/Excel des états
+  (tranche 4), le rapprochement bancaire avec pointage et la clôture avec reports.
 
 ## 8. Note d'architecture (divergence assumée)
 

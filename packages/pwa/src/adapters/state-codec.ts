@@ -3,14 +3,15 @@
  * Les montants `bigint` deviennent des chaînes décimales exactes
  * (aucun flottant ne traverse la persistance), conformément aux contrats.
  *
- * MIGRATION : une base écrite par la tranche 1 (sans numéro de pièce, sans
- * fichier tiers, sans séquences) est complétée à la lecture. Les numéros manquants
- * sont attribués dans l'ordre chronologique par la même règle du domaine
- * ({@link allocateEntryNumber}) que celle utilisée en saisie : la numérotation
- * d'une base existante reste donc continue et cohérente, sans reset utilisateur.
+ * MIGRATION : une base écrite par une tranche antérieure est complétée à la
+ * lecture — tranche 1 (sans numéro de pièce, sans fichier tiers, sans séquences),
+ * tranche 2 (sans extourne, sans lettrage, sans justificatifs). Les numéros
+ * manquants sont attribués dans l'ordre chronologique par la même règle du
+ * domaine ({@link allocateEntryNumber}) que celle utilisée en saisie : la
+ * numérotation d'une base existante reste continue, sans reset utilisateur.
  */
 
-import type { AccountingState, StoredEntry, StoredEntryLine } from "@perfecto/application";
+import type { AccountingState, AttachmentRecord, ReconciliationRecord, StoredEntry, StoredEntryLine } from "@perfecto/application";
 import type { ThirdPartyDto } from "@perfecto/contracts";
 import {
   allocateEntryNumber,
@@ -19,7 +20,8 @@ import {
   civilYear,
   type AccountingEntryStatus,
   type CivilDate,
-  type EntryNumberSequence
+  type EntryNumberSequence,
+  type ReconciliationScope
 } from "@perfecto/domain";
 
 export interface SerializedEntryLine {
@@ -47,7 +49,25 @@ export interface SerializedEntry {
   createdAt: string;
   updatedAt?: string | null;
   postedAt: string | null;
+  /** Absents des bases écrites avant la tranche 3. */
+  reversedAt?: string | null;
+  reversalOfEntryId?: string | null;
+  reversedByEntryId?: string | null;
   lines: SerializedEntryLine[];
+}
+
+export interface SerializedReconciliation {
+  id: string;
+  organizationId: string;
+  label: string;
+  scope: ReconciliationScope;
+  key: string;
+  lineIds: string[];
+  totalDebit: string;
+  totalCredit: string;
+  comment: string;
+  createdAt: string;
+  createdBy: string;
 }
 
 export interface SerializedAuditRecord extends Omit<AccountingState["audit"][number], "sequence"> {
@@ -64,6 +84,9 @@ export interface SerializedState {
   thirdParties?: ThirdPartyDto[];
   entrySequences?: EntryNumberSequence[];
   entries: SerializedEntry[];
+  /** Absents des bases écrites avant la tranche 3. */
+  reconciliations?: SerializedReconciliation[];
+  attachments?: AttachmentRecord[];
   periods: AccountingState["periods"];
   audit?: SerializedAuditRecord[] | undefined;
 }
@@ -71,7 +94,9 @@ export interface SerializedState {
 export function serializeState(state: AccountingState): SerializedState {
   return {
     ...state,
-    entries: state.entries.map(serializeEntry)
+    entries: state.entries.map(serializeEntry),
+    reconciliations: state.reconciliations.map(serializeReconciliation),
+    audit: state.audit.map((event) => ({ ...event }))
   };
 }
 
@@ -91,6 +116,14 @@ function serializeLine(line: StoredEntryLine): SerializedEntryLine {
   };
 }
 
+function serializeReconciliation(record: ReconciliationRecord): SerializedReconciliation {
+  return {
+    ...record,
+    totalDebit: amountToDecimal(record.totalDebit),
+    totalCredit: amountToDecimal(record.totalCredit)
+  };
+}
+
 export function deserializeState(raw: SerializedState): AccountingState {
   const entries: PendingEntry[] = raw.entries.map((entry) => ({
     id: entry.id,
@@ -105,6 +138,9 @@ export function deserializeState(raw: SerializedState): AccountingState {
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt ?? null,
     postedAt: entry.postedAt,
+    reversedAt: entry.reversedAt ?? null,
+    reversalOfEntryId: entry.reversalOfEntryId ?? null,
+    reversedByEntryId: entry.reversedByEntryId ?? null,
     lines: entry.lines.map((line) => ({
       id: line.id,
       accountCode: line.accountCode,
@@ -117,6 +153,16 @@ export function deserializeState(raw: SerializedState): AccountingState {
   }));
 
   const numbered = assignMissingNumbers(entries, raw.entrySequences ?? []);
+  const reconciliations = (raw.reconciliations ?? []).map((record) => ({
+    ...record,
+    totalDebit: amountFromDecimal(record.totalDebit),
+    totalCredit: amountFromDecimal(record.totalCredit)
+  }));
+  // Un lettrage ne peut survivre à la disparition des lignes qu'il rapproche.
+  const knownLineIds = new Set(
+    numbered.entries.flatMap((entry) => entry.lines.map((line) => line.id))
+  );
+  const surviving = reconciliations.filter((record) => record.lineIds.every((id) => knownLineIds.has(id)));
 
   return {
     organizationId: raw.organizationId,
@@ -126,6 +172,8 @@ export function deserializeState(raw: SerializedState): AccountingState {
     thirdParties: raw.thirdParties ?? [],
     entrySequences: numbered.sequences,
     entries: numbered.entries,
+    reconciliations: surviving,
+    attachments: raw.attachments ?? [],
     periods: raw.periods,
     audit: (raw.audit ?? []).map((event, index) => ({ ...event, sequence: event.sequence ?? index + 1 }))
   };
@@ -145,6 +193,9 @@ export function deserializeEntry(entry: SerializedEntry): StoredEntry {
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt ?? null,
     postedAt: entry.postedAt,
+    reversedAt: entry.reversedAt ?? null,
+    reversalOfEntryId: entry.reversalOfEntryId ?? null,
+    reversedByEntryId: entry.reversedByEntryId ?? null,
     lines: entry.lines.map((line) => ({
       id: line.id,
       accountCode: line.accountCode,
@@ -160,8 +211,8 @@ export function deserializeEntry(entry: SerializedEntry): StoredEntry {
 type PendingEntry = Omit<StoredEntry, "number"> & { number?: string | undefined };
 
 /**
- * Complète les numéros manquants (bases tranche 1) dans l'ordre chronologique
- * et reconstruit les séquences par journal + exercice.
+ * Complète les numéros manquants (bases antérieures à la tranche 2) dans l'ordre
+ * chronologique et reconstruit les séquences par journal + exercice.
  */
 function assignMissingNumbers(
   entries: PendingEntry[],

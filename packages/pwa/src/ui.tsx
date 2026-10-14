@@ -92,7 +92,8 @@ export function Link(props: { href: string; class?: string | undefined; children
 }
 
 export function StatusBadge(props: { status: AccountingEntryStatus }) {
-  const className = props.status === "posted" ? "success" : props.status === "draft" ? "draft" : "draft";
+  const className =
+    props.status === "posted" ? "success" : props.status === "reversed" ? "reversed" : "draft";
   return <span class={`status-badge ${className}`}>{accountingEntryStatusLabel[props.status]}</span>;
 }
 

@@ -10,11 +10,14 @@
 
 import {
   AccountingEntryStatus,
+  ReconciliationScope,
   amountFromDecimal,
   civilDate,
   civilYear,
   createThirdParty,
   formatEntryNumber,
+  nextReconciliationLabel,
+  validateReconcilableLines,
   type CivilDate,
   type EntryNumberSequence,
   type ThirdPartyData
@@ -55,6 +58,9 @@ function demoEntry(
     createdAt,
     updatedAt: null,
     postedAt: posted ? createdAt : null,
+    reversedAt: null,
+    reversalOfEntryId: null,
+    reversedByEntryId: null,
     lines: lines.map((line) => ({
       id: crypto.randomUUID(),
       accountCode: line.accountCode,
@@ -140,6 +146,29 @@ export function createDemoState(organizationId: string, fiscalYearId: string): A
       ])
     )
   ];
+
+  // Lettrage de démonstration : la facture client de janvier est réglée par
+  // banque, les deux mouvements se rapprochent en lettre « A ».
+  const customerLines = state.entries.flatMap((entry) => entry.lines)
+    .filter((line) => line.thirdPartyCode === "CLI001");
+  if (customerLines.length === 2) {
+    const totals = validateReconcilableLines(customerLines);
+    state.reconciliations = [
+      {
+        id: crypto.randomUUID(),
+        organizationId,
+        label: nextReconciliationLabel([]),
+        scope: ReconciliationScope.ThirdParty,
+        key: "CLI001",
+        lineIds: customerLines.map((line) => line.id),
+        totalDebit: totals.totalDebit,
+        totalCredit: totals.totalCredit,
+        comment: "Règlement bancaire de la facture FV-2026-001",
+        createdAt: "2026-01-20T09:00:00.000Z",
+        createdBy: "superviseur"
+      }
+    ];
+  }
 
   const sequences = new Map<string, EntryNumberSequence>();
   for (const entry of state.entries) {

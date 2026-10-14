@@ -66,3 +66,53 @@
 .inline-field > span { color: #dbe7fa; font-size: .68rem; font-weight: 800; }
 .inline-field select { min-height: 38px; padding: 7px 10px; border: 1px solid rgba(255, 255, 255, .28); border-radius: 8px; color: #fff; background: rgba(255, 255, 255, .1); outline: 0; }
 .inline-field select option { color: var(--ink); background: #fff; }
+
+/* ------------------------- Tranche 3 ------------------------- */
+
+/* Statut « extournée » : distinct du brouillon, lisible dans les listes. */
+.status-badge.reversed { color: #4b3a95; background: var(--violet-soft); }
+
+/* Extourne (contre-passation). */
+.reversal-note { margin: 0 0 14px; padding: 11px 14px; border-radius: 10px; color: #4b3a95; background: var(--violet-soft); font-size: .74rem; line-height: 1.5; }
+.reversal-form { margin: 0 0 18px; padding: 18px; border: 1px dashed #c9b8f2; border-radius: 14px; background: #fbfaff; }
+.reversal-form > p { margin: 6px 0 16px; color: var(--muted); font-size: .74rem; line-height: 1.6; }
+.reversal-form .entry-header-fields { grid-template-columns: 1fr 1fr 2fr; }
+.reversal-form .action-row { margin-top: 6px; }
+
+/* Justificatifs. */
+.attachments-panel { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+.attachments-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.attachments-heading h3 { margin: 4px 0 0; font-size: .95rem; }
+.attachment-picker { position: relative; overflow: hidden; }
+.attachment-picker input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.attachment-picker.disabled { opacity: .5; pointer-events: none; }
+.attachment-message { margin: 0 0 10px; color: #2b4f95; font-size: .72rem; }
+.attachment-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.attachment-list li { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.attachment-list strong { display: block; font-size: .8rem; }
+.attachment-list small { display: block; margin-top: 3px; color: var(--muted); font-size: .68rem; line-height: 1.5; }
+.attachment-list code { padding: 1px 4px; border-radius: 4px; background: var(--blue-soft); color: #2b4f95; }
+.attachment-notes { font-style: italic; }
+.attachments-panel .button-ghost { color: #6b7280; background: #f4f6fa; border: 1px solid #dfe5ee; }
+
+/* Lettrage / rapprochement. */
+.letter-badge { display: inline-grid; place-items: center; min-width: 26px; height: 24px; padding: 0 7px; border-radius: 7px; color: #087356; background: var(--green-soft); font-size: .7rem; font-weight: 850; }
+.letter-pending { display: inline-grid; place-items: center; min-width: 26px; height: 24px; color: var(--blue); font-size: .9rem; font-weight: 900; }
+.data-table tbody tr.lettered-row > td { background: #f7fcfa; }
+.statement-unlettered { padding-left: 14px; border-left: 1px solid var(--line); }
+.reconcile-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-top: 16px; padding: 14px 16px; border-radius: 12px; background: var(--canvas); }
+.reconcile-bar p { margin: 5px 0 0; color: var(--muted); font-size: .72rem; line-height: 1.5; }
+.reconcile-warning { color: #935700 !important; font-weight: 700; }
+.reconcile-bar input { min-width: 240px; min-height: 40px; padding: 8px 10px; border: 1px solid #d8e0eb; border-radius: 8px; color: var(--ink); background: #fff; outline: 0; }
+.reconciliations-list { margin-top: 16px; }
+.reconciliations-list ul { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.reconciliations-list li { display: flex; align-items: center; gap: 14px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.reconciliations-list li > div { flex: 1; }
+.reconciliations-list strong { font-size: .76rem; }
+.reconciliations-list small { display: block; margin-top: 2px; color: var(--muted); font-size: .67rem; }
+.reconciliations-list .button-ghost { color: #6b7280; background: #f4f6fa; border: 1px solid #dfe5ee; }
+
+/* Volet « contrôle » de l'accueil comptable. */
+.control-list { list-style: none; margin: 14px 0; padding: 14px 0 0; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+.control-list li { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: .72rem; }
+.control-list strong { color: var(--ink); font-size: .82rem; }

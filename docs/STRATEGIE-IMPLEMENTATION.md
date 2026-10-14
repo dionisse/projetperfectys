@@ -127,10 +127,65 @@ sont attribués chronologiquement par la règle du domaine et les séquences rec
 sans reset utilisateur. 110 tests verts (dont 17 tests de rendu réel de l'app sous jsdom,
 toutes routes), typecheck strict OK, build de production OK.
 
-**Prochaine tranche (3) :** extourne d'une pièce validée (contre-passation automatique
-avec lien pièce d'origine ↔ pièce d'extourne), lettrage/rapprochement des comptes de
-tiers, puis pièces jointes avec empreinte (P0 du cadrage : justificatif rattaché à la
-facture fournisseur du critère d'acceptation).
+**Tranche 3 livrée le 14/10/2026 :** le dernier maillon fonctionnel du critère
+d'acceptation du cadrage (facture fournisseur + justificatif → validation → grand livre)
+est en place, et trois règles OHADA jusque-là annoncées sont appliquées par le noyau.
+
+1. **Extourne d'une pièce validée.** `reverseEntry` construit la contre-passation dans le
+   domaine (`AccountingEntry.reversalLineInputs()` permute débits et crédits en conservant
+   comptes, libellés et tiers) puis la valide immédiatement : même journal, numéro suivant
+   de la séquence, référence `EXT-<référence d'origine>` suffixée `-2`, `-3`… si elle est
+   déjà prise (une référence explicitement demandée doit être libre), période de la date
+   d'extourne obligatoirement ouverte. Les deux pièces se citent mutuellement
+   (`reversedByNumber` / `reversalOfNumber`) et l'origine passe au statut `Reversed` avec
+   son propre horodatage (`reversedAt`), sans effacer `postedAt`. Un tiers désactivé depuis
+   la validation ne bloque pas la correction d'une écriture passée.
+   **Piège écarté :** une pièce extournée reste dans le journal, le grand livre, la balance
+   et les relevés (`reportableEntries()` = validées ∪ extournées). Filtrer sur les seules
+   pièces validées aurait fait disparaître l'origine et déséquilibré les livres ; les deux
+   écritures figurent dans les états et leur somme est nulle.
+2. **Lettrage des comptes de tiers.** `reconcileThirdParty` rapproche des mouvements non
+   lettrés d'un même tiers, issus de pièces comptabilisées : au moins deux mouvements,
+   identifiants distincts, totaux débit et crédit égaux, montant non nul — sinon refus avec
+   le message métier précisant l'écart. Les lettres suivent la suite A, B, … Z, AA, AB par
+   tiers (jamais réutilisée tant qu'un lettrage est actif). `cancelReconciliation`
+   libère les mouvements. Le relevé auxiliaire expose la lettre de chaque mouvement, le
+   nombre de lignes lettrées/non lettrées et le **solde non lettré** (reste à rapprocher ou
+   à relancer), et l'écran permet la sélection par clic de ligne avec total de contrôle en
+   direct et blocage tant que la sélection est déséquilibrée.
+3. **Justificatifs à empreinte contrôlée.** `attachDocument` hache le contenu en SHA-256
+   (WebCrypto, navigateur comme Node), refuse un doublon sur la même pièce (empreinte
+   identique), un type MIME hors whitelist (PDF, images, texte/CSV, Office et OpenDocument,
+   ZIP), un fichier vide ou supérieur à 15 Mo, et toute taille déclarée incohérente avec le
+   contenu transmis — ces contrôles précèdent le hachage pour ne pas calculer l'empreinte
+   d'un fichier qui sera refusé. **Séparation stricte** : la métadonnée (nom, type, taille,
+   empreinte, auteur, date) va dans l'état comptable, les octets dans un second magasin
+   IndexedDB `files` derrière le port `AttachmentBytesPort`. Sans stockage de fichiers
+   injecté, le noyau refuse le rattachement : jamais d'empreinte dont le contenu serait
+   perdu. La base locale passe en **version 2** et une base écrite par la tranche 2 est
+   mise à niveau à l'ouverture, état comptable intact.
+
+Écrans : le détail d'une pièce propose l'extourne (date, référence, motif) et le panneau
+des justificatifs (rattachement, consultation/téléchargement, détachement confirmé) ; la
+liste des pièces affiche un filtre « Extournées », une colonne de justificatifs et les
+liens entre pièces ; le relevé auxiliaire est devenu lettrable ; l'accueil comptable
+compte les pièces extournées, les lettrages et les justificatifs.
+
+**153 tests verts** (19 fichiers, +43) : invariants du domaine (contre-passation, double
+extourne refusée, lettres et équilibre du lettrage, empreinte/MIME/taille), noyau
+(extourne et livres équilibrés, audit, période clôturée, tiers désactivé, références
+d'extourne, lettrage/délettrage et refus, justificatifs et leurs refus), adaptateurs
+(magasin `files`, migration v1 → v2, codec des lettrages et justificatifs, lettrage orphelin
+écarté) et **rendu réel sous jsdom** des trois parcours complets (extourner une pièce,
+rattacher puis détacher un justificatif, lettrer une facture et son règlement). Typecheck
+strict OK, build de production OK (39 modules, 125,84 Ko JS / 34,88 Ko gzip).
+
+**Prochaine tranche (4) :** sorties imprimables — exports PDF/Excel/CSV du journal, du grand
+livre, de la balance et d'une pièce (dernier maillon manquant du critère d'acceptation :
+« exporter ces deux états en PDF »), mise en page d'impression sans imprimante (R-ORG-1),
+puis états financiers SYSCOHADA (bilan, compte de résultat) à partir du plan de comptes.
+Le lettrage automatique (appariement par montant et date) et le rapprochement bancaire avec
+pointage rejoindront la tranche 5 avec les clôtures et reports à nouveau.
 
 **Mise à jour du 13/10/2026 (documentation d'origine) :** le dossier Google Drive
 « Créer un Prototype de Logiciel de Comptabilité Windows » a été intégralement lu via le

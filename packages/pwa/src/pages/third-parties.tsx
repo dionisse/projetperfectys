@@ -1,8 +1,14 @@
 import { useEffect, useState } from "preact/hooks";
 import type { ThirdPartyUsageDto } from "@perfecto/contracts";
-import { THIRD_PARTY_TYPES, thirdPartyTypeLabel, type ThirdPartyType } from "@perfecto/domain";
+import {
+  THIRD_PARTY_TYPES,
+  amountFromDecimal,
+  formatCivilDateFr,
+  thirdPartyTypeLabel,
+  type ThirdPartyType
+} from "@perfecto/domain";
 import { DEMO_ORGANIZATION_ID, getKernel } from "../kernel";
-import { ErrorNote, Loading, PageHero, TierChip, money, signedMoney, useAsync } from "../ui";
+import { ErrorNote, Loading, PageHero, TierChip, formatTimestamp, money, signedMoney, useAsync } from "../ui";
 
 interface TierForm {
   code: string;
@@ -288,63 +294,219 @@ export function ThirdParties() {
   );
 }
 
-/** Relevé auxiliaire : mouvements validés et solde progressif du tiers. */
+/**
+ * Relevé auxiliaire : mouvements comptabilisés, solde progressif, lettrage.
+ * Le lettrage rapproche un débit et un crédit (ou plus) et leur attribue une
+ * lettre ; ce qui n'est pas lettré constitue le solde en suspens.
+ */
 function ThirdPartyStatement(props: { code: string }) {
-  const { data, error } = useAsync(() => getKernel().getThirdPartyStatement(props.code), [props.code]);
+  const { data, error, reload } = useAsync(() => getKernel().getThirdPartyStatement(props.code), [props.code]);
+  const [selection, setSelection] = useState<Set<string>>(new Set());
+  const [comment, setComment] = useState("");
+  const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const lines = data?.lines ?? [];
+  const selected = lines.filter((line) => selection.has(line.lineId) && line.reconciliationLabel === null);
+  const selectedDebit = selected.reduce((sum, line) => sum + amountFromDecimal(line.debit), 0n);
+  const selectedCredit = selected.reduce((sum, line) => sum + amountFromDecimal(line.credit), 0n);
+  const selectionBalanced = selected.length >= 2 && selectedDebit === selectedCredit && selectedDebit > 0n;
+
+  const toggle = (lineId: string, lettered: boolean) => {
+    if (lettered) return;
+    const next = new Set(selection);
+    if (next.has(lineId)) {
+      next.delete(lineId);
+    } else {
+      next.add(lineId);
+    }
+    setSelection(next);
+  };
+
+  const reconcile = async () => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const created = await getKernel().reconcileThirdParty({
+        organizationId: DEMO_ORGANIZATION_ID,
+        thirdPartyCode: props.code,
+        lineIds: [...selection],
+        comment: comment.trim() === "" ? null : comment.trim()
+      });
+      setMessage({
+        text: `Lettrage ${created.label} créé : ${created.lineIds.length} mouvement(s) rapprochés pour ${money(created.totalDebit)}.`,
+        isError: false
+      });
+      setSelection(new Set());
+      setComment("");
+      reload();
+    } catch (cause) {
+      setMessage({ text: cause instanceof Error ? cause.message : String(cause), isError: true });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cancel = async (reconciliationId: string, label: string) => {
+    if (!window.confirm(`Annuler le lettrage ${label} ? Les mouvements redeviendront disponibles.`)) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      await getKernel().cancelReconciliation(reconciliationId);
+      setMessage({ text: `Lettrage ${label} annulé.`, isError: false });
+      reload();
+    } catch (cause) {
+      setMessage({ text: cause instanceof Error ? cause.message : String(cause), isError: true });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <section class="panel data-panel statement-panel">
       <div class="panel-heading">
         <div>
           <span class="eyebrow">Relevé auxiliaire</span>
-          <h2>{props.code} · mouvements validés</h2>
+          <h2>{props.code} · mouvements comptabilisés</h2>
         </div>
         {data ? (
           <div class="statement-totals">
             <span>Débit {money(data.totalDebit)}</span>
             <span>Crédit {money(data.totalCredit)}</span>
             <strong>Solde {signedMoney(data.closingBalance)}</strong>
+            <span class="statement-unlettered">
+              Non lettré {signedMoney(data.unreconciledBalance)} · {data.unletteredLineCount} mouvement(s)
+            </span>
           </div>
         ) : null}
       </div>
       <ErrorNote message={error} />
+      {message ? (
+        <div class={`form-message ${message.isError ? "error" : "success"}`}>{message.text}</div>
+      ) : null}
       {!data ? (
         <Loading label="Chargement du relevé…" />
-      ) : data.lines.length === 0 ? (
-        <p class="muted">Aucun mouvement validé pour ce tiers. Les brouillons n'alimentent pas le relevé.</p>
+      ) : lines.length === 0 ? (
+        <p class="muted">
+          Aucun mouvement comptabilisé pour ce tiers. Les brouillons n'alimentent pas le relevé.
+        </p>
       ) : (
-        <div class="responsive-table">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>N° pièce</th>
-                <th>Journal</th>
-                <th>Référence</th>
-                <th>Compte</th>
-                <th>Libellé</th>
-                <th class="number">Débit</th>
-                <th class="number">Crédit</th>
-                <th class="number">Solde</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.lines.map((line) => (
-                <tr key={`${line.entryNumber}-${line.accountCode}-${line.label}`}>
-                  <td>{line.entryDate.split("-").reverse().join("/")}</td>
-                  <td><TierChip code={line.entryNumber} /></td>
-                  <td><span class="code-badge">{line.journalCode}</span></td>
-                  <td>{line.reference}</td>
-                  <td><strong>{line.accountCode}</strong></td>
-                  <td>{line.label}</td>
-                  <td class="number">{money(line.debit)}</td>
-                  <td class="number">{money(line.credit)}</td>
-                  <td class="number">{signedMoney(line.runningBalance)}</td>
+        <>
+          <div class="responsive-table">
+            <table class="data-table selectable-table">
+              <thead>
+                <tr>
+                  <th>Lettre</th>
+                  <th>Date</th>
+                  <th>N° pièce</th>
+                  <th>Journal</th>
+                  <th>Référence</th>
+                  <th>Compte</th>
+                  <th>Libellé</th>
+                  <th class="number">Débit</th>
+                  <th class="number">Crédit</th>
+                  <th class="number">Solde</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {lines.map((line) => {
+                  const lettered = line.reconciliationLabel !== null;
+                  return (
+                    <tr
+                      key={line.lineId}
+                      class={selection.has(line.lineId) ? "selected" : lettered ? "lettered-row" : undefined}
+                      onClick={() => toggle(line.lineId, lettered)}
+                    >
+                      <td>
+                        {lettered ? (
+                          <span class="letter-badge" title="Mouvement lettré">{line.reconciliationLabel}</span>
+                        ) : (
+                          <span class="letter-pending">{selection.has(line.lineId) ? "•" : ""}</span>
+                        )}
+                      </td>
+                      <td>{formatCivilDateFr(line.entryDate)}</td>
+                      <td><TierChip code={line.entryNumber} /></td>
+                      <td><span class="code-badge">{line.journalCode}</span></td>
+                      <td>{line.reference}</td>
+                      <td><strong>{line.accountCode}</strong></td>
+                      <td>{line.label}</td>
+                      <td class="number">{money(line.debit)}</td>
+                      <td class="number">{money(line.credit)}</td>
+                      <td class="number">{signedMoney(line.runningBalance)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="reconcile-bar">
+            <div>
+              <span class="eyebrow">Lettrage</span>
+              <p>
+                {selected.length === 0
+                  ? "Cliquez sur deux mouvements ou plus (non lettrés) pour les rapprocher."
+                  : `${selected.length} mouvement(s) sélectionné(s) · débit ${money(selectedDebit.toString())} · crédit ${money(selectedCredit.toString())}`}
+              </p>
+              {selected.length >= 2 && !selectionBalanced ? (
+                <p class="reconcile-warning">
+                  Sélection déséquilibrée : un lettrage doit totaliser le même montant au débit et au crédit.
+                </p>
+              ) : null}
+            </div>
+            <div class="action-row">
+              <input
+                maxlength={160}
+                placeholder="Commentaire (facultatif)"
+                value={comment}
+                onInput={(event) => setComment(event.currentTarget.value)}
+              />
+              <button
+                class="button button-primary"
+                type="button"
+                disabled={!selectionBalanced || busy}
+                onClick={() => void reconcile()}
+              >
+                Lettrer la sélection
+              </button>
+              {selection.size > 0 ? (
+                <button class="button button-secondary" type="button" disabled={busy} onClick={() => setSelection(new Set())}>
+                  Vider la sélection
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          {data.reconciliations.length > 0 ? (
+            <div class="reconciliations-list">
+              <span class="eyebrow">Lettrages en cours</span>
+              <ul>
+                {data.reconciliations.map((item) => (
+                  <li key={item.id}>
+                    <span class="letter-badge">{item.label}</span>
+                    <div>
+                      <strong>
+                        {item.lineIds.length} mouvement(s) · {money(item.totalDebit)}
+                      </strong>
+                      <small>
+                        {formatTimestamp(item.createdAt)} par {item.createdBy}
+                        {item.comment ? ` · ${item.comment}` : ""}
+                      </small>
+                    </div>
+                    <button
+                      class="button button-ghost"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void cancel(item.id, item.label)}
+                    >
+                      Annuler
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </>
       )}
     </section>
   );

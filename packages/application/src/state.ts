@@ -20,8 +20,10 @@ import {
   frenchMonthLabel,
   type AccountingEntryStatus,
   type Amount,
+  type AttachmentData,
   type CivilDate,
-  type EntryNumberSequence
+  type EntryNumberSequence,
+  type ReconciliationScope
 } from "@perfecto/domain";
 import { SYSCOHADA_STARTER_ACCOUNTS, STARTER_JOURNALS } from "./catalog";
 
@@ -50,8 +52,35 @@ export interface StoredEntry {
   /** ISO 8601, ou `null` tant que la pièce n'a jamais été révisée. */
   updatedAt: string | null;
   postedAt: string | null;
+  /** Date de contre-passation, `null` si la pièce n'a pas été extournée. */
+  reversedAt: string | null;
+  /** Pièce d'origine lorsque celle-ci est une contre-passation. */
+  reversalOfEntryId: string | null;
+  /** Pièce d'extourne lorsque celle-ci a été contre-passée. */
+  reversedByEntryId: string | null;
   lines: StoredEntryLine[];
 }
+
+/** Lettrage : rapprochement équilibré de mouvements d'un même tiers. */
+export interface ReconciliationRecord {
+  id: string;
+  organizationId: string;
+  /** Lettre attribuée : A, B, … Z, AA… */
+  label: string;
+  scope: ReconciliationScope;
+  /** Code tiers (périmètre `thirdParty`) ou numéro de compte (périmètre `account`). */
+  key: string;
+  /** Identifiants des lignes de pièces lettrées : une ligne n'appartient qu'à un lettrage. */
+  lineIds: string[];
+  totalDebit: Amount;
+  totalCredit: Amount;
+  comment: string;
+  createdAt: string;
+  createdBy: string;
+}
+
+/** Métadonnée d'un justificatif : le contenu binaire reste dans le stockage hôte. */
+export type AttachmentRecord = AttachmentData;
 
 export interface AuditRecord {
   /**
@@ -79,6 +108,10 @@ export interface AccountingState {
   /** Dernier numéro attribué par journal et par exercice. */
   entrySequences: EntryNumberSequence[];
   entries: StoredEntry[];
+  /** Lettrages et rapprochements en cours. */
+  reconciliations: ReconciliationRecord[];
+  /** Justificatifs rattachés aux pièces (métadonnées seulement). */
+  attachments: AttachmentRecord[];
   periods: AccountingPeriodDto[];
   audit: AuditRecord[];
 }
@@ -87,6 +120,18 @@ export interface AccountingState {
 export interface StoragePort {
   read(): Promise<AccountingState>;
   write(state: AccountingState): Promise<void>;
+}
+
+/**
+ * Port de stockage des BINAIRES (justificatifs). Volontairement séparé de
+ * {@link StoragePort} : l'état comptable reste sérialisable et synchronisable,
+ * les octets vivent dans le stockage contrôlé de l'hôte (IndexedDB côté PWA,
+ * système de fichiers ou objet côté serveur).
+ */
+export interface AttachmentBytesPort {
+  put(attachmentId: string, bytes: Uint8Array, mimeType: string): Promise<void>;
+  get(attachmentId: string): Promise<{ bytes: Uint8Array; mimeType: string } | null>;
+  delete(attachmentId: string): Promise<void>;
 }
 
 export function createOpenPeriods(year: number): AccountingPeriodDto[] {
@@ -109,6 +154,8 @@ export function createEmptyState(organizationId: string, fiscalYearId: string, y
     thirdParties: [],
     entrySequences: [],
     entries: [],
+    reconciliations: [],
+    attachments: [],
     periods: createOpenPeriods(year),
     audit: []
   };

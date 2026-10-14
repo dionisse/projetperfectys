@@ -125,6 +125,9 @@ describe("IndexedDbStorage", () => {
       createdAt: new Date().toISOString(),
       updatedAt: null,
       postedAt: null,
+      reversedAt: null,
+      reversalOfEntryId: null,
+      reversedByEntryId: null,
       lines: [
         {
           id: "line-1",

@@ -175,7 +175,13 @@ export function AccountingHome() {
           <div class="balance-total"><span>Mouvements débit</span><strong>{money(data.totalDebitMovements)}</strong></div>
           <div class="balance-total"><span>Mouvements crédit</span><strong>{money(data.totalCreditMovements)}</strong></div>
           <div class="balance-proof"><span>Écart</span><strong>{money("0")}</strong></div>
+          <ul class="control-list">
+            <li><span>Pièces extournées</span><strong>{data.reversedEntryCount}</strong></li>
+            <li><span>Lettrages de tiers</span><strong>{data.reconciliationCount}</strong></li>
+            <li><span>Justificatifs rattachés</span><strong>{data.attachmentCount}</strong></li>
+          </ul>
           <Link href="/comptabilite/balance" class="button button-secondary full-width">Ouvrir la balance</Link>
+          <Link href="/comptabilite/audit" class="button button-ghost full-width">Voir la piste d'audit</Link>
         </aside>
       </div>
     </>

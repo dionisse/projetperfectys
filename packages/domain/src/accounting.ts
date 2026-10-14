@@ -111,6 +111,7 @@ export class AccountingEntry {
   #updatedAt: Date;
   #status: AccountingEntryStatus;
   #postedAt: Date | null = null;
+  #reversedAt: Date | null = null;
   #lines: AccountingEntryLineData[] = [];
 
   private constructor(input: AccountingEntryInput, lines: readonly AccountingEntryLineData[] = []) {
@@ -151,6 +152,9 @@ export class AccountingEntry {
   get postedAt(): Date | null {
     return this.#postedAt;
   }
+  get reversedAt(): Date | null {
+    return this.#reversedAt;
+  }
   get lines(): readonly AccountingEntryLineData[] {
     return this.#lines;
   }
@@ -180,14 +184,30 @@ export class AccountingEntry {
     entry: AccountingEntryInput;
     status: AccountingEntryStatus;
     postedAt: Date | null;
+    reversedAt?: Date | null | undefined;
     updatedAt?: Date | undefined;
     lines: readonly AccountingEntryLineData[];
   }): AccountingEntry {
     const restored = new AccountingEntry(input.entry, input.lines);
     restored.#status = input.status;
     restored.#postedAt = input.postedAt;
+    restored.#reversedAt = input.reversedAt ?? null;
     restored.#updatedAt = input.updatedAt ?? input.entry.now;
     return restored;
+  }
+
+  /**
+   * Lignes de la contre-passation : mêmes comptes, mêmes libellés, mêmes tiers,
+   * débits et crédits permutés. La pièce d'origine n'est jamais modifiée.
+   */
+  reversalLineInputs(): EntryLineInput[] {
+    return this.#lines.map((line) => ({
+      accountCode: line.accountCode,
+      label: line.label,
+      debit: line.credit,
+      credit: line.debit,
+      thirdPartyCode: line.thirdPartyCode
+    }));
   }
 
   addLine(
@@ -244,11 +264,15 @@ export class AccountingEntry {
    * est créée par le noyau applicatif.
    */
   markReversed(now: Date): void {
+    if (this.#status === AccountingEntryStatus.Reversed) {
+      throw new DomainRuleError("Cette pièce a déjà été extournée.");
+    }
     if (this.#status !== AccountingEntryStatus.Posted) {
       throw new DomainRuleError("Seule une pièce validée peut être extournée.");
     }
     this.#status = AccountingEntryStatus.Reversed;
-    this.#postedAt = now;
+    // postedAt est conservé : la date de validation appartient à l'histoire de la pièce.
+    this.#reversedAt = now;
     this.touch(now);
   }
 
