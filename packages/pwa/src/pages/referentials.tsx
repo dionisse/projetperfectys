@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
+import { DocumentKind } from "@perfecto/contracts";
 import { getKernel, DEMO_ORGANIZATION_ID } from "../kernel";
-import { EntryNumber, ErrorNote, Loading, PageHero, useAsync } from "../ui";
+import { EntryNumber, ErrorNote, ExportBar, Loading, PageHero, useAsync } from "../ui";
 
 export function ChartOfAccounts() {
   const [search, setSearch] = useState("");
@@ -38,6 +39,10 @@ export function ChartOfAccounts() {
             <span class="result-count">{data?.length ?? 0} compte(s)</span>
           </div>
           <ErrorNote message={error} />
+          <ExportBar
+            request={{ organizationId: DEMO_ORGANIZATION_ID, kind: DocumentKind.chartOfAccounts }}
+            label="Exporter le plan comptable"
+          />
           <div class="responsive-table tall-table">
             <table class="data-table">
               <thead><tr><th>Compte</th><th>Intitulé</th><th>Classe</th><th>Nature</th><th>Auxiliaire</th><th>État</th></tr></thead>

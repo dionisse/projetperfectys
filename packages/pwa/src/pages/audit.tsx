@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
-import { getKernel } from "../kernel";
-import { ErrorNote, Loading, PageHero, entityTypeLabel, formatTimestamp, useAsync } from "../ui";
+import { DocumentKind } from "@perfecto/contracts";
+import { DEMO_ORGANIZATION_ID, getKernel } from "../kernel";
+import { ErrorNote, ExportBar, Loading, PageHero, entityTypeLabel, formatTimestamp, useAsync } from "../ui";
 
 const SCOPES = [
   { id: "", label: "Tout l'historique", entityType: undefined as string | undefined },
@@ -64,6 +65,16 @@ export function AuditLog() {
           </div>
           <span class="result-count">{data ? `${data.length} événement(s)` : "…"}</span>
         </div>
+
+        <ExportBar
+          request={{
+            organizationId: DEMO_ORGANIZATION_ID,
+            kind: DocumentKind.auditTrail,
+            ...(active.entityType ? { entityType: active.entityType } : {}),
+            limit
+          }}
+          label="Exporter la piste d'audit"
+        />
 
         {!data ? (
           <Loading label="Chargement de l'historique…" />

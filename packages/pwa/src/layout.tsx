@@ -1,17 +1,45 @@
 import type { ComponentChildren } from "preact";
 import { Link, currentRoute } from "./ui";
 
-const NAV_ITEMS: { href: string; icon: string; label: string }[] = [
-  { href: "/", icon: "⌂", label: "Tableau de bord" },
-  { href: "/comptabilite", icon: "≡", label: "Comptabilité générale" },
-  { href: "/comptabilite/plan", icon: "0", label: "Plan comptable" },
-  { href: "/comptabilite/journaux", icon: "J", label: "Journaux" },
-  { href: "/comptabilite/tiers", icon: "◉", label: "Tiers" },
-  { href: "/comptabilite/pieces", icon: "✓", label: "Pièces" },
-  { href: "/comptabilite/balance", icon: "=", label: "Balance" },
-  { href: "/comptabilite/etats/grand-livre", icon: "▤", label: "Grand livre" },
-  { href: "/comptabilite/periodes", icon: "◷", label: "Périodes" },
-  { href: "/comptabilite/audit", icon: "§", label: "Piste d'audit" }
+interface NavEntry {
+  href: string;
+  icon: string;
+  label: string;
+}
+
+/**
+ * Navigation groupée, comme le menu du logiciel d'origine (Saisies, Éditions, Outils).
+ * Les groupes sont déclarés explicitement : ajouter un écran ne décale plus les autres.
+ */
+const NAV_GROUPS: { heading: string; items: NavEntry[] }[] = [
+  {
+    heading: "Pilotage",
+    items: [{ href: "/", icon: "⌂", label: "Tableau de bord" }]
+  },
+  {
+    heading: "Comptabilité SYSCOHADA",
+    items: [
+      { href: "/comptabilite", icon: "≡", label: "Comptabilité générale" },
+      { href: "/comptabilite/plan", icon: "0", label: "Plan comptable" },
+      { href: "/comptabilite/journaux", icon: "J", label: "Journaux" },
+      { href: "/comptabilite/tiers", icon: "◉", label: "Tiers" },
+      { href: "/comptabilite/pieces", icon: "✓", label: "Pièces" },
+      { href: "/comptabilite/balance", icon: "=", label: "Balance" },
+      { href: "/comptabilite/etats/grand-livre", icon: "▤", label: "Grand livre" },
+      { href: "/comptabilite/periodes", icon: "◷", label: "Périodes" }
+    ]
+  },
+  {
+    heading: "Éditions",
+    items: [
+      { href: "/comptabilite/editions", icon: "⎙", label: "Éditions et exports" },
+      { href: "/comptabilite/audit", icon: "§", label: "Piste d'audit" }
+    ]
+  },
+  {
+    heading: "Paramètres",
+    items: [{ href: "/parametres/societe", icon: "✎", label: "Fiche société" }]
+  }
 ];
 
 export function Shell(props: { onReset: () => void; children: ComponentChildren }) {
@@ -27,17 +55,13 @@ export function Shell(props: { onReset: () => void; children: ComponentChildren 
           </span>
         </Link>
         <nav aria-label="Navigation principale">
-          <span class="nav-heading">Pilotage</span>
-          {NAV_ITEMS.slice(0, 1).map((item) => (
-            <NavItem key={item.href} item={item} route={route} />
-          ))}
-          <span class="nav-heading">Comptabilité SYSCOHADA</span>
-          {NAV_ITEMS.slice(1, 9).map((item) => (
-            <NavItem key={item.href} item={item} route={route} />
-          ))}
-          <span class="nav-heading">Contrôle</span>
-          {NAV_ITEMS.slice(9).map((item) => (
-            <NavItem key={item.href} item={item} route={route} />
+          {NAV_GROUPS.map((group) => (
+            <div class="nav-group" key={group.heading}>
+              <span class="nav-heading">{group.heading}</span>
+              {group.items.map((item) => (
+                <NavItem key={item.href} item={item} route={route} />
+              ))}
+            </div>
           ))}
         </nav>
         <div class="sidebar-footer">
@@ -71,7 +95,7 @@ export function Shell(props: { onReset: () => void; children: ComponentChildren 
   );
 }
 
-function NavItem(props: { item: { href: string; icon: string; label: string }; route: string }) {
+function NavItem(props: { item: NavEntry; route: string }) {
   const active =
     props.route === props.item.href ||
     (props.item.href === "/comptabilite/pieces" && props.route.startsWith("/comptabilite/pieces/"));

@@ -1,6 +1,13 @@
 import { useEffect, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import type { AuditEventDto } from "@perfecto/contracts";
+import type {
+  AuditEventDto,
+  ExportDocumentRequest,
+  ExportFormat,
+  ExportedFile
+} from "@perfecto/contracts";
+import { exportFormatExtensions, exportFormatLabels, exportFormatShortLabels } from "@perfecto/contracts";
+import { EXPORT_FORMATS } from "@perfecto/exports";
 import {
   accountingEntryStatusLabel,
   amountFromDecimal,
@@ -9,6 +16,7 @@ import {
   formatTimestampFr,
   type AccountingEntryStatus
 } from "@perfecto/domain";
+import { downloadFile, exportDocument, exportOutcomeMessage } from "./downloads";
 import { getKernel } from "./kernel";
 
 /** Formatage français des montants sérialisés (« 2 832 000 XOF »). */
@@ -181,7 +189,14 @@ export function AuditTimeline(props: { events: AuditEventDto[]; emptyLabel?: str
 }
 
 /** Charge puis affiche la piste d'audit d'une entité précise (pièce, tiers…). */
-export function AuditTrailFor(props: { entityId: string; entityType?: string; limit?: number; title: string }) {
+export function AuditTrailFor(props: {
+  entityId: string;
+  entityType?: string;
+  limit?: number;
+  title: string;
+  /** Texte affiché quand l'entité n'a encore aucun événement. */
+  emptyLabel?: string;
+}) {
   const { data, error } = useAsync(
     () =>
       getKernel().getAuditLog({
@@ -196,7 +211,204 @@ export function AuditTrailFor(props: { entityId: string; entityType?: string; li
     <div class="audit-trail">
       <span class="eyebrow">{props.title}</span>
       <ErrorNote message={error} />
-      {!data ? <p class="muted audit-empty">Chargement de la piste d'audit…</p> : <AuditTimeline events={data} />}
+      {!data ? (
+        <p class="muted audit-empty">Chargement de la piste d'audit…</p>
+      ) : (
+        // `exactOptionalPropertyTypes` : on ne transmet la prop que si elle a une valeur.
+        <AuditTimeline events={data} {...(props.emptyLabel ? { emptyLabel: props.emptyLabel } : {})} />
+      )}
     </div>
+  );
+}
+
+/**
+ * Choix du format d'export : trois boutons, un par format, devant le même document.
+ *
+ * C'est l'utilisateur qui décide — la spécification posée pour cette tranche est explicite :
+ * tout document doit sortir en PDF, en Excel **et** en CSV. La barre est donc posée à
+ * l'identique sur les états comptables, sur les fiches et sur la page des éditions, et le
+ * résultat est annoncé en toutes lettres (nom, format, poids) pour qu'un contrôle interne
+ * puisse retrouver le fichier produit.
+ */
+export function ExportBar(props: {
+  request: ExportDocumentRequest;
+  label?: string;
+  onExported?: (file: ExportedFile) => void;
+}) {
+  const [busy, setBusy] = useState<ExportFormat | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  async function download(format: ExportFormat) {
+    setBusy(format);
+    setMessage(null);
+    setFailure(null);
+    try {
+      const file = await exportDocument(props.request, format);
+      const downloaded = downloadFile(file);
+      setMessage(exportOutcomeMessage(file, downloaded));
+      props.onExported?.(file);
+    } catch (error) {
+      setFailure(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div class="export-bar">
+      <span class="eyebrow">{props.label ?? "Exporter ce document"}</span>
+      <div class="export-choices" role="group" aria-label="Choisir le format d'export">
+        {EXPORT_FORMATS.map((format) => (
+          <button
+            key={format}
+            type="button"
+            data-format={format}
+            class="button button-secondary export-choice"
+            title={exportFormatLabels[format]}
+            aria-label={`${exportFormatLabels[format]} — télécharger au format ${exportFormatShortLabels[format]}`}
+            disabled={busy !== null}
+            onClick={() => void download(format)}
+          >
+            <span class="export-format">{exportFormatShortLabels[format]}</span>
+            <span class="export-extension">.{exportFormatExtensions[format]}</span>
+          </button>
+        ))}
+      </div>
+      {busy ? (
+        <span class="export-busy" role="status">
+          Génération du {exportFormatShortLabels[busy]} en cours…
+        </span>
+      ) : null}
+      {message ? (
+        <span class="export-message" role="status">
+          {message}
+        </span>
+      ) : null}
+      {failure ? (
+        <span class="export-failure" role="alert">
+          {failure}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Aperçu du document tel qu'il sortira, suivi de ses trois boutons d'export.
+ *
+ * L'aperçu lit le modèle neutre produit par le noyau : ce que l'écran montre est donc
+ * exactement ce que les trois moteurs mettent en forme, sans deuxième calcul.
+ */
+export function ExportPanel(props: {
+  request: ExportDocumentRequest;
+  heading: string;
+  hint?: string;
+  /** Nombre de lignes affichées à l'écran ; le document téléchargé reste complet. */
+  maxRows?: number;
+}) {
+  const key = JSON.stringify(props.request);
+  const { data, error } = useAsync(() => getKernel().getExportDocument(props.request), [key]);
+  const maxRows = props.maxRows ?? 12;
+
+  return (
+    <section class="panel export-panel">
+      <div class="panel-heading">
+        <div>
+          <span class="eyebrow">Aperçu du document</span>
+          <h2>{props.heading}</h2>
+          {props.hint ? <p>{props.hint}</p> : null}
+        </div>
+        {data ? <span class="status-badge">{data.rows.length} ligne(s)</span> : null}
+      </div>
+
+      <ErrorNote message={error} />
+
+      {!data ? (
+        error ? null : (
+          <Loading />
+        )
+      ) : (
+        <>
+          <ExportBar request={props.request} />
+
+          {data.fields.length > 0 ? (
+            <dl class="document-fields">
+              {data.fields.map((item) => (
+                <div key={item.label}>
+                  <dt>{item.label}</dt>
+                  <dd>{item.text}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+
+          <div class="responsive-table">
+            <table class="data-table document-preview">
+              <caption class="visually-hidden">
+                {data.title}
+                {data.subtitle ? ` — ${data.subtitle}` : ""}
+              </caption>
+              <thead>
+                <tr>
+                  {data.columns.map((column) => (
+                    <th key={column.key} scope="col" class={column.align === "right" ? "number" : undefined}>
+                      {column.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.rows.slice(0, maxRows).map((row, index) => (
+                  <tr
+                    key={index}
+                    class={
+                      row.emphasis === "section"
+                        ? "document-section"
+                        : row.emphasis === "total"
+                          ? "document-total"
+                          : undefined
+                    }
+                  >
+                    {row.cells.map((cell, cellIndex) => (
+                      <td
+                        key={data.columns[cellIndex]?.key ?? cellIndex}
+                        class={data.columns[cellIndex]?.align === "right" ? "number" : undefined}
+                      >
+                        {cell.text}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+              {data.totals ? (
+                <tfoot>
+                  <tr>
+                    {data.totals.cells.map((cell, cellIndex) => (
+                      <th
+                        key={data.columns[cellIndex]?.key ?? cellIndex}
+                        scope="col"
+                        class={data.columns[cellIndex]?.align === "right" ? "number" : undefined}
+                      >
+                        {cell.text}
+                      </th>
+                    ))}
+                  </tr>
+                </tfoot>
+              ) : null}
+            </table>
+          </div>
+
+          {data.rows.length > maxRows ? (
+            <p class="document-more">
+              Aperçu limité aux {maxRows} premières lignes : le document téléchargé en compte{" "}
+              {data.rows.length}.
+            </p>
+          ) : null}
+
+          <p class="document-footer">{data.footer}</p>
+        </>
+      )}
+    </section>
   );
 }

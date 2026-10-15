@@ -1,7 +1,8 @@
 import { useState } from "preact/hooks";
+import { DocumentKind } from "@perfecto/contracts";
 import { amountFromDecimal, amountToDecimal } from "@perfecto/domain";
-import { getKernel } from "../kernel";
-import { EntryNumber, ErrorNote, Loading, PageHero, TierChip, money, signedMoney, useAsync } from "../ui";
+import { DEMO_ORGANIZATION_ID, getKernel } from "../kernel";
+import { EntryNumber, ErrorNote, ExportBar, Loading, PageHero, TierChip, money, signedMoney, useAsync } from "../ui";
 
 export function Balance() {
   const { data, error } = useAsync(() => getKernel().getSnapshot());
@@ -18,6 +19,10 @@ export function Balance() {
           <div><span class="eyebrow">Contrôle d'égalité</span><h2>Balance des comptes actifs</h2></div>
           <span class="status-badge success">Équilibrée</span>
         </div>
+        <ExportBar
+          request={{ organizationId: DEMO_ORGANIZATION_ID, kind: DocumentKind.trialBalance }}
+          label="Exporter la balance"
+        />
         <div class="responsive-table">
           <table class="data-table balance-table">
             <thead><tr><th>Compte</th><th>Intitulé</th><th class="number">Mouvements débit</th><th class="number">Mouvements crédit</th><th class="number">Solde débiteur</th><th class="number">Solde créditeur</th></tr></thead>
@@ -81,6 +86,14 @@ export function JournalReport() {
             </label>
             <span class="result-count">{lines.length} ligne(s)</span>
           </div>
+          <ExportBar
+            request={{
+              organizationId: DEMO_ORGANIZATION_ID,
+              kind: DocumentKind.journal,
+              ...(journal !== "" ? { journalCode: journal } : {})
+            }}
+            label="Exporter le journal"
+          />
           <div class="responsive-table">
             <table class="data-table balance-table">
               <thead><tr><th>Date</th><th>N° pièce</th><th>Journal</th><th>Référence</th><th>Compte</th><th>Intitulé</th><th>Libellé</th><th>Tiers</th><th class="number">Débit</th><th class="number">Crédit</th></tr></thead>
@@ -143,6 +156,14 @@ export function GeneralLedger() {
                 <strong>{account.accountCode} · {account.accountLabel}</strong>
                 <span>Débit {money(account.totalDebit)} · Crédit {money(account.totalCredit)}</span>
               </div>
+              <ExportBar
+                request={{
+                  organizationId: DEMO_ORGANIZATION_ID,
+                  kind: DocumentKind.generalLedger,
+                  ...(code !== "" ? { accountCode: code } : {})
+                }}
+                label="Exporter le grand livre"
+              />
               <div class="responsive-table">
                 <table class="data-table">
                   <thead><tr><th>Date</th><th>N° pièce</th><th>Journal</th><th>Référence</th><th>Libellé</th><th>Tiers</th><th class="number">Débit</th><th class="number">Crédit</th><th class="number">Solde cumulé</th></tr></thead>

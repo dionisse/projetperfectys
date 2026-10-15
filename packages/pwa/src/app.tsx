@@ -7,6 +7,8 @@ import { EditEntry, Entries, NewEntry } from "./pages/entries";
 import { Balance, GeneralLedger, JournalReport } from "./pages/reports";
 import { ThirdParties } from "./pages/third-parties";
 import { AuditLog } from "./pages/audit";
+import { Editions } from "./pages/editions";
+import { Society } from "./pages/society";
 import { Periods } from "./pages/periods";
 
 export function App() {
@@ -57,6 +59,10 @@ function selectPage(route: string) {
       return <Periods />;
     case "/comptabilite/audit":
       return <AuditLog />;
+    case "/comptabilite/editions":
+      return <Editions />;
+    case "/parametres/societe":
+      return <Society />;
     default:
       return (
         <section class="empty-state">

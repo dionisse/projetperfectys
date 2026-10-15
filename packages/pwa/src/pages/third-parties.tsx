@@ -1,5 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import type { ThirdPartyUsageDto } from "@perfecto/contracts";
+import { DocumentKind } from "@perfecto/contracts";
 import {
   THIRD_PARTY_TYPES,
   amountFromDecimal,
@@ -8,7 +9,17 @@ import {
   type ThirdPartyType
 } from "@perfecto/domain";
 import { DEMO_ORGANIZATION_ID, getKernel } from "../kernel";
-import { ErrorNote, Loading, PageHero, TierChip, formatTimestamp, money, signedMoney, useAsync } from "../ui";
+import {
+  ErrorNote,
+  ExportBar,
+  Loading,
+  PageHero,
+  TierChip,
+  formatTimestamp,
+  money,
+  signedMoney,
+  useAsync
+} from "../ui";
 
 interface TierForm {
   code: string;
@@ -146,6 +157,10 @@ export function ThirdParties() {
                 {tiers.length} tiers · {inactiveCount} désactivé(s)
               </span>
             </div>
+            <ExportBar
+              request={{ organizationId: DEMO_ORGANIZATION_ID, kind: DocumentKind.thirdParties }}
+              label="Exporter le fichier des tiers"
+            />
             <div class="responsive-table tall-table">
               <table class="data-table selectable-table">
                 <thead>
@@ -381,6 +396,14 @@ function ThirdPartyStatement(props: { code: string }) {
         ) : null}
       </div>
       <ErrorNote message={error} />
+      <ExportBar
+        request={{
+          organizationId: DEMO_ORGANIZATION_ID,
+          kind: DocumentKind.thirdPartyStatement,
+          thirdPartyCode: props.code
+        }}
+        label="Exporter le relevé"
+      />
       {message ? (
         <div class={`form-message ${message.isError ? "error" : "success"}`}>{message.text}</div>
       ) : null}

@@ -59,9 +59,45 @@ function transaction<T>(
 }
 
 export class IndexedDbStorage implements StoragePort {
+  /**
+   * Amorçage à vol unique.
+   *
+   * Un écran ouvre plusieurs lectures parallèles (journaux, comptes, tiers, pièces…). Sur
+   * une base vide — premier lancement, profil navigateur neuf, réinitialisation — chacune
+   * de ces lectures amorçait son propre jeu de démonstration, avec ses propres identifiants,
+   * et la dernière écriture écrasait les autres : l'écran affichait alors des pièces dont
+   * l'identifiant n'existait plus en base. Une seule promesse d'amorçage, partagée, supprime
+   * la course ; toute lecture et toute écriture l'attend.
+   */
+  #bootstrapped: Promise<void> | null = null;
+
   constructor(private readonly seed: () => AccountingState) {}
 
+  #bootstrap(): Promise<void> {
+    this.#bootstrapped ??= (async () => {
+      const db = await openDatabase();
+      try {
+        const existing = await transaction<SerializedState | undefined>(
+          db,
+          STORE,
+          "readonly",
+          (store) => store.get(STATE_KEY)
+        );
+        if (existing) {
+          return;
+        }
+        await transaction(db, STORE, "readwrite", (store) =>
+          store.put(serializeState(this.seed()), STATE_KEY)
+        );
+      } finally {
+        db.close();
+      }
+    })();
+    return this.#bootstrapped;
+  }
+
   async read(): Promise<AccountingState> {
+    await this.#bootstrap();
     const db = await openDatabase();
     try {
       const existing = await transaction<SerializedState | undefined>(db, STORE, "readonly", (store) =>
@@ -70,6 +106,8 @@ export class IndexedDbStorage implements StoragePort {
       if (existing) {
         return deserializeState(existing);
       }
+      // Repli : base effacée pendant l'exécution. On réamorce et on persiste aussitôt,
+      // pour que la base contienne toujours exactement ce que l'écran affiche.
       const state = this.seed();
       await transaction(db, STORE, "readwrite", (store) => store.put(serializeState(state), STATE_KEY));
       return state;
@@ -79,6 +117,7 @@ export class IndexedDbStorage implements StoragePort {
   }
 
   async write(state: AccountingState): Promise<void> {
+    await this.#bootstrap();
     const db = await openDatabase();
     try {
       await transaction(db, STORE, "readwrite", (store) => store.put(serializeState(state), STATE_KEY));
