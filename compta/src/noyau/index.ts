@@ -170,6 +170,21 @@ export {
   type SensLigneDeclaration
 } from "./declaration-tva";
 
+export {
+  MODELE_BILAN_ACTIF,
+  MODELE_BILAN_PASSIF,
+  MODELE_COMPTE_RESULTAT,
+  construireBilan,
+  construireCompteDeResultat,
+  type Bilan,
+  type CompteDeResultat,
+  type DetailCompte,
+  type LigneEtat,
+  type NiveauRubrique,
+  type Rubrique,
+  type SensPresentation
+} from "./etats-financiers";
+
 export { StockageMemoire } from "./stockage";
 export type { PortStockage } from "./stockage";
 

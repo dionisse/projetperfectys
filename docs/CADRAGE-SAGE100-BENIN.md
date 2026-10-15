@@ -159,6 +159,32 @@ navigables au clavier, barre d'état.
 Le producteur d'**états financiers** est distinct du module, comme *Financial Reporter* l'est de
 Sage 300 GL : même noyau, couche séparée.
 
+### 5.1 Ce que le producteur d'états financiers livre
+
+`compta/src/noyau/etats-financiers.ts` décrit les états comme des **données**. Une rubrique porte
+son code, son libellé, son niveau (`detail`, `total`, `resultat`), les groupes de comptes qui
+l'alimentent, son sens de présentation (`actif`, `passif`, `produit`, `charge`, `amortissement`,
+`solde`) et — pour un total — l'expression qui le compose à partir de rubriques déjà évaluées. Un
+seul moteur plie sur ces rubriques dans l'ordre du modèle : **aucun écran ne calcule un total**, et
+publier le modèle d'un autre pays de l'UEMOA ne toucherait pas au calcul.
+
+| État | Rubriques du modèle | Contrôle emporté par l'état |
+|---|---|---|
+| **Bilan** | Actif : immobilisations incorporelles, corporelles, financières, amortissements et dépréciations, actif circulant, trésorerie-actif, chacun avec son total et le total général. Passif : capitaux propres (**résultat de l'exercice compris**), dettes stables, passif circulant, trésorerie-passif, totaux | `ecart = total de l'actif net − total du passif`, affiché en tête de l'écran ; les comptes qui ne participent à aucun état sont listés, les rubriques qu'aucun solde n'alimente sont annoncées |
+| **Compte de résultat** | Produits et charges d'exploitation, financières, hors activités ordinaires, impôts sur les résultats, et les six résultats numérotés du modèle révisé | Le résultat présenté est confronté à la somme algébrique des comptes de gestion de la balance ; un écart nomme le compte en cause |
+
+Les deux états s'établissent à la clôture de l'exercice **ou à la fin d'une période** : un arrêté
+intermédiaire est cumulé depuis le 1er janvier, jamais borné au seul mois choisi.
+
+**Ce qui n'est pas produit, et pourquoi.** Le tableau des flux de trésorerie et le tableau de
+variation des activités exigent que chaque compte soit classé dans un flux : le groupe `tft` existe
+dans le modèle de groupes, aucun compte du plan de démarrage ne le porte. Publier ces états sans
+classification reviendrait à inventer une présentation — les entrées de menu disent donc la raison
+de leur absence. La colonne « N-1 » attend la tranche G (multi-exercices). Enfin, la mise en page
+des imprimés officiels n'a pas été relevée dans l'Acte uniforme relatif au droit comptable et à
+l'information financière : comme la déclaration TVA, ces états sont des **documents de contrôle**,
+portés `aVerifier`, à rapprocher du formulaire de dépôt avant toute communication légale.
+
 ## 6. Ordre de livraison
 
 | Tranche | Livrable | Preuve | État au 15/10/2026 |
@@ -170,7 +196,7 @@ Sage 300 GL : même noyau, couche séparée.
 | **E** | Taxes Bénin en saisie + **déclaration TVA** mensuelle | tests de calcul fiscal | **livrée** : génération des lignes de taxe en saisie, déclaration recalculée et rapprochée du grand livre, export CSV. Reste le reversement des acomptes et retenues (compte 442100), qui relève d'une autre obligation |
 | **F** | Lettrage, rapprochement bancaire | tests | à faire — l'échéance est déjà saisie ligne par ligne |
 | **G** | Clôtures : période, exercice, à-nouveaux, *Create New Year* | tests | à faire — le noyau verrouille déjà les périodes clôturées |
-| **H** | États financiers OHADA révisé (producteur distinct), exports PDF/Excel/CSV de tous les documents | fichiers produits et vérifiés | à faire — les groupes d'états sont déjà portés par le plan ; l'export CSV est livré (déclaration, balance, journal, grand livre) |
+| **H** | États financiers OHADA révisé (producteur distinct), exports PDF/Excel/CSV de tous les documents | fichiers produits et vérifiés | **partiellement livrée** : bilan et compte de résultat OHADA révisé — producteur `etats-financiers.ts`, deux écrans, arrêté par période, export CSV, 18 tests. Restent le tableau des flux de trésorerie et le tableau de variation des activités (aucun compte du plan n'est classé en flux), les exports PDF et Excel, et la colonne « N-1 » (tranche G) |
 | **I** | Piste d'audit, habilitations par écran, import/export de données, sauvegarde/restauration, hôte Windows | tests + package installable | piste d'audit **livrée** (ajout-seulement, attribuée, horodatée) ; le reste à faire |
 
 **Chaque tranche se termine par un écran validé par l'utilisateur sur l'aperçu live avant la

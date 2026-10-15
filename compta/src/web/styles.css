@@ -366,6 +366,28 @@ body {
   outline: none;
 }
 
+/* États financiers : le niveau d'une rubrique doit se lire sans compter les espaces. */
+.grille-etat td:first-child {
+  white-space: normal;
+}
+
+.grille-etat tr.niveau-detail td:first-child {
+  padding-left: 1.2rem;
+  color: var(--discret);
+}
+
+.grille-etat tr.niveau-total td {
+  font-weight: 600;
+  background: var(--surface-plongee);
+  border-top: 1px solid var(--bord);
+}
+
+.grille-etat tr.niveau-resultat td {
+  font-weight: 700;
+  background: var(--accent-doux);
+  border-top: 2px solid var(--accent);
+}
+
 .grille-saisie input.align-droite {
   text-align: right;
 }

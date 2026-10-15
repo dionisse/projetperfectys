@@ -24,6 +24,7 @@ import {
   formaterDateFr,
   ouvrirPeriode,
   periodeDeDate,
+  periodeParNumero,
   type DateCivile,
   type Exercice
 } from "./calendrier";
@@ -45,6 +46,12 @@ import {
 } from "./lots";
 import { codesTaxeApplicables, verifierLignesTaxees, type CodeTaxe } from "./taxes";
 import { construireDeclarationTva, type DeclarationTva } from "./declaration-tva";
+import {
+  construireBilan,
+  construireCompteDeResultat,
+  type Bilan,
+  type CompteDeResultat
+} from "./etats-financiers";
 import {
   construireBalance,
   construireGrandLivre,
@@ -267,6 +274,40 @@ export class ServiceComptable {
   async journal(filtre: FiltreMouvements = {}): Promise<PieceDeJournal[]> {
     const etat = await this.#stockage.lire();
     return construireJournal(etat.mouvements, filtre);
+  }
+
+  /**
+   * Bilan à une date donnée — par défaut la clôture de l'exercice.
+   *
+   * `periode` borne l'état à la fin de cette période, en cumul depuis l'ouverture de l'exercice :
+   * un bilan intermédiaire n'est pas la balance d'un mois, c'est la situation à la fin du mois.
+   */
+  async bilan(periode?: number): Promise<Bilan> {
+    const etat = await this.#stockage.lire();
+    const borne = periode === undefined ? null : periodeParNumero(etat.exercice, periode);
+    const filtre: FiltreMouvements = borne
+      ? { du: etat.exercice.dateDebut, au: borne.dateFin }
+      : {};
+    const balance = construireBalance(etat.mouvements, etat.comptes, filtre);
+    return construireBilan(balance, this.#paquet.referentiel.groupes, {
+      exercice: etat.exercice.annee,
+      dateCloture: borne ? borne.dateFin : etat.exercice.dateFin
+    });
+  }
+
+  /** Compte de résultat, en cumul depuis l'ouverture de l'exercice jusqu'à la période demandée. */
+  async compteDeResultat(periode?: number): Promise<CompteDeResultat> {
+    const etat = await this.#stockage.lire();
+    const borne = periode === undefined ? null : periodeParNumero(etat.exercice, periode);
+    const filtre: FiltreMouvements = borne
+      ? { du: etat.exercice.dateDebut, au: borne.dateFin }
+      : {};
+    const balance = construireBalance(etat.mouvements, etat.comptes, filtre);
+    return construireCompteDeResultat(balance, {
+      exercice: etat.exercice.annee,
+      dateDebut: etat.exercice.dateDebut,
+      dateFin: borne ? borne.dateFin : etat.exercice.dateFin
+    });
   }
 
   /**

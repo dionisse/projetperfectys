@@ -27,7 +27,7 @@ la même base.
 
 ```bash
 npm install            # installe l'espace de travail (compta)
-npm test               # 103 tests : noyau en Node, interface en jsdom
+npm test               # 121 tests : noyau en Node, interface en jsdom
 npm run typecheck      # TypeScript strict, sans émission
 npm run build          # build de production dans compta/dist
 npm run preview:vercel # sert le build comme le ferait Vercel, sur http://localhost:5173
@@ -57,6 +57,14 @@ npm run dev            # serveur de développement Vite
   par lot) ; elle est effacée à l'enregistrement ou sur demande explicite.
 - **Interrogation** : balance filtrable par période, journal par pièce avec son détail, grand livre
   à solde progressif par compte (comptes auxiliaires compris).
+- **États** : **bilan OHADA révisé** (actif en brut, amortissements et net ; passif en net ;
+  résultat de l'exercice porté aux capitaux propres) et **compte de résultat OHADA révisé** (les
+  six résultats du modèle révisé, du résultat d'exploitation au résultat net), chacun établi à la
+  clôture de l'exercice **ou à la fin d'une période** — un arrêté intermédiaire est cumulé depuis le
+  1er janvier. L'équilibre du bilan est contrôlé et affiché en tête ; le compte de résultat vérifie
+  que le résultat présenté égale la somme algébrique des comptes de gestion de la balance. Les deux
+  écrans détaillent les comptes qui alimentent chaque rubrique, annoncent les rubriques qu'aucun
+  solde n'alimente et listent les comptes qui ne participent à aucun état.
 - **États** : **déclaration TVA mensuelle** recalculée depuis le grand livre — bases, taux, taxes,
   retenue de TVA sur marchés publics, crédit antérieur imputé, taxe nette à payer ou crédit à
   reporter — avec un **rapprochement compte par compte** entre ce que les codes de taxe produisent
@@ -64,7 +72,8 @@ npm run dev            # serveur de développement Vite
   est affiché en alerte, jamais absorbé dans un total. L'écran est un état de contrôle : il ne
   prétend pas reproduire l'imprimé officiel, dont la mise en page n'a pas été relevée dans le texte
   juridique.
-- **Export CSV** : la déclaration TVA, la balance, le journal et le grand livre se téléchargent au
+- **Export CSV** : le bilan, le compte de résultat, la déclaration TVA, la balance, le journal et
+  le grand livre se téléchargent au
   format CSV (point-virgule, BOM UTF-8, fins de ligne CRLF — ce qu'Excel en français attend), dans
   ce que l'écran affiche, filtres compris. Excel et PDF suivent.
 - **Outils** : piste d'audit ajout-seulement, séquencée, attribuée et horodatée ; réinitialisation
@@ -75,11 +84,12 @@ npm run dev            # serveur de développement Vite
 
 Les entrées de menu correspondant à des fonctions non livrées sont **visibles, grisées, et portent
 la tranche qui les livrera** en infobulle. Elles ne sont pas cliquables : aucun lien mort, aucun
-écran vide. Lettrage, rapprochement bancaire, écritures récurrentes, clôtures de période et
-d'exercice, interrogation d'un compte et historique, états financiers OHADA révisé (bilan, compte
-de résultat, tableau des flux, tableau de variation des activités), exports Excel et PDF,
+écran vide. Lettrage, rapprochement bancaire, écritures récurrentes, clôture d'exercice avec
+report des à-nouveaux, interrogation d'un compte et historique, tableau des flux de trésorerie et
+tableau de variation des activités (le plan de démarrage ne porte aucun compte classé « flux de
+trésorerie » : l'entrée de menu le dit au lieu de produire un état vide), exports Excel et PDF,
 reversement des acomptes et retenues à la source, imports, habilitations par écran, sauvegarde et
-restauration.
+restauration. La colonne « N-1 » des états financiers attend la gestion multi-exercices.
 
 ## Décisions de conception
 
@@ -105,6 +115,16 @@ restauration.
 9. **Un état fiscal est un état de contrôle.** La déclaration de TVA est recalculée depuis les
    bases taxées et les taux du paquet pays, puis confrontée au grand livre. Ce qui diffère est
    affiché : une déclaration dont le total tombe juste par compensation ne vaut rien.
+10. **Un état financier est un modèle de rubriques, pas du code de mise en page.** Le bilan et le
+    compte de résultat sont décrits comme des données (rubriques, groupes de comptes qui les
+    alimentent, sens de présentation, niveau, formule de total), puis évalués par un seul moteur.
+    Ajouter une rubrique, ou publier le modèle d'un autre pays de l'UEMOA, ne touche pas au calcul.
+    Chaque état emporte son propre contrôle : écart actif/passif pour le bilan, écart entre le
+    résultat présenté et la somme des comptes de gestion pour le compte de résultat.
+11. **Le résultat de l'exercice est au passif avant la clôture.** Un bilan arrêté en cours d'année
+    n'est équilibré que parce que les comptes de gestion sont résumés dans les capitaux propres. La
+    clôture remplacera ce solde par un compte 121000 mouvementé ; jusqu'alors, aucun état ne fait
+    semblant qu'elle a eu lieu.
 
 ## Société de démonstration
 
