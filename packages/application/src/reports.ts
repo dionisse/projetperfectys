@@ -14,6 +14,7 @@ import type {
   LedgerAccountDto,
   LedgerLineDto,
   ThirdPartyStatementLineDto,
+  ThirdPartyUsageDto,
   TrialBalanceLineDto
 } from "@perfecto/contracts";
 import {
@@ -24,7 +25,7 @@ import {
   amountToDecimal,
   type Amount
 } from "@perfecto/domain";
-import type { StoredEntry } from "./state";
+import type { AccountingState, StoredEntry } from "./state";
 
 /** Pièces validées : servent aux compteurs (validées, extournées…). */
 export function postedEntries(entries: readonly StoredEntry[]): StoredEntry[] {
@@ -207,4 +208,64 @@ export function buildThirdPartyStatement(
 /** Les montants DTO proviennent du noyau (amountToDecimal) : conversion exacte. */
 function amountFromDto(value: string): Amount {
   return amountFromDecimal(value);
+}
+
+/* ------------------------------------------------------------------ */
+/* Sélecteurs partagés : le noyau et les éditions lisent les mêmes données */
+/* ------------------------------------------------------------------ */
+
+/** Année de l'exercice courant, déduite des périodes (à défaut, année du jour). */
+export function exerciseYear(state: AccountingState): number {
+  return state.periods[0]?.year ?? new Date().getFullYear();
+}
+
+/** Nombre de lignes validées imputées à un tiers. */
+export function countPostedLines(state: AccountingState, thirdPartyCode: string): number {
+  const code = thirdPartyCode.toUpperCase();
+  return postedEntries(state.entries)
+    .flatMap((entry) => entry.lines)
+    .filter((line) => (line.thirdPartyCode ?? "").toUpperCase() === code).length;
+}
+
+/** Code de tiers (en majuscules) -> nom, pour libeller les lignes d'états. */
+export function thirdPartyNames(state: AccountingState): Map<string, string> {
+  return new Map(state.thirdParties.map((item) => [item.code.toUpperCase(), item.name] as const));
+}
+
+/**
+ * Fichier des tiers enrichi de son usage comptable.
+ *
+ * Deux compteurs distincts, et ce n'est pas un détail : `lineCount` compte toutes les
+ * lignes (brouillons compris), `postedLineCount` seulement les lignes de pièces validées,
+ * qui sont les seules à alimenter les états. Les soldes suivent la même règle.
+ */
+export function thirdPartyUsage(state: AccountingState, search?: string): ThirdPartyUsageDto[] {
+  const needle = search?.trim().toLowerCase();
+  const postedLines = postedEntries(state.entries).flatMap((entry) => entry.lines);
+
+  return state.thirdParties
+    .filter((item) =>
+      needle
+        ? item.code.toLowerCase().includes(needle) || item.name.toLowerCase().includes(needle)
+        : true
+    )
+    .map((item) => {
+      const own = postedLines.filter(
+        (line) => (line.thirdPartyCode ?? "").toUpperCase() === item.code.toUpperCase()
+      );
+      const all = state.entries
+        .flatMap((entry) => entry.lines)
+        .filter((line) => (line.thirdPartyCode ?? "").toUpperCase() === item.code.toUpperCase());
+      const totalDebit = own.reduce((sum, line) => amountAdd(sum, line.debit), AMOUNT_ZERO);
+      const totalCredit = own.reduce((sum, line) => amountAdd(sum, line.credit), AMOUNT_ZERO);
+      return {
+        ...item,
+        lineCount: all.length,
+        postedLineCount: own.length,
+        totalDebit: amountToDecimal(totalDebit),
+        totalCredit: amountToDecimal(totalCredit),
+        netBalance: amountToDecimal(totalDebit - totalCredit)
+      };
+    })
+    .sort((left, right) => left.code.localeCompare(right.code));
 }

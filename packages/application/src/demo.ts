@@ -15,6 +15,8 @@ import {
   civilDate,
   civilYear,
   createThirdParty,
+  normalizeOrganizationProfile,
+  type OrganizationProfile,
   formatEntryNumber,
   nextReconciliationLabel,
   validateReconcilableLines,
@@ -108,8 +110,25 @@ export function createDemoThirdParties(organizationId: string): ThirdPartyData[]
   ];
 }
 
+/**
+ * Société de démonstration : une fiche complète, pour que les documents exportés
+ * montrent un en-tête réel (raison sociale, forme juridique, IFU, coordonnées).
+ */
+export function createDemoOrganization(): OrganizationProfile {
+  return normalizeOrganizationProfile({
+    name: "PERFECTO Négoce Abidjan",
+    legalForm: "SARL",
+    taxIdentifier: "CI-2024-B-1187",
+    address: "Boulevard Latrille, Cocody Danga, 12 BP 1234",
+    city: "Abidjan",
+    country: "Côte d'Ivoire",
+    phone: "+225 27 22 44 55 66",
+    email: "compta@perfecto-negoce.ci"
+  });
+}
+
 export function createDemoState(organizationId: string, fiscalYearId: string): AccountingState {
-  const state = createEmptyState(organizationId, fiscalYearId, 2026);
+  const state = createEmptyState(organizationId, fiscalYearId, 2026, createDemoOrganization());
   const labels = new Map(state.accounts.map((account) => [account.code, account.label] as const));
   const relabel = (entry: StoredEntry): StoredEntry => ({
     ...entry,

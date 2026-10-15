@@ -38,6 +38,9 @@ import type {
   ThirdPartyStatementDto,
   ThirdPartyUsageDto,
   UpdateAccountingEntryRequest,
+  UpdateOrganizationRequest,
+  ExportDocument,
+  ExportDocumentRequest,
   UpdateThirdPartyRequest
 } from "@perfecto/contracts";
 import { auditActionLabel } from "@perfecto/contracts";
@@ -56,6 +59,8 @@ import {
   assertAttachmentSize,
   createAttachment,
   createThirdParty,
+  normalizeOrganizationProfile,
+  type OrganizationProfile,
   formatByteSize,
   nextReconciliationLabel,
   normalizeMimeType,
@@ -76,9 +81,14 @@ import {
   buildJournal,
   buildThirdPartyStatement,
   buildTrialBalance,
+  countPostedLines,
+  exerciseYear,
   postedEntries,
-  reportableEntries
+  reportableEntries,
+  thirdPartyNames,
+  thirdPartyUsage
 } from "./reports";
+import { buildExportDocument } from "./export-documents";
 import { sha256Hex } from "./crypto";
 import type {
   AccountingState,
@@ -202,6 +212,61 @@ export class AccountingKernel {
   async getGeneralLedger() {
     const state = await this.#storage.read();
     return buildGeneralLedger(state.entries);
+  }
+
+  /* ------------------------- Éditions et exports ------------------------- */
+
+  /**
+   * Document prêt à être mis en forme : le noyau en construit le contenu, les moteurs de
+   * `@perfecto/exports` le rendent en PDF, en Excel ou en CSV au choix de l'utilisateur.
+   *
+   * Éditer un document ne modifie aucune donnée : la lecture n'est pas auditée (seuls les
+   * actes de gestion le sont), mais elle est bornée à l'organisation de l'espace courant.
+   */
+  async getExportDocument(request: ExportDocumentRequest): Promise<ExportDocument> {
+    const state = await this.#storage.read();
+    this.#ensureOrganization(request.organizationId, state);
+    return buildExportDocument(state, request, { now: this.#clock(), actor: this.#actor });
+  }
+
+  /* ------------------------------ Société ------------------------------ */
+
+  /** Identité imprimée en en-tête et en pied de chaque document exporté. */
+  async getOrganization(): Promise<OrganizationProfile> {
+    const state = await this.#storage.read();
+    return state.organization;
+  }
+
+  /**
+   * Met à jour la fiche société.
+   *
+   * La normalisation passe par le domaine ({@link normalizeOrganizationProfile}) : espaces
+   * superflus supprimés, IFU en majuscules, raison sociale obligatoire, courriel vérifié,
+   * champs absents conservés. Le cadrage v2 prévoit qu'un abonnement expiré laisse au moins
+   * la lecture et **l'export** — cette fiche conditionne donc la valeur légale des documents.
+   */
+  async updateOrganization(request: UpdateOrganizationRequest): Promise<OrganizationProfile> {
+    return this.#run(async () => {
+      const state = await this.#storage.read();
+      const now = this.#clock();
+      this.#ensureOrganization(request.organizationId, state);
+
+      const previous = state.organization;
+      const { organizationId: _organizationId, ...profile } = request;
+      const updated = normalizeOrganizationProfile(profile, previous);
+      state.organization = updated;
+
+      this.#audit(
+        state,
+        now,
+        "accounting.organization.updated",
+        "Organization",
+        state.organizationId,
+        `${previous.name} -> ${updated.name} · IFU ${updated.taxIdentifier || "non renseigné"}`
+      );
+      await this.#storage.write(state);
+      return updated;
+    });
   }
 
   async getPeriods(): Promise<AccountingPeriodDto[]> {
@@ -1130,50 +1195,6 @@ export class AccountingKernel {
 
 function parseTypeOrThrow(type: string): ThirdPartyDto["type"] {
   return parseThirdPartyType(type);
-}
-
-/** Année de l'exercice courant, déduite des périodes (à défaut, année du jour). */
-function exerciseYear(state: AccountingState): number {
-  return state.periods[0]?.year ?? new Date().getFullYear();
-}
-
-function countPostedLines(state: AccountingState, thirdPartyCode: string): number {
-  const code = thirdPartyCode.toUpperCase();
-  return postedEntries(state.entries).flatMap((entry) => entry.lines)
-    .filter((line) => (line.thirdPartyCode ?? "").toUpperCase() === code).length;
-}
-
-function thirdPartyNames(state: AccountingState): Map<string, string> {
-  return new Map(state.thirdParties.map((item) => [item.code.toUpperCase(), item.name] as const));
-}
-
-function thirdPartyUsage(state: AccountingState, search?: string): ThirdPartyUsageDto[] {
-  const needle = search?.trim().toLowerCase();
-  const postedLines = postedEntries(state.entries).flatMap((entry) => entry.lines);
-
-  return state.thirdParties
-    .filter((item) =>
-      needle
-        ? item.code.toLowerCase().includes(needle) || item.name.toLowerCase().includes(needle)
-        : true
-    )
-    .map((item) => {
-      const own = postedLines.filter((line) => (line.thirdPartyCode ?? "").toUpperCase() === item.code.toUpperCase());
-      const all = state.entries
-        .flatMap((entry) => entry.lines)
-        .filter((line) => (line.thirdPartyCode ?? "").toUpperCase() === item.code.toUpperCase());
-      const totalDebit = own.reduce((sum, line) => amountAdd(sum, line.debit), AMOUNT_ZERO);
-      const totalCredit = own.reduce((sum, line) => amountAdd(sum, line.credit), AMOUNT_ZERO);
-      return {
-        ...item,
-        lineCount: all.length,
-        postedLineCount: own.length,
-        totalDebit: amountToDecimal(totalDebit),
-        totalCredit: amountToDecimal(totalCredit),
-        netBalance: amountToDecimal(totalDebit - totalCredit)
-      };
-    })
-    .sort((left, right) => left.code.localeCompare(right.code));
 }
 
 function sortEntries(entries: readonly StoredEntry[]): StoredEntry[] {

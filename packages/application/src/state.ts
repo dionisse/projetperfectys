@@ -17,12 +17,14 @@ import type {
   ThirdPartyDto
 } from "@perfecto/contracts";
 import {
+  emptyOrganizationProfile,
   frenchMonthLabel,
   type AccountingEntryStatus,
   type Amount,
   type AttachmentData,
   type CivilDate,
   type EntryNumberSequence,
+  type OrganizationProfile,
   type ReconciliationScope
 } from "@perfecto/domain";
 import { SYSCOHADA_STARTER_ACCOUNTS, STARTER_JOURNALS } from "./catalog";
@@ -100,6 +102,12 @@ export interface AuditRecord {
 
 export interface AccountingState {
   organizationId: string;
+  /**
+   * Identité imprimée de la société : en-tête et pied de page de chaque document
+   * exporté. Distincte de l'agrégat `Organization` du domaine (code, devise,
+   * activation), qui pilote le cycle de vie multi-sociétés.
+   */
+  organization: OrganizationProfile;
   fiscalYearId: string;
   accounts: GeneralAccountDto[];
   journals: AccountingJournalDto[];
@@ -145,9 +153,15 @@ export function createOpenPeriods(year: number): AccountingPeriodDto[] {
 }
 
 /** État initial : plan SYSCOHADA, journaux, périodes ouvertes. Aucune écriture. */
-export function createEmptyState(organizationId: string, fiscalYearId: string, year = 2026): AccountingState {
+export function createEmptyState(
+  organizationId: string,
+  fiscalYearId: string,
+  year = 2026,
+  organization: OrganizationProfile = emptyOrganizationProfile()
+): AccountingState {
   return {
     organizationId,
+    organization,
     fiscalYearId,
     accounts: SYSCOHADA_STARTER_ACCOUNTS.map((account) => ({ ...account })),
     journals: STARTER_JOURNALS.map((journal) => ({ ...journal })),

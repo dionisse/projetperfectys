@@ -5,7 +5,8 @@
  *
  * MIGRATION : une base écrite par une tranche antérieure est complétée à la
  * lecture — tranche 1 (sans numéro de pièce, sans fichier tiers, sans séquences),
- * tranche 2 (sans extourne, sans lettrage, sans justificatifs). Les numéros
+ * tranche 2 (sans extourne, sans lettrage, sans justificatifs), tranche 3 (sans
+ * fiche société : un profil vide est amorcé, à compléter dans l'écran « Société »). Les numéros
  * manquants sont attribués dans l'ordre chronologique par la même règle du
  * domaine ({@link allocateEntryNumber}) que celle utilisée en saisie : la
  * numérotation d'une base existante reste continue, sans reset utilisateur.
@@ -18,6 +19,8 @@ import {
   amountFromDecimal,
   amountToDecimal,
   civilYear,
+  emptyOrganizationProfile,
+  normalizeOrganizationProfile,
   type AccountingEntryStatus,
   type CivilDate,
   type EntryNumberSequence,
@@ -77,6 +80,8 @@ export interface SerializedAuditRecord extends Omit<AccountingState["audit"][num
 
 export interface SerializedState {
   organizationId: string;
+  /** Absente des bases écrites avant la tranche 4 : amorcée par la migration. */
+  organization?: AccountingState["organization"] | undefined;
   fiscalYearId: string;
   accounts: AccountingState["accounts"];
   journals: AccountingState["journals"];
@@ -166,6 +171,11 @@ export function deserializeState(raw: SerializedState): AccountingState {
 
   return {
     organizationId: raw.organizationId,
+    // Une base antérieure à la tranche 4 n'a pas de fiche société : on amorce un
+    // profil vide, que l'écran « Société » complétera. Aucune donnée n'est inventée.
+    organization: raw.organization
+      ? normalizeOrganizationProfile(raw.organization, emptyOrganizationProfile())
+      : emptyOrganizationProfile(),
     fiscalYearId: raw.fiscalYearId,
     accounts: raw.accounts,
     journals: raw.journals,
