@@ -176,3 +176,72 @@ describe("AccountingKernel (portage de AccountingServiceTests.cs)", () => {
     await expect(kernel.saveEntry(badJournal)).rejects.toThrow("Le journal sélectionné n'existe pas.");
   });
 });
+
+describe("contexte du dossier ouvert (getDossierContext)", () => {
+  /** La coquille affiche ce contexte en permanence : il doit refléter l'état, une seule lecture. */
+  function kernelWith(state: ReturnType<typeof createDemoState>, options = {}) {
+    return new AccountingKernel(new InMemoryStorage(state), {
+      clock: () => NOW,
+      actor: "superviseur",
+      storageMode: "IndexedDB · disponible hors ligne",
+      ...options
+    });
+  }
+
+  it("compose le code dossier à la manière de l'original : module, société, année", async () => {
+    const context = await kernelWith(createDemoState(ORG, FISCAL_YEAR)).getDossierContext();
+
+    expect(context.dossierCode).toBe("CR000-26");
+    expect(context.moduleCode).toBe("CR");
+    expect(context.moduleLabel).toBe("Comptabilité SYSCOHADA révisé");
+    expect(context.referential).toBe("SYSCOHADA révisé (OHADA)");
+    expect(context.societyCode).toBe("000");
+    expect(context.societyName).toBe("PERFECTO Négoce Abidjan");
+    expect(context.currency).toBe("XOF");
+    expect(context.actor).toBe("superviseur");
+    expect(context.storageMode).toBe("IndexedDB · disponible hors ligne");
+  });
+
+  it("borne la période sur l'exercice des périodes, au format affiché par l'original", async () => {
+    const context = await kernelWith(createDemoState(ORG, FISCAL_YEAR)).getDossierContext();
+
+    expect(context.fiscalYear).toBe(2026);
+    expect(context.periodFrom).toBe("2026-01-01");
+    expect(context.periodTo).toBe("2026-12-31");
+    expect(context.periodLabel).toBe("01/01/2026 - 31/12/2026");
+    expect(context.closedPeriodCount).toBe(0);
+  });
+
+  it("ne fabrique pas de code société fictif sur une base ancienne sans code", async () => {
+    const state = createDemoState(ORG, FISCAL_YEAR);
+    state.organization = { ...state.organization, code: "" };
+
+    const context = await kernelWith(state).getDossierContext();
+
+    expect(context.societyCode).toBe("");
+    expect(context.dossierCode).toBe("CR-26");
+  });
+
+  it("compte le contenu réel du dossier et suit la dernière modification tracée", async () => {
+    const kernel = kernelWith(createDemoState(ORG, FISCAL_YEAR));
+    const state = createDemoState(ORG, FISCAL_YEAR);
+    const before = await kernel.getDossierContext();
+
+    expect(before.counts.accounts).toBe(state.accounts.length);
+    expect(before.counts.journals).toBe(state.journals.length);
+    expect(before.counts.thirdParties).toBe(state.thirdParties.length);
+    expect(before.counts.entries).toBe(state.entries.length);
+    // Une base de démonstration régénérée n'a rien écrit : aucune modification n'est inventée.
+    expect(before.lastModifiedAt).toBeNull();
+    expect(before.lastModifiedLabel).toBeNull();
+
+    await kernel.saveEntry(balancedRequest("CTX-1"));
+    const after = await kernel.getDossierContext();
+
+    expect(after.counts.entries).toBe(before.counts.entries + 1);
+    expect(after.counts.draftEntries).toBe(before.counts.draftEntries + 1);
+    expect(after.counts.auditEvents).toBe(before.counts.auditEvents + 1);
+    expect(after.lastModifiedAt).toBe(NOW.toISOString());
+    expect(after.lastModifiedLabel).toBeTruthy();
+  });
+});

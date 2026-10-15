@@ -1,7 +1,8 @@
 import { Shell } from "./layout";
 import { resetDemoData } from "./kernel";
 import { useRoute } from "./ui";
-import { AccountingHome, Dashboard } from "./pages/home";
+import { AccountingHome } from "./pages/home";
+import { Opening } from "./pages/opening";
 import { ChartOfAccounts, Journals } from "./pages/referentials";
 import { EditEntry, Entries, NewEntry } from "./pages/entries";
 import { Balance, GeneralLedger, JournalReport } from "./pages/reports";
@@ -36,7 +37,7 @@ function selectPage(route: string) {
 
   switch (route) {
     case "/":
-      return <Dashboard />;
+      return <Opening />;
     case "/comptabilite":
       return <AccountingHome />;
     case "/comptabilite/plan":

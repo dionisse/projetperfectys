@@ -384,6 +384,54 @@ export interface UpdateOrganizationRequest extends OrganizationProfileInput {
   organizationId: string;
 }
 
+/* --------------------- Dossier ouvert (coquille) --------------------- */
+
+/**
+ * Contexte du dossier ouvert.
+ *
+ * L'original le portait en titre de fenêtre, en permanence :
+ * « CR000-26: Comptabilité générale SOCIETE TEST [01/01/2026-31/12/2026] ». Un utilisateur
+ * de PERFECTO sait toujours dans quel module, quelle société et quelle période il écrit —
+ * c'est une garantie de fond, pas un décor. La coquille le lit en UNE fois : quatre appels
+ * parallèles auraient pu afficher un contexte recomposé de lectures différentes.
+ */
+export interface DossierContextDto {
+  /** Code dossier à la manière de l'original : module + société + année (`CR000-26`). */
+  dossierCode: string;
+  moduleCode: string;
+  moduleLabel: string;
+  referential: string;
+  organizationId: string;
+  societyCode: string;
+  societyName: string;
+  currency: string;
+  fiscalYear: number;
+  /** `2026-01-01` : borne basse de la période attachée au dossier. */
+  periodFrom: string;
+  /** `2026-12-31` : borne haute. */
+  periodTo: string;
+  /** `01/01/2026 - 31/12/2026`, au format affiché par l'original. */
+  periodLabel: string;
+  closedPeriodCount: number;
+  /** Session courante : l'original affichait « session ouverte » et son utilisateur. */
+  actor: string;
+  storageMode: string;
+  /** Dernier acte de gestion tracé, ou `null` sur un dossier qui n'a rien écrit. */
+  lastModifiedAt: string | null;
+  lastModifiedLabel: string | null;
+  counts: {
+    accounts: number;
+    journals: number;
+    thirdParties: number;
+    entries: number;
+    postedEntries: number;
+    draftEntries: number;
+    attachments: number;
+    reconciliations: number;
+    auditEvents: number;
+  };
+}
+
 /* ------------------------ Éditions et exports ------------------------ */
 
 /**

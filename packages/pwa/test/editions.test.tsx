@@ -501,21 +501,31 @@ describe("fiche société", () => {
 });
 
 describe("navigation", () => {
-  it("groupe le menu et atteint les deux nouveaux écrans", async () => {
+  it("reprend l'arborescence des six menus de l'original", async () => {
     await openRoute("#/");
     const headings = [...container.querySelectorAll(".nav-heading")].map((item) => item.textContent);
 
-    expect(headings).toEqual(["Pilotage", "Comptabilité SYSCOHADA", "Éditions", "Paramètres"]);
-    expect(container.querySelectorAll(".nav-group")).toHaveLength(4);
+    expect(headings).toEqual([
+      "Module ouvert",
+      "Fichier",
+      "Définitions",
+      "Saisies",
+      "Éditions",
+      "Paramètres",
+      "Outils"
+    ]);
+    expect(container.querySelectorAll(".nav-group")).toHaveLength(7);
 
     const editionsLink = [...container.querySelectorAll<HTMLAnchorElement>(".sidebar nav a")].find(
-      (link) => link.textContent?.includes("Éditions et exports")
+      (link) => link.textContent?.includes("Toutes les éditions")
     );
     const societyLink = [...container.querySelectorAll<HTMLAnchorElement>(".sidebar nav a")].find(
       (link) => link.textContent?.includes("Fiche société")
     );
     expect(editionsLink?.getAttribute("href")).toBe("#/comptabilite/editions");
     expect(societyLink?.getAttribute("href")).toBe("#/parametres/societe");
+    // Le raccourci de l'original est affiché à côté de l'entrée.
+    expect(societyLink?.textContent).toContain("F2");
 
     await act(async () => {
       editionsLink!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -525,5 +535,17 @@ describe("navigation", () => {
     expect(container.querySelector(".edition-card.selected")?.textContent).toContain(
       "Balance générale"
     );
+  });
+
+  it("montre les fonctions non implémentées sans les rendre cliquables", async () => {
+    await openRoute("#/");
+    const unavailable = [...container.querySelectorAll<HTMLElement>(".nav-unavailable")];
+
+    expect(unavailable.length).toBeGreaterThan(5);
+    const backup = unavailable.find((item) => item.textContent?.includes("Sauvegarde du dossier"));
+    expect(backup?.getAttribute("title")).toContain("Tranche 9");
+    // Aucune de ces entrées n'est un lien : rien ne peut mener à un écran vide.
+    expect(unavailable.every((item) => item.closest("a") === null)).toBe(true);
+    expect(unavailable.every((item) => item.getAttribute("aria-disabled") === "true")).toBe(true);
   });
 });

@@ -2,6 +2,8 @@ import { render } from "preact";
 import { App } from "./app";
 import "./styles/perfecto.css";
 import "./styles/app.css";
+// Chargé en dernier : il redéfinit les jetons et corrige la peau précédente.
+import "./styles/theme.css";
 
 render(<App />, document.getElementById("app")!);
 

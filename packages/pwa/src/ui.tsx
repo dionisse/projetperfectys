@@ -412,3 +412,98 @@ export function ExportPanel(props: {
     </section>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* Jeu d'icônes : traits de 1,6 px, grille de 24 — langage shadcn.     */
+/* ------------------------------------------------------------------ */
+
+const ICONS: Record<string, ComponentChildren> = {
+  home: (
+    <>
+      <path d="M3.6 10.7 12 4l8.4 6.7" />
+      <path d="M5.9 9.7V20h12.2V9.7" />
+    </>
+  ),
+  folder: (
+    <path d="M3.5 7.6A2.1 2.1 0 0 1 5.6 5.5h3.1a1 1 0 0 1 .8.4l1 1.3a1 1 0 0 0 .8.4h5.1a2.1 2.1 0 0 1 2.1 2.1v7.7a2.1 2.1 0 0 1-2.1 2.1H5.6a2.1 2.1 0 0 1-2.1-2.1z" />
+  ),
+  book: (
+    <>
+      <path d="M4.5 5.6A2.1 2.1 0 0 1 6.6 3.5h12.9v13.1H6.6a2.1 2.1 0 0 0-2.1 2.1z" />
+      <path d="M4.5 18.7a2.1 2.1 0 0 1 2.1-2.1h12.9v3.9H6.6a2.1 2.1 0 0 1-2.1-1.8z" />
+    </>
+  ),
+  users: (
+    <>
+      <path d="M15.4 20v-1.7a3.6 3.6 0 0 0-3.6-3.6H6.6A3.6 3.6 0 0 0 3 18.3V20" />
+      <circle cx="9.2" cy="7.6" r="3.4" />
+      <path d="M21 20v-1.7a3.6 3.6 0 0 0-2.7-3.5M15.9 4.3a3.6 3.6 0 0 1 0 6.7" />
+    </>
+  ),
+  file: (
+    <>
+      <path d="M13.9 3.5H7.4a1.9 1.9 0 0 0-1.9 1.9v13.2a1.9 1.9 0 0 0 1.9 1.9h9.2a1.9 1.9 0 0 0 1.9-1.9V8.1z" />
+      <path d="M13.9 3.5v4.6h4.6M8.8 13.2h6.4M8.8 16.6h4.4" />
+    </>
+  ),
+  scale: (
+    <>
+      <path d="M12 4.2v15.6M8.2 19.8h7.6M4.6 7.8h14.8" />
+      <path d="M4.6 7.8 2.4 13.4a2.4 2.4 0 0 0 4.4 0zM19.4 7.8l2.2 5.6a2.4 2.4 0 0 1-4.4 0z" />
+    </>
+  ),
+  grid: (
+    <>
+      <rect x="3.6" y="3.6" width="16.8" height="16.8" rx="1.9" />
+      <path d="M3.6 9.6h16.8M9.6 9.6v10.8" />
+    </>
+  ),
+  calendar: (
+    <>
+      <rect x="3.6" y="5.2" width="16.8" height="15.2" rx="1.9" />
+      <path d="M8.2 3.4v3.6M15.8 3.4v3.6M3.6 10.2h16.8" />
+    </>
+  ),
+  printer: (
+    <>
+      <path d="M7.2 8.6V3.6h9.6v5" />
+      <rect x="3.6" y="8.6" width="16.8" height="7.4" rx="1.9" />
+      <path d="M7.2 13.8h9.6v6.6H7.2z" />
+    </>
+  ),
+  settings: (
+    <>
+      <circle cx="12" cy="12" r="3.1" />
+      <path d="M12 2.9v2.5M12 18.6v2.5M4.9 7.6l2.2 1.2M16.9 15.2l2.2 1.2M4.9 16.4l2.2-1.2M16.9 8.8l2.2-1.2" />
+    </>
+  ),
+  wrench: (
+    <path d="M20.2 6.2a4.6 4.6 0 0 1-6.1 6.1L7 19.4a2.2 2.2 0 0 1-3.1-3.1l7.1-7.1a4.6 4.6 0 0 1 6.1-6.1l-2.7 2.7 2 2z" />
+  ),
+  shield: (
+    <>
+      <path d="M12 20.8s7.2-3.4 7.2-9V6L12 3.2 4.8 6v5.8c0 5.6 7.2 9 7.2 9z" />
+      <path d="M9.2 11.9l1.9 1.9 3.7-3.7" />
+    </>
+  )
+};
+
+export function Icon(props: { name: string; size?: number }) {
+  const size = props.size ?? 16;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.6"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {ICONS[props.name] ?? ICONS.file}
+    </svg>
+  );
+}

@@ -39,6 +39,7 @@ import type {
   ThirdPartyUsageDto,
   UpdateAccountingEntryRequest,
   UpdateOrganizationRequest,
+  DossierContextDto,
   ExportDocument,
   ExportDocumentRequest,
   UpdateThirdPartyRequest
@@ -54,8 +55,10 @@ import {
   amountAdd,
   amountFromDecimal,
   amountToDecimal,
+  civilDate,
   civilMonth,
   civilYear,
+  formatCivilDateFr,
   assertAttachmentSize,
   createAttachment,
   createThirdParty,
@@ -88,7 +91,8 @@ import {
   thirdPartyNames,
   thirdPartyUsage
 } from "./reports";
-import { buildExportDocument } from "./export-documents";
+import { EXPORT_CURRENCY, buildExportDocument } from "./export-documents";
+import { activeModuleProfile, dossierCode } from "./catalog";
 import { sha256Hex } from "./crypto";
 import type {
   AccountingState,
@@ -212,6 +216,64 @@ export class AccountingKernel {
   async getGeneralLedger() {
     const state = await this.#storage.read();
     return buildGeneralLedger(state.entries);
+  }
+
+  /* --------------------------- Dossier ouvert --------------------------- */
+
+  /**
+   * Contexte affiché en permanence par la coquille : module, société, dossier, période,
+   * session, stockage et dernière modification tracée.
+   *
+   * Une seule lecture de l'état, donc un contexte impossible à recomposer à partir de
+   * plusieurs versions des données.
+   */
+  async getDossierContext(): Promise<DossierContextDto> {
+    const state = await this.#storage.read();
+    const moduleProfile = activeModuleProfile();
+    const profile = state.organization;
+
+    const years = state.periods.map((period) => period.year);
+    const fiscalYear = years.length > 0 ? Math.min(...years) : civilYear(this.#clock().toISOString().slice(0, 10));
+    const yearPeriods = state.periods.filter((period) => period.year === fiscalYear);
+    const months = yearPeriods.map((period) => period.month);
+    const firstMonth = months.length > 0 ? Math.min(...months) : 1;
+    const lastMonth = months.length > 0 ? Math.max(...months) : 12;
+    const lastDay = new Date(Date.UTC(fiscalYear, lastMonth, 0)).getUTCDate();
+    const periodFrom = civilDate(fiscalYear, firstMonth, 1);
+    const periodTo = civilDate(fiscalYear, lastMonth, lastDay);
+
+    const lastEvent = state.audit.at(-1) ?? null;
+
+    return {
+      dossierCode: dossierCode(moduleProfile.code, profile.code, fiscalYear),
+      moduleCode: moduleProfile.code,
+      moduleLabel: moduleProfile.label,
+      referential: moduleProfile.referential,
+      organizationId: state.organizationId,
+      societyCode: profile.code,
+      societyName: profile.name,
+      currency: EXPORT_CURRENCY,
+      fiscalYear,
+      periodFrom,
+      periodTo,
+      periodLabel: `${formatCivilDateFr(periodFrom)} - ${formatCivilDateFr(periodTo)}`,
+      closedPeriodCount: yearPeriods.filter((period) => period.isClosed).length,
+      actor: this.#actor,
+      storageMode: this.#storageMode,
+      lastModifiedAt: lastEvent?.occurredAt ?? null,
+      lastModifiedLabel: lastEvent ? auditActionLabel(lastEvent.action) : null,
+      counts: {
+        accounts: state.accounts.length,
+        journals: state.journals.length,
+        thirdParties: state.thirdParties.length,
+        entries: state.entries.length,
+        postedEntries: state.entries.filter((entry) => entry.status === AccountingEntryStatus.Posted).length,
+        draftEntries: state.entries.filter((entry) => entry.status === AccountingEntryStatus.Draft).length,
+        attachments: state.attachments.length,
+        reconciliations: state.reconciliations.length,
+        auditEvents: state.audit.length
+      }
+    };
   }
 
   /* ------------------------- Éditions et exports ------------------------- */

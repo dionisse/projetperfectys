@@ -63,7 +63,7 @@ afterEach(async () => {
 });
 
 const ROUTES: [string, string[]][] = [
-  ["#/", ["Bonjour, Superviseur", "Fichier tiers", "Pièces récentes"]],
+  ["#/", ["Ouverture des dossiers", "CR000-26", "Comptabilité SYSCOHADA révisé", "PERFECTO Négoce Abidjan", "01/01/2026 - 31/12/2026", "Catalogue des modules", "Sociétés…"]],
   ["#/comptabilite", ["Comptabilité générale", "Fichier des tiers", "Piste d'audit", "Équilibre de la période", "Pièces extournées", "Lettrages de tiers", "Justificatifs rattachés"]],
   ["#/comptabilite/plan", ["Plan comptable", "401100", "Requis"]],
   ["#/comptabilite/journaux", ["Journaux comptables", "Numérotation automatique", "ACH-2026-0002"]],
