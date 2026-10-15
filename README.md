@@ -14,15 +14,43 @@ PWA, le futur hôte desktop et l'API.
 | Code .NET 10 d'origine (référence gelée, Lot 0 + Lot 1) | `legacy/dotnet-0.2.0-preview.1/` |
 | Archives et notes de livraison d'origine | racine (`*.zip`, `*.md`) |
 | Index de la documentation du logiciel d'origine | `docs/specs/INDEX.md` |
+| Déploiement Vercel (configuration et guide) | `vercel.json`, `docs/DEPLOIEMENT-VERCEL.md` |
 
 ## Démarrer
 
 ```bash
 npm install
-npm test          # 153 tests vitest : domaine, noyau, états, lettrage, justificatifs, IndexedDB, rendu PWA
+npm test          # 168 tests vitest : domaine, noyau, états, lettrage, justificatifs, IndexedDB, rendu PWA, déploiement
 npm run typecheck # tsc --noEmit, strict
-npm run dev       # PWA en prévisualisation (http://localhost:5173)
+npm run dev       # PWA en développement (http://localhost:5173)
+
+npm run build:pwa      # build de production dans packages/pwa/dist
+npm run preview:vercel # sert ce build avec les règles exactes de Vercel (http://localhost:5173)
 ```
+
+## Déploiement sur Vercel
+
+Le site est publié comme **statique** : le noyau comptable, les écrans et le stockage
+IndexedDB tournent dans le navigateur, aucune API n'est requise. Trois réglages font la
+différence entre « déployé » et « affiche quelque chose » :
+
+- `vercel.json` impose le build du monorepo (`framework: null`, `npm run build:pwa`,
+  sortie `packages/pwa/dist`) — sans quoi Vercel lance `vite build` à la racine, où il n'y a
+  rien à construire ;
+- une réécriture renvoie tout chemin inconnu vers `index.html` (liens profonds partagés),
+  pendant que les assets hachés restent servis tels quels ;
+- le service worker est **versionné par identifiant de déploiement** (`sw.js?v=<commit>`) et
+  ne met en cache que des réponses saines : un visiteur de retour voit la nouvelle version,
+  et un incident de déploiement ne se transforme pas en écran blanc permanent.
+
+Vérification locale du contrat, puis publication :
+
+```bash
+npm run build:pwa && npm run preview:vercel   # mêmes règles que Vercel, sur le vrai build
+```
+
+Détail des en-têtes, du routage, des garde-fous automatisés (`packages/pwa/test/deployment.test.ts`)
+et du dépannage « page blanche » : **`docs/DEPLOIEMENT-VERCEL.md`**.
 
 ## Architecture du noyau TypeScript
 

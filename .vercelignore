@@ -1,0 +1,8 @@
+# Inutile au déploiement web : alourdirait l'envoi et ralentirait le build Vercel.
+legacy/
+*.zip
+.arena/
+SHA256SUMS.txt
+
+# Les tests ne sont pas exécutés par Vercel (ils tournent dans `npm test`).
+packages/*/test/

@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "dev": "npm run dev -w @perfecto/pwa",
     "build:pwa": "npm run build -w @perfecto/pwa",
+    "preview:vercel": "node scripts/serve-vercel-preview.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
