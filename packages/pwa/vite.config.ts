@@ -40,7 +40,8 @@ export default defineConfig({
     alias: {
       "@perfecto/domain": alias("domain"),
       "@perfecto/contracts": alias("contracts"),
-      "@perfecto/application": alias("application")
+      "@perfecto/application": alias("application"),
+      "@perfecto/exports": alias("exports")
     }
   },
   server: {

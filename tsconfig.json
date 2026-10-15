@@ -18,7 +18,8 @@
     "paths": {
       "@perfecto/domain": ["packages/domain/src/index.ts"],
       "@perfecto/contracts": ["packages/contracts/src/index.ts"],
-      "@perfecto/application": ["packages/application/src/index.ts"]
+      "@perfecto/application": ["packages/application/src/index.ts"],
+      "@perfecto/exports": ["packages/exports/src/index.ts"]
     }
   },
   "include": ["packages/*/src/**/*", "packages/*/test/**/*", "vitest.config.ts"]

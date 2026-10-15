@@ -1,0 +1,12 @@
+{
+  "name": "@perfecto/exports",
+  "version": "0.3.0-dev",
+  "private": true,
+  "type": "module",
+  "description": "Moteurs de rendu des documents PERFECTO : CSV, Excel (.xlsx) et PDF à partir d'un modèle neutre",
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8"
+  }
+}
