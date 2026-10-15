@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
@@ -16,11 +20,25 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@perfecto/domain": ["packages/domain/src/index.ts"],
-      "@perfecto/contracts": ["packages/contracts/src/index.ts"],
-      "@perfecto/application": ["packages/application/src/index.ts"],
-      "@perfecto/exports": ["packages/exports/src/index.ts"]
+      "@perfecto/domain": [
+        "packages/domain/src/index.ts"
+      ],
+      "@perfecto/contracts": [
+        "packages/contracts/src/index.ts"
+      ],
+      "@perfecto/application": [
+        "packages/application/src/index.ts"
+      ],
+      "@perfecto/exports": [
+        "packages/exports/src/index.ts"
+      ]
     }
   },
-  "include": ["packages/*/src/**/*", "packages/*/test/**/*", "vitest.config.ts"]
+  "include": [
+    "packages/*/src/**/*",
+    "packages/*/test/**/*",
+    "compta/src/**/*",
+    "compta/test/**/*",
+    "vitest.config.ts"
+  ]
 }

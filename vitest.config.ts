@@ -13,7 +13,12 @@ export default defineConfig({
     }
   },
   test: {
-    include: ["packages/*/test/**/*.test.ts", "packages/*/test/**/*.test.tsx"],
+    include: [
+      "packages/*/test/**/*.test.ts",
+      "packages/*/test/**/*.test.tsx",
+      "compta/test/**/*.test.ts",
+      "compta/test/**/*.test.tsx"
+    ],
     environment: "node"
   }
 });
