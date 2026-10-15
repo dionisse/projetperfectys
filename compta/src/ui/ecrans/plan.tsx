@@ -29,7 +29,6 @@ import {
   ChargementEnCours,
   Erreur,
   Etiquette,
-  ExportCsv,
   Fenetre,
   Grille,
   message,
@@ -38,6 +37,7 @@ import {
   type CelluleCsv,
   type Colonne
 } from "../composants";
+import { Exporter } from "../exporter";
 
 interface BrouillonCompte {
   numero: string;
@@ -299,7 +299,7 @@ export function PlanComptable(props: { onMutation: () => void }) {
               onInput={(evenement) => setRecherche((evenement.target as HTMLInputElement).value)}
             />
           </div>
-          <ExportCsv tige="plan-comptable" contexte={contexte.societe.code} date={aujourdHui} lignes={lignesCsv} />
+          <Exporter tige="plan-comptable" contexte={contexte.societe.code} date={aujourdHui} lignes={lignesCsv} />
           <button
             class="bouton"
             type="button"

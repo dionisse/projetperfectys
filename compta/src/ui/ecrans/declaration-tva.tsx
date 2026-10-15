@@ -26,7 +26,6 @@ import {
   ChargementEnCours,
   Erreur,
   Etiquette,
-  ExportCsv,
   Fenetre,
   Grille,
   montant,
@@ -34,6 +33,7 @@ import {
   type CelluleCsv,
   type Colonne
 } from "../composants";
+import { Exporter } from "../exporter";
 
 const LIBELLES_SENS: Record<LigneDeclarationTva["sens"], string> = {
   collectee: "Collectée",
@@ -213,7 +213,7 @@ export function DeclarationTva() {
               ))}
             </select>
           </label>
-          <ExportCsv
+          <Exporter
             tige="declaration-tva"
             contexte={`${contexte.societe.code}-${declaration.exercice}-P${declaration.periode.toString().padStart(2, "0")}`}
             date={declaration.dateFin}

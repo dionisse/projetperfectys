@@ -41,7 +41,9 @@ const texte = (racine: HTMLElement | null): string =>
   (racine?.textContent ?? "").replace(/\s+/gu, " ").trim();
 
 function bouton(libelle: string): HTMLButtonElement {
-  const trouve = [...conteneur.querySelectorAll<HTMLButtonElement>("button")].find(
+  // Un <summary> déplie le choix de format : c'est un bouton pour l'utilisateur, il est cherché
+  // comme tel.
+  const trouve = [...conteneur.querySelectorAll<HTMLButtonElement>("button, summary")].find(
     (item) => texte(item) === libelle
   );
   if (!trouve) {
@@ -50,11 +52,11 @@ function bouton(libelle: string): HTMLButtonElement {
   return trouve;
 }
 
-async function cliquer(cible: HTMLElement): Promise<void> {
+async function cliquer(cible: HTMLElement, fois = 14): Promise<void> {
   await act(async () => {
     cible.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
-  await flush();
+  await flush(fois);
 }
 
 /** Coche la ligne d'une pièce : l'étiquette accessible porte la pièce et sa date. */
@@ -217,14 +219,18 @@ describe("Écran de lettrage", () => {
     expect(bouton("Délettrer").disabled).toBe(true);
   });
 
-  it("télécharge l'état de lettrage en CSV", async () => {
+  it("télécharge l'état de lettrage dans le format choisi", async () => {
     await facturerEtRegler({ montant: "1000000", pieceFacture: "FA-2026-018", pieceReglement: "RG-2026-004" });
     await ouvrir();
+    (URL as unknown as { createObjectURL: () => string }).createObjectURL = () => "blob:perfectys";
+    (URL as unknown as { revokeObjectURL: () => void }).revokeObjectURL = () => undefined;
 
-    const telecharge = bouton("Télécharger en CSV");
-    expect(telecharge.getAttribute("title")).toMatch(/Excel et PDF suivent/i);
-    await cliquer(telecharge);
+    await cliquer(bouton("CSV (.csv)"));
+    await cliquer(bouton("Excel (.xlsx)"), 30);
     expect(nomsTelecharges.some((nom) => /^perfectys_lettrage_401100-tous_\d{4}-\d{2}-\d{2}\.csv$/.test(nom))).toBe(
+      true
+    );
+    expect(nomsTelecharges.some((nom) => /^perfectys_lettrage_401100-tous_\d{4}-\d{2}-\d{2}\.xlsx$/.test(nom))).toBe(
       true
     );
   });

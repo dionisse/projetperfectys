@@ -10,13 +10,13 @@ import {
   ChargementEnCours,
   Erreur,
   Etiquette,
-  ExportCsv,
   Fenetre,
   Grille,
   montant,
   useAsync,
   type Colonne
 } from "../composants";
+import { Exporter } from "../exporter";
 
 /** Grand livre d'un compte, avec solde progressif : le contrôle ligne à ligne d'un compte. */
 export function GrandLivre() {
@@ -82,7 +82,7 @@ export function GrandLivre() {
             Afficher
           </button>
         </form>
-        <ExportCsv
+        <Exporter
           tige="grand-livre"
           contexte={soumis}
           date={aujourdHui}

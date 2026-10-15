@@ -64,7 +64,9 @@ async function ouvrir(): Promise<string> {
 }
 
 function bouton(libelle: string): HTMLButtonElement {
-  const trouve = [...container.querySelectorAll<HTMLButtonElement>("button")].find((item) =>
+  // Un <summary> déplie le choix de format : c'est un bouton pour l'utilisateur, il est cherché
+  // comme tel.
+  const trouve = [...container.querySelectorAll<HTMLButtonElement>("button, summary")].find((item) =>
     item.textContent?.trim().includes(libelle)
   );
   if (!trouve) {
@@ -73,11 +75,11 @@ function bouton(libelle: string): HTMLButtonElement {
   return trouve;
 }
 
-async function cliquer(element: HTMLElement): Promise<void> {
+async function cliquer(element: HTMLElement, fois = 14): Promise<void> {
   await act(async () => {
     element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
-  await flush();
+  await flush(fois);
 }
 
 /** Saisit et comptabilise une écriture par le noyau, comme le ferait l'écran de saisie. */
@@ -235,17 +237,31 @@ describe("écran de déclaration de TVA", () => {
     expect(texte).not.toContain(formatMontant(360_000n));
   });
 
-  it("le bouton de téléchargement produit un fichier nommé selon la convention", async () => {
+  it("laisse choisir le format : Excel, CSV ou PDF, tous les trois nommés selon la convention", async () => {
     await ouvrir();
     const noms: string[] = [];
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
       noms.push(this.download);
     });
+    // jsdom ne fabrique pas d'URL d'objet : les exports binaires en ont besoin.
+    (URL as unknown as { createObjectURL: () => string }).createObjectURL = () => "blob:perfectys";
+    (URL as unknown as { revokeObjectURL: () => void }).revokeObjectURL = () => undefined;
 
-    await cliquer(bouton("Télécharger en CSV"));
+    // Le choix de format est un bouton qui déplie les trois formats, comme dans Sage où l'export
+    // demande son format avant de produire le fichier.
+    expect(bouton("Exporter…").getAttribute("title")).toMatch(/Excel pour retraiter.*PDF pour imprimer/us);
+    await cliquer(bouton("CSV (.csv)"));
+    await cliquer(bouton("Excel (.xlsx)"), 30);
+    await cliquer(bouton("PDF (.pdf)"), 30);
 
-    expect(noms).toHaveLength(1);
+    expect(noms).toHaveLength(3);
     expect(noms[0]).toMatch(/^perfectys_declaration-tva_.+_\d{4}-\d{2}-\d{2}\.csv$/);
-    expect(bouton("Télécharger en CSV").title).toContain("Excel et PDF suivent");
+    expect(noms[1]).toMatch(/^perfectys_declaration-tva_.+_\d{4}-\d{2}-\d{2}\.xlsx$/);
+    expect(noms[2]).toMatch(/^perfectys_declaration-tva_.+_\d{4}-\d{2}-\d{2}\.pdf$/);
+
+    // Le retour dit ce qui vient d'être produit, avec sa taille : un téléchargement silencieux
+    // laisse croire qu'il n'a rien donné. Un seul retour est affiché à la fois — le dernier.
+    const dit = (container.textContent ?? "").replace(/\s+/gu, " ");
+    expect(dit).toMatch(/Fichier PDF téléchargé : perfectys_declaration-tva_[^ ]+\.pdf \([\d,.]+ [kM]?o\)/u);
   });
 });

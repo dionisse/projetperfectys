@@ -76,6 +76,37 @@ export function telecharger(nomFichier: string, contenu: string, type = "text/cs
   }
 }
 
+/**
+ * Déclenche le téléchargement d'un fichier binaire (Excel, PDF).
+ *
+ * Les octets sont passés tels quels : aucune conversion de texte ne doit intervenir entre le moteur
+ * de rendu et le fichier reçu, sinon un XLSX devient illisible sans que rien ne le signale.
+ */
+export function telechargerOctets(nomFichier: string, octets: Uint8Array, mime: string): void {
+  if (typeof document === "undefined") {
+    throw new Error("Le téléchargement n'est disponible que dans un navigateur.");
+  }
+  const blob = new Blob([octets as unknown as BlobPart], { type: mime });
+  const url =
+    typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
+      ? URL.createObjectURL(blob)
+      : "";
+  if (url === "") {
+    throw new Error("Ce navigateur ne permet pas de créer un fichier à télécharger.");
+  }
+  const lien = document.createElement("a");
+  lien.href = url;
+  lien.download = nomFichier;
+  lien.style.display = "none";
+  document.body.appendChild(lien);
+  lien.click();
+  lien.remove();
+  if (typeof URL.revokeObjectURL === "function") {
+    // Libéré après le clic : le navigateur a déjà pris les octets en charge.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+}
+
 /** Télécharge des lignes au format CSV. */
 export function telechargerCsv(
   noms: { tige: string; contexte: string; date: DateCivile },

@@ -16,12 +16,12 @@ import { getService } from "../../web/noyau";
 import {
   ChargementEnCours,
   Erreur,
-  ExportCsv,
   Fenetre,
   montant,
   useAsync,
   type CelluleCsv
 } from "../composants";
+import { Exporter } from "../exporter";
 
 function ligne(ligneEtat: LigneEtat, colonnes: "actif" | "passif", precedent?: Montant) {
   return (
@@ -171,7 +171,7 @@ export function BilanOhada() {
               ))}
             </select>
           </label>
-          <ExportCsv
+          <Exporter
             tige="bilan"
             contexte={`${contexte.societe.code}-${bilan.exercice}`}
             date={bilan.dateCloture}

@@ -30,7 +30,6 @@ import {
   ChargementEnCours,
   Erreur,
   Etiquette,
-  ExportCsv,
   Fenetre,
   Vide,
   message,
@@ -38,6 +37,7 @@ import {
   useAsync,
   type CelluleCsv
 } from "../composants";
+import { Exporter } from "../exporter";
 
 interface LigneDeBrouillon {
   date: string;
@@ -370,7 +370,7 @@ export function Rapprochement(props: { onMutation: () => void }) {
               ))}
             </select>
           </label>
-          <ExportCsv tige="rapprochement" contexte={releve?.compte ?? "aucun"} date={aujourdHui} lignes={lignesCsv} />
+          <Exporter tige="rapprochement" contexte={releve?.compte ?? "aucun"} date={aujourdHui} lignes={lignesCsv} />
           <button class="bouton" type="button" onClick={() => recharger()}>
             Actualiser
           </button>

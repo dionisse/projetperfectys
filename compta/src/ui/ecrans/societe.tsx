@@ -18,12 +18,12 @@ import {
   ChargementEnCours,
   Erreur,
   Etiquette,
-  ExportCsv,
   Fenetre,
   message,
   useAsync,
   type CelluleCsv
 } from "../composants";
+import { Exporter } from "../exporter";
 
 export function Societe(props: { onMutation: () => void }) {
   const service = getService();
@@ -115,7 +115,7 @@ export function Societe(props: { onMutation: () => void }) {
       sousTitre={`Dossier ${contexte.numero} · paquet pays ${paquet.nom} ${paquet.version}`}
       actions={
         <>
-          <ExportCsv tige="societe" contexte={societe.code} date={aujourdHui} lignes={lignesCsv} />
+          <Exporter tige="societe" contexte={societe.code} date={aujourdHui} lignes={lignesCsv} />
           <button class="bouton" type="button" onClick={() => recharger()}>
             Actualiser
           </button>

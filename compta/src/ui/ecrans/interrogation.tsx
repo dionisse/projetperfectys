@@ -32,7 +32,6 @@ import {
   ChargementEnCours,
   Erreur,
   Etiquette,
-  ExportCsv,
   Fenetre,
   Grille,
   Vide,
@@ -42,6 +41,7 @@ import {
   type CelluleCsv,
   type Colonne
 } from "../composants";
+import { Exporter } from "../exporter";
 
 export function Interrogation() {
   const service = getService();
@@ -381,11 +381,13 @@ export function Interrogation() {
             />
             Comparer à l'exercice précédent
           </label>
-          <ExportCsv
+          <Exporter
             tige="interrogation"
             contexte={`${compte.trim()}${tiers ? `-${tiers}` : ""}`}
             date={aujourdHui}
             lignes={lignesCsv}
+            sousTitre="Ce qui s'est passé sur ce compte, et ce qui reste en suspens"
+            titresDeSection={["Mouvements, avec le solde après chaque ligne", "Historique par exercice"]}
           />
           <button class="bouton" type="button" onClick={() => recharger()}>
             Actualiser

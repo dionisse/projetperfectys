@@ -27,7 +27,7 @@ la même base.
 
 ```bash
 npm install            # installe l'espace de travail (compta)
-npm test               # 204 tests : noyau en Node, interface en jsdom
+npm test               # 218 tests : noyau en Node, interface en jsdom, exports vérifiés
 npm run typecheck      # TypeScript strict, sans émission
 npm run build          # build de production dans compta/dist
 npm run preview:vercel # sert le build comme le ferait Vercel, sur http://localhost:5173
@@ -104,10 +104,18 @@ npm run dev            # serveur de développement Vite
   est affiché en alerte, jamais absorbé dans un total. L'écran est un état de contrôle : il ne
   prétend pas reproduire l'imprimé officiel, dont la mise en page n'a pas été relevée dans le texte
   juridique.
-- **Export CSV** : le bilan, le compte de résultat, le rapport de clôture, l'état de rapprochement, l'état de lettrage, la
-  déclaration TVA, la balance, le journal et le grand livre se téléchargent au
-  format CSV (point-virgule, BOM UTF-8, fins de ligne CRLF — ce qu'Excel en français attend), dans
-  ce que l'écran affiche, filtres compris. Excel et PDF suivent.
+- **Export au choix de l'utilisateur : Excel, CSV ou PDF.** Les treize écrans qui produisent un
+  état portent un bouton **Exporter…** qui déplie les trois formats. Le CSV garde ses conventions de
+  cabinet francophone (point-virgule, BOM UTF-8, fins de ligne CRLF — ce qu'Excel en français
+  attend). L'**Excel** est une vraie feuille de calcul : un onglet par section, les montants en
+  **nombres entiers** au format `#,##0` (le franc CFA n'a pas de centimes, aucun format n'en
+  invente), les dates en ISO, un volet figé sous la ligne de titres, un filtre automatique, une mise
+  en page A4 ajustée en largeur avec répétition des titres, et les totaux en gras. Le **PDF** est un
+  document imprimé : A4, portrait ou paysage selon la largeur du tableau, en-tête de société complet
+  en page 1 puis en-tête compact, paramètres de l'édition, mention finale, « Page n/N ». Les trois
+  formats partent de la **même description** du document, donc des mêmes chiffres, et exportent ce
+  que l'écran affiche au moment du clic, filtres compris. Excel et PDF sont chargés à la demande :
+  leur poids ne pèse pas sur le démarrage, seulement sur le premier export dans ce format.
 - **Outils** : piste d'audit ajout-seulement, séquencée, attribuée et horodatée ; réinitialisation
   du dossier de démonstration.
 - **Hors ligne** : le dossier est persisté dans IndexedDB, montants sérialisés en chaînes.
@@ -120,10 +128,11 @@ la tranche qui les livrera** en infobulle. Elles ne sont pas cliquables : aucun 
 ligne en attendant), lettrage partiel d'un règlement à-compte, écritures récurrentes, **réouverture d'un exercice clos**
 (la clôture est définitive dans cette version : la correction d'un exercice clos passe par une
 écriture dans l'exercice en cours, et l'écran le dit), affectation du résultat décidée en assemblée
-(121000 vers 111000 ou 112000), interrogation d'un compte et historique, tableau des flux de
+(121000 vers 111000 ou 112000), interrogation d'un compte par montant ou par lettre et appel d'une
+écriture depuis une ligne d'interrogation, tableau des flux de
 trésorerie et tableau de variation des activités (le plan de démarrage ne porte aucun compte classé
-« flux de trésorerie » : l'entrée de menu le dit au lieu de produire un état vide), exports Excel et
-PDF, reversement des acomptes et retenues à la source, imports, habilitations par écran, sauvegarde
+« flux de trésorerie » : l'entrée de menu le dit au lieu de produire un état vide),
+reversement des acomptes et retenues à la source, imports, habilitations par écran, sauvegarde
 et restauration.
 
 ## Décisions de conception
@@ -174,6 +183,13 @@ et restauration.
     n'est équilibré que parce que les comptes de gestion sont résumés dans les capitaux propres. La
     clôture remplacera ce solde par un compte 121000 mouvementé ; jusqu'alors, aucun état ne fait
     semblant qu'elle a eu lieu.
+14. **Un document se décrit une fois et se rend dans trois formats.** Chaque cellule a deux faces :
+    la **valeur** exacte (un montant entier, une date ISO, un code technique), que reçoivent le CSV
+    et Excel pour rester calculables, et le **texte** français, que le PDF imprime. Un état qui
+    dirait autre chose en PDF qu'en Excel ne serait pas un état. Les bibliothèques de rendu sont
+    chargées à la demande, et les caractères que les polices PDF standard feraient disparaître
+    (l'espace insécable étroite des montants, le tiret cadratin, la ligature « Œ ») sont normalisés
+    explicitement plutôt que perdus en silence.
 
 ## Société de démonstration
 

@@ -28,7 +28,6 @@ import {
   ChargementEnCours,
   Erreur,
   Etiquette,
-  ExportCsv,
   Fenetre,
   Grille,
   message,
@@ -37,6 +36,7 @@ import {
   type CelluleCsv,
   type Colonne
 } from "../composants";
+import { Exporter } from "../exporter";
 
 const LIBELLES_SENS: Record<SensTaxe, string> = {
   collectee: "Collectée",
@@ -477,7 +477,7 @@ export function CodesTaxe(props: { onMutation: () => void }) {
       sousTitre={`Dossier ${contexte.numero} · les taux appartiennent au dossier : le paquet pays les amorce, vous les corrigez`}
       actions={
         <>
-          <ExportCsv tige="codes-taxe" contexte={paquet.code} date={aujourdHui} lignes={lignesCsv} />
+          <Exporter tige="codes-taxe" contexte={paquet.code} date={aujourdHui} lignes={lignesCsv} />
           <button
             class="bouton"
             type="button"

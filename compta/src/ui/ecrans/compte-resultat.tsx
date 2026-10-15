@@ -17,12 +17,12 @@ import { getService } from "../../web/noyau";
 import {
   ChargementEnCours,
   Erreur,
-  ExportCsv,
   Fenetre,
   montant,
   useAsync,
   type CelluleCsv
 } from "../composants";
+import { Exporter } from "../exporter";
 
 export function CompteDeResultatOhada() {
   const service = getService();
@@ -136,7 +136,7 @@ export function CompteDeResultatOhada() {
               ))}
             </select>
           </label>
-          <ExportCsv
+          <Exporter
             tige="compte-de-resultat"
             contexte={`${contexte.societe.code}-${resultat.exercice}`}
             date={resultat.dateFin}

@@ -5,13 +5,13 @@ import {
   ChargementEnCours,
   Erreur,
   Etiquette,
-  ExportCsv,
   Fenetre,
   Grille,
   montant,
   useAsync,
   type Colonne
 } from "../composants";
+import { Exporter } from "../exporter";
 
 /** Balance générale, filtrable par période : le contrôle d'équilibre avant toute édition. */
 export function Balance() {
@@ -65,7 +65,7 @@ export function Balance() {
             ))}
           </select>
         </label>
-        <ExportCsv
+        <Exporter
           tige="balance"
           contexte={periode === "toutes" ? "toutes-periodes" : `periode-${periode}`}
           date={aujourdHui}

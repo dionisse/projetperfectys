@@ -26,7 +26,6 @@ import {
   ChargementEnCours,
   Erreur,
   Etiquette,
-  ExportCsv,
   Fenetre,
   Grille,
   Vide,
@@ -36,6 +35,7 @@ import {
   type CelluleCsv,
   type Colonne
 } from "../composants";
+import { Exporter } from "../exporter";
 
 export function Lettrage(props: { onMutation: () => void }) {
   const service = getService();
@@ -296,7 +296,7 @@ export function Lettrage(props: { onMutation: () => void }) {
               ))}
             </select>
           </label>
-          <ExportCsv tige="lettrage" contexte={`${compte}-${tiers}`} date={aujourdHui} lignes={lignesCsv} />
+          <Exporter tige="lettrage" contexte={`${compte}-${tiers}`} date={aujourdHui} lignes={lignesCsv} />
           <button class="bouton" type="button" onClick={() => recharger()}>
             Actualiser
           </button>

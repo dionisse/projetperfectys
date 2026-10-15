@@ -341,6 +341,53 @@ Les règles retenues :
 Ce qui n'est pas produit : l'interrogation d'un compte par **montant** ou par **lettre** (le finder
 de Sage), l'appel d'une écriture depuis une ligne, et l'impression PDF.
 
+### 5.6 Ce que les trois formats d'export livrent
+
+L'exigence était posée dès le cadrage : **tout document est exportable en PDF, en Excel et en CSV,
+et c'est l'utilisateur qui choisit**. Elle est tenue pour les treize écrans qui produisent un état :
+balance, journal, grand livre, interrogation de compte, plan comptable, société, codes de taxe,
+déclaration TVA, bilan, compte de résultat, état de lettrage, état de rapprochement, rapport de
+clôture.
+
+Le bouton **Exporter…** de la barre d'actions déplie les trois formats. Ce choix n'est pas une
+question de confort : les trois rendus servent trois usages différents, et un cabinet les emploie
+tous les trois dans la même journée.
+
+| Format | Usage | Ce qui est garanti |
+|---|---|---|
+| **CSV** | Échanger, importer dans un autre logiciel | Point-virgule, BOM UTF-8, fins de ligne CRLF : Excel en français découpe correctement, et les accents survivent |
+| **Excel** | Retraiter, sommer, contrôler | Les montants sont des **nombres entiers** au format `#,##0`, les dates en ISO, un **onglet par section**, volet figé sous les titres, filtre automatique, A4 ajusté en largeur avec titres répétés, totaux en gras |
+| **PDF** | Imprimer, archiver, envoyer | A4, portrait ou paysage selon la largeur du tableau, en-tête de société complet en page 1 puis en-tête compact, paramètres de l'édition, mention finale, « Page n/N » |
+
+**Une seule description, trois rendus.** Le document est décrit une fois (`documentDepuisLignes`,
+dans `compta/src/web/exports/document.ts`) à partir des lignes que l'écran prépare déjà pour son
+export, puis rendu par chaque moteur. Chaque cellule a deux faces : la **valeur** exacte — un montant
+entier, une date ISO, un code technique — que reçoivent le CSV et Excel, et le **texte** français que
+le PDF imprime. C'est ce qui empêche les trois formats de diverger : ils ne recalculent rien, ils
+mettent en forme la même chose.
+
+Trois conséquences assumées :
+
+1. **Le franc CFA n'a pas de centimes.** Un format `#,##0.00` inventerait une subdivision qui
+   n'existe pas ; le format retenu est `#,##0`.
+2. **Au-delà de ce qu'un nombre JavaScript représente exactement, un montant bascule en texte** dans
+   Excel, plutôt que de devenir un nombre faux. Un export qui arrondit en silence est pire qu'un
+   export qui dit qu'il ne peut pas.
+3. **Les polices PDF standard (Helvetica, WinAnsi) silencent les caractères hors latin1.** L'espace
+   insécable étroite que `formatMontant` emploie comme séparateur de milliers, le tiret cadratin et
+   la ligature « Œ » disparaîtraient du texte imprimé sans aucun avertissement : ils sont
+   normalisés explicitement. Les accents français, eux, sont en latin1 et restent.
+
+Les bibliothèques (`exceljs`, `jspdf`, `jspdf-autotable`) sont chargées **à la demande** : le paquet
+principal reste à ≈ 292 ko, et les ≈ 940 ko d'Excel ou les ≈ 390 ko de PDF ne sont téléchargés
+qu'au premier export dans ce format. Le bouton dit ce qu'il fait pendant la génération (« Excel en
+cours… ») et le retour donne le nom du fichier et sa taille : un téléchargement silencieux laisse
+croire qu'il n'a rien donné.
+
+Les moteurs reprennent les conventions de mise en page éprouvées dans l'application précédente
+(`legacy/perfecto-typescript/exports/`, archivée et hors build), vérifiées à la sonde sur les mêmes
+versions de bibliothèques.
+
 ## 6. Ordre de livraison
 
 | Tranche | Livrable | Preuve | État au 15/10/2026 |
@@ -352,7 +399,7 @@ de Sage), l'appel d'une écriture depuis une ligne, et l'impression PDF.
 | **E** | Taxes Bénin en saisie + **déclaration TVA** mensuelle | tests de calcul fiscal | **livrée** : génération des lignes de taxe en saisie, déclaration recalculée et rapprochée du grand livre, export CSV. Reste le reversement des acomptes et retenues (compte 442100), qui relève d'une autre obligation |
 | **F** | Lettrage, rapprochement bancaire | tests | **partiellement livrée** : lettrage des comptes de tiers — producteur `lettrage.ts`, écran, lettrage manuel et automatique (proposé avant d'être appliqué), délettrage tracé, export CSV, 21 tests — **et rapprochement bancaire** : relevés saisis ligne à ligne, producteur `rapprochement.ts`, état de rapprochement avec écart expliqué et reste inexpliqué, pointage manuel et automatique (par référence puis par montant), dépointage tracé, écran, export CSV, 13 + 3 tests. Reste le lettrage partiel d'un règlement à-compte ; l'import d'un fichier de relevé (CSV, OFX, CAMT) n'est pas produit |
 | **G** | Clôtures : période, exercice, à-nouveaux, *Create New Year* | tests | **livrée** : rapport de préparation, clôture d'exercice (solde des comptes de gestion vers 121000, à-nouveaux segment de tiers compris, ouverture de l'exercice suivant, archivage de l'exercice clos), lectures par exercice, écran avec confirmation explicite, 14 tests. La réouverture d'un exercice clos n'est pas produite : la clôture est définitive, et l'écran le dit |
-| **H** | États financiers OHADA révisé (producteur distinct), exports PDF/Excel/CSV de tous les documents | fichiers produits et vérifiés | **partiellement livrée** : bilan et compte de résultat OHADA révisé — producteur `etats-financiers.ts`, deux écrans, arrêté par période, **colonne N-1 dès qu'un exercice est clos**, export CSV, 18 tests. Restent le tableau des flux de trésorerie et le tableau de variation des activités (aucun compte du plan n'est classé en flux) et les exports PDF et Excel |
+| **H** | États financiers OHADA révisé (producteur distinct), exports PDF/Excel/CSV de tous les documents | fichiers produits et vérifiés | **largement livrée** : bilan et compte de résultat OHADA révisé — producteur `etats-financiers.ts`, deux écrans, arrêté par période, **colonne N-1 dès qu'un exercice est clos**, 18 tests ; puis les **trois formats d'export** (§5.6) — description unique du document, Excel à montants numériques avec un onglet par section, PDF A4 paginé avec en-tête de société, CSV inchangé, chargement à la demande des bibliothèques, 14 tests de rendu (dont un XLSX relu par `exceljs` et un PDF dont le texte imprimé est décodé) plus 2 parcours d'écran. Restent le tableau des flux de trésorerie et le tableau de variation des activités (aucun compte du plan n'est classé en flux) |
 | **I** | Piste d'audit, habilitations par écran, import/export de données, sauvegarde/restauration, hôte Windows | tests + package installable | piste d'audit **livrée** (ajout-seulement, attribuée, horodatée) ; le reste à faire |
 
 **Chaque tranche se termine par un écran validé par l'utilisateur sur l'aperçu live avant la

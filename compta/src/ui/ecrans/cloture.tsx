@@ -17,7 +17,6 @@ import {
   ChargementEnCours,
   Erreur,
   Etiquette,
-  ExportCsv,
   Fenetre,
   Vide,
   message,
@@ -25,6 +24,7 @@ import {
   useAsync,
   type CelluleCsv
 } from "../composants";
+import { Exporter } from "../exporter";
 
 function grilleDeLignes(lignes: readonly LignePrevue[], titre: string) {
   if (lignes.length === 0) {
@@ -182,7 +182,7 @@ export function ClotureExercice(props: { onMutation: () => void }) {
       )} · montants en ${contexte.devise}`}
       actions={
         <>
-          <ExportCsv
+          <Exporter
             tige="cloture"
             contexte={`${contexte.societe.code}-${rapport.exercice}`}
             date={aujourdHui}

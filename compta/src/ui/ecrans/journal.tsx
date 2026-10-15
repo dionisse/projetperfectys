@@ -4,13 +4,13 @@ import { getService } from "../../web/noyau";
 import {
   ChargementEnCours,
   Erreur,
-  ExportCsv,
   Fenetre,
   Grille,
   montant,
   useAsync,
   type Colonne
 } from "../composants";
+import { Exporter } from "../exporter";
 
 /** Journal des écritures comptabilisées, par pièce, avec le détail de la pièce sélectionnée. */
 export function Journal() {
@@ -64,7 +64,7 @@ export function Journal() {
             ))}
           </select>
         </label>
-        <ExportCsv
+        <Exporter
           tige="journal"
           contexte={journalCode === "" ? "tous-journaux" : journalCode}
           date={aujourdHui}
