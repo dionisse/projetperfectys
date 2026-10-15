@@ -1,17 +1,17 @@
 {
-  "name": "perfecto-next",
+  "name": "perfectys",
   "private": true,
-  "version": "0.3.0-dev",
-  "description": "PERFECTO Nouvelle Génération — suite de gestion modulaire SYSCOHADA (noyau TypeScript partagé PWA / desktop / API)",
+  "version": "0.4.0-dev",
+  "description": "Perfectys Compta \u2014 comptabilit\u00e9 g\u00e9n\u00e9rale SYSCOHADA r\u00e9vis\u00e9 sur le mod\u00e8le Sage, paquet pays B\u00e9nin (noyau TypeScript, interface web, h\u00f4te Windows \u00e0 venir)",
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "compta"
   ],
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "dev": "npm run dev -w @perfecto/pwa",
-    "build:pwa": "npm run build -w @perfecto/pwa",
+    "dev": "npm run dev -w @perfectys/compta",
+    "build": "npm run build -w @perfectys/compta",
     "preview:vercel": "node scripts/serve-vercel-preview.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

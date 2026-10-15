@@ -18,27 +18,16 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "baseUrl": ".",
-    "paths": {
-      "@perfecto/domain": [
-        "packages/domain/src/index.ts"
-      ],
-      "@perfecto/contracts": [
-        "packages/contracts/src/index.ts"
-      ],
-      "@perfecto/application": [
-        "packages/application/src/index.ts"
-      ],
-      "@perfecto/exports": [
-        "packages/exports/src/index.ts"
-      ]
-    }
+    "baseUrl": "."
   },
   "include": [
-    "packages/*/src/**/*",
-    "packages/*/test/**/*",
     "compta/src/**/*",
     "compta/test/**/*",
     "vitest.config.ts"
+  ],
+  "exclude": [
+    "legacy",
+    "node_modules",
+    "compta/dist"
   ]
 }

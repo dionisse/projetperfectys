@@ -5,4 +5,4 @@ legacy/
 SHA256SUMS.txt
 
 # Les tests ne sont pas exécutés par Vercel (ils tournent dans `npm test`).
-packages/*/test/
+compta/test/

@@ -2,8 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "npm ci --no-audit --no-fund",
-  "buildCommand": "npm run build:pwa",
-  "outputDirectory": "packages/pwa/dist",
+  "buildCommand": "npm run build",
+  "outputDirectory": "compta/dist",
   "cleanUrls": true,
   "trailingSlash": false,
   "build": {
@@ -28,37 +28,11 @@
       ]
     },
     {
-      "source": "/sw.js",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
-        },
-        {
-          "key": "Service-Worker-Allowed",
-          "value": "/"
-        }
-      ]
-    },
-    {
       "source": "/index.html",
       "headers": [
         {
           "key": "Cache-Control",
           "value": "public, max-age=0, must-revalidate"
-        }
-      ]
-    },
-    {
-      "source": "/manifest.webmanifest",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
-        },
-        {
-          "key": "Content-Type",
-          "value": "application/manifest+json"
         }
       ]
     },

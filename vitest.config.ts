@@ -1,24 +1,15 @@
-import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
-const alias = (name: string) => fileURLToPath(new URL(`./packages/${name}/src/index.ts`, import.meta.url));
-
+/**
+ * Configuration de test.
+ *
+ * `environment: "node"` par défaut : le noyau est du métier pur, il n'a pas besoin de DOM et un
+ * test qui tourne sans navigateur tourne dix fois plus vite. Les tests d'écran demandent jsdom
+ * par un commentaire de docblock en première ligne de fichier.
+ */
 export default defineConfig({
-  resolve: {
-    alias: {
-      "@perfecto/domain": alias("domain"),
-      "@perfecto/contracts": alias("contracts"),
-      "@perfecto/application": alias("application"),
-      "@perfecto/exports": alias("exports")
-    }
-  },
   test: {
-    include: [
-      "packages/*/test/**/*.test.ts",
-      "packages/*/test/**/*.test.tsx",
-      "compta/test/**/*.test.ts",
-      "compta/test/**/*.test.tsx"
-    ],
+    include: ["compta/test/**/*.test.ts", "compta/test/**/*.test.tsx"],
     environment: "node"
   }
 });
