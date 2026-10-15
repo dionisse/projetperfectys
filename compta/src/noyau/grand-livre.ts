@@ -25,6 +25,14 @@ export interface Mouvement {
   journalCode: string;
   ecritureId: string;
   ecritureNumero: string;
+  /**
+   * Identifiant de la ligne d'écriture d'origine.
+   *
+   * Une écriture peut porter deux lignes sur le même compte (un avoir et une facture dans une même
+   * pièce) : sans cet identifiant, aucune marque — lettrage, pointage — ne pourrait désigner une
+   * ligne plutôt qu'une autre.
+   */
+  ligneId: string;
   piece: string;
   date: DateCivile;
   /** Numéro de période de l'exercice. */

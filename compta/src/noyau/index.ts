@@ -184,6 +184,21 @@ export {
   type Rubrique,
   type SensPresentation
 } from "./etats-financiers";
+export {
+  chercherCombinaison,
+  codeDeLettrageSuivant,
+  comparerLignesALettrer,
+  lignesLettrees,
+  mouvementsALettrer,
+  proposerLettrageAutomatique,
+  situationsDeLettrage,
+  verifierGroupeALettrer,
+  type CritereDeLettrage,
+  type FiltreLignesALettrer,
+  type Lettrage,
+  type PropositionLettrage,
+  type SituationDeLettrage
+} from "./lettrage";
 
 export { StockageMemoire } from "./stockage";
 export type { PortStockage } from "./stockage";

@@ -27,7 +27,7 @@ la même base.
 
 ```bash
 npm install            # installe l'espace de travail (compta)
-npm test               # 121 tests : noyau en Node, interface en jsdom
+npm test               # 142 tests : noyau en Node, interface en jsdom
 npm run typecheck      # TypeScript strict, sans émission
 npm run build          # build de production dans compta/dist
 npm run preview:vercel # sert le build comme le ferait Vercel, sur http://localhost:5173
@@ -55,6 +55,12 @@ npm run dev            # serveur de développement Vite
   choisi, complété du tiers quand il est connu.
 - **Brouillon conservé** : une saisie entamée survit à un changement d'écran (mémoire de session,
   par lot) ; elle est effacée à l'enregistrement ou sur demande explicite.
+- **Lettrage des comptes de tiers** : situation compte par compte (solde comptable **et** solde non
+  lettré, plus ancienne ligne non rapprochée), lignes à lettrer cochables, lettrage manuel d'une
+  sélection, **lettrage automatique proposé avant d'être appliqué** (montants exactement égaux, un
+  contre un ou un contre deux ou trois), délettrage. Une marque n'écrit aucune écriture : elle
+  rapproche des lignes déjà comptabilisées. Un groupe déséquilibré est refusé, l'écart affiché, et le
+  bouton grisé porte la raison. Un délettrage ne supprime pas la marque : il la date.
 - **Interrogation** : balance filtrable par période, journal par pièce avec son détail, grand livre
   à solde progressif par compte (comptes auxiliaires compris).
 - **États** : **bilan OHADA révisé** (actif en brut, amortissements et net ; passif en net ;
@@ -72,8 +78,8 @@ npm run dev            # serveur de développement Vite
   est affiché en alerte, jamais absorbé dans un total. L'écran est un état de contrôle : il ne
   prétend pas reproduire l'imprimé officiel, dont la mise en page n'a pas été relevée dans le texte
   juridique.
-- **Export CSV** : le bilan, le compte de résultat, la déclaration TVA, la balance, le journal et
-  le grand livre se téléchargent au
+- **Export CSV** : le bilan, le compte de résultat, l'état de lettrage, la déclaration TVA, la
+  balance, le journal et le grand livre se téléchargent au
   format CSV (point-virgule, BOM UTF-8, fins de ligne CRLF — ce qu'Excel en français attend), dans
   ce que l'écran affiche, filtres compris. Excel et PDF suivent.
 - **Outils** : piste d'audit ajout-seulement, séquencée, attribuée et horodatée ; réinitialisation
@@ -84,7 +90,8 @@ npm run dev            # serveur de développement Vite
 
 Les entrées de menu correspondant à des fonctions non livrées sont **visibles, grisées, et portent
 la tranche qui les livrera** en infobulle. Elles ne sont pas cliquables : aucun lien mort, aucun
-écran vide. Lettrage, rapprochement bancaire, écritures récurrentes, clôture d'exercice avec
+écran vide. Rapprochement bancaire (le lettrage est livré ; le pointage d'un relevé suit),
+lettrage partiel d'un règlement à-compte, écritures récurrentes, clôture d'exercice avec
 report des à-nouveaux, interrogation d'un compte et historique, tableau des flux de trésorerie et
 tableau de variation des activités (le plan de démarrage ne porte aucun compte classé « flux de
 trésorerie » : l'entrée de menu le dit au lieu de produire un état vide), exports Excel et PDF,
@@ -121,7 +128,10 @@ restauration. La colonne « N-1 » des états financiers attend la gestion multi
     Ajouter une rubrique, ou publier le modèle d'un autre pays de l'UEMOA, ne touche pas au calcul.
     Chaque état emporte son propre contrôle : écart actif/passif pour le bilan, écart entre le
     résultat présenté et la somme des comptes de gestion pour le compte de résultat.
-11. **Le résultat de l'exercice est au passif avant la clôture.** Un bilan arrêté en cours d'année
+11. **Une marque ne réécrit pas le grand livre.** Le lettrage rapproche des lignes déjà
+    comptabilisées : il n'écrit aucun mouvement, ne modifie aucun solde, et se défait sans trace
+    perdue. Un délettrage date la marque au lieu de la supprimer.
+12. **Le résultat de l'exercice est au passif avant la clôture.** Un bilan arrêté en cours d'année
     n'est équilibré que parce que les comptes de gestion sont résumés dans les capitaux propres. La
     clôture remplacera ce solde par un compte 121000 mouvementé ; jusqu'alors, aucun état ne fait
     semblant qu'elle a eu lieu.

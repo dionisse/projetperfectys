@@ -366,6 +366,28 @@ body {
   outline: none;
 }
 
+/* Lettrage : une ligne cochée et une marque défaite doivent se reconnaître d'un coup d'œil. */
+.barre-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.grille tr.selectionnee td {
+  background: var(--accent-doux);
+}
+
+.grille tr.defaite td {
+  color: var(--discret);
+  text-decoration: line-through;
+}
+
+.grille tr.defaite td:last-child {
+  text-decoration: none;
+}
+
 /* États financiers : le niveau d'une rubrique doit se lire sans compter les espaces. */
 .grille-etat td:first-child {
   white-space: normal;

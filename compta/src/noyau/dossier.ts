@@ -53,9 +53,21 @@ import {
   type CompteDeResultat
 } from "./etats-financiers";
 import {
+  codeDeLettrageSuivant,
+  mouvementsALettrer,
+  proposerLettrageAutomatique,
+  situationsDeLettrage,
+  verifierGroupeALettrer,
+  type CritereDeLettrage,
+  type Lettrage,
+  type PropositionLettrage,
+  type SituationDeLettrage
+} from "./lettrage";
+import {
   construireBalance,
   construireGrandLivre,
   construireJournal,
+  comptePrincipalDe,
   verifierEquilibre,
   type FiltreMouvements,
   type LigneBalance,
@@ -104,6 +116,11 @@ export interface EtatDossier {
   lots: Lot[];
   /** Écritures comptabilisées, ajout-seulement. */
   mouvements: Mouvement[];
+  /**
+   * Marques de lettrage. Un délettrage ne retire pas la marque : il la date. L'historique d'un
+   * compte de tiers reste reconstituable.
+   */
+  lettrages: Lettrage[];
   sequencesLots: Record<string, number>;
   sequencesEcritures: Record<string, number>;
   audit: EvenementAudit[];
@@ -587,6 +604,7 @@ export class ServiceComptable {
             journalCode: lot.journalCode,
             ecritureId: ecriture.id,
             ecritureNumero: ecriture.numero,
+            ligneId: ligne.id,
             piece: ecriture.piece,
             date: ecriture.date,
             periode: periode.numero,
@@ -722,6 +740,204 @@ export class ServiceComptable {
       this.#tracer(etat, "Période rouverte", "Periode", `${etat.exercice.annee}-${numero}`, `Période ${numero}`);
       return etat.exercice;
     });
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Lettrage des comptes de tiers                                     */
+  /* ---------------------------------------------------------------- */
+
+  /**
+   * Marques de lettrage d'un compte — en vigueur et défaites.
+   *
+   * Les marques défaites sont rendues elles aussi : un délettrage n'efface pas qu'une facture a été
+   * rapprochée d'un règlement un jour, et pourquoi ça n'a pas tenu.
+   */
+  async lettrages(compte?: string): Promise<Lettrage[]> {
+    const etat = await this.#stockage.lire();
+    if (compte === undefined) {
+      return [...etat.lettrages];
+    }
+    const principal = comptePrincipalDe(compte);
+    return etat.lettrages.filter((lettrage) => comptePrincipalDe(lettrage.compte) === principal);
+  }
+
+  /**
+   * Situation du lettrage, compte de tiers par compte de tiers.
+   *
+   * Deux soldes distincts : le solde comptable (ce qui est dû) et le solde non lettré (ce qui est dû
+   * sans qu'aucun règlement ne l'explique). Le second est celui qu'un trésorier regarde.
+   */
+  async situationDuLettrage(
+    options: { du?: DateCivile; au?: DateCivile } = {}
+  ): Promise<SituationDeLettrage[]> {
+    const etat = await this.#stockage.lire();
+    return situationsDeLettrage(etat.mouvements, etat.lettrages, options);
+  }
+
+  /** Lignes d'un compte de tiers qui ne sont encore rapprochées d'aucune autre. */
+  async lignesALettrer(critere: CritereDeLettrage): Promise<Mouvement[]> {
+    const etat = await this.#stockage.lire();
+    this.#verifierCompteDeTiers(etat, critere.compte);
+    return mouvementsALettrer(etat.mouvements, etat.lettrages, critere);
+  }
+
+  /**
+   * Ce que le lettrage automatique proposerait, sans rien écrire.
+   *
+   * La proposition précède toujours l'écriture : un lettrage automatique qu'on ne peut pas regarder
+   * avant de l'appliquer n'est pas vérifiable.
+   */
+  async proposerLettrageAutomatique(critere: CritereDeLettrage): Promise<PropositionLettrage[]> {
+    const etat = await this.#stockage.lire();
+    this.#verifierCompteDeTiers(etat, critere.compte);
+    return proposerLettrageAutomatique(etat.mouvements, etat.lettrages, critere);
+  }
+
+  /** Lettre un groupe de lignes choisi ligne à ligne. */
+  async lettrer(demande: {
+    compte: string;
+    lignes: string[];
+    date?: DateCivile;
+  }): Promise<Lettrage> {
+    return this.#muter((etat) => {
+      this.#verifierCompteDeTiers(etat, demande.compte);
+      const groupe = this.#resoudreLignes(etat, demande.lignes);
+      return this.#lettrerDans(etat, groupe, demande.date);
+    });
+  }
+
+  /**
+   * Lettre automatiquement un compte de tiers : toutes les propositions sont appliquées d'un coup.
+   *
+   * Chaque marque créée reste visible séparément et peut être défaite.
+   */
+  async lettrerAutomatiquement(critere: CritereDeLettrage): Promise<Lettrage[]> {
+    return this.#muter((etat) => {
+      this.#verifierCompteDeTiers(etat, critere.compte);
+      const propositions = proposerLettrageAutomatique(etat.mouvements, etat.lettrages, critere);
+      const crees: Lettrage[] = [];
+      for (const proposition of propositions) {
+        const groupe = this.#resoudreLignes(etat, proposition.lignes);
+        crees.push(this.#lettrerDans(etat, groupe, critere.au));
+      }
+      if (crees.length > 0) {
+        this.#tracer(
+          etat,
+          "Lettrage automatique",
+          "Compte",
+          comptePrincipalDe(critere.compte),
+          `${crees.length} marque${crees.length > 1 ? "s" : ""} créée${crees.length > 1 ? "s" : ""} : ${crees
+            .map((lettrage) => lettrage.code)
+            .join(", ")}`
+        );
+      }
+      return crees;
+    });
+  }
+
+  /** Délettre une marque : les lignes redeviennent à lettrer, la marque reste lisible. */
+  async delettrer(code: string): Promise<Lettrage> {
+    return this.#muter((etat) => {
+      const lettrage = etat.lettrages.find((item) => item.code === code);
+      if (!lettrage) {
+        throw new ErreurRegle(`Le lettrage « ${code} » n'existe pas dans ce dossier.`);
+      }
+      if (lettrage.defaitLe !== null) {
+        throw new ErreurRegle(`Le lettrage « ${code} » est déjà défait.`);
+      }
+      lettrage.defaitLe = this.#horloge().toISOString();
+      this.#tracer(
+        etat,
+        "Lettrage défait",
+        "Lettrage",
+        lettrage.code,
+        `${lettrage.compte}${lettrage.tiersCode ? ` · ${lettrage.tiersCode}` : ""} — ${
+          lettrage.lignes.length
+        } lignes, ${formatMontant(lettrage.montant, this.#paquet.devise)}`
+      );
+      return lettrage;
+    });
+  }
+
+  #verifierCompteDeTiers(etat: EtatDossier, compte: string): void {
+    const principal = comptePrincipalDe(compte);
+    if (!etat.comptes.some((item) => item.numero === principal)) {
+      throw new ErreurRegle(`Le compte « ${principal} » n'existe pas dans le plan du dossier.`);
+    }
+  }
+
+  #resoudreLignes(etat: EtatDossier, lignes: readonly string[]): Mouvement[] {
+    if (lignes.length === 0) {
+      throw new ErreurRegle("Aucune ligne demandée : choisissez au moins deux lignes à lettrer.");
+    }
+    const vus = new Set<string>();
+    const groupe: Mouvement[] = [];
+    for (const ligneId of lignes) {
+      if (vus.has(ligneId)) {
+        throw new ErreurRegle(`La ligne « ${ligneId} » est demandée deux fois.`);
+      }
+      vus.add(ligneId);
+      const mouvement = etat.mouvements.find((item) => item.ligneId === ligneId);
+      if (!mouvement) {
+        throw new ErreurRegle(`La ligne « ${ligneId} » n'existe pas dans le grand livre.`);
+      }
+      groupe.push(mouvement);
+    }
+    return groupe;
+  }
+
+  /** Vérifie un groupe, l'attribue et le trace. Appelé dans une mutation déjà ouverte. */
+  #lettrerDans(etat: EtatDossier, groupe: readonly Mouvement[], date?: DateCivile): Lettrage {
+    const verifie = verifierGroupeALettrer(groupe, this.#paquet.devise);
+
+    const enVigueur = etat.lettrages.filter((lettrage) => lettrage.defaitLe === null);
+    for (const mouvement of groupe) {
+      const deja = enVigueur.find((lettrage) => lettrage.lignes.includes(mouvement.ligneId));
+      if (deja) {
+        throw new ErreurRegle(
+          `La ligne ${mouvement.piece} · ${mouvement.compte} du ${formaterDateFr(
+            mouvement.date
+          )} est déjà lettrée sous le code ${deja.code}. Délettrez-la avant de la rapprocher d'une autre ligne.`
+        );
+      }
+    }
+
+    const comptes = [...new Set(groupe.map((mouvement) => comptePrincipalDe(mouvement.compte)))];
+    if (comptes.length > 1) {
+      throw new ErreurRegle(
+        `Un lettrage ne mélange pas deux comptes : ${comptes.join(" et ")} demandés. Lettrez chaque compte séparément.`
+      );
+    }
+    const tiers = [...new Set(groupe.map((mouvement) => mouvement.tiersCode))];
+    if (tiers.length > 1) {
+      throw new ErreurRegle(
+        `Un lettrage ne mélange pas deux tiers : ${tiers.map((code) => code ?? "sans tiers").join(" et ")}.`
+      );
+    }
+
+    const horodate = this.#horloge().toISOString();
+    const lettrage: Lettrage = {
+      code: codeDeLettrageSuivant(etat.lettrages),
+      compte: comptes[0]!,
+      tiersCode: tiers[0] ?? null,
+      lignes: groupe.map((mouvement) => mouvement.ligneId),
+      montant: verifie.montant,
+      date: date ?? (horodate.slice(0, 10) as DateCivile),
+      acteur: this.#utilisateur,
+      horodate,
+      defaitLe: null
+    };
+    etat.lettrages.push(lettrage);
+    this.#tracer(
+      etat,
+      "Lettrage",
+      "Lettrage",
+      lettrage.code,
+      `${lettrage.compte}${lettrage.tiersCode ? ` · ${lettrage.tiersCode}` : ""} — ${
+        groupe.length
+      } lignes, ${formatMontant(lettrage.montant, this.#paquet.devise)}`
+    );
+    return lettrage;
   }
 
   /* ---------------------------------------------------------------- */
@@ -1026,6 +1242,7 @@ export function creerDossierDemonstration(options?: {
     tiers,
     lots: [],
     mouvements: [],
+    lettrages: [],
     sequencesLots: {},
     sequencesEcritures: {},
     audit: []
@@ -1078,6 +1295,7 @@ export function creerDossierDemonstration(options?: {
       journalCode: lot.journalCode,
       ecritureId: ecriture.id,
       ecritureNumero: ecriture.numero,
+      ligneId: item.id,
       piece: ecriture.piece,
       date: ecriture.date,
       periode: periode.numero,
@@ -1129,7 +1347,9 @@ function ligne(
 /* Sérialisation : les montants sont des bigint, JSON ne les porte pas. */
 /* ------------------------------------------------------------------ */
 
-export interface EtatDossierSerialise extends Omit<EtatDossier, "mouvements" | "comptes" | "lots"> {
+export interface EtatDossierSerialise
+  extends Omit<EtatDossier, "mouvements" | "comptes" | "lots" | "lettrages"> {
+  lettrages: (Omit<Lettrage, "montant"> & { montant: string })[];
   comptes: (Omit<Compte, "soldeInitial"> & { soldeInitial: string })[];
   lots: (Omit<Lot, "ecritures"> & {
     ecritures: (Omit<Ecriture, "lignes"> & {
@@ -1158,7 +1378,8 @@ export function serialiserEtat(etat: EtatDossier): EtatDossierSerialise {
       ...mouvement,
       debit: montantVersChaine(mouvement.debit),
       credit: montantVersChaine(mouvement.credit)
-    }))
+    })),
+    lettrages: etat.lettrages.map((lettrage) => ({ ...lettrage, montant: montantVersChaine(lettrage.montant) }))
   };
 }
 
@@ -1181,7 +1402,8 @@ export function deserialiserEtat(brut: EtatDossierSerialise): EtatDossier {
       ...mouvement,
       debit: montantDepuisChaine(mouvement.debit),
       credit: montantDepuisChaine(mouvement.credit)
-    }))
+    })),
+    lettrages: brut.lettrages.map((lettrage) => ({ ...lettrage, montant: montantDepuisChaine(lettrage.montant) }))
   };
 }
 

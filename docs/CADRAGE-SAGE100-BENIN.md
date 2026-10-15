@@ -159,6 +159,23 @@ navigables au clavier, barre d'état.
 Le producteur d'**états financiers** est distinct du module, comme *Financial Reporter* l'est de
 Sage 300 GL : même noyau, couche séparée.
 
+### 5.0 Ce que le lettrage livre
+
+`compta/src/noyau/lettrage.ts` produit les marques, l'écran ne fait que les montrer. Trois règles :
+
+- **Un groupe lettré est équilibré.** La somme des débits égale la somme des crédits. Un groupe d'un
+  seul sens, ou dont l'écart n'est pas nul, est refusé — le lettrage partiel (un règlement à-compte)
+  n'est pas produit, parce qu'il suppose un suivi des imputations ligne à ligne.
+- **La proposition précède l'écriture.** Le lettrage automatique rapproche des montants exactement
+  égaux (un contre un, puis un contre deux ou trois, dans une recherche bornée et triée) ; ce qu'il
+  trouve est affiché avant que l'utilisateur ne l'applique. Ce qui n'est pas rapproché reste à
+  lettrer à la main, et l'écran le dit.
+- **Un délettrage ne supprime rien.** La marque défaite reste lisible avec sa date : l'historique
+  d'un compte de tiers doit pouvoir être reconstitué, et un code de lettrage n'est jamais recyclé.
+
+L'écran distingue deux soldes : le solde comptable (ce qui est dû) et le solde non lettré (ce qui
+est dû sans qu'aucun règlement ne l'explique), avec la plus ancienne ligne non rapprochée.
+
 ### 5.1 Ce que le producteur d'états financiers livre
 
 `compta/src/noyau/etats-financiers.ts` décrit les états comme des **données**. Une rubrique porte
@@ -194,7 +211,7 @@ portés `aVerifier`, à rapprocher du formulaire de dépôt avant toute communic
 | **C** | Écrans **Traitements** : lots, saisie des écritures en table de détail, comptabilisation, contre-passation | aperçu live + tests de parcours | **livrée**, 9 tests de parcours en jsdom |
 | **D** | Écrans **Interrogation** : balance, grand livre, journal, compte, historique | aperçu live | balance, journal et grand livre **livrés** ; interrogation d'un compte et historique restants |
 | **E** | Taxes Bénin en saisie + **déclaration TVA** mensuelle | tests de calcul fiscal | **livrée** : génération des lignes de taxe en saisie, déclaration recalculée et rapprochée du grand livre, export CSV. Reste le reversement des acomptes et retenues (compte 442100), qui relève d'une autre obligation |
-| **F** | Lettrage, rapprochement bancaire | tests | à faire — l'échéance est déjà saisie ligne par ligne |
+| **F** | Lettrage, rapprochement bancaire | tests | **partiellement livrée** : lettrage des comptes de tiers — producteur `lettrage.ts`, écran, lettrage manuel et automatique (proposé avant d'être appliqué), délettrage tracé, export CSV, 21 tests. Restent le rapprochement bancaire (pointage d'un relevé) et le lettrage partiel |
 | **G** | Clôtures : période, exercice, à-nouveaux, *Create New Year* | tests | à faire — le noyau verrouille déjà les périodes clôturées |
 | **H** | États financiers OHADA révisé (producteur distinct), exports PDF/Excel/CSV de tous les documents | fichiers produits et vérifiés | **partiellement livrée** : bilan et compte de résultat OHADA révisé — producteur `etats-financiers.ts`, deux écrans, arrêté par période, export CSV, 18 tests. Restent le tableau des flux de trésorerie et le tableau de variation des activités (aucun compte du plan n'est classé en flux), les exports PDF et Excel, et la colonne « N-1 » (tranche G) |
 | **I** | Piste d'audit, habilitations par écran, import/export de données, sauvegarde/restauration, hôte Windows | tests + package installable | piste d'audit **livrée** (ajout-seulement, attribuée, horodatée) ; le reste à faire |

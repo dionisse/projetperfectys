@@ -132,9 +132,19 @@ describe("coquille Sage 100", () => {
     // Aucune entrée indisponible n'est un bouton : rien ne peut mener à un écran vide.
     expect(indisponibles.every((entree) => entree.tagName === "SPAN")).toBe(true);
     expect(indisponibles.every((entree) => entree.getAttribute("aria-disabled") === "true")).toBe(true);
-    const lettrage = indisponibles.find((entree) => entree.textContent?.includes("Lettrage"));
-    expect(lettrage?.getAttribute("title")).toContain("tranche F");
+    // Le lettrage est livré : ce n'est plus une entrée grisée, c'est un bouton qui mène à un écran.
+    const lettrage = entrees.find((entree) => entree.textContent?.includes("Lettrage"));
+    expect(lettrage?.tagName).toBe("BUTTON");
+    // Le rapprochement bancaire reste annoncé, avec ce qui est déjà livré et ce qui manque.
+    const rapprochement = indisponibles.find((entree) =>
+      entree.textContent?.includes("Rapprochement bancaire")
+    );
+    expect(rapprochement?.getAttribute("title")).toContain("tranche F");
 
+    await cliquer(bouton("Lettrage des comptes de tiers…"));
+    expect(location.hash).toBe("#/traitements/lettrage");
+
+    await cliquer(bouton("Traitements"));
     await cliquer(bouton("Lots et comptabilisation…"));
     expect(location.hash).toBe("#/traitements/lots");
     // Le menu se referme après navigation.
