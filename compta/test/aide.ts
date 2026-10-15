@@ -72,6 +72,9 @@ export async function posterLot(
     libelle: demande.libelle
   });
 
+  // Les lignes de taxe sont proposées d'après le paramétrage **du dossier** : un taux que
+  // l'utilisateur a ajouté ou corrigé s'applique ici comme dans l'écran de saisie.
+  const codesDuDossier = await service.codesTaxe();
   const demandes: DemandeLigne[] = [];
   for (const ligne of demande.lignes) {
     const debit = ligne.debit !== undefined ? xof(ligne.debit) : ZERO;
@@ -87,7 +90,7 @@ export async function posterLot(
     demandes.push(base);
     for (const taxe of proposerLignesDeTaxe(
       { compte: ligne.compte, libelle: ligne.libelle, debit, credit, codesTaxe: codes },
-      BENIN.codesTaxe
+      codesDuDossier
     )) {
       demandes.push({
         compte: taxe.compte,

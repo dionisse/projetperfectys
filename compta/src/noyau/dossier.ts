@@ -45,7 +45,7 @@ import {
   type Lot,
   type NatureJournal
 } from "./lots";
-import { codesTaxeApplicables, verifierLignesTaxees, type CodeTaxe } from "./taxes";
+import { codesTaxeApplicables, formaterTaux, verifierLignesTaxees, type CodeTaxe } from "./taxes";
 import { construireDeclarationTva, type DeclarationTva } from "./declaration-tva";
 import {
   construireBilan,
@@ -169,6 +169,15 @@ export interface EtatDossier {
   releves: ReleveBancaire[];
   pointages: Pointage[];
   sequencesReleves: number;
+  /**
+   * Codes de taxe **du dossier**, amorcés depuis le paquet pays et modifiables par l'utilisateur.
+   *
+   * Le paquet pays reste la référence légale, versionnée ; le dossier porte ce qui s'applique ici.
+   * Un taux modifié ne réécrit rien : les écritures déjà comptabilisées gardent le calcul fait au
+   * moment de leur saisie, et la modification est refusée sur un code déjà mouvementé — un changement
+   * de taux passe par un nouveau code, comme dans la réalité.
+   */
+  codesTaxe: CodeTaxe[];
   sequencesLots: Record<string, number>;
   sequencesEcritures: Record<string, number>;
   audit: EvenementAudit[];
@@ -258,14 +267,91 @@ export class ServiceComptable {
     return this.#paquet.referentiel;
   }
 
-  /** Codes de taxe applicables à une opération, proposés par le paquet pays. */
-  codesTaxePour(contexte: {
+  /** Les codes de taxe du dossier : ceux du paquet pays, tels que l'utilisateur les a ajustés. */
+  async codesTaxe(): Promise<CodeTaxe[]> {
+    const etat = await this.#stockage.lire();
+    return etat.codesTaxe;
+  }
+
+  /**
+   * Combien de lignes tiennent à chaque compte du plan : dans le grand livre, tous exercices
+   * confondus, et dans les lots encore en saisie.
+   *
+   * L'écran du plan s'en sert pour griser ce qui ne peut plus changer — un compte mouvementé ne change
+   * pas de groupe et ne se supprime pas — au lieu de laisser l'utilisateur le découvrir par un refus.
+   */
+  async utilisationDesComptes(): Promise<Record<string, { mouvements: number; lots: number }>> {
+    const etat = await this.#stockage.lire();
+    const compte: Record<string, { mouvements: number; lots: number }> = {};
+    for (const item of etat.comptes) {
+      compte[item.comptePrincipal] = { mouvements: 0, lots: 0 };
+    }
+    const noter = (numero: string, champ: "mouvements" | "lots"): void => {
+      const principal = comptePrincipalDe(numero);
+      const entree = compte[principal] ?? { mouvements: 0, lots: 0 };
+      entree[champ] += 1;
+      compte[principal] = entree;
+    };
+    for (const mouvement of etat.mouvements) {
+      noter(mouvement.compte, "mouvements");
+    }
+    for (const lot of etat.lots) {
+      for (const ecriture of lot.ecritures) {
+        for (const ligne of ecriture.lignes) {
+          noter(ligne.compte, "lots");
+        }
+      }
+    }
+    return compte;
+  }
+
+  /**
+   * Combien de fois chaque code de taxe a servi : dans le grand livre, et dans les lots encore en
+   * saisie. Un écran en a besoin pour griser ce qui ne peut plus être modifié — un taux qui a servi ne
+   * se réécrit pas — plutôt que de laisser l'utilisateur le découvrir par un refus.
+   */
+  async utilisationDesCodesTaxe(): Promise<Record<string, { mouvements: number; lots: number }>> {
+    const etat = await this.#stockage.lire();
+    const compte: Record<string, { mouvements: number; lots: number }> = {};
+    for (const code of etat.codesTaxe) {
+      compte[code.code] = { mouvements: 0, lots: 0 };
+    }
+    const noter = (codeDemande: string, champ: "mouvements" | "lots"): void => {
+      const entree = compte[codeDemande];
+      if (entree) {
+        entree[champ] += 1;
+      } else {
+        // Un code absent du paramétrage mais présent dans une écriture : il compte quand même, pour
+        // que l'écran dise la vérité sur ce qui est réutilisable.
+        compte[codeDemande] = { mouvements: champ === "mouvements" ? 1 : 0, lots: champ === "lots" ? 1 : 0 };
+      }
+    };
+    for (const mouvement of etat.mouvements) {
+      for (const code of mouvement.codesTaxe) {
+        noter(code, "mouvements");
+      }
+    }
+    for (const lot of etat.lots) {
+      for (const ecriture of lot.ecritures) {
+        for (const ligne of ecriture.lignes) {
+          for (const code of ligne.codesTaxe) {
+            noter(code, "lots");
+          }
+        }
+      }
+    }
+    return compte;
+  }
+
+  /** Codes de taxe applicables à une opération, d'après le paramétrage du dossier. */
+  async codesTaxePour(contexte: {
     operation: "achat" | "vente";
     tiersImmatricule: boolean;
     tiersPublic: boolean;
     exportation: boolean;
-  }): CodeTaxe[] {
-    return codesTaxeApplicables(this.#paquet.codesTaxe, contexte);
+  }): Promise<CodeTaxe[]> {
+    const etat = await this.#stockage.lire();
+    return codesTaxeApplicables(etat.codesTaxe, contexte);
   }
 
   /* ---------------------------------------------------------------- */
@@ -399,7 +485,8 @@ export class ServiceComptable {
       etat.comptes,
       this.#paquet,
       etat.exercice,
-      numero
+      numero,
+      etat.codesTaxe
     );
   }
 
@@ -505,7 +592,7 @@ export class ServiceComptable {
         { ...lot, ecritures: [...lot.ecritures, ecriture] },
         this.#contexteDeValidation(etat)
       );
-      verifierLignesTaxees(ecriture.lignes, this.#paquet.codesTaxe);
+      verifierLignesTaxees(ecriture.lignes, etat.codesTaxe);
 
       lot.ecritures.push(ecriture);
       this.#tracer(etat, "Écriture ajoutée au lot", "Ecriture", ecriture.id, `${lot.numero} / ${ecriture.piece}`);
@@ -653,7 +740,7 @@ export class ServiceComptable {
       const contexte = this.#contexteDeValidation(etat);
       validerLot(lot, contexte);
       for (const ecriture of lot.ecritures) {
-        verifierLignesTaxees(ecriture.lignes, this.#paquet.codesTaxe);
+        verifierLignesTaxees(ecriture.lignes, etat.codesTaxe);
       }
 
       const horodate = this.#horloge().toISOString();
@@ -791,6 +878,508 @@ export class ServiceComptable {
       etat.comptes.sort((gauche, droite) => gauche.comptePrincipal.localeCompare(droite.comptePrincipal));
       this.#tracer(etat, "Compte ajouté au plan", "Compte", compte.comptePrincipal, compte.libelle);
       return compte;
+    });
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Paramétrage du dossier : société, plan de comptes, taux            */
+  /* ---------------------------------------------------------------- */
+
+  /**
+   * Modifie la société du dossier.
+   *
+   * Chaque champ modifié est tracé avec sa valeur d'avant : la société apparaît sur tous les états
+   * exportés, et un changement de raison sociale ou d'identifiant fiscal se retrouve.
+   */
+  async modifierSociete(demande: Partial<Societe>): Promise<Societe> {
+    return this.#muter((etat) => {
+      const avant = etat.societe;
+      const apres: Societe = { ...avant };
+      const changements: string[] = [];
+
+      if (demande.code !== undefined) {
+        const code = demande.code.trim().toUpperCase();
+        if (!/^[A-Z0-9]{1,5}$/.test(code)) {
+          throw new ErreurRegle(
+            `Code société invalide : « ${demande.code} ». 5 caractères maximum, lettres et chiffres — il entre dans le numéro de dossier.`
+          );
+        }
+        apres.code = code;
+      }
+      if (demande.raisonSociale !== undefined) {
+        const raison = demande.raisonSociale.trim();
+        if (raison === "") {
+          throw new ErreurRegle("La raison sociale est obligatoire : elle porte tous les états exportés.");
+        }
+        if (raison.length > 120) {
+          throw new ErreurRegle("La raison sociale dépasse 120 caractères.");
+        }
+        apres.raisonSociale = raison;
+      }
+      if (demande.identifiantFiscal !== undefined) {
+        apres.identifiantFiscal = this.#validerIdentifiantFiscal(demande.identifiantFiscal);
+      }
+      if (demande.formeJuridique !== undefined) {
+        const forme = demande.formeJuridique.trim().toUpperCase();
+        if (!this.#paquet.formesJuridiques.some((item) => item.code === forme)) {
+          throw new ErreurRegle(
+            `La forme juridique « ${demande.formeJuridique} » n'est pas prévue par le paquet ${this.#paquet.nom}. Formes admises : ${this.#paquet.formesJuridiques
+              .map((item) => item.code)
+              .join(", ")}.`
+          );
+        }
+        apres.formeJuridique = forme;
+      }
+      if (demande.courriel !== undefined) {
+        const courriel = demande.courriel.trim().toLowerCase();
+        if (courriel !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(courriel)) {
+          throw new ErreurRegle(`Le courriel « ${demande.courriel} » n'a pas un format valide.`);
+        }
+        apres.courriel = courriel;
+      }
+      if (demande.pays !== undefined) {
+        const pays = demande.pays.trim();
+        if (pays === "") {
+          throw new ErreurRegle("Le pays est obligatoire : il détermine le paquet fiscal applicable.");
+        }
+        apres.pays = pays;
+      }
+      for (const champ of ["adresse", "ville", "telephone", "regimeFiscal"] as const) {
+        if (demande[champ] !== undefined) {
+          apres[champ] = demande[champ]!.trim();
+        }
+      }
+
+      for (const champ of Object.keys(apres) as (keyof Societe)[]) {
+        if (avant[champ] !== apres[champ]) {
+          changements.push(`${champ} : « ${avant[champ]} » → « ${apres[champ]} »`);
+        }
+      }
+      if (changements.length === 0) {
+        return avant;
+      }
+
+      etat.societe = apres;
+      this.#tracer(etat, "Société modifiée", "Societe", apres.code, changements.join(" · "));
+      return apres;
+    });
+  }
+
+  /**
+   * Modifie un compte du plan.
+   *
+   * Deux refus protègent les états déjà produits : un compte **mouvementé** ne change ni de groupe
+   * (le groupe décide de la ligne du bilan où il apparaît) ni de solde initial (les à-nouveaux
+   * passent par un lot, pas par le plan).
+   */
+  async modifierCompte(
+    numero: string,
+    demande: {
+      libelle?: string;
+      groupe?: string;
+      actif?: boolean;
+      autoriseSaisie?: boolean;
+      exigeTiers?: boolean;
+      soldeInitial?: string | Montant;
+    }
+  ): Promise<Compte> {
+    return this.#muter((etat) => {
+      const principal = comptePrincipalDe(numero);
+      const compte = etat.comptes.find((item) => item.comptePrincipal === principal);
+      if (!compte) {
+        throw new ErreurRegle(`Le compte « ${principal} » n'existe pas dans le plan du dossier.`);
+      }
+      const mouvemente = etat.mouvements.some((mouvement) => comptePrincipalDe(mouvement.compte) === principal);
+      const changements: string[] = [];
+
+      if (demande.libelle !== undefined) {
+        const libelle = demande.libelle.trim();
+        if (libelle === "") {
+          throw new ErreurRegle("Le libellé du compte est obligatoire.");
+        }
+        if (libelle.length > 120) {
+          throw new ErreurRegle("Le libellé du compte dépasse 120 caractères.");
+        }
+        if (libelle !== compte.libelle) {
+          changements.push(`libellé : « ${compte.libelle} » → « ${libelle} »`);
+          compte.libelle = libelle;
+        }
+      }
+      if (demande.groupe !== undefined && demande.groupe !== compte.groupe) {
+        if (mouvemente) {
+          throw new ErreurRegle(
+            `Le compte ${principal} est mouvementé : il ne change pas de groupe. Le groupe décide de la ligne du bilan où le compte apparaît — le déplacer réécrirait des états déjà produits. Créez un autre compte, ou corrigez par une écriture.`
+          );
+        }
+        if (!this.#paquet.referentiel.groupes.some((groupe) => groupe.code === demande.groupe)) {
+          throw new ErreurRegle(
+            `Le groupe de comptes « ${demande.groupe} » n'existe pas dans le référentiel ${this.#paquet.referentiel.code}.`
+          );
+        }
+        changements.push(`groupe : ${compte.groupe} → ${demande.groupe}`);
+        compte.groupe = demande.groupe;
+      }
+      if (demande.soldeInitial !== undefined) {
+        const solde =
+          typeof demande.soldeInitial === "bigint"
+            ? demande.soldeInitial
+            : analyserMontant(demande.soldeInitial, this.#paquet.devise);
+        if (mouvemente) {
+          throw new ErreurRegle(
+            `Le compte ${principal} est mouvementé : son solde initial ne se modifie plus. Les à-nouveaux se saisissent par un lot, pour que le grand livre en garde la trace.`
+          );
+        }
+        if (solde !== compte.soldeInitial) {
+          changements.push(
+            `solde initial : ${formatMontant(compte.soldeInitial, this.#paquet.devise)} → ${formatMontant(
+              solde,
+              this.#paquet.devise
+            )}`
+          );
+          compte.soldeInitial = solde;
+        }
+      }
+      for (const drapeau of ["actif", "autoriseSaisie", "exigeTiers"] as const) {
+        if (demande[drapeau] !== undefined && demande[drapeau] !== compte[drapeau]) {
+          changements.push(`${drapeau} : ${compte[drapeau] ? "oui" : "non"} → ${demande[drapeau] ? "oui" : "non"}`);
+          compte[drapeau] = demande[drapeau]!;
+        }
+      }
+
+      if (changements.length === 0) {
+        return compte;
+      }
+      this.#tracer(etat, "Compte modifié", "Compte", compte.comptePrincipal, changements.join(" · "));
+      return compte;
+    });
+  }
+
+  /**
+   * Supprime un compte du plan.
+   *
+   * Refusé dès que quelque chose tient à ce compte, et **toutes** les raisons sont données d'un coup :
+   * un utilisateur qui retire un compte pour en découvrir une deuxième raison au prochain essai perd
+   * du temps sans rien apprendre.
+   */
+  async supprimerCompte(numero: string): Promise<void> {
+    await this.#muter((etat) => {
+      const principal = comptePrincipalDe(numero);
+      const compte = etat.comptes.find((item) => item.comptePrincipal === principal);
+      if (!compte) {
+        throw new ErreurRegle(`Le compte « ${principal} » n'existe pas dans le plan du dossier.`);
+      }
+
+      const raisons: string[] = [];
+      if (etat.mouvements.some((mouvement) => comptePrincipalDe(mouvement.compte) === principal)) {
+        raisons.push("il porte des mouvements : un compte mouvementé ne se supprime pas, il se désactive");
+      }
+      if (
+        etat.lots.some((lot) =>
+          lot.ecritures.some((ecriture) =>
+            ecriture.lignes.some((ligne) => comptePrincipalDe(ligne.compte) === principal)
+          )
+        )
+      ) {
+        raisons.push("il figure dans un lot : retirez-le de ces écritures d'abord");
+      }
+      const taxes = etat.codesTaxe.filter((code) => code.compteTaxe === principal).map((code) => code.code);
+      if (taxes.length > 0) {
+        raisons.push(`il enregistre la taxe ${taxes.join(", ")} : changez le compte de taxe avant`);
+      }
+      const journaux = etat.journaux
+        .filter((journal) => comptePrincipalDe(journal.compteContrepartie ?? "") === principal)
+        .map((journal) => journal.code);
+      if (journaux.length > 0) {
+        raisons.push(`il est la contrepartie du journal ${journaux.join(", ")} : modifiez ce journal avant`);
+      }
+      if (principal === COMPTE_RESULTAT_EXERCICE) {
+        raisons.push("il porte le résultat de l'exercice : la clôture d'exercice en a besoin");
+      }
+      if (raisons.length > 0) {
+        throw new ErreurRegle(
+          `Le compte ${principal} ne peut pas être supprimé : ${raisons.join(" ; ")}.`
+        );
+      }
+
+      etat.comptes = etat.comptes.filter((item) => item.comptePrincipal !== principal);
+      this.#tracer(etat, "Compte supprimé du plan", "Compte", principal, compte.libelle);
+    });
+  }
+
+  /** Codes de taxe déjà utilisés par un mouvement ou par une ligne de lot. */
+  #codesTaxeUtilises(etat: EtatDossier): Set<string> {
+    const utilises = new Set<string>();
+    for (const mouvement of etat.mouvements) {
+      for (const code of mouvement.codesTaxe) {
+        utilises.add(code);
+      }
+    }
+    for (const lot of etat.lots) {
+      for (const ecriture of lot.ecritures) {
+        for (const ligne of ecriture.lignes) {
+          for (const code of ligne.codesTaxe) {
+            utilises.add(code);
+          }
+        }
+      }
+    }
+    return utilises;
+  }
+
+  #validerIdentifiantFiscal(valeur: string): string {
+    const propre = valeur.replace(/[\s-]/gu, "").toUpperCase();
+    if (propre === "") {
+      throw new ErreurRegle(
+        `L'${this.#paquet.regleIdentifiantFiscal.nom} est obligatoire : sans lui, aucune déclaration n'est déposée.`
+      );
+    }
+    if (!this.#paquet.regleIdentifiantFiscal.motif.test(propre)) {
+      throw new ErreurRegle(this.#paquet.regleIdentifiantFiscal.messageErreur);
+    }
+    return propre;
+  }
+
+  #validerCodeTaxe(etat: EtatDossier, code: CodeTaxe): void {
+    if (!/^[A-Z0-9][A-Z0-9-]{0,15}$/.test(code.code)) {
+      throw new ErreurRegle(
+        `Code de taxe invalide : « ${code.code} ». 16 caractères maximum, lettres, chiffres et tirets.`
+      );
+    }
+    if (code.libelle.trim() === "") {
+      throw new ErreurRegle("Le libellé du code de taxe est obligatoire.");
+    }
+    if (code.referenceLegale.trim() === "") {
+      throw new ErreurRegle(
+        "La référence légale est obligatoire : un taux sans article n'est pas défendable devant l'administration."
+      );
+    }
+    if (code.pointsDeBase < ZERO) {
+      throw new ErreurRegle(`Le taux ${formaterTaux(code.pointsDeBase)} est négatif : un taux de taxe ne l'est pas.`);
+    }
+    if (code.pointsDeBase > 10000n) {
+      throw new ErreurRegle(
+        `Le taux ${formaterTaux(code.pointsDeBase)} dépasse 100 % : vérifiez la saisie — le taux s'exprime en points de base (18 % = 1800).`
+      );
+    }
+    const compte = comptePrincipalDe(code.compteTaxe);
+    if (!etat.comptes.some((item) => item.comptePrincipal === compte)) {
+      throw new ErreurRegle(
+        `Le compte de taxe « ${code.compteTaxe} » n'existe pas dans le plan du dossier : la taxe n'aurait nulle part où s'enregistrer.`
+      );
+    }
+  }
+
+  /** Ajoute un code de taxe au paramétrage du dossier. */
+  async ajouterCodeTaxe(demande: Omit<CodeTaxe, "aVerifier"> & { aVerifier?: boolean }): Promise<CodeTaxe> {
+    return this.#muter((etat) => {
+      const code: CodeTaxe = {
+        ...demande,
+        code: demande.code.trim().toUpperCase(),
+        libelle: demande.libelle.trim(),
+        referenceLegale: demande.referenceLegale.trim(),
+        compteTaxe: comptePrincipalDe(demande.compteTaxe),
+        aVerifier: demande.aVerifier ?? false
+      };
+      if (etat.codesTaxe.some((item) => item.code === code.code)) {
+        throw new ErreurRegle(`Le code de taxe « ${code.code} » existe déjà dans le paramétrage du dossier.`);
+      }
+      this.#validerCodeTaxe(etat, code);
+      etat.codesTaxe.push(code);
+      this.#tracer(
+        etat,
+        "Code de taxe ajouté",
+        "CodeTaxe",
+        code.code,
+        `${code.libelle} — ${formaterTaux(code.pointsDeBase)}, ${code.sens}, compte ${code.compteTaxe}, ${code.referenceLegale}`
+      );
+      return code;
+    });
+  }
+
+  /**
+   * Modifie un code de taxe du dossier.
+   *
+   * Ce qui touche au **montant** de la taxe — le taux, la base, le sens, le compte de taxe — est
+   * refusé dès que le code a servi : les écritures déjà comptabilisées ont été calculées avec
+   * l'ancienne valeur, et la déclaration TVA se recalcule à partir des codes en vigueur. Un
+   * changement de taux passe par un **nouveau code**, ce que fait la réalité : la TVA est passée de
+   * 18 % à un autre taux par un texte, pas en réécrivant le taux précédent.
+   */
+  async modifierCodeTaxe(
+    codeDemande: string,
+    demande: Partial<Omit<CodeTaxe, "code">>
+  ): Promise<CodeTaxe> {
+    return this.#muter((etat) => {
+      const code = etat.codesTaxe.find((item) => item.code === codeDemande.trim().toUpperCase());
+      if (!code) {
+        throw new ErreurRegle(`Le code de taxe « ${codeDemande} » n'existe pas dans le paramétrage du dossier.`);
+      }
+      const utilise = this.#codesTaxeUtilises(etat).has(code.code);
+      const changements: string[] = [];
+      const toucheAuMontant =
+        demande.pointsDeBase !== undefined ||
+        demande.base !== undefined ||
+        demande.sens !== undefined ||
+        demande.compteTaxe !== undefined;
+
+      if (toucheAuMontant && utilise) {
+        throw new ErreurRegle(
+          `Le code ${code.code} a déjà servi dans des écritures : son taux, sa base, son sens et son compte de taxe ne se modifient pas, sinon les écritures comptabilisées et les déclarations déjà calculées ne correspondraient plus à rien. Créez un nouveau code (${code.code}-${
+            code.exigibleSur === "vente" ? "V" : "A"
+          }2) pour la nouvelle valeur, et laissez celui-ci à l'historique.`
+        );
+      }
+
+      if (demande.libelle !== undefined) {
+        const libelle = demande.libelle.trim();
+        if (libelle === "") {
+          throw new ErreurRegle("Le libellé du code de taxe est obligatoire.");
+        }
+        changements.push(`libellé : « ${code.libelle} » → « ${libelle} »`);
+        code.libelle = libelle;
+      }
+      if (demande.referenceLegale !== undefined) {
+        const reference = demande.referenceLegale.trim();
+        if (reference === "") {
+          throw new ErreurRegle(
+            "La référence légale est obligatoire : un taux sans article n'est pas défendable devant l'administration."
+          );
+        }
+        changements.push(`référence : « ${code.referenceLegale} » → « ${reference} »`);
+        code.referenceLegale = reference;
+      }
+      if (demande.pointsDeBase !== undefined) {
+        changements.push(`taux : ${formaterTaux(code.pointsDeBase)} → ${formaterTaux(demande.pointsDeBase)}`);
+        code.pointsDeBase = demande.pointsDeBase;
+        // Le paramètre n'est plus « à confirmer » : c'est l'utilisateur qui l'a fixé, et la piste
+        // d'audit dit qui et quand.
+        if (code.aVerifier) {
+          changements.push("statut : à confirmer → fixé par l'utilisateur");
+          code.aVerifier = false;
+        }
+      }
+      if (demande.base !== undefined) {
+        changements.push(`base : ${code.base} → ${demande.base}`);
+        code.base = demande.base;
+      }
+      if (demande.sens !== undefined) {
+        changements.push(`sens : ${code.sens} → ${demande.sens}`);
+        code.sens = demande.sens;
+      }
+      if (demande.exigibleSur !== undefined) {
+        changements.push(`opération : ${code.exigibleSur} → ${demande.exigibleSur}`);
+        code.exigibleSur = demande.exigibleSur;
+      }
+      if (demande.condition !== undefined) {
+        changements.push(`condition : ${code.condition} → ${demande.condition}`);
+        code.condition = demande.condition;
+      }
+      if (demande.compteTaxe !== undefined) {
+        const compte = comptePrincipalDe(demande.compteTaxe);
+        changements.push(`compte de taxe : ${code.compteTaxe} → ${compte}`);
+        code.compteTaxe = compte;
+      }
+      if (demande.aVerifier !== undefined && demande.aVerifier !== code.aVerifier) {
+        changements.push(`statut : ${code.aVerifier ? "à confirmer" : "établi"} → ${demande.aVerifier ? "à confirmer" : "établi"}`);
+        code.aVerifier = demande.aVerifier;
+      }
+
+      this.#validerCodeTaxe(etat, code);
+      if (changements.length === 0) {
+        return code;
+      }
+      this.#tracer(etat, "Code de taxe modifié", "CodeTaxe", code.code, changements.join(" · "));
+      return code;
+    });
+  }
+
+  /** Supprime un code de taxe. Refusé dès qu'il a servi : une écriture porte son code. */
+  async supprimerCodeTaxe(codeDemande: string): Promise<void> {
+    await this.#muter((etat) => {
+      const code = etat.codesTaxe.find((item) => item.code === codeDemande.trim().toUpperCase());
+      if (!code) {
+        throw new ErreurRegle(`Le code de taxe « ${codeDemande} » n'existe pas dans le paramétrage du dossier.`);
+      }
+      if (this.#codesTaxeUtilises(etat).has(code.code)) {
+        throw new ErreurRegle(
+          `Le code ${code.code} figure dans des écritures : il ne se supprime pas. Un code qui ne doit plus servir se désactive en lui retirant sa condition d'application, ou se laisse à l'historique.`
+        );
+      }
+      etat.codesTaxe = etat.codesTaxe.filter((item) => item.code !== code.code);
+      this.#tracer(
+        etat,
+        "Code de taxe supprimé",
+        "CodeTaxe",
+        code.code,
+        `${code.libelle} — ${formaterTaux(code.pointsDeBase)}`
+      );
+    });
+  }
+
+  /**
+   * Reprend les taux du paquet pays, sans rien réécrire de ce qui a déjà servi.
+   *
+   * Utile après une mise à jour du paquet, ou pour revenir en arrière. Les codes déjà utilisés par
+   * des écritures gardent la valeur du dossier — sinon les déclarations déjà calculées ne
+   * correspondraient plus aux écritures. Les codes créés par l'utilisateur sont conservés.
+   */
+  async reprendreCodesTaxeDuPaquet(): Promise<{
+    repris: string[];
+    conserves: string[];
+    ajoutes: string[];
+    personnalises: string[];
+  }> {
+    return this.#muter((etat) => {
+      const utilises = this.#codesTaxeUtilises(etat);
+      const repris: string[] = [];
+      const conserves: string[] = [];
+      const ajoutes: string[] = [];
+
+      for (const reference of this.#paquet.codesTaxe) {
+        const existant = etat.codesTaxe.find((item) => item.code === reference.code);
+        if (!existant) {
+          etat.codesTaxe.push({ ...reference });
+          ajoutes.push(reference.code);
+          continue;
+        }
+        if (utilises.has(existant.code)) {
+          if (existant.pointsDeBase !== reference.pointsDeBase) {
+            conserves.push(existant.code);
+          }
+          continue;
+        }
+        if (
+          existant.pointsDeBase !== reference.pointsDeBase ||
+          existant.base !== reference.base ||
+          existant.sens !== reference.sens ||
+          existant.compteTaxe !== reference.compteTaxe ||
+          existant.condition !== reference.condition ||
+          existant.libelle !== reference.libelle ||
+          existant.referenceLegale !== reference.referenceLegale ||
+          existant.aVerifier !== reference.aVerifier
+        ) {
+          etat.codesTaxe = etat.codesTaxe.map((item) => (item.code === reference.code ? { ...reference } : item));
+          repris.push(reference.code);
+        }
+      }
+
+      const codesDuPaquet = new Set(this.#paquet.codesTaxe.map((item) => item.code));
+      const personnalises = etat.codesTaxe.filter((item) => !codesDuPaquet.has(item.code)).map((item) => item.code);
+
+      if (repris.length > 0 || ajoutes.length > 0) {
+        this.#tracer(
+          etat,
+          "Taux repris du paquet pays",
+          "CodeTaxe",
+          this.#paquet.code,
+          `${this.#paquet.nom} ${this.#paquet.version} — repris : ${
+            repris.length > 0 ? repris.join(", ") : "aucun"
+          } · ajoutés : ${ajoutes.length > 0 ? ajoutes.join(", ") : "aucun"} · conservés (déjà utilisés) : ${
+            conserves.length > 0 ? conserves.join(", ") : "aucun"
+          }`
+        );
+      }
+      return { repris, conserves, ajoutes, personnalises };
     });
   }
 
@@ -1608,9 +2197,11 @@ export class ServiceComptable {
     }
     const codesTaxe = demande.codesTaxe ?? [];
     for (const codeDemande of codesTaxe) {
-      if (!this.#paquet.codesTaxe.some((code) => code.code === codeDemande)) {
+      if (!etat.codesTaxe.some((code) => code.code === codeDemande)) {
         throw new ErreurRegle(
-          `Le code de taxe « ${codeDemande} » n'existe pas dans le paquet pays ${this.#paquet.nom}.`
+          `Le code de taxe « ${codeDemande} » n'existe pas dans le paramétrage du dossier. Codes disponibles : ${etat.codesTaxe
+            .map((code) => code.code)
+            .join(", ")}.`
         );
       }
     }
@@ -1818,6 +2409,8 @@ export function creerDossierDemonstration(options?: {
     releves: [],
     pointages: [],
     sequencesReleves: 0,
+    // Copie, pas référence : modifier un taux du dossier ne doit pas toucher au paquet pays.
+    codesTaxe: paquet.codesTaxe.map((code) => ({ ...code })),
     sequencesLots: {},
     sequencesEcritures: {},
     audit: []
@@ -1971,8 +2564,16 @@ function ligne(
 export interface EtatDossierSerialise
   extends Omit<
     EtatDossier,
-    "mouvements" | "comptes" | "lots" | "lettrages" | "exercicesClos" | "releves" | "pointages"
+    | "mouvements"
+    | "comptes"
+    | "lots"
+    | "lettrages"
+    | "exercicesClos"
+    | "releves"
+    | "pointages"
+    | "codesTaxe"
   > {
+  codesTaxe: (Omit<CodeTaxe, "pointsDeBase"> & { pointsDeBase: string })[];
   releves: (Omit<ReleveBancaire, "soldeDOuverture" | "lignes"> & {
     soldeDOuverture: string;
     lignes: (Omit<LigneDeReleve, "montant"> & { montant: string })[];
@@ -2020,6 +2621,7 @@ export function serialiserEtat(etat: EtatDossier): EtatDossierSerialise {
       totalActif: montantVersChaine(clos.totalActif),
       totalPassif: montantVersChaine(clos.totalPassif)
     })),
+    codesTaxe: etat.codesTaxe.map((code) => ({ ...code, pointsDeBase: montantVersChaine(code.pointsDeBase) })),
     releves: etat.releves.map((releve) => ({
       ...releve,
       soldeDOuverture: montantVersChaine(releve.soldeDOuverture),
@@ -2056,12 +2658,17 @@ export function deserialiserEtat(brut: EtatDossierSerialise): EtatDossier {
       totalActif: montantDepuisChaine(clos.totalActif),
       totalPassif: montantDepuisChaine(clos.totalPassif)
     })),
-    releves: brut.releves.map((releve) => ({
+    // Un dossier enregistré avant ces champs les reçoit vides : relire un ancien dossier ne doit pas
+    // échouer. Les codes de taxe retombent sur ceux du paquet pays, qui est la référence.
+    codesTaxe: (brut.codesTaxe ?? BENIN.codesTaxe.map((code) => ({ ...code, pointsDeBase: code.pointsDeBase.toString() }))).map(
+      (code) => ({ ...code, pointsDeBase: montantDepuisChaine(code.pointsDeBase) })
+    ),
+    releves: (brut.releves ?? []).map((releve) => ({
       ...releve,
       soldeDOuverture: montantDepuisChaine(releve.soldeDOuverture),
       lignes: releve.lignes.map((ligne) => ({ ...ligne, montant: montantDepuisChaine(ligne.montant) }))
     })),
-    pointages: brut.pointages.map((pointage) => ({ ...pointage, montant: montantDepuisChaine(pointage.montant) }))
+    pointages: (brut.pointages ?? []).map((pointage) => ({ ...pointage, montant: montantDepuisChaine(pointage.montant) }))
   };
 }
 

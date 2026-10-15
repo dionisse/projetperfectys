@@ -271,12 +271,51 @@ de défaisance. Un rapprochement refait ne fait pas disparaître celui qui a ét
 ligne à ligne —, les échelles d'intérêts et les agios calculés, et le rapprochement de plusieurs
 comptes bancaires en une seule opération.
 
+### 5.4 Ce que le paramétrage modifiable livre
+
+Trois écrans permettent de remplacer les valeurs livrées par celles du dossier réel.
+
+**Société** (Structure › Société) : raison sociale, forme juridique choisie parmi celles du paquet
+pays, code société (il entre dans le numéro de dossier), identifiant fiscal validé par la **règle du
+paquet pays** — pas par une règle codée en dur, pour qu'un autre pays valide autrement — adresse,
+ville, pays, téléphone, courriel, régime fiscal. Chaque champ modifié est tracé avec sa valeur d'avant.
+La devise et le référentiel ne se modifient pas ici, et l'écran le dit : chaque montant du grand livre
+est en XOF, et un dossier dans une autre devise est un autre dossier.
+
+**Plan comptable** (Structure › Plan comptable) : ajout d'un compte, correction du libellé, changement
+de groupe, activation, accès à la saisie, exigence d'un tiers, suppression. Une colonne « Utilisation »
+dit, avant l'essai, ce qui tient à chaque compte. Deux garde-fous :
+
+- un compte **mouvementé** ne change pas de groupe — le groupe décide de la ligne du bilan où le compte
+  apparaît, et le déplacer réécrirait des états déjà produits ;
+- un compte qui tient au dossier (mouvements, lots en saisie, code de taxe qui l'utilise comme compte
+  de taxe, contrepartie d'un journal, compte de résultat de l'exercice) ne se supprime pas. **Toutes**
+  les raisons sont données en une fois : retirer un compte pour découvrir la deuxième raison au prochain
+  essai ne fait rien apprendre à personne.
+
+**Codes de taxe et taux** (Structure › Codes de taxe) : les codes du dossier, leur origine (valeur du
+paquet pays, valeur modifiée au dossier, code créé au dossier), combien de lignes les utilisent, et leur
+statut. Création d'un code, correction du libellé, du taux, de la base, du sens, du compte de taxe, de
+l'opération, de la condition et de la référence légale — obligatoire, parce qu'un taux sans article
+n'est pas défendable. Suppression d'un code qui n'a pas servi. Reprise des valeurs du paquet pays après
+une mise à jour, qui ne touche ni à ce qui a servi ni aux codes créés au dossier, et dit ce qu'elle a
+repris, ajouté, conservé.
+
+Le taux se saisit en pourcentage et se stocke en **points de base entiers** (18 → 1800, 1,5 → 150,
+0,1 → 10) : aucune conversion flottante, et une saisie illisible est refusée plutôt qu'arrondie.
+
+**Ce qui ne se modifie pas encore** : les impôts assis sur l'exercice (IS, minimum de perception, TPS,
+IBA) et le calendrier déclaratif restent ceux du paquet pays — aucun écran ne les calcule encore, et
+rendre modifiable un paramètre que rien n'emploie ne servirait qu'à donner l'illusion du contrôle. Ils
+le deviendront avec la tranche qui les emploiera (liasse fiscale, acomptes). Les journaux, les périodes
+et la structure de comptes ne se modifient pas non plus.
+
 ## 6. Ordre de livraison
 
 | Tranche | Livrable | Preuve | État au 15/10/2026 |
 |---|---|---|---|
 | **A** | Noyau : montants, calendrier, comptes segmentés, plan SYSCOHADA, lots, taxes, paquet pays Bénin, grand livre, stockage | suite de tests verte en Node | **livrée** (`e27fbe1`) |
-| **B** | Coquille Sage 100 (menus, barre d'état, finder) + écrans **Structure** : plan comptable, journaux, tiers, codes de taxe | aperçu live, écrans validés par l'utilisateur | **livrée** (`77afc69`), en attente de validation |
+| **B** | Coquille Sage 100 (menus, barre d'état, finder) + écrans **Structure** : société, plan comptable, journaux, tiers, codes de taxe | aperçu live, écrans validés par l'utilisateur | **livrée** (`77afc69`), en attente de validation ; complétée par le **paramétrage modifiable** (§5.4) : société, plan comptable et taux se corrigent dans l'application, 17 + 4 tests |
 | **C** | Écrans **Traitements** : lots, saisie des écritures en table de détail, comptabilisation, contre-passation | aperçu live + tests de parcours | **livrée**, 9 tests de parcours en jsdom |
 | **D** | Écrans **Interrogation** : balance, grand livre, journal, compte, historique | aperçu live | balance, journal et grand livre **livrés** ; interrogation d'un compte et historique restants |
 | **E** | Taxes Bénin en saisie + **déclaration TVA** mensuelle | tests de calcul fiscal | **livrée** : génération des lignes de taxe en saisie, déclaration recalculée et rapprochée du grand livre, export CSV. Reste le reversement des acomptes et retenues (compte 442100), qui relève d'une autre obligation |

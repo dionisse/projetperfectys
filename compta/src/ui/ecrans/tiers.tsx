@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import { formaterTaux, LIBELLES_TYPE_TIERS, type Tiers as TiersType } from "../../noyau/index";
+import { codesTaxeApplicables, formaterTaux, LIBELLES_TYPE_TIERS, type Tiers as TiersType } from "../../noyau/index";
 import { getService } from "../../web/noyau";
 import {
   ChargementEnCours,
@@ -24,10 +24,13 @@ export function Tiers() {
   const [selection, setSelection] = useState<string | null>(null);
   const [operation, setOperation] = useState<"achat" | "vente">("achat");
   const { donnees, erreur, recharger } = useAsync(() => service.listeTiers(), []);
+  // Les codes applicables viennent du paramétrage du dossier, pas du seul paquet pays : un taux que
+  // l'utilisateur a ajusté s'applique ici comme partout ailleurs.
+  const { donnees: codesDuDossier } = useAsync(() => service.codesTaxe(), []);
 
   const tiers = donnees?.find((item) => item.code === selection) ?? null;
   const codes = tiers
-    ? service.codesTaxePour({
+    ? codesTaxeApplicables(codesDuDossier ?? [], {
         operation,
         tiersImmatricule: tiers.immatricule,
         tiersPublic: tiers.type === "etat",

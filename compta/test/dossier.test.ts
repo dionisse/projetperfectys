@@ -238,7 +238,7 @@ describe("saisie par lots", () => {
         libelle: "Code de taxe inconnu",
         lignes: [{ compte: "601100", libelle: "Achat", debit: "1000", codesTaxe: ["TVA-99"] }]
       })
-    ).rejects.toThrow(/n'existe pas dans le paquet pays/);
+    ).rejects.toThrow(/n'existe pas dans le paramétrage du dossier/);
 
     // Rien de tout cela n'a été ajouté au lot.
     const apres = await service.lots();

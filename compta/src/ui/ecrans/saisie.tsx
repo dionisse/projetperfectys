@@ -17,6 +17,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import {
   CODES_SOURCE,
   LIBELLES_NATURE_JOURNAL,
+  codesTaxeApplicables,
   ZERO,
   analyserMontant,
   composerNumero,
@@ -182,7 +183,8 @@ export function Saisie(props: { onMutation: () => void }) {
       journaux: await service.journaux(),
       lots: await service.lots(),
       tiers: await service.listeTiers(),
-      comptes: await service.planComptable()
+      comptes: await service.planComptable(),
+      codesTaxe: await service.codesTaxe()
     }),
     []
   );
@@ -365,7 +367,7 @@ export function Saisie(props: { onMutation: () => void }) {
 
   const codesProposes: CodeTaxe[] =
     journal && (journal.nature === "achats" || journal.nature === "ventes")
-      ? service.codesTaxePour({
+      ? codesTaxeApplicables(donnees?.codesTaxe ?? [], {
           operation: journal.nature === "ventes" ? "vente" : "achat",
           tiersImmatricule: tiersOperation?.immatricule ?? true,
           tiersPublic: tiersOperation?.type === "etat",

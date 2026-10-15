@@ -129,18 +129,25 @@ et restauration.
 3. **Le compte est segmenté** (compte principal · tiers · axe analytique), ce qui ouvre la voie à
    l'analytique sans reconstruire le plan. La balance regroupe les mouvements auxiliaires sur leur
    compte principal.
-4. **Aucun taux dans le noyau.** Les taxes, l'IFU, les formes juridiques et le calendrier déclaratif
-   vivent dans un **paquet pays** versionné. Un autre pays de l'UEMOA sera un autre paquet.
-5. **Un paramètre incertain est signalé.** Les taux relevés dans des guides et non dans le texte
-   officiel portent `aVerifier: true` ; `parametresAVerifier()` les publie et l'interface les affiche
-   comme « à confirmer ».
+4. **Aucun taux dans le noyau ; les taux appartiennent au dossier.** Les taxes, l'IFU, les formes
+   juridiques et le calendrier déclaratif vivent dans un **paquet pays** versionné : un autre pays de
+   l'UEMOA sera un autre paquet, pas une modification de celui-ci. Le paquet **amorce** le dossier, qui
+   porte ensuite ses propres valeurs, modifiables — parce qu'un taux relevé dans une publication doit
+   pouvoir être remplacé par celui que le cabinet a confirmé. Une limite tient l'ensemble : **un taux
+   qui a déjà servi ne se réécrit pas**, il est remplacé par un nouveau code. Les écritures
+   comptabilisées et les déclarations déjà calculées ont été faites avec la valeur d'alors.
+5. **Un paramètre incertain est signalé, et cesse de l'être quand l'utilisateur le fixe.** Les taux
+   relevés dans des guides et non dans le texte officiel portent `aVerifier: true` ;
+   `parametresAVerifier()` les publie et l'interface les affiche comme « à confirmer ». Un taux corrigé
+   dans le dossier passe à « établi » : ce n'est plus une approximation, c'est une décision, et la piste
+   d'audit dit qui l'a prise et quelle était la valeur avant.
 6. **Le noyau calcule les taxes mais n'invente jamais une ligne.** Une écriture dont une ligne porte
    un code de taxe doit comporter la ligne de taxe correspondante, dans le bon sens : une retenue à
    la source va à l'inverse de la charge.
 7. **Dates civiles sans fuseau horaire.** Le 31/12/2026 est le même à Cotonou et à Paris.
 8. **Piste d'audit ajout-seulement** : rien n'est supprimé, rien n'est réécrit.
 9. **Un état fiscal est un état de contrôle.** La déclaration de TVA est recalculée depuis les
-   bases taxées et les taux du paquet pays, puis confrontée au grand livre. Ce qui diffère est
+   bases taxées et les taux en vigueur dans le dossier, puis confrontée au grand livre. Ce qui diffère est
    affiché : une déclaration dont le total tombe juste par compensation ne vaut rien.
 10. **Un état financier est un modèle de rubriques, pas du code de mise en page.** Le bilan et le
     compte de résultat sont décrits comme des données (rubriques, groupes de comptes qui les

@@ -140,11 +140,16 @@ export function construireDeclarationTva(
   comptes: readonly Compte[],
   paquet: PaquetPays,
   exercice: Exercice,
-  periode: number
+  periode: number,
+  /**
+   * Codes de taxe du dossier. Absents, ceux du paquet pays s'appliquent : la déclaration se calcule
+   * sur le paramétrage en vigueur dans le dossier, pas sur la référence légale seule.
+   */
+  codesDuDossier?: readonly CodeTaxe[]
 ): DeclarationTva {
   const periodeDuCalendrier = periodeParNumero(exercice, periode);
   const duMois = mouvements.filter((mouvement) => mouvement.periode === periode);
-  const codes = codesDeTva(paquet.codesTaxe);
+  const codes = codesDeTva(codesDuDossier ?? paquet.codesTaxe);
 
   const lignes: LigneDeclarationTva[] = codes
     .map((code) => {

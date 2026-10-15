@@ -38,6 +38,7 @@ import { BilanOhada } from "./ecrans/bilan";
 import { CompteDeResultatOhada } from "./ecrans/compte-resultat";
 import { Lettrage } from "./ecrans/lettrage";
 import { Rapprochement } from "./ecrans/rapprochement";
+import { Societe } from "./ecrans/societe";
 import { ClotureExercice } from "./ecrans/cloture";
 import { Balance } from "./ecrans/balance";
 import { Journal } from "./ecrans/journal";
@@ -148,10 +149,11 @@ export function Coquille() {
     {
       titre: "Structure",
       entrees: [
+        { label: "Société…", href: "/structure/societe" },
         { label: "Plan comptable…", href: "/structure/plan" },
         { label: "Journaux…", href: "/structure/journaux" },
         { label: "Tiers…", href: "/structure/tiers", raccourci: "F2" },
-        { label: "Codes de taxe…", href: "/structure/codes-taxe" },
+        { label: "Codes de taxe et taux…", href: "/structure/codes-taxe" },
         { label: "", indisponible: "", separation: true },
         { label: "Groupes de comptes", indisponible: "Visibles dans la colonne « Groupe » du plan comptable ; l'écran propre arrive avec les états financiers" },
         { label: "Structures de comptes", indisponible: "Le format segmenté est affiché en tête du plan comptable" }
@@ -188,6 +190,7 @@ export function Coquille() {
       titre: "Outils",
       entrees: [
         { label: "Piste d'audit…", href: "/outils/audit" },
+        { label: "Paramètres fiscaux du dossier…", href: "/structure/codes-taxe" },
         { label: "Paquet pays : Bénin", href: "/structure/codes-taxe" },
         { label: "Diagnostic du dossier", href: "/" },
         { label: "", indisponible: "", separation: true },
@@ -373,13 +376,15 @@ function ecranPour(route: string, recharger: () => void): ComponentChildren {
     case "/":
       return <Accueil onMutation={recharger} />;
     case "/structure/plan":
-      return <PlanComptable />;
+      return <PlanComptable onMutation={recharger} />;
     case "/structure/journaux":
       return <Journaux />;
     case "/structure/tiers":
       return <Tiers />;
     case "/structure/codes-taxe":
-      return <CodesTaxe />;
+      return <CodesTaxe onMutation={recharger} />;
+    case "/structure/societe":
+      return <Societe onMutation={recharger} />;
     case "/traitements/saisie":
       return <Saisie onMutation={recharger} />;
     case "/etats/bilan":
