@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import { LIBELLES_TYPE_TIERS, type Tiers as TiersType } from "../../noyau/index";
+import { formaterTaux, LIBELLES_TYPE_TIERS, type Tiers as TiersType } from "../../noyau/index";
 import { getService } from "../../web/noyau";
 import {
   ChargementEnCours,
@@ -114,7 +114,7 @@ export function Tiers() {
                     <li key={code.code}>
                       <span class="mono">{code.code}</span>
                       <span>{code.libelle}</span>
-                      <span class="taux">{pourcentage(code.pointsDeBase)}</span>
+                      <span class="taux">{formaterTaux(code.pointsDeBase)}</span>
                       {code.aVerifier ? <Etiquette ton="alerte">à confirmer</Etiquette> : <Etiquette ton="succes">établi</Etiquette>}
                     </li>
                   ))}
@@ -134,8 +134,3 @@ export function Tiers() {
   );
 }
 
-export function pourcentage(pointsDeBase: bigint): string {
-  const valeur = Number(pointsDeBase) / 100;
-  const texte = Number.isInteger(valeur) ? valeur.toString() : valeur.toFixed(2).replace(".", ",");
-  return `${texte} %`;
-}

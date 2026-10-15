@@ -44,6 +44,7 @@ import {
   type NatureJournal
 } from "./lots";
 import { codesTaxeApplicables, verifierLignesTaxees, type CodeTaxe } from "./taxes";
+import { construireDeclarationTva, type DeclarationTva } from "./declaration-tva";
 import {
   construireBalance,
   construireGrandLivre,
@@ -266,6 +267,16 @@ export class ServiceComptable {
   async journal(filtre: FiltreMouvements = {}): Promise<PieceDeJournal[]> {
     const etat = await this.#stockage.lire();
     return construireJournal(etat.mouvements, filtre);
+  }
+
+  /**
+   * Déclaration de TVA d'une période, recalculée depuis le grand livre et les codes de taxe du
+   * paquet pays. Par défaut, la période courante.
+   */
+  async declarationTva(periode?: number): Promise<DeclarationTva> {
+    const etat = await this.#stockage.lire();
+    const numero = periode ?? this.#periodeCourante(etat).numero;
+    return construireDeclarationTva(etat.mouvements, etat.comptes, this.#paquet, etat.exercice, numero);
   }
 
   async grandLivre(compte: string, filtre: FiltreMouvements = {}): Promise<LigneGrandLivre[]> {

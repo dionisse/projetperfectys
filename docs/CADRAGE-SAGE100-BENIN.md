@@ -167,10 +167,10 @@ Sage 300 GL : même noyau, couche séparée.
 | **B** | Coquille Sage 100 (menus, barre d'état, finder) + écrans **Structure** : plan comptable, journaux, tiers, codes de taxe | aperçu live, écrans validés par l'utilisateur | **livrée** (`77afc69`), en attente de validation |
 | **C** | Écrans **Traitements** : lots, saisie des écritures en table de détail, comptabilisation, contre-passation | aperçu live + tests de parcours | **livrée**, 9 tests de parcours en jsdom |
 | **D** | Écrans **Interrogation** : balance, grand livre, journal, compte, historique | aperçu live | balance, journal et grand livre **livrés** ; interrogation d'un compte et historique restants |
-| **E** | Taxes Bénin en saisie + **déclaration TVA** mensuelle | tests de calcul fiscal | génération des lignes de taxe en saisie **livrée** ; déclaration TVA restante |
+| **E** | Taxes Bénin en saisie + **déclaration TVA** mensuelle | tests de calcul fiscal | **livrée** : génération des lignes de taxe en saisie, déclaration recalculée et rapprochée du grand livre, export CSV. Reste le reversement des acomptes et retenues (compte 442100), qui relève d'une autre obligation |
 | **F** | Lettrage, rapprochement bancaire | tests | à faire — l'échéance est déjà saisie ligne par ligne |
 | **G** | Clôtures : période, exercice, à-nouveaux, *Create New Year* | tests | à faire — le noyau verrouille déjà les périodes clôturées |
-| **H** | États financiers OHADA révisé (producteur distinct), exports PDF/Excel/CSV de tous les documents | fichiers produits et vérifiés | à faire — les groupes d'états sont déjà portés par le plan |
+| **H** | États financiers OHADA révisé (producteur distinct), exports PDF/Excel/CSV de tous les documents | fichiers produits et vérifiés | à faire — les groupes d'états sont déjà portés par le plan ; l'export CSV est livré (déclaration, balance, journal, grand livre) |
 | **I** | Piste d'audit, habilitations par écran, import/export de données, sauvegarde/restauration, hôte Windows | tests + package installable | piste d'audit **livrée** (ajout-seulement, attribuée, horodatée) ; le reste à faire |
 
 **Chaque tranche se termine par un écran validé par l'utilisateur sur l'aperçu live avant la

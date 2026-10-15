@@ -33,6 +33,7 @@ import { Tiers } from "./ecrans/tiers";
 import { CodesTaxe } from "./ecrans/codes-taxe";
 import { Lots } from "./ecrans/lots";
 import { Saisie } from "./ecrans/saisie";
+import { DeclarationTva } from "./ecrans/declaration-tva";
 import { Balance } from "./ecrans/balance";
 import { Journal } from "./ecrans/journal";
 import { GrandLivre } from "./ecrans/grand-livre";
@@ -168,7 +169,7 @@ export function Coquille() {
         { label: "Tableau des flux de trésorerie", indisponible: "États financiers : tranche H" },
         { label: "Tableau de variation des activités", indisponible: "États financiers : tranche H" },
         { label: "", indisponible: "", separation: true },
-        { label: "Déclaration TVA mensuelle", indisponible: "Déclaration fiscale : tranche E" },
+        { label: "Déclaration TVA mensuelle…", href: "/etats/declaration-tva" },
         { label: "États de paramétrage", indisponible: "Impression du paramétrage : tranche H" }
       ]
     },
@@ -370,6 +371,8 @@ function ecranPour(route: string, recharger: () => void): ComponentChildren {
       return <CodesTaxe />;
     case "/traitements/saisie":
       return <Saisie onMutation={recharger} />;
+    case "/etats/declaration-tva":
+      return <DeclarationTva />;
     case "/traitements/lots":
       return <Lots onMutation={recharger} />;
     case "/interrogation/balance":

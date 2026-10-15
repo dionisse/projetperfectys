@@ -117,6 +117,7 @@ export {
   calculerTaxe,
   codeTaxeApplicable,
   codesTaxeApplicables,
+  formaterTaux,
   ligneTaxeAttendue,
   proposerLignesDeTaxe,
   verifierLignesTaxees,
@@ -158,6 +159,16 @@ export {
   type SensSolde,
   type TotalParGroupe
 } from "./grand-livre";
+
+export {
+  codesDeTva,
+  construireDeclarationTva,
+  obligationDeTva,
+  type ControleDeDeclaration,
+  type DeclarationTva,
+  type LigneDeclarationTva,
+  type SensLigneDeclaration
+} from "./declaration-tva";
 
 export { StockageMemoire } from "./stockage";
 export type { PortStockage } from "./stockage";

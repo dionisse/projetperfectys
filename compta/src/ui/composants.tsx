@@ -8,7 +8,17 @@
 
 import { useEffect, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { ErreurRegle, SEPARATEUR_MILLIERS, XOF, formatMontant, type Montant } from "../noyau/index";
+import {
+  ErreurRegle,
+  SEPARATEUR_MILLIERS,
+  XOF,
+  formatMontant,
+  type DateCivile,
+  type Montant
+} from "../noyau/index";
+import { telechargerCsv, type CelluleCsv } from "../web/telechargement";
+
+export type { CelluleCsv };
 
 /* ------------------------------------------------------------------ */
 /* Routage par fragment : aucun serveur à configurer, liens partageables */
@@ -241,3 +251,43 @@ export function Etiquette(props: { children: ComponentChildren; ton?: string | u
 
 /** Séparateur de milliers visible dans les libellés de test. */
 export const ESPACE_MILLIERS = SEPARATEUR_MILLIERS;
+
+/* ------------------------------------------------------------------ */
+/* Export                                                              */
+/* ------------------------------------------------------------------ */
+
+export interface ExportCsvProps {
+  /** Nom du document, dans le nom de fichier : `declaration-tva`, `balance`… */
+  tige: string;
+  /** Contexte qui distingue deux exports du même document : société, exercice, période. */
+  contexte: string;
+  /** Date portée dans le nom de fichier : celle de la période ou du jour de l'export. */
+  date: DateCivile;
+  /**
+   * Les lignes à exporter, lues au moment du clic : ce qui est téléchargé est ce que l'écran
+   * affiche, filtres compris.
+   */
+  lignes: () => readonly (readonly CelluleCsv[])[];
+}
+
+/**
+ * Bouton de téléchargement CSV.
+ *
+ * Le CSV est le seul format qu'un navigateur produit sans dépendance : il est disponible
+ * maintenant, Excel et PDF suivent. L'infobulle le dit plutôt que de laisser croire à un choix de
+ * format complet.
+ */
+export function ExportCsv(props: ExportCsvProps) {
+  return (
+    <button
+      class="bouton"
+      type="button"
+      title="Télécharger ce que l'écran affiche au format CSV. Les formats Excel et PDF suivent."
+      onClick={() =>
+        telechargerCsv({ tige: props.tige, contexte: props.contexte, date: props.date }, props.lignes())
+      }
+    >
+      Télécharger en CSV
+    </button>
+  );
+}

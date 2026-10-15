@@ -1,10 +1,16 @@
 import { useState } from "preact/hooks";
-import { additionner, type Compte, type LigneGrandLivre } from "../../noyau/index";
+import {
+  additionner,
+  type Compte,
+  type DateCivile,
+  type LigneGrandLivre
+} from "../../noyau/index";
 import { getService } from "../../web/noyau";
 import {
   ChargementEnCours,
   Erreur,
   Etiquette,
+  ExportCsv,
   Fenetre,
   Grille,
   montant,
@@ -16,6 +22,7 @@ import {
 export function GrandLivre() {
   const service = getService();
   const [compte, setCompte] = useState("521100");
+  const aujourdHui = new Date().toISOString().slice(0, 10) as DateCivile;
   const [soumis, setSoumis] = useState("521100");
   const { donnees, erreur, recharger } = useAsync(
     async () => ({
@@ -49,6 +56,7 @@ export function GrandLivre() {
       chemin="Interrogation › Grand livre"
       sousTitre="Tous les mouvements comptabilisés d'un compte, y compris ceux de ses comptes auxiliaires, avec le solde progressif."
       actions={
+        <>
         <form
           class="recherche"
           onSubmit={(evenement) => {
@@ -74,6 +82,31 @@ export function GrandLivre() {
             Afficher
           </button>
         </form>
+        <ExportCsv
+          tige="grand-livre"
+          contexte={soumis}
+          date={aujourdHui}
+          lignes={() => [
+            ["Grand livre", soumis],
+            [],
+            ["Date", "Pièce", "Journal", "Lot", "Tiers", "Libellé", "Débit", "Crédit", "Solde progressif", "Sens"],
+            ...lignes.map((ligne) => [
+              ligne.date,
+              ligne.piece,
+              ligne.journalCode,
+              ligne.lotNumero,
+              ligne.tiersCode,
+              ligne.libelle,
+              ligne.debit,
+              ligne.credit,
+              ligne.soldeProgressif,
+              ligne.sens
+            ]),
+            [],
+            ["Totaux", null, null, null, null, null, totalDebit, totalCredit, totalDebit - totalCredit, null]
+          ]}
+        />
+        </>
       }
     >
       {erreur ? <Erreur message={erreur} onRetry={recharger} /> : null}

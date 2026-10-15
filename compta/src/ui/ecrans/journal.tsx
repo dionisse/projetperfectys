@@ -1,9 +1,10 @@
 import { useState } from "preact/hooks";
-import type { PieceDeJournal } from "../../noyau/index";
+import type { DateCivile, PieceDeJournal } from "../../noyau/index";
 import { getService } from "../../web/noyau";
 import {
   ChargementEnCours,
   Erreur,
+  ExportCsv,
   Fenetre,
   Grille,
   montant,
@@ -15,6 +16,7 @@ import {
 export function Journal() {
   const service = getService();
   const [journalCode, setJournalCode] = useState("");
+  const aujourdHui = new Date().toISOString().slice(0, 10) as DateCivile;
   const [selection, setSelection] = useState<string | null>(null);
   const { donnees, erreur, recharger } = useAsync(
     async () => ({
@@ -50,6 +52,7 @@ export function Journal() {
       chemin="Interrogation › Journal"
       sousTitre="Les écritures comptabilisées, regroupées par pièce, dans l'ordre chronologique puis par référence."
       actions={
+        <>
         <label class="champ-court">
           Journal
           <select value={journalCode} onChange={(evenement) => setJournalCode((evenement.target as HTMLSelectElement).value)}>
@@ -61,6 +64,31 @@ export function Journal() {
             ))}
           </select>
         </label>
+        <ExportCsv
+          tige="journal"
+          contexte={journalCode === "" ? "tous-journaux" : journalCode}
+          date={aujourdHui}
+          lignes={() => [
+            ["Journal des écritures comptabilisées", journalCode === "" ? "tous les journaux" : journalCode],
+            [],
+            ["Date", "Pièce", "Journal", "Lot", "N° écriture", "Compte", "Tiers", "Libellé", "Débit", "Crédit"],
+            ...(donnees?.pieces ?? []).flatMap((piece) =>
+              piece.lignes.map((ligne) => [
+                piece.date,
+                piece.piece,
+                piece.journalCode,
+                piece.lotNumero,
+                piece.ecritureNumero,
+                ligne.compte,
+                ligne.tiersCode,
+                ligne.libelle,
+                ligne.debit,
+                ligne.credit
+              ])
+            )
+          ]}
+        />
+        </>
       }
     >
       {erreur ? <Erreur message={erreur} onRetry={recharger} /> : null}

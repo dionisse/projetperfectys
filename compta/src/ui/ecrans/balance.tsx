@@ -1,10 +1,11 @@
 import { useState } from "preact/hooks";
-import { ZERO, additionner, type LigneBalance } from "../../noyau/index";
+import { ZERO, additionner, type DateCivile, type LigneBalance } from "../../noyau/index";
 import { getService } from "../../web/noyau";
 import {
   ChargementEnCours,
   Erreur,
   Etiquette,
+  ExportCsv,
   Fenetre,
   Grille,
   montant,
@@ -16,6 +17,7 @@ import {
 export function Balance() {
   const service = getService();
   const [periode, setPeriode] = useState<number | "toutes">("toutes");
+  const aujourdHui = new Date().toISOString().slice(0, 10) as DateCivile;
   const { donnees, erreur, recharger } = useAsync(
     () => service.balance(periode === "toutes" ? {} : { periode }),
     [periode]
@@ -45,6 +47,7 @@ export function Balance() {
       chemin="Interrogation › Balance"
       sousTitre="Seuls les mouvements comptabilisés apparaissent : un brouillon ne modifie jamais une balance."
       actions={
+        <>
         <label class="champ-court">
           Période
           <select
@@ -62,6 +65,40 @@ export function Balance() {
             ))}
           </select>
         </label>
+        <ExportCsv
+          tige="balance"
+          contexte={periode === "toutes" ? "toutes-periodes" : `periode-${periode}`}
+          date={aujourdHui}
+          lignes={() => [
+            ["Balance générale", periode === "toutes" ? "toutes périodes" : `période ${periode}`],
+            [],
+            ["Compte", "Libellé", "Classe", "Groupe", "Solde initial", "Débit", "Crédit", "Solde", "Sens"],
+            ...lignes.map((ligne) => [
+              ligne.compte,
+              ligne.libelle,
+              ligne.classe,
+              ligne.groupe,
+              ligne.soldeInitial,
+              ligne.totalDebit,
+              ligne.totalCredit,
+              ligne.solde,
+              ligne.sens
+            ]),
+            [],
+            [
+              "Totaux",
+              null,
+              null,
+              null,
+              totalInitial,
+              totalDebit,
+              totalCredit,
+              totalDebit - totalCredit,
+              equilibre ? "équilibrée" : "déséquilibrée"
+            ]
+          ]}
+        />
+        </>
       }
     >
       {erreur ? <Erreur message={erreur} onRetry={recharger} /> : null}

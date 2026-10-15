@@ -1,7 +1,6 @@
-import { BENIN, type CodeTaxe, type ImpotAnnuel } from "../../noyau/index";
+import { BENIN, formaterTaux, type CodeTaxe, type ImpotAnnuel } from "../../noyau/index";
 import { getService } from "../../web/noyau";
 import { Etiquette, Fenetre, Grille, montant, type Colonne } from "../composants";
-import { pourcentage } from "./tiers";
 
 const LIBELLES_SENS: Record<string, string> = {
   collectee: "Collectée",
@@ -32,7 +31,7 @@ export function CodesTaxe() {
   const colonnesTaxe: Colonne<CodeTaxe>[] = [
     { cle: "code", titre: "Code", largeur: "8rem", valeur: (code) => <span class="mono">{code.code}</span> },
     { cle: "libelle", titre: "Libellé", valeur: (code) => code.libelle },
-    { cle: "taux", titre: "Taux", alignement: "droite", largeur: "6rem", valeur: (code) => pourcentage(code.pointsDeBase) },
+    { cle: "taux", titre: "Taux", alignement: "droite", largeur: "6rem", valeur: (code) => formaterTaux(code.pointsDeBase) },
     { cle: "base", titre: "Base", largeur: "12rem", valeur: (code) => (code.base === "hors-taxe" ? "Hors taxe" : "Toutes taxes comprises") },
     { cle: "sens", titre: "Sens", largeur: "12rem", valeur: (code) => LIBELLES_SENS[code.sens] ?? code.sens },
     { cle: "compte", titre: "Compte de taxe", alignement: "centre", largeur: "9rem", valeur: (code) => <span class="mono">{code.compteTaxe}</span> },
@@ -57,7 +56,7 @@ export function CodesTaxe() {
       titre: "Taux",
       alignement: "droite",
       largeur: "7rem",
-      valeur: (impot) => (impot.pointsDeBase === null ? "—" : pourcentage(impot.pointsDeBase))
+      valeur: (impot) => (impot.pointsDeBase === null ? "—" : formaterTaux(impot.pointsDeBase))
     },
     {
       cle: "plancher",
@@ -73,7 +72,7 @@ export function CodesTaxe() {
       valeur: (impot) =>
         impot.variantes.length === 0
           ? "—"
-          : impot.variantes.map((variante) => `${variante.condition} : ${pourcentage(variante.pointsDeBase)}`).join(" · ")
+          : impot.variantes.map((variante) => `${variante.condition} : ${formaterTaux(variante.pointsDeBase)}`).join(" · ")
     },
     { cle: "compte", titre: "Compte", alignement: "centre", largeur: "7rem", valeur: (impot) => <span class="mono">{impot.compte}</span> }
   ];

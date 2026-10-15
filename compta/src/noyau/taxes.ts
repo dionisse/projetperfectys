@@ -202,6 +202,21 @@ export function ligneTaxeAttendue(
   return { compteTaxe: code.compteTaxe, sens, montant: calcule.taxe, codeTaxe: code.code };
 }
 
+/**
+ * Un taux en points de base, lisible : 1800 → « 18 % », 10 → « 0,10 % », 0 → « 0 % ».
+ *
+ * Le calcul reste entier : un taux affiché n'est pas converti en flottant, comme le reste du
+ * noyau. Les points de base sont l'unité de stockage, le pourcentage n'est qu'une lecture.
+ */
+export function formaterTaux(pointsDeBase: bigint): string {
+  const negatif = pointsDeBase < ZERO;
+  const absolu = negatif ? -pointsDeBase : pointsDeBase;
+  const entiers = absolu / 100n;
+  const reste = absolu % 100n;
+  const texte = reste === ZERO ? entiers.toString() : `${entiers.toString()},${reste.toString().padStart(2, "0")}`;
+  return `${negatif ? "-" : ""}${texte} %`;
+}
+
 /** Ligne de taxe que l'écran de saisie propose à l'utilisateur, avant qu'il ne la valide. */
 export interface LigneDeTaxeProposee {
   compte: string;

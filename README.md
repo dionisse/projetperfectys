@@ -27,7 +27,7 @@ la même base.
 
 ```bash
 npm install            # installe l'espace de travail (compta)
-npm test               # 81 tests : noyau en Node, interface en jsdom
+npm test               # 103 tests : noyau en Node, interface en jsdom
 npm run typecheck      # TypeScript strict, sans émission
 npm run build          # build de production dans compta/dist
 npm run preview:vercel # sert le build comme le ferait Vercel, sur http://localhost:5173
@@ -57,6 +57,16 @@ npm run dev            # serveur de développement Vite
   par lot) ; elle est effacée à l'enregistrement ou sur demande explicite.
 - **Interrogation** : balance filtrable par période, journal par pièce avec son détail, grand livre
   à solde progressif par compte (comptes auxiliaires compris).
+- **États** : **déclaration TVA mensuelle** recalculée depuis le grand livre — bases, taux, taxes,
+  retenue de TVA sur marchés publics, crédit antérieur imputé, taxe nette à payer ou crédit à
+  reporter — avec un **rapprochement compte par compte** entre ce que les codes de taxe produisent
+  et ce que la période contient. Un écart (une taxe saisie à la main, un code oublié sur une base)
+  est affiché en alerte, jamais absorbé dans un total. L'écran est un état de contrôle : il ne
+  prétend pas reproduire l'imprimé officiel, dont la mise en page n'a pas été relevée dans le texte
+  juridique.
+- **Export CSV** : la déclaration TVA, la balance, le journal et le grand livre se téléchargent au
+  format CSV (point-virgule, BOM UTF-8, fins de ligne CRLF — ce qu'Excel en français attend), dans
+  ce que l'écran affiche, filtres compris. Excel et PDF suivent.
 - **Outils** : piste d'audit ajout-seulement, séquencée, attribuée et horodatée ; réinitialisation
   du dossier de démonstration.
 - **Hors ligne** : le dossier est persisté dans IndexedDB, montants sérialisés en chaînes.
@@ -66,8 +76,10 @@ npm run dev            # serveur de développement Vite
 Les entrées de menu correspondant à des fonctions non livrées sont **visibles, grisées, et portent
 la tranche qui les livrera** en infobulle. Elles ne sont pas cliquables : aucun lien mort, aucun
 écran vide. Lettrage, rapprochement bancaire, écritures récurrentes, clôtures de période et
-d'exercice, interrogation d'un compte et historique, états financiers OHADA révisé, déclaration
-TVA, exports PDF/Excel/CSV, imports, habilitations par écran, sauvegarde et restauration.
+d'exercice, interrogation d'un compte et historique, états financiers OHADA révisé (bilan, compte
+de résultat, tableau des flux, tableau de variation des activités), exports Excel et PDF,
+reversement des acomptes et retenues à la source, imports, habilitations par écran, sauvegarde et
+restauration.
 
 ## Décisions de conception
 
@@ -90,6 +102,9 @@ TVA, exports PDF/Excel/CSV, imports, habilitations par écran, sauvegarde et res
    la source va à l'inverse de la charge.
 7. **Dates civiles sans fuseau horaire.** Le 31/12/2026 est le même à Cotonou et à Paris.
 8. **Piste d'audit ajout-seulement** : rien n'est supprimé, rien n'est réécrit.
+9. **Un état fiscal est un état de contrôle.** La déclaration de TVA est recalculée depuis les
+   bases taxées et les taux du paquet pays, puis confrontée au grand livre. Ce qui diffère est
+   affiché : une déclaration dont le total tombe juste par compensation ne vaut rien.
 
 ## Société de démonstration
 
