@@ -6,6 +6,7 @@ import {
   amountFromDecimal,
   formatAmount,
   formatCivilDateFr,
+  formatTimestampFr,
   type AccountingEntryStatus
 } from "@perfecto/domain";
 import { getKernel } from "./kernel";
@@ -21,12 +22,9 @@ export function signedMoney(value: string): string {
   return amount > 0n ? `${formatAmount(amount)} D` : `${formatAmount(-amount)} C`;
 }
 
-/**
- * « 02/03/2026 11:30 » — construit à la main : `Intl` en français insère des
- * espaces insécables U+202F qui cassent les comparaisons et certains rendus.
- */
+/** « 02/03/2026 11:30 » — délégué au domaine : mêmes horodatages à l'écran et sur les documents. */
 export function formatTimestamp(iso: string): string {
-  return `${formatCivilDateFr(iso.slice(0, 10))} ${iso.slice(11, 16)}`;
+  return formatTimestampFr(iso);
 }
 
 export const entityTypeLabels: Record<string, string> = {

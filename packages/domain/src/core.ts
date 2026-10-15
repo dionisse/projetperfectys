@@ -79,6 +79,24 @@ export function formatCivilDateFr(date: CivilDate): string {
   return `${date.slice(8, 10)}/${date.slice(5, 7)}/${date.slice(0, 4)}`;
 }
 
+/**
+ * Horodatage lisible : `JJ/MM/AAAA HH:MM`, à l'heure du poste qui édite le document.
+ *
+ * Construit à la main plutôt qu'avec `Intl.DateTimeFormat("fr-FR")` : ce dernier insère
+ * des espaces insécables (U+202F) que les polices PDF standard ne savent pas encoder.
+ */
+export function formatTimestampFr(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return iso;
+  }
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return (
+    `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}`
+  );
+}
+
 function requireText(value: string | null | undefined, message: string): string {
   const normalized = value?.trim() ?? "";
   if (normalized.length === 0) {

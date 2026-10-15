@@ -10,7 +10,14 @@
  *    flottants JSON.
  */
 
-import type { AccountingEntryStatus, CivilDate, ThirdPartyData, ThirdPartyType } from "@perfecto/domain";
+import type {
+  AccountingEntryStatus,
+  CivilDate,
+  OrganizationProfile,
+  OrganizationProfileInput,
+  ThirdPartyData,
+  ThirdPartyType
+} from "@perfecto/domain";
 
 export type EntryStatus = AccountingEntryStatus;
 export type { ThirdPartyData as ThirdPartyDto, ThirdPartyType };
@@ -276,7 +283,8 @@ export const auditActionLabels: Record<string, string> = {
   "accounting.thirdparty.created": "Fiche tiers créée",
   "accounting.thirdparty.updated": "Fiche tiers modifiée",
   "accounting.thirdparty.deactivated": "Tiers désactivé",
-  "accounting.thirdparty.reactivated": "Tiers réactivé"
+  "accounting.thirdparty.reactivated": "Tiers réactivé",
+  "accounting.organization.updated": "Identité de la société mise à jour"
 };
 
 export function auditActionLabel(action: string): string {
@@ -367,4 +375,165 @@ export interface CreateGeneralAccountRequest {
   label: string;
   accountType?: string | undefined;
   requiresThirdParty?: boolean | undefined;
+}
+
+/* ------------------------ Société ------------------------ */
+
+/** Mise à jour de l'identité imprimée ; les champs absents conservent leur valeur. */
+export interface UpdateOrganizationRequest extends OrganizationProfileInput {
+  organizationId: string;
+}
+
+/* ------------------------ Éditions et exports ------------------------ */
+
+/**
+ * Formats de sortie proposés à l'utilisateur.
+ *
+ * Décision du 14/10/2026 : **tous les documents sortent en PDF, en Excel et en CSV**,
+ * au choix de l'utilisateur — jamais un format unique imposé. Les trois rendus partagent
+ * le même {@link ExportDocument}, donc exactement les mêmes chiffres et mentions.
+ */
+export const ExportFormat = {
+  pdf: "pdf",
+  excel: "excel",
+  csv: "csv"
+} as const;
+
+export type ExportFormat = (typeof ExportFormat)[keyof typeof ExportFormat];
+
+/** Libellé long : ce à quoi sert chaque format, affiché en infobulle. */
+export const exportFormatLabels: Record<ExportFormat, string> = {
+  pdf: "PDF — impression et archive",
+  excel: "Excel (.xlsx) — calculable",
+  csv: "CSV (;) — échange de données"
+};
+
+/** Libellé court pour les boutons ; le libellé long sert d'infobulle. */
+export const exportFormatShortLabels: Record<ExportFormat, string> = {
+  pdf: "PDF",
+  excel: "Excel",
+  csv: "CSV"
+};
+
+export const exportFormatExtensions: Record<ExportFormat, string> = {
+  pdf: "pdf",
+  excel: "xlsx",
+  csv: "csv"
+};
+
+export const exportMimeTypes: Record<ExportFormat, string> = {
+  pdf: "application/pdf",
+  excel: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  csv: "text/csv;charset=utf-8"
+};
+
+/** Documents éditables, reprise du menu « Éditions » de PERFECTO WinDev. */
+export const DocumentKind = {
+  journal: "journal",
+  generalLedger: "general-ledger",
+  trialBalance: "trial-balance",
+  entry: "entry",
+  thirdPartyStatement: "third-party-statement",
+  chartOfAccounts: "chart-of-accounts",
+  thirdParties: "third-parties",
+  auditTrail: "audit-trail"
+} as const;
+
+export type DocumentKind = (typeof DocumentKind)[keyof typeof DocumentKind];
+
+export const documentKindLabels: Record<DocumentKind, string> = {
+  journal: "Journal des écritures",
+  "general-ledger": "Grand livre",
+  "trial-balance": "Balance générale",
+  entry: "Pièce comptable",
+  "third-party-statement": "Relevé auxiliaire",
+  "chart-of-accounts": "Plan comptable",
+  "third-parties": "Fichier des tiers",
+  "audit-trail": "Piste d'audit"
+};
+
+export type ExportColumnAlign = "left" | "right" | "center";
+
+/** Nature de la colonne : pilote l'alignement, le format de cellule et le type CSV. */
+export type ExportColumnKind = "text" | "amount" | "date" | "number";
+
+export interface ExportColumn {
+  key: string;
+  label: string;
+  align: ExportColumnAlign;
+  kind: ExportColumnKind;
+  /** Largeur indicative en caractères ; les rendus la convertissent dans leur unité. */
+  width?: number | undefined;
+}
+
+/**
+ * Cellule à double face : `text` pour l'affichage français, `value` pour un tableur
+ * (nombre exact, date ISO). Un export CSV ou Excel reste ainsi calculable sans
+ * réinterpréter du texte formaté.
+ */
+export interface ExportCell {
+  text: string;
+  value?: number | string | null | undefined;
+}
+
+/** Ligne d'identité du document (« Journal », « Période », « Arrêté au »…). */
+export interface ExportField {
+  label: string;
+  text: string;
+}
+
+export type ExportRowEmphasis = "section" | "total";
+
+export interface ExportRow {
+  cells: ExportCell[];
+  emphasis?: ExportRowEmphasis | undefined;
+}
+
+/**
+ * Modèle neutre de document : le noyau le construit, les moteurs de rendu le mettent en
+ * forme. Aucun des trois formats ne recalcule quoi que ce soit.
+ */
+export interface ExportDocument {
+  kind: DocumentKind;
+  title: string;
+  subtitle: string;
+  organization: OrganizationProfile;
+  organizationId: string;
+  /** « Exercice 2026 » — libellé déjà composé pour l'impression. */
+  fiscalYear: string;
+  currency: string;
+  /** Horodatage ISO de la génération. */
+  generatedAt: string;
+  generatedBy: string;
+  /** Racine du nom de fichier, sans extension. */
+  slug: string;
+  fields: ExportField[];
+  columns: ExportColumn[];
+  rows: ExportRow[];
+  totals?: ExportRow | undefined;
+  footer: string;
+}
+
+export interface ExportedFile {
+  fileName: string;
+  mimeType: string;
+  format: ExportFormat;
+  sizeBytes: number;
+  bytes: Uint8Array;
+}
+
+/** Demande d'édition : le document voulu et ses filtres, toujours bornés à la société. */
+export interface ExportDocumentRequest {
+  organizationId: string;
+  kind: DocumentKind;
+  journalCode?: string | undefined;
+  accountCode?: string | undefined;
+  thirdPartyCode?: string | undefined;
+  entryId?: string | undefined;
+  from?: CivilDate | undefined;
+  to?: CivilDate | undefined;
+  /** Filtres de la piste d'audit. */
+  entityType?: string | undefined;
+  entityId?: string | undefined;
+  limit?: number | undefined;
 }

@@ -94,3 +94,29 @@ export function formatAmount(amount: Amount, currency = "XOF"): string {
   }).format(units);
   return `${formatted} ${currency}`;
 }
+
+/**
+ * Montant groupé à la française, sans devise (« 2 832 000 », « -472 000 »).
+ *
+ * Destiné aux documents exportés : le séparateur de milliers est une **espace simple**,
+ * jamais l'espace insécable étroite (U+202F) produite par `Intl` en `fr-FR`, que les
+ * polices standard des PDF (encodage WinAnsi) ne contiennent pas.
+ */
+export function formatAmountGrouped(amount: Amount): string {
+  const units = amount < 0n ? -Number(-amount / 100n) : Number(amount / 100n);
+  const formatted = new Intl.NumberFormat("fr-FR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(units);
+  return formatted.replace(/[\u202F\u00A0\u2009]/g, " ");
+}
+
+/**
+ * Valeur numérique en unités monétaires, pour les cellules calculables d'un tableur.
+ *
+ * Le XOF n'a pas de subdivision usuelle ; les deux décimales du noyau sont conservées
+ * (un format de cellule `#,##0.00` les affiche si besoin).
+ */
+export function amountToNumber(amount: Amount): number {
+  return Number(amount) / 100;
+}
