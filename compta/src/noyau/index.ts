@@ -213,6 +213,23 @@ export {
   type SoldeSegment
 } from "./cloture";
 
+export {
+  analyserMontantSigne,
+  construireReleve,
+  etatDeRapprochement,
+  pointagesEnVigueur,
+  proposerPointageAutomatique,
+  soldeDuReleve,
+  verifierPointage,
+  type DemandeDeReleve,
+  type ElementPointe,
+  type EtatDeRapprochement,
+  type LigneDeReleve,
+  type Pointage,
+  type PropositionDePointage,
+  type ReleveBancaire
+} from "./rapprochement";
+
 export { StockageMemoire } from "./stockage";
 export type { PortStockage } from "./stockage";
 

@@ -10,6 +10,7 @@
  */
 
 import {
+  additionner,
   ErreurRegle,
   ZERO,
   analyserMontant,
@@ -53,6 +54,18 @@ import {
   type CompteDeResultat,
   type ExercicePrecedent
 } from "./etats-financiers";
+import {
+  construireReleve,
+  type LigneDeReleve,
+  etatDeRapprochement as construireEtatDeRapprochement,
+  proposerPointageAutomatique,
+  verifierPointage,
+  type DemandeDeReleve,
+  type EtatDeRapprochement,
+  type Pointage,
+  type PropositionDePointage,
+  type ReleveBancaire
+} from "./rapprochement";
 import {
   preparerCloture as preparerRapportDeCloture,
   verifierCloture,
@@ -152,6 +165,10 @@ export interface EtatDossier {
    * colonne « N-1 » des états financiers s'appuie sur eux.
    */
   exercicesClos: ExerciceClos[];
+  /** Relevés bancaires saisis, et les pointages qui les rapprochent du compte de trésorerie. */
+  releves: ReleveBancaire[];
+  pointages: Pointage[];
+  sequencesReleves: number;
   sequencesLots: Record<string, number>;
   sequencesEcritures: Record<string, number>;
   audit: EvenementAudit[];
@@ -910,6 +927,215 @@ export class ServiceComptable {
     });
   }
 
+  // ------------------------------------------------------------------ rapprochement bancaire
+
+  /** Les relevés bancaires du dossier, du plus récent au plus ancien. */
+  async releves(): Promise<ReleveBancaire[]> {
+    const etat = await this.#stockage.lire();
+    return [...etat.releves].reverse();
+  }
+
+  /** Saisit un relevé bancaire. Aucune écriture n'est passée : un relevé décrit, il ne comptabilise pas. */
+  async ajouterReleve(demande: DemandeDeReleve): Promise<ReleveBancaire> {
+    return this.#muter((etat) => {
+      const compte = etat.comptes.find((item) => item.numero === comptePrincipalDe(demande.compte));
+      if (!compte) {
+        throw new ErreurRegle(`Le compte « ${comptePrincipalDe(demande.compte)} » n'existe pas dans le plan du dossier.`);
+      }
+      const codeJournal = (demande.journalCode ?? "BQ").toUpperCase();
+      if (!etat.journaux.some((item) => item.code === codeJournal)) {
+        throw new ErreurRegle(`Le journal « ${codeJournal} » n'existe pas dans le dossier.`);
+      }
+      etat.sequencesReleves += 1;
+      const releve = construireReleve(demande, {
+        identifiant: `RELEVE-${compte.numero}-${etat.sequencesReleves}`,
+        horodate: this.#horloge().toISOString(),
+        acteur: this.#utilisateur,
+        devise: this.#paquet.devise
+      });
+      etat.releves.push(releve);
+      this.#tracer(
+        etat,
+        "Relevé saisi",
+        "Relevé",
+        releve.id,
+        `${releve.libelle} — compte ${releve.compte}, ${releve.lignes.length} lignes, du ${formaterDateFr(
+          releve.dateDebut
+        )} au ${formaterDateFr(releve.dateFin)}`
+      );
+      return releve;
+    });
+  }
+
+  /** Supprime un relevé. Refusé tant qu'un pointage le rattache au grand livre. */
+  async supprimerReleve(releveId: string): Promise<void> {
+    await this.#muter((etat) => {
+      const releve = etat.releves.find((item) => item.id === releveId);
+      if (!releve) {
+        throw new ErreurRegle(`Le relevé « ${releveId} » n'existe pas dans le dossier.`);
+      }
+      const enVigueur = etat.pointages.filter(
+        (pointage) => pointage.releveId === releveId && pointage.defaitLe === null
+      );
+      if (enVigueur.length > 0) {
+        throw new ErreurRegle(
+          `Le relevé « ${releve.libelle} » porte ${enVigueur.length} pointage${
+            enVigueur.length > 1 ? "s" : ""
+          } : dépointez avant de supprimer.`
+        );
+      }
+      etat.releves = etat.releves.filter((item) => item.id !== releveId);
+      etat.pointages = etat.pointages.filter((pointage) => pointage.releveId !== releveId);
+      this.#tracer(etat, "Relevé supprimé", "Relevé", releveId, releve.libelle);
+    });
+  }
+
+  /**
+   * L'état de rapprochement d'un relevé.
+   *
+   * `conforme` dit que l'écart entre le solde comptable et le solde du relevé est entièrement composé
+   * de suspens identifiés. Ce qui ne s'explique pas est montré, jamais absorbé.
+   */
+  async etatDeRapprochement(releveId: string): Promise<EtatDeRapprochement> {
+    const etat = await this.#stockage.lire();
+    const releve = etat.releves.find((item) => item.id === releveId);
+    if (!releve) {
+      throw new ErreurRegle(`Le relevé « ${releveId} » n'existe pas dans le dossier.`);
+    }
+    return construireEtatDeRapprochement(etat.mouvements, releve, etat.pointages, this.#paquet.devise);
+  }
+
+  /** Ce que le rapprochement proposerait de pointer : par référence d'abord, par montant exact ensuite. */
+  async proposerPointage(releveId: string, options?: { horsPeriode?: boolean }): Promise<PropositionDePointage[]> {
+    const etat = await this.#stockage.lire();
+    const releve = etat.releves.find((item) => item.id === releveId);
+    if (!releve) {
+      throw new ErreurRegle(`Le relevé « ${releveId} » n'existe pas dans le dossier.`);
+    }
+    return proposerPointageAutomatique(etat.mouvements, releve, etat.pointages, {
+      dansLaPlageDuReleve: options?.horsPeriode !== true
+    });
+  }
+
+  /**
+   * Pointe des lignes de relevé avec des mouvements du compte.
+   *
+   * Un pointage n'exige que l'égalité des montants : rapprocher deux montants différents masquerait
+   * une écriture manquante, et c'est précisément ce que le rapprochement doit révéler.
+   */
+  async pointer(demande: { releveId: string; paires: { ligne: string; mouvement: string }[] }): Promise<Pointage[]> {
+    if (demande.paires.length === 0) {
+      throw new ErreurRegle("Aucune paire demandée : choisissez une ligne de relevé et un mouvement.");
+    }
+    return this.#muter((etat) => {
+      const releve = etat.releves.find((item) => item.id === demande.releveId);
+      if (!releve) {
+        throw new ErreurRegle(`Le relevé « ${demande.releveId} » n'existe pas dans le dossier.`);
+      }
+      const enVigueur = etat.pointages.filter(
+        (pointage) => pointage.releveId === releve.id && pointage.defaitLe === null
+      );
+      const lignesPointees = new Set(enVigueur.map((pointage) => pointage.ligneDeReleve));
+      const mouvementsPointes = new Set(enVigueur.map((pointage) => pointage.mouvement));
+      const horodate = this.#horodate();
+      const crees: Pointage[] = [];
+
+      for (const paire of demande.paires) {
+        const ligne = releve.lignes.find((item) => item.id === paire.ligne);
+        if (!ligne) {
+          throw new ErreurRegle(`La ligne « ${paire.ligne} » n'existe pas dans le relevé « ${releve.libelle} ».`);
+        }
+        if (lignesPointees.has(ligne.id)) {
+          throw new ErreurRegle(`La ligne « ${ligne.libelle} » est déjà pointée dans ce relevé.`);
+        }
+        if (mouvementsPointes.has(paire.mouvement)) {
+          throw new ErreurRegle(`Le mouvement ${paire.mouvement} est déjà pointé dans ce relevé.`);
+        }
+        const mouvement = this.#resoudreLignes(etat, [paire.mouvement])[0]!;
+        if (comptePrincipalDe(mouvement.compte) !== comptePrincipalDe(releve.compte)) {
+          throw new ErreurRegle(
+            `Le mouvement ${mouvement.piece} porte le compte ${comptePrincipalDe(
+              mouvement.compte
+            )}, pas le compte du relevé ${comptePrincipalDe(releve.compte)}.`
+          );
+        }
+        const montant = verifierPointage(mouvement, ligne, this.#paquet.devise);
+        const numero = etat.pointages.filter((pointage) => pointage.releveId === releve.id).length + 1;
+        const pointage: Pointage = {
+          id: `${releve.id}-P${numero}`,
+          releveId: releve.id,
+          ligneDeReleve: ligne.id,
+          mouvement: mouvement.ligneId,
+          montant,
+          date: mouvement.date,
+          acteur: this.#utilisateur,
+          horodate,
+          defaitLe: null
+        };
+        etat.pointages.push(pointage);
+        lignesPointees.add(ligne.id);
+        mouvementsPointes.add(mouvement.ligneId);
+        crees.push(pointage);
+      }
+
+      this.#tracer(
+        etat,
+        "Pointage bancaire",
+        "Relevé",
+        releve.id,
+        `${releve.libelle} — ${crees.length} paire${crees.length > 1 ? "s" : ""}, ${formatMontant(
+          additionner(...crees.map((pointage) => pointage.montant)),
+          this.#paquet.devise
+        )}`
+      );
+      return crees;
+    });
+  }
+
+  /** Applique les propositions de pointage automatique. Rien n'est écrit s'il n'y a rien à proposer. */
+  async pointerAutomatiquement(
+    releveId: string,
+    options?: { horsPeriode?: boolean }
+  ): Promise<{ pointages: Pointage[]; propositions: PropositionDePointage[] }> {
+    const propositions = await this.proposerPointage(releveId, options);
+    if (propositions.length === 0) {
+      return { pointages: [], propositions };
+    }
+    const pointages = await this.pointer({
+      releveId,
+      paires: propositions.map((proposition) => ({
+        ligne: proposition.ligneDeReleve,
+        mouvement: proposition.mouvement
+      }))
+    });
+    return { pointages, propositions };
+  }
+
+  /**
+   * Dépointe. Le pointage est conservé avec sa date de défaisance : un rapprochement refait ne doit
+   * pas effacer la trace de celui qui a été défait.
+   */
+  async depointer(pointageId: string): Promise<Pointage> {
+    return this.#muter((etat) => {
+      const pointage = etat.pointages.find((item) => item.id === pointageId);
+      if (!pointage) {
+        throw new ErreurRegle(`Le pointage « ${pointageId} » n'existe pas dans le dossier.`);
+      }
+      if (pointage.defaitLe !== null) {
+        throw new ErreurRegle("Ce pointage est déjà défait.");
+      }
+      const defait: Pointage = { ...pointage, defaitLe: this.#horodate() };
+      etat.pointages = etat.pointages.map((item) => (item.id === pointageId ? defait : item));
+      this.#tracer(etat, "Pointage défait", "Relevé", pointage.releveId, `Pointage ${pointage.id}`);
+      return defait;
+    });
+  }
+
+  /** L'horodate courante, au format de la piste d'audit. */
+  #horodate(): string {
+    return this.#horloge().toISOString();
+  }
+
   #verifierCompteDeTiers(etat: EtatDossier, compte: string): void {
     const principal = comptePrincipalDe(compte);
     if (!etat.comptes.some((item) => item.numero === principal)) {
@@ -1589,6 +1815,9 @@ export function creerDossierDemonstration(options?: {
     mouvements: [],
     lettrages: [],
     exercicesClos: [],
+    releves: [],
+    pointages: [],
+    sequencesReleves: 0,
     sequencesLots: {},
     sequencesEcritures: {},
     audit: []
@@ -1655,6 +1884,51 @@ export function creerDossierDemonstration(options?: {
       comptabiliseLe: horodate
     });
   }
+  // Un relevé bancaire de démonstration : celui de mars, reçu de la banque et pas encore
+  // comptabilisé. C'est le point de départ ordinaire d'un rapprochement — quatre opérations que la
+  // banque a enregistrées et que la comptabilité n'a pas passées. Aucun mouvement n'est ajouté ici :
+  // les soldes du dossier de démonstration restent ceux des à-nouveaux.
+  etat.releves.push(
+    construireReleve(
+      {
+        compte: "521100",
+        journalCode: "BQ",
+        libelle: `Relevé de mars ${annee} — BOA Bénin`,
+        dateDebut: `${annee}-03-01`,
+        dateFin: `${annee}-03-31`,
+        soldeDOuverture: "55000000",
+        lignes: [
+          {
+            date: `${annee}-03-05`,
+            libelle: "Virement SUPERMARCHÉ CADJEHOUN",
+            reference: "VIR-2291",
+            montant: "3500000"
+          },
+          {
+            date: `${annee}-03-12`,
+            libelle: "Chèque émis — facture FA-2026-011 FOU01",
+            reference: "CHQ-118204",
+            montant: "-1850000"
+          },
+          { date: `${annee}-03-20`, libelle: "Remise espèces guichet Cotonou", reference: "REM-0044", montant: "750000" },
+          {
+            date: `${annee}-03-31`,
+            libelle: "Frais de tenue de compte et commissions",
+            reference: "FRAIS-03",
+            montant: "-18500"
+          }
+        ]
+      },
+      {
+        identifiant: "RELEVE-521100-1",
+        horodate,
+        acteur: "superviseur",
+        devise: paquet.devise
+      }
+    )
+  );
+  etat.sequencesReleves = 1;
+
   etat.audit.push({
     sequence: 1,
     horodate,
@@ -1695,7 +1969,15 @@ function ligne(
 /* ------------------------------------------------------------------ */
 
 export interface EtatDossierSerialise
-  extends Omit<EtatDossier, "mouvements" | "comptes" | "lots" | "lettrages" | "exercicesClos"> {
+  extends Omit<
+    EtatDossier,
+    "mouvements" | "comptes" | "lots" | "lettrages" | "exercicesClos" | "releves" | "pointages"
+  > {
+  releves: (Omit<ReleveBancaire, "soldeDOuverture" | "lignes"> & {
+    soldeDOuverture: string;
+    lignes: (Omit<LigneDeReleve, "montant"> & { montant: string })[];
+  })[];
+  pointages: (Omit<Pointage, "montant"> & { montant: string })[];
   lettrages: (Omit<Lettrage, "montant"> & { montant: string })[];
   exercicesClos: (Omit<ExerciceClos, "resultat" | "totalActif" | "totalPassif"> & {
     resultat: string;
@@ -1737,7 +2019,13 @@ export function serialiserEtat(etat: EtatDossier): EtatDossierSerialise {
       resultat: montantVersChaine(clos.resultat),
       totalActif: montantVersChaine(clos.totalActif),
       totalPassif: montantVersChaine(clos.totalPassif)
-    }))
+    })),
+    releves: etat.releves.map((releve) => ({
+      ...releve,
+      soldeDOuverture: montantVersChaine(releve.soldeDOuverture),
+      lignes: releve.lignes.map((ligne) => ({ ...ligne, montant: montantVersChaine(ligne.montant) }))
+    })),
+    pointages: etat.pointages.map((pointage) => ({ ...pointage, montant: montantVersChaine(pointage.montant) }))
   };
 }
 
@@ -1767,7 +2055,13 @@ export function deserialiserEtat(brut: EtatDossierSerialise): EtatDossier {
       resultat: montantDepuisChaine(clos.resultat),
       totalActif: montantDepuisChaine(clos.totalActif),
       totalPassif: montantDepuisChaine(clos.totalPassif)
-    }))
+    })),
+    releves: brut.releves.map((releve) => ({
+      ...releve,
+      soldeDOuverture: montantDepuisChaine(releve.soldeDOuverture),
+      lignes: releve.lignes.map((ligne) => ({ ...ligne, montant: montantDepuisChaine(ligne.montant) }))
+    })),
+    pointages: brut.pointages.map((pointage) => ({ ...pointage, montant: montantDepuisChaine(pointage.montant) }))
   };
 }
 

@@ -27,7 +27,7 @@ la même base.
 
 ```bash
 npm install            # installe l'espace de travail (compta)
-npm test               # 156 tests : noyau en Node, interface en jsdom
+npm test               # 172 tests : noyau en Node, interface en jsdom
 npm run typecheck      # TypeScript strict, sans émission
 npm run build          # build de production dans compta/dist
 npm run preview:vercel # sert le build comme le ferait Vercel, sur http://localhost:5173
@@ -55,6 +55,14 @@ npm run dev            # serveur de développement Vite
   choisi, complété du tiers quand il est connu.
 - **Brouillon conservé** : une saisie entamée survit à un changement d'écran (mémoire de session,
   par lot) ; elle est effacée à l'enregistrement ou sur demande explicite.
+- **Rapprochement bancaire** : un relevé se saisit tel que la banque le donne — date, référence
+  (numéro de chèque, de virement, de remise), libellé, montant au sens de la banque, positif quand
+  l'argent entre. L'écran confronte ce relevé au compte de trésorerie : les deux soldes, l'écart, la
+  part que les suspens de la période expliquent, ce que les périodes antérieures ont laissé, et
+  **ce qui reste inexpliqué**. Le pointage rapproche une ligne d'un mouvement, par référence d'abord
+  puis par montant exact, et refuse deux montants différents : rapprocher un règlement partiel
+  masquerait une écriture manquante, et c'est précisément ce que l'état doit révéler. Un pointage se
+  défait sans effacer sa trace.
 - **Clôture d'exercice** (le *Create New Year* de Sage) : un **rapport de préparation** montre avant
   toute écriture ce qui s'y oppose — périodes ouvertes, lots en attente, grand livre déséquilibré,
   soldes initiaux posés dans le plan — et le contenu ligne à ligne des deux écritures qui seraient
@@ -88,7 +96,7 @@ npm run dev            # serveur de développement Vite
   est affiché en alerte, jamais absorbé dans un total. L'écran est un état de contrôle : il ne
   prétend pas reproduire l'imprimé officiel, dont la mise en page n'a pas été relevée dans le texte
   juridique.
-- **Export CSV** : le bilan, le compte de résultat, le rapport de clôture, l'état de lettrage, la
+- **Export CSV** : le bilan, le compte de résultat, le rapport de clôture, l'état de rapprochement, l'état de lettrage, la
   déclaration TVA, la balance, le journal et le grand livre se téléchargent au
   format CSV (point-virgule, BOM UTF-8, fins de ligne CRLF — ce qu'Excel en français attend), dans
   ce que l'écran affiche, filtres compris. Excel et PDF suivent.
@@ -100,8 +108,8 @@ npm run dev            # serveur de développement Vite
 
 Les entrées de menu correspondant à des fonctions non livrées sont **visibles, grisées, et portent
 la tranche qui les livrera** en infobulle. Elles ne sont pas cliquables : aucun lien mort, aucun
-écran vide. Rapprochement bancaire (le lettrage est livré ; le pointage d'un relevé suit),
-lettrage partiel d'un règlement à-compte, écritures récurrentes, **réouverture d'un exercice clos**
+écran vide. Import d'un fichier de relevé bancaire (CSV, OFX, CAMT — le relevé se saisit ligne à
+ligne en attendant), lettrage partiel d'un règlement à-compte, écritures récurrentes, **réouverture d'un exercice clos**
 (la clôture est définitive dans cette version : la correction d'un exercice clos passe par une
 écriture dans l'exercice en cours, et l'écran le dit), affectation du résultat décidée en assemblée
 (121000 vers 111000 ou 112000), interrogation d'un compte et historique, tableau des flux de

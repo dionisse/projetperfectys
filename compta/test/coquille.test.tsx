@@ -128,28 +128,29 @@ describe("coquille Sage 100", () => {
     expect(entrees.map((entree) => entree.textContent)).toContain("Lots et comptabilisation…");
 
     const indisponibles = entrees.filter((entree) => entree.classList.contains("indisponible"));
-    // Il en reste : le rapprochement bancaire et les écritures récurrentes. Chaque entrée grisée
-    // porte la raison de son absence, jamais une tranche vide de sens.
-    expect(indisponibles.length).toBeGreaterThanOrEqual(2);
+    // Il en reste : les écritures récurrentes. Chaque entrée grisée porte la raison de son absence,
+    // jamais une tranche vide de sens.
+    expect(indisponibles.length).toBeGreaterThanOrEqual(1);
     expect(indisponibles.every((entree) => (entree.getAttribute("title") ?? "").length > 10)).toBe(true);
     // Ce qui est livré est un bouton : la clôture d'exercice et le lettrage ouvrent un écran.
     const disponibles = entrees.filter((entree) => entree.tagName === "BUTTON").map((entree) => entree.textContent);
     expect(disponibles).toContain("Clôture d'exercice…");
     expect(disponibles).toContain("Clôture de période…");
+    expect(disponibles).toContain("Rapprochement bancaire…");
     // Aucune entrée indisponible n'est un bouton : rien ne peut mener à un écran vide.
     expect(indisponibles.every((entree) => entree.tagName === "SPAN")).toBe(true);
     expect(indisponibles.every((entree) => entree.getAttribute("aria-disabled") === "true")).toBe(true);
     // Le lettrage est livré : ce n'est plus une entrée grisée, c'est un bouton qui mène à un écran.
     const lettrage = entrees.find((entree) => entree.textContent?.includes("Lettrage"));
     expect(lettrage?.tagName).toBe("BUTTON");
-    // Le rapprochement bancaire reste annoncé, avec ce qui est déjà livré et ce qui manque.
-    const rapprochement = indisponibles.find((entree) =>
-      entree.textContent?.includes("Rapprochement bancaire")
-    );
-    expect(rapprochement?.getAttribute("title")).toContain("tranche F");
-
     await cliquer(bouton("Lettrage des comptes de tiers…"));
     expect(location.hash).toBe("#/traitements/lettrage");
+
+    // Le rapprochement bancaire est livré : il mène à son écran, il n'est plus annoncé.
+    await cliquer(bouton("Traitements"));
+    await cliquer(bouton("Rapprochement bancaire…"));
+    expect(location.hash).toBe("#/traitements/rapprochement");
+    expect(container.textContent).toContain("État de rapprochement");
 
     await cliquer(bouton("Traitements"));
     await cliquer(bouton("Lots et comptabilisation…"));

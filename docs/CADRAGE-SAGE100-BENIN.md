@@ -236,6 +236,41 @@ lisible dans les deux cas.
 écriture dans l'exercice en cours), l'affectation du résultat décidée en assemblée (121000 vers
 111000 ou 112000), et la consolidation de plusieurs dossiers.
 
+### 5.3 Ce que le rapprochement bancaire livre
+
+`compta/src/noyau/rapprochement.ts` ne produit **aucune écriture** : un relevé décrit ce que la banque
+a enregistré, le pointage rapproche ce qui existe déjà des deux côtés. Ce qui doit être comptabilisé
+(frais bancaires, intérêts, agios) se saisit d'abord, par un lot, puis se pointe.
+
+**Le sens des montants.** Une ligne de relevé porte le montant **au sens de la banque** : positif
+quand l'argent entre. Le compte de trésorerie, lui, est débiteur positif. Les deux sens sont inversés,
+et la conversion se fait une seule fois, dans `verifierPointage` — jamais dispersée dans les écrans.
+
+**L'état de rapprochement** ne dit pas seulement « les deux soldes diffèrent de tant » ; il décompose
+l'écart en trois termes qui s'additionnent exactement :
+
+| Terme | Ce qu'il porte |
+| --- | --- |
+| `ecartExplique` | Les suspens **de la période** : ce que la comptabilité a passé et que la banque n'a pas encore enregistré (un chèque émis), moins ce que la banque a enregistré et que la comptabilité n'a pas passé (des frais prélevés) |
+| `ecartDOuverture` | Ce que les périodes antérieures ont laissé en suspens, net des mouvements antérieurs que ce relevé explique déjà |
+| `ecartRestant` | Ce qui ne s'explique par rien. **Nul quand le rapprochement est conforme** |
+
+`conforme` ne veut donc pas dire « les soldes sont égaux » — ils ne le sont presque jamais — mais
+« toute différence a une ligne en face ». Un `ecartRestant` non nul est une anomalie, et l'écran
+l'affiche en avertissement avec les deux soldes d'ouverture à vérifier.
+
+**Le pointage automatique** retient la référence avant le montant : deux règlements du même montant le
+même jour sont courants, deux règlements portant le même numéro de chèque ne le sont pas. Les
+propositions sont montrées avant d'être appliquées, comme pour le lettrage. Un pointage n'accepte que
+des montants **exactement égaux** ; un règlement partiel ne se pointe pas, il se comptabilise.
+
+**Le dépointage** conserve la trace : un pointage défait garde son identifiant, son acteur et sa date
+de défaisance. Un rapprochement refait ne fait pas disparaître celui qui a été défait.
+
+**Ce qui n'est pas produit** : l'import d'un fichier de relevé (CSV, OFX, CAMT) — le relevé se saisit
+ligne à ligne —, les échelles d'intérêts et les agios calculés, et le rapprochement de plusieurs
+comptes bancaires en une seule opération.
+
 ## 6. Ordre de livraison
 
 | Tranche | Livrable | Preuve | État au 15/10/2026 |
@@ -245,7 +280,7 @@ lisible dans les deux cas.
 | **C** | Écrans **Traitements** : lots, saisie des écritures en table de détail, comptabilisation, contre-passation | aperçu live + tests de parcours | **livrée**, 9 tests de parcours en jsdom |
 | **D** | Écrans **Interrogation** : balance, grand livre, journal, compte, historique | aperçu live | balance, journal et grand livre **livrés** ; interrogation d'un compte et historique restants |
 | **E** | Taxes Bénin en saisie + **déclaration TVA** mensuelle | tests de calcul fiscal | **livrée** : génération des lignes de taxe en saisie, déclaration recalculée et rapprochée du grand livre, export CSV. Reste le reversement des acomptes et retenues (compte 442100), qui relève d'une autre obligation |
-| **F** | Lettrage, rapprochement bancaire | tests | **partiellement livrée** : lettrage des comptes de tiers — producteur `lettrage.ts`, écran, lettrage manuel et automatique (proposé avant d'être appliqué), délettrage tracé, export CSV, 21 tests. Restent le rapprochement bancaire (pointage d'un relevé) et le lettrage partiel |
+| **F** | Lettrage, rapprochement bancaire | tests | **partiellement livrée** : lettrage des comptes de tiers — producteur `lettrage.ts`, écran, lettrage manuel et automatique (proposé avant d'être appliqué), délettrage tracé, export CSV, 21 tests — **et rapprochement bancaire** : relevés saisis ligne à ligne, producteur `rapprochement.ts`, état de rapprochement avec écart expliqué et reste inexpliqué, pointage manuel et automatique (par référence puis par montant), dépointage tracé, écran, export CSV, 13 + 3 tests. Reste le lettrage partiel d'un règlement à-compte ; l'import d'un fichier de relevé (CSV, OFX, CAMT) n'est pas produit |
 | **G** | Clôtures : période, exercice, à-nouveaux, *Create New Year* | tests | **livrée** : rapport de préparation, clôture d'exercice (solde des comptes de gestion vers 121000, à-nouveaux segment de tiers compris, ouverture de l'exercice suivant, archivage de l'exercice clos), lectures par exercice, écran avec confirmation explicite, 14 tests. La réouverture d'un exercice clos n'est pas produite : la clôture est définitive, et l'écran le dit |
 | **H** | États financiers OHADA révisé (producteur distinct), exports PDF/Excel/CSV de tous les documents | fichiers produits et vérifiés | **partiellement livrée** : bilan et compte de résultat OHADA révisé — producteur `etats-financiers.ts`, deux écrans, arrêté par période, **colonne N-1 dès qu'un exercice est clos**, export CSV, 18 tests. Restent le tableau des flux de trésorerie et le tableau de variation des activités (aucun compte du plan n'est classé en flux) et les exports PDF et Excel |
 | **I** | Piste d'audit, habilitations par écran, import/export de données, sauvegarde/restauration, hôte Windows | tests + package installable | piste d'audit **livrée** (ajout-seulement, attribuée, horodatée) ; le reste à faire |
