@@ -230,6 +230,19 @@ export {
   type ReleveBancaire
 } from "./rapprochement";
 
+export {
+  comptesInterrogeables,
+  formaterSens,
+  interrogerCompte,
+  type CompteInterrogeable,
+  type ContexteInterrogation,
+  type DemandeInterrogation,
+  type ExerciceClosSommaire,
+  type InterrogationDeCompte,
+  type LigneInterrogation,
+  type ReportExercice
+} from "./interrogation";
+
 export { StockageMemoire } from "./stockage";
 export type { PortStockage } from "./stockage";
 

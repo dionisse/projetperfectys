@@ -55,6 +55,13 @@ import {
   type ExercicePrecedent
 } from "./etats-financiers";
 import {
+  comptesInterrogeables,
+  interrogerCompte,
+  type CompteInterrogeable,
+  type DemandeInterrogation,
+  type InterrogationDeCompte
+} from "./interrogation";
+import {
   construireReleve,
   type LigneDeReleve,
   etatDeRapprochement as construireEtatDeRapprochement,
@@ -488,6 +495,75 @@ export class ServiceComptable {
       numero,
       etat.codesTaxe
     );
+  }
+
+  /**
+   * Interroge un compte : ce qui s'y est passé, avec le solde après chaque ligne.
+   *
+   * Le compte peut être demandé segmenté (`401100-FOU01`) : l'interrogation porte alors sur ce
+   * segment, ce qui est la question posée quand on appelle un fournisseur. Le solde d'ouverture de la
+   * fenêtre tient compte de tout ce qui précède, à-nouveaux compris — un solde progressif qui partirait
+   * de zéro ne correspondrait à rien de connu.
+   */
+  async interrogerCompte(
+    compte: string,
+    filtre: Omit<DemandeInterrogation, "compte"> = {}
+  ): Promise<InterrogationDeCompte> {
+    const etat = await this.#stockage.lire();
+    const principal = comptePrincipalDe(compte);
+    const trouve = etat.comptes.find((item) => item.comptePrincipal === principal);
+    if (!trouve) {
+      throw new ErreurRegle(`Le compte « ${compte} » n'existe pas dans le plan du dossier.`);
+    }
+    // Valider l'exercice demandé, même quand le compte n'y a pas bougé : un exercice qui n'existe pas
+    // doit être dit, pas rendu comme un compte vide.
+    this.#exerciceDemande(etat, filtre.exercice);
+    if (filtre.inclureExercicePrecedent) {
+      const precedent = (filtre.exercice ?? etat.exercice.annee) - 1;
+      const connu = precedent === etat.exercice.annee || etat.exercicesClos.some((clos) => clos.exercice.annee === precedent);
+      if (!connu) {
+        throw new ErreurRegle(
+          `L'exercice ${precedent} n'existe pas dans ce dossier : la comparaison d'exercices s'arrête là. Exercices disponibles : ${[
+            ...etat.exercicesClos.map((item) => item.exercice.annee),
+            etat.exercice.annee
+          ].join(", ")}.`
+        );
+      }
+    }
+
+    const bornes: Record<number, { dateDebut: DateCivile; dateFin: DateCivile }> = {
+      [etat.exercice.annee]: { dateDebut: etat.exercice.dateDebut, dateFin: etat.exercice.dateFin }
+    };
+    for (const clos of etat.exercicesClos) {
+      bornes[clos.exercice.annee] = { dateDebut: clos.exercice.dateDebut, dateFin: clos.exercice.dateFin };
+    }
+
+    return interrogerCompte(
+      etat.mouvements,
+      trouve,
+      { compte, ...filtre },
+      {
+        lettrages: etat.lettrages,
+        releves: etat.releves,
+        pointages: etat.pointages,
+        exercicesClos: etat.exercicesClos,
+        exerciceCourant: etat.exercice.annee,
+        bornes,
+        devise: this.#paquet.devise
+      }
+    );
+  }
+
+  /**
+   * Les comptes qui ont bougé, avec leur solde et leurs tiers : le point de départ d'une
+   * interrogation, pour qui cherche un compte par son activité plutôt que par son numéro.
+   */
+  async comptesInterrogeables(filtre: FiltreMouvements = {}): Promise<CompteInterrogeable[]> {
+    const etat = await this.#stockage.lire();
+    return comptesInterrogeables(etat.mouvements, etat.comptes, {
+      exercice: etat.exercice.annee,
+      ...filtre
+    });
   }
 
   async grandLivre(compte: string, filtre: FiltreMouvements = {}): Promise<LigneGrandLivre[]> {

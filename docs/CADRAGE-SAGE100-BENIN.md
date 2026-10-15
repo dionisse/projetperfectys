@@ -310,6 +310,37 @@ rendre modifiable un paramètre que rien n'emploie ne servirait qu'à donner l'i
 le deviendront avec la tranche qui les emploiera (liasse fiscale, acomptes). Les journaux, les périodes
 et la structure de comptes ne se modifient pas non plus.
 
+### 5.5 Ce que l'interrogation de compte livre
+
+L'interrogation répond à une question que les états de synthèse ne posent pas : **que s'est-il passé
+sur ce compte, et où en est-il maintenant ?**
+
+Le producteur `compta/src/noyau/interrogation.ts` est une fonction pure : elle prend les mouvements,
+le compte, un filtre et un contexte (lettrages, relevés, pointages, exercices clos, devise, bornes
+d'exercices) et rend l'interrogation. Aucune marque ni pointage n'est réécrit.
+
+Les règles retenues :
+
+1. **Le solde progressif part du solde réel à l'ouverture de la fenêtre.** Ce qui précède — à-nouveaux
+   compris — forme le solde initial. Un solde qui repartirait de zéro ne correspondrait à rien de ce
+   que l'utilisateur connaît, et rendrait la ligne suivante incompréhensible.
+2. **Un compte segmenté s'interroge seul.** `401100-FOU01` ne montre que ce fournisseur ; le compte
+   principal `401100` rassemble tous les segments, et l'écran le dit explicitement — c'est le seul
+   moyen de ne pas croire qu'on regarde un tiers alors qu'on en regarde huit.
+3. **Les lignes d'un exercice clos sont marquées figées.** Elles ne bougeront plus, et le rappel que
+   toute correction passe par l'exercice en cours est affiché, pas supposé connu.
+4. **L'historique par exercice** donne, exercice par exercice, la période couverte, les totaux, le
+   nombre de mouvements, l'état (clos ou en cours) et le **solde reporté** — ce que la clôture a
+   emporté. C'est la même grandeur que celle des à-nouveaux : une interrogation et une clôture qui
+   ne diraient pas le même chiffre seraient contradictoires.
+5. **Comparer à l'exercice précédent refuse un exercice qui n'existe pas.** Rendre un compte vide
+   serait une réponse fausse ; l'écran donne la liste des exercices disponibles.
+6. **Les suspens sont montrés, pas devinés** : reste à lettrer, reste à pointer en banque. Un compte
+   soldé n'est pas forcément lettré, et un compte pointé n'est pas forcément rapproché.
+
+Ce qui n'est pas produit : l'interrogation d'un compte par **montant** ou par **lettre** (le finder
+de Sage), l'appel d'une écriture depuis une ligne, et l'impression PDF.
+
 ## 6. Ordre de livraison
 
 | Tranche | Livrable | Preuve | État au 15/10/2026 |
@@ -317,7 +348,7 @@ et la structure de comptes ne se modifient pas non plus.
 | **A** | Noyau : montants, calendrier, comptes segmentés, plan SYSCOHADA, lots, taxes, paquet pays Bénin, grand livre, stockage | suite de tests verte en Node | **livrée** (`e27fbe1`) |
 | **B** | Coquille Sage 100 (menus, barre d'état, finder) + écrans **Structure** : société, plan comptable, journaux, tiers, codes de taxe | aperçu live, écrans validés par l'utilisateur | **livrée** (`77afc69`), en attente de validation ; complétée par le **paramétrage modifiable** (§5.4) : société, plan comptable et taux se corrigent dans l'application, 17 + 4 tests |
 | **C** | Écrans **Traitements** : lots, saisie des écritures en table de détail, comptabilisation, contre-passation | aperçu live + tests de parcours | **livrée**, 9 tests de parcours en jsdom |
-| **D** | Écrans **Interrogation** : balance, grand livre, journal, compte, historique | aperçu live | balance, journal et grand livre **livrés** ; interrogation d'un compte et historique restants |
+| **D** | Écrans **Interrogation** : balance, grand livre, journal, compte, historique | aperçu live | **livrée** : balance, journal, grand livre, puis **interrogation de compte** (§5.5) — producteur `interrogation.ts`, solde progressif à partir du solde réel, lecture d'un segment de tiers, marques de lettrage et de pointage sur les lignes, exercice clos signalé, historique par exercice avec solde reporté, comparaison d'exercices refusée quand l'exercice n'existe pas, liste des comptes qui ont bougé, écran avec fenêtre libre et export CSV, 8 + 3 tests. Reste l'interrogation par montant ou par lettre (le finder de Sage) et l'appel d'une écriture depuis une ligne |
 | **E** | Taxes Bénin en saisie + **déclaration TVA** mensuelle | tests de calcul fiscal | **livrée** : génération des lignes de taxe en saisie, déclaration recalculée et rapprochée du grand livre, export CSV. Reste le reversement des acomptes et retenues (compte 442100), qui relève d'une autre obligation |
 | **F** | Lettrage, rapprochement bancaire | tests | **partiellement livrée** : lettrage des comptes de tiers — producteur `lettrage.ts`, écran, lettrage manuel et automatique (proposé avant d'être appliqué), délettrage tracé, export CSV, 21 tests — **et rapprochement bancaire** : relevés saisis ligne à ligne, producteur `rapprochement.ts`, état de rapprochement avec écart expliqué et reste inexpliqué, pointage manuel et automatique (par référence puis par montant), dépointage tracé, écran, export CSV, 13 + 3 tests. Reste le lettrage partiel d'un règlement à-compte ; l'import d'un fichier de relevé (CSV, OFX, CAMT) n'est pas produit |
 | **G** | Clôtures : période, exercice, à-nouveaux, *Create New Year* | tests | **livrée** : rapport de préparation, clôture d'exercice (solde des comptes de gestion vers 121000, à-nouveaux segment de tiers compris, ouverture de l'exercice suivant, archivage de l'exercice clos), lectures par exercice, écran avec confirmation explicite, 14 tests. La réouverture d'un exercice clos n'est pas produite : la clôture est définitive, et l'écran le dit |

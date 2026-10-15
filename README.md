@@ -27,7 +27,7 @@ la même base.
 
 ```bash
 npm install            # installe l'espace de travail (compta)
-npm test               # 172 tests : noyau en Node, interface en jsdom
+npm test               # 204 tests : noyau en Node, interface en jsdom
 npm run typecheck      # TypeScript strict, sans émission
 npm run build          # build de production dans compta/dist
 npm run preview:vercel # sert le build comme le ferait Vercel, sur http://localhost:5173
@@ -77,7 +77,15 @@ npm run dev            # serveur de développement Vite
   rapproche des lignes déjà comptabilisées. Un groupe déséquilibré est refusé, l'écart affiché, et le
   bouton grisé porte la raison. Un délettrage ne supprime pas la marque : il la date.
 - **Interrogation** : balance filtrable par période, journal par pièce avec son détail, grand livre
-  à solde progressif par compte (comptes auxiliaires compris).
+  à solde progressif par compte (comptes auxiliaires compris), et **interrogation de compte** —
+  l'écran du quotidien : un compte ou un segment de tiers (`401100-FOU01`), une fenêtre libre, le
+  **solde après chaque ligne** qui part du solde réel à l'ouverture de la fenêtre (à-nouveaux
+  compris, jamais de zéro inventé), les marques de **lettrage** et de **pointage bancaire** portées
+  sur les lignes qu'elles concernent, les lignes d'un **exercice clos** dites figées avec le rappel
+  qu'une correction passe par l'exercice en cours, l'**historique par exercice** (solde reporté,
+  totaux, état clos ou en cours), la comparaison à l'exercice précédent, et ce qui reste **à lettrer
+  et à pointer**. La liste des comptes qui ont bougé, avec leurs tiers, sert de point de départ.
+  Export CSV de la fenêtre interrogée.
 - **États** : **bilan OHADA révisé** (actif en brut, amortissements et net ; passif en net ;
   résultat de l'exercice porté aux capitaux propres) et **compte de résultat OHADA révisé** (les
   six résultats du modèle révisé, du résultat d'exploitation au résultat net), chacun établi à la

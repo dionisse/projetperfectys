@@ -38,6 +38,7 @@ import { BilanOhada } from "./ecrans/bilan";
 import { CompteDeResultatOhada } from "./ecrans/compte-resultat";
 import { Lettrage } from "./ecrans/lettrage";
 import { Rapprochement } from "./ecrans/rapprochement";
+import { Interrogation } from "./ecrans/interrogation";
 import { Societe } from "./ecrans/societe";
 import { ClotureExercice } from "./ecrans/cloture";
 import { Balance } from "./ecrans/balance";
@@ -165,7 +166,7 @@ export function Coquille() {
         { label: "Balance…", href: "/interrogation/balance" },
         { label: "Journal…", href: "/interrogation/journal" },
         { label: "Grand livre…", href: "/interrogation/grand-livre" },
-        { label: "Compte et historique", indisponible: "Historique par compte et comparaison d'exercices : avec les clôtures" }
+        { label: "Compte et historique…", href: "/interrogation/compte" }
       ]
     },
     {
@@ -405,6 +406,8 @@ function ecranPour(route: string, recharger: () => void): ComponentChildren {
       return <Balance />;
     case "/interrogation/journal":
       return <Journal />;
+    case "/interrogation/compte":
+      return <Interrogation />;
     case "/interrogation/grand-livre":
       return <GrandLivre />;
     case "/outils/audit":
