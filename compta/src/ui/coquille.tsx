@@ -37,6 +37,7 @@ import { DeclarationTva } from "./ecrans/declaration-tva";
 import { BilanOhada } from "./ecrans/bilan";
 import { CompteDeResultatOhada } from "./ecrans/compte-resultat";
 import { Lettrage } from "./ecrans/lettrage";
+import { ClotureExercice } from "./ecrans/cloture";
 import { Balance } from "./ecrans/balance";
 import { Journal } from "./ecrans/journal";
 import { GrandLivre } from "./ecrans/grand-livre";
@@ -142,8 +143,8 @@ export function Coquille() {
           indisponible: "Le lettrage est livré ; le pointage d'un relevé bancaire suit (tranche F)"
         },
         { label: "Écritures récurrentes", indisponible: "Abonnements : après les clôtures de période" },
-        { label: "Clôture de période", indisponible: "Le noyau verrouille déjà les périodes ; l'écran arrive avec les clôtures (tranche G)" },
-        { label: "Clôture d'exercice", indisponible: "Création d'exercice et à-nouveaux : tranche G" }
+        { label: "Clôture de période…", href: "/traitements/cloture" },
+        { label: "Clôture d'exercice…", href: "/traitements/cloture" }
       ]
     },
     {
@@ -393,6 +394,8 @@ function ecranPour(route: string, recharger: () => void): ComponentChildren {
       return <Lots onMutation={recharger} />;
     case "/traitements/lettrage":
       return <Lettrage onMutation={recharger} />;
+    case "/traitements/cloture":
+      return <ClotureExercice onMutation={recharger} />;
     case "/interrogation/balance":
       return <Balance />;
     case "/interrogation/journal":

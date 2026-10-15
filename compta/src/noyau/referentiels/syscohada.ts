@@ -55,8 +55,24 @@ export const CLASSES_SYSCOHADA: ClasseDeCompte[] = [
  * comme les *Account Groups* de Sage alimentent Financial Reporter. Un compte appartient à un
  * groupe, et un groupe appartient à un état.
  */
+/**
+ * Compte du résultat de l'exercice.
+ *
+ * La clôture d'un exercice solde les comptes de gestion vers ce compte, et les à-nouveaux de
+ * l'exercice suivant le reportent tant que l'assemblée n'a pas décidé de son affectation.
+ */
+export const COMPTE_RESULTAT_EXERCICE = "121000";
+
 export const GROUPES_SYSCOHADA: GroupeDeComptes[] = [
   { code: "CAP", libelle: "Capitaux propres", etat: "bilan" },
+  {
+    // Le compte 121000 porte le résultat une fois l'exercice clos. Le distinguer des capitaux
+    // propres permet au bilan de présenter le résultat sur sa propre ligne, que l'exercice soit en
+    // cours (résultat issu des comptes de gestion) ou clos (résultat porté au compte 121000).
+    code: "RESULTAT-CLOS",
+    libelle: "Résultat de l'exercice clos",
+    etat: "bilan"
+  },
   { code: "DET-ST", libelle: "Dettes stables", etat: "bilan" },
   { code: "IMMO-INC", libelle: "Immobilisations incorporelles", etat: "bilan" },
   { code: "IMMO-COR", libelle: "Immobilisations corporelles", etat: "bilan" },
@@ -88,7 +104,7 @@ export const PLAN_DEMARRAGE_SYSCOHADA: CompteDuPlan[] = [
   // ---- Classe 1 : ressources durables
   { numero: "101000", libelle: "Capital social", groupe: "CAP" },
   { numero: "111000", libelle: "Report à nouveau", groupe: "CAP" },
-  { numero: "121000", libelle: "Résultat de l'exercice", groupe: "CAP" },
+  { numero: "121000", libelle: "Résultat de l'exercice", groupe: "RESULTAT-CLOS" },
   { numero: "131000", libelle: "Subventions d'investissement reçues", groupe: "CAP" },
   { numero: "151000", libelle: "Provisions pour risques", groupe: "DET-ST" },
   { numero: "161000", libelle: "Emprunts et dettes auprès des établissements de crédit", groupe: "DET-ST" },

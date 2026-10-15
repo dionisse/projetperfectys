@@ -202,6 +202,40 @@ des imprimés officiels n'a pas été relevée dans l'Acte uniforme relatif au d
 l'information financière : comme la déclaration TVA, ces états sont des **documents de contrôle**,
 portés `aVerifier`, à rapprocher du formulaire de dépôt avant toute communication légale.
 
+### 5.2 Ce que la clôture d'exercice livre
+
+`compta/src/noyau/cloture.ts` prépare, `ServiceComptable.cloturerExercice()` exécute. La préparation
+est une fonction pure : elle ne touche pas au dossier, elle dit ce qui serait écrit.
+
+**Les trois effets d'une clôture**, en une opération atomique — soit les trois ont lieu, soit aucun :
+
+1. L'écriture de solde des comptes de gestion, dans la **période de clôture** (la période
+   supplémentaire que porte déjà l'exercice) : chaque produit et chaque charge est ramené à zéro, la
+   contrepartie étant le compte **121000 — Résultat de l'exercice**.
+2. Le lot d'**à-nouveaux** au premier jour de l'exercice suivant : chaque compte de bilan dont le
+   solde n'est pas nul est reporté, **segment de tiers compris** — reporter 401100 sans ses
+   fournisseurs ferait perdre le détail que le lettrage exploite. Les engagements hors bilan
+   (groupe `ENG`) ne se reportent pas : ils se ressaisissent, et le rapport le dit.
+3. L'**archivage** de l'exercice clos, toutes ses périodes clôturées, et l'ouverture de l'exercice
+   suivant avec ses périodes. Chaque mouvement porte désormais l'année de son exercice : aucune
+   lecture ne mélange deux années, et les périodes portent le même numéro d'une année sur l'autre.
+
+**Les obstacles**, cités dans l'ordre où il faut les corriger : des périodes normales ou
+d'ajustement encore ouvertes, un lot de l'exercice en saisie ou prêt mais non comptabilisé, un grand
+livre déséquilibré, un plan qui porte des soldes initiaux (ils doivent passer par un lot
+d'à-nouveaux, sinon ils ne se reportent pas), une écriture de clôture ou des à-nouveaux qui ne
+tombent pas juste.
+
+**Le compte de résultat ignore l'écriture de clôture.** Elle est la conséquence du résultat, pas un
+élément de l'activité : l'inclure annoncerait un résultat nul pour un exercice clos. Le bilan, lui,
+l'inclut — c'est elle qui porte le résultat dans les capitaux propres d'un exercice clos, via le
+groupe `RESULTAT-CLOS` distingué du groupe `CAP` pour que la ligne « Résultat de l'exercice » reste
+lisible dans les deux cas.
+
+**Ce qui n'est pas produit** : la réouverture d'un exercice clos (la correction passe par une
+écriture dans l'exercice en cours), l'affectation du résultat décidée en assemblée (121000 vers
+111000 ou 112000), et la consolidation de plusieurs dossiers.
+
 ## 6. Ordre de livraison
 
 | Tranche | Livrable | Preuve | État au 15/10/2026 |
@@ -212,8 +246,8 @@ portés `aVerifier`, à rapprocher du formulaire de dépôt avant toute communic
 | **D** | Écrans **Interrogation** : balance, grand livre, journal, compte, historique | aperçu live | balance, journal et grand livre **livrés** ; interrogation d'un compte et historique restants |
 | **E** | Taxes Bénin en saisie + **déclaration TVA** mensuelle | tests de calcul fiscal | **livrée** : génération des lignes de taxe en saisie, déclaration recalculée et rapprochée du grand livre, export CSV. Reste le reversement des acomptes et retenues (compte 442100), qui relève d'une autre obligation |
 | **F** | Lettrage, rapprochement bancaire | tests | **partiellement livrée** : lettrage des comptes de tiers — producteur `lettrage.ts`, écran, lettrage manuel et automatique (proposé avant d'être appliqué), délettrage tracé, export CSV, 21 tests. Restent le rapprochement bancaire (pointage d'un relevé) et le lettrage partiel |
-| **G** | Clôtures : période, exercice, à-nouveaux, *Create New Year* | tests | à faire — le noyau verrouille déjà les périodes clôturées |
-| **H** | États financiers OHADA révisé (producteur distinct), exports PDF/Excel/CSV de tous les documents | fichiers produits et vérifiés | **partiellement livrée** : bilan et compte de résultat OHADA révisé — producteur `etats-financiers.ts`, deux écrans, arrêté par période, export CSV, 18 tests. Restent le tableau des flux de trésorerie et le tableau de variation des activités (aucun compte du plan n'est classé en flux), les exports PDF et Excel, et la colonne « N-1 » (tranche G) |
+| **G** | Clôtures : période, exercice, à-nouveaux, *Create New Year* | tests | **livrée** : rapport de préparation, clôture d'exercice (solde des comptes de gestion vers 121000, à-nouveaux segment de tiers compris, ouverture de l'exercice suivant, archivage de l'exercice clos), lectures par exercice, écran avec confirmation explicite, 14 tests. La réouverture d'un exercice clos n'est pas produite : la clôture est définitive, et l'écran le dit |
+| **H** | États financiers OHADA révisé (producteur distinct), exports PDF/Excel/CSV de tous les documents | fichiers produits et vérifiés | **partiellement livrée** : bilan et compte de résultat OHADA révisé — producteur `etats-financiers.ts`, deux écrans, arrêté par période, **colonne N-1 dès qu'un exercice est clos**, export CSV, 18 tests. Restent le tableau des flux de trésorerie et le tableau de variation des activités (aucun compte du plan n'est classé en flux) et les exports PDF et Excel |
 | **I** | Piste d'audit, habilitations par écran, import/export de données, sauvegarde/restauration, hôte Windows | tests + package installable | piste d'audit **livrée** (ajout-seulement, attribuée, horodatée) ; le reste à faire |
 
 **Chaque tranche se termine par un écran validé par l'utilisateur sur l'aperçu live avant la

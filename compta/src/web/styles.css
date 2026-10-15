@@ -51,6 +51,11 @@ body {
   height: 100%;
 }
 
+/* Une colonne de comparaison (N-1) ne doit pas rivaliser avec la colonne de l'exercice. */
+.discret {
+  color: var(--discret);
+}
+
 .mono {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
@@ -364,6 +369,27 @@ body {
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);
   outline: none;
+}
+
+/* Clôture d'exercice : la confirmation d'une opération définitive se lit comme telle. */
+.case-a-cocher {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.4rem 0;
+}
+
+.case-a-cocher input {
+  margin-top: 0.2rem;
+}
+
+.bloc ul {
+  margin: 0.3rem 0 0.3rem 1.2rem;
+  padding: 0;
+}
+
+.bloc ul li {
+  margin-bottom: 0.2rem;
 }
 
 /* Lettrage : une ligne cochée et une marque défaite doivent se reconnaître d'un coup d'œil. */

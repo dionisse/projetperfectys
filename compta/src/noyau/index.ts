@@ -70,6 +70,7 @@ export {
 export {
   CLASSES_SYSCOHADA,
   CODE_REFERENTIEL,
+  COMPTE_RESULTAT_EXERCICE,
   GROUPES_SYSCOHADA,
   NOM_REFERENTIEL,
   PLAN_DEMARRAGE_SYSCOHADA,
@@ -177,8 +178,10 @@ export {
   construireBilan,
   construireCompteDeResultat,
   type Bilan,
+  type ColonnePrecedente,
   type CompteDeResultat,
   type DetailCompte,
+  type ExercicePrecedent,
   type LigneEtat,
   type NiveauRubrique,
   type Rubrique,
@@ -200,6 +203,16 @@ export {
   type SituationDeLettrage
 } from "./lettrage";
 
+export {
+  preparerCloture,
+  soldesSegmentes,
+  verifierCloture,
+  type DemandeDePreparation,
+  type LignePrevue,
+  type RapportDeCloture,
+  type SoldeSegment
+} from "./cloture";
+
 export { StockageMemoire } from "./stockage";
 export type { PortStockage } from "./stockage";
 
@@ -212,6 +225,7 @@ export {
   serialiserEtat,
   type ContexteDossier,
   type DemandeEcriture,
+  type ExerciceClos,
   type DemandeLigne,
   type DemandeLot,
   type EtatDossier,

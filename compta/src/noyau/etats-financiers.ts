@@ -94,6 +94,8 @@ export interface Bilan {
   groupesSansSolde: string[];
   /** Comptes dont le groupe ne participe à aucun état (engagements hors bilan). */
   comptesHorsEtat: DetailCompte[];
+  /** Colonne N-1, présente seulement si un exercice est clos dans le dossier. */
+  precedent: ColonnePrecedente | null;
   aVerifier: boolean;
 }
 
@@ -212,7 +214,21 @@ export const MODELE_BILAN_PASSIF: Rubrique[] = [
     code: "RESULTAT",
     libelle: "Résultat de l'exercice",
     niveau: "detail",
-    groupes: ["CHG-EXP", "CHG-PERS", "CHG-IMP", "CHG-FIN", "CHG-DOT", "CHG-HAO", "PRD-EXP", "PRD-FIN", "PRD-HAO", "IS"],
+    // Les dix groupes de gestion tant que l'exercice est ouvert, plus le compte 121000 une fois
+    // clos : la ligne présente le résultat dans les deux cas, sans changer de place au passif.
+    groupes: [
+      "CHG-EXP",
+      "CHG-PERS",
+      "CHG-IMP",
+      "CHG-FIN",
+      "CHG-DOT",
+      "CHG-HAO",
+      "PRD-EXP",
+      "PRD-FIN",
+      "PRD-HAO",
+      "IS",
+      "RESULTAT-CLOS"
+    ],
     sens: "passif"
   },
   {
@@ -495,10 +511,33 @@ function evaluerModele(
   return { lignes, valeurs };
 }
 
+/**
+ * Colonne « exercice précédent » d'un bilan.
+ *
+ * Elle n'existe que si un exercice est clos dans le dossier : un N-1 inventé, ou repris d'un
+ * exercice jamais clôturé, serait une fausse comparaison.
+ */
+export interface ColonnePrecedente {
+  exercice: number;
+  dateCloture: DateCivile;
+  actif: LigneEtat[];
+  passif: LigneEtat[];
+  totalActifNet: Montant;
+  totalPassif: Montant;
+  resultatExercice: Montant;
+}
+
+/** Balance de l'exercice précédent, déjà bornée à sa clôture. */
+export interface ExercicePrecedent {
+  exercice: number;
+  dateCloture: DateCivile;
+  balance: readonly LigneBalance[];
+}
+
 export function construireBilan(
   balance: readonly LigneBalance[],
   groupes: readonly GroupeDeComptes[],
-  options: { exercice: number; dateCloture: DateCivile }
+  options: { exercice: number; dateCloture: DateCivile; precedent: ExercicePrecedent | null }
 ): Bilan {
   const actif = evaluerModele(MODELE_BILAN_ACTIF, balance);
   const passif = evaluerModele(MODELE_BILAN_PASSIF, balance);
@@ -536,8 +575,32 @@ export function construireBilan(
         solde: ligne.solde,
         presente: ligne.solde
       })),
+    precedent: construireColonnePrecedente(options.precedent),
     // La mise en page de l'imprimé officiel n'a pas été relevée dans l'Acte uniforme.
     aVerifier: true
+  };
+}
+
+/**
+ * Évalue le même modèle sur la balance de l'exercice précédent.
+ *
+ * Un seul modèle, deux colonnes : si la colonne N-1 différait de la colonne N par sa composition, la
+ * comparaison n'aurait aucun sens.
+ */
+function construireColonnePrecedente(precedent: ExercicePrecedent | null): ColonnePrecedente | null {
+  if (precedent === null) {
+    return null;
+  }
+  const actif = evaluerModele(MODELE_BILAN_ACTIF, precedent.balance);
+  const passif = evaluerModele(MODELE_BILAN_PASSIF, precedent.balance);
+  return {
+    exercice: precedent.exercice,
+    dateCloture: precedent.dateCloture,
+    actif: actif.lignes,
+    passif: passif.lignes,
+    totalActifNet: actif.valeurs.get("TOTAL-ACTIF")!.net,
+    totalPassif: passif.valeurs.get("TOTAL-PASSIF")!.net,
+    resultatExercice: passif.valeurs.get("RESULTAT")!.net
   };
 }
 

@@ -70,6 +70,7 @@ const ligne = (montant: Montant, sens: "debit" | "credit"): Mouvement => ({
   ligneId: sens === "debit" ? "L1" : "L2",
   piece: sens === "debit" ? "FA-2026-001" : "RG-2026-001",
   date: "2026-04-12",
+  exercice: 2026,
   periode: 4,
   compte: "401100-FOU01",
   tiersCode: "FOU01",

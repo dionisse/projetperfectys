@@ -1,17 +1,17 @@
 /**
  * Bilan — États › Bilan OHADA révisé.
  *
- * Deux colonnes, comme l'imprimé : l'actif en brut, amortissements et net ; le passif en net. Le
+ * Deux masses, comme l'imprimé : l'actif en brut, amortissements et net ; le passif en net. Le
  * résultat de l'exercice figure au passif dans les capitaux propres — c'est ce qui rend le bilan
- * équilibré en cours d'année, avant toute clôture.
+ * équilibré en cours d'année, avant toute clôture. Une fois l'exercice clos, ce même résultat vient
+ * du compte 121000.
  *
- * Le contrôle d'équilibre est affiché en tête : un écart n'est jamais absorbé dans un total. Les
- * rubriques qu'aucun solde n'alimente sont annoncées, pour qu'un zéro ne se lise pas comme une
- * absence d'erreur.
+ * La colonne « N-1 » n'apparaît que si un exercice est clos dans le dossier : comparer l'exercice à
+ * un exercice qui n'existe pas serait une fausse comparaison.
  */
 
 import { useState } from "preact/hooks";
-import { formaterDateFr, type LigneEtat } from "../../noyau/index";
+import { formaterDateFr, type LigneEtat, type Montant } from "../../noyau/index";
 import { getService } from "../../web/noyau";
 import {
   ChargementEnCours,
@@ -23,7 +23,7 @@ import {
   type CelluleCsv
 } from "../composants";
 
-function ligne(ligneEtat: LigneEtat, colonnes: "actif" | "passif") {
+function ligne(ligneEtat: LigneEtat, colonnes: "actif" | "passif", precedent?: Montant) {
   return (
     <tr class={`niveau-${ligneEtat.niveau}`} key={ligneEtat.code}>
       <td>{ligneEtat.libelle}</td>
@@ -36,6 +36,7 @@ function ligne(ligneEtat: LigneEtat, colonnes: "actif" | "passif") {
         </>
       ) : null}
       <td class="align-droite mono">{montant(ligneEtat.net)}</td>
+      {precedent === undefined ? null : <td class="align-droite mono discret">{montant(precedent)}</td>}
     </tr>
   );
 }
@@ -43,18 +44,28 @@ function ligne(ligneEtat: LigneEtat, colonnes: "actif" | "passif") {
 export function BilanOhada() {
   const service = getService();
   const [periode, setPeriode] = useState<number | "exercice">("exercice");
+  const [exercice, setExercice] = useState<number | "courant">("courant");
 
   const { donnees, erreur, charge, recharger } = useAsync(
     async () => {
       const etat = await service.lire();
       const contexte = await service.contexte();
+      const exercices = await service.exercices();
       return {
         contexte,
-        bilan: await service.bilan(periode === "exercice" ? undefined : periode),
-        periodes: etat.exercice.periodes.filter((item) => item.type === "normale")
+        exercices,
+        bilan: await service.bilan(
+          periode === "exercice" ? undefined : periode,
+          exercice === "courant" ? undefined : exercice
+        ),
+        periodes: (
+          exercice === "courant"
+            ? etat.exercice
+            : exercices.find((item) => item.exercice.annee === exercice)?.exercice ?? etat.exercice
+        ).periodes.filter((item) => item.type === "normale")
       };
     },
-    [periode]
+    [periode, exercice]
   );
 
   if (erreur) {
@@ -67,8 +78,10 @@ export function BilanOhada() {
     return <ChargementEnCours libelle="Chargement du dossier…" />;
   }
 
-  const { contexte, bilan } = donnees;
+  const { contexte, bilan, exercices } = donnees;
   const equilibre = bilan.ecart === 0n;
+  const precedentActif = new Map((bilan.precedent?.actif ?? []).map((item) => [item.code, item.net] as const));
+  const precedentPassif = new Map((bilan.precedent?.passif ?? []).map((item) => [item.code, item.net] as const));
 
   const lignesCsv = (): (readonly CelluleCsv[])[] => [
     ["Bilan — SYSCOHADA révisé"],
@@ -76,13 +89,28 @@ export function BilanOhada() {
     ["Société", contexte.societe.raisonSociale],
     ["Exercice", bilan.exercice],
     ["Arrêté au", formaterDateFr(bilan.dateCloture)],
+    ["Exercice précédent", bilan.precedent ? `${bilan.precedent.exercice} (clos)` : "aucun exercice clos"],
     ["Devise", contexte.devise],
     [],
-    ["ACTIF", "Rubrique", "Brut", "Amortissements et dépréciations", "Net"],
-    ...bilan.actif.map((item) => [item.niveau, item.libelle, item.brut, item.amortissements, item.net]),
+    [
+      "ACTIF",
+      "Rubrique",
+      "Brut",
+      "Amortissements et dépréciations",
+      "Net",
+      bilan.precedent ? `Net ${bilan.precedent.exercice}` : "Net N-1"
+    ],
+    ...bilan.actif.map((item) => [
+      item.niveau,
+      item.libelle,
+      item.brut,
+      item.amortissements,
+      item.net,
+      precedentActif.get(item.code) ?? ""
+    ]),
     [],
-    ["PASSIF", "Rubrique", "Net"],
-    ...bilan.passif.map((item) => [item.niveau, item.libelle, item.net]),
+    ["PASSIF", "Rubrique", "Net", bilan.precedent ? `Net ${bilan.precedent.exercice}` : "Net N-1"],
+    ...bilan.passif.map((item) => [item.niveau, item.libelle, item.net, precedentPassif.get(item.code) ?? ""]),
     [],
     ["Total général de l'actif (net)", bilan.totalActifNet],
     ["Total général du passif", bilan.totalPassif],
@@ -101,6 +129,27 @@ export function BilanOhada() {
       } · ${contexte.societe.raisonSociale}`}
       actions={
         <>
+          {exercices.length > 1 ? (
+            <label class="champ-court">
+              Exercice
+              <select
+                value={exercice === "courant" ? "courant" : String(exercice)}
+                onChange={(evenement) => {
+                  const valeur = evenement.currentTarget.value;
+                  setExercice(valeur === "courant" ? "courant" : Number(valeur));
+                }}
+              >
+                <option value="courant">Exercice en cours ({contexte.exercice})</option>
+                {exercices
+                  .filter((item) => item.clos)
+                  .map((item) => (
+                    <option key={item.exercice.annee} value={item.exercice.annee}>
+                      {item.exercice.annee} — clos
+                    </option>
+                  ))}
+              </select>
+            </label>
+          ) : null}
           <label class="champ-court">
             Arrêté
             <select
@@ -110,7 +159,11 @@ export function BilanOhada() {
                 setPeriode(valeur === "exercice" ? "exercice" : Number(valeur));
               }}
             >
-              <option value="exercice">Clôture de l'exercice</option>
+              <option value="exercice">
+                {exercices.find((item) => item.exercice.annee === bilan.exercice)?.clos
+                  ? "Clôture de l'exercice"
+                  : "Situation à la clôture"}
+              </option>
               {donnees.periodes.map((item) => (
                 <option key={item.numero} value={item.numero}>
                   Fin de période {item.numero} — {item.libelle}
@@ -159,9 +212,14 @@ export function BilanOhada() {
                   <th class="align-droite">Brut</th>
                   <th class="align-droite">Amort. et dépréc.</th>
                   <th class="align-droite">Net</th>
+                  {bilan.precedent ? <th class="align-droite">N-1 ({bilan.precedent.exercice})</th> : null}
                 </tr>
               </thead>
-              <tbody>{bilan.actif.map((item) => ligne(item, "actif"))}</tbody>
+              <tbody>
+                {bilan.actif.map((item) =>
+                  ligne(item, "actif", bilan.precedent ? precedentActif.get(item.code) : undefined)
+                )}
+              </tbody>
             </table>
           </div>
         </div>
@@ -174,13 +232,31 @@ export function BilanOhada() {
                 <tr>
                   <th>Rubrique</th>
                   <th class="align-droite">Net</th>
+                  {bilan.precedent ? <th class="align-droite">N-1 ({bilan.precedent.exercice})</th> : null}
                 </tr>
               </thead>
-              <tbody>{bilan.passif.map((item) => ligne(item, "passif"))}</tbody>
+              <tbody>
+                {bilan.passif.map((item) =>
+                  ligne(item, "passif", bilan.precedent ? precedentPassif.get(item.code) : undefined)
+                )}
+              </tbody>
             </table>
           </div>
         </div>
       </div>
+
+      {bilan.precedent ? (
+        <p class="note">
+          Colonne N-1 : exercice {bilan.precedent.exercice}, clos le{" "}
+          {formaterDateFr(bilan.precedent.dateCloture)} — actif {montant(bilan.precedent.totalActifNet)}, passif{" "}
+          {montant(bilan.precedent.totalPassif)}, résultat {montant(bilan.precedent.resultatExercice)}.
+        </p>
+      ) : (
+        <p class="note">
+          Pas de colonne N-1 : aucun exercice n'est clos dans ce dossier. La comparaison n'apparaît
+          qu'après une clôture, parce qu'un exercice non clos n'a pas de bilan définitif à comparer.
+        </p>
+      )}
 
       {bilan.groupesSansSolde.length > 0 ? (
         <p class="note">
@@ -221,8 +297,7 @@ export function BilanOhada() {
         (actif immobilisé, actif circulant, trésorerie-actif ; capitaux propres, dettes stables,
         passif circulant, trésorerie-passif). La mise en page de l'imprimé officiel n'a pas été
         relevée dans l'Acte uniforme : cet état est un document de contrôle, à rapprocher du
-        formulaire de dépôt avant toute communication légale. La colonne « N-1 » apparaîtra avec la
-        gestion multi-exercices.
+        formulaire de dépôt avant toute communication légale.
       </p>
     </Fenetre>
   );

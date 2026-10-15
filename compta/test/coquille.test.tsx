@@ -128,7 +128,14 @@ describe("coquille Sage 100", () => {
     expect(entrees.map((entree) => entree.textContent)).toContain("Lots et comptabilisation…");
 
     const indisponibles = entrees.filter((entree) => entree.classList.contains("indisponible"));
-    expect(indisponibles.length).toBeGreaterThan(3);
+    // Il en reste : le rapprochement bancaire et les écritures récurrentes. Chaque entrée grisée
+    // porte la raison de son absence, jamais une tranche vide de sens.
+    expect(indisponibles.length).toBeGreaterThanOrEqual(2);
+    expect(indisponibles.every((entree) => (entree.getAttribute("title") ?? "").length > 10)).toBe(true);
+    // Ce qui est livré est un bouton : la clôture d'exercice et le lettrage ouvrent un écran.
+    const disponibles = entrees.filter((entree) => entree.tagName === "BUTTON").map((entree) => entree.textContent);
+    expect(disponibles).toContain("Clôture d'exercice…");
+    expect(disponibles).toContain("Clôture de période…");
     // Aucune entrée indisponible n'est un bouton : rien ne peut mener à un écran vide.
     expect(indisponibles.every((entree) => entree.tagName === "SPAN")).toBe(true);
     expect(indisponibles.every((entree) => entree.getAttribute("aria-disabled") === "true")).toBe(true);

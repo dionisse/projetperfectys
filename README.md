@@ -27,7 +27,7 @@ la même base.
 
 ```bash
 npm install            # installe l'espace de travail (compta)
-npm test               # 142 tests : noyau en Node, interface en jsdom
+npm test               # 156 tests : noyau en Node, interface en jsdom
 npm run typecheck      # TypeScript strict, sans émission
 npm run build          # build de production dans compta/dist
 npm run preview:vercel # sert le build comme le ferait Vercel, sur http://localhost:5173
@@ -55,6 +55,13 @@ npm run dev            # serveur de développement Vite
   choisi, complété du tiers quand il est connu.
 - **Brouillon conservé** : une saisie entamée survit à un changement d'écran (mémoire de session,
   par lot) ; elle est effacée à l'enregistrement ou sur demande explicite.
+- **Clôture d'exercice** (le *Create New Year* de Sage) : un **rapport de préparation** montre avant
+  toute écriture ce qui s'y oppose — périodes ouvertes, lots en attente, grand livre déséquilibré,
+  soldes initiaux posés dans le plan — et le contenu ligne à ligne des deux écritures qui seraient
+  passées. La clôture solde les comptes de gestion vers le compte 121000, reporte les comptes de
+  bilan **segment de tiers compris** au premier jour de l'exercice suivant, ouvre cet exercice avec
+  ses périodes, et archive l'exercice clos avec toutes ses périodes clôturées. Elle est définitive :
+  plus aucune écriture n'entre dans un exercice clos, et chaque exercice est consultable séparément.
 - **Lettrage des comptes de tiers** : situation compte par compte (solde comptable **et** solde non
   lettré, plus ancienne ligne non rapprochée), lignes à lettrer cochables, lettrage manuel d'une
   sélection, **lettrage automatique proposé avant d'être appliqué** (montants exactement égaux, un
@@ -70,7 +77,10 @@ npm run dev            # serveur de développement Vite
   1er janvier. L'équilibre du bilan est contrôlé et affiché en tête ; le compte de résultat vérifie
   que le résultat présenté égale la somme algébrique des comptes de gestion de la balance. Les deux
   écrans détaillent les comptes qui alimentent chaque rubrique, annoncent les rubriques qu'aucun
-  solde n'alimente et listent les comptes qui ne participent à aucun état.
+  solde n'alimente et listent les comptes qui ne participent à aucun état. Le bilan présente une
+  **colonne N-1** dès qu'un exercice est clos — et dit qu'il ne peut pas la produire tant qu'aucun
+  exercice ne l'est. Un exercice clos lit son résultat dans le compte 121000 ; le compte de résultat
+  ignore l'écriture de clôture, qui en est la conséquence et non un élément de l'activité.
 - **États** : **déclaration TVA mensuelle** recalculée depuis le grand livre — bases, taux, taxes,
   retenue de TVA sur marchés publics, crédit antérieur imputé, taxe nette à payer ou crédit à
   reporter — avec un **rapprochement compte par compte** entre ce que les codes de taxe produisent
@@ -78,8 +88,8 @@ npm run dev            # serveur de développement Vite
   est affiché en alerte, jamais absorbé dans un total. L'écran est un état de contrôle : il ne
   prétend pas reproduire l'imprimé officiel, dont la mise en page n'a pas été relevée dans le texte
   juridique.
-- **Export CSV** : le bilan, le compte de résultat, l'état de lettrage, la déclaration TVA, la
-  balance, le journal et le grand livre se téléchargent au
+- **Export CSV** : le bilan, le compte de résultat, le rapport de clôture, l'état de lettrage, la
+  déclaration TVA, la balance, le journal et le grand livre se téléchargent au
   format CSV (point-virgule, BOM UTF-8, fins de ligne CRLF — ce qu'Excel en français attend), dans
   ce que l'écran affiche, filtres compris. Excel et PDF suivent.
 - **Outils** : piste d'audit ajout-seulement, séquencée, attribuée et horodatée ; réinitialisation
@@ -91,12 +101,14 @@ npm run dev            # serveur de développement Vite
 Les entrées de menu correspondant à des fonctions non livrées sont **visibles, grisées, et portent
 la tranche qui les livrera** en infobulle. Elles ne sont pas cliquables : aucun lien mort, aucun
 écran vide. Rapprochement bancaire (le lettrage est livré ; le pointage d'un relevé suit),
-lettrage partiel d'un règlement à-compte, écritures récurrentes, clôture d'exercice avec
-report des à-nouveaux, interrogation d'un compte et historique, tableau des flux de trésorerie et
-tableau de variation des activités (le plan de démarrage ne porte aucun compte classé « flux de
-trésorerie » : l'entrée de menu le dit au lieu de produire un état vide), exports Excel et PDF,
-reversement des acomptes et retenues à la source, imports, habilitations par écran, sauvegarde et
-restauration. La colonne « N-1 » des états financiers attend la gestion multi-exercices.
+lettrage partiel d'un règlement à-compte, écritures récurrentes, **réouverture d'un exercice clos**
+(la clôture est définitive dans cette version : la correction d'un exercice clos passe par une
+écriture dans l'exercice en cours, et l'écran le dit), affectation du résultat décidée en assemblée
+(121000 vers 111000 ou 112000), interrogation d'un compte et historique, tableau des flux de
+trésorerie et tableau de variation des activités (le plan de démarrage ne porte aucun compte classé
+« flux de trésorerie » : l'entrée de menu le dit au lieu de produire un état vide), exports Excel et
+PDF, reversement des acomptes et retenues à la source, imports, habilitations par écran, sauvegarde
+et restauration.
 
 ## Décisions de conception
 
@@ -131,7 +143,11 @@ restauration. La colonne « N-1 » des états financiers attend la gestion multi
 11. **Une marque ne réécrit pas le grand livre.** Le lettrage rapproche des lignes déjà
     comptabilisées : il n'écrit aucun mouvement, ne modifie aucun solde, et se défait sans trace
     perdue. Un délettrage date la marque au lieu de la supprimer.
-12. **Le résultat de l'exercice est au passif avant la clôture.** Un bilan arrêté en cours d'année
+12. **La clôture se prépare avant de s'exécuter.** `preparerCloture` ne produit aucune écriture : il
+    décrit ce qui serait écrit et cite chaque obstacle. L'écran exige en plus une confirmation
+    explicite, parce qu'une clôture est définitive. Un exercice clos est archivé tel quel — ses
+    mouvements portent l'année de leur exercice, et aucune lecture ne mélange deux années.
+13. **Le résultat de l'exercice est au passif avant la clôture.** Un bilan arrêté en cours d'année
     n'est équilibré que parce que les comptes de gestion sont résumés dans les capitaux propres. La
     clôture remplacera ce solde par un compte 121000 mouvementé ; jusqu'alors, aucun état ne fait
     semblant qu'elle a eu lieu.

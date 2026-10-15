@@ -35,6 +35,14 @@ export interface Mouvement {
   ligneId: string;
   piece: string;
   date: DateCivile;
+  /**
+   * Année de l'exercice auquel le mouvement appartient.
+   *
+   * Sans elle, les mouvements d'un exercice clos se mêleraient à ceux de l'exercice courant dès la
+   * première clôture : les périodes portent le même numéro d'une année sur l'autre, et une date ne
+   * suffit pas à dire à quel exercice elle appartient quand un dossier en porte plusieurs.
+   */
+  exercice: number;
   /** Numéro de période de l'exercice. */
   periode: number;
   compte: string;
@@ -92,6 +100,8 @@ export interface FiltreMouvements {
   journalCode?: string;
   periode?: number;
   tiersCode?: string;
+  /** Année d'exercice. Sans elle, tous les exercices du dossier sont mélangés. */
+  exercice?: number;
 }
 
 export function filtrerMouvements(
@@ -104,6 +114,7 @@ export function filtrerMouvements(
     if (filtre.journalCode && mouvement.journalCode !== filtre.journalCode) return false;
     if (filtre.periode !== undefined && mouvement.periode !== filtre.periode) return false;
     if (filtre.tiersCode && mouvement.tiersCode !== filtre.tiersCode) return false;
+    if (filtre.exercice !== undefined && mouvement.exercice !== filtre.exercice) return false;
     return true;
   });
 }

@@ -27,18 +27,28 @@ import {
 export function CompteDeResultatOhada() {
   const service = getService();
   const [periode, setPeriode] = useState<number | "exercice">("exercice");
+  const [exercice, setExercice] = useState<number | "courant">("courant");
 
   const { donnees, erreur, charge, recharger } = useAsync(
     async () => {
       const etat = await service.lire();
       const contexte = await service.contexte();
+      const exercices = await service.exercices();
+      const cible =
+        exercice === "courant"
+          ? etat.exercice
+          : exercices.find((item) => item.exercice.annee === exercice)?.exercice ?? etat.exercice;
       return {
         contexte,
-        resultat: await service.compteDeResultat(periode === "exercice" ? undefined : periode),
-        periodes: etat.exercice.periodes.filter((item) => item.type === "normale")
+        exercices,
+        resultat: await service.compteDeResultat(
+          periode === "exercice" ? undefined : periode,
+          exercice === "courant" ? undefined : exercice
+        ),
+        periodes: cible.periodes.filter((item) => item.type === "normale")
       };
     },
-    [periode]
+    [periode, exercice]
   );
 
   if (erreur) {
@@ -51,8 +61,9 @@ export function CompteDeResultatOhada() {
     return <ChargementEnCours libelle="Chargement du dossier…" />;
   }
 
-  const { contexte, resultat } = donnees;
+  const { contexte, resultat, exercices } = donnees;
   const controleConforme = resultat.controle.ecart === 0n;
+  const exerciceClos = exercices.some((item) => item.clos && item.exercice.annee === resultat.exercice);
 
   const lignesCsv = (): (readonly CelluleCsv[])[] => [
     ["Compte de résultat — SYSCOHADA révisé"],
@@ -87,6 +98,27 @@ export function CompteDeResultatOhada() {
       )} · montants en ${contexte.devise} · ${contexte.societe.raisonSociale}`}
       actions={
         <>
+          {exercices.length > 1 ? (
+            <label class="champ-court">
+              Exercice
+              <select
+                value={exercice === "courant" ? "courant" : String(exercice)}
+                onChange={(evenement) => {
+                  const valeur = evenement.currentTarget.value;
+                  setExercice(valeur === "courant" ? "courant" : Number(valeur));
+                }}
+              >
+                <option value="courant">Exercice en cours ({contexte.exercice})</option>
+                {exercices
+                  .filter((item) => item.clos)
+                  .map((item) => (
+                    <option key={item.exercice.annee} value={item.exercice.annee}>
+                      {item.exercice.annee} — clos
+                    </option>
+                  ))}
+              </select>
+            </label>
+          ) : null}
           <label class="champ-court">
             Arrêté
             <select
@@ -159,8 +191,10 @@ export function CompteDeResultatOhada() {
       {controleConforme ? (
         <p class="retour succes" role="status">
           Contrôle conforme : le résultat présenté ({montant(resultat.controle.presente)}) égale la
-          somme algébrique des comptes de gestion de la balance. Il sera porté au compte 121000 —
-          Résultat de l'exercice — par la clôture, et non avant.
+          somme algébrique des comptes de gestion de la balance.{" "}
+          {exerciceClos
+            ? "L'exercice est clos : ce résultat a été porté au compte 121000 par l'écriture de clôture, que cet état ne compte pas — elle est la conséquence du résultat, pas un élément de l'activité."
+            : "Il sera porté au compte 121000 — Résultat de l'exercice — par la clôture, et non avant."}
         </p>
       ) : (
         <div class="bloc avertissement">

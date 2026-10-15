@@ -29,7 +29,7 @@ import {
   type Exercice
 } from "./calendrier";
 import { compteDepuisPlan, decouperNumero, type Compte, type CompteDuPlan } from "./comptes";
-import type { Referentiel } from "./referentiels/syscohada";
+import { COMPTE_RESULTAT_EXERCICE, type Referentiel } from "./referentiels/syscohada";
 import { normaliserTiers, type Tiers, type TypeTiers } from "./tiers";
 import {
   CODES_SOURCE,
@@ -50,8 +50,15 @@ import {
   construireBilan,
   construireCompteDeResultat,
   type Bilan,
-  type CompteDeResultat
+  type CompteDeResultat,
+  type ExercicePrecedent
 } from "./etats-financiers";
+import {
+  preparerCloture as preparerRapportDeCloture,
+  verifierCloture,
+  type LignePrevue,
+  type RapportDeCloture
+} from "./cloture";
 import {
   codeDeLettrageSuivant,
   mouvementsALettrer,
@@ -103,6 +110,23 @@ export interface EvenementAudit {
   detail: string;
 }
 
+/** Un exercice clos, avec ce que la clôture y a produit. */
+export interface ExerciceClos {
+  /** L'exercice tel qu'il était au moment de la clôture : toutes ses périodes sont clôturées. */
+  exercice: Exercice;
+  clotureLe: string;
+  cloturePar: string;
+  /** Résultat porté au compte 121000, positif pour un bénéfice. */
+  resultat: Montant;
+  /** Lot contenant l'écriture de solde des comptes de gestion — `null` si le résultat est nul. */
+  lotClotureId: string | null;
+  /** Lot d'à-nouveaux de l'exercice suivant — `null` si aucun compte de bilan n'est reporté. */
+  lotANouveauxId: string | null;
+  totalActif: Montant;
+  totalPassif: Montant;
+  nombreDANouveaux: number;
+}
+
 export interface EtatDossier {
   /** Version du format d'état : une migration l'augmentera, jamais une réécriture silencieuse. */
   version: number;
@@ -121,6 +145,13 @@ export interface EtatDossier {
    * compte de tiers reste reconstituable.
    */
   lettrages: Lettrage[];
+  /**
+   * Exercices clos, du plus ancien au plus récent.
+   *
+   * Un exercice clos ne se rouvre pas : ses mouvements, ses lots et son résultat sont figés, et la
+   * colonne « N-1 » des états financiers s'appuie sur eux.
+   */
+  exercicesClos: ExerciceClos[];
   sequencesLots: Record<string, number>;
   sequencesEcritures: Record<string, number>;
   audit: EvenementAudit[];
@@ -145,6 +176,8 @@ export interface ContexteDossier {
   lotsComptabilises: number;
   mouvements: number;
   equilibre: boolean;
+  /** Nombre d'exercices clos archivés dans le dossier. */
+  exercicesClos: number;
 }
 
 export interface DemandeLot {
@@ -248,7 +281,8 @@ export class ServiceComptable {
       lots: etat.lots.length,
       lotsComptabilises: etat.lots.filter((lot) => lot.etat === "comptabilise").length,
       mouvements: etat.mouvements.length,
-      equilibre: verifierEquilibre(etat.mouvements).equilibre
+      equilibre: verifierEquilibre(etat.mouvements).equilibre,
+      exercicesClos: etat.exercicesClos.length
     };
   }
 
@@ -283,14 +317,20 @@ export class ServiceComptable {
     });
   }
 
+  /**
+   * Balance de l'exercice courant, sauf filtre contraire.
+   *
+   * « Toutes périodes » veut dire toutes les périodes **de l'exercice** : après une clôture, les
+   * mouvements de l'exercice précédent ne doivent pas se mêler à ceux de l'exercice ouvert.
+   */
   async balance(filtre: FiltreMouvements = {}): Promise<LigneBalance[]> {
     const etat = await this.#stockage.lire();
-    return construireBalance(etat.mouvements, etat.comptes, filtre);
+    return construireBalance(etat.mouvements, etat.comptes, { exercice: etat.exercice.annee, ...filtre });
   }
 
   async journal(filtre: FiltreMouvements = {}): Promise<PieceDeJournal[]> {
     const etat = await this.#stockage.lire();
-    return construireJournal(etat.mouvements, filtre);
+    return construireJournal(etat.mouvements, { exercice: etat.exercice.annee, ...filtre });
   }
 
   /**
@@ -299,31 +339,34 @@ export class ServiceComptable {
    * `periode` borne l'état à la fin de cette période, en cumul depuis l'ouverture de l'exercice :
    * un bilan intermédiaire n'est pas la balance d'un mois, c'est la situation à la fin du mois.
    */
-  async bilan(periode?: number): Promise<Bilan> {
+  async bilan(periode?: number, exercice?: number): Promise<Bilan> {
     const etat = await this.#stockage.lire();
-    const borne = periode === undefined ? null : periodeParNumero(etat.exercice, periode);
+    const cible = this.#exerciceDemande(etat, exercice);
+    const borne = periode === undefined ? null : periodeParNumero(cible, periode);
     const filtre: FiltreMouvements = borne
-      ? { du: etat.exercice.dateDebut, au: borne.dateFin }
-      : {};
+      ? { exercice: cible.annee, du: cible.dateDebut, au: borne.dateFin }
+      : { exercice: cible.annee };
     const balance = construireBalance(etat.mouvements, etat.comptes, filtre);
     return construireBilan(balance, this.#paquet.referentiel.groupes, {
-      exercice: etat.exercice.annee,
-      dateCloture: borne ? borne.dateFin : etat.exercice.dateFin
+      exercice: cible.annee,
+      dateCloture: borne ? borne.dateFin : cible.dateFin,
+      precedent: this.#exercicePrecedent(etat, cible)
     });
   }
 
   /** Compte de résultat, en cumul depuis l'ouverture de l'exercice jusqu'à la période demandée. */
-  async compteDeResultat(periode?: number): Promise<CompteDeResultat> {
+  async compteDeResultat(periode?: number, exercice?: number): Promise<CompteDeResultat> {
     const etat = await this.#stockage.lire();
-    const borne = periode === undefined ? null : periodeParNumero(etat.exercice, periode);
+    const cible = this.#exerciceDemande(etat, exercice);
+    const borne = periode === undefined ? null : periodeParNumero(cible, periode);
     const filtre: FiltreMouvements = borne
-      ? { du: etat.exercice.dateDebut, au: borne.dateFin }
-      : {};
-    const balance = construireBalance(etat.mouvements, etat.comptes, filtre);
+      ? { exercice: cible.annee, du: cible.dateDebut, au: borne.dateFin }
+      : { exercice: cible.annee };
+    const balance = construireBalance(this.#mouvementsHorsCloture(etat), etat.comptes, filtre);
     return construireCompteDeResultat(balance, {
-      exercice: etat.exercice.annee,
-      dateDebut: etat.exercice.dateDebut,
-      dateFin: borne ? borne.dateFin : etat.exercice.dateFin
+      exercice: cible.annee,
+      dateDebut: cible.dateDebut,
+      dateFin: borne ? borne.dateFin : cible.dateFin
     });
   }
 
@@ -334,11 +377,18 @@ export class ServiceComptable {
   async declarationTva(periode?: number): Promise<DeclarationTva> {
     const etat = await this.#stockage.lire();
     const numero = periode ?? this.#periodeCourante(etat).numero;
-    return construireDeclarationTva(etat.mouvements, etat.comptes, this.#paquet, etat.exercice, numero);
+    return construireDeclarationTva(
+      etat.mouvements.filter((mouvement) => mouvement.exercice === etat.exercice.annee),
+      etat.comptes,
+      this.#paquet,
+      etat.exercice,
+      numero
+    );
   }
 
   async grandLivre(compte: string, filtre: FiltreMouvements = {}): Promise<LigneGrandLivre[]> {
     const etat = await this.#stockage.lire();
+    filtre = { exercice: etat.exercice.annee, ...filtre };
     const resolu = this.#resoudreCompte(etat, compte);
     if (!resolu) {
       throw new ErreurRegle(`Le compte « ${compte} » n'existe pas dans le plan du dossier.`);
@@ -607,6 +657,7 @@ export class ServiceComptable {
             ligneId: ligne.id,
             piece: ecriture.piece,
             date: ecriture.date,
+            exercice: etat.exercice.annee,
             periode: periode.numero,
             compte: resolu.numero,
             tiersCode: ligne.tiersCode ?? resolu.auxiliaire,
@@ -941,6 +992,300 @@ export class ServiceComptable {
   }
 
   /* ---------------------------------------------------------------- */
+  /* Multi-exercices et clôture                                        */
+  /* ---------------------------------------------------------------- */
+
+  /** Exercices du dossier, clos puis courant. */
+  async exercices(): Promise<{ exercice: Exercice; clos: boolean; resultat: Montant | null }[]> {
+    const etat = await this.#stockage.lire();
+    return [
+      ...etat.exercicesClos.map((clos) => ({
+        exercice: clos.exercice,
+        clos: true,
+        resultat: clos.resultat
+      })),
+      { exercice: etat.exercice, clos: false, resultat: null }
+    ];
+  }
+
+  /**
+   * Prépare la clôture de l'exercice courant.
+   *
+   * Rien n'est écrit : le rapport dit ce qui serait écrit — le solde des comptes de gestion vers le
+   * compte 121000, et les à-nouveaux de l'exercice suivant — et ce qui s'y oppose.
+   */
+  async preparerCloture(): Promise<RapportDeCloture> {
+    const etat = await this.#stockage.lire();
+    return this.#rapportDeCloture(etat);
+  }
+
+  /**
+   * Clôture l'exercice courant et ouvre le suivant.
+   *
+   * Trois effets, en une seule opération atomique : l'écriture de solde des comptes de gestion dans
+   * la période de clôture, le lot d'à-nouveaux au premier jour de l'exercice suivant, et le
+   * basculement du dossier sur cet exercice. L'exercice clos est archivé avec toutes ses périodes
+   * clôturées : plus aucune écriture ne peut y entrer.
+   *
+   * Une clôture refusée ne laisse aucune trace : soit les trois effets ont lieu, soit aucun.
+   */
+  async cloturerExercice(): Promise<{ clos: ExerciceClos; suivant: Exercice }> {
+    return this.#muter((etat) => {
+      const rapport = this.#rapportDeCloture(etat);
+      verifierCloture(rapport);
+
+      const exerciceClos = etat.exercice;
+      const periodeDeCloture = rapport.periodeDeCloture;
+      if (!periodeDeCloture) {
+        throw new ErreurRegle("L'exercice ne comporte pas de période de clôture.");
+      }
+      const horodate = this.#horloge().toISOString();
+
+      const cloture = this.#poserLotDeCloture(etat, {
+        journalCode: "OD",
+        exercice: exerciceClos,
+        periodeNumero: periodeDeCloture.numero,
+        date: periodeDeCloture.dateFin,
+        libelle: `Clôture de l'exercice ${exerciceClos.annee}`,
+        piece: `CL-${exerciceClos.annee}-0001`,
+        codeSource: "CLOTURE",
+        lignes: rapport.lignesDeCloture
+      });
+
+      const suivant = creerExercice(exerciceClos.annee + 1, exerciceClos.moisDeDepart);
+      const premiere = suivant.periodes[0];
+      if (!premiere) {
+        throw new ErreurRegle("Le nouvel exercice n'a aucune période.");
+      }
+      const anouveaux = this.#poserLotDeCloture(etat, {
+        journalCode: "AN",
+        exercice: suivant,
+        periodeNumero: premiere.numero,
+        date: suivant.dateDebut,
+        libelle: `À-nouveaux de l'exercice ${suivant.annee}`,
+        piece: `AN-${suivant.annee}-0001`,
+        codeSource: "ANOUVEAU",
+        lignes: rapport.lignesDANouveaux
+      });
+
+      const archive: Exercice = {
+        ...exerciceClos,
+        periodes: exerciceClos.periodes.map((periode) => ({ ...periode, clots: true }))
+      };
+      const clos: ExerciceClos = {
+        exercice: archive,
+        clotureLe: horodate,
+        cloturePar: this.#utilisateur,
+        resultat: rapport.resultat,
+        lotClotureId: cloture?.lot.id ?? null,
+        lotANouveauxId: anouveaux?.lot.id ?? null,
+        totalActif: rapport.totalActif,
+        totalPassif: rapport.totalPassif,
+        nombreDANouveaux: rapport.lignesDANouveaux.length
+      };
+      etat.exercicesClos.push(clos);
+      etat.exercice = suivant;
+
+      this.#tracer(
+        etat,
+        "Exercice clôturé",
+        "Exercice",
+        String(exerciceClos.annee),
+        `Résultat ${formatMontant(rapport.resultat, this.#paquet.devise)} porté au compte ${COMPTE_RESULTAT_EXERCICE} · ${
+          rapport.lignesDeCloture.length
+        } lignes de clôture · ${cloture ? `lot ${cloture.lot.numero}` : "aucune écriture de clôture nécessaire"}`
+      );
+      this.#tracer(
+        etat,
+        "À-nouveaux créés",
+        "Exercice",
+        String(suivant.annee),
+        `${rapport.lignesDANouveaux.length} compte${
+          rapport.lignesDANouveaux.length > 1 ? "s" : ""
+        } reporté${rapport.lignesDANouveaux.length > 1 ? "s" : ""} · ${
+          anouveaux ? `lot ${anouveaux.lot.numero} du ${formaterDateFr(suivant.dateDebut)}` : "aucun à-nouveau"
+        }`
+      );
+      return { clos, suivant };
+    });
+  }
+
+  #rapportDeCloture(etat: EtatDossier): RapportDeCloture {
+    return preparerRapportDeCloture({
+      exercice: etat.exercice,
+      mouvements: etat.mouvements,
+      comptes: etat.comptes,
+      groupes: this.#paquet.referentiel.groupes,
+      structure: this.#paquet.referentiel.structure,
+      lots: etat.lots,
+      compteDeResultat: COMPTE_RESULTAT_EXERCICE,
+      devise: this.#paquet.devise,
+      exercicesClos: etat.exercicesClos.map((clos) => clos.exercice.annee)
+    });
+  }
+
+  /**
+   * Pose un lot et son écriture, déjà comptabilisés, sans passer par la saisie.
+   *
+   * Réservé à la clôture : les écritures produites sont la conséquence mécanique des soldes, pas une
+   * saisie. Un lot sans ligne n'est pas créé — une écriture vide n'a pas de sens.
+   */
+  #poserLotDeCloture(
+    etat: EtatDossier,
+    demande: {
+      journalCode: string;
+      exercice: Exercice;
+      periodeNumero: number;
+      date: DateCivile;
+      libelle: string;
+      piece: string;
+      codeSource: string;
+      lignes: readonly LignePrevue[];
+    }
+  ): { lot: Lot; mouvements: Mouvement[] } | null {
+    if (demande.lignes.length === 0) {
+      return null;
+    }
+    const journal = etat.journaux.find((item) => item.code === demande.journalCode.toUpperCase());
+    if (!journal) {
+      throw new ErreurRegle(
+        `Le journal « ${demande.journalCode} » n'existe pas dans le dossier : la clôture ne peut pas être écrite.`
+      );
+    }
+
+    const sequence = (etat.sequencesLots[journal.code] ?? 0) + 1;
+    etat.sequencesLots[journal.code] = sequence;
+    const sequenceEcriture = (etat.sequencesEcritures[journal.code] ?? 0) + 1;
+    etat.sequencesEcritures[journal.code] = sequenceEcriture;
+
+    const lotIdentifiant = `LOT-${demande.exercice.annee}-${journal.code}-${sequence}`;
+    const ecritureIdentifiant = `${lotIdentifiant}-E1`;
+    const horodate = this.#horloge().toISOString();
+
+    const lignes: LigneEcriture[] = demande.lignes.map((prevue, index) => ({
+      id: `${ecritureIdentifiant}-L${index + 1}`,
+      compte: prevue.compte,
+      libelle: prevue.libelle,
+      debit: prevue.debit,
+      credit: prevue.credit,
+      codesTaxe: [],
+      tiersCode: prevue.tiersCode,
+      echeance: null
+    }));
+
+    const ecriture: Ecriture = {
+      id: ecritureIdentifiant,
+      numero: `${journal.prefixeLot}-${sequenceEcriture.toString().padStart(5, "0")}`,
+      piece: demande.piece,
+      date: demande.date,
+      libelle: demande.libelle,
+      etat: "comptabilisee",
+      lignes,
+      origine: null
+    };
+    const lot: Lot = {
+      id: lotIdentifiant,
+      numero: `${journal.prefixeLot}${sequence.toString().padStart(4, "0")}`,
+      journalCode: journal.code,
+      date: demande.date,
+      libelle: demande.libelle,
+      codeSource: demande.codeSource,
+      etat: "comptabilise",
+      ecritures: [ecriture],
+      comptabiliseLe: horodate,
+      comptabilisePar: this.#utilisateur,
+      contrePasseLe: null,
+      origine: null
+    };
+    etat.lots.push(lot);
+
+    const mouvements: Mouvement[] = lignes.map((ligne) => ({
+      lotId: lot.id,
+      lotNumero: lot.numero,
+      journalCode: lot.journalCode,
+      ecritureId: ecriture.id,
+      ecritureNumero: ecriture.numero,
+      ligneId: ligne.id,
+      piece: ecriture.piece,
+      date: ecriture.date,
+      exercice: demande.exercice.annee,
+      periode: demande.periodeNumero,
+      compte: ligne.compte,
+      tiersCode: ligne.tiersCode,
+      libelle: ligne.libelle,
+      debit: ligne.debit,
+      credit: ligne.credit,
+      codesTaxe: [],
+      comptabiliseLe: horodate
+    }));
+
+    // Une écriture de clôture déséquilibrée serait une faute du producteur, pas de l'utilisateur :
+    // elle est refusée ici plutôt que découverte dans un état.
+    const equilibre = verifierEquilibre(mouvements);
+    if (!equilibre.equilibre) {
+      throw new ErreurRegle(
+        `Le lot ${lot.numero} produit par la clôture n'est pas équilibré : débit ${formatMontant(
+          equilibre.totalDebit,
+          this.#paquet.devise
+        )}, crédit ${formatMontant(equilibre.totalCredit, this.#paquet.devise)}.`
+      );
+    }
+
+    etat.mouvements.push(...mouvements);
+    return { lot, mouvements };
+  }
+
+  /**
+   * Mouvements du dossier, écritures de clôture exceptées.
+   *
+   * L'écriture de clôture solde les comptes de gestion vers le compte 121000 : l'inclure dans un
+   * compte de résultat reviendrait à annoncer un résultat nul pour un exercice clos. Elle est la
+   * conséquence du résultat, pas un élément de l'activité. Le bilan, lui, l'inclut — c'est elle qui
+   * porte le résultat dans les capitaux propres d'un exercice clos.
+   */
+  #mouvementsHorsCloture(etat: EtatDossier): Mouvement[] {
+    const lotsDeCloture = new Set(
+      etat.lots.filter((lot) => lot.codeSource === "CLOTURE").map((lot) => lot.id)
+    );
+    if (lotsDeCloture.size === 0) {
+      return etat.mouvements;
+    }
+    return etat.mouvements.filter((mouvement) => !lotsDeCloture.has(mouvement.lotId));
+  }
+
+  /** Résout l'exercice demandé : le courant, ou un exercice clos du dossier. */
+  #exerciceDemande(etat: EtatDossier, exercice?: number): Exercice {
+    if (exercice === undefined || exercice === etat.exercice.annee) {
+      return etat.exercice;
+    }
+    const clos = etat.exercicesClos.find((item) => item.exercice.annee === exercice);
+    if (!clos) {
+      const disponibles = [...etat.exercicesClos.map((item) => item.exercice.annee), etat.exercice.annee];
+      throw new ErreurRegle(
+        `L'exercice ${exercice} n'existe pas dans ce dossier. Exercices disponibles : ${disponibles.join(", ")}.`
+      );
+    }
+    return clos.exercice;
+  }
+
+  /**
+   * Balance de l'exercice précédent, pour la colonne N-1.
+   *
+   * `null` quand aucun exercice n'est clos : un N-1 inventé serait une fausse comparaison.
+   */
+  #exercicePrecedent(etat: EtatDossier, cible: Exercice): ExercicePrecedent | null {
+    const clos = etat.exercicesClos.find((item) => item.exercice.annee === cible.annee - 1);
+    if (!clos) {
+      return null;
+    }
+    return {
+      exercice: clos.exercice.annee,
+      dateCloture: clos.exercice.dateFin,
+      balance: construireBalance(etat.mouvements, etat.comptes, { exercice: clos.exercice.annee })
+    };
+  }
+
+  /* ---------------------------------------------------------------- */
   /* Internes                                                          */
   /* ---------------------------------------------------------------- */
 
@@ -1243,6 +1588,7 @@ export function creerDossierDemonstration(options?: {
     lots: [],
     mouvements: [],
     lettrages: [],
+    exercicesClos: [],
     sequencesLots: {},
     sequencesEcritures: {},
     audit: []
@@ -1298,6 +1644,7 @@ export function creerDossierDemonstration(options?: {
       ligneId: item.id,
       piece: ecriture.piece,
       date: ecriture.date,
+      exercice: etat.exercice.annee,
       periode: periode.numero,
       compte: item.compte,
       tiersCode: item.tiersCode,
@@ -1348,8 +1695,13 @@ function ligne(
 /* ------------------------------------------------------------------ */
 
 export interface EtatDossierSerialise
-  extends Omit<EtatDossier, "mouvements" | "comptes" | "lots" | "lettrages"> {
+  extends Omit<EtatDossier, "mouvements" | "comptes" | "lots" | "lettrages" | "exercicesClos"> {
   lettrages: (Omit<Lettrage, "montant"> & { montant: string })[];
+  exercicesClos: (Omit<ExerciceClos, "resultat" | "totalActif" | "totalPassif"> & {
+    resultat: string;
+    totalActif: string;
+    totalPassif: string;
+  })[];
   comptes: (Omit<Compte, "soldeInitial"> & { soldeInitial: string })[];
   lots: (Omit<Lot, "ecritures"> & {
     ecritures: (Omit<Ecriture, "lignes"> & {
@@ -1379,7 +1731,13 @@ export function serialiserEtat(etat: EtatDossier): EtatDossierSerialise {
       debit: montantVersChaine(mouvement.debit),
       credit: montantVersChaine(mouvement.credit)
     })),
-    lettrages: etat.lettrages.map((lettrage) => ({ ...lettrage, montant: montantVersChaine(lettrage.montant) }))
+    lettrages: etat.lettrages.map((lettrage) => ({ ...lettrage, montant: montantVersChaine(lettrage.montant) })),
+    exercicesClos: etat.exercicesClos.map((clos) => ({
+      ...clos,
+      resultat: montantVersChaine(clos.resultat),
+      totalActif: montantVersChaine(clos.totalActif),
+      totalPassif: montantVersChaine(clos.totalPassif)
+    }))
   };
 }
 
@@ -1403,7 +1761,13 @@ export function deserialiserEtat(brut: EtatDossierSerialise): EtatDossier {
       debit: montantDepuisChaine(mouvement.debit),
       credit: montantDepuisChaine(mouvement.credit)
     })),
-    lettrages: brut.lettrages.map((lettrage) => ({ ...lettrage, montant: montantDepuisChaine(lettrage.montant) }))
+    lettrages: brut.lettrages.map((lettrage) => ({ ...lettrage, montant: montantDepuisChaine(lettrage.montant) })),
+    exercicesClos: brut.exercicesClos.map((clos) => ({
+      ...clos,
+      resultat: montantDepuisChaine(clos.resultat),
+      totalActif: montantDepuisChaine(clos.totalActif),
+      totalPassif: montantDepuisChaine(clos.totalPassif)
+    }))
   };
 }
 
