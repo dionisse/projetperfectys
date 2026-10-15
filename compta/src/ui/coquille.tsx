@@ -32,6 +32,7 @@ import { Journaux } from "./ecrans/journaux";
 import { Tiers } from "./ecrans/tiers";
 import { CodesTaxe } from "./ecrans/codes-taxe";
 import { Lots } from "./ecrans/lots";
+import { Saisie } from "./ecrans/saisie";
 import { Balance } from "./ecrans/balance";
 import { Journal } from "./ecrans/journal";
 import { GrandLivre } from "./ecrans/grand-livre";
@@ -127,13 +128,13 @@ export function Coquille() {
     {
       titre: "Traitements",
       entrees: [
+        { label: "Saisie des écritures…", href: "/traitements/saisie", raccourci: "F4" },
         { label: "Lots et comptabilisation…", href: "/traitements/lots" },
-        { label: "Saisie des écritures", indisponible: "Table de détail navigable au clavier : prochain incrément" },
         { label: "Contre-passation d'un lot", href: "/traitements/lots" },
         { label: "", indisponible: "", separation: true },
         { label: "Lettrage des comptes de tiers", indisponible: "Lettrage : tranche F" },
         { label: "Rapprochement bancaire", indisponible: "Rapprochement : tranche F" },
-        { label: "Écritures récurrentes", indisponible: "Abonnements : après la saisie" },
+        { label: "Écritures récurrentes", indisponible: "Abonnements : après les clôtures de période" },
         { label: "Clôture de période", indisponible: "Le noyau verrouille déjà les périodes ; l'écran arrive avec les clôtures (tranche G)" },
         { label: "Clôture d'exercice", indisponible: "Création d'exercice et à-nouveaux : tranche G" }
       ]
@@ -192,7 +193,9 @@ export function Coquille() {
     }
   ];
 
-  // Raccourcis conservés : F2 ouvre les tiers, F3 la recherche de comptes.
+  // Raccourcis conservés du logiciel d'origine : F2 les tiers, F3 la recherche de comptes,
+  // F4 la saisie. F4 ne relance pas l'écran s'il est déjà affiché : une saisie en cours ne se
+  // jette pas par accident.
   useEffect(() => {
     function clavier(event: KeyboardEvent) {
       if (event.key === "F2") {
@@ -201,6 +204,11 @@ export function Coquille() {
       } else if (event.key === "F3") {
         event.preventDefault();
         naviguer("/structure/plan");
+      } else if (event.key === "F4") {
+        event.preventDefault();
+        if (routeCourante() !== "/traitements/saisie") {
+          naviguer("/traitements/saisie");
+        }
       }
     }
     window.addEventListener("keydown", clavier);
@@ -360,6 +368,8 @@ function ecranPour(route: string, recharger: () => void): ComponentChildren {
       return <Tiers />;
     case "/structure/codes-taxe":
       return <CodesTaxe />;
+    case "/traitements/saisie":
+      return <Saisie onMutation={recharger} />;
     case "/traitements/lots":
       return <Lots onMutation={recharger} />;
     case "/interrogation/balance":

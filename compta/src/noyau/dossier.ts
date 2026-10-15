@@ -418,6 +418,87 @@ export class ServiceComptable {
   }
 
   /**
+   * Modifie l'en-tête d'un lot encore en saisie : date, libellé, code source.
+   *
+   * Un lot prêt, comptabilisé ou contre-passé ne se modifie pas. La date reste soumise au contrôle
+   * de période : on ne déplace pas un lot vers une période clôturée pour échapper au verrou.
+   */
+  async modifierLot(
+    lotIdentifiant: string,
+    demande: { date?: DateCivile; libelle?: string; codeSource?: string }
+  ): Promise<Lot> {
+    return this.#muter(async (etat) => {
+      const lot = this.#trouverLot(etat, lotIdentifiant);
+      if (lot.etat !== "ouvert") {
+        throw new ErreurRegle(
+          `Le lot ${lot.numero} est ${lot.etat} : son en-tête ne se modifie plus.` +
+            (lot.etat === "comptabilise" ? " Une erreur se corrige par contre-passation." : "")
+        );
+      }
+      if (demande.date !== undefined) {
+        periodeDeDate(etat.exercice, demande.date);
+        if (!this.#periodeOuverte(etat, demande.date)) {
+          throw new ErreurRegle(
+            `La période du ${formaterDateFr(demande.date)} est clôturée : le lot ne peut pas y être déplacé.`
+          );
+        }
+        lot.date = demande.date;
+      }
+      if (demande.libelle !== undefined) {
+        const libelle = demande.libelle.trim();
+        if (libelle === "") {
+          throw new ErreurRegle("Le libellé du lot est obligatoire.");
+        }
+        lot.libelle = libelle;
+      }
+      if (demande.codeSource !== undefined) {
+        const codeSource = demande.codeSource.toUpperCase();
+        if (!CODES_SOURCE.some((source) => source.code === codeSource)) {
+          throw new ErreurRegle(`Code source inconnu : « ${demande.codeSource} ».`);
+        }
+        lot.codeSource = codeSource;
+      }
+      this.#tracer(etat, "Lot modifié", "Lot", lot.id, lot.numero);
+      return lot;
+    });
+  }
+
+  /**
+   * Retire une écriture en brouillon d'un lot encore en saisie.
+   *
+   * Une écriture comptabilisée ne se retire pas — elle appartient au grand livre. La supprimer
+   * d'un lot ouvert n'est pas une correction comptable, c'est une reprise de saisie.
+   */
+  async supprimerEcriture(lotIdentifiant: string, ecritureIdentifiant: string): Promise<Lot> {
+    return this.#muter(async (etat) => {
+      const lot = this.#trouverLot(etat, lotIdentifiant);
+      if (lot.etat !== "ouvert") {
+        throw new ErreurRegle(
+          `Le lot ${lot.numero} est ${lot.etat} : aucune écriture ne peut en être retirée.`
+        );
+      }
+      const ecriture = lot.ecritures.find((item) => item.id === ecritureIdentifiant);
+      if (!ecriture) {
+        throw new ErreurRegle("L'écriture demandée n'existe pas dans ce lot.");
+      }
+      if (ecriture.etat !== "brouillon") {
+        throw new ErreurRegle(
+          `L'écriture ${ecriture.piece} est ${ecriture.etat} : elle ne se retire pas du lot.`
+        );
+      }
+      lot.ecritures = lot.ecritures.filter((item) => item.id !== ecritureIdentifiant);
+      this.#tracer(
+        etat,
+        "Écriture retirée du lot",
+        "Ecriture",
+        ecriture.id,
+        `${lot.numero} / ${ecriture.piece}`
+      );
+      return lot;
+    });
+  }
+
+  /**
    * Comptabilise un lot : atomique. Toutes les écritures sont vérifiées, puis les mouvements sont
    * ajoutés au grand livre et le lot passe à l'état comptabilisé. Un échec laisse le dossier
    * exactement comme avant.

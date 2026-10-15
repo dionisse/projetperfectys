@@ -118,6 +118,7 @@ export {
   codeTaxeApplicable,
   codesTaxeApplicables,
   ligneTaxeAttendue,
+  proposerLignesDeTaxe,
   verifierLignesTaxees,
   type BaseTaxe,
   type CalculTaxe,

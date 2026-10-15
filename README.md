@@ -27,7 +27,7 @@ la même base.
 
 ```bash
 npm install            # installe l'espace de travail (compta)
-npm test               # 56 tests : noyau en Node, interface en jsdom
+npm test               # 81 tests : noyau en Node, interface en jsdom
 npm run typecheck      # TypeScript strict, sans émission
 npm run build          # build de production dans compta/dist
 npm run preview:vercel # sert le build comme le ferait Vercel, sur http://localhost:5173
@@ -42,9 +42,19 @@ npm run dev            # serveur de développement Vite
 - **Structure** : plan comptable segmenté et filtrable (55 comptes, 10 classes, 22 groupes
   d'états), journaux, fichier des tiers avec les codes de taxe applicables à chaque tiers, codes
   de taxe et impôts annuels du paquet pays.
-- **Traitements** : ouverture d'un lot, marquage « prêt à comptabiliser », comptabilisation
-  atomique, remise en saisie, suppression d'un lot non comptabilisé, **contre-passation** d'un lot
-  comptabilisé (l'original reste intact).
+- **Traitements** : **saisie des écritures en table de détail** (grille navigable au clavier,
+  compte segmenté et tiers synchronisés, libellé pré-rempli depuis le plan, échéance par ligne),
+  ouverture d'un lot, modification de son en-tête, marquage « prêt à comptabiliser »,
+  comptabilisation atomique, remise en saisie, retrait d'une écriture en brouillon, suppression
+  d'un lot non comptabilisé, **contre-passation** d'un lot comptabilisé (l'original reste intact).
+- **Taxes en saisie** : l'utilisateur coche les codes de taxe applicables à l'opération — la liste
+  dépend du journal, du tiers et de l'exportation — et le noyau **calcule et affiche** les lignes de
+  taxe correspondantes, dans le bon sens (une retenue à la source va à l'inverse de la charge).
+  Elles apparaissent dans la grille, marquées comme générées, et restent modifiables : rien n'est
+  inséré en silence à la comptabilisation. L'équilibrage propose la contrepartie sur un compte
+  choisi, complété du tiers quand il est connu.
+- **Brouillon conservé** : une saisie entamée survit à un changement d'écran (mémoire de session,
+  par lot) ; elle est effacée à l'enregistrement ou sur demande explicite.
 - **Interrogation** : balance filtrable par période, journal par pièce avec son détail, grand livre
   à solde progressif par compte (comptes auxiliaires compris).
 - **Outils** : piste d'audit ajout-seulement, séquencée, attribuée et horodatée ; réinitialisation
@@ -55,9 +65,9 @@ npm run dev            # serveur de développement Vite
 
 Les entrées de menu correspondant à des fonctions non livrées sont **visibles, grisées, et portent
 la tranche qui les livrera** en infobulle. Elles ne sont pas cliquables : aucun lien mort, aucun
-écran vide. Saisie des écritures en table de détail, lettrage, rapprochement bancaire, écritures
-récurrentes, clôtures de période et d'exercice, états financiers OHADA révisé, déclaration TVA,
-exports PDF/Excel/CSV, imports, habilitations par écran, sauvegarde et restauration.
+écran vide. Lettrage, rapprochement bancaire, écritures récurrentes, clôtures de période et
+d'exercice, interrogation d'un compte et historique, états financiers OHADA révisé, déclaration
+TVA, exports PDF/Excel/CSV, imports, habilitations par écran, sauvegarde et restauration.
 
 ## Décisions de conception
 

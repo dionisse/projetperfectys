@@ -340,6 +340,76 @@ body {
   white-space: normal;
 }
 
+/* Grille de saisie : les cellules sont des champs, pas du texte. Le chrome disparaît tant que
+   la cellule n'a pas le focus, pour que la grille reste lisible à cinquante lignes. */
+.grille-saisie td {
+  height: var(--hauteur-ligne);
+  padding: 0 2px;
+}
+
+.grille-saisie input,
+.grille-saisie select {
+  background: transparent;
+  border: 1px solid transparent;
+  font: inherit;
+  height: calc(var(--hauteur-ligne) - 4px);
+  min-width: 0;
+  padding: 0 4px;
+  width: 100%;
+}
+
+.grille-saisie input:focus,
+.grille-saisie select:focus {
+  background: var(--surface);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  outline: none;
+}
+
+.grille-saisie input.align-droite {
+  text-align: right;
+}
+
+.grille-saisie input.illisible {
+  background: #fdecec;
+  color: var(--danger);
+}
+
+/* Une ligne produite par la machine est marquée : l'utilisateur voit ce qu'il n'a pas tapé. */
+.grille-saisie tr.generee {
+  background: #f2f7fd;
+}
+
+.grille-saisie tr.generee td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.grille-saisie tr.generee:hover {
+  background: #e7f0fa;
+}
+
+.succes-texte {
+  color: var(--succes);
+}
+
+.codes-choix li {
+  grid-template-columns: minmax(0, 1fr) 5rem;
+}
+
+.codes-choix label {
+  align-items: flex-start;
+  display: flex;
+  gap: 6px;
+}
+
+.codes-choix label span {
+  display: block;
+}
+
+.codes-choix input[type="checkbox"] {
+  margin-top: 2px;
+}
+
 /* ---------------------------------------------------------------- */
 /* Barre d'état                                                      */
 /* ---------------------------------------------------------------- */

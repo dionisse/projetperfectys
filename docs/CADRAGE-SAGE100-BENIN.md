@@ -161,17 +161,17 @@ Sage 300 GL : même noyau, couche séparée.
 
 ## 6. Ordre de livraison
 
-| Tranche | Livrable | Preuve |
-|---|---|---|
-| **A** | Noyau : montants, calendrier, comptes segmentés, plan SYSCOHADA, lots, taxes, paquet pays Bénin, grand livre, stockage | suite de tests verte en Node |
-| **B** | Coquille Sage 100 (menus, barre d'état, finder) + écrans **Structure** : plan comptable, journaux, tiers | aperçu live, écrans validés par l'utilisateur |
-| **C** | Écrans **Traitements** : lots, saisie des écritures en table de détail, comptabilisation, contre-passation | aperçu live + tests de parcours |
-| **D** | Écrans **Interrogation** : balance, grand livre, journal, compte, historique | aperçu live |
-| **E** | Taxes Bénin en saisie + **déclaration TVA** mensuelle | tests de calcul fiscal |
-| **F** | Lettrage, rapprochement bancaire | tests |
-| **G** | Clôtures : période, exercice, à-nouveaux, *Create New Year* | tests |
-| **H** | États financiers OHADA révisé (producteur distinct), exports PDF/Excel/CSV de tous les documents | fichiers produits et vérifiés |
-| **I** | Piste d'audit, habilitations par écran, import/export de données, sauvegarde/restauration, hôte Windows | tests + package installable |
+| Tranche | Livrable | Preuve | État au 15/10/2026 |
+|---|---|---|---|
+| **A** | Noyau : montants, calendrier, comptes segmentés, plan SYSCOHADA, lots, taxes, paquet pays Bénin, grand livre, stockage | suite de tests verte en Node | **livrée** (`e27fbe1`) |
+| **B** | Coquille Sage 100 (menus, barre d'état, finder) + écrans **Structure** : plan comptable, journaux, tiers, codes de taxe | aperçu live, écrans validés par l'utilisateur | **livrée** (`77afc69`), en attente de validation |
+| **C** | Écrans **Traitements** : lots, saisie des écritures en table de détail, comptabilisation, contre-passation | aperçu live + tests de parcours | **livrée**, 9 tests de parcours en jsdom |
+| **D** | Écrans **Interrogation** : balance, grand livre, journal, compte, historique | aperçu live | balance, journal et grand livre **livrés** ; interrogation d'un compte et historique restants |
+| **E** | Taxes Bénin en saisie + **déclaration TVA** mensuelle | tests de calcul fiscal | génération des lignes de taxe en saisie **livrée** ; déclaration TVA restante |
+| **F** | Lettrage, rapprochement bancaire | tests | à faire — l'échéance est déjà saisie ligne par ligne |
+| **G** | Clôtures : période, exercice, à-nouveaux, *Create New Year* | tests | à faire — le noyau verrouille déjà les périodes clôturées |
+| **H** | États financiers OHADA révisé (producteur distinct), exports PDF/Excel/CSV de tous les documents | fichiers produits et vérifiés | à faire — les groupes d'états sont déjà portés par le plan |
+| **I** | Piste d'audit, habilitations par écran, import/export de données, sauvegarde/restauration, hôte Windows | tests + package installable | piste d'audit **livrée** (ajout-seulement, attribuée, horodatée) ; le reste à faire |
 
 **Chaque tranche se termine par un écran validé par l'utilisateur sur l'aperçu live avant la
 suivante** — c'est la règle posée après l'échec de la première refonte (15 écrans construits sans

@@ -202,6 +202,62 @@ export function ligneTaxeAttendue(
   return { compteTaxe: code.compteTaxe, sens, montant: calcule.taxe, codeTaxe: code.code };
 }
 
+/** Ligne de taxe que l'écran de saisie propose à l'utilisateur, avant qu'il ne la valide. */
+export interface LigneDeTaxeProposee {
+  compte: string;
+  libelle: string;
+  debit: Montant;
+  credit: Montant;
+  codeTaxe: string;
+  sens: "debit" | "credit";
+}
+
+/**
+ * Calcule les lignes de taxe qu'une ligne taxée appelle, pour que l'écran de saisie les propose.
+ *
+ * Le noyau ne les insère jamais en silence : elles sont renvoyées ici, affichées dans la grille,
+ * et l'utilisateur les enregistre comme les autres lignes. Le calcul, lui, ne lui appartient pas —
+ * un montant de taxe recopié à la main ne garantit rien face à la base.
+ *
+ * Une taxe de nature `charge` (la taxe sur le sport, par exemple) ne produit **aucune** ligne dans
+ * la même écriture : elle est constatée par une écriture propre, le plus souvent périodique.
+ */
+export function proposerLignesDeTaxe(
+  ligne: {
+    compte: string;
+    libelle: string;
+    debit: Montant;
+    credit: Montant;
+    codesTaxe: readonly string[];
+  },
+  codes: readonly CodeTaxe[]
+): LigneDeTaxeProposee[] {
+  const parCode = new Map(codes.map((code) => [code.code, code] as const));
+  const proposees: LigneDeTaxeProposee[] = [];
+  for (const codeDemande of ligne.codesTaxe) {
+    const code = parCode.get(codeDemande);
+    if (!code) {
+      throw new ErreurRegle(`Le code de taxe « ${codeDemande} » n'existe pas dans le paquet pays.`);
+    }
+    if (code.sens === "charge") {
+      continue;
+    }
+    const attendue = ligneTaxeAttendue(ligne, code);
+    if (attendue.montant === ZERO) {
+      continue;
+    }
+    proposees.push({
+      compte: attendue.compteTaxe,
+      libelle: `${code.libelle} — ${ligne.libelle}`,
+      debit: attendue.sens === "debit" ? attendue.montant : ZERO,
+      credit: attendue.sens === "credit" ? attendue.montant : ZERO,
+      codeTaxe: code.code,
+      sens: attendue.sens
+    });
+  }
+  return proposees;
+}
+
 /**
  * Vérifie qu'une écriture taxée porte bien ses lignes de taxe, sur le bon compte, dans le bon
  * sens et pour le bon montant.
