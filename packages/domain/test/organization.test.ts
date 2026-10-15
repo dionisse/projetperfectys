@@ -131,3 +131,31 @@ describe("formatage pour les documents exportés", () => {
     expect(formatTimestampFr("2026-03-01T08:00:00.000Z")).toMatch(/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/);
   });
 });
+
+describe("code société", () => {
+  it("normalise en majuscules et sans espaces", () => {
+    expect(normalizeOrganizationProfile({ code: "  0a1  ", name: "SOCIETE TEST" }).code).toBe("0A1");
+  });
+
+  it("refuse un code non conforme, avec le message de l'original", () => {
+    expect(() => normalizeOrganizationProfile({ code: "AB-12", name: "SOCIETE TEST" })).toThrow("Code société invalide.");
+    expect(() => normalizeOrganizationProfile({ code: "SO-1", name: "SOCIETE TEST" })).toThrow("Code société invalide.");
+  });
+
+  it("borne la longueur du code", () => {
+    expect(() => normalizeOrganizationProfile({ code: "ABCDEFG", name: "SOCIETE TEST" })).toThrow(
+      "Le code société ne peut pas dépasser 6 caractères."
+    );
+  });
+
+  it("tolère un code absent : une base ancienne s'ouvre quand même", () => {
+    expect(emptyOrganizationProfile().code).toBe("");
+    expect(normalizeOrganizationProfile({ name: "Reprise" }).code).toBe("");
+  });
+
+  it("conserve le code existant quand la mise à jour ne le mentionne pas", () => {
+    const existing = normalizeOrganizationProfile({ code: "000", name: "SOCIETE TEST" });
+    expect(normalizeOrganizationProfile({ city: "Abidjan" }, existing).code).toBe("000");
+    expect(normalizeOrganizationProfile({ code: "001" }, existing).code).toBe("001");
+  });
+});

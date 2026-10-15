@@ -15,6 +15,12 @@
 import { DomainRuleError } from "./core";
 
 export interface OrganizationProfile {
+  /**
+   * Code société court de l'original (`000` pour `SOCIETE TEST`). Il entre dans le code
+   * dossier `CR000-26` (module + société + année) et identifie la société dans les écrans
+   * de gestion. Vide tant qu'une base ancienne n'a pas été complétée.
+   */
+  readonly code: string;
   readonly name: string;
   readonly legalForm: string;
   /** IFU (Identifiant Financier Unique) ou numéro de compte contribuable. */
@@ -30,6 +36,7 @@ export type OrganizationProfileInput = Partial<OrganizationProfile>;
 
 /** Limites alignées sur les fiches du logiciel d'origine (longueurs de champs WinDev). */
 const LIMITS = {
+  code: 6,
   name: 120,
   legalForm: 40,
   taxIdentifier: 40,
@@ -40,10 +47,17 @@ const LIMITS = {
   email: 120
 } as const satisfies Record<keyof OrganizationProfile, number>;
 
+/**
+ * Code société : alphanumérique court. C'est le champ libre de l'original, dont la saisie
+ * non conforme était refusée par « Code société invalide ».
+ */
+const SOCIETY_CODE_RE = /^[A-Z0-9]{1,6}$/;
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Libellés français des champs, pour les messages d'erreur lisibles par l'utilisateur. */
 const LABELS: Record<keyof OrganizationProfile, string> = {
+  code: "Le code société",
   name: "La raison sociale",
   legalForm: "La forme juridique",
   taxIdentifier: "L'identifiant fiscal (IFU)",
@@ -68,6 +82,7 @@ function clean(value: string | undefined | null, field: keyof OrganizationProfil
  */
 export function emptyOrganizationProfile(name = "Société sans nom"): OrganizationProfile {
   return {
+    code: "",
     name,
     legalForm: "",
     taxIdentifier: "",
@@ -82,7 +97,8 @@ export function emptyOrganizationProfile(name = "Société sans nom"): Organizat
 /**
  * Normalise et valide une saisie de fiche société.
  *
- * Règles : espaces superflus supprimés, IFU en majuscules (identifiant administratif),
+ * Règles : espaces superflus supprimés, code société et IFU en majuscules (identifiants
+ * administratifs),
  * raison sociale obligatoire, courriel au format minimal si renseigné. Les champs non
  * fournis conservent la valeur existante lorsqu'un `fallback` est passé — c'est le cas
  * d'une mise à jour partielle depuis l'écran Société.
@@ -101,7 +117,16 @@ export function normalizeOrganizationProfile(
     throw new DomainRuleError("Le courriel de la société n'a pas un format valide.");
   }
 
+  // Identifiant administratif, comme l'IFU : la casse ne doit pas créer deux fiches.
+  const code = clean(input.code ?? fallback.code, "code").toUpperCase();
+  // Toléré vide : une base créée avant l'existence du code société s'ouvre quand même, et
+  // l'écran de gestion propose alors de le renseigner. Toute valeur fournie est contrôlée.
+  if (code !== "" && !SOCIETY_CODE_RE.test(code)) {
+    throw new DomainRuleError("Code société invalide.");
+  }
+
   return {
+    code,
     name,
     legalForm: clean(input.legalForm ?? fallback.legalForm, "legalForm"),
     // Identifiant administratif : la casse ne doit pas créer deux fiches différentes.

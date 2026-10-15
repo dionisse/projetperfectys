@@ -35,3 +35,65 @@ export const STARTER_JOURNALS: readonly AccountingJournalDto[] = [
   { code: "OD", label: "Opérations diverses", journalType: "Opérations diverses", counterpartAccount: null, isActive: true },
   { code: "AN", label: "À-nouveaux", journalType: "À-nouveaux", counterpartAccount: null, isActive: true }
 ];
+
+/* ------------------------------------------------------------------ */
+/* Modules et dossiers de l'intégrateur                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Catalogue des modules de l'intégrateur PERFECTO.
+ *
+ * Les quatorze variantes observées dans le logiciel d'origine (`SPEC-ORIGINAL-PERFECTO.md`
+ * §3) ne sont pas des applications distinctes : règle **R-REF-1**, ce sont des **profils
+ * versionnés** du même noyau — plan initial, classes, contrôles, modèles d'états, règles de
+ * clôture, taxes et formats d'export. Règle **R-REF-2** : un profil validé n'est jamais
+ * modifié rétroactivement, il migre explicitement ou s'active à un nouvel exercice.
+ *
+ * Un seul profil est implémenté aujourd'hui : `CR`, celui du dossier de démonstration. Les
+ * autres sont listés parce qu'ils existent dans le produit et que l'écran de gestion doit
+ * les montrer — jamais comme des fonctions disponibles.
+ */
+export interface ModuleProfile {
+  readonly code: string;
+  readonly label: string;
+  readonly referential: string;
+  readonly implemented: boolean;
+}
+
+export const MODULE_PROFILES: readonly ModuleProfile[] = [
+  { code: "CR", label: "Comptabilité SYSCOHADA révisé", referential: "SYSCOHADA révisé (OHADA)", implemented: true },
+  { code: "CO", label: "Comptabilité OHADA", referential: "SYSCOHADA non révisé", implemented: false },
+  { code: "CG", label: "Comptabilité France", referential: "Plan comptable général français", implemented: false },
+  { code: "CC", label: "Comptabilité générale PARMEC", referential: "PARMEC (BCEAO)", implemented: false },
+  { code: "CB", label: "Bancaire UEMOA", referential: "Plan bancaire UEMOA", implemented: false },
+  { code: "CF", label: "SFD Microfinance", referential: "Plan comptable SFD microfinance", implemented: false },
+  { code: "CI", label: "CIPRES", referential: "Comptabilité sociale et financière", implemented: false },
+  { code: "CQ", label: "Comptabilité SYSCBNL", referential: "SYSCBNL (banque nationale)", implemented: false },
+  { code: "CS", label: "S.G.I.", referential: "Société de gestion et d'intermédiation", implemented: false },
+  { code: "CA", label: "Assurances CIMA", referential: "Plan comptable CIMA", implemented: false },
+  { code: "CL", label: "Plan comptable libre", referential: "Plan libre défini par le dossier", implemented: false },
+  { code: "GM", label: "Comptabilité des matières", referential: "Suivi des matières", implemented: false },
+  { code: "GP", label: "Maîtrise d'Ouvrages Déléguée", referential: "Comptabilité d'opérations déléguées", implemented: false },
+  { code: "IN", label: "Intégrateur PERFECTO", referential: "Gestion des sociétés et des dossiers", implemented: false }
+];
+
+/** Le profil actif du prototype : le seul dont le noyau applique le référentiel. */
+export function activeModuleProfile(): ModuleProfile {
+  return MODULE_PROFILES.find((profile) => profile.implemented) ?? MODULE_PROFILES[0]!;
+}
+
+/**
+ * Code dossier, à la manière de l'original : module + code société + année sur deux
+ * chiffres. `CR` + `000` + `2026` donne `CR000-26`, le répertoire du dossier de
+ * démonstration.
+ *
+ * Sans code société renseigné, on ne fabrique pas un faux `000` : le code reste court et
+ * l'écran de gestion invite à compléter la fiche.
+ */
+export function dossierCode(moduleCode: string, societyCode: string, year: number): string {
+  const society = societyCode.trim().toUpperCase();
+  const suffix = String(year % 100).padStart(2, "0");
+  return society === ""
+    ? `${moduleCode.trim().toUpperCase()}-${suffix}`
+    : `${moduleCode.trim().toUpperCase()}${society}-${suffix}`;
+}

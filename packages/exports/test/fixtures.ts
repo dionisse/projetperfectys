@@ -12,6 +12,7 @@ import type { OrganizationProfile } from "@perfecto/domain";
 import { inflateSync } from "node:zlib";
 
 export const SOCIETY: OrganizationProfile = {
+  code: "000",
   name: "PERFECTO Négoce Abidjan",
   legalForm: "SARL",
   taxIdentifier: "CI-2024-B-1187",

@@ -116,6 +116,8 @@ export function createDemoThirdParties(organizationId: string): ThirdPartyData[]
  */
 export function createDemoOrganization(): OrganizationProfile {
   return normalizeOrganizationProfile({
+    // Code société court : le dossier de démonstration s'écrit CR000-26, comme l'original.
+    code: "000",
     name: "PERFECTO Négoce Abidjan",
     legalForm: "SARL",
     taxIdentifier: "CI-2024-B-1187",

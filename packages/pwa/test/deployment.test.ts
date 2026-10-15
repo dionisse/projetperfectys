@@ -188,8 +188,12 @@ describe("build publié", () => {
   });
 
   it.skipIf(!built)("embarque l'enregistrement versionné du service worker", () => {
-    const assets = readdirSync(join(DIST, "assets"));
-    const bundle = assets.find((name) => name.endsWith(".js"));
+    // Le module d'entrée, tel qu'index.html le cite : c'est lui qui enregistre le
+    // service worker. Les moteurs Excel et PDF sont découpés en morceaux chargés à la
+    // demande, qui ne contiennent évidemment pas cet enregistrement.
+    const html = readFileSync(join(DIST, "index.html"), "utf8");
+    const bundle = /\/assets\/(index-[\w-]+\.js)/.exec(html)?.[1];
+    expect(bundle, "module d'entrée introuvable dans index.html").toBeDefined();
     const code = readFileSync(join(DIST, "assets", bundle!), "utf8");
 
     expect(code).toContain("sw.js?v=");
