@@ -12,9 +12,11 @@
 import {
   additionner,
   ErreurRegle,
+  type Devise,
   ZERO,
   analyserMontant,
   formatMontant,
+  XOF,
   montantDepuisChaine,
   montantVersChaine,
   type Montant
@@ -2145,6 +2147,89 @@ export class ServiceComptable {
   }
 
   /** Résout l'exercice demandé : le courant, ou un exercice clos du dossier. */
+  /**
+   * Produit une sauvegarde complète du dossier, prête à être téléchargée.
+   *
+   * La sauvegarde porte son propre inventaire : qui l'a produite, quand, sur quel paquet pays, avec
+   * combien de comptes, de mouvements et de lots. C'est ce qui permet de décider, six mois plus tard,
+   * si un fichier vaut d'être restauré.
+   */
+  async produireSauvegarde(): Promise<SauvegardeDossier> {
+    const etat = await this.#stockage.lire();
+    return composerSauvegarde(etat, {
+      creeeLe: this.#horloge().toISOString(),
+      creeePar: this.#utilisateur,
+      paquet: this.#paquet
+    });
+  }
+
+  /**
+   * Restaure un dossier depuis une sauvegarde.
+   *
+   * La restauration **remplace** tout : elle n'est pas une fusion. Une fusion silencieuse de deux
+   * dossiers produirait des soldes que personne ne pourrait expliquer. Le remplacement est tracé dans
+   * la piste d'audit de la sauvegarde restaurée, avec le contenu du dossier qu'il écrase — c'est la
+   * seule mémoire qui reste de ce qui a été perdu.
+   *
+   * Une sauvegarde produite sur un autre paquet pays est refusée : ses taux et ses règles fiscales ne
+   * correspondent pas à ceux que cette application applique.
+   */
+  async restaurerSauvegarde(brut: unknown): Promise<ResultatRestauration> {
+    const { sauvegarde, etat } = verifierSauvegarde(brut, this.#paquet.devise);
+    if (sauvegarde.paquetPays?.nom !== this.#paquet.nom) {
+      throw new ErreurRegle(
+        `Cette sauvegarde a été produite sur le paquet pays « ${String(
+          sauvegarde.paquetPays?.nom ?? "inconnu"
+        )} » ; ce dossier tourne sur « ${
+          this.#paquet.nom
+        } ». Restaurez-la dans une application configurée pour ce pays.`
+      );
+    }
+
+    return this.#remplacer(async () => {
+      const courant = await this.#stockage.lire();
+      const avant = compterContenu(courant);
+      this.#tracer(
+        etat,
+        "Restauration du dossier",
+        "dossier",
+        etat.societe.code,
+        `Sauvegarde du ${sauvegarde.creeeLe} produite par ${sauvegarde.creeePar}. Dossier écrasé : ${
+          avant.mouvements
+        } mouvement(s), ${avant.lots} lot(s), ${avant.comptes} compte(s).`
+      );
+      return {
+        etat,
+        resultat: {
+          avant,
+          apres: compterContenu(etat),
+          sauvegardeDu: sauvegarde.creeeLe,
+          societe: etat.societe.raisonSociale,
+          exercice: etat.exercice.annee
+        }
+      };
+    });
+  }
+
+  /**
+   * Écrit un état qui ne dérive pas de l'état courant.
+   *
+   * `#muter` relit et réécrit le même état : c'est ce qu'il faut pour une mutation, et exactement ce
+   * qu'il ne faut pas pour une restauration, qui remplace l'état par un autre.
+   */
+  async #remplacer<Resultat>(
+    operation: () => Promise<{ etat: EtatDossier; resultat: Resultat }>
+  ): Promise<Resultat> {
+    const execution = this.#chaine.then(async () => {
+      const { etat, resultat } = await operation();
+      await this.#stockage.ecrire(etat);
+      return resultat;
+    });
+    // Une erreur ne doit pas bloquer les mutations suivantes.
+    this.#chaine = execution.catch(() => undefined);
+    return execution;
+  }
+
   #exerciceDemande(etat: EtatDossier, exercice?: number): Exercice {
     if (exercice === undefined || exercice === etat.exercice.annee) {
       return etat.exercice;
@@ -2746,6 +2831,189 @@ export function deserialiserEtat(brut: EtatDossierSerialise): EtatDossier {
     })),
     pointages: (brut.pointages ?? []).map((pointage) => ({ ...pointage, montant: montantDepuisChaine(pointage.montant) }))
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Sauvegarde et restauration du dossier                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Marque de fabrique d'une sauvegarde.
+ *
+ * Elle est vérifiée à la restauration : un fichier JSON qui n'est pas une sauvegarde doit être
+ * refusé avec une phrase claire, pas chargé à moitié.
+ */
+export const FORMAT_SAUVEGARDE = "perfectys-compta/sauvegarde";
+
+/** Version du format. Une sauvegarde d'une autre version est refusée plutôt que devinée. */
+export const VERSION_SAUVEGARDE = 1;
+
+/** Ce qu'une sauvegarde contient, en compteurs : de quoi décider avant de regarder le détail. */
+export interface ContenuDossier {
+  comptes: number;
+  journaux: number;
+  tiers: number;
+  mouvements: number;
+  lots: number;
+  lettrages: number;
+  exercicesClos: number;
+  releves: number;
+  pointages: number;
+  codesTaxe: number;
+  audit: number;
+}
+
+/**
+ * Une sauvegarde complète du dossier.
+ *
+ * Le fichier est autosuffisant : il porte l'identité de la société, l'exercice, le paquet pays et le
+ * référentiel qui ont servi, et le compte de ce qu'il contient. Une sauvegarde retrouvée dans un
+ * dossier de courriel six mois plus tard doit dire ce qu'elle est sans qu'on ait à l'ouvrir.
+ */
+export interface SauvegardeDossier {
+  format: typeof FORMAT_SAUVEGARDE;
+  version: number;
+  creeeLe: string;
+  creeePar: string;
+  paquetPays: { nom: string; version: string };
+  referentiel: string;
+  devise: string;
+  societe: {
+    code: string;
+    raisonSociale: string;
+    formeJuridique: string;
+    identifiantFiscal: string;
+    ville: string;
+    pays: string;
+    regimeFiscal: string;
+  };
+  exercice: number;
+  contenu: ContenuDossier;
+  etat: EtatDossierSerialise;
+}
+
+export interface SauvegardeVerifiee {
+  sauvegarde: SauvegardeDossier;
+  etat: EtatDossier;
+}
+
+export interface ResultatRestauration {
+  avant: ContenuDossier;
+  apres: ContenuDossier;
+  sauvegardeDu: string;
+  societe: string;
+  exercice: number;
+}
+
+export function compterContenu(etat: EtatDossier): ContenuDossier {
+  return {
+    comptes: etat.comptes.length,
+    journaux: etat.journaux.length,
+    tiers: etat.tiers.length,
+    mouvements: etat.mouvements.length,
+    lots: etat.lots.length,
+    lettrages: etat.lettrages.length,
+    exercicesClos: etat.exercicesClos.length,
+    releves: etat.releves.length,
+    pointages: etat.pointages.length,
+    codesTaxe: etat.codesTaxe.length,
+    audit: etat.audit.length
+  };
+}
+
+export function composerSauvegarde(
+  etat: EtatDossier,
+  meta: { creeeLe: string; creeePar: string; paquet: PaquetPays }
+): SauvegardeDossier {
+  return {
+    format: FORMAT_SAUVEGARDE,
+    version: VERSION_SAUVEGARDE,
+    creeeLe: meta.creeeLe,
+    creeePar: meta.creeePar,
+    paquetPays: { nom: meta.paquet.nom, version: meta.paquet.version },
+    referentiel: meta.paquet.referentiel.nom,
+    devise: meta.paquet.devise.code,
+    societe: {
+      code: etat.societe.code,
+      raisonSociale: etat.societe.raisonSociale,
+      formeJuridique: etat.societe.formeJuridique,
+      identifiantFiscal: etat.societe.identifiantFiscal,
+      ville: etat.societe.ville,
+      pays: etat.societe.pays,
+      regimeFiscal: etat.societe.regimeFiscal
+    },
+    exercice: etat.exercice.annee,
+    contenu: compterContenu(etat),
+    etat: serialiserEtat(etat)
+  };
+}
+
+function texteErreur(erreur: unknown): string {
+  return erreur instanceof Error ? erreur.message : String(erreur);
+}
+
+/**
+ * Vérifie une sauvegarde avant de la charger.
+ *
+ * Quatre refus, chacun avec sa raison : ce n'est pas une sauvegarde, ce n'est pas la bonne version,
+ * elle est illisible, ou elle contient un grand livre déséquilibré. Le dernier cas est le plus
+ * important : restaurer un dossier dont le débit ne fait pas le crédit produirait des états faux
+ * sans que rien ne le signale jamais.
+ */
+export function verifierSauvegarde(brut: unknown, devise: Devise = XOF): SauvegardeVerifiee {
+  if (brut === null || typeof brut !== "object" || Array.isArray(brut)) {
+    throw new ErreurRegle(
+      "Ce fichier n'est pas une sauvegarde Perfectys Compta : il ne contient pas un objet JSON."
+    );
+  }
+  const objet = brut as Record<string, unknown>;
+  if (objet.format !== FORMAT_SAUVEGARDE) {
+    throw new ErreurRegle(
+      `Ce fichier n'est pas une sauvegarde Perfectys Compta : format attendu « ${FORMAT_SAUVEGARDE} », trouvé « ${String(
+        objet.format ?? "aucun"
+      )} ».`
+    );
+  }
+  if (objet.version !== VERSION_SAUVEGARDE) {
+    throw new ErreurRegle(
+      `Cette sauvegarde est en version ${String(
+        objet.version
+      )} ; cette application lit la version ${VERSION_SAUVEGARDE}. Une sauvegarde d'une autre version n'est pas devinée : elle est refusée.`
+    );
+  }
+  const etatBrut = objet.etat;
+  if (etatBrut === null || typeof etatBrut !== "object") {
+    throw new ErreurRegle("Cette sauvegarde ne contient pas d'état de dossier.");
+  }
+
+  let etat: EtatDossier;
+  try {
+    etat = deserialiserEtat(etatBrut as EtatDossierSerialise);
+  } catch (erreur) {
+    throw new ErreurRegle(`Cette sauvegarde est illisible : ${texteErreur(erreur)}`);
+  }
+
+  if (etat.comptes.length === 0) {
+    throw new ErreurRegle("Cette sauvegarde ne contient aucun compte : ce n'est pas un dossier comptable.");
+  }
+  if (typeof etat.societe?.raisonSociale !== "string" || etat.societe.raisonSociale.trim() === "") {
+    throw new ErreurRegle("Cette sauvegarde ne dit pas quelle société elle contient.");
+  }
+
+  const equilibre = verifierEquilibre(etat.mouvements);
+  if (!equilibre.equilibre) {
+    throw new ErreurRegle(
+      `Cette sauvegarde contient un grand livre déséquilibré : débit ${formatMontant(
+        equilibre.totalDebit,
+        devise
+      )}, crédit ${formatMontant(
+        equilibre.totalCredit,
+        devise
+      )}. Elle n'est pas restaurable en l'état — un dossier déséquilibré produirait des états faux sans que rien ne le signale.`
+    );
+  }
+
+  return { sauvegarde: objet as unknown as SauvegardeDossier, etat };
 }
 
 export { totalLot };

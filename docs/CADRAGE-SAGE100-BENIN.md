@@ -388,6 +388,44 @@ Les moteurs reprennent les conventions de mise en page éprouvées dans l'applic
 (`legacy/perfecto-typescript/exports/`, archivée et hors build), vérifiées à la sonde sur les mêmes
 versions de bibliothèques.
 
+### 5.7 Ce que la sauvegarde et la restauration livrent
+
+L'application est hors ligne : le dossier vit dans le stockage local du navigateur. Sans sauvegarde,
+il est en sursis — un navigateur réinitialisé, un poste changé, un stockage purgé, et un exercice
+disparaît. Outils › Sauvegarde du dossier donne les deux gestes : **emporter** le dossier, et le
+**remettre**.
+
+Le fichier est un JSON autosuffisant : format `perfectys-compta/sauvegarde`, version 1, identité de
+la société, exercice, paquet pays et référentiel qui ont servi, horodatage et auteur, **inventaire
+chiffré** de son contenu (comptes, journaux, tiers, mouvements, lots, lettrages, exercices clos,
+relevés, pointages, codes de taxe, événements d'audit), puis l'état complet sérialisé. Une sauvegarde
+retrouvée six mois plus tard dans un dossier de courriel doit dire ce qu'elle est sans qu'on ait à
+l'ouvrir. Les montants y sont des **chaînes** : ce sont des entiers exacts, et un JSON de nombres
+perdrait cette exactitude au premier passage dans un tableur.
+
+Quatre refus, chacun avec sa raison :
+
+| Refus | Pourquoi |
+|---|---|
+| Ce n'est pas une sauvegarde | La marque de fabrique manque : un JSON quelconque n'est pas chargé à moitié |
+| La version ne correspond pas | Une sauvegarde d'une autre version n'est pas devinée |
+| Le grand livre est déséquilibré | Restaurer un débit qui ne fait pas le crédit produirait des états faux sans que rien ne le signale jamais |
+| Le paquet pays diffère | Les taux et les règles fiscales du fichier ne sont pas ceux que cette application applique |
+
+La vérification est faite **deux fois** : à l'écran, dès le choix du fichier, pour informer
+l'utilisateur de ce qu'il s'apprête à remettre ; puis dans le noyau, au moment d'écrire, pour
+protéger le dossier. La première sert à décider, la seconde sert à garantir.
+
+La restauration **remplace** tout, et l'écran le dit avant, pas après : ce n'est pas une fusion, parce
+que deux dossiers rapprochés en silence donneraient des soldes que personne ne pourrait expliquer.
+Elle est soumise à une case à cocher — avoir téléchargé une sauvegarde du dossier en cours — qui est
+la seule marche arrière existante. Le remplacement est inscrit dans la piste d'audit de la sauvegarde
+restaurée, avec le contenu du dossier qu'il écrase : c'est la seule mémoire qui reste de ce qui a été
+perdu.
+
+Ce qui n'est pas produit : la sauvegarde automatique périodique, la sauvegarde chiffrée, la fusion de
+deux dossiers, et l'import de données depuis un fichier tiers (ECF, FEC, CSV de comptes ou de tiers).
+
 ## 6. Ordre de livraison
 
 | Tranche | Livrable | Preuve | État au 15/10/2026 |
@@ -400,7 +438,7 @@ versions de bibliothèques.
 | **F** | Lettrage, rapprochement bancaire | tests | **partiellement livrée** : lettrage des comptes de tiers — producteur `lettrage.ts`, écran, lettrage manuel et automatique (proposé avant d'être appliqué), délettrage tracé, export CSV, 21 tests — **et rapprochement bancaire** : relevés saisis ligne à ligne, producteur `rapprochement.ts`, état de rapprochement avec écart expliqué et reste inexpliqué, pointage manuel et automatique (par référence puis par montant), dépointage tracé, écran, export CSV, 13 + 3 tests. Reste le lettrage partiel d'un règlement à-compte ; l'import d'un fichier de relevé (CSV, OFX, CAMT) n'est pas produit |
 | **G** | Clôtures : période, exercice, à-nouveaux, *Create New Year* | tests | **livrée** : rapport de préparation, clôture d'exercice (solde des comptes de gestion vers 121000, à-nouveaux segment de tiers compris, ouverture de l'exercice suivant, archivage de l'exercice clos), lectures par exercice, écran avec confirmation explicite, 14 tests. La réouverture d'un exercice clos n'est pas produite : la clôture est définitive, et l'écran le dit |
 | **H** | États financiers OHADA révisé (producteur distinct), exports PDF/Excel/CSV de tous les documents | fichiers produits et vérifiés | **largement livrée** : bilan et compte de résultat OHADA révisé — producteur `etats-financiers.ts`, deux écrans, arrêté par période, **colonne N-1 dès qu'un exercice est clos**, 18 tests ; puis les **trois formats d'export** (§5.6) — description unique du document, Excel à montants numériques avec un onglet par section, PDF A4 paginé avec en-tête de société, CSV inchangé, chargement à la demande des bibliothèques, 14 tests de rendu (dont un XLSX relu par `exceljs` et un PDF dont le texte imprimé est décodé) plus 2 parcours d'écran. Restent le tableau des flux de trésorerie et le tableau de variation des activités (aucun compte du plan n'est classé en flux) |
-| **I** | Piste d'audit, habilitations par écran, import/export de données, sauvegarde/restauration, hôte Windows | tests + package installable | piste d'audit **livrée** (ajout-seulement, attribuée, horodatée) ; le reste à faire |
+| **I** | Piste d'audit, habilitations par écran, import/export de données, sauvegarde/restauration, hôte Windows | tests + package installable | piste d'audit **livrée** (ajout-seulement, attribuée, horodatée) ; **sauvegarde et restauration livrées** (§5.7) — fichier JSON autosuffisant et versionné, inventaire chiffré, montants en chaînes, quatre refus motivés dont le grand livre déséquilibré et le paquet pays différent, vérification à l'écran puis dans le noyau, remplacement tracé avec le contenu écrasé, écran avec marche arrière obligatoire, 7 + 3 tests. Restent les habilitations par écran, l'import de données tiers (FEC, ECF, CSV), la sauvegarde automatique et l'hôte Windows |
 
 **Chaque tranche se termine par un écran validé par l'utilisateur sur l'aperçu live avant la
 suivante** — c'est la règle posée après l'échec de la première refonte (15 écrans construits sans

@@ -39,6 +39,7 @@ import { CompteDeResultatOhada } from "./ecrans/compte-resultat";
 import { Lettrage } from "./ecrans/lettrage";
 import { Rapprochement } from "./ecrans/rapprochement";
 import { Interrogation } from "./ecrans/interrogation";
+import { Sauvegarde } from "./ecrans/sauvegarde";
 import { Societe } from "./ecrans/societe";
 import { ClotureExercice } from "./ecrans/cloture";
 import { Balance } from "./ecrans/balance";
@@ -195,8 +196,9 @@ export function Coquille() {
         { label: "Paquet pays : Bénin", href: "/structure/codes-taxe" },
         { label: "Diagnostic du dossier", href: "/" },
         { label: "", indisponible: "", separation: true },
-        { label: "Import de données", indisponible: "Import de comptes, tiers et lots : tranche I" },
-        { label: "Export de données", indisponible: "Export de données brutes : tranche I" },
+        { label: "Sauvegarde du dossier…", href: "/outils/sauvegarde" },
+        { label: "Restaurer une sauvegarde…", href: "/outils/sauvegarde" },
+        { label: "Import de données", indisponible: "Import de comptes, de tiers et de lots depuis un fichier tiers : tranche I. Reprendre une sauvegarde Perfectys, lui, est disponible" },
         { label: "Habilitations par écran", indisponible: "Sécurité par écran, comme Sage : tranche I" }
       ]
     },
@@ -410,6 +412,8 @@ function ecranPour(route: string, recharger: () => void): ComponentChildren {
       return <Interrogation />;
     case "/interrogation/grand-livre":
       return <GrandLivre />;
+    case "/outils/sauvegarde":
+      return <Sauvegarde onMutation={recharger} />;
     case "/outils/audit":
       return <PisteAudit />;
     default:

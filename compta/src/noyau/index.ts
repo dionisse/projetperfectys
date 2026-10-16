@@ -249,10 +249,16 @@ export type { PortStockage } from "./stockage";
 export {
   ServiceComptable,
   SOCIETE_DEMONSTRATION_BENIN,
+  FORMAT_SAUVEGARDE,
+  VERSION_SAUVEGARDE,
+  composerSauvegarde,
+  compterContenu,
   creerDossierDemonstration,
   deserialiserEtat,
   numeroDeDossier,
   serialiserEtat,
+  verifierSauvegarde,
+  type ContenuDossier,
   type ContexteDossier,
   type DemandeEcriture,
   type ExerciceClos,
@@ -262,5 +268,8 @@ export {
   type EtatDossierSerialise,
   type EvenementAudit,
   type OptionsService,
+  type ResultatRestauration,
+  type SauvegardeDossier,
+  type SauvegardeVerifiee,
   type Societe
 } from "./dossier";

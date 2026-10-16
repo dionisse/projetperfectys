@@ -27,7 +27,7 @@ la même base.
 
 ```bash
 npm install            # installe l'espace de travail (compta)
-npm test               # 218 tests : noyau en Node, interface en jsdom, exports vérifiés
+npm test               # 228 tests : noyau en Node, interface en jsdom, exports vérifiés
 npm run typecheck      # TypeScript strict, sans émission
 npm run build          # build de production dans compta/dist
 npm run preview:vercel # sert le build comme le ferait Vercel, sur http://localhost:5173
@@ -116,7 +116,13 @@ npm run dev            # serveur de développement Vite
   formats partent de la **même description** du document, donc des mêmes chiffres, et exportent ce
   que l'écran affiche au moment du clic, filtres compris. Excel et PDF sont chargés à la demande :
   leur poids ne pèse pas sur le démarrage, seulement sur le premier export dans ce format.
-- **Outils** : piste d'audit ajout-seulement, séquencée, attribuée et horodatée ; réinitialisation
+- **Outils** : piste d'audit ajout-seulement, séquencée, attribuée et horodatée ; **sauvegarde et
+  restauration du dossier** — un fichier JSON autosuffisant (format, version, société, exercice,
+  paquet pays, inventaire, état complet, montants en chaînes pour rester exacts), vérifié **avant**
+  d'être restauré : l'écran montre ce que le fichier contient, ou la raison précise du refus
+  (pas une sauvegarde, mauvaise version, JSON illisible, grand livre déséquilibré, autre paquet
+  pays). La restauration **remplace** le dossier, exige d'avoir téléchargé une marche arrière, et
+  inscrit le remplacement dans la piste d'audit avec le contenu du dossier écrasé ; réinitialisation
   du dossier de démonstration.
 - **Hors ligne** : le dossier est persisté dans IndexedDB, montants sérialisés en chaînes.
 
@@ -132,8 +138,8 @@ ligne en attendant), lettrage partiel d'un règlement à-compte, écritures réc
 écriture depuis une ligne d'interrogation, tableau des flux de
 trésorerie et tableau de variation des activités (le plan de démarrage ne porte aucun compte classé
 « flux de trésorerie » : l'entrée de menu le dit au lieu de produire un état vide),
-reversement des acomptes et retenues à la source, imports, habilitations par écran, sauvegarde
-et restauration.
+reversement des acomptes et retenues à la source, import de données depuis un fichier tiers,
+habilitations par écran.
 
 ## Décisions de conception
 
