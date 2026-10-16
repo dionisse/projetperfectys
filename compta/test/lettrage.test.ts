@@ -140,7 +140,7 @@ describe("vérification d'un groupe à lettrer", () => {
       expect(erreur).toBeInstanceOf(ErreurRegle);
       expect((erreur as Error).message).toMatch(/n'est pas équilibré/i);
       expect((erreur as Error).message).toMatch(/écart\s+100\s000/u);
-      expect((erreur as Error).message).toMatch(/lettrage partiel n'est pas produit/i);
+      expect((erreur as Error).message).toMatch(/imputez un montant partiel/i);
     }
   });
 });
@@ -243,7 +243,7 @@ describe("lettrage manuel", () => {
         compte: "401100",
         lignes: [parPiece("FA-2026-018").ligneId, parPiece("RG-2026-005").ligneId]
       })
-    ).rejects.toThrow(/déjà lettrée sous le code AA/i);
+    ).rejects.toThrow(/déjà entièrement lettrée sous le code AA/i);
   });
 
   it("trace le lettrage dans la piste d'audit", async () => {

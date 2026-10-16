@@ -3,9 +3,10 @@
  * L'écran de lettrage, monté pour de vrai.
  *
  * Ce qui est vérifié : que l'écran lit le grand livre sans le réécrire, que le bouton « Lettrer »
- * n'est actif que sur une sélection équilibrée et dit pourquoi sinon, qu'une marque créée retire les
- * lignes de la liste, qu'un délettrage les rend sans effacer la marque, et que la proposition
- * automatique est montrée avant d'être appliquée.
+ * n'est actif que sur des imputations équilibrées et dit pourquoi sinon, qu'un acompte saisi ligne à
+ * ligne crée un lettrage partiel qui laisse voir le reste dû, qu'une marque créée retire les lignes
+ * entièrement lettrées de la liste, qu'un délettrage les rend sans effacer la marque, et que la
+ * proposition automatique est montrée avant d'être appliquée.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -57,6 +58,21 @@ async function cliquer(cible: HTMLElement, fois = 14): Promise<void> {
     cible.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
   await flush(fois);
+}
+
+/** Saisit le montant imputé sur une ligne cochée : l'étiquette accessible porte la pièce. */
+async function imputer(piece: string, valeur: string): Promise<void> {
+  const champs = [...conteneur.querySelectorAll<HTMLInputElement>('input[type="text"]')];
+  const cible = champs.find((item) => (item.getAttribute("aria-label") ?? "").includes(piece));
+  if (!cible) {
+    throw new Error(`champ d'imputation introuvable pour la pièce ${piece} (${champs.length} champs)`);
+  }
+  await act(async () => {
+    cible.value = valeur;
+    cible.dispatchEvent(new Event("input", { bubbles: true }));
+    cible.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await flush(4);
 }
 
 /** Coche la ligne d'une pièce : l'étiquette accessible porte la pièce et sa date. */
@@ -136,7 +152,7 @@ describe("Écran de lettrage", () => {
     expect(retour).toMatch(/solde non lettré dit ce qui est dû sans qu'aucun règlement/i);
   });
 
-  it("n'active « Lettrer la sélection » que sur une sélection équilibrée, et dit pourquoi sinon", async () => {
+  it("n'active « Lettrer la sélection » que sur des imputations équilibrées, et dit pourquoi sinon", async () => {
     await facturerEtRegler({ montant: "1000000", pieceFacture: "FA-2026-018", pieceReglement: "RG-2026-004" });
     const racine = await ouvrir();
 
@@ -147,16 +163,54 @@ describe("Écran de lettrage", () => {
     await cocher("AN-0001");
     await cocher("FA-2026-018");
     expect(bouton("Lettrer la sélection").disabled).toBe(true);
-    expect(bouton("Lettrer la sélection").getAttribute("title")).toMatch(/n'est pas équilibrée/i);
+    expect(bouton("Lettrer la sélection").getAttribute("title")).toMatch(/ne s'équilibrent pas/i);
     // `formatMontant` signe d'un tiret : l'écart se lit −11 170 000 FCFA.
     expect(texte(racine)).toMatch(/Écart -11\s170\s000/u);
-    expect(texte(racine)).toMatch(/lettrage partiel n'est pas produit/i);
+    expect(texte(racine)).toMatch(/Écart -11\s170\s000 entre les montants imputés/u);
 
     // On corrige la sélection : la facture et son règlement.
     await cocher("AN-0001");
     await cocher("RG-2026-004");
     expect(bouton("Lettrer la sélection").disabled).toBe(false);
     expect(texte(racine)).toMatch(/Lettrage possible : 1\s170\s000/u);
+  });
+
+  it("un acompte saisi ligne à ligne crée un lettrage partiel et laisse voir le reste dû", async () => {
+    await facturerEtRegler({ montant: "1000000", pieceFacture: "FA-2026-018", pieceReglement: "RG-2026-004" });
+    const racine = await ouvrir();
+
+    await cocher("FA-2026-018");
+    await cocher("RG-2026-004");
+    // Tant que les imputations valent le reste de chaque ligne, le lettrage est total.
+    expect(bouton("Lettrer la sélection").disabled).toBe(false);
+    expect(texte(racine)).toMatch(/Lettrage possible : 1\s170\s000/u);
+
+    // Le fournisseur n'a réglé que 500 000 : on impute moins que le reste dû.
+    await imputer("FA-2026-018", "500000");
+    await imputer("RG-2026-004", "500000");
+    expect(texte(racine)).toMatch(/Lettrage partiel possible : 500\s000/u);
+    expect(bouton("Lettrer partiellement la sélection").disabled).toBe(false);
+    await cliquer(bouton("Lettrer partiellement la sélection"));
+
+    expect(texte(racine)).toMatch(/Lettrage partiel AA créé : 500\s000 imputés sur 2 lignes/u);
+    // Les deux lignes reviennent, entamées, avec ce qui reste dû : 670 000 chacune.
+    expect(texte(racine)).toMatch(/entamée/);
+    expect(texte(racine)).toMatch(/670\s000/u);
+    const cases = [...conteneur.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+    expect(cases.length).toBe(3);
+    // La marque créée dit son montant imputé, pas le montant des lignes.
+    expect(texte(racine)).toMatch(/AA/);
+  });
+
+  it("refuse une imputation illisible et le dit", async () => {
+    await facturerEtRegler({ montant: "1000000", pieceFacture: "FA-2026-018", pieceReglement: "RG-2026-004" });
+    const racine = await ouvrir();
+
+    await cocher("FA-2026-018");
+    await cocher("RG-2026-004");
+    await imputer("RG-2026-004", "abc");
+    expect(bouton("Lettrer la sélection").disabled).toBe(true);
+    expect(texte(racine)).toMatch(/n'est pas un montant lisible/i);
   });
 
   it("une marque créée retire les lignes de la liste et s'affiche en vigueur", async () => {
@@ -198,7 +252,7 @@ describe("Écran de lettrage", () => {
     const racine = await ouvrir();
 
     await cliquer(bouton("Proposer un lettrage automatique"));
-    expect(texte(racine)).toMatch(/Aucun rapprochement de même montant/i);
+    expect(texte(racine)).toMatch(/Aucun rapprochement n'a été trouvé/i);
     expect(bouton("Appliquer les propositions").disabled).toBe(true);
   });
 

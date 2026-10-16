@@ -978,3 +978,11 @@ input[type="date"] {
   font-size: 12.5px;
   margin: 0;
 }
+
+/* Imputation d'un acompte, dans la grille des lignes à lettrer : la place d'un montant, à droite. */
+.saisie-montant {
+  min-width: 7.5rem;
+  padding: 1px 5px;
+  text-align: right;
+  width: 7.5rem;
+}

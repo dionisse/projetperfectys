@@ -85,10 +85,13 @@ import {
   codeDeLettrageSuivant,
   mouvementsALettrer,
   proposerLettrageAutomatique,
+  resteDeLigne,
   situationsDeLettrage,
-  verifierGroupeALettrer,
+  verifierImputations,
   type CritereDeLettrage,
   type Lettrage,
+  type LigneAImputer,
+  type LigneALettrer,
   type PropositionLettrage,
   type SituationDeLettrage
 } from "./lettrage";
@@ -1509,8 +1512,13 @@ export class ServiceComptable {
     return situationsDeLettrage(etat.mouvements, etat.lettrages, options);
   }
 
-  /** Lignes d'un compte de tiers qui ne sont encore rapprochées d'aucune autre. */
-  async lignesALettrer(critere: CritereDeLettrage): Promise<Mouvement[]> {
+  /**
+   * Lignes d'un compte de tiers qui portent encore un reste à rapprocher.
+   *
+   * Chacune dit ce qui a déjà été consommé, ce qui reste, et sous quelles marques : une ligne entamée
+   * par un à-compte reste candidate pour son solde, et l'écran doit pouvoir montrer pourquoi.
+   */
+  async lignesALettrer(critere: CritereDeLettrage): Promise<LigneALettrer[]> {
     const etat = await this.#stockage.lire();
     this.#verifierCompteDeTiers(etat, critere.compte);
     return mouvementsALettrer(etat.mouvements, etat.lettrages, critere);
@@ -1528,15 +1536,61 @@ export class ServiceComptable {
     return proposerLettrageAutomatique(etat.mouvements, etat.lettrages, critere);
   }
 
-  /** Lettre un groupe de lignes choisi ligne à ligne. */
+  /**
+   * Lettre un groupe de lignes choisi ligne à ligne.
+   *
+   * Sans `imputations`, chaque ligne est consommée pour tout ce qui lui reste à lettrer : c'est le
+   * lettrage ordinaire. Avec `imputations`, l'utilisateur dit combien il rapproche sur chaque ligne —
+   * un règlement à-compte sur une facture plus lourde. Les imputations doivent alors couvrir toutes
+   * les lignes choisies : une ligne dont la portion n'est pas dite serait consommée en entier par
+   * surprise.
+   */
   async lettrer(demande: {
     compte: string;
     lignes: string[];
+    /** Portions imputées, en unités de la devise. Autant d'entrées que de lignes choisies. */
+    imputations?: { ligneId: string; montant: string }[];
     date?: DateCivile;
   }): Promise<Lettrage> {
     return this.#muter((etat) => {
       this.#verifierCompteDeTiers(etat, demande.compte);
-      const groupe = this.#resoudreLignes(etat, demande.lignes);
+      const mouvements = this.#resoudreLignes(etat, demande.lignes);
+
+      if (!demande.imputations) {
+        return this.#lettrerDans(
+          etat,
+          mouvements.map((mouvement) => ({
+            mouvement,
+            montant: resteDeLigne(mouvement, etat.lettrages)
+          })),
+          demande.date
+        );
+      }
+
+      const demandees = new Map(
+        demande.imputations.map((imputation) => [imputation.ligneId, analyserMontant(imputation.montant)])
+      );
+      const inconnues = [...demandees.keys()].filter(
+        (ligneId) => !mouvements.some((mouvement) => mouvement.ligneId === ligneId)
+      );
+      if (inconnues.length > 0) {
+        throw new ErreurRegle(
+          `Les portions imputées portent sur des lignes non choisies : ${inconnues.join(", ")}.`
+        );
+      }
+      const manquantes = mouvements.filter((mouvement) => !demandees.has(mouvement.ligneId));
+      if (manquantes.length > 0) {
+        throw new ErreurRegle(
+          `Les portions imputées doivent couvrir toutes les lignes choisies. Manquent : ${manquantes
+            .map((mouvement) => `${mouvement.piece} · ${mouvement.compte}`)
+            .join(", ")}.`
+        );
+      }
+
+      const groupe: LigneAImputer[] = mouvements.map((mouvement) => ({
+        mouvement,
+        montant: demandees.get(mouvement.ligneId)!
+      }));
       return this.#lettrerDans(etat, groupe, demande.date);
     });
   }
@@ -1552,7 +1606,13 @@ export class ServiceComptable {
       const propositions = proposerLettrageAutomatique(etat.mouvements, etat.lettrages, critere);
       const crees: Lettrage[] = [];
       for (const proposition of propositions) {
-        const groupe = this.#resoudreLignes(etat, proposition.lignes);
+        const mouvements = this.#resoudreLignes(etat, proposition.lignes);
+        // Les portions proposées sont appliquées telles quelles : une proposition partielle ne doit
+        // pas devenir un lettrage total à l'écriture.
+        const groupe: LigneAImputer[] = proposition.portions.map((imputation) => ({
+          mouvement: mouvements.find((mouvement) => mouvement.ligneId === imputation.ligneId)!,
+          montant: imputation.montant
+        }));
         crees.push(this.#lettrerDans(etat, groupe, critere.au));
       }
       if (crees.length > 0) {
@@ -1831,28 +1891,24 @@ export class ServiceComptable {
   }
 
   /** Vérifie un groupe, l'attribue et le trace. Appelé dans une mutation déjà ouverte. */
-  #lettrerDans(etat: EtatDossier, groupe: readonly Mouvement[], date?: DateCivile): Lettrage {
-    const verifie = verifierGroupeALettrer(groupe, this.#paquet.devise);
+  /**
+   * Crée une marque de lettrage sur des lignes **et** les portions imputées.
+   *
+   * Une portion égale au reste de la ligne est un lettrage ordinaire ; une portion inférieure est un
+   * à-compte, et la marque porte alors ses imputations pour que le reste de chaque ligne demeure
+   * lisible. Les écritures ne sont jamais scindées : ce qui reste dû reste sur la ligne d'origine.
+   */
+  #lettrerDans(etat: EtatDossier, groupe: readonly LigneAImputer[], date?: DateCivile): Lettrage {
+    const verifie = verifierImputations(groupe, etat.lettrages, this.#paquet.devise);
+    const mouvements = groupe.map((imputation) => imputation.mouvement);
 
-    const enVigueur = etat.lettrages.filter((lettrage) => lettrage.defaitLe === null);
-    for (const mouvement of groupe) {
-      const deja = enVigueur.find((lettrage) => lettrage.lignes.includes(mouvement.ligneId));
-      if (deja) {
-        throw new ErreurRegle(
-          `La ligne ${mouvement.piece} · ${mouvement.compte} du ${formaterDateFr(
-            mouvement.date
-          )} est déjà lettrée sous le code ${deja.code}. Délettrez-la avant de la rapprocher d'une autre ligne.`
-        );
-      }
-    }
-
-    const comptes = [...new Set(groupe.map((mouvement) => comptePrincipalDe(mouvement.compte)))];
+    const comptes = [...new Set(mouvements.map((mouvement) => comptePrincipalDe(mouvement.compte)))];
     if (comptes.length > 1) {
       throw new ErreurRegle(
         `Un lettrage ne mélange pas deux comptes : ${comptes.join(" et ")} demandés. Lettrez chaque compte séparément.`
       );
     }
-    const tiers = [...new Set(groupe.map((mouvement) => mouvement.tiersCode))];
+    const tiers = [...new Set(mouvements.map((mouvement) => mouvement.tiersCode))];
     if (tiers.length > 1) {
       throw new ErreurRegle(
         `Un lettrage ne mélange pas deux tiers : ${tiers.map((code) => code ?? "sans tiers").join(" et ")}.`
@@ -1864,8 +1920,9 @@ export class ServiceComptable {
       code: codeDeLettrageSuivant(etat.lettrages),
       compte: comptes[0]!,
       tiersCode: tiers[0] ?? null,
-      lignes: groupe.map((mouvement) => mouvement.ligneId),
+      lignes: mouvements.map((mouvement) => mouvement.ligneId),
       montant: verifie.montant,
+      ...(verifie.partiel ? { portions: verifie.portions } : {}),
       date: date ?? (horodate.slice(0, 10) as DateCivile),
       acteur: this.#utilisateur,
       horodate,
@@ -1874,10 +1931,21 @@ export class ServiceComptable {
     etat.lettrages.push(lettrage);
     this.#tracer(
       etat,
-      "Lettrage",
+      verifie.partiel ? "Lettrage partiel" : "Lettrage",
       "Lettrage",
       lettrage.code,
-      `${lettrage.compte}${lettrage.tiersCode ? ` · ${lettrage.tiersCode}` : ""} — ${
+      `${lettrage.compte}${lettrage.tiersCode ? ` · ${lettrage.tiersCode}` : ""}${
+        verifie.partiel
+          ? ` — partiel : reste à lettrer ${groupe
+              .map((imputation) => ({
+                imputation,
+                reste: resteDeLigne(imputation.mouvement, etat.lettrages)
+              }))
+              .filter(({ reste }) => reste > ZERO)
+              .map(({ imputation, reste }) => `${imputation.mouvement.piece} ${formatMontant(reste, this.#paquet.devise)}`)
+              .join(", ")}`
+          : ""
+      } — ${
         groupe.length
       } lignes, ${formatMontant(lettrage.montant, this.#paquet.devise)}`
     );
@@ -2740,7 +2808,11 @@ export interface EtatDossierSerialise
     lignes: (Omit<LigneDeReleve, "montant"> & { montant: string })[];
   })[];
   pointages: (Omit<Pointage, "montant"> & { montant: string })[];
-  lettrages: (Omit<Lettrage, "montant"> & { montant: string })[];
+  lettrages: (Omit<Lettrage, "montant" | "portions"> & {
+    montant: string;
+    /** Absent d'une marque totale : les sauvegardes produites avant le lettrage partiel restent lisibles. */
+    portions?: { ligneId: string; montant: string }[];
+  })[];
   exercicesClos: (Omit<ExerciceClos, "resultat" | "totalActif" | "totalPassif"> & {
     resultat: string;
     totalActif: string;
@@ -2775,7 +2847,13 @@ export function serialiserEtat(etat: EtatDossier): EtatDossierSerialise {
       debit: montantVersChaine(mouvement.debit),
       credit: montantVersChaine(mouvement.credit)
     })),
-    lettrages: etat.lettrages.map((lettrage) => ({ ...lettrage, montant: montantVersChaine(lettrage.montant) })),
+    lettrages: etat.lettrages.map(({ portions, ...lettrage }) => ({
+      ...lettrage,
+      montant: montantVersChaine(lettrage.montant),
+      ...(portions
+        ? { portions: portions.map((imputation) => ({ ligneId: imputation.ligneId, montant: montantVersChaine(imputation.montant) })) }
+        : {})
+    })),
     exercicesClos: etat.exercicesClos.map((clos) => ({
       ...clos,
       resultat: montantVersChaine(clos.resultat),
@@ -2812,7 +2890,18 @@ export function deserialiserEtat(brut: EtatDossierSerialise): EtatDossier {
       debit: montantDepuisChaine(mouvement.debit),
       credit: montantDepuisChaine(mouvement.credit)
     })),
-    lettrages: brut.lettrages.map((lettrage) => ({ ...lettrage, montant: montantDepuisChaine(lettrage.montant) })),
+    lettrages: brut.lettrages.map(({ portions, ...lettrage }) => ({
+      ...lettrage,
+      montant: montantDepuisChaine(lettrage.montant),
+      ...(portions
+        ? {
+            portions: portions.map((imputation) => ({
+              ligneId: imputation.ligneId,
+              montant: montantDepuisChaine(imputation.montant)
+            }))
+          }
+        : {})
+    })),
     exercicesClos: brut.exercicesClos.map((clos) => ({
       ...clos,
       resultat: montantDepuisChaine(clos.resultat),

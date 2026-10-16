@@ -161,20 +161,34 @@ Sage 300 GL : même noyau, couche séparée.
 
 ### 5.0 Ce que le lettrage livre
 
-`compta/src/noyau/lettrage.ts` produit les marques, l'écran ne fait que les montrer. Trois règles :
+`compta/src/noyau/lettrage.ts` produit les marques, l'écran ne fait que les montrer. Quatre règles :
 
-- **Un groupe lettré est équilibré.** La somme des débits égale la somme des crédits. Un groupe d'un
-  seul sens, ou dont l'écart n'est pas nul, est refusé — le lettrage partiel (un règlement à-compte)
-  n'est pas produit, parce qu'il suppose un suivi des imputations ligne à ligne.
-- **La proposition précède l'écriture.** Le lettrage automatique rapproche des montants exactement
-  égaux (un contre un, puis un contre deux ou trois, dans une recherche bornée et triée) ; ce qu'il
-  trouve est affiché avant que l'utilisateur ne l'applique. Ce qui n'est pas rapproché reste à
-  lettrer à la main, et l'écran le dit.
-- **Un délettrage ne supprime rien.** La marque défaite reste lisible avec sa date : l'historique
-  d'un compte de tiers doit pouvoir être reconstitué, et un code de lettrage n'est jamais recyclé.
+- **Un groupe lettré est équilibré sur ses imputations.** Chaque ligne du groupe porte le montant
+  qui lui est imputé ; la somme des débits imputés égale la somme des crédits imputés. Un groupe d'un
+  seul sens, ou dont l'écart n'est pas nul, est refusé.
+- **On ne lettre pas plus qu'il n'est dû.** L'imputation d'une ligne ne peut excéder ce qui lui reste
+  à lettrer, et une ligne déjà entièrement lettrée est refusée — le message cite la marque en cause
+  plutôt que le montant saisi. Une ligne n'est jamais scindée : l'écriture est immuable, c'est la
+  marque qui porte ses imputations (`Lettrage.portions`). Une marque **sans** ce champ se lit comme
+  avant : chaque ligne y est consommée en entier, ce qui laisse valides les marques et les sauvegardes
+  produites avant le lettrage partiel.
+- **La proposition précède l'écriture, en trois passes déterministes.** (1) un débit contre un crédit
+  de même montant ; (2) une ligne contre deux ou trois de l'autre sens dont les montants somment
+  exactement (recherche bornée par `tailleMaximaleDuGroupe`, 4 par défaut) ; (3) ce qui ne tombe pas
+  juste : le règlement le plus ancien est imputé sur la dette la plus ancienne, à hauteur du plus
+  petit des deux restes — un **à-compte**, annoncé « Règlement partiel ». Une même facture peut
+  recevoir plusieurs marques partielles. Ce qui est trouvé est affiché avant d'être appliqué ;
+  l'option `partiel: false` s'en tient aux deux premières passes.
+- **Un délettrage ne supprime rien.** La marque défaite reste lisible avec sa date et rend son
+  imputation : l'historique d'un compte de tiers doit pouvoir être reconstitué, et un code de
+  lettrage n'est jamais recyclé.
 
 L'écran distingue deux soldes : le solde comptable (ce qui est dû) et le solde non lettré (ce qui
-est dû sans qu'aucun règlement ne l'explique), avec la plus ancienne ligne non rapprochée.
+est dû sans qu'aucun règlement ne l'explique), avec la plus ancienne ligne non rapprochée et le
+nombre de lignes entamées. Le solde non lettré somme **les restes**, pas les lignes sans marque :
+après un acompte de 500 000 sur une facture de 1 170 000, ce qui reste dû est 670 000. Chaque ligne
+affiche son consommé, son reste, ses marques et son état (`nonLettree`, `partielle`, `lettree`), et
+l'interrogation de compte reporte le reste à lettrer ligne à ligne.
 
 ### 5.1 Ce que le producteur d'états financiers livre
 
@@ -262,7 +276,9 @@ l'affiche en avertissement avec les deux soldes d'ouverture à vérifier.
 **Le pointage automatique** retient la référence avant le montant : deux règlements du même montant le
 même jour sont courants, deux règlements portant le même numéro de chèque ne le sont pas. Les
 propositions sont montrées avant d'être appliquées, comme pour le lettrage. Un pointage n'accepte que
-des montants **exactement égaux** ; un règlement partiel ne se pointe pas, il se comptabilise.
+des montants **exactement égaux** : contrairement au lettrage, il n'y a pas de pointage partiel. Un
+règlement à-compte se lettre au compte du tiers, et la ligne de banque qui le porte se pointe pour
+son montant entier — le relevé dit ce que la banque a fait, pas ce que l'entreprise doit.
 
 **Le dépointage** conserve la trace : un pointage défait garde son identifiant, son acteur et sa date
 de défaisance. Un rapprochement refait ne fait pas disparaître celui qui a été défait.
@@ -433,9 +449,9 @@ deux dossiers, et l'import de données depuis un fichier tiers (ECF, FEC, CSV de
 | **A** | Noyau : montants, calendrier, comptes segmentés, plan SYSCOHADA, lots, taxes, paquet pays Bénin, grand livre, stockage | suite de tests verte en Node | **livrée** (`e27fbe1`) |
 | **B** | Coquille Sage 100 (menus, barre d'état, finder) + écrans **Structure** : société, plan comptable, journaux, tiers, codes de taxe | aperçu live, écrans validés par l'utilisateur | **livrée** (`77afc69`), en attente de validation ; complétée par le **paramétrage modifiable** (§5.4) : société, plan comptable et taux se corrigent dans l'application, 17 + 4 tests |
 | **C** | Écrans **Traitements** : lots, saisie des écritures en table de détail, comptabilisation, contre-passation | aperçu live + tests de parcours | **livrée**, 9 tests de parcours en jsdom |
-| **D** | Écrans **Interrogation** : balance, grand livre, journal, compte, historique | aperçu live | **livrée** : balance, journal, grand livre, puis **interrogation de compte** (§5.5) — producteur `interrogation.ts`, solde progressif à partir du solde réel, lecture d'un segment de tiers, marques de lettrage et de pointage sur les lignes, exercice clos signalé, historique par exercice avec solde reporté, comparaison d'exercices refusée quand l'exercice n'existe pas, liste des comptes qui ont bougé, écran avec fenêtre libre et export CSV, 8 + 3 tests. Reste l'interrogation par montant ou par lettre (le finder de Sage) et l'appel d'une écriture depuis une ligne |
+| **D** | Écrans **Interrogation** : balance, grand livre, journal, compte, historique | aperçu live | **livrée** : balance, journal, grand livre, puis **interrogation de compte** (§5.5) — producteur `interrogation.ts`, solde progressif à partir du solde réel, lecture d'un segment de tiers, marques de lettrage et de pointage sur les lignes, **reste à lettrer par ligne** et ligne entamée signalée, exercice clos signalé, historique par exercice avec solde reporté, comparaison d'exercices refusée quand l'exercice n'existe pas, liste des comptes qui ont bougé, écran avec fenêtre libre et export CSV, 8 + 3 tests. Reste l'interrogation par montant ou par lettre (le finder de Sage) et l'appel d'une écriture depuis une ligne |
 | **E** | Taxes Bénin en saisie + **déclaration TVA** mensuelle | tests de calcul fiscal | **livrée** : génération des lignes de taxe en saisie, déclaration recalculée et rapprochée du grand livre, export CSV. Reste le reversement des acomptes et retenues (compte 442100), qui relève d'une autre obligation |
-| **F** | Lettrage, rapprochement bancaire | tests | **partiellement livrée** : lettrage des comptes de tiers — producteur `lettrage.ts`, écran, lettrage manuel et automatique (proposé avant d'être appliqué), délettrage tracé, export CSV, 21 tests — **et rapprochement bancaire** : relevés saisis ligne à ligne, producteur `rapprochement.ts`, état de rapprochement avec écart expliqué et reste inexpliqué, pointage manuel et automatique (par référence puis par montant), dépointage tracé, écran, export CSV, 13 + 3 tests. Reste le lettrage partiel d'un règlement à-compte ; l'import d'un fichier de relevé (CSV, OFX, CAMT) n'est pas produit |
+| **F** | Lettrage, rapprochement bancaire | tests | **partiellement livrée** : lettrage des comptes de tiers — producteur `lettrage.ts`, écran, lettrage manuel et automatique (proposé avant d'être appliqué), **lettrage partiel d'un règlement à-compte** (§5.0 : imputations ligne à ligne, reste à lettrer affiché, trois passes de proposition dont les à-comptes du plus ancien au plus récent, marques anciennes sans `portions` toujours lisibles), délettrage tracé, export en trois formats, 40 tests — **et rapprochement bancaire** : relevés saisis ligne à ligne, producteur `rapprochement.ts`, état de rapprochement avec écart expliqué et reste inexpliqué, pointage manuel et automatique (par référence puis par montant), dépointage tracé, écran, export, 13 + 3 tests. Reste l'import d'un fichier de relevé (CSV, OFX, CAMT) |
 | **G** | Clôtures : période, exercice, à-nouveaux, *Create New Year* | tests | **livrée** : rapport de préparation, clôture d'exercice (solde des comptes de gestion vers 121000, à-nouveaux segment de tiers compris, ouverture de l'exercice suivant, archivage de l'exercice clos), lectures par exercice, écran avec confirmation explicite, 14 tests. La réouverture d'un exercice clos n'est pas produite : la clôture est définitive, et l'écran le dit |
 | **H** | États financiers OHADA révisé (producteur distinct), exports PDF/Excel/CSV de tous les documents | fichiers produits et vérifiés | **largement livrée** : bilan et compte de résultat OHADA révisé — producteur `etats-financiers.ts`, deux écrans, arrêté par période, **colonne N-1 dès qu'un exercice est clos**, 18 tests ; puis les **trois formats d'export** (§5.6) — description unique du document, Excel à montants numériques avec un onglet par section, PDF A4 paginé avec en-tête de société, CSV inchangé, chargement à la demande des bibliothèques, 14 tests de rendu (dont un XLSX relu par `exceljs` et un PDF dont le texte imprimé est décodé) plus 2 parcours d'écran. Restent le tableau des flux de trésorerie et le tableau de variation des activités (aucun compte du plan n'est classé en flux) |
 | **I** | Piste d'audit, habilitations par écran, import/export de données, sauvegarde/restauration, hôte Windows | tests + package installable | piste d'audit **livrée** (ajout-seulement, attribuée, horodatée) ; **sauvegarde et restauration livrées** (§5.7) — fichier JSON autosuffisant et versionné, inventaire chiffré, montants en chaînes, quatre refus motivés dont le grand livre déséquilibré et le paquet pays différent, vérification à l'écran puis dans le noyau, remplacement tracé avec le contenu écrasé, écran avec marche arrière obligatoire, 7 + 3 tests. Restent les habilitations par écran, l'import de données tiers (FEC, ECF, CSV), la sauvegarde automatique et l'hôte Windows |

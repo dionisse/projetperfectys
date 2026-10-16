@@ -131,10 +131,28 @@ export function Interrogation() {
         "Solde",
         "Sens",
         "Lettrage",
+        "Reste à lettrer",
         "Pointage",
         "Exercice clos"
       ],
-      ["", "", "", "", "", "", "À nouveau", "", "", "", interrogation.soldeInitial, interrogation.sensInitial, "", "", ""],
+      [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "À nouveau",
+        "",
+        "",
+        "",
+        interrogation.soldeInitial,
+        interrogation.sensInitial,
+        "",
+        "",
+        "",
+        ""
+      ],
       ...interrogation.lignes.map((ligne) => [
         ligne.exercice,
         ligne.periode,
@@ -149,6 +167,7 @@ export function Interrogation() {
         ligne.soldeProgressif,
         formaterSens(ligne.sens),
         ligne.lettrage ?? "",
+        ligne.resteALettrer,
         ligne.pointage ?? "",
         ligne.exerciceClos ? "oui" : "non"
       ]),
@@ -165,6 +184,7 @@ export function Interrogation() {
         interrogation.totalCredit,
         interrogation.soldeFinal,
         formaterSens(interrogation.sensFinal),
+        "",
         "",
         "",
         ""
@@ -234,8 +254,25 @@ export function Interrogation() {
       cle: "lettrage",
       titre: "Lettré",
       alignement: "centre",
-      largeur: "5rem",
-      valeur: (ligne) => (ligne.lettrage ? <span class="mono">{ligne.lettrage}</span> : "—")
+      largeur: "6rem",
+      valeur: (ligne) =>
+        ligne.lettrage ? (
+          <>
+            <span class="mono">{ligne.lettrage}</span>
+            {ligne.lettragePartiel ? <Etiquette ton="alerte">entamée</Etiquette> : null}
+          </>
+        ) : (
+          "—"
+        )
+    },
+    {
+      cle: "reste",
+      titre: "Reste à lettrer",
+      alignement: "droite",
+      largeur: "9rem",
+      valeur: (ligne) => (
+        <span class="mono">{ligne.resteALettrer === ZERO ? "" : montant(ligne.resteALettrer)}</span>
+      )
     },
     {
       cle: "pointage",

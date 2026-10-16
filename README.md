@@ -27,7 +27,7 @@ la même base.
 
 ```bash
 npm install            # installe l'espace de travail (compta)
-npm test               # 229 tests : noyau en Node, interface en jsdom, exports vérifiés
+npm test               # 248 tests : noyau en Node, interface en jsdom, exports vérifiés
 npm run typecheck      # TypeScript strict, sans émission
 npm run build          # build de production dans compta/dist
 npm run preview:vercel # sert le build comme le ferait Vercel, sur http://localhost:5173
@@ -60,9 +60,10 @@ npm run dev            # serveur de développement Vite
   l'argent entre. L'écran confronte ce relevé au compte de trésorerie : les deux soldes, l'écart, la
   part que les suspens de la période expliquent, ce que les périodes antérieures ont laissé, et
   **ce qui reste inexpliqué**. Le pointage rapproche une ligne d'un mouvement, par référence d'abord
-  puis par montant exact, et refuse deux montants différents : rapprocher un règlement partiel
-  masquerait une écriture manquante, et c'est précisément ce que l'état doit révéler. Un pointage se
-  défait sans effacer sa trace.
+  puis par montant exact, et refuse deux montants différents : un règlement partiel se lettre
+  à-compte au compte du tiers, mais au relevé il ne se pointe pas — rapprocher deux montants
+  différents masquerait une écriture manquante, et c'est précisément ce que l'état doit révéler. Un
+  pointage se défait sans effacer sa trace.
 - **Clôture d'exercice** (le *Create New Year* de Sage) : un **rapport de préparation** montre avant
   toute écriture ce qui s'y oppose — périodes ouvertes, lots en attente, grand livre déséquilibré,
   soldes initiaux posés dans le plan — et le contenu ligne à ligne des deux écritures qui seraient
@@ -71,11 +72,16 @@ npm run dev            # serveur de développement Vite
   ses périodes, et archive l'exercice clos avec toutes ses périodes clôturées. Elle est définitive :
   plus aucune écriture n'entre dans un exercice clos, et chaque exercice est consultable séparément.
 - **Lettrage des comptes de tiers** : situation compte par compte (solde comptable **et** solde non
-  lettré, plus ancienne ligne non rapprochée), lignes à lettrer cochables, lettrage manuel d'une
-  sélection, **lettrage automatique proposé avant d'être appliqué** (montants exactement égaux, un
-  contre un ou un contre deux ou trois), délettrage. Une marque n'écrit aucune écriture : elle
-  rapproche des lignes déjà comptabilisées. Un groupe déséquilibré est refusé, l'écart affiché, et le
-  bouton grisé porte la raison. Un délettrage ne supprime pas la marque : il la date.
+  lettré, plus ancienne ligne non rapprochée, nombre de lignes entamées), lignes à lettrer cochables
+  avec leur **reste à lettrer**, lettrage manuel d'une sélection, **lettrage partiel d'un règlement
+  à-compte** (la colonne « Imputer » dit combien on rapproche sur chaque ligne cochée), **lettrage
+  automatique proposé avant d'être appliqué** (montant exact, puis montants composés, puis à-comptes
+  du plus ancien au plus récent), délettrage. Une marque n'écrit aucune écriture : elle rapproche des
+  lignes déjà comptabilisées. Une ligne n'est jamais scindée — la marque porte ses imputations, et ce
+  qui reste dû revient dans la liste, marqué « entamée ». Un groupe dont les imputations ne
+  s'équilibrent pas est refusé, l'écart affiché, et le bouton grisé porte la raison. On ne peut pas
+  imputer plus qu'il n'est dû. Un délettrage ne supprime pas la marque : il la date et rend son
+  imputation.
 - **Interrogation** : balance filtrable par période, journal par pièce avec son détail, grand livre
   à solde progressif par compte (comptes auxiliaires compris), et **interrogation de compte** —
   l'écran du quotidien : un compte ou un segment de tiers (`401100-FOU01`), une fenêtre libre, le
@@ -131,7 +137,7 @@ npm run dev            # serveur de développement Vite
 Les entrées de menu correspondant à des fonctions non livrées sont **visibles, grisées, et portent
 la tranche qui les livrera** en infobulle. Elles ne sont pas cliquables : aucun lien mort, aucun
 écran vide. Import d'un fichier de relevé bancaire (CSV, OFX, CAMT — le relevé se saisit ligne à
-ligne en attendant), lettrage partiel d'un règlement à-compte, écritures récurrentes, **réouverture d'un exercice clos**
+ligne en attendant), écritures récurrentes, **réouverture d'un exercice clos**
 (la clôture est définitive dans cette version : la correction d'un exercice clos passe par une
 écriture dans l'exercice en cours, et l'écran le dit), affectation du résultat décidée en assemblée
 (121000 vers 111000 ou 112000), interrogation d'un compte par montant ou par lettre et appel d'une
@@ -180,7 +186,10 @@ habilitations par écran.
     résultat présenté et la somme des comptes de gestion pour le compte de résultat.
 11. **Une marque ne réécrit pas le grand livre.** Le lettrage rapproche des lignes déjà
     comptabilisées : il n'écrit aucun mouvement, ne modifie aucun solde, et se défait sans trace
-    perdue. Un délettrage date la marque au lieu de la supprimer.
+    perdue. Un délettrage date la marque au lieu de la supprimer. Une marque totale ne porte pas
+    d'imputations — chaque ligne est consommée pour son reste ; une marque partielle porte les
+    siennes, ligne par ligne, et ce qui reste dû demeure ouvert. Une ligne n'est jamais scindée :
+    l'écriture comptable reste intacte, seule la marque dit ce qu'elle a rapproché.
 12. **La clôture se prépare avant de s'exécuter.** `preparerCloture` ne produit aucune écriture : il
     décrit ce qui serait écrit et cite chaque obstacle. L'écran exige en plus une confirmation
     explicite, parce qu'une clôture est définitive. Un exercice clos est archivé tel quel — ses

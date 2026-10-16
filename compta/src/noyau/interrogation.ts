@@ -25,7 +25,7 @@ import {
 } from "./grand-livre";
 import type { Compte } from "./comptes";
 import { formaterDateFr, type DateCivile } from "./calendrier";
-import type { Lettrage } from "./lettrage";
+import { etatDeLettrage, resteDeLigne, type Lettrage } from "./lettrage";
 import type { Pointage, ReleveBancaire } from "./rapprochement";
 
 /**
@@ -73,6 +73,15 @@ export interface LigneInterrogation {
   sens: SensSolde;
   /** Code de lettrage, ou `null` si la ligne ne porte pas de marque en vigueur. */
   lettrage: string | null;
+  /**
+   * Ce qui reste à rapprocher sur cette ligne.
+   *
+   * Nul pour une ligne entièrement lettrée ou jamais entamée. Un à-compte laisse un reste : c'est ce
+   * reste, et non la seule absence de marque, qui dit ce qui est encore dû sans règlement.
+   */
+  resteALettrer: Montant;
+  /** La ligne porte une marque qui ne la solde pas : un règlement partiel l'a entamée. */
+  lettragePartiel: boolean;
   /** Relevé qui a pointé cette ligne, ou `null`. */
   pointage: string | null;
   /** La ligne vient d'un exercice clos : elle ne bougera plus. */
@@ -246,7 +255,8 @@ export function interrogerCompte(
       gauche.ligneId.localeCompare(droite.ligneId)
   );
 
-  const parLigneLettrage = lettragesParLigne(contexte.lettrages ?? []);
+  const marques = contexte.lettrages ?? [];
+  const parLigneLettrage = lettragesParLigne(marques);
   const parLignePointage = pointagesParLigne(contexte.pointages ?? [], contexte.releves ?? []);
 
   let solde = soldeInitial;
@@ -268,6 +278,8 @@ export function interrogerCompte(
       soldeProgressif: solde,
       sens: sensDe(solde),
       lettrage: parLigneLettrage.get(mouvement.ligneId) ?? null,
+      resteALettrer: resteDeLigne(mouvement, marques),
+      lettragePartiel: etatDeLettrage(mouvement, marques) === "partielle",
       pointage: parLignePointage.get(mouvement.ligneId) ?? null,
       exerciceClos: exercicesClos.has(mouvement.exercice)
     };
@@ -276,8 +288,10 @@ export function interrogerCompte(
   const totalDebit = additionner(...lignes.map((ligne) => ligne.debit));
   const totalCredit = additionner(...lignes.map((ligne) => ligne.credit));
   const soldeFinal = solde;
+  // Ce qui reste à lettrer, pas ce qui n'a jamais été lettré : une ligne entamée par un à-compte
+  // porte une marque et reste due pour son solde.
   const nonLettre = additionner(
-    ...lignes.filter((ligne) => ligne.lettrage === null).map((ligne) => ligne.debit - ligne.credit)
+    ...lignes.map((ligne) => (ligne.debit !== ZERO ? ligne.resteALettrer : -ligne.resteALettrer))
   );
   const nonPointe = additionner(
     ...lignes.filter((ligne) => ligne.pointage === null).map((ligne) => ligne.debit - ligne.credit)

@@ -5,19 +5,23 @@
  * (ce qui est dû, ce qui est rapproché, ce qui ne l'est pas), les lignes à lettrer du compte choisi,
  * et les marques posées — y compris celles qui ont été défaites.
  *
- * Le lettrage n'écrit aucune écriture : il rapproche des lignes déjà comptabilisées. C'est pourquoi
- * l'écran refuse de proposer un bouton « Lettrer » quand la sélection ne tombe pas juste : il affiche
- * l'écart et laisse l'utilisateur compléter sa sélection.
+ * Le lettrage n'écrit aucune écriture : il rapproche des lignes déjà comptabilisées. Une ligne se
+ * lettre en entier ou en partie : quand la sélection ne tombe pas juste, l'écran laisse l'utilisateur
+ * imputer un montant inférieur à ce qui reste dû sur une ou plusieurs lignes — un acompte qui laissera
+ * ces lignes partiellement lettrées, avec leur reste affiché à côté. Rien n'est envoyé tant que les
+ * imputations saisies ne s'équilibrent pas.
  */
 
 import { useState } from "preact/hooks";
 import {
   ZERO,
+  analyserMontant,
   formaterDateFr,
   type CritereDeLettrage,
   type DateCivile,
   type Lettrage,
-  type Mouvement,
+  type LigneALettrer,
+  type Montant,
   type PropositionLettrage,
   type SituationDeLettrage
 } from "../../noyau/index";
@@ -42,6 +46,7 @@ export function Lettrage(props: { onMutation: () => void }) {
   const [compte, setCompte] = useState("401100");
   const [tiers, setTiers] = useState<string>("tous");
   const [cochees, setCochees] = useState<string[]>([]);
+  const [imputations, setImputations] = useState<Record<string, string>>({});
   const [propositions, setPropositions] = useState<PropositionLettrage[] | null>(null);
   const [retour, setRetour] = useState<{ ton: "succes" | "erreur"; texte: string } | null>(null);
   const [revision, setRevision] = useState(0);
@@ -79,23 +84,64 @@ export function Lettrage(props: { onMutation: () => void }) {
   const { contexte, situations, lignes, marques } = donnees;
   const tiersDuCompte = situations.filter((item) => item.compte === compte && item.tiersCode !== null);
 
-  const cocheesResolues: Mouvement[] = lignes.filter((ligne) => cochees.includes(ligne.ligneId));
-  const totalDebit = cocheesResolues.reduce((total, ligne) => total + ligne.debit, ZERO);
-  const totalCredit = cocheesResolues.reduce((total, ligne) => total + ligne.credit, ZERO);
+  const cocheesResolues: LigneALettrer[] = lignes.filter((ligne) => cochees.includes(ligne.ligneId));
+
+  /** Ce que l'utilisateur impute sur une ligne cochée : le reste entier, sauf saisie contraire. */
+  const imputationDe = (ligne: LigneALettrer): { montant: Montant | null; erreur: string | null } => {
+    const saisie = imputations[ligne.ligneId];
+    if (saisie === undefined || saisie.trim() === "") {
+      return { montant: ligne.reste, erreur: null };
+    }
+    try {
+      return { montant: analyserMontant(saisie), erreur: null };
+    } catch (erreur) {
+      return { montant: null, erreur: message(erreur) };
+    }
+  };
+
+  const saisies = cocheesResolues.map((ligne) => ({ ligne, ...imputationDe(ligne) }));
+  const illisible = saisies.some((saisie) => saisie.montant === null);
+  const impute = (cote: "debit" | "credit"): Montant =>
+    saisies.reduce((total, saisie) => {
+      if (saisie.montant === null) {
+        return total;
+      }
+      const surCeCote = cote === "debit" ? saisie.ligne.debit !== ZERO : saisie.ligne.credit !== ZERO;
+      return surCeCote ? total + saisie.montant : total;
+    }, ZERO);
+  const totalDebit = impute("debit");
+  const totalCredit = impute("credit");
   const ecart = totalDebit - totalCredit;
-  const lettrable = cocheesResolues.length >= 2 && ecart === ZERO;
+  const lettrable = cocheesResolues.length >= 2 && !illisible && ecart === ZERO;
+  const partiel = saisies.some((saisie) => saisie.montant !== null && saisie.montant < saisie.ligne.reste);
   const raisonIndisponible =
     cocheesResolues.length < 2
       ? "Sélectionnez au moins deux lignes à rapprocher."
-      : ecart !== ZERO
-        ? `La sélection n'est pas équilibrée : écart ${montant(ecart)}. Le lettrage partiel n'est pas produit.`
-        : "";
+      : illisible
+        ? "Une imputation saisie n'est pas un montant lisible."
+        : ecart !== ZERO
+          ? `Les imputations ne s'équilibrent pas : écart ${montant(
+              ecart
+            )}. Corrigez les montants imputés, ou complétez la sélection.`
+          : "";
 
   const basculer = (ligneId: string): void => {
     setRetour(null);
     setCochees((precedent) =>
       precedent.includes(ligneId) ? precedent.filter((item) => item !== ligneId) : [...precedent, ligneId]
     );
+    if (cochees.includes(ligneId)) {
+      setImputations((precedent) => {
+        const { [ligneId]: _retiree, ...suite } = precedent;
+        void _retiree;
+        return suite;
+      });
+    }
+  };
+
+  const saisirImputation = (ligneId: string, valeur: string): void => {
+    setRetour(null);
+    setImputations((precedent) => ({ ...precedent, [ligneId]: valeur }));
   };
 
   const terminer = (texte: string): void => {
@@ -112,11 +158,28 @@ export function Lettrage(props: { onMutation: () => void }) {
 
   const lettrer = async (): Promise<void> => {
     try {
-      const lettrage = await service.lettrer({ compte, lignes: cochees });
+      const lettrage = await service.lettrer({
+        compte,
+        lignes: cochees,
+        ...(partiel
+          ? {
+              imputations: saisies
+                .filter((saisie) => saisie.montant !== null)
+                .map((saisie) => ({
+                  ligneId: saisie.ligne.ligneId,
+                  montant: String(saisie.montant)
+                }))
+            }
+          : {})
+      });
       terminer(
-        `Lettrage ${lettrage.code} créé : ${lettrage.lignes.length} lignes rapprochées, ${montant(
-          lettrage.montant
-        )}.`
+        lettrage.portions
+          ? `Lettrage partiel ${lettrage.code} créé : ${montant(lettrage.montant)} imputés sur ${
+              lettrage.lignes.length
+            } lignes. Ce qui reste dû demeure ouvert et reviendra dans la liste.`
+          : `Lettrage ${lettrage.code} créé : ${lettrage.lignes.length} lignes rapprochées, ${montant(
+              lettrage.montant
+            )}.`
       );
     } catch (erreur) {
       echouer(erreur);
@@ -133,7 +196,7 @@ export function Lettrage(props: { onMutation: () => void }) {
           ? {
               ton: "erreur",
               texte:
-                "Aucun rapprochement de même montant n'a été trouvé. Le lettrage automatique ne rapproche que des montants exactement égaux : le reste se lettre à la main."
+                "Aucun rapprochement n'a été trouvé : ni montant exact, ni combinaison de montants, ni règlement partiel imputable. Le solde reste ouvert."
             }
           : {
               ton: "succes",
@@ -368,6 +431,9 @@ export function Lettrage(props: { onMutation: () => void }) {
                     <th>Libellé</th>
                     <th class="align-droite">Débit</th>
                     <th class="align-droite">Crédit</th>
+                    <th>Marques</th>
+                    <th class="align-droite">Reste à lettrer</th>
+                    <th class="align-droite">Imputer</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -389,12 +455,36 @@ export function Lettrage(props: { onMutation: () => void }) {
                       <td>{ligne.libelle}</td>
                       <td class="align-droite mono">{ligne.debit === ZERO ? "" : montant(ligne.debit)}</td>
                       <td class="align-droite mono">{ligne.credit === ZERO ? "" : montant(ligne.credit)}</td>
+                      <td class="mono">
+                        {ligne.marques.join(", ")}
+                        {ligne.etat === "partielle" ? <Etiquette ton="alerte">entamée</Etiquette> : null}
+                      </td>
+                      <td class="align-droite mono">
+                        <strong>{ligne.reste === ZERO ? "" : montant(ligne.reste)}</strong>
+                      </td>
+                      <td class="align-droite">
+                        {cochees.includes(ligne.ligneId) ? (
+                          <input
+                            class="mono saisie-montant"
+                            type="text"
+                            inputMode="decimal"
+                            value={imputations[ligne.ligneId] ?? String(ligne.reste)}
+                            aria-label={`Montant imputé sur la ligne ${ligne.piece}`}
+                            onChange={(evenement) => saisirImputation(ligne.ligneId, evenement.currentTarget.value)}
+                          />
+                        ) : (
+                          ""
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr>
-                    <th colSpan={7}>Sélection — {cocheesResolues.length} ligne{cocheesResolues.length > 1 ? "s" : ""}</th>
+                    <th colSpan={7}>
+                      Sélection — {cocheesResolues.length} ligne{cocheesResolues.length > 1 ? "s" : ""}
+                      {partiel ? " (imputations partielles)" : ""}
+                    </th>
                     <td class="align-droite mono">{montant(totalDebit)}</td>
                     <td class="align-droite mono">{montant(totalCredit)}</td>
                   </tr>
@@ -409,7 +499,7 @@ export function Lettrage(props: { onMutation: () => void }) {
                 title={lettrable ? "Créer une marque de lettrage sur les lignes cochées" : raisonIndisponible}
                 onClick={() => void lettrer()}
               >
-                Lettrer la sélection
+                {partiel ? "Lettrer partiellement la sélection" : "Lettrer la sélection"}
               </button>
               <button class="bouton" type="button" onClick={() => void proposer()}>
                 Proposer un lettrage automatique
@@ -442,9 +532,13 @@ export function Lettrage(props: { onMutation: () => void }) {
               <Etiquette ton={lettrable ? "succes" : cochees.length === 0 ? "" : "alerte"}>
                 {cochees.length === 0
                   ? "Aucune ligne cochée"
-                  : lettrable
-                    ? `Lettrage possible : ${montant(totalDebit)}`
-                    : `Écart ${montant(ecart)} — le lettrage partiel n'est pas produit`}
+                  : illisible
+                    ? "Une imputation n'est pas un montant lisible"
+                    : lettrable
+                      ? partiel
+                        ? `Lettrage partiel possible : ${montant(totalDebit)} imputés`
+                        : `Lettrage possible : ${montant(totalDebit)}`
+                      : `Écart ${montant(ecart)} entre les montants imputés`}
               </Etiquette>
             </div>
           </>
@@ -467,7 +561,14 @@ export function Lettrage(props: { onMutation: () => void }) {
             <tbody>
               {propositions.map((proposition, index) => (
                 <tr key={`${proposition.montant}-${index}`}>
-                  <td>{proposition.nature === "exact" ? "Montant exact" : "Montants composés"}</td>
+                  <td>
+                    {proposition.nature === "exact"
+                      ? "Montant exact"
+                      : proposition.nature === "compose"
+                        ? "Montants composés"
+                        : "Règlement partiel"}
+                    {proposition.nature === "partiel" ? <Etiquette ton="alerte">à-compte</Etiquette> : null}
+                  </td>
                   <td class="mono">{proposition.pieces.join(", ")}</td>
                   <td class="align-droite">{proposition.lignes.length}</td>
                   <td class="align-droite mono">{montant(proposition.montant)}</td>
@@ -536,12 +637,15 @@ export function Lettrage(props: { onMutation: () => void }) {
       </div>
 
       <p class="note">
-        Le lettrage automatique ne rapproche que des montants <strong>exactement égaux</strong> — un montant
-        contre un autre, ou un montant contre deux ou trois autres. Le lettrage partiel (un règlement
-        qui ne couvre qu'une partie d'une facture) n'est pas produit : il suppose un suivi des
-        imputations ligne à ligne, et l'annoncer sans le faire serait pire que de ne pas l'annoncer.
-        Un délettrage ne supprime pas la marque : il la date, pour que l'historique du compte reste
-        reconstituable.
+        Le lettrage automatique rapproche d'abord les montants <strong>exactement égaux</strong> — un
+        montant contre un autre, ou un montant contre deux ou trois autres. S'il reste des soldes des
+        deux côtés, il impute ensuite les règlements les plus anciens sur les dettes les plus
+        anciennes, à hauteur de ce qui reste dû : ce sont des <strong>à-comptes</strong>, annoncés
+        « Règlement partiel » dans les propositions. Une ligne entamée revient dans la liste avec son
+        reste à lettrer et peut recevoir plusieurs marques. À la main, la colonne « Imputer » dit
+        combien on rapproche sur chaque ligne cochée : laissée au reste, la ligne est lettrée en
+        entier. Un délettrage ne supprime pas la marque : il la date et rend son imputation, pour que
+        l'historique du compte reste reconstituable.
       </p>
     </Fenetre>
   );
