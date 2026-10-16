@@ -71,10 +71,19 @@ import {
   verifierPointage,
   type DemandeDeReleve,
   type EtatDeRapprochement,
+  type FormatDeReleve,
   type Pointage,
   type PropositionDePointage,
-  type ReleveBancaire
+  type ReleveBancaire,
+  type SourceDeReleve
 } from "./rapprochement";
+import {
+  cleDeDoublon,
+  demandeDeReleveDepuisImport,
+  lireReleve,
+  type LigneDeReleveLue,
+  type ReleveImporte
+} from "./import-releve";
 import {
   preparerCloture as preparerRapportDeCloture,
   verifierCloture,
@@ -255,6 +264,25 @@ export function numeroDeDossier(moduleCode: string, societeCode: string, exercic
   const code = societeCode.trim().toUpperCase();
   const annee = exercice.toString().slice(-2);
   return code === "" ? `${moduleCode}-${annee}` : `${moduleCode}${code}-${annee}`;
+}
+
+/** Ce qu'un fichier de relevé donnerait, lu sans rien écrire : l'aperçu que l'écran montre. */
+export interface ApercuDImportDeReleve {
+  /** Le fichier tel que le lecteur l'a compris, avec ses avertissements. */
+  importe: ReleveImporte;
+  /** Opérations déjà présentes dans un relevé du même compte. */
+  doublons: LigneDeReleveLue[];
+  /** Ce qui serait importé : les opérations du fichier, doublons ôtés. */
+  retenues: LigneDeReleveLue[];
+}
+
+/** Ce que rend l'import d'un relevé : le relevé créé, ce que le fichier portait, ce qui a été écarté. */
+export interface ResultatDImportDeReleve {
+  releve: ReleveBancaire;
+  /** Le fichier tel que lu, y compris les lignes écartées comme doublons. */
+  importe: ReleveImporte;
+  /** Opérations déjà présentes dans un relevé du même compte : elles n'ont pas été reprises. */
+  doublons: LigneDeReleveLue[];
 }
 
 export class ServiceComptable {
@@ -1662,36 +1690,168 @@ export class ServiceComptable {
     return [...etat.releves].reverse();
   }
 
+  /**
+   * Ce qu'un fichier de relevé donnerait, sans rien écrire.
+   *
+   * L'aperçu précède l'import comme la proposition précède le lettrage : l'utilisateur voit le
+   * mappage que le lecteur a reconnu, les opérations lues, les lignes écartées, et celles qui
+   * figurent déjà dans un relevé du compte. Rien n'est écrit tant qu'il n'a pas validé.
+   */
+  async apercuDImportDeReleve(demande: {
+    compte: string;
+    texte: string;
+    nomFichier?: string | null;
+    format?: FormatDeReleve;
+  }): Promise<ApercuDImportDeReleve> {
+    const importe = lireReleve(demande.texte, {
+      devise: this.#paquet.devise,
+      ...(demande.format ? { format: demande.format } : {}),
+      nomFichier: demande.nomFichier ?? null
+    });
+    const etat = await this.#stockage.lire();
+    const { doublons, retenues } = this.#doublonsDImport(etat, comptePrincipalDe(demande.compte), importe);
+    return { importe, doublons, retenues };
+  }
+
+  /** Les opérations du fichier qui figurent déjà dans un relevé du même compte. */
+  #doublonsDImport(
+    etat: EtatDossier,
+    compte: string,
+    importe: ReleveImporte
+  ): { doublons: LigneDeReleveLue[]; retenues: LigneDeReleveLue[] } {
+    const dejaVues = new Set<string>(
+      etat.releves
+        .filter((releve) => releve.compte === compte)
+        .flatMap((releve) => releve.lignes.map((ligne) => cleDeDoublon(ligne)))
+    );
+    return {
+      doublons: importe.lignes.filter((ligne) => dejaVues.has(cleDeDoublon(ligne))),
+      retenues: importe.lignes.filter((ligne) => !dejaVues.has(cleDeDoublon(ligne)))
+    };
+  }
+
   /** Saisit un relevé bancaire. Aucune écriture n'est passée : un relevé décrit, il ne comptabilise pas. */
   async ajouterReleve(demande: DemandeDeReleve): Promise<ReleveBancaire> {
-    return this.#muter((etat) => {
-      const compte = etat.comptes.find((item) => item.numero === comptePrincipalDe(demande.compte));
-      if (!compte) {
-        throw new ErreurRegle(`Le compte « ${comptePrincipalDe(demande.compte)} » n'existe pas dans le plan du dossier.`);
-      }
-      const codeJournal = (demande.journalCode ?? "BQ").toUpperCase();
-      if (!etat.journaux.some((item) => item.code === codeJournal)) {
-        throw new ErreurRegle(`Le journal « ${codeJournal} » n'existe pas dans le dossier.`);
-      }
-      etat.sequencesReleves += 1;
-      const releve = construireReleve(demande, {
-        identifiant: `RELEVE-${compte.numero}-${etat.sequencesReleves}`,
-        horodate: this.#horloge().toISOString(),
-        acteur: this.#utilisateur,
-        devise: this.#paquet.devise
-      });
-      etat.releves.push(releve);
-      this.#tracer(
-        etat,
-        "Relevé saisi",
-        "Relevé",
-        releve.id,
-        `${releve.libelle} — compte ${releve.compte}, ${releve.lignes.length} lignes, du ${formaterDateFr(
-          releve.dateDebut
-        )} au ${formaterDateFr(releve.dateFin)}`
+    return this.#muter((etat) => this.#ajouterReleveDans(etat, demande));
+  }
+
+  /**
+   * Importe un relevé bancaire depuis un fichier : CSV, OFX ou CAMT.053.
+   *
+   * Le fichier est lu et vérifié **avant** toute écriture : un fichier illisible ne touche pas au
+   * dossier, et ce qu'il contient est rendu tel quel (`importe`) pour être montré à l'utilisateur.
+   * Les opérations déjà présentes dans un relevé du même compte sont écartées et rendues à part :
+   * importer deux fois le même fichier ne double pas les lignes, mais ne le cache pas non plus.
+   *
+   * Un import n'écrit aucune écriture, comme une saisie : il décrit ce que la banque dit. Les frais
+   * que le fichier révèle et que la comptabilité n'a pas passés se comptabilisent ensuite, puis se
+   * pointent — c'est précisément ce que l'état de rapprochement est fait pour montrer.
+   */
+  async importerReleve(demande: {
+    compte: string;
+    /** Le contenu du fichier, tel quel. */
+    texte: string;
+    nomFichier?: string | null;
+    /** À défaut, le format est détecté depuis le contenu et le nom du fichier. */
+    format?: FormatDeReleve;
+    journalCode?: string;
+    libelle?: string;
+    du?: DateCivile;
+    au?: DateCivile;
+    /** Solde d'ouverture ; à défaut, celui que le fichier porte. */
+    soldeDOuverture?: string | Montant;
+  }): Promise<ResultatDImportDeReleve> {
+    // Le compte est vérifié avant la lecture : un mauvais compte n'a pas à attendre qu'un fichier
+    // soit déchiffré pour être refusé.
+    const avant = await this.#stockage.lire();
+    const compte = comptePrincipalDe(demande.compte);
+    if (!avant.comptes.some((item) => item.numero === compte)) {
+      throw new ErreurRegle(`Le compte « ${compte} » n'existe pas dans le plan du dossier.`);
+    }
+    if (compte.charAt(0) !== "5") {
+      throw new ErreurRegle(
+        `Le compte « ${compte} » n'est pas un compte de trésorerie : un relevé bancaire se rapproche d'un compte de classe 5.`
       );
-      return releve;
+    }
+
+    const importe = lireReleve(demande.texte, {
+      devise: this.#paquet.devise,
+      ...(demande.format ? { format: demande.format } : {}),
+      nomFichier: demande.nomFichier ?? null
     });
+
+    const { doublons, retenues } = this.#doublonsDImport(avant, compte, importe);
+    if (retenues.length === 0) {
+      throw new ErreurRegle(
+        `Les ${doublons.length} opération${
+          doublons.length > 1 ? "s" : ""
+        } de ce fichier figurent déjà dans un relevé du compte ${compte}. Rien n'est importé : un relevé ne se recopie pas.`
+      );
+    }
+
+    const demandeDeReleve = demandeDeReleveDepuisImport({ ...importe, lignes: retenues }, {
+      compte,
+      ...(demande.journalCode ? { journalCode: demande.journalCode } : {}),
+      ...(demande.libelle ? { libelle: demande.libelle } : {}),
+      ...(demande.du ? { du: demande.du } : {}),
+      ...(demande.au ? { au: demande.au } : {}),
+      ...(demande.soldeDOuverture !== undefined ? { soldeDOuverture: demande.soldeDOuverture } : {})
+    });
+    const source: SourceDeReleve = {
+      format: importe.format,
+      nomFichier: demande.nomFichier ?? null,
+      importeLe: this.#horloge().toISOString(),
+      compteBancaire: importe.compteBancaire,
+      deviseDuFichier: importe.deviseDuFichier,
+      soldeDeFin:
+        importe.soldeDeFin === null ? null : formatMontant(importe.soldeDeFin, this.#paquet.devise),
+      doublonsEcartes: doublons.length
+    };
+
+    const releve = await this.#muter((etat) => this.#ajouterReleveDans(etat, demandeDeReleve, source));
+    return { releve, importe, doublons };
+  }
+
+  #ajouterReleveDans(
+    etat: EtatDossier,
+    demande: DemandeDeReleve,
+    source?: SourceDeReleve
+  ): ReleveBancaire {
+    const compte = etat.comptes.find((item) => item.numero === comptePrincipalDe(demande.compte));
+    if (!compte) {
+      throw new ErreurRegle(`Le compte « ${comptePrincipalDe(demande.compte)} » n'existe pas dans le plan du dossier.`);
+    }
+    const codeJournal = (demande.journalCode ?? "BQ").toUpperCase();
+    if (!etat.journaux.some((item) => item.code === codeJournal)) {
+      throw new ErreurRegle(`Le journal « ${codeJournal} » n'existe pas dans le dossier.`);
+    }
+    etat.sequencesReleves += 1;
+    const releve = construireReleve(demande, {
+      identifiant: `RELEVE-${compte.numero}-${etat.sequencesReleves}`,
+      horodate: this.#horloge().toISOString(),
+      acteur: this.#utilisateur,
+      devise: this.#paquet.devise
+    });
+    if (source) {
+      releve.source = source;
+    }
+    etat.releves.push(releve);
+    this.#tracer(
+      etat,
+      source ? "Relevé importé" : "Relevé saisi",
+      "Relevé",
+      releve.id,
+      `${releve.libelle} — compte ${releve.compte}, ${releve.lignes.length} lignes, du ${formaterDateFr(
+        releve.dateDebut
+      )} au ${formaterDateFr(releve.dateFin)}${
+        source
+          ? ` — importé au format ${source.format}${
+              source.nomFichier ? ` depuis « ${source.nomFichier} »` : ""
+            }${source.doublonsEcartes > 0 ? `, ${source.doublonsEcartes} ligne(s) déjà vue(s) écartée(s)` : ""}`
+          : ""
+      }`
+    );
+    return releve;
   }
 
   /** Supprime un relevé. Refusé tant qu'un pointage le rattache au grand livre. */

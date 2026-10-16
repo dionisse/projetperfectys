@@ -40,6 +40,29 @@ export interface LigneDeReleve {
   montant: Montant;
 }
 
+/** Le format du fichier d'où vient un relevé importé. */
+export type FormatDeReleve = "csv" | "ofx" | "camt053";
+
+/**
+ * D'où vient un relevé.
+ *
+ * Le champ est absent d'un relevé saisi ligne à ligne, et facultatif pour que les relevés et les
+ * sauvegardes produits avant l'import demeurent lisibles. Aucun montant n'y figure en `bigint` : la
+ * provenance se sérialise telle quelle.
+ */
+export interface SourceDeReleve {
+  format: FormatDeReleve;
+  nomFichier: string | null;
+  importeLe: string;
+  /** IBAN ou numéro de compte annoncé par le fichier. */
+  compteBancaire: string | null;
+  deviseDuFichier: string | null;
+  /** Solde de fin annoncé par le fichier, formaté dans la devise du dossier. */
+  soldeDeFin: string | null;
+  /** Lignes du fichier écartées parce que déjà présentes dans un relevé du même compte. */
+  doublonsEcartes: number;
+}
+
 /** Un relevé bancaire, rattaché à un compte de trésorerie du dossier. */
 export interface ReleveBancaire {
   id: string;
@@ -53,6 +76,8 @@ export interface ReleveBancaire {
   lignes: LigneDeReleve[];
   saisiLe: string;
   saisiPar: string;
+  /** Absent d'un relevé saisi ligne à ligne. */
+  source?: SourceDeReleve;
 }
 
 /** Un pointage : une ligne de relevé rapprochée d'un mouvement du compte. */

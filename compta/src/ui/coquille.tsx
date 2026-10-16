@@ -204,7 +204,7 @@ export function Coquille() {
         { label: "", indisponible: "", separation: true },
         { label: "Sauvegarde du dossier…", href: "/outils/sauvegarde" },
         { label: "Restaurer une sauvegarde…", href: "/outils/sauvegarde" },
-        { label: "Import de données", indisponible: "Import de comptes, de tiers et de lots depuis un fichier tiers : tranche I. Reprendre une sauvegarde Perfectys, lui, est disponible" },
+        { label: "Import de données", indisponible: "Import de comptes, de tiers et de lots depuis un fichier tiers : tranche I. Sont déjà disponibles : la reprise d'une sauvegarde Perfectys (Outils › Sauvegarde) et l'import d'un relevé bancaire CSV, OFX ou CAMT.053 (Traitements › Rapprochement bancaire)" },
         { label: "Habilitations par écran", indisponible: "Sécurité par écran, comme Sage : tranche I" }
       ]
     },

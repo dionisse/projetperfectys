@@ -4,8 +4,8 @@
  *
  * Ce qui est vérifié : que l'état de rapprochement montre les deux soldes et ce qui reste inexpliqué,
  * que les boutons sont grisés tant qu'une sélection ne tombe pas juste — avec la raison, pas un
- * silence —, que le pointage automatique est proposé avant d'être appliqué, et que dépointer rend la
- * ligne au rapprochement.
+ * silence —, que le pointage automatique est proposé avant d'être appliqué, que dépointer rend la
+ * ligne au rapprochement, et qu'un relevé importé d'un fichier est **lu et montré avant d'être créé**.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -54,6 +54,20 @@ async function cliquer(cible: HTMLElement, fois = 14): Promise<void> {
     cible.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
   await flush(fois);
+}
+
+/** Colle un contenu de fichier dans le champ de l'import. */
+async function coller(contenu: string): Promise<void> {
+  const champ = conteneur.querySelector<HTMLTextAreaElement>('textarea[aria-label="Contenu du fichier de relevé"]');
+  if (!champ) {
+    throw new Error("champ de contenu introuvable");
+  }
+  await act(async () => {
+    champ.value = contenu;
+    champ.dispatchEvent(new Event("input", { bubbles: true }));
+    champ.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await flush(8);
 }
 
 /**
@@ -128,12 +142,65 @@ describe("Écran de rapprochement bancaire", () => {
     expect(appliquer.disabled).toBe(true);
     expect(appliquer.getAttribute("title")).toMatch(/rien n'est écrit sans qu'elle ait été montrée/u);
 
-    // L'import d'un fichier n'est pas produit : annoncé, pas absent.
-    const importer = [...racine.querySelectorAll<HTMLSpanElement>("span.indisponible")].find((item) =>
-      texte(item).includes("Importer un fichier de relevé")
-    );
-    expect(importer).toBeDefined();
-    expect(importer!.getAttribute("title")).toMatch(/tranche F/u);
+    // L'import d'un fichier est livré : un bouton qui agit, plus une entrée grisée.
+    void racine;
+    const importer = bouton("Importer un fichier de relevé");
+    expect(importer.disabled).toBe(false);
+    expect(
+      [...conteneur.querySelectorAll<HTMLSpanElement>("span.indisponible")].some((item) =>
+        texte(item).includes("Importer")
+      )
+    ).toBe(false);
+  });
+
+  it("importe un relevé : le fichier est lu et montré avant d'être créé", async () => {
+    const racine = await ouvrir();
+
+    // Rien n'est écrit tant que le fichier n'a pas été lu : le bouton de création est grisé.
+    await cliquer(bouton("Importer un fichier de relevé"));
+    expect(texte(racine)).toMatch(/Import d'un relevé bancaire/);
+    expect(bouton("Lire le fichier").disabled).toBe(true);
+    const creer = bouton("Créer le relevé depuis l'import");
+    expect(creer.disabled).toBe(true);
+    expect(creer.getAttribute("title")).toMatch(/sans que le fichier ait été lu/i);
+
+    // Un relevé d'exemple, construit depuis le grand livre du dossier : l'import est essayable sans
+    // fichier sous la main, et il porte deux frais que la comptabilité n'a pas passés.
+    await cliquer(bouton("Charger un relevé d'exemple"), 20);
+    expect(bouton("Lire le fichier").disabled).toBe(false);
+
+    await cliquer(bouton("Lire le fichier"), 20);
+    const lu = texte(racine);
+    expect(lu).toMatch(/opération[s]? à importer au format CSV/i);
+    expect(lu).toMatch(/Format reconnu\s*CSV \(texte séparé\)/u);
+    expect(lu).toMatch(/Colonnes reconnues/u);
+    expect(lu).toMatch(/Date d'opération ← Date opération/u);
+    expect(lu).toMatch(/FRAIS DE TENUE DE COMPTE/);
+    expect(lu).toMatch(/COMMISSION DE VIREMENT/);
+    expect(lu).toMatch(/à importer/);
+    // Rien n'est encore écrit.
+    expect((await getService().releves()).length).toBe(1);
+
+    await cliquer(bouton("Créer le relevé depuis l'import"), 22);
+    const apres = texte(racine);
+    expect(apres).toMatch(/importé au format CSV \(texte séparé\) : 3 opérations/u);
+    expect(apres).toMatch(/Aucune écriture n'est passée/i);
+    // Le relevé importé est celui qui est montré, et le rapprochement voit les frais.
+    expect(apres).toMatch(/Relevé d'exemple/);
+    expect(apres).toMatch(/Frais|frais/u);
+    expect((await getService().releves()).length).toBe(2);
+  });
+
+  it("refuse un fichier illisible et n'écrit rien", async () => {
+    const racine = await ouvrir();
+    await cliquer(bouton("Importer un fichier de relevé"));
+
+    await coller("Libellé;Montant\nVirement;1 000\n");
+    await cliquer(bouton("Lire le fichier"), 18);
+
+    expect(texte(racine)).toMatch(/Aucune date d'opération/i);
+    expect(bouton("Créer le relevé depuis l'import").disabled).toBe(true);
+    expect((await getService().releves()).length).toBe(1);
   });
 
   it("propose le pointage, l'applique, puis dépointe", async () => {

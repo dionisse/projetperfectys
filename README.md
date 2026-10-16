@@ -27,7 +27,7 @@ la même base.
 
 ```bash
 npm install            # installe l'espace de travail (compta)
-npm test               # 248 tests : noyau en Node, interface en jsdom, exports vérifiés
+npm test               # 283 tests : noyau en Node, interface en jsdom, exports vérifiés
 npm run typecheck      # TypeScript strict, sans émission
 npm run build          # build de production dans compta/dist
 npm run preview:vercel # sert le build comme le ferait Vercel, sur http://localhost:5173
@@ -63,7 +63,14 @@ npm run dev            # serveur de développement Vite
   puis par montant exact, et refuse deux montants différents : un règlement partiel se lettre
   à-compte au compte du tiers, mais au relevé il ne se pointe pas — rapprocher deux montants
   différents masquerait une écriture manquante, et c'est précisément ce que l'état doit révéler. Un
-  pointage se défait sans effacer sa trace.
+  pointage se défait sans effacer sa trace. Le relevé se saisit ligne à ligne, **ou s'importe du
+  fichier que la banque donne** : CSV, OFX/QFX ou CAMT.053. Le séparateur, la décimale, les colonnes,
+  l'ordre des dates et le sens des montants sont détectés, et ce qui est reconnu est **montré avant
+  d'écrire** — colonnes mappées, opérations lues, lignes écartées, opérations déjà présentes dans un
+  relevé du compte. Un fichier illisible cite la ligne en cause et n'écrit rien ; un montant qui porte
+  des centimes dans une devise qui n'en a pas est refusé plutôt qu'arrondi. Un **relevé d'exemple**,
+  construit à partir du grand livre du dossier et de deux frais que seule la banque a passés, permet
+  d'essayer l'import sans fichier sous la main.
 - **Clôture d'exercice** (le *Create New Year* de Sage) : un **rapport de préparation** montre avant
   toute écriture ce qui s'y oppose — périodes ouvertes, lots en attente, grand livre déséquilibré,
   soldes initiaux posés dans le plan — et le contenu ligne à ligne des deux écritures qui seraient
@@ -136,8 +143,9 @@ npm run dev            # serveur de développement Vite
 
 Les entrées de menu correspondant à des fonctions non livrées sont **visibles, grisées, et portent
 la tranche qui les livrera** en infobulle. Elles ne sont pas cliquables : aucun lien mort, aucun
-écran vide. Import d'un fichier de relevé bancaire (CSV, OFX, CAMT — le relevé se saisit ligne à
-ligne en attendant), écritures récurrentes, **réouverture d'un exercice clos**
+écran vide. Import de comptes, de tiers et de lots depuis un fichier tiers (l'import d'un relevé
+bancaire, lui, est livré — CSV, OFX et CAMT.053, dans Traitements › Rapprochement bancaire),
+écritures récurrentes, **réouverture d'un exercice clos**
 (la clôture est définitive dans cette version : la correction d'un exercice clos passe par une
 écriture dans l'exercice en cours, et l'écran le dit), affectation du résultat décidée en assemblée
 (121000 vers 111000 ou 112000), interrogation d'un compte par montant ou par lettre et appel d'une

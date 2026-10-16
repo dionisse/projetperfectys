@@ -6,6 +6,12 @@
  * soldes, l'écart, et surtout **ce que l'écart ne s'explique pas** — parce qu'un rapprochement qui
  * absorbe une différence ne sert à rien.
  *
+ * Le relevé se saisit ligne à ligne, ou **s'importe du fichier que la banque donne** (CSV, OFX/QFX,
+ * CAMT.053). L'import suit la même discipline que le pointage : le fichier est lu, ce que le lecteur a
+ * reconnu est montré — colonnes mappées, opérations lues, lignes déjà vues —, et rien n'est écrit avant
+ * que l'utilisateur ait validé. Un relevé d'exemple, tiré du grand livre du dossier, permet d'essayer
+ * l'import sans fichier sous la main.
+ *
  * Le pointage n'écrit aucune écriture : il rapproche des mouvements déjà comptabilisés avec des lignes
  * déjà reçues. Quand la banque a prélevé des frais que la comptabilité n'a pas passés, le bouton de
  * pointage reste grisé et dit pourquoi : la différence se comptabilise d'abord.
@@ -13,12 +19,18 @@
 
 import { useState } from "preact/hooks";
 import {
+  FORMATS_DE_RELEVE,
+  NOM_DE_FORMAT,
   ZERO,
+  comptePrincipalDe,
+  exempleDeReleveCsv,
   formaterDateFr,
   oppose,
+  type ApercuDImportDeReleve,
   type DateCivile,
   type ElementPointe,
   type EtatDeRapprochement,
+  type FormatDeReleve,
   type LigneDeReleve,
   type Mouvement,
   type Pointage,
@@ -66,6 +78,19 @@ export function Rapprochement(props: { onMutation: () => void }) {
     soldeDOuverture: string;
     lignes: LigneDeBrouillon[];
   } | null>(null);
+  const [importation, setImportation] = useState<{
+    compte: string;
+    journalCode: string;
+    libelle: string;
+    /** Vide : le format est détecté depuis le contenu et le nom du fichier. */
+    format: string;
+    nomFichier: string;
+    texte: string;
+    du: string;
+    au: string;
+    soldeDOuverture: string;
+  } | null>(null);
+  const [apercu, setApercu] = useState<ApercuDImportDeReleve | null>(null);
   const aujourdHui = new Date().toISOString().slice(0, 10) as DateCivile;
 
   const { donnees, erreur, charge, recharger } = useAsync(
@@ -272,6 +297,196 @@ export function Rapprochement(props: { onMutation: () => void }) {
   };
 
   /* ---------------------------------------------------------------- */
+  /* Import d'un relevé depuis un fichier                              */
+  /* ---------------------------------------------------------------- */
+
+  const ouvrirImport = (): void => {
+    setRetour(null);
+    setApercu(null);
+    setImportation({
+      compte: releve?.compte ?? "521100",
+      journalCode: releve?.journalCode ?? "BQ",
+      libelle: "",
+      format: "",
+      nomFichier: "",
+      texte: "",
+      du: `${aujourdHui.slice(0, 8)}01`,
+      au: aujourdHui,
+      soldeDOuverture: ""
+    });
+  };
+
+  const choisirFichierDeReleve = async (fichier: File | null): Promise<void> => {
+    if (!fichier) {
+      return;
+    }
+    try {
+      const texte = await fichier.text();
+      setApercu(null);
+      setImportation((precedent) =>
+        precedent === null ? null : { ...precedent, texte, nomFichier: fichier.name, format: precedent.format }
+      );
+      setRetour({
+        ton: "succes",
+        texte: `« ${fichier.name} » chargé (${fichier.size} octets). Cliquez sur « Lire le fichier » : rien n'est écrit avant l'aperçu.`
+      });
+    } catch (erreurInconnue) {
+      echouer(erreurInconnue);
+    }
+  };
+
+  const lireFichier = async (): Promise<void> => {
+    if (!importation) {
+      return;
+    }
+    try {
+      setRetour(null);
+      const lu = await service.apercuDImportDeReleve({
+        compte: importation.compte,
+        texte: importation.texte,
+        nomFichier: importation.nomFichier === "" ? null : importation.nomFichier,
+        ...(importation.format === "" ? {} : { format: importation.format as FormatDeReleve })
+      });
+      setApercu(lu);
+      // Ce que le fichier dit et que le formulaire ne savait pas encore : la période et, quand la
+      // banque le porte, le solde d'ouverture. Un solde déjà saisi n'est pas écrasé.
+      setImportation((precedent) =>
+        precedent === null
+          ? null
+          : {
+              ...precedent,
+              du: lu.importe.dateDebut ?? precedent.du,
+              au: lu.importe.dateFin ?? precedent.au,
+              soldeDOuverture:
+                precedent.soldeDOuverture.trim() !== "" || lu.importe.soldeDOuverture === null
+                  ? precedent.soldeDOuverture
+                  : lu.importe.soldeDOuverture.toString()
+            }
+      );
+      setRetour({
+        ton: "succes",
+        texte: `${lu.retenues.length} opération${lu.retenues.length > 1 ? "s" : ""} à importer au format ${
+          NOM_DE_FORMAT[lu.importe.format]
+        }${lu.doublons.length > 0 ? `, ${lu.doublons.length} déjà vue${lu.doublons.length > 1 ? "s" : ""} écartée${
+          lu.doublons.length > 1 ? "s" : ""
+        }` : ""}. Rien n'est écrit : vérifiez l'aperçu, puis créez le relevé.`
+      });
+    } catch (erreurInconnue) {
+      setApercu(null);
+      echouer(erreurInconnue);
+    }
+  };
+
+  /** Le dernier jour du mois d'une date, et la veille d'une date : l'exemple se cale sur le dossier. */
+  const dernierJourDuMois = (date: DateCivile): DateCivile =>
+    new Date(Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)), 0)).toISOString().slice(0, 10) as DateCivile;
+  const veille = (date: DateCivile): DateCivile =>
+    new Date(new Date(`${date}T00:00:00Z`).getTime() - 86_400_000).toISOString().slice(0, 10) as DateCivile;
+
+  /**
+   * Un relevé d'exemple, construit à partir du grand livre du dossier.
+   *
+   * Il rend l'import essayable sans fichier sous la main : les opérations que la comptabilité connaît,
+   * plus deux frais que seule la banque a passés, pour que le rapprochement ait un écart à expliquer.
+   */
+  const chargerExemple = async (): Promise<void> => {
+    try {
+      setRetour(null);
+      const compte = importation?.compte ?? releve?.compte ?? "521100";
+      const etat = await service.lire();
+      const duCompte = etat.mouvements.filter(
+        (mouvement) =>
+          comptePrincipalDe(mouvement.compte) === compte &&
+          (mouvement.debit !== ZERO || mouvement.credit !== ZERO)
+      );
+      if (duCompte.length === 0) {
+        setRetour({
+          ton: "erreur",
+          texte: `Le compte ${compte} n'a aucun mouvement : il n'y a rien à mettre dans un relevé d'exemple.`
+        });
+        return;
+      }
+      const dates = duCompte.map((mouvement) => mouvement.date).sort();
+      const du = `${dates[dates.length - 1]!.slice(0, 7)}-01` as DateCivile;
+      const au = dernierJourDuMois(du);
+      let soldeDOuverture = ZERO;
+      try {
+        soldeDOuverture = (await service.interrogerCompte(compte, { au: veille(du) })).soldeFinal;
+      } catch {
+        soldeDOuverture = ZERO;
+      }
+      const texte = exempleDeReleveCsv({
+        compte,
+        mouvements: etat.mouvements,
+        du,
+        au,
+        soldeDOuverture,
+        devise: service.paquetPays.devise,
+        // Ce que la banque a passé et que la comptabilité n'a pas encore passé.
+        separees: [
+          { date: au, libelle: "FRAIS DE TENUE DE COMPTE", reference: "FRAIS-EX", montant: -BigInt(15000) },
+          { date: au, libelle: "COMMISSION DE VIREMENT", reference: "COMM-EX", montant: -BigInt(7500) }
+        ]
+      });
+      setApercu(null);
+      setImportation({
+        compte,
+        journalCode: importation?.journalCode ?? "BQ",
+        libelle: `Relevé d'exemple — ${du.slice(0, 7)}`,
+        format: "csv",
+        nomFichier: `exemple-releve-${compte}-${du.slice(0, 7)}.csv`,
+        texte,
+        du,
+        au,
+        soldeDOuverture: soldeDOuverture.toString()
+      });
+      setRetour({
+        ton: "succes",
+        texte: `Relevé d'exemple chargé : ${du} – ${au}, construit à partir des mouvements du compte ${compte} et de deux frais bancaires. Cliquez sur « Lire le fichier ».`
+      });
+    } catch (erreurInconnue) {
+      echouer(erreurInconnue);
+    }
+  };
+
+  const creerReleveImporte = async (): Promise<void> => {
+    if (!importation) {
+      return;
+    }
+    try {
+      const cree = await service.importerReleve({
+        compte: importation.compte,
+        texte: importation.texte,
+        nomFichier: importation.nomFichier === "" ? null : importation.nomFichier,
+        ...(importation.format === "" ? {} : { format: importation.format as FormatDeReleve }),
+        journalCode: importation.journalCode,
+        ...(importation.libelle.trim() === "" ? {} : { libelle: importation.libelle.trim() }),
+        du: importation.du as DateCivile,
+        au: importation.au as DateCivile,
+        ...(importation.soldeDOuverture.trim() === ""
+          ? {}
+          : { soldeDOuverture: importation.soldeDOuverture.trim() })
+      });
+      setImportation(null);
+      setApercu(null);
+      setReleveChoisi(cree.releve.id);
+      terminer(
+        `Relevé « ${cree.releve.libelle} » importé au format ${NOM_DE_FORMAT[cree.importe.format]} : ${
+          cree.releve.lignes.length
+        } opération${cree.releve.lignes.length > 1 ? "s" : ""}${
+          cree.doublons.length > 0
+            ? `, ${cree.doublons.length} déjà vue${cree.doublons.length > 1 ? "s" : ""} écartée${
+                cree.doublons.length > 1 ? "s" : ""
+              }`
+            : ""
+        }. Aucune écriture n'est passée : les frais que le relevé révèle se comptabilisent, puis se pointent.`
+      );
+    } catch (erreurInconnue) {
+      echouer(erreurInconnue);
+    }
+  };
+
+  /* ---------------------------------------------------------------- */
   /* Export                                                            */
   /* ---------------------------------------------------------------- */
 
@@ -279,11 +494,28 @@ export function Rapprochement(props: { onMutation: () => void }) {
     if (!releve || !etat) {
       return [["Rapprochement bancaire"], ["Dossier", contexte.numero], [], ["Aucun relevé saisi."]];
     }
+    // Un relevé importé cite son fichier dans l'export : la provenance fait partie de l'état.
+    const source = releve.source;
+    const provenance: (readonly CelluleCsv[])[] = source
+      ? [
+          [
+            "Provenance",
+            `${NOM_DE_FORMAT[source.format]}${source.nomFichier ? ` — ${source.nomFichier}` : ""}`,
+            "Importé le",
+            source.importeLe
+          ],
+          ...(source.compteBancaire ? [["Compte bancaire annoncé", source.compteBancaire]] : []),
+          ...(source.doublonsEcartes > 0
+            ? [["Opérations déjà vues, écartées à l'import", source.doublonsEcartes]]
+            : [])
+        ]
+      : [];
     return [
       ["Rapprochement bancaire"],
       ["Dossier", contexte.numero],
       ["Société", contexte.societe.raisonSociale],
       ["Relevé", releve.libelle],
+      ...provenance,
       ["Compte", etat.compte, "Journal", etat.journalCode],
       ["Période", `${formaterDateFr(releve.dateDebut)} – ${formaterDateFr(releve.dateFin)}`],
       [],
@@ -446,10 +678,23 @@ export function Rapprochement(props: { onMutation: () => void }) {
           </div>
 
           <div class="bloc">
-            <h2>Relevé — {releve.libelle}</h2>
+            <h2>
+              Relevé — {releve.libelle}{" "}
+              {releve.source ? (
+                <Etiquette ton="succes">
+                  importé · {NOM_DE_FORMAT[releve.source.format]}
+                  {releve.source.nomFichier ? ` · ${releve.source.nomFichier}` : ""}
+                </Etiquette>
+              ) : (
+                <Etiquette>saisi ligne à ligne</Etiquette>
+              )}
+            </h2>
             <p class="note">
               Les montants sont portés au sens de la banque : positif quand l'argent entre. Côté
               compte de trésorerie, le sens est inverse — la conversion est faite au pointage.
+              {releve.source?.doublonsEcartes
+                ? ` ${releve.source.doublonsEcartes} opération(s) déjà vue(s) dans un relevé du compte ont été écartée(s) à l'import.`
+                : ""}
             </p>
             <div class="grille-conteneur">
               <table class="grille grille-etat">
@@ -730,6 +975,291 @@ export function Rapprochement(props: { onMutation: () => void }) {
       )}
 
       <div class="bloc">
+        <h2>{importation ? "Import d'un relevé bancaire" : "Importer un relevé bancaire"}</h2>
+        {importation === null ? (
+          <>
+            <p class="note">
+              Le relevé que la banque donne se lit tel quel : <strong>CSV</strong> (texte séparé),{" "}
+              <strong>OFX / QFX</strong> ou <strong>CAMT.053</strong>. Le séparateur, la décimale, les
+              colonnes, l'ordre des dates et le sens des montants sont reconnus automatiquement, et ce
+              qui est reconnu est <strong>montré avant d'écrire</strong>. Les opérations déjà présentes
+              dans un relevé du compte sont écartées et annoncées : importer deux fois le même fichier
+              ne double rien. Comme une saisie, un import ne passe aucune écriture — les frais que le
+              fichier révèle se comptabilisent ensuite, puis se pointent.
+            </p>
+            <div class="barre-actions">
+              <button
+                class="bouton"
+                type="button"
+                title="Choisir un fichier, ou coller son contenu"
+                onClick={ouvrirImport}
+              >
+                Importer un fichier de relevé
+              </button>
+              <button
+                class="bouton"
+                type="button"
+                title="Un relevé construit à partir du grand livre du dossier, pour essayer l'import sans fichier sous la main"
+                onClick={() => void chargerExemple()}
+              >
+                Charger un relevé d'exemple
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div class="deux-colonnes">
+              <label class="champ-court">
+                Compte de trésorerie
+                <input
+                  class="mono"
+                  value={importation.compte}
+                  onChange={(evenement) => {
+                    const compte = evenement.currentTarget.value;
+                    setApercu(null);
+                    setImportation({ ...importation, compte });
+                  }}
+                />
+              </label>
+              <label class="champ-court">
+                Journal
+                <input
+                  class="mono"
+                  value={importation.journalCode}
+                  onChange={(evenement) => setImportation({ ...importation, journalCode: evenement.currentTarget.value })}
+                />
+              </label>
+              <label class="champ-court">
+                Format
+                <select
+                  value={importation.format}
+                  onChange={(evenement) => {
+                    setApercu(null);
+                    setImportation({ ...importation, format: evenement.currentTarget.value });
+                  }}
+                >
+                  <option value="">Détection automatique</option>
+                  {FORMATS_DE_RELEVE.map((format) => (
+                    <option key={format} value={format}>
+                      {NOM_DE_FORMAT[format]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label class="champ-court">
+                Libellé du relevé
+                <input
+                  value={importation.libelle}
+                  placeholder="Relevé d'avril 2026 — BOA Bénin"
+                  onChange={(evenement) => setImportation({ ...importation, libelle: evenement.currentTarget.value })}
+                />
+              </label>
+              <label class="champ-court">
+                Du
+                <input
+                  type="date"
+                  value={importation.du}
+                  onChange={(evenement) => setImportation({ ...importation, du: evenement.currentTarget.value })}
+                />
+              </label>
+              <label class="champ-court">
+                Au
+                <input
+                  type="date"
+                  value={importation.au}
+                  onChange={(evenement) => setImportation({ ...importation, au: evenement.currentTarget.value })}
+                />
+              </label>
+              <label class="champ-court">
+                Solde d'ouverture (sens banque)
+                <input
+                  class="mono"
+                  value={importation.soldeDOuverture}
+                  placeholder="Tel que la banque l'indique"
+                  onChange={(evenement) =>
+                    setImportation({ ...importation, soldeDOuverture: evenement.currentTarget.value })
+                  }
+                />
+              </label>
+            </div>
+            <label class="champ-court">
+              Fichier de relevé (.csv, .ofx, .qfx, .xml)
+              <input
+                type="file"
+                accept=".csv,.txt,.ofx,.qfx,.xml,text/csv,application/xml,text/plain"
+                onChange={(evenement) => void choisirFichierDeReleve(evenement.currentTarget.files?.[0] ?? null)}
+              />
+            </label>
+            <label class="champ-texte">
+              Contenu du fichier {importation.nomFichier === "" ? "" : `— ${importation.nomFichier}`}
+              <textarea
+                rows={8}
+                spellcheck={false}
+                aria-label="Contenu du fichier de relevé"
+                value={importation.texte}
+                placeholder="Choisissez un fichier ci-dessus, ou collez ici son contenu. Un relevé d'exemple est proposé pour essayer l'import."
+                onChange={(evenement) => {
+                  setApercu(null);
+                  setImportation({ ...importation, texte: evenement.currentTarget.value });
+                }}
+              />
+            </label>
+            <div class="barre-actions">
+              <button
+                class="bouton"
+                type="button"
+                disabled={importation.texte.trim() === ""}
+                title={
+                  importation.texte.trim() === ""
+                    ? "Choisissez un fichier ou collez son contenu"
+                    : "Lire le fichier et montrer ce qu'il contient, sans rien écrire"
+                }
+                onClick={() => void lireFichier()}
+              >
+                Lire le fichier
+              </button>
+              <button
+                class="bouton primaire"
+                type="button"
+                disabled={apercu === null || apercu.retenues.length === 0}
+                title={
+                  apercu === null
+                    ? "Rien n'est écrit sans que le fichier ait été lu et montré"
+                    : apercu.retenues.length === 0
+                      ? "Aucune opération nouvelle à importer"
+                      : `Créer le relevé avec ${apercu.retenues.length} opération${
+                          apercu.retenues.length > 1 ? "s" : ""
+                        }`
+                }
+                onClick={() => void creerReleveImporte()}
+              >
+                Créer le relevé depuis l'import
+              </button>
+              <button
+                class="bouton"
+                type="button"
+                onClick={() => {
+                  setImportation(null);
+                  setApercu(null);
+                  setRetour(null);
+                }}
+              >
+                Annuler l'import
+              </button>
+              <button class="bouton" type="button" onClick={() => void chargerExemple()}>
+                Charger un relevé d'exemple
+              </button>
+            </div>
+
+            {apercu === null ? null : (
+              <>
+                <dl class="liste-definition">
+                  <dt>Format reconnu</dt>
+                  <dd>{NOM_DE_FORMAT[apercu.importe.format]}</dd>
+                  <dt>Fichier</dt>
+                  <dd class="mono">{apercu.importe.nomFichier ?? "contenu collé"}</dd>
+                  {apercu.importe.compteBancaire === null ? null : (
+                    <>
+                      <dt>Compte annoncé</dt>
+                      <dd class="mono">{apercu.importe.compteBancaire}</dd>
+                    </>
+                  )}
+                  {apercu.importe.deviseDuFichier === null ? null : (
+                    <>
+                      <dt>Devise annoncée</dt>
+                      <dd>{apercu.importe.deviseDuFichier}</dd>
+                    </>
+                  )}
+                  <dt>Période lue</dt>
+                  <dd>
+                    {apercu.importe.dateDebut === null || apercu.importe.dateFin === null
+                      ? "aucune"
+                      : `${formaterDateFr(apercu.importe.dateDebut)} – ${formaterDateFr(apercu.importe.dateFin)}`}
+                  </dd>
+                  <dt>Solde d'ouverture déduit</dt>
+                  <dd class="mono">
+                    {apercu.importe.soldeDOuverture === null
+                      ? "non porté par le fichier : saisissez-le"
+                      : montant(apercu.importe.soldeDOuverture)}
+                  </dd>
+                  <dt>Solde de fin annoncé</dt>
+                  <dd class="mono">
+                    {apercu.importe.soldeDeFin === null ? "non porté" : montant(apercu.importe.soldeDeFin)}
+                  </dd>
+                  <dt>Opérations lues</dt>
+                  <dd>
+                    {apercu.importe.lignes.length}, dont {apercu.retenues.length} à importer
+                    {apercu.doublons.length > 0 ? ` et ${apercu.doublons.length} déjà vue(s)` : ""}
+                  </dd>
+                  <dt>Colonnes reconnues</dt>
+                  <dd>
+                    {apercu.importe.correspondances.map((item) => `${item.role} ← ${item.colonne}`).join(" · ")}
+                  </dd>
+                </dl>
+
+                {apercu.importe.avertissements.length === 0 ? null : (
+                  <ul>
+                    {apercu.importe.avertissements.map((avertissement) => (
+                      <li key={avertissement} class="discret">
+                        {avertissement}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {apercu.doublons.length === 0 ? null : (
+                  <p class="avertissement">
+                    {apercu.doublons.length} opération{apercu.doublons.length > 1 ? "s" : ""} figure
+                    {apercu.doublons.length > 1 ? "nt" : ""} déjà dans un relevé du compte{" "}
+                    {importation.compte} : elle{apercu.doublons.length > 1 ? "s" : ""} ne sera
+                    {apercu.doublons.length > 1 ? "ont" : ""} pas reprise
+                    {apercu.doublons.length > 1 ? "s" : ""}.
+                  </p>
+                )}
+
+                <div class="grille-conteneur">
+                  <table class="grille grille-etat">
+                    <thead>
+                      <tr>
+                        <th>Ligne</th>
+                        <th>Date</th>
+                        <th>Référence</th>
+                        <th>Libellé</th>
+                        <th class="align-droite">Montant (sens banque)</th>
+                        <th class="align-droite">Solde</th>
+                        <th>Sort</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {apercu.importe.lignes.map((ligne) => {
+                        const doublon = apercu.doublons.some(
+                          (item) => item.numero === ligne.numero && item.date === ligne.date
+                        );
+                        return (
+                          <tr key={`apercu-${ligne.numero}`}>
+                            <td class="align-droite">{ligne.numero}</td>
+                            <td>{formaterDateFr(ligne.date)}</td>
+                            <td class="mono">{ligne.reference}</td>
+                            <td>{ligne.libelle}</td>
+                            <td class="align-droite mono">{montant(ligne.montant)}</td>
+                            <td class="align-droite mono">
+                              {ligne.solde === null ? "" : montant(ligne.solde)}
+                            </td>
+                            <td>
+                              {doublon ? <Etiquette ton="alerte">déjà vue</Etiquette> : <Etiquette>à importer</Etiquette>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </div>
+
+      <div class="bloc">
         <h2>{brouillon ? "Saisie d'un relevé" : "Saisir un relevé bancaire"}</h2>
         {brouillon === null ? (
           <>
@@ -757,9 +1287,14 @@ export function Rapprochement(props: { onMutation: () => void }) {
               >
                 Saisir un relevé
               </button>
-              <span class="indisponible" aria-disabled="true" title="L'import d'un fichier de relevé bancaire (CSV, OFX, CAMT) n'est pas produit — tranche F.">
+              <button
+                class="bouton"
+                type="button"
+                title="Lire un relevé CSV, OFX ou CAMT.053 : l'aperçu précède l'import"
+                onClick={ouvrirImport}
+              >
                 Importer un fichier de relevé
-              </span>
+              </button>
             </div>
           </>
         ) : (

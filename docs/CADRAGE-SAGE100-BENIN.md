@@ -283,9 +283,35 @@ son montant entier — le relevé dit ce que la banque a fait, pas ce que l'entr
 **Le dépointage** conserve la trace : un pointage défait garde son identifiant, son acteur et sa date
 de défaisance. Un rapprochement refait ne fait pas disparaître celui qui a été défait.
 
-**Ce qui n'est pas produit** : l'import d'un fichier de relevé (CSV, OFX, CAMT) — le relevé se saisit
-ligne à ligne —, les échelles d'intérêts et les agios calculés, et le rapprochement de plusieurs
-comptes bancaires en une seule opération.
+**L'import d'un fichier de relevé** (`compta/src/noyau/import-releve.ts`) lit ce que la banque donne :
+**CSV**, **OFX/QFX** (SGML, balises non fermées comprises) et **CAMT.053** (ISO 20022). La lecture est
+pure, elle n'écrit rien, et quatre règles la tiennent :
+
+- **Le fichier ne dit pas sa forme, elle est détectée et montrée.** Séparateur (`;`, `,`, tabulation),
+  décimale (virgule ou point), en-têtes reconnus par vocabulaire français et anglais — ou colonnes
+  déduites du contenu quand il n'y a pas d'en-tête —, montant signé ou porté sur deux colonnes
+  débit/crédit, sens marqué d'une lettre D/C, dates `jj/mm/aaaa`, `aaaa-mm-jj` ou `mm/jj/aaaa` quand le
+  fichier le prouve. Le mappage reconnu est rendu dans `correspondances` et affiché : l'utilisateur le
+  contrôle avant d'écrire.
+- **L'aperçu précède l'import**, comme la proposition précède le lettrage. `apercuDImportDeReleve` rend
+  les opérations lues, les avertissements et les **doublons** — les opérations déjà présentes dans un
+  relevé du même compte, reconnues à la date, la référence et le montant, jamais au libellé que les
+  banques reformulent. Importer deux fois le même fichier ne double rien, et ne le cache pas.
+- **Aucun arrondi silencieux.** Un montant est lu en unités exactes de la devise du dossier : « 1 170
+  000,00 » en XOF est accepté, « 1 170 000,56 » est refusé. Une ligne illisible cite son numéro et
+  arrête la lecture — un relevé amputé ne se rapproche pas. Une ligne qui n'est pas une opération
+  (pied de fichier, total) est écartée et annoncée.
+- **Ce que le fichier ne dit pas est demandé, jamais inventé.** Le compte du dossier, le journal, le
+  libellé du relevé, et le solde d'ouverture quand le fichier ne le porte pas. La provenance est gardée
+  sur le relevé (`source` : format, nom du fichier, compte et devise annoncés, doublons écartés) et
+  tracée dans l'audit comme « Relevé importé ».
+
+Un **relevé d'exemple** est produit à la demande depuis le grand livre du dossier, augmenté de deux
+opérations que seule la banque connaît (des frais) : l'import est essayable sans fichier sous la main,
+et le rapprochement a un écart réel à expliquer.
+
+**Ce qui n'est pas produit** : les échelles d'intérêts et les agios calculés, le rapprochement de
+plusieurs comptes bancaires en une seule opération, et les formats MT940 (SWIFT) et CAMT.052/054.
 
 ### 5.4 Ce que le paramétrage modifiable livre
 
@@ -451,7 +477,7 @@ deux dossiers, et l'import de données depuis un fichier tiers (ECF, FEC, CSV de
 | **C** | Écrans **Traitements** : lots, saisie des écritures en table de détail, comptabilisation, contre-passation | aperçu live + tests de parcours | **livrée**, 9 tests de parcours en jsdom |
 | **D** | Écrans **Interrogation** : balance, grand livre, journal, compte, historique | aperçu live | **livrée** : balance, journal, grand livre, puis **interrogation de compte** (§5.5) — producteur `interrogation.ts`, solde progressif à partir du solde réel, lecture d'un segment de tiers, marques de lettrage et de pointage sur les lignes, **reste à lettrer par ligne** et ligne entamée signalée, exercice clos signalé, historique par exercice avec solde reporté, comparaison d'exercices refusée quand l'exercice n'existe pas, liste des comptes qui ont bougé, écran avec fenêtre libre et export CSV, 8 + 3 tests. Reste l'interrogation par montant ou par lettre (le finder de Sage) et l'appel d'une écriture depuis une ligne |
 | **E** | Taxes Bénin en saisie + **déclaration TVA** mensuelle | tests de calcul fiscal | **livrée** : génération des lignes de taxe en saisie, déclaration recalculée et rapprochée du grand livre, export CSV. Reste le reversement des acomptes et retenues (compte 442100), qui relève d'une autre obligation |
-| **F** | Lettrage, rapprochement bancaire | tests | **partiellement livrée** : lettrage des comptes de tiers — producteur `lettrage.ts`, écran, lettrage manuel et automatique (proposé avant d'être appliqué), **lettrage partiel d'un règlement à-compte** (§5.0 : imputations ligne à ligne, reste à lettrer affiché, trois passes de proposition dont les à-comptes du plus ancien au plus récent, marques anciennes sans `portions` toujours lisibles), délettrage tracé, export en trois formats, 40 tests — **et rapprochement bancaire** : relevés saisis ligne à ligne, producteur `rapprochement.ts`, état de rapprochement avec écart expliqué et reste inexpliqué, pointage manuel et automatique (par référence puis par montant), dépointage tracé, écran, export, 13 + 3 tests. Reste l'import d'un fichier de relevé (CSV, OFX, CAMT) |
+| **F** | Lettrage, rapprochement bancaire | tests | **livrée** : lettrage des comptes de tiers — producteur `lettrage.ts`, écran, lettrage manuel et automatique (proposé avant d'être appliqué), **lettrage partiel d'un règlement à-compte** (§5.0 : imputations ligne à ligne, reste à lettrer affiché, trois passes de proposition dont les à-comptes du plus ancien au plus récent, marques anciennes sans `portions` toujours lisibles), délettrage tracé, export en trois formats, 40 tests — **et rapprochement bancaire** : relevés saisis ligne à ligne, producteur `rapprochement.ts`, état de rapprochement avec écart expliqué et reste inexpliqué, pointage manuel et automatique (par référence puis par montant), dépointage tracé, écran, export, 13 + 5 tests — **et l'import d'un fichier de relevé** (§5.3 : producteur `import-releve.ts`, CSV/OFX/CAMT.053, détection du séparateur, de la décimale, des colonnes et de l'ordre des dates, aperçu avant écriture, doublons écartés, provenance gardée sur le relevé et tracée, relevé d'exemple produit depuis le grand livre, 33 tests) |
 | **G** | Clôtures : période, exercice, à-nouveaux, *Create New Year* | tests | **livrée** : rapport de préparation, clôture d'exercice (solde des comptes de gestion vers 121000, à-nouveaux segment de tiers compris, ouverture de l'exercice suivant, archivage de l'exercice clos), lectures par exercice, écran avec confirmation explicite, 14 tests. La réouverture d'un exercice clos n'est pas produite : la clôture est définitive, et l'écran le dit |
 | **H** | États financiers OHADA révisé (producteur distinct), exports PDF/Excel/CSV de tous les documents | fichiers produits et vérifiés | **largement livrée** : bilan et compte de résultat OHADA révisé — producteur `etats-financiers.ts`, deux écrans, arrêté par période, **colonne N-1 dès qu'un exercice est clos**, 18 tests ; puis les **trois formats d'export** (§5.6) — description unique du document, Excel à montants numériques avec un onglet par section, PDF A4 paginé avec en-tête de société, CSV inchangé, chargement à la demande des bibliothèques, 14 tests de rendu (dont un XLSX relu par `exceljs` et un PDF dont le texte imprimé est décodé) plus 2 parcours d'écran. Restent le tableau des flux de trésorerie et le tableau de variation des activités (aucun compte du plan n'est classé en flux) |
 | **I** | Piste d'audit, habilitations par écran, import/export de données, sauvegarde/restauration, hôte Windows | tests + package installable | piste d'audit **livrée** (ajout-seulement, attribuée, horodatée) ; **sauvegarde et restauration livrées** (§5.7) — fichier JSON autosuffisant et versionné, inventaire chiffré, montants en chaînes, quatre refus motivés dont le grand livre déséquilibré et le paquet pays différent, vérification à l'écran puis dans le noyau, remplacement tracé avec le contenu écrasé, écran avec marche arrière obligatoire, 7 + 3 tests. Restent les habilitations par écran, l'import de données tiers (FEC, ECF, CSV), la sauvegarde automatique et l'hôte Windows |

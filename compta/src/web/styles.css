@@ -986,3 +986,32 @@ input[type="date"] {
   text-align: right;
   width: 7.5rem;
 }
+
+/* Un avertissement qui n'est pas un bloc entier : la couleur d'alerte, sans décor supplémentaire. */
+p.avertissement {
+  background: var(--alerte-doux);
+  border-left: 3px solid #e8cfa4;
+  color: var(--alerte);
+  font-size: 12.5px;
+  margin: 8px 0;
+  padding: 6px 10px;
+}
+
+/* Le contenu d'un fichier à importer, collé tel quel : une police à chasse fixe le rend lisible. */
+.champ-texte {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.champ-texte textarea {
+  border: 1px solid var(--bord);
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 12px;
+  min-height: 9rem;
+  padding: 6px 8px;
+  resize: vertical;
+  width: 100%;
+}

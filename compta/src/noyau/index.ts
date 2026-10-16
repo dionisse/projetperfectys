@@ -188,6 +188,24 @@ export {
   type SensPresentation
 } from "./etats-financiers";
 export {
+  FORMATS_DE_RELEVE,
+  NOM_DE_FORMAT,
+  cleDeDoublon,
+  detecterFormatDeReleve,
+  demandeDeReleveDepuisImport,
+  exempleDeReleveCsv,
+  estDate,
+  estMontant,
+  lireReleve,
+  type Correspondance,
+  type DemandeDImport,
+  type LigneDeReleveLue,
+  type OperationBancaireSeule,
+  type OptionsDeLecture,
+  type ReleveImporte
+} from "./import-releve";
+
+export {
   chercherCombinaison,
   chercherCombinaisonImputee,
   codeDeLettrageSuivant,
@@ -237,10 +255,12 @@ export {
   type DemandeDeReleve,
   type ElementPointe,
   type EtatDeRapprochement,
+  type FormatDeReleve,
   type LigneDeReleve,
   type Pointage,
   type PropositionDePointage,
-  type ReleveBancaire
+  type ReleveBancaire,
+  type SourceDeReleve
 } from "./rapprochement";
 
 export {
@@ -280,7 +300,9 @@ export {
   type EtatDossier,
   type EtatDossierSerialise,
   type EvenementAudit,
+  type ApercuDImportDeReleve,
   type OptionsService,
+  type ResultatDImportDeReleve,
   type ResultatRestauration,
   type SauvegardeDossier,
   type SauvegardeVerifiee,
