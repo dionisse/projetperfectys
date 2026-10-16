@@ -27,7 +27,7 @@ la même base.
 
 ```bash
 npm install            # installe l'espace de travail (compta)
-npm test               # 228 tests : noyau en Node, interface en jsdom, exports vérifiés
+npm test               # 229 tests : noyau en Node, interface en jsdom, exports vérifiés
 npm run typecheck      # TypeScript strict, sans émission
 npm run build          # build de production dans compta/dist
 npm run preview:vercel # sert le build comme le ferait Vercel, sur http://localhost:5173

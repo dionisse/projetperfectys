@@ -114,6 +114,26 @@ afterEach(() => {
 });
 
 describe("Écran de sauvegarde et restauration", () => {
+  it("s'atteint par Fichier › Sauvegarde du dossier, qui n'est plus une entrée annoncée", async () => {
+    await ouvrir("/");
+    await cliquer(bouton("Fichier"));
+    const panneau = conteneur.querySelector<HTMLElement>('.menu-panneau[aria-label="Menu Fichier"]');
+    expect(panneau).not.toBeNull();
+
+    const entrees = [...panneau!.querySelectorAll<HTMLElement>(".menu-entree")];
+    const sauvegarde = entrees.find((entree) => texte(entree).includes("Sauvegarde du dossier"));
+    // Livrée : c'est un bouton qui mène à l'écran, plus une entrée grisée qui l'annonce.
+    expect(sauvegarde?.tagName).toBe("BUTTON");
+    expect(sauvegarde?.classList.contains("indisponible")).toBe(false);
+
+    const restauration = entrees.find((entree) => texte(entree).includes("Restauration"));
+    expect(restauration?.tagName).toBe("BUTTON");
+
+    await cliquer(sauvegarde!);
+    expect(location.hash).toBe("#/outils/sauvegarde");
+    expect(texte(conteneur)).toMatch(/Outils › Sauvegarde du dossier/u);
+  });
+
   it("montre le dossier en cours et télécharge une sauvegarde lisible", async () => {
     const racine = await ouvrir();
     const affiche = texte(racine);

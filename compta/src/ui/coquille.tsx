@@ -120,8 +120,8 @@ export function Coquille() {
         { label: "Ouvrir un dossier", indisponible: "Multi-sociétés : après la validation des écrans de saisie" },
         { label: "", indisponible: "", separation: true },
         { label: "Réinitialiser la démonstration", action: () => void reinitialiser() },
-        { label: "Sauvegarde du dossier", indisponible: "Sauvegarde et restauration testables : tranche I" },
-        { label: "Restauration", indisponible: "Sauvegarde et restauration testables : tranche I" }
+        { label: "Sauvegarde du dossier…", href: "/outils/sauvegarde" },
+        { label: "Restauration…", href: "/outils/sauvegarde" }
       ]
     },
     {
@@ -130,7 +130,10 @@ export function Coquille() {
         { label: "Rechercher un compte…", href: "/structure/plan", raccourci: "F3" },
         { label: "Rechercher un tiers…", href: "/structure/tiers" },
         { label: "", indisponible: "", separation: true },
-        { label: "Exporter en PDF, Excel ou CSV", indisponible: "Exports des documents : tranche H" },
+        {
+          label: "Exporter en PDF, Excel ou CSV",
+          indisponible: "Le choix du format est sur chaque écran : le bouton « Exporter… » de la barre d'actions déplie Excel, CSV et PDF"
+        },
         { label: "Imprimer", indisponible: "Aucun démarrage ne dépend d'une imprimante : l'export PDF la remplace" }
       ]
     },
@@ -177,15 +180,18 @@ export function Coquille() {
         { label: "Compte de résultat OHADA révisé", href: "/etats/compte-resultat" },
         {
           label: "Tableau des flux de trésorerie",
-          indisponible: "Aucun compte du plan n'est classé « flux de trésorerie » : tranche H"
+          indisponible: "Aucun compte du plan de démarrage n'est classé « flux de trésorerie » : l'état serait vide. Il s'ouvrira quand le plan en portera"
         },
         {
           label: "Tableau de variation des activités",
-          indisponible: "Aucun compte du plan n'est classé « variation des activités » : tranche H"
+          indisponible: "Aucun compte du plan de démarrage n'est classé « variation des activités » : l'état serait vide. Il s'ouvrira quand le plan en portera"
         },
         { label: "", indisponible: "", separation: true },
         { label: "Déclaration TVA mensuelle…", href: "/etats/declaration-tva" },
-        { label: "États de paramétrage", indisponible: "Impression du paramétrage : tranche H" }
+        {
+          label: "États de paramétrage",
+          indisponible: "Le récapitulé imprimable du paramétrage n'est pas composé. Chaque paramètre s'exporte déjà depuis son écran : plan comptable, tiers, codes de taxe"
+        }
       ]
     },
     {
