@@ -1,7 +1,7 @@
 {
   "name": "perfecto-prototype",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Modern prototype of PERFECTO accounting PWA",
   "type": "module",
   "scripts": {
