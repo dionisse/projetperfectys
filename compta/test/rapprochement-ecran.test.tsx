@@ -56,6 +56,19 @@ async function cliquer(cible: HTMLElement, fois = 14): Promise<void> {
   await flush(fois);
 }
 
+/**
+ * Laisse vraiment tourner l'horloge.
+ *
+ * Écrire un classeur Excel ou un PDF, puis le relire, prend plus de temps qu'un tour de microtâches :
+ * sans cette attente, le test regarderait un écran qui n'a pas encore fini de travailler.
+ */
+async function attendre(ms: number): Promise<void> {
+  await act(async () => {
+    await new Promise((resolution) => setTimeout(resolution, ms));
+  });
+  await flush(12);
+}
+
 /** Colle un contenu de fichier dans le champ de l'import. */
 async function coller(contenu: string): Promise<void> {
   const champ = conteneur.querySelector<HTMLTextAreaElement>('textarea[aria-label="Contenu du fichier de relevé"]');
@@ -201,6 +214,54 @@ describe("Écran de rapprochement bancaire", () => {
     expect(texte(racine)).toMatch(/Aucune date d'opération/i);
     expect(bouton("Créer le relevé depuis l'import").disabled).toBe(true);
     expect((await getService().releves()).length).toBe(1);
+  });
+
+  it("importe un relevé d'exemple écrit en classeur Excel, puis relu par l'application", async () => {
+    const racine = await ouvrir();
+    await cliquer(bouton("Importer un fichier de relevé"));
+
+    // Un vrai classeur est écrit ici, puis relu par le lecteur : il n'y a plus de texte à coller, et ce
+    // que le lecteur a trouvé prend sa place.
+    await cliquer(bouton("Charger un exemple Excel"), 10);
+    await attendre(2500);
+    expect(bouton("Lire le fichier").disabled).toBe(false);
+    expect(conteneur.querySelector('textarea[aria-label="Contenu du fichier de relevé"]')).toBeNull();
+    expect(texte(racine)).toMatch(/en grille/i);
+    expect(texte(racine)).toMatch(/Feuille lue : « Relevé »/u);
+    expect(texte(racine)).toMatch(/première qui contient des dates et des montants/i);
+
+    await cliquer(bouton("Lire le fichier"), 30);
+    const lu = texte(racine);
+    expect(lu).toMatch(/Format reconnu\s*Classeur Excel \(\.xlsx\)/u);
+    expect(lu).toMatch(/Date d'opération ← Date opération/u);
+    expect(lu).toMatch(/FRAIS DE TENUE DE COMPTE/);
+    expect(lu).toMatch(/Total des opérations/i);
+    expect((await getService().releves()).length).toBe(1);
+
+    await cliquer(bouton("Créer le relevé depuis l'import"), 30);
+    expect(texte(racine)).toMatch(/importé au format Classeur Excel \(\.xlsx\) : 3 opérations/u);
+    expect((await getService().releves()).length).toBe(2);
+  });
+
+  it("importe un relevé d'exemple imprimé en PDF, puis relu par l'application", async () => {
+    const racine = await ouvrir();
+    await cliquer(bouton("Importer un fichier de relevé"));
+
+    await cliquer(bouton("Charger un exemple PDF"), 10);
+    await attendre(2500);
+    expect(bouton("Lire le fichier").disabled).toBe(false);
+    expect(texte(racine)).toMatch(/Document lu : 1 page/u);
+    expect(texte(racine)).toMatch(/mise en page du PDF/i);
+
+    await cliquer(bouton("Lire le fichier"), 30);
+    const lu = texte(racine);
+    expect(lu).toMatch(/Format reconnu\s*Document PDF/u);
+    expect(lu).toMatch(/FRAIS DE TENUE DE COMPTE/);
+    expect((await getService().releves()).length).toBe(1);
+
+    await cliquer(bouton("Créer le relevé depuis l'import"), 30);
+    expect(texte(racine)).toMatch(/importé au format Document PDF : 3 opérations/u);
+    expect((await getService().releves()).length).toBe(2);
   });
 
   it("propose le pointage, l'applique, puis dépointe", async () => {

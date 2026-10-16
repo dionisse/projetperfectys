@@ -81,6 +81,8 @@ import {
   cleDeDoublon,
   demandeDeReleveDepuisImport,
   lireReleve,
+  lireReleveDepuisGrille,
+  type LigneDeGrille,
   type LigneDeReleveLue,
   type ReleveImporte
 } from "./import-releve";
@@ -264,6 +266,22 @@ export function numeroDeDossier(moduleCode: string, societeCode: string, exercic
   const code = societeCode.trim().toUpperCase();
   const annee = exercice.toString().slice(-2);
   return code === "" ? `${moduleCode}-${annee}` : `${moduleCode}${code}-${annee}`;
+}
+
+/**
+ * Le contenu d'un relevé à importer.
+ *
+ * Un CSV, un OFX et un CAMT arrivent en texte. Un classeur Excel et un PDF sont binaires : la couche
+ * web les lit et rend une **grille de cellules**, que le même lecteur du noyau reconnaît. Le noyau,
+ * lui, n'ouvre aucun fichier.
+ */
+export interface ContenuDeReleveAImporter {
+  /** Le contenu en texte, pour un CSV, un OFX ou un CAMT. */
+  texte?: string;
+  /** Le contenu mis en grille, pour un classeur Excel ou un PDF. */
+  grille?: readonly LigneDeGrille[];
+  /** Ce que la lecture du fichier binaire a à dire : feuille retenue, nombre de pages, colonnes. */
+  notes?: readonly string[];
 }
 
 /** Ce qu'un fichier de relevé donnerait, lu sans rien écrire : l'aperçu que l'écran montre. */
@@ -1697,20 +1715,50 @@ export class ServiceComptable {
    * mappage que le lecteur a reconnu, les opérations lues, les lignes écartées, et celles qui
    * figurent déjà dans un relevé du compte. Rien n'est écrit tant qu'il n'a pas validé.
    */
-  async apercuDImportDeReleve(demande: {
-    compte: string;
-    texte: string;
-    nomFichier?: string | null;
-    format?: FormatDeReleve;
-  }): Promise<ApercuDImportDeReleve> {
-    const importe = lireReleve(demande.texte, {
+  async apercuDImportDeReleve(
+    demande: ContenuDeReleveAImporter & {
+      compte: string;
+      nomFichier?: string | null;
+      format?: FormatDeReleve;
+    }
+  ): Promise<ApercuDImportDeReleve> {
+    const importe = this.#lireContenuDeReleve(demande);
+    const etat = await this.#stockage.lire();
+    const { doublons, retenues } = this.#doublonsDImport(etat, comptePrincipalDe(demande.compte), importe);
+    return { importe, doublons, retenues };
+  }
+
+  /**
+   * Lit le contenu d'un relevé, texte ou grille.
+   *
+   * Exactement un des deux est attendu : un contenu ambigu (les deux, ou aucun) est refusé plutôt que
+   * deviné, parce que c'est le relevé d'un compte qui en dépend.
+   */
+  #lireContenuDeReleve(
+    demande: ContenuDeReleveAImporter & { nomFichier?: string | null; format?: FormatDeReleve }
+  ): ReleveImporte {
+    const aTexte = demande.texte !== undefined;
+    const aGrille = demande.grille !== undefined;
+    if (aTexte === aGrille) {
+      throw new ErreurRegle(
+        aTexte
+          ? "Le contenu du relevé est donné à la fois en texte et en grille : il faut choisir l'un des deux."
+          : "Aucun contenu de relevé n'est donné : choisissez un fichier, ou collez son texte."
+      );
+    }
+    if (aGrille) {
+      return lireReleveDepuisGrille(demande.grille!, {
+        devise: this.#paquet.devise,
+        ...(demande.format ? { format: demande.format } : {}),
+        nomFichier: demande.nomFichier ?? null,
+        notes: demande.notes ?? []
+      });
+    }
+    return lireReleve(demande.texte!, {
       devise: this.#paquet.devise,
       ...(demande.format ? { format: demande.format } : {}),
       nomFichier: demande.nomFichier ?? null
     });
-    const etat = await this.#stockage.lire();
-    const { doublons, retenues } = this.#doublonsDImport(etat, comptePrincipalDe(demande.compte), importe);
-    return { importe, doublons, retenues };
   }
 
   /** Les opérations du fichier qui figurent déjà dans un relevé du même compte. */
@@ -1747,20 +1795,20 @@ export class ServiceComptable {
    * que le fichier révèle et que la comptabilité n'a pas passés se comptabilisent ensuite, puis se
    * pointent — c'est précisément ce que l'état de rapprochement est fait pour montrer.
    */
-  async importerReleve(demande: {
-    compte: string;
-    /** Le contenu du fichier, tel quel. */
-    texte: string;
-    nomFichier?: string | null;
-    /** À défaut, le format est détecté depuis le contenu et le nom du fichier. */
-    format?: FormatDeReleve;
-    journalCode?: string;
-    libelle?: string;
-    du?: DateCivile;
-    au?: DateCivile;
-    /** Solde d'ouverture ; à défaut, celui que le fichier porte. */
-    soldeDOuverture?: string | Montant;
-  }): Promise<ResultatDImportDeReleve> {
+  async importerReleve(
+    demande: ContenuDeReleveAImporter & {
+      compte: string;
+      nomFichier?: string | null;
+      /** À défaut, le format est détecté depuis le contenu et le nom du fichier. */
+      format?: FormatDeReleve;
+      journalCode?: string;
+      libelle?: string;
+      du?: DateCivile;
+      au?: DateCivile;
+      /** Solde d'ouverture ; à défaut, celui que le fichier porte. */
+      soldeDOuverture?: string | Montant;
+    }
+  ): Promise<ResultatDImportDeReleve> {
     // Le compte est vérifié avant la lecture : un mauvais compte n'a pas à attendre qu'un fichier
     // soit déchiffré pour être refusé.
     const avant = await this.#stockage.lire();
@@ -1774,12 +1822,7 @@ export class ServiceComptable {
       );
     }
 
-    const importe = lireReleve(demande.texte, {
-      devise: this.#paquet.devise,
-      ...(demande.format ? { format: demande.format } : {}),
-      nomFichier: demande.nomFichier ?? null
-    });
-
+    const importe = this.#lireContenuDeReleve(demande);
     const { doublons, retenues } = this.#doublonsDImport(avant, compte, importe);
     if (retenues.length === 0) {
       throw new ErreurRegle(

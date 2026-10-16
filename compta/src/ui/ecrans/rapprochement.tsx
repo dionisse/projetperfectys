@@ -6,11 +6,15 @@
  * soldes, l'écart, et surtout **ce que l'écart ne s'explique pas** — parce qu'un rapprochement qui
  * absorbe une différence ne sert à rien.
  *
- * Le relevé se saisit ligne à ligne, ou **s'importe du fichier que la banque donne** (CSV, OFX/QFX,
- * CAMT.053). L'import suit la même discipline que le pointage : le fichier est lu, ce que le lecteur a
- * reconnu est montré — colonnes mappées, opérations lues, lignes déjà vues —, et rien n'est écrit avant
- * que l'utilisateur ait validé. Un relevé d'exemple, tiré du grand livre du dossier, permet d'essayer
- * l'import sans fichier sous la main.
+ * Le relevé se saisit ligne à ligne, ou **s'importe du fichier que la banque donne**. Le contenant
+ * varie d'une banque à l'autre — CSV, OFX/QFX, CAMT.053, classeur Excel, PDF imprimé — mais ce qu'on y
+ * cherche est toujours la même chose : une date, une référence, un libellé, un montant, un solde. Les
+ * trois premiers se lisent comme du texte ; le classeur et le PDF sont d'abord remis en grille de
+ * cellules par `web/lecture-fichier`, puis lus par le même lecteur que le CSV. L'import suit la même
+ * discipline que le pointage : le fichier est lu, ce que le lecteur a reconnu est montré — colonnes
+ * mappées, opérations lues, lignes déjà vues —, et rien n'est écrit avant que l'utilisateur ait validé.
+ * Un relevé d'exemple, tiré du grand livre du dossier, permet d'essayer l'import sans fichier sous la
+ * main.
  *
  * Le pointage n'écrit aucune écriture : il rapproche des mouvements déjà comptabilisés avec des lignes
  * déjà reçues. Quand la banque a prélevé des frais que la comptabilité n'a pas passés, le bouton de
@@ -18,6 +22,9 @@
  */
 
 import { useState } from "preact/hooks";
+
+/** Le contenant d'un relevé d'exemple : les trois qu'une banque donne vraiment. */
+type ContenantDExemple = "csv" | "xlsx" | "pdf";
 import {
   FORMATS_DE_RELEVE,
   NOM_DE_FORMAT,
@@ -31,6 +38,7 @@ import {
   type ElementPointe,
   type EtatDeRapprochement,
   type FormatDeReleve,
+  type LigneDeGrille,
   type LigneDeReleve,
   type Mouvement,
   type Pointage,
@@ -38,6 +46,8 @@ import {
   type ReleveBancaire
 } from "../../noyau/index";
 import { getService } from "../../web/noyau";
+import { estFichierBinaire, lireFichierDeReleve } from "../../web/lecture-fichier";
+import { classeurDExemple, documentDExemple } from "../../web/exemple-de-releve";
 import {
   ChargementEnCours,
   Erreur,
@@ -68,6 +78,8 @@ export function Rapprochement(props: { onMutation: () => void }) {
   const [horsPeriode, setHorsPeriode] = useState(false);
   const [propositions, setPropositions] = useState<PropositionDePointage[] | null>(null);
   const [retour, setRetour] = useState<{ ton: "succes" | "erreur"; texte: string } | null>(null);
+  /** Le contenant d'un exemple en cours d'écriture : écrire un classeur ou un PDF prend une seconde. */
+  const [exempleEnCours, setExempleEnCours] = useState<ContenantDExemple | null>(null);
   const [revision, setRevision] = useState(0);
   const [brouillon, setBrouillon] = useState<{
     compte: string;
@@ -85,7 +97,12 @@ export function Rapprochement(props: { onMutation: () => void }) {
     /** Vide : le format est détecté depuis le contenu et le nom du fichier. */
     format: string;
     nomFichier: string;
+    /** Le contenu en texte, pour un CSV, un OFX ou un CAMT. */
     texte: string;
+    /** Le contenu mis en grille, pour un classeur Excel ou un PDF. L'un des deux, jamais les deux. */
+    grille: LigneDeGrille[] | null;
+    /** Ce que la lecture d'un fichier binaire a à dire : feuille retenue, pages, colonnes reconnues. */
+    notes: string[];
     du: string;
     au: string;
     soldeDOuverture: string;
@@ -310,21 +327,47 @@ export function Rapprochement(props: { onMutation: () => void }) {
       format: "",
       nomFichier: "",
       texte: "",
+      grille: null,
+      notes: [],
       du: `${aujourdHui.slice(0, 8)}01`,
       au: aujourdHui,
       soldeDOuverture: ""
     });
   };
 
+  /**
+   * Prend le fichier choisi.
+   *
+   * Un classeur Excel ou un PDF n'a pas de texte à coller : il est mis en grille dès le chargement, et
+   * ce que le lecteur en dit est montré. Un fichier texte est chargé tel quel. Dans les deux cas rien
+   * n'est lu ni écrit avant « Lire le fichier ».
+   */
   const choisirFichierDeReleve = async (fichier: File | null): Promise<void> => {
     if (!fichier) {
       return;
     }
     try {
-      const texte = await fichier.text();
       setApercu(null);
+      if (estFichierBinaire(fichier.name)) {
+        const lu = await lireFichierDeReleve(fichier.name, await fichier.arrayBuffer());
+        setImportation((precedent) =>
+          precedent === null
+            ? null
+            : { ...precedent, texte: "", grille: lu.grille, notes: lu.notes, nomFichier: fichier.name, format: lu.format }
+        );
+        setRetour({
+          ton: "succes",
+          texte: `« ${fichier.name} » chargé (${fichier.size} octets) : ${lu.grille.length} ligne${
+            lu.grille.length > 1 ? "s" : ""
+          } mise${lu.grille.length > 1 ? "s" : ""} en grille. Cliquez sur « Lire le fichier » : rien n'est écrit avant l'aperçu.`
+        });
+        return;
+      }
+      const texte = await fichier.text();
       setImportation((precedent) =>
-        precedent === null ? null : { ...precedent, texte, nomFichier: fichier.name, format: precedent.format }
+        precedent === null
+          ? null
+          : { ...precedent, texte, grille: null, notes: [], nomFichier: fichier.name, format: precedent.format }
       );
       setRetour({
         ton: "succes",
@@ -335,6 +378,12 @@ export function Rapprochement(props: { onMutation: () => void }) {
     }
   };
 
+  /** Le contenu à faire lire : la grille d'un fichier binaire, ou le texte collé ou chargé. */
+  const contenuDImportation = (
+    etat: { texte: string; grille: LigneDeGrille[] | null; notes: string[] }
+  ): { texte?: string; grille?: readonly LigneDeGrille[]; notes?: readonly string[] } =>
+    etat.grille === null ? { texte: etat.texte } : { grille: etat.grille, notes: etat.notes };
+
   const lireFichier = async (): Promise<void> => {
     if (!importation) {
       return;
@@ -343,7 +392,7 @@ export function Rapprochement(props: { onMutation: () => void }) {
       setRetour(null);
       const lu = await service.apercuDImportDeReleve({
         compte: importation.compte,
-        texte: importation.texte,
+        ...contenuDImportation(importation),
         nomFichier: importation.nomFichier === "" ? null : importation.nomFichier,
         ...(importation.format === "" ? {} : { format: importation.format as FormatDeReleve })
       });
@@ -388,10 +437,16 @@ export function Rapprochement(props: { onMutation: () => void }) {
    *
    * Il rend l'import essayable sans fichier sous la main : les opérations que la comptabilité connaît,
    * plus deux frais que seule la banque a passés, pour que le rapprochement ait un écart à expliquer.
+   *
+   * Le contenant se choisit — texte séparé, classeur, page imprimée — parce que c'est lui qui change
+   * tout d'une banque à l'autre. Un classeur et un PDF sont **écrits pour de vrai** puis relus par le
+   * lecteur de l'application : le chemin est le même qu'avec un fichier de banque, et il est essayable
+   * sans en avoir un.
    */
-  const chargerExemple = async (): Promise<void> => {
+  const chargerExemple = async (contenant: ContenantDExemple = "csv"): Promise<void> => {
     try {
       setRetour(null);
+      setExempleEnCours(contenant);
       const compte = importation?.compte ?? releve?.compte ?? "521100";
       const etat = await service.lire();
       const duCompte = etat.mouvements.filter(
@@ -415,37 +470,61 @@ export function Rapprochement(props: { onMutation: () => void }) {
       } catch {
         soldeDOuverture = ZERO;
       }
-      const texte = exempleDeReleveCsv({
+      const exemple = {
         compte,
         mouvements: etat.mouvements,
         du,
         au,
         soldeDOuverture,
-        devise: service.paquetPays.devise,
         // Ce que la banque a passé et que la comptabilité n'a pas encore passé.
         separees: [
           { date: au, libelle: "FRAIS DE TENUE DE COMPTE", reference: "FRAIS-EX", montant: -BigInt(15000) },
           { date: au, libelle: "COMMISSION DE VIREMENT", reference: "COMM-EX", montant: -BigInt(7500) }
         ]
-      });
-      setApercu(null);
-      setImportation({
+      };
+      const formulaire = {
         compte,
         journalCode: importation?.journalCode ?? "BQ",
         libelle: `Relevé d'exemple — ${du.slice(0, 7)}`,
-        format: "csv",
-        nomFichier: `exemple-releve-${compte}-${du.slice(0, 7)}.csv`,
-        texte,
         du,
         au,
         soldeDOuverture: soldeDOuverture.toString()
-      });
+      };
+      const periode = `${du} – ${au}, construit à partir des mouvements du compte ${compte} et de deux frais bancaires`;
+
+      if (contenant === "csv") {
+        const texte = exempleDeReleveCsv({ ...exemple, devise: service.paquetPays.devise });
+        setApercu(null);
+        setImportation({
+          ...formulaire,
+          format: "csv",
+          nomFichier: `exemple-releve-${compte}-${du.slice(0, 7)}.csv`,
+          texte,
+          grille: null,
+          notes: []
+        });
+        setRetour({ ton: "succes", texte: `Relevé d'exemple chargé (texte séparé) : ${periode}. Cliquez sur « Lire le fichier ».` });
+        return;
+      }
+
+      const nom = `exemple-releve-${compte}-${du.slice(0, 7)}.${contenant}`;
+      const octets =
+        contenant === "xlsx"
+          ? await classeurDExemple(exemple)
+          : await documentDExemple({ ...exemple, devise: service.paquetPays.devise });
+      const lu = await lireFichierDeReleve(nom, octets);
+      setApercu(null);
+      setImportation({ ...formulaire, format: lu.format, nomFichier: nom, texte: "", grille: lu.grille, notes: lu.notes });
       setRetour({
         ton: "succes",
-        texte: `Relevé d'exemple chargé : ${du} – ${au}, construit à partir des mouvements du compte ${compte} et de deux frais bancaires. Cliquez sur « Lire le fichier ».`
+        texte: `Relevé d'exemple chargé (${NOM_DE_FORMAT[lu.format]}) : ${periode}. Un vrai fichier ${
+          contenant === "xlsx" ? "classeur" : "PDF"
+        } a été écrit, puis relu par l'application — ${lu.grille.length} lignes mises en grille. Cliquez sur « Lire le fichier ».`
       });
     } catch (erreurInconnue) {
       echouer(erreurInconnue);
+    } finally {
+      setExempleEnCours(null);
     }
   };
 
@@ -456,7 +535,7 @@ export function Rapprochement(props: { onMutation: () => void }) {
     try {
       const cree = await service.importerReleve({
         compte: importation.compte,
-        texte: importation.texte,
+        ...contenuDImportation(importation),
         nomFichier: importation.nomFichier === "" ? null : importation.nomFichier,
         ...(importation.format === "" ? {} : { format: importation.format as FormatDeReleve }),
         journalCode: importation.journalCode,
@@ -573,6 +652,53 @@ export function Rapprochement(props: { onMutation: () => void }) {
   /* ---------------------------------------------------------------- */
   /* Rendu                                                             */
   /* ---------------------------------------------------------------- */
+
+  /**
+   * Le même relevé d'exemple dans les trois contenants qu'une banque emploie.
+   *
+   * Le classeur et le PDF sont écrits pour de vrai, puis relus par le lecteur de l'application : ils
+   * rendent l'import d'un fichier binaire essayable sans avoir celui de sa banque sous la main.
+   */
+  const titreDExemple = (contenant: ContenantDExemple, auRepos: string): string =>
+    exempleEnCours === contenant
+      ? contenant === "csv"
+        ? "Le relevé d'exemple s'écrit…"
+        : `Le fichier ${contenant === "xlsx" ? "classeur" : "PDF"} d'exemple s'écrit, puis il est relu par l'application…`
+      : exempleEnCours === null
+        ? auRepos
+        : "Un autre relevé d'exemple est en cours d'écriture";
+
+  const boutonsDExemple = (
+    <>
+      <button
+        class="bouton"
+        type="button"
+        disabled={exempleEnCours !== null}
+        title={titreDExemple("csv", "Un relevé construit à partir du grand livre du dossier, pour essayer l'import sans fichier sous la main")}
+        onClick={() => void chargerExemple("csv")}
+      >
+        Charger un relevé d'exemple
+      </button>
+      <button
+        class="bouton"
+        type="button"
+        disabled={exempleEnCours !== null}
+        title={titreDExemple("xlsx", "Le même relevé d'exemple, écrit dans un vrai classeur .xlsx puis relu par l'application")}
+        onClick={() => void chargerExemple("xlsx")}
+      >
+        Charger un exemple Excel
+      </button>
+      <button
+        class="bouton"
+        type="button"
+        disabled={exempleEnCours !== null}
+        title={titreDExemple("pdf", "Le même relevé d'exemple, imprimé dans un vrai PDF puis relu par l'application")}
+        onClick={() => void chargerExemple("pdf")}
+      >
+        Charger un exemple PDF
+      </button>
+    </>
+  );
 
   return (
     <Fenetre
@@ -979,13 +1105,17 @@ export function Rapprochement(props: { onMutation: () => void }) {
         {importation === null ? (
           <>
             <p class="note">
-              Le relevé que la banque donne se lit tel quel : <strong>CSV</strong> (texte séparé),{" "}
-              <strong>OFX / QFX</strong> ou <strong>CAMT.053</strong>. Le séparateur, la décimale, les
-              colonnes, l'ordre des dates et le sens des montants sont reconnus automatiquement, et ce
-              qui est reconnu est <strong>montré avant d'écrire</strong>. Les opérations déjà présentes
-              dans un relevé du compte sont écartées et annoncées : importer deux fois le même fichier
-              ne double rien. Comme une saisie, un import ne passe aucune écriture — les frais que le
-              fichier révèle se comptabilisent ensuite, puis se pointent.
+              Le relevé que la banque donne se lit tel quel, quel que soit son contenant :{" "}
+              <strong>CSV</strong> (texte séparé), <strong>OFX / QFX</strong>, <strong>CAMT.053</strong>,{" "}
+              <strong>classeur Excel</strong> (.xlsx) ou <strong>PDF</strong>. Le contenant change d'une
+              banque à l'autre, pas ce qu'on y cherche : une date, une référence, un libellé, un montant,
+              un solde. Le séparateur, la décimale, les colonnes, l'ordre des dates et le sens des
+              montants sont reconnus automatiquement, et ce qui est reconnu est{" "}
+              <strong>montré avant d'écrire</strong>. Les opérations déjà présentes dans un relevé du
+              compte sont écartées et annoncées : importer deux fois le même fichier ne double rien.
+              Comme une saisie, un import ne passe aucune écriture — les frais que le fichier révèle se
+              comptabilisent ensuite, puis se pointent. Un PDF dont les chiffres sont des images — un
+              relevé scanné — n'est pas deviné : il est refusé, et l'écran dit quoi faire.
             </p>
             <div class="barre-actions">
               <button
@@ -996,14 +1126,7 @@ export function Rapprochement(props: { onMutation: () => void }) {
               >
                 Importer un fichier de relevé
               </button>
-              <button
-                class="bouton"
-                type="button"
-                title="Un relevé construit à partir du grand livre du dossier, pour essayer l'import sans fichier sous la main"
-                onClick={() => void chargerExemple()}
-              >
-                Charger un relevé d'exemple
-              </button>
+              {boutonsDExemple}
             </div>
           </>
         ) : (
@@ -1083,34 +1206,53 @@ export function Rapprochement(props: { onMutation: () => void }) {
               </label>
             </div>
             <label class="champ-court">
-              Fichier de relevé (.csv, .ofx, .qfx, .xml)
+              Fichier de relevé (.csv, .ofx, .qfx, .xml, .xlsx, .pdf)
               <input
                 type="file"
-                accept=".csv,.txt,.ofx,.qfx,.xml,text/csv,application/xml,text/plain"
+                accept=".csv,.txt,.ofx,.qfx,.xml,.xlsx,.xlsm,.pdf,text/csv,application/xml,application/pdf,text/plain"
                 onChange={(evenement) => void choisirFichierDeReleve(evenement.currentTarget.files?.[0] ?? null)}
               />
             </label>
-            <label class="champ-texte">
-              Contenu du fichier {importation.nomFichier === "" ? "" : `— ${importation.nomFichier}`}
-              <textarea
-                rows={8}
-                spellcheck={false}
-                aria-label="Contenu du fichier de relevé"
-                value={importation.texte}
-                placeholder="Choisissez un fichier ci-dessus, ou collez ici son contenu. Un relevé d'exemple est proposé pour essayer l'import."
-                onChange={(evenement) => {
-                  setApercu(null);
-                  setImportation({ ...importation, texte: evenement.currentTarget.value });
-                }}
-              />
-            </label>
+            {importation.grille === null ? (
+              <label class="champ-texte">
+                Contenu du fichier {importation.nomFichier === "" ? "" : `— ${importation.nomFichier}`}
+                <textarea
+                  rows={8}
+                  spellcheck={false}
+                  aria-label="Contenu du fichier de relevé"
+                  value={importation.texte}
+                  placeholder="Choisissez un fichier ci-dessus, ou collez ici son contenu. Un relevé d'exemple est proposé pour essayer l'import, dans les trois contenants."
+                  onChange={(evenement) => {
+                    setApercu(null);
+                    setImportation({ ...importation, texte: evenement.currentTarget.value });
+                  }}
+                />
+              </label>
+            ) : (
+              <div class="champ-texte">
+                <span>
+                  Contenu du fichier — {importation.nomFichier} ({importation.grille.length} ligne
+                  {importation.grille.length > 1 ? "s" : ""} mise{importation.grille.length > 1 ? "s" : ""} en
+                  grille)
+                </span>
+                <p class="note">
+                  Un classeur Excel ou un PDF n'a pas de texte à coller : le lecteur l'a remis en grille
+                  de cellules, et c'est cette grille qui sera lue. Voici ce qu'il en dit.
+                </p>
+                <ul class="liste-compacte" aria-label="Ce que le lecteur dit du fichier">
+                  {importation.notes.map((note) => (
+                    <li key={note}>{note}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div class="barre-actions">
               <button
                 class="bouton"
                 type="button"
-                disabled={importation.texte.trim() === ""}
+                disabled={importation.texte.trim() === "" && importation.grille === null}
                 title={
-                  importation.texte.trim() === ""
+                  importation.texte.trim() === "" && importation.grille === null
                     ? "Choisissez un fichier ou collez son contenu"
                     : "Lire le fichier et montrer ce qu'il contient, sans rien écrire"
                 }
@@ -1146,9 +1288,7 @@ export function Rapprochement(props: { onMutation: () => void }) {
               >
                 Annuler l'import
               </button>
-              <button class="bouton" type="button" onClick={() => void chargerExemple()}>
-                Charger un relevé d'exemple
-              </button>
+              {boutonsDExemple}
             </div>
 
             {apercu === null ? null : (
@@ -1290,7 +1430,7 @@ export function Rapprochement(props: { onMutation: () => void }) {
               <button
                 class="bouton"
                 type="button"
-                title="Lire un relevé CSV, OFX ou CAMT.053 : l'aperçu précède l'import"
+                title="Lire un relevé CSV, OFX, CAMT.053, Excel ou PDF : l'aperçu précède l'import"
                 onClick={ouvrirImport}
               >
                 Importer un fichier de relevé

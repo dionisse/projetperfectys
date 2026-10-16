@@ -188,21 +188,31 @@ export {
   type SensPresentation
 } from "./etats-financiers";
 export {
+  FORMATS_BINAIRES,
   FORMATS_DE_RELEVE,
   NOM_DE_FORMAT,
+  champsALaForme,
   cleDeDoublon,
   detecterFormatDeReleve,
   demandeDeReleveDepuisImport,
   exempleDeReleveCsv,
+  operationsDExempleDeReleve,
   estDate,
   estMontant,
+  grilleDepuisTexteDePdf,
   lireReleve,
+  lireReleveDepuisGrille,
   type Correspondance,
   type DemandeDImport,
+  type GrilleDePdf,
+  type LigneDeGrille,
   type LigneDeReleveLue,
   type OperationBancaireSeule,
+  type OperationDExempleDeReleve,
+  type OptionsDExempleDeReleve,
   type OptionsDeLecture,
-  type ReleveImporte
+  type ReleveImporte,
+  type TextePositionne
 } from "./import-releve";
 
 export {
@@ -292,6 +302,7 @@ export {
   serialiserEtat,
   verifierSauvegarde,
   type ContenuDossier,
+  type ContenuDeReleveAImporter,
   type ContexteDossier,
   type DemandeEcriture,
   type ExerciceClos,

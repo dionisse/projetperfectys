@@ -40,8 +40,14 @@ export interface LigneDeReleve {
   montant: Montant;
 }
 
-/** Le format du fichier d'où vient un relevé importé. */
-export type FormatDeReleve = "csv" | "ofx" | "camt053";
+/**
+ * Le format du fichier d'où vient un relevé importé.
+ *
+ * `xlsx` et `pdf` sont des contenants, pas des mises en page : une banque donne le même relevé en
+ * classeur ou en document, et ce qu'on y cherche est toujours la date, la référence, le libellé, le
+ * montant et le solde. La lecture de ces deux formats passe par une grille de cellules, comme le CSV.
+ */
+export type FormatDeReleve = "csv" | "ofx" | "camt053" | "xlsx" | "pdf";
 
 /**
  * D'où vient un relevé.

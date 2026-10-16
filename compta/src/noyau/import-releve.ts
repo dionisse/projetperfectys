@@ -30,13 +30,18 @@ import { analyserMontantSigne, type DemandeDeReleve, type FormatDeReleve } from 
 
 export type { FormatDeReleve };
 
-export const FORMATS_DE_RELEVE: readonly FormatDeReleve[] = ["csv", "ofx", "camt053"];
+export const FORMATS_DE_RELEVE: readonly FormatDeReleve[] = ["csv", "ofx", "camt053", "xlsx", "pdf"];
+
+/** Les formats qui sont des fichiers binaires : ils se lisent en octets, pas en texte collé. */
+export const FORMATS_BINAIRES: readonly FormatDeReleve[] = ["xlsx", "pdf"];
 
 /** Ce qu'un format de relevé porte comme nom, pour les messages et les menus. */
 export const NOM_DE_FORMAT: Record<FormatDeReleve, string> = {
   csv: "CSV (texte séparé)",
   ofx: "OFX / QFX",
-  camt053: "CAMT.053 (ISO 20022)"
+  camt053: "CAMT.053 (ISO 20022)",
+  xlsx: "Classeur Excel (.xlsx)",
+  pdf: "Document PDF"
 };
 
 /** Une opération lue dans le fichier, avant toute écriture dans le dossier. */
@@ -87,7 +92,7 @@ export interface OptionsDeLecture {
 /* Lecture                                                             */
 /* ------------------------------------------------------------------ */
 
-/** Lit un fichier de relevé. N'écrit rien : le résultat se montre avant d'être importé. */
+/** Lit un fichier de relevé donné comme texte. N'écrit rien : le résultat se montre avant d'être importé. */
 export function lireReleve(texte: string, options: OptionsDeLecture): ReleveImporte {
   const format = options.format ?? detecterFormatDeReleve(texte, options.nomFichier ?? null);
   const nomFichier = options.nomFichier ?? null;
@@ -98,7 +103,32 @@ export function lireReleve(texte: string, options: OptionsDeLecture): ReleveImpo
       return { ...lireReleveOfx(texte, options), format, nomFichier };
     case "camt053":
       return { ...lireReleveCamt053(texte, options), format, nomFichier };
+    case "xlsx":
+    case "pdf":
+      throw new ErreurRegle(
+        `Un ${NOM_DE_FORMAT[format]} est un fichier binaire : il se lit en octets, pas en texte collé. Choisissez le fichier, l'application le lit et montre ce qu'il contient.`
+      );
   }
+}
+
+/**
+ * Lit un relevé déjà mis en grille de cellules — ce que rendent un classeur Excel et un PDF.
+ *
+ * Les cellules sont du texte : un nombre y figure tel que le fichier l'écrit, une date au format ISO
+ * ou européen. La reconnaissance des colonnes, de la décimale et du sens des montants est la même que
+ * pour un CSV, parce que c'est le même lecteur.
+ */
+export function lireReleveDepuisGrille(
+  grille: readonly LigneDeGrille[],
+  options: OptionsDeLecture & { notes?: readonly string[] }
+): ReleveImporte {
+  const format = options.format ?? "xlsx";
+  const notes: Correspondance[] = (options.notes ?? []).map((note) => ({ role: "Lecture", colonne: note }));
+  const lecture = lireGrilleDeReleve(grille, options, notes);
+  for (const note of options.notes ?? []) {
+    lecture.avertissements.push(note);
+  }
+  return { ...lecture, format, nomFichier: options.nomFichier ?? null };
 }
 
 /**
@@ -111,6 +141,16 @@ export function detecterFormatDeReleve(texte: string, nomFichier: string | null)
   const propre = texte.replace(/^\uFEFF/u, "").trim();
   if (propre === "") {
     throw new ErreurRegle("Le fichier est vide : rien à importer.");
+  }
+  if (propre.startsWith("%PDF")) {
+    throw new ErreurRegle(
+      "Ce contenu est un document PDF : il se lit en octets. Choisissez le fichier au lieu d'en coller le texte."
+    );
+  }
+  if (propre.startsWith("PK\u0003\u0004")) {
+    throw new ErreurRegle(
+      "Ce contenu est un classeur Excel (.xlsx) : il se lit en octets. Choisissez le fichier au lieu d'en coller le texte."
+    );
   }
   if (/<OFX[\s>]/iu.test(propre) || /<STMTTRNRS[\s>]/iu.test(propre)) {
     return "ofx";
@@ -165,7 +205,11 @@ const MOTIFS_DE_ROLE: readonly { role: Role; motif: RegExp }[] = [
   { role: "montant", motif: /montant|amount|somme|valeur|total/iu }
 ];
 
-interface LigneCsv {
+/**
+ * Une ligne d'une grille de cellules : ce que le CSV, le classeur Excel et le PDF rendent tous les
+ * trois. Le numéro est celui de la ligne dans le fichier, pour citer les erreurs.
+ */
+export interface LigneDeGrille {
   numero: number;
   cellules: string[];
 }
@@ -189,12 +233,31 @@ function lireReleveCsv(texte: string, options: OptionsDeLecture): LectureCsv {
   }
 
   const separateur = detecterSeparateur(brut);
-  const lignes = decouperCsv(brut, separateur).filter((ligne) => ligne.cellules.some((cellule) => cellule.trim() !== ""));
+  const lignes = decouperCsv(brut, separateur);
+  const notes: Correspondance[] = [
+    { role: "Séparateur", colonne: separateur === "\t" ? "tabulation" : `« ${separateur} »` }
+  ];
+  return lireGrilleDeReleve(lignes, options, notes);
+}
+
+/**
+ * Lit une grille de cellules, d'où qu'elle vienne.
+ *
+ * C'est le socle commun des trois contenants : un CSV découpé, une feuille de classeur, une page de
+ * PDF remise en colonnes. Tout ce qui décide — en-têtes reconnus ou colonnes déduites, décimale,
+ * ordre des dates, sens des montants — se joue ici, une seule fois.
+ */
+function lireGrilleDeReleve(
+  lignesBrutes: readonly LigneDeGrille[],
+  options: OptionsDeLecture,
+  notes: readonly Correspondance[] = []
+): LectureCsv {
+  const lignes = lignesBrutes.filter((ligne) => ligne.cellules.some((cellule) => cellule.trim() !== ""));
   if (lignes.length === 0) {
     throw new ErreurRegle("Le fichier ne contient aucune ligne lisible.");
   }
 
-  const premierIndex = indexDeLaPremiereOperation(lignes, separateur);
+  const premierIndex = indexDeLaPremiereOperation(lignes);
   const entetes =
     premierIndex > 0
       ? lignes[premierIndex - 1]!.cellules.map((cellule) => nettoyerEnTete(cellule))
@@ -240,10 +303,7 @@ function lireReleveCsv(texte: string, options: OptionsDeLecture): LectureCsv {
     );
   }
 
-  const decimale = detecterDecimale(
-    lignes.slice(premierIndex).flatMap((ligne) => ligne.cellules),
-    separateur
-  );
+  const decimale = detecterDecimale(lignes.slice(premierIndex).flatMap((ligne) => ligne.cellules));
   const ordreDesDates = detecterOrdreDesDates(lignes.slice(premierIndex).map((ligne) => ligne.cellules[dateColonne]!));
 
   const lire = {
@@ -335,7 +395,9 @@ function lireReleveCsv(texte: string, options: OptionsDeLecture): LectureCsv {
       role: NOM_DE_ROLE[role],
       colonne: entetes?.[index] ?? `colonne ${index + 1}`
     }));
-  correspondances.push({ role: "Séparateur", colonne: separateur === "\t" ? "tabulation" : `« ${separateur} »` });
+  for (const note of notes) {
+    correspondances.push(note);
+  }
   correspondances.push({ role: "Décimale", colonne: decimale === "." ? "point" : "virgule" });
   if (premierAvecSolde) {
     correspondances.push({
@@ -396,8 +458,8 @@ function compterHorsGuillemets(ligne: string, caractere: string): number {
 }
 
 /** Découpe un CSV en respectant les guillemets, y compris quand un champ porte un retour à la ligne. */
-function decouperCsv(brut: string, separateur: string): LigneCsv[] {
-  const lignes: LigneCsv[] = [];
+function decouperCsv(brut: string, separateur: string): LigneDeGrille[] {
+  const lignes: LigneDeGrille[] = [];
   let cellules: string[] = [];
   let cellule = "";
   let dansGuillemets = false;
@@ -446,8 +508,7 @@ function decouperCsv(brut: string, separateur: string): LigneCsv[] {
 }
 
 /** La première ligne qui porte à la fois une date et un montant : les lignes d'avant sont l'en-tête. */
-function indexDeLaPremiereOperation(lignes: readonly LigneCsv[], separateur: string): number {
-  void separateur;
+function indexDeLaPremiereOperation(lignes: readonly LigneDeGrille[]): number {
   for (let index = 0; index < lignes.length; index += 1) {
     const cellules = lignes[index]!.cellules;
     const aUneDate = cellules.some((cellule) => estDate(cellule));
@@ -497,7 +558,7 @@ function mapperColonnes(entetes: readonly string[]): Map<number, Role> {
 }
 
 /** Sans en-tête : la colonne des dates, celle des montants, le texte le plus long, le code le plus court. */
-function mapperSansEntete(lignes: readonly LigneCsv[]): Map<number, Role> {
+function mapperSansEntete(lignes: readonly LigneDeGrille[]): Map<number, Role> {
   const largeur = Math.max(0, ...lignes.map((ligne) => ligne.cellules.length));
   const roles = new Map<number, Role>();
   const colonnes = Array.from({ length: largeur }, (_, index) => index);
@@ -539,8 +600,7 @@ function mapperSansEntete(lignes: readonly LigneCsv[]): Map<number, Role> {
 }
 
 /** La décimale du fichier : virgule en France, point ailleurs. */
-function detecterDecimale(cellules: readonly string[], separateur: string): "," | "." {
-  void separateur;
+function detecterDecimale(cellules: readonly string[]): "," | "." {
   let virgule = 0;
   let point = 0;
   for (const cellule of cellules) {
@@ -588,6 +648,409 @@ function detecterOrdreDesDates(cellules: readonly string[]): "jm" | "mj" {
     }
   }
   return !premierTropGrand && secondTropGrand ? "mj" : "jm";
+}
+
+
+/* ------------------------------------------------------------------ */
+/* Un PDF remis en grille                                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Un morceau de texte posé sur une page, tel qu'un extracteur de PDF le rend.
+ *
+ * `y` est mesuré **depuis le haut de la page**, comme un écran le lit : c'est l'adaptateur qui retourne
+ * l'ordonnée de PDF, laquelle compte depuis le bas. `largeur` sert à savoir où finit une cellule.
+ */
+export interface TextePositionne {
+  page: number;
+  texte: string;
+  x: number;
+  y: number;
+  largeur: number;
+}
+
+/** Ce que donne la remise en grille d'un PDF : les lignes, et ce qu'il faut en dire. */
+export interface GrilleDePdf {
+  lignes: LigneDeGrille[];
+  notes: string[];
+}
+
+/** Les colonnes de la grille quand le PDF n'a pas d'en-tête de colonnes lisible. */
+const COLONNES_CANONIQUES: readonly string[] = ["Date opération", "Référence", "Libellé", "Montant", "Solde"];
+
+interface CelluleDePdf {
+  texte: string;
+  x: number;
+  droite: number;
+}
+
+interface LigneDePdf {
+  page: number;
+  y: number;
+  cellules: CelluleDePdf[];
+  /** Le texte de la ligne, quand elle n'est portée que par un seul morceau. */
+  brut: string;
+}
+
+/**
+ * Remet en grille le texte d'un PDF.
+ *
+ * Un relevé imprimé n'est pas un tableau : c'est de l'encre posée à des coordonnées. Deux cas, traités
+ * séparément parce qu'ils ne se lisent pas de la même façon :
+ *
+ * - **La page porte ses colonnes.** Chaque cellule est un morceau de texte distinct, et les morceaux
+ *   d'une même ligne partagent une ordonnée. Les colonnes sont retrouvées sur la ligne la plus fournie,
+ *   puis chaque cellule est rangée dans la colonne dont elle borde l'entrée ou la sortie — ce qui tient
+ *   compte des montants alignés à droite, dont l'abscisse varie avec le nombre de chiffres.
+ * - **La page ne porte qu'une ligne de texte par opération.** Aucun repère de colonne : les champs sont
+ *   reconnus à leur forme (une date, des nombres, un code, le reste en libellé). C'est un repli, il est
+ *   annoncé comme tel, et l'aperçu est là pour que l'utilisateur le contrôle avant d'importer.
+ *
+ * Ce qui n'est pas une opération — titre, pied de page, « Page 2/3 », total — est écarté : une ligne de
+ * relevé porte toujours une date.
+ */
+export function grilleDepuisTexteDePdf(
+  elements: readonly TextePositionne[],
+  options?: { toleranceLigne?: number; ecartCellule?: number }
+): GrilleDePdf {
+  const toleranceLigne = options?.toleranceLigne ?? 3;
+  const ecartCellule = options?.ecartCellule ?? 6;
+
+  const utiles = elements
+    .filter((element) => element.texte.replace(/\s/gu, "") !== "")
+    .map((element) => ({ ...element, texte: element.texte.replace(/\s+/gu, " ").trim() }));
+  if (utiles.length === 0) {
+    throw new ErreurRegle(
+      "Ce PDF ne porte aucun texte : c'est probablement un relevé scanné, dont les chiffres sont des images. Exportez le relevé en CSV ou en Excel depuis l'espace bancaire, ou collez son texte dans le champ prévu."
+    );
+  }
+
+  const lignes = lignesDePdf(utiles, toleranceLigne, ecartCellule);
+  if (lignes.length === 0) {
+    throw new ErreurRegle("Ce PDF ne porte aucune ligne de texte exploitable.");
+  }
+
+  // Le mode se décide sur ce que la page donne, en ne comptant que les opérations : un titre découpé
+  // en deux morceaux par l'imprimeur ne fait pas une page à colonnes.
+  const enColonnes = lignes.filter(
+    (ligne) => ligne.cellules.length >= 2 && estOperation(ligne.cellules.map((cellule) => cellule.texte))
+  ).length;
+  const enTexte = lignes.filter(
+    (ligne) => ligne.cellules.length === 1 && estOperation([ligne.brut])
+  ).length;
+  return enColonnes > 0 && enColonnes >= enTexte ? grilleEnColonnes(lignes) : grilleALaForme(lignes);
+}
+
+/** Regroupe les morceaux de texte en lignes, puis les morceaux d'une ligne en cellules. */
+function lignesDePdf(
+  elements: readonly TextePositionne[],
+  toleranceLigne: number,
+  ecartCellule: number
+): LigneDePdf[] {
+  const tries = [...elements].sort(
+    (gauche, droite) =>
+      gauche.page - droite.page || gauche.y - droite.y || gauche.x - droite.x
+  );
+  const lignes: LigneDePdf[] = [];
+  let courante: { page: number; y: number; morceaux: TextePositionne[] } | null = null;
+
+  for (const element of tries) {
+    if (courante === null || courante.page !== element.page || Math.abs(courante.y - element.y) > toleranceLigne) {
+      if (courante !== null) {
+        lignes.push(ligneDePdf(courante, ecartCellule));
+      }
+      courante = { page: element.page, y: element.y, morceaux: [element] };
+    } else {
+      courante.morceaux.push(element);
+      courante.y = (courante.y * (courante.morceaux.length - 1) + element.y) / courante.morceaux.length;
+    }
+  }
+  if (courante !== null) {
+    lignes.push(ligneDePdf(courante, ecartCellule));
+  }
+  return lignes;
+}
+
+function ligneDePdf(
+  ligne: { page: number; y: number; morceaux: TextePositionne[] },
+  ecartCellule: number
+): LigneDePdf {
+  const morceaux = [...ligne.morceaux].sort((gauche, droite) => gauche.x - droite.x);
+  const cellules: CelluleDePdf[] = [];
+  for (const morceau of morceaux) {
+    const precedente = cellules[cellules.length - 1];
+    // Un écart faible est un espace entre mots d'une même cellule, pas une colonne : les rapports de
+    // banque découpent volontiers un libellé en plusieurs morceaux. Un chevauchement franc, lui, dit
+    // deux cellules voisines dont la largeur mesurée déborde : elles restent séparées.
+    const ecart = precedente ? morceau.x - precedente.droite : Number.POSITIVE_INFINITY;
+    if (precedente && ecart >= -2 && ecart < ecartCellule) {
+      precedente.texte = `${precedente.texte} ${morceau.texte}`.trim();
+      precedente.droite = Math.max(precedente.droite, morceau.x + morceau.largeur);
+      continue;
+    }
+    cellules.push({ texte: morceau.texte, x: morceau.x, droite: morceau.x + morceau.largeur });
+  }
+  return {
+    page: ligne.page,
+    y: ligne.y,
+    cellules,
+    brut: morceaux.map((morceau) => morceau.texte).join(" ")
+  };
+}
+
+/** Une ligne porte-t-elle une opération ? Il lui faut une date, ou à défaut un montant et du texte. */
+const estOperation = (cellules: readonly string[]): boolean =>
+  cellules.some((cellule) => estDate(cellule)) ||
+  (cellules.some((cellule) => estMontant(cellule)) &&
+    cellules.some((cellule) => !estMontant(cellule) && cellule.trim().length > 2));
+
+/** Cas 1 : les colonnes sont repérables sur la page. */
+function grilleEnColonnes(lignes: readonly LigneDePdf[]): GrilleDePdf {
+  const notes: string[] = [];
+  const modele = lignes.reduce<LigneDePdf | null>(
+    (plusFournie, ligne) =>
+      ligne.cellules.length >= 2 && (plusFournie === null || ligne.cellules.length > plusFournie.cellules.length)
+        ? ligne
+        : plusFournie,
+    null
+  );
+  if (modele === null) {
+    return grilleALaForme(lignes);
+  }
+
+  // La ligne la plus fournie donne les colonnes ; une cellule s'y range par son bord gauche ou droit.
+  const colonnes = modele.cellules.map((cellule) => ({ gauche: cellule.x, droite: cellule.droite }));
+  const rangees: (string[])[] = [];
+  let ecartees = 0;
+  for (const ligne of lignes) {
+    if (ligne.cellules.length < 2) {
+      // Un titre, une note : pas une colonne à ranger.
+      if (estOperation([ligne.brut])) {
+        ecartees += 1;
+      }
+      continue;
+    }
+    const emplacements = new Array<string | undefined>(colonnes.length).fill(undefined);
+    for (const cellule of ligne.cellules) {
+      const index = colonneDeCellule(cellule, colonnes);
+      if (index === null) {
+        ecartees += 1;
+        continue;
+      }
+      emplacements[index] =
+        emplacements[index] === undefined ? cellule.texte : `${emplacements[index]} ${cellule.texte}`.trim();
+    }
+    rangees.push(emplacements.map((cellule) => cellule ?? ""));
+  }
+
+  const operations = rangees.filter((cellules) => estOperation(cellules));
+  if (operations.length === 0) {
+    throw new ErreurRegle(
+      "Aucune opération n'a été retrouvée dans la mise en page de ce PDF : les colonnes reconnues ne portent ni date ni montant."
+    );
+  }
+  const sansDate = rangees.length - operations.length;
+  if (sansDate > 0) {
+    notes.push(
+      `${sansDate} ligne${sansDate > 1 ? "s" : ""} de la page écartée${sansDate > 1 ? "s" : ""} : ni date ni montant lisible (titre, pied de page, total).`
+    );
+  }
+  if (ecartees > 0) {
+    notes.push(
+      `${ecartees} morceau${ecartees > 1 ? "x" : ""} de texte n'a pas trouvé sa colonne et n'est pas repris.`
+    );
+  }
+
+  // L'en-tête : la ligne qui précède la première opération, s'il y en a une. Les noms viennent sinon
+  // de la forme des colonnes.
+  const premiereOperation = rangees.findIndex((cellules) => estOperation(cellules));
+  const enteteDePage = premiereOperation > 0 ? rangees[premiereOperation - 1]! : null;
+  const contenus = colonnes.map((_, index) => operations.map((ligne) => ligne[index] ?? ""));
+  const numeriques = contenus
+    .map((cellules, index) => ({ index, cellules: cellules.filter((cellule) => cellule.trim() !== "") }))
+    .filter(({ cellules }) => cellules.length > 0 && cellules.every((cellule) => estMontant(cellule)))
+    .map(({ index }) => index);
+  const entetes = enteteDePage ?? contenus.map((cellules, index) => nomDeColonne(cellules, numeriques.indexOf(index)));
+  // `operations` ne contient déjà ni l'en-tête ni les lignes écartées : tout y passe.
+  const corps = operations;
+  notes.push(
+    enteteDePage
+      ? `Grille reconstruite depuis la mise en page du PDF : ${colonnes.length} colonnes, en-tête de la page reconnu.`
+      : `Grille reconstruite depuis la mise en page du PDF : ${
+          colonnes.length
+        } colonnes nommées d'après leur contenu (${entetes.join(", ")}).`
+  );
+
+  return {
+    lignes: [
+      { numero: 1, cellules: entetes },
+      ...corps.map((cellules, index) => ({ numero: index + 2, cellules }))
+    ],
+    notes
+  };
+}
+
+/** La colonne d'une cellule : celle dont elle borde l'entrée (texte à gauche) ou la sortie (montant à droite). */
+function colonneDeCellule(
+  cellule: CelluleDePdf,
+  colonnes: readonly { gauche: number; droite: number }[]
+): number | null {
+  const tolerance = 6;
+  let meilleur: number | null = null;
+  let meilleurEcart = Number.POSITIVE_INFINITY;
+  colonnes.forEach((colonne, index) => {
+    const ecart = Math.min(
+      Math.abs(cellule.x - colonne.gauche),
+      Math.abs(cellule.droite - colonne.droite)
+    );
+    if (ecart <= tolerance && ecart < meilleurEcart) {
+      meilleurEcart = ecart;
+      meilleur = index;
+    }
+  });
+  return meilleur;
+}
+
+/**
+ * Le nom d'une colonne sans en-tête, d'après ce qu'elle contient.
+ *
+ * `rangNumerique` est le rang de cette colonne parmi celles qui ne portent que des nombres, ou -1 si
+ * elle n'en est pas une. Deux colonnes de nombres se lisent dans l'ordre du relevé : le montant
+ * d'abord, le solde ensuite.
+ */
+function nomDeColonne(cellules: readonly string[], rangNumerique: number): string {
+  const nonVides = cellules.filter((cellule) => cellule.trim() !== "");
+  if (nonVides.length === 0) {
+    return "Ignoré";
+  }
+  if (nonVides.some((cellule) => estDate(cellule))) {
+    return "Date opération";
+  }
+  if (rangNumerique === 0) {
+    return "Montant";
+  }
+  if (rangNumerique === 1) {
+    return "Solde";
+  }
+  if (rangNumerique > 1) {
+    return "Nombre";
+  }
+  if (nonVides.every((cellule) => /^[A-Z]{2,8}[-.\s]?\d{2,}/iu.test(cellule) || /^\d{4,}$/u.test(cellule))) {
+    return "Référence";
+  }
+  return "Libellé";
+}
+
+/** Cas 2 : une ligne de texte par opération, sans colonne repérable. */
+function grilleALaForme(lignes: readonly LigneDePdf[]): GrilleDePdf {
+  const notes: string[] = [
+    "Ce PDF ne sépare pas ses colonnes de façon repérable : les champs ont été reconnus à leur forme (une date, des nombres, un code, le reste en libellé). Vérifiez l'aperçu avant d'importer."
+  ];
+  const cellules: string[][] = [];
+  let ecartees = 0;
+  for (const ligne of lignes) {
+    const ligneLue = champsALaForme(ligne.brut);
+    if (ligneLue === null) {
+      if (ligne.brut.trim() !== "") {
+        ecartees += 1;
+      }
+      continue;
+    }
+    cellules.push(ligneLue);
+  }
+  if (cellules.length === 0) {
+    throw new ErreurRegle(
+      "Aucune opération n'a été retrouvée dans ce PDF : aucune ligne ne porte une date et un montant. Un relevé scanné ou un extrait de tableau ne se lit pas ici."
+    );
+  }
+  if (ecartees > 0) {
+    notes.push(`${ecartees} ligne${ecartees > 1 ? "s" : ""} de la page écartée${ecartees > 1 ? "s" : ""} : ni date ni montant.`);
+  }
+  return {
+    lignes: [
+      { numero: 1, cellules: [...COLONNES_CANONIQUES] },
+      ...cellules.map((ligne, index) => ({ numero: index + 2, cellules: ligne }))
+    ],
+    notes
+  };
+}
+
+/**
+ * Les champs d'une ligne de texte, reconnus à leur forme.
+ *
+ * L'ordre rendu est celui des colonnes canoniques : date, référence, libellé, montant, solde. Une
+ * ligne sans date n'est pas une opération de relevé — un titre, un pied de page, un total.
+ */
+export function champsALaForme(texte: string): string[] | null {
+  const jetons = jetonsDeLigne(texte);
+  if (jetons.length === 0) {
+    return null;
+  }
+  let date = "";
+  let reference = "";
+  const nombres: string[] = [];
+  const mots: string[] = [];
+  for (const jeton of jetons) {
+    if (date === "" && estDate(jeton)) {
+      date = jeton;
+    } else if (estMontant(jeton)) {
+      nombres.push(jeton);
+    } else if (reference === "" && /^[A-Z]{2,8}[-.\s]?\d{2,}/iu.test(jeton)) {
+      reference = jeton;
+    } else {
+      mots.push(jeton);
+    }
+  }
+  if (date === "" || nombres.length === 0) {
+    return null;
+  }
+  // Le premier nombre est le montant de l'opération, le dernier le solde s'il y en a deux.
+  const montant = nombres[0]!;
+  const solde = nombres.length > 1 ? nombres[nombres.length - 1]! : "";
+  return [date, reference, mots.join(" "), montant, solde];
+}
+
+/**
+ * Les mots d'une ligne de PDF, nombres regroupés.
+ *
+ * Un extracteur rend « -1 170 000 » en trois morceaux quand l'espace de milliers est un vrai espace.
+ * Les recoller est nécessaire, sinon le montant lu est « -1 ». Deux morceaux ne sont recollés que s'ils
+ * se suivent d'un seul espace et forment, à eux deux, un nombre lisible — jamais au-delà.
+ */
+function jetonsDeLigne(texte: string): string[] {
+  const morceaux: { jeton: string; debut: number; fin: number }[] = [];
+  for (const trouve of texte.matchAll(/\S+/gu)) {
+    const debut = trouve.index ?? 0;
+    morceaux.push({ jeton: trouve[0], debut, fin: debut + trouve[0].length });
+  }
+  const jetons: string[] = [];
+  let finPrecedente: number | null = null;
+  for (const morceau of morceaux) {
+    const precedent = jetons[jetons.length - 1];
+    const separeDUnEspace = finPrecedente !== null && morceau.debut - finPrecedente === 1;
+    if (precedent !== undefined && separeDUnEspace && suiteDeNombre(precedent, morceau.jeton)) {
+      jetons[jetons.length - 1] = `${precedent} ${morceau.jeton}`;
+    } else {
+      jetons.push(morceau.jeton);
+    }
+    finPrecedente = morceau.fin;
+  }
+  return jetons;
+}
+
+/**
+ * « 170 » suit « -1 », puis « 000 » suit « -1 170 » : un groupe de milliers, ou une décimale.
+ *
+ * Un signe posé seul — certaines banques l'impriment à part — se recolle aussi au nombre qui suit. Le
+ * dernier mot est `estMontant` : rien n'est recollé qui ne donne un nombre lisible.
+ */
+function suiteDeNombre(debut: string, suite: string): boolean {
+  const groupes = debut.trim().split(/\s+/u);
+  const dernier = groupes[groupes.length - 1]!.replace(/^[-+]/u, "");
+  const debutValide =
+    groupes.every((groupe) => /^[-+]?\d{1,3}$/u.test(groupe)) && /^\d{1,3}$/u.test(dernier);
+  const suiteValide = /^\d{3}$/u.test(suite) || /^[.,]\d{1,3}$/u.test(suite);
+  return (debutValide || dernier === "") && suiteValide && estMontant(`${debut} ${suite}`);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1197,15 +1660,28 @@ export interface OperationBancaireSeule {
  * comme avec un vrai relevé. Un utilisateur qui n'a pas de relevé sous la main essaie l'import sur
  * celui-ci, et voit le même écran qu'avec le sien.
  */
-export function exempleDeReleveCsv(options: {
+/** Ce qu'un relevé d'exemple demande : le compte, sa période, son ouverture, et ce que la banque sait seule. */
+export interface OptionsDExempleDeReleve {
   compte: string;
   mouvements: readonly Mouvement[];
   du: DateCivile;
   au: DateCivile;
   soldeDOuverture: Montant;
-  devise: Devise;
   separees?: readonly OperationBancaireSeule[];
-}): string {
+}
+
+/** Une opération d'un relevé d'exemple, avec le solde que la banque porterait juste après. */
+export interface OperationDExempleDeReleve extends OperationBancaireSeule {
+  solde: Montant;
+}
+
+/**
+ * Les opérations d'un relevé d'exemple, dans l'ordre où une banque les imprime.
+ *
+ * Les extraire du CSV permet de donner le même exemple dans les trois contenants qu'une banque emploie
+ * — texte séparé, classeur, page imprimée — sans jamais recopier la liste des opérations.
+ */
+export function operationsDExempleDeReleve(options: OptionsDExempleDeReleve): OperationDExempleDeReleve[] {
   const retenus = options.mouvements
     .filter(
       (mouvement) =>
@@ -1226,12 +1702,19 @@ export function exempleDeReleveCsv(options: {
     gauche.date === droite.date ? (gauche.reference < droite.reference ? -1 : 1) : gauche.date < droite.date ? -1 : 1
   );
 
+  let solde = options.soldeDOuverture;
+  return toutes.map((operation) => {
+    solde += operation.montant;
+    return { ...operation, solde };
+  });
+}
+
+export function exempleDeReleveCsv(options: OptionsDExempleDeReleve & { devise: Devise }): string {
+  const operations = operationsDExempleDeReleve(options);
   const entetes = ["Date opération", "Date valeur", "Libellé", "Référence", "Montant", "Solde"];
   const lignes = [`Résumé de compte — ${options.compte} — du ${options.du} au ${options.au}`];
   lignes.push(entetes.join(";"));
-  let solde = options.soldeDOuverture;
-  for (const operation of toutes) {
-    solde += operation.montant;
+  for (const operation of operations) {
     lignes.push(
       [
         dateEnCsv(operation.date),
@@ -1239,12 +1722,12 @@ export function exempleDeReleveCsv(options: {
         csvCellule(operation.libelle),
         csvCellule(operation.reference),
         csvCellule(montantEnCsv(operation.montant, options.devise)),
-        csvCellule(montantEnCsv(solde, options.devise))
+        csvCellule(montantEnCsv(operation.solde, options.devise))
       ].join(";")
     );
   }
   lignes.push("");
-  lignes.push(`Total des opérations;${toutes.length}`);
+  lignes.push(`Total des opérations;${operations.length}`);
   return `${lignes.join("\n")}\n`;
 }
 
