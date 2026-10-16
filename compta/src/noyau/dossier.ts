@@ -57,6 +57,10 @@ import {
   type ExercicePrecedent
 } from "./etats-financiers";
 import {
+  construireTableauDesFluxDeTresorerie,
+  type TableauDesFluxDeTresorerie
+} from "./flux-tresorerie";
+import {
   comptesInterrogeables,
   interrogerCompte,
   type CompteInterrogeable,
@@ -111,6 +115,7 @@ import {
   construireGrandLivre,
   construireJournal,
   comptePrincipalDe,
+  filtrerMouvements,
   verifierEquilibre,
   type FiltreMouvements,
   type LigneBalance,
@@ -528,6 +533,38 @@ export class ServiceComptable {
       exercice: cible.annee,
       dateDebut: cible.dateDebut,
       dateFin: borne ? borne.dateFin : cible.dateFin
+    });
+  }
+
+  /**
+   * Tableau des flux de trésorerie, en cumul depuis l'ouverture de l'exercice jusqu'à l'arrêté demandé.
+   *
+   * Les écritures de clôture en sont écartées, comme du compte de résultat : solder les comptes de
+   * gestion vers le résultat n'est pas un mouvement d'argent, et la capacité d'autofinancement se lit
+   * sur la même base que le résultat présenté par ailleurs.
+   */
+  async tableauDesFluxDeTresorerie(
+    periode?: number,
+    exercice?: number
+  ): Promise<TableauDesFluxDeTresorerie> {
+    const etat = await this.#stockage.lire();
+    const cible = this.#exerciceDemande(etat, exercice);
+    const borne = periode === undefined ? null : periodeParNumero(cible, periode);
+    const filtre: FiltreMouvements = borne
+      ? { exercice: cible.annee, du: cible.dateDebut, au: borne.dateFin }
+      : { exercice: cible.annee };
+    const mouvements = filtrerMouvements(this.#mouvementsHorsCloture(etat), filtre);
+    const balance = construireBalance(mouvements, etat.comptes, filtre);
+    // Les à-nouveaux décrivent l'ouverture, pas un flux de la période : le dossier nomme ses journaux,
+    // et c'est leur nature — pas leur code — qui fait foi.
+    const journauxDOuverture = etat.journaux
+      .filter((journal) => journal.nature === "a-nouveaux")
+      .map((journal) => journal.code);
+    return construireTableauDesFluxDeTresorerie(balance, mouvements, this.#paquet.referentiel.groupes, {
+      exercice: cible.annee,
+      dateDebut: cible.dateDebut,
+      dateFin: borne ? borne.dateFin : cible.dateFin,
+      journauxDOuverture
     });
   }
 

@@ -36,6 +36,7 @@ import { Saisie } from "./ecrans/saisie";
 import { DeclarationTva } from "./ecrans/declaration-tva";
 import { BilanOhada } from "./ecrans/bilan";
 import { CompteDeResultatOhada } from "./ecrans/compte-resultat";
+import { FluxDeTresorerie } from "./ecrans/flux-tresorerie";
 import { Lettrage } from "./ecrans/lettrage";
 import { Rapprochement } from "./ecrans/rapprochement";
 import { Interrogation } from "./ecrans/interrogation";
@@ -178,13 +179,10 @@ export function Coquille() {
       entrees: [
         { label: "Bilan OHADA révisé", href: "/etats/bilan" },
         { label: "Compte de résultat OHADA révisé", href: "/etats/compte-resultat" },
-        {
-          label: "Tableau des flux de trésorerie",
-          indisponible: "Aucun compte du plan de démarrage n'est classé « flux de trésorerie » : l'état serait vide. Il s'ouvrira quand le plan en portera"
-        },
+        { label: "Tableau des flux de trésorerie…", href: "/etats/flux-tresorerie" },
         {
           label: "Tableau de variation des activités",
-          indisponible: "Aucun compte du plan de démarrage n'est classé « variation des activités » : l'état serait vide. Il s'ouvrira quand le plan en portera"
+          indisponible: "Le modèle de cet état n'a pas pu être arrêté sur une source officielle : l'Acte uniforme révisé porte quatre états — bilan, compte de résultat, tableau des flux de trésorerie, notes annexes. Il reste annoncé plutôt que composé d'après une présentation inventée"
         },
         { label: "", indisponible: "", separation: true },
         { label: "Déclaration TVA mensuelle…", href: "/etats/declaration-tva" },
@@ -400,6 +398,8 @@ function ecranPour(route: string, recharger: () => void): ComponentChildren {
       return <BilanOhada />;
     case "/etats/compte-resultat":
       return <CompteDeResultatOhada />;
+    case "/etats/flux-tresorerie":
+      return <FluxDeTresorerie />;
     case "/etats/declaration-tva":
       return <DeclarationTva />;
     case "/traitements/lots":

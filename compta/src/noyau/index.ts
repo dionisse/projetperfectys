@@ -187,6 +187,19 @@ export {
   type Rubrique,
   type SensPresentation
 } from "./etats-financiers";
+
+export {
+  LIBELLE_DE_SECTION,
+  MODELE_TFT,
+  construireTableauDesFluxDeTresorerie,
+  type CalculDeFlux,
+  type CompteNonCouvert,
+  type DetailDeFlux,
+  type LigneDeFlux,
+  type RubriqueDeFlux,
+  type SectionDeFlux,
+  type TableauDesFluxDeTresorerie
+} from "./flux-tresorerie";
 export {
   FORMATS_BINAIRES,
   FORMATS_DE_RELEVE,

@@ -1015,3 +1015,23 @@ p.avertissement {
   resize: vertical;
   width: 100%;
 }
+
+/* Tableau des flux de trésorerie : les grandes masses de l'imprimé se lisent comme des titres de
+   groupe, et le détail des comptes ne doit pas élargir la rubrique. */
+.grille-etat tr.ligne-section td {
+  padding-top: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--discret);
+  background: var(--surface-plongee);
+  border-top: 2px solid var(--bord);
+}
+
+.grille-etat td.detail-flux {
+  white-space: normal;
+  font-family: var(--police-mono, ui-monospace, monospace);
+  font-size: 11px;
+  min-width: 16rem;
+}

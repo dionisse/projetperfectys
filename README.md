@@ -27,7 +27,7 @@ la même base.
 
 ```bash
 npm install            # installe l'espace de travail (compta)
-npm test               # 308 tests : noyau en Node, interface en jsdom, exports vérifiés
+npm test               # 324 tests : noyau en Node, interface en jsdom, exports vérifiés
 npm run typecheck      # TypeScript strict, sans émission
 npm run build          # build de production dans compta/dist
 npm run preview:vercel # sert le build comme le ferait Vercel, sur http://localhost:5173
@@ -105,11 +105,16 @@ npm run dev            # serveur de développement Vite
   et à pointer**. La liste des comptes qui ont bougé, avec leurs tiers, sert de point de départ.
   Export CSV de la fenêtre interrogée.
 - **États** : **bilan OHADA révisé** (actif en brut, amortissements et net ; passif en net ;
-  résultat de l'exercice porté aux capitaux propres) et **compte de résultat OHADA révisé** (les
-  six résultats du modèle révisé, du résultat d'exploitation au résultat net), chacun établi à la
+  résultat de l'exercice porté aux capitaux propres), **compte de résultat OHADA révisé** (les
+  six résultats du modèle révisé, du résultat d'exploitation au résultat net) et **tableau des flux
+  de trésorerie** (les codes de l'imprimé, ZA et FA à FP, ZB à ZH ; activité en méthode indirecte à
+  partir de la capacité d'autofinancement globale, investissement et financement en méthode directe,
+  lus dans les écritures qui touchent un compte de trésorerie), chacun établi à la
   clôture de l'exercice **ou à la fin d'une période** — un arrêté intermédiaire est cumulé depuis le
   1er janvier. L'équilibre du bilan est contrôlé et affiché en tête ; le compte de résultat vérifie
-  que le résultat présenté égale la somme algébrique des comptes de gestion de la balance. Les deux
+  que le résultat présenté égale la somme algébrique des comptes de gestion de la balance ; le
+  tableau des flux vérifie que la trésorerie de clôture qu'il présente égale la trésorerie réelle lue
+  dans les comptes de classe 5, et nomme les comptes qu'il ne classe pas quand l'écart existe. Les trois
   écrans détaillent les comptes qui alimentent chaque rubrique, annoncent les rubriques qu'aucun
   solde n'alimente et listent les comptes qui ne participent à aucun état. Le bilan présente une
   **colonne N-1** dès qu'un exercice est clos — et dit qu'il ne peut pas la produire tant qu'aucun
@@ -155,9 +160,10 @@ Rapprochement bancaire),
 (la clôture est définitive dans cette version : la correction d'un exercice clos passe par une
 écriture dans l'exercice en cours, et l'écran le dit), affectation du résultat décidée en assemblée
 (121000 vers 111000 ou 112000), interrogation d'un compte par montant ou par lettre et appel d'une
-écriture depuis une ligne d'interrogation, tableau des flux de
-trésorerie et tableau de variation des activités (le plan de démarrage ne porte aucun compte classé
-« flux de trésorerie » : l'entrée de menu le dit au lieu de produire un état vide),
+écriture depuis une ligne d'interrogation, tableau de variation des activités (le modèle de cet
+état n'a pas pu être arrêté sur une source officielle — l'Acte uniforme révisé porte quatre états :
+bilan, compte de résultat, tableau des flux de trésorerie, notes annexes — et l'entrée de menu le dit
+au lieu de composer une présentation inventée),
 reversement des acomptes et retenues à la source, import de données depuis un fichier tiers,
 habilitations par écran.
 
@@ -192,12 +198,15 @@ habilitations par écran.
 9. **Un état fiscal est un état de contrôle.** La déclaration de TVA est recalculée depuis les
    bases taxées et les taux en vigueur dans le dossier, puis confrontée au grand livre. Ce qui diffère est
    affiché : une déclaration dont le total tombe juste par compensation ne vaut rien.
-10. **Un état financier est un modèle de rubriques, pas du code de mise en page.** Le bilan et le
-    compte de résultat sont décrits comme des données (rubriques, groupes de comptes qui les
-    alimentent, sens de présentation, niveau, formule de total), puis évalués par un seul moteur.
-    Ajouter une rubrique, ou publier le modèle d'un autre pays de l'UEMOA, ne touche pas au calcul.
+10. **Un état financier est un modèle de rubriques, pas du code de mise en page.** Le bilan, le
+    compte de résultat et le tableau des flux de trésorerie sont décrits comme des données
+    (rubriques, groupes de comptes qui les alimentent, sens de présentation, niveau, formule de
+    total), puis évalués par un seul moteur. Ajouter une rubrique, ou publier le modèle d'un autre
+    pays de l'UEMOA, ne touche pas au calcul.
     Chaque état emporte son propre contrôle : écart actif/passif pour le bilan, écart entre le
-    résultat présenté et la somme des comptes de gestion pour le compte de résultat.
+    résultat présenté et la somme des comptes de gestion pour le compte de résultat, écart entre la
+    trésorerie présentée et la trésorerie réelle pour le tableau des flux. Un écart est affiché avec
+    les comptes qui l'expliquent, jamais absorbé dans une ligne « divers ».
 11. **Une marque ne réécrit pas le grand livre.** Le lettrage rapproche des lignes déjà
     comptabilisées : il n'écrit aucun mouvement, ne modifie aucun solde, et se défait sans trace
     perdue. Un délettrage date la marque au lieu de la supprimer. Une marque totale ne porte pas

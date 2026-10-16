@@ -192,26 +192,42 @@ l'interrogation de compte reporte le reste à lettrer ligne à ligne.
 
 ### 5.1 Ce que le producteur d'états financiers livre
 
-`compta/src/noyau/etats-financiers.ts` décrit les états comme des **données**. Une rubrique porte
-son code, son libellé, son niveau (`detail`, `total`, `resultat`), les groupes de comptes qui
-l'alimentent, son sens de présentation (`actif`, `passif`, `produit`, `charge`, `amortissement`,
-`solde`) et — pour un total — l'expression qui le compose à partir de rubriques déjà évaluées. Un
-seul moteur plie sur ces rubriques dans l'ordre du modèle : **aucun écran ne calcule un total**, et
+`compta/src/noyau/etats-financiers.ts` décrit le bilan et le compte de résultat comme des
+**données**, `compta/src/noyau/flux-tresorerie.ts` fait de même pour le tableau des flux de
+trésorerie. Une rubrique porte son code, son libellé, son niveau (`detail`, `total`, `resultat`), les
+groupes de comptes qui l'alimentent, son sens de présentation (`actif`, `passif`, `produit`,
+`charge`, `amortissement`, `solde`) et — pour un total — l'expression qui le compose à partir de
+rubriques déjà évaluées. Un flux porte en plus sa **nature de calcul** : `tresorerie` (les comptes de
+classe 5 à l'ouverture ou à la clôture), `capaciteAutofinancement` (le résultat corrigé des charges
+et produits calculés), `variation` (le mouvement d'un groupe entre l'ouverture et la clôture) ou
+`flux` (les contreparties hors trésorerie des écritures de trésorerie, dans un sens donné). Un seul
+moteur plie sur ces rubriques dans l'ordre du modèle : **aucun écran ne calcule un total**, et
 publier le modèle d'un autre pays de l'UEMOA ne toucherait pas au calcul.
 
 | État | Rubriques du modèle | Contrôle emporté par l'état |
 |---|---|---|
 | **Bilan** | Actif : immobilisations incorporelles, corporelles, financières, amortissements et dépréciations, actif circulant, trésorerie-actif, chacun avec son total et le total général. Passif : capitaux propres (**résultat de l'exercice compris**), dettes stables, passif circulant, trésorerie-passif, totaux | `ecart = total de l'actif net − total du passif`, affiché en tête de l'écran ; les comptes qui ne participent à aucun état sont listés, les rubriques qu'aucun solde n'alimente sont annoncées |
 | **Compte de résultat** | Produits et charges d'exploitation, financières, hors activités ordinaires, impôts sur les résultats, et les six résultats numérotés du modèle révisé | Le résultat présenté est confronté à la somme algébrique des comptes de gestion de la balance ; un écart nomme le compte en cause |
+| **Tableau des flux de trésorerie** | Trésorerie d'ouverture (ZA) ; activité en méthode indirecte — capacité d'autofinancement globale (FA), variation de l'actif circulant hors activités ordinaires (FB), des stocks (FC), des créances (FD), du passif circulant (FE) — et son total ZB ; investissement en méthode directe, acquisitions et cessions d'immobilisations incorporelles, corporelles et financières (FF à FJ, ZC) ; financement par les capitaux propres (FK à FN, ZD) et par les capitaux étrangers (FO à FP, ZE), soit ZF ; variation de la trésorerie nette ZG et trésorerie de clôture ZH | `ecart = trésorerie présentée (ZA + ZG) − trésorerie réelle` (trésorerie actif − trésorerie passif à la clôture), c'est le contrôle que l'imprimé officiel porte lui-même en bas de page ; les comptes dont la variation n'entre dans aucune ligne sont listés avec leur montant, et les écritures entre comptes de trésorerie — virements internes — sont comptées et annoncées comme n'étant pas des flux |
 
-Les deux états s'établissent à la clôture de l'exercice **ou à la fin d'une période** : un arrêté
+Les trois états s'établissent à la clôture de l'exercice **ou à la fin d'une période** : un arrêté
 intermédiaire est cumulé depuis le 1er janvier, jamais borné au seul mois choisi.
 
-**Ce qui n'est pas produit, et pourquoi.** Le tableau des flux de trésorerie et le tableau de
-variation des activités exigent que chaque compte soit classé dans un flux : le groupe `tft` existe
-dans le modèle de groupes, aucun compte du plan de démarrage ne le porte. Publier ces états sans
-classification reviendrait à inventer une présentation — les entrées de menu disent donc la raison
-de leur absence. La colonne « N-1 » attend la tranche G (multi-exercices). Enfin, la mise en page
+Le tableau des flux lit **la balance et les mouvements de la même fenêtre** : un tableau dont les
+flux ne couvrent pas la période de ses variations ne se contrôlerait pas. Deux écarts de lecture y
+sont traités explicitement. Les **à-nouveaux** — ceux d'une première ouverture comme ceux qu'écrit
+une clôture — décrivent la position de départ et non un flux de la période : ils sont ajoutés aux
+soldes d'ouverture et retirés des flux, sinon le capital et les dettes de l'an dernier apparaîtraient
+comme de l'argent reçu cette année, et la trésorerie d'ouverture serait lue à zéro sur un premier
+exercice. Les **écritures de clôture** sont écartées, comme du compte de résultat : solder les
+comptes de gestion vers le résultat n'est pas un mouvement d'argent.
+
+**Ce qui n'est pas produit, et pourquoi.** Le tableau de variation des activités reste annoncé : son
+modèle n'a pas pu être arrêté sur une source officielle — l'Acte uniforme révisé porte quatre états
+(bilan, compte de résultat, tableau des flux de trésorerie, notes annexes) — et le composer
+reviendrait à inventer une présentation. Le tableau des flux ne porte **pas de colonne N-1** : les
+flux de l'exercice précédent se calculent à partir de ses soldes d'ouverture, qui sont les soldes de
+clôture de N-2, et l'écran le dit au lieu d'afficher une comparaison fausse. Enfin, la mise en page
 des imprimés officiels n'a pas été relevée dans l'Acte uniforme relatif au droit comptable et à
 l'information financière : comme la déclaration TVA, ces états sont des **documents de contrôle**,
 portés `aVerifier`, à rapprocher du formulaire de dépôt avant toute communication légale.
@@ -498,7 +514,7 @@ adaptateur `web/lecture-fichier.ts`, socle commun `lireGrilleDeReleve` partagé 
 colonnes ou reconnu à la forme, relevé scanné refusé, exemple écrit puis relu dans les trois
 contenants, lecteurs chargés à la demande, 23 + 2 tests) |
 | **G** | Clôtures : période, exercice, à-nouveaux, *Create New Year* | tests | **livrée** : rapport de préparation, clôture d'exercice (solde des comptes de gestion vers 121000, à-nouveaux segment de tiers compris, ouverture de l'exercice suivant, archivage de l'exercice clos), lectures par exercice, écran avec confirmation explicite, 14 tests. La réouverture d'un exercice clos n'est pas produite : la clôture est définitive, et l'écran le dit |
-| **H** | États financiers OHADA révisé (producteur distinct), exports PDF/Excel/CSV de tous les documents | fichiers produits et vérifiés | **largement livrée** : bilan et compte de résultat OHADA révisé — producteur `etats-financiers.ts`, deux écrans, arrêté par période, **colonne N-1 dès qu'un exercice est clos**, 18 tests ; puis les **trois formats d'export** (§5.6) — description unique du document, Excel à montants numériques avec un onglet par section, PDF A4 paginé avec en-tête de société, CSV inchangé, chargement à la demande des bibliothèques, 14 tests de rendu (dont un XLSX relu par `exceljs` et un PDF dont le texte imprimé est décodé) plus 2 parcours d'écran. Restent le tableau des flux de trésorerie et le tableau de variation des activités (aucun compte du plan n'est classé en flux) |
+| **H** | États financiers OHADA révisé (producteur distinct), exports PDF/Excel/CSV de tous les documents | fichiers produits et vérifiés | **largement livrée** : bilan et compte de résultat OHADA révisé — producteur `etats-financiers.ts`, deux écrans, arrêté par période, **colonne N-1 dès qu'un exercice est clos**, 18 tests ; puis les **trois formats d'export** (§5.6) — description unique du document, Excel à montants numériques avec un onglet par section, PDF A4 paginé avec en-tête de société, CSV inchangé, chargement à la demande des bibliothèques, 14 tests de rendu (dont un XLSX relu par `exceljs` et un PDF dont le texte imprimé est décodé) plus 2 parcours d'écran ; puis le **tableau des flux de trésorerie** (§5.1 : producteur `flux-tresorerie.ts`, modèle `MODELE_TFT` aux codes de l'imprimé, activité en méthode indirecte à partir de la capacité d'autofinancement globale, investissement et financement en méthode directe lus dans les écritures de trésorerie, à-nouveaux traités en ouverture et non en flux, virements internes écartés et comptés, contrôle ZH contre la trésorerie réelle avec les comptes non classés listés, écran et export en trois formats, 11 + 5 tests). Reste le tableau de variation des activités, dont le modèle n'a pas de source officielle |
 | **I** | Piste d'audit, habilitations par écran, import/export de données, sauvegarde/restauration, hôte Windows | tests + package installable | piste d'audit **livrée** (ajout-seulement, attribuée, horodatée) ; **sauvegarde et restauration livrées** (§5.7) — fichier JSON autosuffisant et versionné, inventaire chiffré, montants en chaînes, quatre refus motivés dont le grand livre déséquilibré et le paquet pays différent, vérification à l'écran puis dans le noyau, remplacement tracé avec le contenu écrasé, écran avec marche arrière obligatoire, 7 + 3 tests. Restent les habilitations par écran, l'import de données tiers (FEC, ECF, CSV), la sauvegarde automatique et l'hôte Windows |
 
 **Chaque tranche se termine par un écran validé par l'utilisateur sur l'aperçu live avant la
