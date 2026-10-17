@@ -1,0 +1,50 @@
+@page "/analytique"
+@page "/ventes-stocks"
+@page "/courriers"
+@page "/paie"
+@page "/administration"
+@inject NavigationManager Navigation
+
+<PageTitle>@_title — PERFECTO</PageTitle>
+
+<section class="module-hero">
+    <div>
+        <span class="eyebrow">@_code · Feuille de route progressive</span>
+        <h1>@_title</h1>
+        <p>@_description</p>
+    </div>
+    <span class="phase-badge">@_phase</span>
+</section>
+
+<section class="panel construction-panel">
+    <div class="construction-mark">@_code</div>
+    <div>
+        <h2>Le socle est prêt pour ce module</h2>
+        <p>La navigation, les contrats partagés, la sécurité par organisation, l’audit et les adaptateurs de stockage sont intégrés au Lot 0. Les fonctions métier seront ajoutées sans dupliquer le noyau entre Windows et la PWA.</p>
+        <div class="action-row">
+            <a class="button button-primary" href="/">Retour au tableau de bord</a>
+            <button class="button button-secondary" type="button" disabled>Activer plus tard</button>
+        </div>
+    </div>
+</section>
+
+@code {
+    private string _code = "MOD";
+    private string _title = "Module";
+    private string _description = string.Empty;
+    private string _phase = "Planifié";
+
+    protected override void OnInitialized()
+    {
+        var path = new Uri(Navigation.Uri).AbsolutePath.Trim('/').ToLowerInvariant();
+        (_code, _title, _description, _phase) = path switch
+        {
+            "analytique" => ("AN", "Comptabilité analytique", "Axes, sections, budgets, ventilations et analyse des écarts.", "Lot 2"),
+            "ventes-stocks" => ("VS", "Ventes, stocks et facturation", "Du devis au règlement, avec mouvements de stock et génération comptable.", "Lot 3"),
+            "courriers" => ("CO", "Gestion des courriers", "Registres entrants et sortants, affectations, échéances et recherche documentaire.", "Lot 4"),
+            "paie" => ("PA", "Paie", "Dossiers salariés, bulletins, déclarations et écritures après cadrage réglementaire pays.", "Lot 5"),
+            "administration" => ("AD", "Administration", "Organisations, exercices, utilisateurs, rôles, audit, stockage et synchronisation.", "Lot 0"),
+            _ => ("MOD", "Module", "Cette fonction sera ajoutée progressivement.", "Planifié")
+        };
+    }
+}

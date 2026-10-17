@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Perfecto.Api/Perfecto.Api.csproj" />
+    <Project Path="src/Perfecto.Application/Perfecto.Application.csproj" />
+    <Project Path="src/Perfecto.Contracts/Perfecto.Contracts.csproj" />
+    <Project Path="src/Perfecto.Domain/Perfecto.Domain.csproj" />
+    <Project Path="src/Perfecto.Infrastructure/Perfecto.Infrastructure.csproj" />
+    <Project Path="src/Perfecto.Pwa/Perfecto.Pwa.csproj" />
+    <Project Path="src/Perfecto.Shared.UI/Perfecto.Shared.UI.csproj" />
+    <Project Path="src/Perfecto.Windows/Perfecto.Windows.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Perfecto.Domain.Tests/Perfecto.Domain.Tests.csproj" />
+  </Folder>
+</Solution>

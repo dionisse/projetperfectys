@@ -1,0 +1,33 @@
+@page "/comptabilite/journaux"
+@inject IAccountingService AccountingService
+
+<PageTitle>Journaux comptables — PERFECTO</PageTitle>
+
+<section class="module-hero compact-hero">
+    <div><span class="eyebrow">Comptabilité générale</span><h1>Journaux comptables</h1><p>Organisation des écritures par cycle et par moyen de trésorerie.</p></div>
+    <a class="button button-secondary" href="/comptabilite">Retour au module</a>
+</section>
+
+<section class="journal-grid">
+    @foreach (var journal in _journals)
+    {
+        <article class="panel journal-card">
+            <div class="journal-code">@journal.Code</div>
+            <div><span class="eyebrow">@journal.JournalType</span><h2>@journal.Label</h2><p>@Counterpart(journal)</p></div>
+            <span class="status-badge success">Actif</span>
+        </article>
+    }
+</section>
+
+<section class="panel info-panel">
+    <strong>Règle du prototype</strong>
+    <p>Chaque pièce appartient à un journal. Les journaux de banque et de caisse peuvent porter un compte de contrepartie par défaut. Le verrouillage par période sera ajouté dans la prochaine tranche du Lot 1.</p>
+</section>
+
+@code {
+    private IReadOnlyList<AccountingJournalDto> _journals = [];
+    protected override async Task OnInitializedAsync() => _journals = await AccountingService.GetJournalsAsync();
+    private static string Counterpart(AccountingJournalDto journal) => string.IsNullOrEmpty(journal.CounterpartAccount)
+        ? "Contrepartie définie à la saisie"
+        : $"Compte de contrepartie : {journal.CounterpartAccount}";
+}

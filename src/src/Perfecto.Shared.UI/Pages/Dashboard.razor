@@ -1,0 +1,97 @@
+@page "/"
+@inject IWorkspaceService WorkspaceService
+
+<PageTitle>Tableau de bord — PERFECTO</PageTitle>
+
+@if (_snapshot is null)
+{
+    <section class="loading-panel" aria-live="polite">
+        <div class="loading-bar"></div>
+        <p>Préparation de l’espace de travail…</p>
+    </section>
+}
+else
+{
+    <section class="page-header">
+        <div>
+            <span class="eyebrow">@_snapshot.Organization.Code · @_snapshot.FiscalYear.AccountingProfile</span>
+            <h1>Bonjour, Superviseur</h1>
+            <p>@_snapshot.Organization.Name · @_snapshot.FiscalYear.Label · @_snapshot.FiscalYear.StartsOn.ToString("dd/MM/yyyy") au @_snapshot.FiscalYear.EndsOn.ToString("dd/MM/yyyy")</p>
+        </div>
+        <div class="runtime-card">
+            <span class="connection-state @(_snapshot.IsOnline ? "online" : "offline")">
+                @(_snapshot.IsOnline ? "Connecté" : "Hors ligne")
+            </span>
+            <strong>@_snapshot.RuntimeMode</strong>
+            <small>Dernière vérification à @DateTime.Now.ToString("HH:mm")</small>
+        </div>
+    </section>
+
+    <section class="kpi-grid" aria-label="Indicateurs clés">
+        <KpiCard Label="Brouillons" Value="@_snapshot.DraftEntries.ToString()" Hint="Pièces à contrôler" Icon="✎" Tone="blue" />
+        <KpiCard Label="Synchronisation" Value="@_snapshot.PendingSyncOperations.ToString()" Hint="Opérations en attente" Icon="↻" Tone="amber" />
+        <KpiCard Label="Périodes ouvertes" Value="@_snapshot.OpenPeriods.ToString()" Hint="Exercice 2026" Icon="◷" Tone="green" />
+        <KpiCard Label="Référentiel" Value="CR" Hint="SYSCOHADA révisé" Icon="§" Tone="violet" />
+    </section>
+
+    <div class="dashboard-grid">
+        <section class="panel modules-panel">
+            <div class="panel-heading">
+                <div><span class="eyebrow">Suite modulaire</span><h2>Vos modules</h2></div>
+                <span class="muted">1 actif · 4 planifiés</span>
+            </div>
+            <div class="module-grid">
+                @foreach (var module in _snapshot.Modules)
+                {
+                    <a class="module-card" href="@module.Route">
+                        <div class="module-code">@module.Code</div>
+                        <div class="module-copy">
+                            <div class="module-title-row"><h3>@module.Name</h3><span>@module.Status</span></div>
+                            <p>@module.Description</p>
+                            <div class="progress-track" aria-label="Progression @module.ProgressPercent%"><span style="width:@module.ProgressPercent%"></span></div>
+                        </div>
+                    </a>
+                }
+            </div>
+        </section>
+
+        <aside class="panel activity-panel">
+            <div class="panel-heading">
+                <div><span class="eyebrow">Traçabilité</span><h2>Activité récente</h2></div>
+            </div>
+            <ol class="activity-list">
+                @foreach (var activity in _snapshot.Activities)
+                {
+                    <li>
+                        <span class="activity-marker @activity.Tone"></span>
+                        <div><strong>@activity.Title</strong><p>@activity.Detail</p><small>il y a @Elapsed(activity.OccurredAt)</small></div>
+                    </li>
+                }
+            </ol>
+        </aside>
+    </div>
+
+    <section class="quick-actions">
+        <div><span class="eyebrow">Accès rapide</span><h2>Commencer une opération</h2></div>
+        <div class="action-row">
+            <a class="button button-primary" href="/comptabilite/pieces/nouvelle">Nouvelle pièce</a>
+            <a class="button button-secondary" href="/comptabilite/plan">Consulter le plan comptable</a>
+            <a class="button button-ghost" href="/administration">Gérer l’exercice</a>
+        </div>
+    </section>
+}
+
+@code {
+    private WorkspaceSnapshot? _snapshot;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _snapshot = await WorkspaceService.GetSnapshotAsync();
+    }
+
+    private static string Elapsed(DateTimeOffset occurredAt)
+    {
+        var minutes = Math.Max(1, (int)(DateTimeOffset.UtcNow - occurredAt).TotalMinutes);
+        return minutes < 60 ? $"{minutes} min" : $"{minutes / 60} h";
+    }
+}
