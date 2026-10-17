@@ -1,9 +1,8 @@
 name: Deploy prototype to GitHub Pages
 
 on:
-  push:
-    branches:
-      - 'arena/658dcef5-projetperfectys'
+  # Déploiement manuel : activer d'abord Pages dans Settings > Pages > Source:
+  # GitHub Actions, puis lancer ce workflow depuis l'onglet Actions.
   workflow_dispatch: {}
 
 permissions:

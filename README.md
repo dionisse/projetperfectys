@@ -74,10 +74,25 @@ C'est tout : les chemins sont relatifs, il n'y a ni `vercel.json`, ni `builds`, 
 404 observé auparavant. À la racine, un `index.html` de redirection prend le relais
 si le Root Directory est `.`.
 
-> Les quatre projets Vercel connectés au dépôt (`perfect`, `modern-proto`,
-> `projetperfectys-modern-proto`, `projetperfectys-pwa`) déclenchent chacun un
-> déploiement à chaque push. Il est conseillé d'en conserver un seul pour éviter les
-> limitations de débit Vercel.
+> **Important — quota Vercel.** Quatre projets sont connectés au dépôt (`perfect`,
+> `modern-proto`, `projetperfectys-modern-proto`, `projetperfectys-pwa`) et chacun
+> déclenche un déploiement à chaque push. Le compte a atteint la limite de
+> déploiements (« Deployment rate limited — retry in 24 hours »). Pour retrouver un
+> déploiement fiable : conserver le seul projet utile (`perfect`), supprimer les
+> doublons dans Vercel, puis relancer un déploiement après réinitialisation du quota.
+> Le projet `perfect` a son Root Directory sur `modern-proto` : cette structure est
+> donc conservée.
+
+## Publier aussi sur GitHub Pages (optionnel)
+
+Le dépôt contient le workflow `.github/workflows/pages.yml`. Pour l'utiliser :
+
+1. **Settings → Pages → Source : GitHub Actions** ;
+2. onglet **Actions → Deploy prototype to GitHub Pages → Run workflow**.
+
+Le site est alors publié sur `https://dionisse.github.io/projetperfectys/`. Ce
+workflow est volontairement manuel : sans Pages activé, il ne peut pas créer le site
+lui-même.
 
 ## Structure
 
