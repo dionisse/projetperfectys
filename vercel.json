@@ -1,7 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "builds": {
-    "/api/(.*)": "api"
+  "services": {
+    "pwa": {
+      "root": "modern-proto",
+      "framework": "vite"
+    }
   },
   "routes": [
     {
@@ -67,6 +70,5 @@
         }
       ]
     }
-  ],
-  "headers": []
+  ]
 }
