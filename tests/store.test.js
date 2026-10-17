@@ -31,7 +31,7 @@ sandbox.window.localStorage = sandbox.localStorage;
 sandbox.global = sandbox;
 vm.createContext(sandbox);
 vm.runInContext(
-  fs.readFileSync(path.join(__dirname, '..', 'js', 'store.js'), 'utf8'),
+  fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'store.js'), 'utf8'),
   sandbox,
   { filename: 'store.js' }
 );

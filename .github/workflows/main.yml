@@ -23,7 +23,7 @@ jobs:
       - name: Check required files
         run: |
           missing=0
-          for file in index.html css/modern.css js/app.js js/store.js manifest.webmanifest service-worker.js icon-192.png icon-512.png; do
+          for file in index.html modern-proto/index.html modern-proto/css/modern.css modern-proto/js/app.js modern-proto/js/store.js modern-proto/manifest.webmanifest modern-proto/service-worker.js modern-proto/icon-192.png modern-proto/icon-512.png; do
             if [ ! -f "$file" ]; then
               echo "::error::Fichier obligatoire manquant : $file"
               missing=1
@@ -36,7 +36,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import json
-          with open('manifest.webmanifest', encoding='utf-8') as handle:
+          with open('modern-proto/manifest.webmanifest', encoding='utf-8') as handle:
               data = json.load(handle)
           assert data.get('name') and data.get('icons'), 'Manifest incomplet'
           print('manifest.webmanifest valide :', data['short_name'])
@@ -44,7 +44,7 @@ jobs:
 
       - name: Check JavaScript syntax
         run: |
-          for file in js/*.js service-worker.js; do
+          for file in modern-proto/js/*.js modern-proto/service-worker.js; do
             node --check "$file"
             echo "Syntaxe OK : $file"
           done
@@ -56,7 +56,7 @@ jobs:
         run: |
           python3 -m http.server 8080 >/tmp/perfecto-http.log 2>&1 &
           sleep 1
-          for path in / /index.html /css/modern.css /js/app.js /js/store.js /manifest.webmanifest /service-worker.js /icon-192.png; do
+          for path in / /modern-proto/ /modern-proto/index.html /modern-proto/css/modern.css /modern-proto/js/app.js /modern-proto/js/store.js /modern-proto/manifest.webmanifest /modern-proto/service-worker.js /modern-proto/icon-192.png; do
             code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:8080$path")
             if [ "$code" != "200" ]; then
               echo "::error::$path a renvoyé HTTP $code"
@@ -71,6 +71,6 @@ jobs:
             echo "### Prototype statique validé"
             echo ""
             echo "- Aucun Blazor, WebAssembly ou build requis."
-            echo "- Fichiers servis depuis la racine du dépôt."
+            echo "- Application servie depuis modern-proto/, compatible avec un Root Directory Vercel au choix (. ou modern-proto)."
             echo "- Tests des règles métier exécutés avec succès."
           } >> "$GITHUB_STEP_SUMMARY"

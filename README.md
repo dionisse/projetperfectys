@@ -55,34 +55,43 @@ Aucune installation, aucun `npm install` :
 
 ```bash
 python3 -m http.server 8080
-# puis ouvrir http://localhost:8080
+# puis ouvrir http://localhost:8080/modern-proto/
 ```
 
-Un simple double-clic sur `index.html` fonctionne aussi (le service worker est
-alors désactivé, ce qui est sans conséquence).
+Un simple double-clic sur `modern-proto/index.html` fonctionne aussi (le service worker
+est alors désactivé, ce qui est sans conséquence).
 
 ## Déployer sur Vercel
 
 1. Importer le dépôt dans Vercel.
 2. Laisser le framework sur **Other** et ne renseigner aucune commande de build.
-3. Le répertoire de sortie est la racine du dépôt.
+3. Régler le **Root Directory** sur `modern-proto` (configuration historique du
+   projet) **ou** sur la racine du dépôt `.` : les deux fonctionnent.
 
-C'est tout : `index.html` est servi à la racine, les chemins sont relatifs, il n'y a
-ni `vercel.json`, ni `builds`, ni `functions`, ni `services` — donc plus aucune
-source d'erreur de configuration. Le fichier `service-worker.js` est lui aussi servi
-depuis la racine, ce qui corrige le 404 observé auparavant.
+C'est tout : les chemins sont relatifs, il n'y a ni `vercel.json`, ni `builds`, ni
+`functions`, ni `services` — donc plus aucune source d'erreur de configuration.
+`service-worker.js` accompagne l'application dans `modern-proto/`, ce qui corrige le
+404 observé auparavant. À la racine, un `index.html` de redirection prend le relais
+si le Root Directory est `.`.
+
+> Les quatre projets Vercel connectés au dépôt (`perfect`, `modern-proto`,
+> `projetperfectys-modern-proto`, `projetperfectys-pwa`) déclenchent chacun un
+> déploiement à chaque push. Il est conseillé d'en conserver un seul pour éviter les
+> limitations de débit Vercel.
 
 ## Structure
 
 ```
-index.html               coquille de l'application (navigation, topbar)
-css/modern.css           design system autonome, responsive et imprimable
-js/store.js              données, règles métier, calculs, import/export
-js/app.js                routeur, vues, formulaires, interactions
-manifest.webmanifest     métadonnées PWA
-service-worker.js        cache hors ligne (réseau d'abord, cache en secours)
-icon-192.png / 512.png   icônes de l'application
-tests/store.test.js      tests des règles métier (Node, sans dépendance)
+index.html                    redirection vers modern-proto/ (déploiement racine)
+modern-proto/index.html        coquille de l'application (navigation, topbar)
+modern-proto/css/modern.css    design system autonome, responsive et imprimable
+modern-proto/js/store.js       données, règles métier, calculs, import/export
+modern-proto/js/app.js         routeur, vues, formulaires, interactions
+modern-proto/manifest.webmanifest  métadonnées PWA
+modern-proto/service-worker.js cache hors ligne (réseau d'abord, cache en secours)
+modern-proto/icon-192.png      icônes de l'application
+modern-proto/icon-512.png
+tests/store.test.js            tests des règles métier (Node, sans dépendance)
 ```
 
 ## Tests
