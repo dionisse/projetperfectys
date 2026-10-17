@@ -1,9 +1,14 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "routes": [
+  "builds": [
     {
-      "src": "/(.*)",
-      "dest": "modern-proto/$1"
+      "src": "modern-proto/package.json",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "modern-proto/dist" }
     }
+  ],
+  "routes": [
+    { "src": "/", "dest": "/modern-proto/index.html" },
+    { "src": "/(.*)", "dest": "/modern-proto/$1" }
   ]
 }
