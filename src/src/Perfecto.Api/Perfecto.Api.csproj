@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Perfecto.Application\Perfecto.Application.csproj" />
+    <ProjectReference Include="..\Perfecto.Contracts\Perfecto.Contracts.csproj" />
+    <ProjectReference Include="..\Perfecto.Infrastructure\Perfecto.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

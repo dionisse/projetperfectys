@@ -1,0 +1,20 @@
+@inherits LayoutComponentBase
+
+<div class="app-shell">
+    <Sidebar />
+    <main class="workspace">
+        <header class="topbar">
+            <div>
+                <span class="eyebrow">Espace de gestion</span>
+                <strong>PERFECTO Nouvelle Génération</strong>
+            </div>
+            <div class="topbar-actions">
+                <span class="sync-chip"><span class="status-dot"></span>Lot 1 · PWA-first</span>
+                <button class="avatar-button" type="button" aria-label="Compte utilisateur">SD</button>
+            </div>
+        </header>
+        <div class="page-content">
+            @Body
+        </div>
+    </main>
+</div>

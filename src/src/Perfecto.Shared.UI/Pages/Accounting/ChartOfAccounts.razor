@@ -1,0 +1,89 @@
+@page "/comptabilite/plan"
+@inject IAccountingService AccountingService
+
+<PageTitle>Plan comptable — PERFECTO</PageTitle>
+
+<section class="module-hero compact-hero">
+    <div><span class="eyebrow">Comptabilité générale</span><h1>Plan comptable</h1><p>Comptes généraux du profil SYSCOHADA révisé.</p></div>
+    <a class="button button-secondary" href="/comptabilite">Retour au module</a>
+</section>
+
+<div class="split-layout">
+    <section class="panel data-panel">
+        <div class="table-toolbar">
+            <div class="search-field"><span>⌕</span><input placeholder="Rechercher un numéro ou un intitulé" @bind="_search" @bind:event="oninput" /></div>
+            <span class="result-count">@FilteredAccounts.Count compte(s)</span>
+        </div>
+        <div class="responsive-table tall-table">
+            <table class="data-table">
+                <thead><tr><th>Compte</th><th>Intitulé</th><th>Classe</th><th>Nature</th><th>Auxiliaire</th><th>État</th></tr></thead>
+                <tbody>
+                    @foreach (var account in FilteredAccounts)
+                    {
+                        <tr>
+                            <td><strong class="account-number">@account.Code</strong></td>
+                            <td>@account.Label</td>
+                            <td>Classe @account.AccountClass</td>
+                            <td>@account.AccountType</td>
+                            <td>@(account.RequiresThirdParty ? "Requis" : "Non")</td>
+                            <td><span class="status-badge success">Actif</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <aside class="panel form-panel">
+        <span class="eyebrow">Nouveau compte</span>
+        <h2>Enrichir le plan</h2>
+        <p>Le compte sera conservé dans la base locale de ce navigateur.</p>
+
+        @if (!string.IsNullOrEmpty(_message))
+        {
+            <div class="form-message @(_isError ? "error" : "success")">@_message</div>
+        }
+
+        <label class="field"><span>Numéro de compte</span><input inputmode="numeric" maxlength="12" placeholder="Ex. 601200" @bind="_request.Code" /></label>
+        <label class="field"><span>Intitulé</span><input maxlength="120" placeholder="Intitulé du compte" @bind="_request.Label" /></label>
+        <label class="field"><span>Nature</span>
+            <select @bind="_request.AccountType">
+                <option>Général</option><option>Capitaux</option><option>Immobilisation</option><option>Stock</option><option>Tiers</option><option>Trésorerie</option><option>Charge</option><option>Produit</option>
+            </select>
+        </label>
+        <label class="check-field"><input type="checkbox" @bind="_request.RequiresThirdParty" /><span>Exiger un tiers lors de la saisie</span></label>
+        <button class="button button-primary full-width" type="button" @onclick="CreateAccountAsync">Ajouter le compte</button>
+    </aside>
+</div>
+
+@code {
+    private IReadOnlyList<GeneralAccountDto> _accounts = [];
+    private CreateGeneralAccountRequest _request = new();
+    private string _search = string.Empty;
+    private string _message = string.Empty;
+    private bool _isError;
+
+    private IReadOnlyList<GeneralAccountDto> FilteredAccounts => _accounts
+        .Where(account => string.IsNullOrWhiteSpace(_search) || account.Code.Contains(_search, StringComparison.OrdinalIgnoreCase) || account.Label.Contains(_search, StringComparison.OrdinalIgnoreCase))
+        .OrderBy(account => account.Code)
+        .ToList();
+
+    protected override async Task OnInitializedAsync() => _accounts = await AccountingService.GetAccountsAsync();
+
+    private async Task CreateAccountAsync()
+    {
+        try
+        {
+            var account = await AccountingService.CreateAccountAsync(_request);
+            _accounts = [.. _accounts, account];
+            _message = $"Le compte {account.Code} a été ajouté.";
+            _isError = false;
+            _request = new();
+        }
+        catch (InvalidOperationException exception)
+        {
+            _message = exception.Message;
+            _isError = true;
+        }
+    }
+}
