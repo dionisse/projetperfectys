@@ -1,0 +1,16 @@
+{
+  "name": "PERFECTO Nouvelle Génération",
+  "short_name": "PERFECTO",
+  "id": "/",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f4f7fb",
+  "theme_color": "#12213a",
+  "lang": "fr",
+  "description": "Suite de gestion modulaire SYSCOHADA pour Windows et le Web.",
+  "prefer_related_applications": false,
+  "icons": [
+    { "src": "icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512" }
+  ]
+}
