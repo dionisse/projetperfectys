@@ -1,0 +1,27 @@
+# .NET
+**/bin/
+**/obj/
+*.user
+*.suo
+.vs/
+
+# Published artifacts
+artifacts/
+
+# Local databases and logs
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# Environment and secrets
+.env
+.env.*
+!*.example
+appsettings.Local.json
+
+# OS and editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

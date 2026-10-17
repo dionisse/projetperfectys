@@ -1,0 +1,29 @@
+.boot-screen {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 10px;
+    color: #162133;
+    background: #f4f7fb;
+    font-family: Inter, system-ui, sans-serif;
+}
+.boot-screen img { width: 58px; height: 58px; image-rendering: pixelated; border-radius: 14px; }
+.boot-screen strong { letter-spacing: .12em; }
+.boot-screen span { color: #68758a; font-size: .8rem; }
+#blazor-error-ui {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    right: 18px;
+    bottom: 18px;
+    padding: 14px 16px;
+    color: #fff;
+    background: #8b1d2c;
+    border-radius: 10px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, .18);
+    font-family: Inter, system-ui, sans-serif;
+    font-size: .8rem;
+}
+#blazor-error-ui a { color: #fff; margin-left: 10px; font-weight: 800; }
+#blazor-error-ui button { margin-left: 8px; border: 0; color: #fff; background: transparent; cursor: pointer; }
