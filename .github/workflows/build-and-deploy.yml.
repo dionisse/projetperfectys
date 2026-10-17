@@ -83,6 +83,17 @@ jobs:
           git add modern-proto/dist || true
           git status --porcelain
 
+      - name: Debug: show token user & repo access
+        if: ${{ secrets.ACTIONS_PAT != '' }}
+        env:
+          PAT: ${{ secrets.ACTIONS_PAT }}
+        run: |
+          echo "=== token user ==="
+          curl -s -H "Authorization: token $PAT" https://api.github.com/user || true
+          echo ""
+          echo "=== repo info ==="
+          curl -s -H "Authorization: token $PAT" https://api.github.com/repos/dionisse/projetperfectys || true
+
       - name: Create Pull Request with built files
         uses: peter-evans/create-pull-request@v5
         with:
