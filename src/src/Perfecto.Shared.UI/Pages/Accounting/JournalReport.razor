@@ -1,0 +1,32 @@
+@page "/comptabilite/etats/journal"
+@inject IAccountingService AccountingService
+
+<PageTitle>Journal comptable — PERFECTO</PageTitle>
+
+<section class="module-hero compact-hero">
+    <div><span class="eyebrow">États comptables</span><h1>Journal des écritures</h1><p>Détail chronologique des seules pièces validées.</p></div>
+    <a class="button button-secondary" href="/comptabilite">Retour au module</a>
+</section>
+
+<section class="panel data-panel">
+    <div class="table-toolbar">
+        <label class="inline-filter"><span>Journal</span><select @bind="_selectedJournal"><option value="">Tous les journaux</option>@foreach (var journal in _journals) { <option value="@journal.Code">@journal.Code · @journal.Label</option> }</select></label>
+        <span class="result-count">@FilteredLines.Count ligne(s)</span>
+    </div>
+    <div class="responsive-table">
+        <table class="data-table balance-table">
+            <thead><tr><th>Date</th><th>Journal</th><th>Pièce</th><th>Compte</th><th>Intitulé</th><th>Libellé</th><th class="number">Débit</th><th class="number">Crédit</th></tr></thead>
+            <tbody>@foreach (var line in FilteredLines) { <tr><td>@line.EntryDate.ToString("dd/MM/yyyy")</td><td><span class="code-badge">@line.JournalCode</span></td><td><strong>@line.Reference</strong></td><td>@line.AccountCode</td><td>@line.AccountLabel</td><td>@line.Label</td><td class="number">@Money(line.Debit)</td><td class="number">@Money(line.Credit)</td></tr> }</tbody>
+            <tfoot><tr><th colspan="6">Totaux</th><th class="number">@Money(FilteredLines.Sum(line => line.Debit))</th><th class="number">@Money(FilteredLines.Sum(line => line.Credit))</th></tr></tfoot>
+        </table>
+    </div>
+</section>
+
+@code {
+    private IReadOnlyList<JournalLineDto> _lines = [];
+    private IReadOnlyList<AccountingJournalDto> _journals = [];
+    private string _selectedJournal = string.Empty;
+    private IReadOnlyList<JournalLineDto> FilteredLines => _lines.Where(line => string.IsNullOrEmpty(_selectedJournal) || line.JournalCode == _selectedJournal).ToList();
+    protected override async Task OnInitializedAsync() { _lines = await AccountingService.GetJournalLinesAsync(); _journals = await AccountingService.GetJournalsAsync(); }
+    private static string Money(decimal value) => value == 0 ? "—" : $"{value:N0}";
+}
