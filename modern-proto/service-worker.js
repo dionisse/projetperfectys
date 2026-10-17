@@ -20,7 +20,7 @@ self.addEventListener('install', (event) => {
       .then((cache) => cache.addAll(ASSETS_TO_CACHE))
       .then(() => self.skipWaiting())
   );
-};
+});
 
 // Activation du service worker
 self.addEventListener('activate', (event) => {
@@ -36,7 +36,7 @@ self.addEventListener('activate', (event) => {
     })
   );
   self.clients.claim();
-);
+});
 
 // Interception des requêtes
 self.addEventListener('fetch', (event) => {
