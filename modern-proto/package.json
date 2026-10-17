@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prebuild": "bash -lc 'if [ ! -d ./_framework ] || [ ! -f ./js/perfecto-db.js ]; then rm -rf ../tmp_unzip && mkdir -p ../tmp_unzip && unzip -o ../Perfecto-Next-0.2.0-preview.1-source.zip -d ../tmp_unzip >/dev/null 2>&1 || true; SRC=$(find ../tmp_unzip -type d -path \"*/src/Perfecto.Pwa/wwwroot\" -print -quit); if [ -n \"$SRC\" ]; then cp -r \"$SRC\"/* .; else echo \"wwwroot not found in ZIP\"; fi; fi'"
   },
   "dependencies": {
     "vite": "^5.2.0",
