@@ -1,0 +1,34 @@
+@page "/comptabilite/balance"
+@inject IAccountingService AccountingService
+
+<PageTitle>Balance générale — PERFECTO</PageTitle>
+
+<section class="module-hero compact-hero">
+    <div><span class="eyebrow">États comptables</span><h1>Balance générale</h1><p>Mouvements et soldes des comptes sur l’exercice 2026.</p></div>
+    <div class="accounting-actions"><span class="phase-badge">Au 31/12/2026</span><a class="button button-secondary" href="/comptabilite">Retour au module</a></div>
+</section>
+
+@if (_snapshot is not null)
+{
+    <section class="panel data-panel">
+        <div class="panel-heading"><div><span class="eyebrow">Contrôle d’égalité</span><h2>Balance des comptes actifs</h2></div><span class="status-badge success">Équilibrée</span></div>
+        <div class="responsive-table">
+            <table class="data-table balance-table">
+                <thead><tr><th>Compte</th><th>Intitulé</th><th class="number">Mouvements débit</th><th class="number">Mouvements crédit</th><th class="number">Solde débiteur</th><th class="number">Solde créditeur</th></tr></thead>
+                <tbody>
+                    @foreach (var line in _snapshot.TrialBalance)
+                    {
+                        <tr><td><strong>@line.AccountCode</strong></td><td>@line.AccountLabel</td><td class="number">@Money(line.DebitMovements)</td><td class="number">@Money(line.CreditMovements)</td><td class="number">@Money(line.DebitBalance)</td><td class="number">@Money(line.CreditBalance)</td></tr>
+                    }
+                </tbody>
+                <tfoot><tr><th colspan="2">Totaux</th><th class="number">@Money(_snapshot.TotalDebitMovements)</th><th class="number">@Money(_snapshot.TotalCreditMovements)</th><th class="number">@Money(_snapshot.TrialBalance.Sum(line => line.DebitBalance))</th><th class="number">@Money(_snapshot.TrialBalance.Sum(line => line.CreditBalance))</th></tr></tfoot>
+            </table>
+        </div>
+    </section>
+}
+
+@code {
+    private AccountingSnapshot? _snapshot;
+    protected override async Task OnInitializedAsync() => _snapshot = await AccountingService.GetSnapshotAsync();
+    private static string Money(decimal value) => value == 0 ? "—" : $"{value:N0}";
+}

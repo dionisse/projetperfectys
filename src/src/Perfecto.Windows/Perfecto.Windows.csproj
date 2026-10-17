@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <RootNamespace>Perfecto.Windows</RootNamespace>
+    <ApplicationIcon>wwwroot\perfecto.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="10.0.20" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Perfecto.Application\Perfecto.Application.csproj" />
+    <ProjectReference Include="..\Perfecto.Contracts\Perfecto.Contracts.csproj" />
+    <ProjectReference Include="..\Perfecto.Infrastructure\Perfecto.Infrastructure.csproj" />
+    <ProjectReference Include="..\Perfecto.Shared.UI\Perfecto.Shared.UI.csproj" />
+  </ItemGroup>
+</Project>
