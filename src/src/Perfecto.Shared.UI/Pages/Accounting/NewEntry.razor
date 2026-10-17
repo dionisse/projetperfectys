@@ -1,0 +1,104 @@
+@page "/comptabilite/pieces/nouvelle"
+@inject IAccountingService AccountingService
+@inject NavigationManager Navigation
+
+<PageTitle>Nouvelle pièce — PERFECTO</PageTitle>
+
+<section class="module-hero compact-hero">
+    <div><span class="eyebrow">Saisie des écritures</span><h1>Nouvelle pièce comptable</h1><p>La validation est impossible tant que les débits et crédits ne sont pas équilibrés.</p></div>
+    <a class="button button-secondary" href="/comptabilite/pieces">Annuler</a>
+</section>
+
+@if (!string.IsNullOrEmpty(_message))
+{
+    <div class="form-message @(_isError ? "error" : "success") wide-message">@_message</div>
+}
+
+<section class="panel entry-form-panel">
+    <div class="entry-header-fields">
+        <label class="field"><span>Journal</span><select @bind="_request.JournalCode">@foreach (var journal in _journals) { <option value="@journal.Code">@journal.Code · @journal.Label</option> }</select></label>
+        <label class="field"><span>Date</span><InputDate @bind-Value="_request.EntryDate" /></label>
+        <label class="field"><span>Référence</span><input maxlength="80" placeholder="Ex. OD-2026-002" @bind="_request.Reference" /></label>
+        <label class="field field-wide"><span>Libellé de la pièce</span><input maxlength="180" placeholder="Objet de l'opération" @bind="_request.Description" /></label>
+    </div>
+
+    <div class="entry-lines-heading"><div><span class="eyebrow">Mouvements</span><h2>Lignes comptables</h2></div><button class="button button-secondary" type="button" @onclick="AddLine">Ajouter une ligne</button></div>
+
+    <div class="responsive-table">
+        <table class="data-table entry-lines-table">
+            <thead><tr><th>Compte général</th><th>Libellé de ligne</th><th class="number">Débit</th><th class="number">Crédit</th><th></th></tr></thead>
+            <tbody>
+                @for (var index = 0; index < _request.Lines.Count; index++)
+                {
+                    var line = _request.Lines[index];
+                    var currentIndex = index;
+                    <tr>
+                        <td><select @bind="line.AccountCode"><option value="">Sélectionner…</option>@foreach (var account in _accounts) { <option value="@account.Code">@account.Code · @account.Label</option> }</select></td>
+                        <td><input maxlength="160" placeholder="Libellé" @bind="line.Label" /></td>
+                        <td><InputNumber class="amount-input" @bind-Value="line.Debit" /></td>
+                        <td><InputNumber class="amount-input" @bind-Value="line.Credit" /></td>
+                        <td><button class="icon-button danger" type="button" title="Supprimer" @onclick="() => RemoveLine(currentIndex)">×</button></td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot><tr><th colspan="2">Totaux de la pièce</th><th class="number">@Money(TotalDebit)</th><th class="number">@Money(TotalCredit)</th><th></th></tr></tfoot>
+        </table>
+    </div>
+
+    <div class="entry-footer">
+        <div class="balance-indicator @(IsBalanced ? "balanced" : "unbalanced")">
+            <span>@(IsBalanced ? "Pièce équilibrée" : "Écart à corriger")</span>
+            <strong>@Money(Math.Abs(TotalDebit - TotalCredit))</strong>
+        </div>
+        <div class="action-row">
+            <button class="button button-secondary" type="button" @onclick="() => SaveAsync(false)">Enregistrer le brouillon</button>
+            <button class="button button-primary" type="button" disabled="@(!IsBalanced)" @onclick="() => SaveAsync(true)">Valider la pièce</button>
+        </div>
+    </div>
+</section>
+
+@code {
+    private IReadOnlyList<GeneralAccountDto> _accounts = [];
+    private IReadOnlyList<AccountingJournalDto> _journals = [];
+    private CreateAccountingEntryRequest _request = NewRequest();
+    private string _message = string.Empty;
+    private bool _isError;
+    private decimal TotalDebit => _request.Lines.Sum(line => line.Debit);
+    private decimal TotalCredit => _request.Lines.Sum(line => line.Credit);
+    private bool IsBalanced => _request.Lines.Count >= 2 && TotalDebit > 0 && TotalDebit == TotalCredit;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _accounts = await AccountingService.GetAccountsAsync();
+        _journals = await AccountingService.GetJournalsAsync();
+    }
+
+    private static CreateAccountingEntryRequest NewRequest() => new()
+    {
+        EntryDate = new DateOnly(2026, 2, 15),
+        Lines = [new(), new()]
+    };
+
+    private void AddLine() => _request.Lines.Add(new AccountingEntryLineInput());
+    private void RemoveLine(int index) { if (_request.Lines.Count > 2) _request.Lines.RemoveAt(index); }
+
+    private async Task SaveAsync(bool post)
+    {
+        try
+        {
+            _request.PostImmediately = post;
+            var saved = await AccountingService.SaveEntryAsync(_request);
+            _message = $"La pièce {saved.Reference} a été {(post ? "validée" : "enregistrée en brouillon")}.";
+            _isError = false;
+            await Task.Delay(500);
+            Navigation.NavigateTo("/comptabilite/pieces");
+        }
+        catch (InvalidOperationException exception)
+        {
+            _message = exception.Message;
+            _isError = true;
+        }
+    }
+
+    private static string Money(decimal value) => $"{value:N0} XOF";
+}
