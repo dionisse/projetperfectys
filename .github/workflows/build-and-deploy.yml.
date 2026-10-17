@@ -65,3 +65,72 @@ jobs:
           git add modern-proto/dist || true
           git commit -m "ci(build): add publish output [skip ci]" || echo "No changes to commit"
           git push origin HEAD:${{ github.ref_name }}
+
+
+name: Build and publish Blazor site
+
+on:
+  push:
+    branches:
+      - 'arena/658dcef5-projetperfectys'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Install unzip
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip
+
+      - name: Unzip source archive
+        run: |
+          mkdir -p src
+          unzip -q Perfecto-Next-0.2.0-preview.1-source.zip -d src
+
+      - name: Find first .csproj
+        id: find-proj
+        run: |
+          proj=$(find src -name '*.csproj' | head -n1 || true)
+          if [ -z "$proj" ]; then echo "No .csproj found in source archive" >&2; exit 1; fi
+          echo "proj=$proj" >> $GITHUB_OUTPUT
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: dotnet publish
+        run: |
+          dotnet publish "${{ steps.find-proj.outputs.proj }}" -c Release -o publish_output
+
+      - name: Copy publish output to modern-proto/dist
+        run: |
+          mkdir -p modern-proto/dist
+          if [ -d publish_output/wwwroot ]; then
+            cp -a publish_output/wwwroot/. modern-proto/dist/
+          else
+            cp -a publish_output/. modern-proto/dist/ || true
+          fi
+
+      - name: Create Pull Request with built files
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.ACTIONS_PAT }}
+          commit-message: "ci(build): add publish output"
+          branch: build/publish-${{ github.run_id }}
+          title: "ci(build): add publish output"
+          body: "Automatic build output from workflow"
+          base: arena/658dcef5-projetperfectys
