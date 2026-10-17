@@ -1,8 +1,82 @@
+name: Build and publish Blazor site
+
+on:
+  push:
+    branches:
+      - 'arena/658dcef5-projetperfectys'
+  workflow_dispatch: {}
+
 permissions:
   contents: write
   pull-requests: write
 
-# ...jobs et steps précédents inchangés...
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Exit if skip-ci commit
+        if: "contains(github.event.head_commit.message, '[skip ci]')"
+        run: |
+          echo "Skipping workflow for [skip ci] commit"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Install unzip
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip
+
+      - name: Unzip source archive
+        run: |
+          mkdir -p src
+          if [ -f Perfecto-Next-0.2.0-preview.1-source.zip ]; then
+            unzip -q Perfecto-Next-0.2.0-preview.1-source.zip -d src
+          else
+            echo "Source archive not found: Perfecto-Next-0.2.0-preview.1-source.zip" >&2
+            exit 1
+          fi
+
+      - name: Find first .csproj
+        id: find-proj
+        run: |
+          proj=$(find src -name '*.csproj' | head -n1 || true)
+          if [ -z "$proj" ]; then
+            echo "No .csproj found in source archive" >&2
+            exit 1
+          fi
+          echo "proj=$proj" >> $GITHUB_OUTPUT
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: dotnet publish
+        run: |
+          set -e
+          echo "Publishing project: ${{ steps.find-proj.outputs.proj }}"
+          dotnet publish "${{ steps.find-proj.outputs.proj }}" -c Release -o publish_output
+
+      - name: Show publish output (debug)
+        run: |
+          echo "Publish output listing:"
+          ls -la publish_output || true
+          ls -la publish_output/wwwroot || true
+
+      - name: Copy publish output to modern-proto/dist
+        run: |
+          mkdir -p modern-proto/dist
+          if [ -d publish_output/wwwroot ]; then
+            cp -a publish_output/wwwroot/. modern-proto/dist/
+          else
+            cp -a publish_output/. modern-proto/dist/ || true
+          fi
 
       - name: Ensure git status includes built files
         run: |
