@@ -1,0 +1,28 @@
+{
+  "id": "/",
+  "name": "PERFECTO — Comptabilité générale SYSCOHADA",
+  "short_name": "PERFECTO",
+  "description": "Prototype statique de comptabilité générale SYSCOHADA révisé : plan comptable, journaux, pièces, balance, grand livre et périodes.",
+  "lang": "fr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f7fb",
+  "theme_color": "#0369a1",
+  "categories": ["business", "finance", "productivity"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

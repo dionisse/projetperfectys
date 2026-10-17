@@ -1,76 +1,76 @@
-name: Build and publish Blazor site
+name: Validate static prototype
 
 on:
   push:
     branches:
       - 'arena/658dcef5-projetperfectys'
+      - main
+  pull_request:
   workflow_dispatch: {}
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+
 jobs:
-  build-and-publish:
+  validate:
+    name: Static checks & business rules
     runs-on: ubuntu-latest
 
     steps:
-      - name: Exit if skip-ci commit
-        if: "contains(github.event.head_commit.message, '[skip ci]')"
-        run: |
-          echo "Skipping workflow for [skip ci] commit"
-
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: true
 
-      - name: Install unzip
+      - name: Check required files
         run: |
-          sudo apt-get update
-          sudo apt-get install -y unzip
+          missing=0
+          for file in index.html css/modern.css js/app.js js/store.js manifest.webmanifest service-worker.js icon-192.png icon-512.png; do
+            if [ ! -f "$file" ]; then
+              echo "::error::Fichier obligatoire manquant : $file"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then exit 1; fi
+          echo "Tous les fichiers du prototype sont présents."
 
-      - name: Unzip source archive
+      - name: Validate manifest JSON
         run: |
-          mkdir -p src
-          unzip -q Perfecto-Next-0.2.0-preview.1-source.zip -d src
+          python3 - <<'PY'
+          import json
+          with open('manifest.webmanifest', encoding='utf-8') as handle:
+              data = json.load(handle)
+          assert data.get('name') and data.get('icons'), 'Manifest incomplet'
+          print('manifest.webmanifest valide :', data['short_name'])
+          PY
 
-      - name: Find first .csproj
-        id: find-proj
+      - name: Check JavaScript syntax
         run: |
-          proj=$(find src -name '*.csproj' | head -n1 || true)
-          if [ -z "$proj" ]; then echo "No .csproj found in source archive" >&2; exit 1; fi
-          echo "proj=$proj" >> $GITHUB_OUTPUT
+          for file in js/*.js service-worker.js; do
+            node --check "$file"
+            echo "Syntaxe OK : $file"
+          done
 
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: '8.0.x'
+      - name: Run business rules tests
+        run: node tests/store.test.js
 
-      - name: dotnet publish
+      - name: Smoke test static server
         run: |
-          dotnet publish "${{ steps.find-proj.outputs.proj }}" -c Release -o publish_output
+          python3 -m http.server 8080 >/tmp/perfecto-http.log 2>&1 &
+          sleep 1
+          for path in / /index.html /css/modern.css /js/app.js /js/store.js /manifest.webmanifest /service-worker.js /icon-192.png; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:8080$path")
+            if [ "$code" != "200" ]; then
+              echo "::error::$path a renvoyé HTTP $code"
+              exit 1
+            fi
+            echo "HTTP 200 : $path"
+          done
 
-      - name: Copy publish output to modern-proto/dist
+      - name: Summary
         run: |
-          mkdir -p modern-proto/dist
-          if [ -d publish_output/wwwroot ]; then
-            cp -a publish_output/wwwroot/. modern-proto/dist/
-          else
-            cp -a publish_output/. modern-proto/dist/ || true
-          fi
-
-      - name: Ensure git status includes built files
-        run: |
-          git add modern-proto/dist || true
-          git status --porcelain
-
-      - name: Create Pull Request with built files
-        uses: peter-evans/create-pull-request@v5
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "ci(build): add publish output"
-          branch: build/publish-${{ github.run_id }}
-          title: "ci(build): add publish output"
-          body: "Automatic build output from workflow"
-          base: arena/658dcef5-projetperfectys
+          {
+            echo "### Prototype statique validé"
+            echo ""
+            echo "- Aucun Blazor, WebAssembly ou build requis."
+            echo "- Fichiers servis depuis la racine du dépôt."
+            echo "- Tests des règles métier exécutés avec succès."
+          } >> "$GITHUB_STEP_SUMMARY"

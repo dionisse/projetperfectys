@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0369a1" />
+  <meta name="description" content="PERFECTO — prototype statique de comptabilité générale SYSCOHADA révisé. Sans Blazor, sans serveur : HTML, CSS et JavaScript natifs." />
+  <title>PERFECTO · Comptabilité générale SYSCOHADA</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" href="icon-192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="icon-512.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png" />
+  <link rel="stylesheet" href="css/modern.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Aller au contenu principal</a>
+
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="Navigation principale">
+      <div class="brand">
+        <img class="brand-img" src="icon-192.png" alt="" width="44" height="44" />
+        <div class="brand-text">
+          <strong>PERFECTO</strong>
+          <small>Comptabilité SYSCOHADA</small>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-section">
+          <p class="nav-section-heading">Pilotage</p>
+          <a href="#/dashboard" data-route="dashboard">
+            <span class="nav-icon" aria-hidden="true">📊</span>Tableau de bord
+          </a>
+        </div>
+
+        <div class="nav-section">
+          <p class="nav-section-heading">Comptabilité</p>
+          <a href="#/accounts" data-route="accounts">
+            <span class="nav-icon" aria-hidden="true">📒</span>Plan comptable
+          </a>
+          <a href="#/journals" data-route="journals">
+            <span class="nav-icon" aria-hidden="true">🗂️</span>Journaux
+          </a>
+          <a href="#/entry" data-route="entry">
+            <span class="nav-icon" aria-hidden="true">✍️</span>Saisie d’écriture
+          </a>
+          <a href="#/entries" data-route="entries">
+            <span class="nav-icon" aria-hidden="true">📄</span>Pièces comptables
+            <span class="nav-badge" id="draft-badge" aria-label="Brouillons en attente">1</span>
+          </a>
+        </div>
+
+        <div class="nav-section">
+          <p class="nav-section-heading">États</p>
+          <a href="#/balance" data-route="balance">
+            <span class="nav-icon" aria-hidden="true">⚖️</span>Balance générale
+          </a>
+          <a href="#/journal" data-route="journal">
+            <span class="nav-icon" aria-hidden="true">📚</span>Journal des écritures
+          </a>
+          <a href="#/ledger" data-route="ledger">
+            <span class="nav-icon" aria-hidden="true">🔎</span>Grand livre
+          </a>
+        </div>
+
+        <div class="nav-section">
+          <p class="nav-section-heading">Paramètres</p>
+          <a href="#/periods" data-route="periods">
+            <span class="nav-icon" aria-hidden="true">🔒</span>Périodes
+          </a>
+          <a href="#/settings" data-route="settings">
+            <span class="nav-icon" aria-hidden="true">⚙️</span>Données &amp; application
+          </a>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        PERFECTO v0.2.0-preview.1
+        <div class="status-row"><span class="dot" aria-hidden="true"></span>Données enregistrées localement</div>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <button type="button" class="menu-toggle" data-action="toggle-sidebar" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="sidebar">☰</button>
+        <div class="topbar-titles">
+          <span class="eyebrow">PERFECTO · Comptabilité générale</span>
+          <h1 id="page-title">Tableau de bord</h1>
+        </div>
+        <div class="topbar-actions">
+          <span class="topbar-date" id="topbar-date"></span>
+          <a class="btn btn-primary" href="#/entry">＋ <span class="btn-label">Nouvelle écriture</span></a>
+        </div>
+      </header>
+
+      <main class="content" id="main-content" tabindex="-1">
+        <div id="view"></div>
+      </main>
+    </div>
+  </div>
+
+  <div id="modal-root"></div>
+  <div class="toast-region" id="toast-region" aria-live="polite"></div>
+
+  <script src="js/store.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' }).catch(function (error) {
+          console.warn('Service worker non enregistré :', error);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
