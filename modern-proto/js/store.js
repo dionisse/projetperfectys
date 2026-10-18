@@ -7,6 +7,7 @@
   'use strict';
 
   var STORAGE_KEY = 'perfecto.lot1.v1';
+  var BACKUP_STORAGE_KEY = 'perfecto.lot1.backup.v1';
   var EXERCICE = 2026;
 
   var JOURNAUX = [
@@ -124,9 +125,36 @@
     return state;
   }
 
-  function save() {
+  function isBackupData(data) {
+    return !!data && Array.isArray(data.accounts) && Array.isArray(data.journals) &&
+      Array.isArray(data.entries) && Array.isArray(data.periods);
+  }
+
+  function snapshotPreviousState(raw) {
     try {
-      global.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      var previous = JSON.parse(raw);
+      if (!isBackupData(previous)) return false;
+      var snapshot = {
+        application: 'PERFECTO',
+        module: 'Comptabilité générale SYSCOHADA',
+        version: 1,
+        createdAt: new Date().toISOString(),
+        data: previous
+      };
+      global.localStorage.setItem(BACKUP_STORAGE_KEY, JSON.stringify(snapshot));
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function save() {
+    if (!state) return false;
+    try {
+      var serialized = JSON.stringify(state);
+      var previous = global.localStorage.getItem(STORAGE_KEY);
+      if (previous && previous !== serialized) snapshotPreviousState(previous);
+      global.localStorage.setItem(STORAGE_KEY, serialized);
       return true;
     } catch (err) {
       return false;
@@ -533,6 +561,44 @@
     }
   }
 
+  function readBackupSnapshot() {
+    try {
+      var raw = global.localStorage.getItem(BACKUP_STORAGE_KEY);
+      if (!raw) return null;
+      var snapshot = JSON.parse(raw);
+      if (!snapshot || snapshot.application !== 'PERFECTO' || snapshot.version !== 1 || !isBackupData(snapshot.data)) return null;
+      return snapshot;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function backupInfo() {
+    var snapshot = readBackupSnapshot();
+    if (!snapshot) return { available: false, createdAt: null, accountCount: 0, entryCount: 0, periodCount: 0 };
+    return {
+      available: true,
+      createdAt: snapshot.createdAt,
+      accountCount: snapshot.data.accounts.length,
+      entryCount: snapshot.data.entries.length,
+      periodCount: snapshot.data.periods.length
+    };
+  }
+
+  function restoreBackup() {
+    var snapshot = readBackupSnapshot();
+    if (!snapshot) return { ok: false, errors: ['Aucun point de restauration local valide n’est disponible.'] };
+
+    var previousState = state ? clone(state) : null;
+    state = clone(snapshot.data);
+    ensurePeriodsForEntries();
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Restauration impossible : le stockage local est indisponible ou plein.'] };
+    }
+    return { ok: true, errors: [], restoredAt: snapshot.createdAt };
+  }
+
   /* ---------------- Utilitaires de format ---------------- */
   var MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 
@@ -598,6 +664,8 @@
     periodStats: periodStats,
     exportJson: exportJson,
     importJson: importJson,
+    backupInfo: backupInfo,
+    restoreBackup: restoreBackup,
     monthLabel: monthLabel,
     money: money,
     amount: amount,

@@ -1692,3 +1692,18 @@ body.launcher-mode .content { background: #f7f6f0; }
 .login-methods-caption { display: block; margin-bottom: 7px; color: #77837e; font-size: .55rem; font-weight: 800; letter-spacing: .1em; }
 .login-methods > div { display: flex; flex-wrap: wrap; gap: 6px; }
 .login-methods > div span { padding: 5px 8px; border: 1px solid #dce5df; border-radius: 5px; color: #405a5b; background: #f4f7f3; font-size: .65rem; font-weight: 700; }
+
+/* Point de restauration local dans les paramètres de données */
+.local-backup-box { margin-top: 15px; padding: 12px; border: 1px solid #dce5df; border-radius: 7px; background: #f7f9f5; }
+.local-backup-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
+.local-backup-heading > span { color: #65746e; font-size: .57rem; font-weight: 800; letter-spacing: .1em; }
+.local-backup-heading > b { padding: 4px 6px; border-radius: 4px; color: #08776e; background: #e7f2ed; font-size: .57rem; }
+.local-backup-status { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border: 1px solid #cfe3d9; border-radius: 6px; background: #fff; }
+.local-backup-status > div { display: grid; gap: 4px; }
+.local-backup-status strong { color: #24444a; font-size: .72rem; }
+.local-backup-status small { color: #697871; font-size: .64rem; line-height: 1.45; }
+.local-backup-status.is-empty { border-color: #e2e7e2; background: #fbfcfa; }
+.local-backup-box > p { margin: 9px 0 0; font-size: .66rem; line-height: 1.5; }
+@media (max-width: 480px) {
+  .local-backup-status { align-items: flex-start; flex-direction: column; }
+}

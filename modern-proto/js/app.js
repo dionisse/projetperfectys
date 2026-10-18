@@ -1124,6 +1124,11 @@
     try { raw = window.localStorage.getItem(S.STORAGE_KEY) || ''; } catch (err) { raw = ''; }
     var sizeKb = (raw.length / 1024).toFixed(1);
     var state = S.getState();
+    var backupInfo = S.backupInfo();
+    var backupDate = backupInfo.available ? new Date(backupInfo.createdAt).toLocaleString('fr-FR') : '';
+    var backupMarkup = backupInfo.available
+      ? '<div class="local-backup-status"><div><strong>Point de restauration disponible</strong><small>État précédent · ' + esc(backupDate) + ' · ' + backupInfo.entryCount + ' pièce(s)</small></div><button type="button" class="btn btn-ghost btn-sm" data-action="restore-local-backup">Restaurer</button></div>'
+      : '<div class="local-backup-status is-empty"><div><strong>Aucun point de restauration pour le moment</strong><small>Il sera créé automatiquement avant la prochaine modification des données.</small></div></div>';
     var swReady = 'serviceWorker' in navigator && !!navigator.serviceWorker.controller;
 
     var html = pageHeader('Données & application', 'Sauvegarde, restauration et installation — tout reste dans votre navigateur.',
@@ -1146,6 +1151,8 @@
         '<button type="button" class="btn btn-danger" data-action="reset-data">↺ Réinitialiser la démo</button>' +
       '</div>' +
       '<p class="small muted mt-8">L’export produit un fichier JSON relisible par n’importe quel outil. L’import remplace toutes les données locales.</p>' +
+      '<div class="local-backup-box"><div class="local-backup-heading"><span>RESTAURATION LOCALE</span><b>1 point</b></div>' + backupMarkup +
+      '<p class="small muted">Ce point reste dans ce navigateur et conserve uniquement l’état précédent. Il ne remplace pas une copie exportée sur un support indépendant.</p></div>' +
     '</section>';
 
     html += '<section class="card panel">' +
@@ -1486,11 +1493,19 @@
         break;
       }
       case 'reset-data':
-        if (!window.confirm('Réinitialiser toutes les données locales avec la démonstration du Lot 1 ?')) break;
+        if (!window.confirm('Réinitialiser toutes les données locales avec la démonstration du Lot 1 ? Un point de restauration sera conservé avant le remplacement.')) break;
         S.reset();
-        toast('Données de démonstration restaurées.', 'success');
+        toast('Données de démonstration restaurées. L’état précédent reste récupérable localement.', 'success');
         render();
         break;
+      case 'restore-local-backup': {
+        if (!window.confirm('Restaurer le dernier point de restauration ? L’état actuel deviendra à son tour le point de restauration.')) break;
+        var restoredBackup = S.restoreBackup();
+        if (!restoredBackup.ok) { toast(restoredBackup.errors[0] || 'Restauration impossible.', 'error'); break; }
+        toast('Point de restauration local restauré.', 'success');
+        render();
+        break;
+      }
       case 'export-json':
         downloadFile('perfecto-comptabilite-' + S.todayIso() + '.json', S.exportJson(), 'application/json;charset=utf-8');
         toast('Export JSON généré.', 'success');

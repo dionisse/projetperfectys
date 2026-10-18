@@ -33,7 +33,7 @@ publier, un déploiement immédiat.
 | Journal des écritures | Écritures validées chronologiques, filtre journal/exercice, impression |
 | Grand livre | Mouvements par compte et solde progressif |
 | Périodes | Douze mois de l'exercice, ouverture et clôture persistées |
-| Données & application | Export/import JSON, réinitialisation de la démo, installation PWA |
+| Données & application | Export/import JSON, point de restauration local avant modification, restauration, installation PWA |
 
 ### Règles métier appliquées
 
@@ -128,7 +128,9 @@ ces tests ainsi qu'un contrôle de syntaxe et un test de service HTTP.
 ## Limites de cette prévisualisation
 
 La connexion et le launcher sont des écrans de démonstration : il n'y a pas encore
-d'authentification réelle ni de connexion à Google Drive. Il n'y a pas non plus de
+d'authentification réelle ni de connexion à Google Drive. Un point de restauration
+local conserve le dernier état comptable avant une modification, mais reste dans le
+même navigateur et ne remplace pas une sauvegarde externe indépendante. Il n'y a pas non plus de
 synchronisation multi-utilisateur ; les données comptables restent locales dans le
 navigateur. Les limites comptables du Lot 1 restent applicables (notamment tiers et
 auxiliaires détaillés, extourne, lettrage, rapprochement bancaire, exports PDF/Excel

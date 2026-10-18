@@ -212,6 +212,21 @@ test('import d’un fichier invalide refusé', () => {
   assert.strictEqual(result.ok, false);
 });
 
+test('point de restauration local avant remplacement et restauration', () => {
+  const before = S.getState();
+  const beforeSummary = { accounts: before.accounts.length, entries: before.entries.length, debit: S.kpis().debit };
+  S.reset();
+  const backup = S.backupInfo();
+  assert.strictEqual(backup.available, true);
+  assert.strictEqual(backup.accountCount, beforeSummary.accounts);
+  assert.strictEqual(backup.entryCount, beforeSummary.entries);
+  const restored = S.restoreBackup();
+  assert.strictEqual(restored.ok, true, restored.errors.join(' '));
+  assert.strictEqual(S.accounts().length, beforeSummary.accounts);
+  assert.strictEqual(S.entries().length, beforeSummary.entries);
+  assert.strictEqual(S.kpis().debit, beforeSummary.debit);
+});
+
 console.log('');
 if (process.exitCode) {
   console.error('Échec des tests.');
