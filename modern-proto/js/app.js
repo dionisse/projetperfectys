@@ -63,6 +63,8 @@
 
   var deferredInstallPrompt = null;
   var launcherUi = { filter: 'all', query: '' };
+  var demoMembers = [{ id: 'demo-supervisor', name: 'Compte superviseur (démo)', role: 'supervisor' }];
+  var demoMemberSequence = 0;
 
   /* -------------------------------- Toasts --------------------------------- */
   function toast(message, type) {
@@ -350,8 +352,39 @@
       </div>`;
   }
 
+  function demoRoleLabel(role) {
+    if (role === 'supervisor') return 'Superviseur général';
+    if (role === 'manager') return 'Gestionnaire';
+    return 'Utilisateur / employé';
+  }
+
+  function demoMemberRow(member) {
+    var isSupervisor = member.role === 'supervisor';
+    var roleControl = isSupervisor
+      ? '<span class="member-role-static">Superviseur général · racine</span>'
+      : '<label class="sr-only" for="demo-role-' + esc(member.id) + '">Rôle de ' + esc(member.name) + '</label>' +
+        '<select id="demo-role-' + esc(member.id) + '" data-demo-member-role data-id="' + esc(member.id) + '">' +
+          '<option value="manager"' + (member.role === 'manager' ? ' selected' : '') + '>Gestionnaire</option>' +
+          '<option value="employee"' + (member.role === 'employee' ? ' selected' : '') + '>Utilisateur / employé</option>' +
+        '</select>';
+    var removeControl = isSupervisor
+      ? '<span class="member-root-note">Rôle racine</span>'
+      : '<button type="button" class="member-remove-button" data-action="remove-demo-member" data-id="' + esc(member.id) + '">Retirer</button>';
+    var initials = member.role === 'supervisor' ? 'SG' : (member.role === 'manager' ? 'G' : 'U');
+
+    return '<div class="organization-member-row">' +
+      '<div class="member-identity"><span class="member-avatar ' + (isSupervisor ? 'is-root' : '') + '">' + initials + '</span><span><strong>' + esc(member.name) + '</strong><small>Profil temporaire de démonstration · aucune connexion réelle</small></span></div>' +
+      '<div class="member-role-control">' + roleControl + '</div>' +
+      '<div class="member-access-status"><span>ACCÈS AUX MODULES</span><strong>À valider</strong></div>' +
+      '<div class="member-row-action">' + removeControl + '</div>' +
+      '</div>';
+  }
+
   function viewOrganization() {
     var modules = ModuleRegistry.all();
+    var managers = demoMembers.filter(function (member) { return member.role === 'manager'; }).length;
+    var employees = demoMembers.filter(function (member) { return member.role === 'employee'; }).length;
+    var memberRows = demoMembers.map(demoMemberRow).join('');
     var rows = modules.map(function (module) {
       var availability = module.status === 'available' ? 'Disponible en démo' : 'À venir';
       return '<tr>' +
@@ -374,7 +407,7 @@
         </header>
         <main class="organization-main">
           <section class="organization-heading">
-            <div><p class="suite-kicker">ESPACE DE TRAVAIL · DÉMONSTRATION</p><h1>Organisation &amp; accès</h1><p>La hiérarchie et les droits de votre organisation, présentés sans créer de faux comptes ni appliquer de règles non validées.</p></div>
+            <div><p class="suite-kicker">ESPACE DE TRAVAIL · DÉMONSTRATION</p><h1>Organisation &amp; accès</h1><p>La hiérarchie est illustrée par des profils temporaires de démonstration ; aucun compte réel n’est créé et aucun droit non validé n’est appliqué.</p></div>
           </section>
           <div class="organization-summary-grid">
             <article class="organization-panel organization-identity">
@@ -392,6 +425,14 @@
               <div class="role-level"><span class="role-level-number">03</span><div><strong>Utilisateurs / employés</strong><small>Accès selon l’affiliation et les droits accordés</small></div></div>
             </article>
           </div>
+          <section class="organization-panel members-panel">
+            <div class="members-heading">
+              <div><div class="organization-panel-kicker">PROFILS DE DÉMONSTRATION</div><h2>Membres de l’organisation</h2><p>${demoMembers.length} profil(s) · ${managers} gestionnaire(s) · ${employees} utilisateur(s)/employé(s)</p></div>
+              <button type="button" class="btn btn-primary btn-sm" data-action="add-demo-member">＋ Ajouter un profil démo</button>
+            </div>
+            <div class="members-list">${memberRows}</div>
+            <p class="members-demo-note">Ces profils sont temporaires et restent en mémoire jusqu’au rechargement de la page. Aucun e-mail n’est demandé, aucun compte n’est créé et aucune invitation n’est envoyée.</p>
+          </section>
           <section class="organization-panel access-design-panel">
             <div class="access-design-heading"><div><div class="organization-panel-kicker">MODÈLE D’AUTORISATION</div><h2>Accès par module</h2><p>La matrice est à valider ensemble. Les accès ne sont pas encore appliqués dans le prototype.</p></div><span class="permission-pending">À VALIDER</span></div>
             <div class="organization-table-wrap">
@@ -405,6 +446,33 @@
         </main>
         <footer class="suite-footer launcher-footer"><span>PERFECTO · ESPACE DE DÉMONSTRATION</span><span>Authentification et droits réels à implémenter après validation</span></footer>
       </div>`;
+  }
+
+  function openDemoMemberModal() {
+    var body = '<form id="demo-member-form" novalidate>' +
+      '<div class="alert info">Prototype uniquement : ce profil temporaire ne crée pas de compte et n’envoie pas d’invitation.</div>' +
+      '<div class="field"><label for="demo-member-role">Rôle à prévisualiser</label>' +
+        '<select id="demo-member-role" name="role"><option value="manager">Gestionnaire</option><option value="employee">Utilisateur / employé</option></select></div>' +
+      '<p class="small muted">Les droits d’accès par module restent « à valider » et ne changent pas avec cette prévisualisation.</p>' +
+    '</form>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button>' +
+      '<button type="submit" class="btn btn-primary" form="demo-member-form">Ajouter le profil démo</button>';
+    openModal('Ajouter un profil de démonstration', 'Aucune donnée réelle ne sera demandée.', body, footer);
+
+    var form = $('#demo-member-form');
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var role = $('#demo-member-role').value === 'manager' ? 'manager' : 'employee';
+      demoMemberSequence += 1;
+      demoMembers.push({
+        id: 'demo-member-' + demoMemberSequence,
+        name: 'Profil de démonstration ' + demoMemberSequence,
+        role: role
+      });
+      closeModal(true);
+      toast('Profil temporaire ajouté. Aucune invitation n’a été envoyée.', 'success');
+      render();
+    });
   }
 
   function accountOptions(selected) {
@@ -1198,6 +1266,10 @@
       bindLauncherView();
       return;
     }
+    if (route === 'organization') {
+      bindOrganizationView();
+      return;
+    }
 
     if (route === 'entry') {
       var form = $('#entry-form');
@@ -1293,6 +1365,19 @@
       });
     }
     applyLauncherFilters();
+  }
+
+  function bindOrganizationView() {
+    $$('[data-demo-member-role]').forEach(function (select) {
+      select.addEventListener('change', function () {
+        var id = select.getAttribute('data-id');
+        var member = demoMembers.find(function (item) { return item.id === id; });
+        if (!member) return;
+        member.role = select.value === 'manager' ? 'manager' : 'employee';
+        toast('Rôle de démonstration modifié. Les droits réels restent à valider.', 'success');
+        render();
+      });
+    });
   }
 
   function applyLauncherFilters() {
@@ -1399,6 +1484,18 @@
       case 'demo-login':
         navigate('#/launcher');
         break;
+      case 'add-demo-member':
+        openDemoMemberModal();
+        break;
+      case 'remove-demo-member': {
+        var memberIndex = demoMembers.findIndex(function (member) { return member.id === id && member.role !== 'supervisor'; });
+        if (memberIndex < 0) break;
+        if (!window.confirm('Retirer ce profil temporaire de la démonstration ? Aucun compte réel n’est concerné.')) break;
+        demoMembers.splice(memberIndex, 1);
+        toast('Profil temporaire retiré de la démonstration.', 'success');
+        render();
+        break;
+      }
       case 'open-module': {
         var selectedModule = ModuleRegistry.get(trigger.getAttribute('data-module-id'));
         if (selectedModule && selectedModule.status === 'available' && selectedModule.route) {

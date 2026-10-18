@@ -23,7 +23,7 @@ publier, un déploiement immédiat.
 |---|---|
 | Connexion (démo) | Aucun identifiant collecté ; e-mail/mot de passe et Google sont prévus, mais non actifs en démo |
 | Launcher | Catalogue modulaire, recherche et filtres ; accès à la Comptabilité générale, autres modules à venir |
-| Organisation & accès (démo) | Hiérarchie Superviseur général → gestionnaires → utilisateurs/employés ; matrice de droits à valider |
+| Organisation & accès (démo) | Profils temporaires de démonstration, hiérarchie et rôles ; matrice de droits à valider |
 | Tableau de bord | Indicateurs (débit, crédit, résultat, pièces), dernières pièces, activité par journal, état des périodes |
 | Plan comptable | 18 comptes SYSCOHADA initiaux, recherche, filtres, création de compte, export CSV |
 | Journaux | Six journaux (AC, VE, BQ, CA, OD, PA) avec totaux et brouillons |
