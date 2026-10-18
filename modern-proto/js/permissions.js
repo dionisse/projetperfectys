@@ -48,6 +48,21 @@
     return String(value == null ? '' : value).trim().toLocaleLowerCase();
   }
 
+  function grantsForModule(member, moduleId) {
+    var grants = member && member.grants && member.grants[moduleId];
+    if (Array.isArray(grants)) return grants;
+    // Compatibilité de démonstration avec la première forme : un grant par module.
+    return grants && typeof grants === 'object' ? [grants] : [];
+  }
+
+  function scopeAllows(scope, context) {
+    if (!scope || !context) return false;
+    if (scope.type === 'organization') return true;
+    if (scope.type !== 'folder' || context.scopeType !== 'folder' || !Array.isArray(scope.folders) || !context.folderName) return false;
+    var folder = normalize(context.folderName);
+    return !!folder && scope.folders.some(function (name) { return normalize(name) === folder; });
+  }
+
   function sameOrganization(member, context) {
     return !!(member && context && member.organizationId && context.organizationId &&
       String(member.organizationId) === String(context.organizationId));
@@ -61,18 +76,14 @@
     // Le Superviseur général agit au niveau de sa propre organisation uniquement.
     if (member.role === 'supervisor') return true;
 
-    var grant = member.grants && member.grants[moduleId];
-    if (!grant || !Array.isArray(grant.actions) || grant.actions.indexOf(actionId) === -1) return false;
-
-    // Toute action métier exige aussi l’accès explicite à la consultation du module.
-    if (actionId !== 'module.view' && grant.actions.indexOf('module.view') === -1) return false;
-
-    var scope = grant.scope || {};
-    if (scope.type === 'organization') return true;
-    if (scope.type !== 'folder' || context.scopeType !== 'folder' || !Array.isArray(scope.folders) || !context.folderName) return false;
-
-    var folder = normalize(context.folderName);
-    return !!folder && scope.folders.some(function (name) { return normalize(name) === folder; });
+    // Les grants se cumulent : une action n'est accordée que par un grant
+    // explicite qui couvre à la fois le module, l'action et le même périmètre.
+    return grantsForModule(member, moduleId).some(function (grant) {
+      if (!grant || !Array.isArray(grant.actions) || grant.actions.indexOf(actionId) === -1) return false;
+      // Toute action métier exige aussi la consultation dans ce grant/périmètre.
+      if (actionId !== 'module.view' && grant.actions.indexOf('module.view') === -1) return false;
+      return scopeAllows(grant.scope, context);
+    });
   }
 
   var api = Object.freeze({

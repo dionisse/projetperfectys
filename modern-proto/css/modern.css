@@ -1811,3 +1811,16 @@ body.launcher-mode .content { background: #f7f6f0; }
 
 /* Les droits masquent les commandes indisponibles pour le profil simulé. */
 [hidden] { display: none !important; }
+
+/* Plusieurs grants indépendants peuvent coexister pour un même module. */
+.demo-grants-list { display: grid; gap: 9px; }
+.demo-scope-grant { display: grid; gap: 10px; padding: 11px; border: 1px solid #e0e7e2; border-radius: 7px; background: #fbfcfa; }
+.demo-scope-grant-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.demo-scope-grant-heading strong { color: #405953; font-size: .66rem; }
+.demo-grant-remove { padding: 4px 7px; border: 1px solid #e3d5cf; border-radius: 5px; color: #8c4d3b; background: #fff; cursor: pointer; font-size: .61rem; font-weight: 700; }
+.demo-grant-remove:hover { border-color: #c58d7c; background: #fcf6f3; }
+.demo-grant-add { justify-self: start; min-height: 32px; padding: 5px 9px; border: 1px solid #cfe0d8; border-radius: 5px; color: #08776e; background: #f5faf7; cursor: pointer; font-size: .65rem; font-weight: 700; }
+.demo-grant-add:hover:not(:disabled) { border-color: #8bbdaf; background: #eaf4ef; }
+.demo-grant-add:disabled { color: #8a9690; background: #f4f5f2; cursor: not-allowed; }
+.demo-no-grants { color: #77837e; font-size: .66rem; }
+.demo-no-grants[hidden] { display: none !important; }

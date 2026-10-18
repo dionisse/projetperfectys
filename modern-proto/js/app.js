@@ -75,6 +75,12 @@
     return demoMembers.find(function (member) { return member.id === activeDemoMemberId; }) || demoMembers[0] || null;
   }
 
+  function demoGrantList(member, moduleId) {
+    var grants = member && member.grants && member.grants[moduleId];
+    if (Array.isArray(grants)) return grants;
+    return grants && typeof grants === 'object' ? [grants] : [];
+  }
+
   function demoAccessContext(scopeType, folderName) {
     return {
       organizationId: DEMO_ORGANIZATION_ID,
@@ -515,13 +521,16 @@
       ? '<span class="member-root-note">Administration racine</span>'
       : '<button type="button" class="member-configure-button" data-action="configure-demo-access" data-id="' + esc(member.id) + '">Droits</button>' +
         '<button type="button" class="member-remove-button" data-action="remove-demo-member" data-id="' + esc(member.id) + '">Retirer</button>';
-    var configured = Object.keys(member.grants || {}).filter(function (moduleId) {
-      return member.grants[moduleId] && Array.isArray(member.grants[moduleId].actions) && member.grants[moduleId].actions.length > 0;
+    var configured = ACCESS_MODULES.filter(function (module) {
+      return demoGrantList(member, module.id).some(function (grant) {
+        return grant && Array.isArray(grant.actions) && grant.actions.length > 0;
+      });
     }).length;
-    var folderScopes = Object.keys(member.grants || {}).filter(function (moduleId) {
-      var grant = member.grants[moduleId];
-      return grant && grant.scope && grant.scope.type === 'folder' && grant.scope.folders && grant.scope.folders.length;
-    }).length;
+    var folderScopes = ACCESS_MODULES.reduce(function (count, module) {
+      return count + demoGrantList(member, module.id).filter(function (grant) {
+        return grant && grant.scope && grant.scope.type === 'folder' && grant.scope.folders && grant.scope.folders.length;
+      }).length;
+    }, 0);
     var initials = member.role === 'supervisor' ? 'SG' : (member.role === 'manager' ? 'G' : 'U');
 
     return '<div class="organization-member-row">' +
@@ -633,61 +642,125 @@
     });
   }
 
+  function demoPermissionGrantRow(module, grant, grantIndex) {
+    grant = grant || { scope: { type: 'organization', folders: [] }, actions: [] };
+    var scopeType = module.scopeable === false ? 'organization' : (grant.scope && grant.scope.type === 'folder' ? 'folder' : 'organization');
+    var folders = grant.scope && Array.isArray(grant.scope.folders) ? grant.scope.folders.join(', ') : '';
+    var scopeOptions = '<option value="organization"' + (scopeType === 'organization' ? ' selected' : '') + '>Organisation entière</option>';
+    if (module.scopeable !== false) scopeOptions += '<option value="folder"' + (scopeType === 'folder' ? ' selected' : '') + '>Dossier(s) précis</option>';
+    var folderField = module.scopeable === false ? '' :
+      '<div class="field demo-folder-field" data-demo-folder-field="' + esc(module.id) + '" data-demo-folder-index="' + grantIndex + '"' + (scopeType === 'folder' ? '' : ' hidden') + '>' +
+        '<label for="demo-folders-' + esc(module.id) + '-' + grantIndex + '">Noms des dossiers de démo</label>' +
+        '<input id="demo-folders-' + esc(module.id) + '-' + grantIndex + '" data-demo-folder-names="' + esc(module.id) + '" data-demo-folder-index="' + grantIndex + '" type="text" value="' + esc(folders) + '" placeholder="Ex. Comptabilité 2026, Agence Nord">' +
+        '<span class="hint">Sépare plusieurs noms par une virgule. Aucun dossier Drive réel n’est sélectionné.</span></div>';
+    var actions = Permissions.actionsForModule(module.id).map(function (action) {
+      var checked = Array.isArray(grant.actions) && grant.actions.indexOf(action.id) !== -1;
+      return '<label class="demo-action-choice"><input type="checkbox" data-demo-action-module="' + esc(module.id) + '" data-demo-action-index="' + grantIndex + '" data-demo-action-id="' + esc(action.id) + '"' + (checked ? ' checked' : '') + '><span>' + esc(action.label) + '</span></label>';
+    }).join('');
+    return '<section class="demo-scope-grant" data-demo-grant-row data-demo-grant-module="' + esc(module.id) + '" data-demo-grant-index="' + grantIndex + '">' +
+      '<div class="demo-scope-grant-heading"><strong>Portée ' + (grantIndex + 1) + '</strong><button type="button" class="demo-grant-remove" data-demo-remove-grant="' + esc(module.id) + '" data-demo-grant-index="' + grantIndex + '">Retirer</button></div>' +
+      '<div class="field"><label for="demo-scope-' + esc(module.id) + '-' + grantIndex + '">Périmètre</label><select id="demo-scope-' + esc(module.id) + '-' + grantIndex + '" data-demo-scope-module="' + esc(module.id) + '" data-demo-scope-index="' + grantIndex + '">' + scopeOptions + '</select></div>' +
+      folderField +
+      '<fieldset class="demo-actions-fieldset"><legend>Actions proposées à accorder</legend><div class="demo-actions-grid">' + actions + '</div></fieldset>' +
+      '</section>';
+  }
+
+  function updateDemoGrantModuleState(moduleId, scopeable) {
+    var list = $('[data-demo-grant-list="' + moduleId + '"]');
+    if (!list) return;
+    var rows = $$('[data-demo-grant-row]', list);
+    var count = rows.length;
+    var totalActions = rows.reduce(function (sum, row) { return sum + $$('input[type="checkbox"]:checked', row).length; }, 0);
+    var empty = $('[data-demo-no-grants="' + moduleId + '"]');
+    var addButton = $('[data-demo-add-grant="' + moduleId + '"]');
+    var status = $('[data-demo-module-count="' + moduleId + '"]');
+    if (empty) empty.hidden = count > 0;
+    if (addButton) addButton.disabled = scopeable === false && count > 0;
+    if (status) status.textContent = count ? count + ' portée(s) · ' + totalActions + ' droit(s)' : 'À définir';
+  }
+
   function openDemoAccessModal(memberId) {
     var member = demoMembers.find(function (item) { return item.id === memberId; });
     if (!member) return;
     var modules = ACCESS_MODULES;
     var moduleRows = modules.map(function (module, moduleIndex) {
-      var grant = member.grants && member.grants[module.id] || { scope: { type: 'organization', folders: [] }, actions: [] };
-      var scopeType = module.scopeable === false ? 'organization' : (grant.scope && grant.scope.type === 'folder' ? 'folder' : 'organization');
-      var folders = grant.scope && Array.isArray(grant.scope.folders) ? grant.scope.folders.join(', ') : '';
-      var scopeOptions = '<option value="organization"' + (scopeType === 'organization' ? ' selected' : '') + '>Organisation entière</option>';
-      if (module.scopeable !== false) scopeOptions += '<option value="folder"' + (scopeType === 'folder' ? ' selected' : '') + '>Dossier(s) précis</option>';
-      var folderField = module.scopeable === false ? '' :
-        '<div class="field demo-folder-field" data-demo-folder-field="' + esc(module.id) + '"' + (scopeType === 'folder' ? '' : ' hidden') + '><label for="demo-folders-' + esc(module.id) + '">Noms des dossiers de démo</label>' +
-          '<input id="demo-folders-' + esc(module.id) + '" data-demo-folder-names="' + esc(module.id) + '" type="text" value="' + esc(folders) + '" placeholder="Ex. Comptabilité 2026, Agence Nord">' +
-          '<span class="hint">Sépare plusieurs noms par une virgule. Aucun dossier Drive réel n’est sélectionné.</span></div>';
-      var actions = Permissions.actionsForModule(module.id).map(function (action) {
-        var checked = Array.isArray(grant.actions) && grant.actions.indexOf(action.id) !== -1;
-        return '<label class="demo-action-choice"><input type="checkbox" data-demo-action-module="' + esc(module.id) + '" data-demo-action-id="' + esc(action.id) + '"' + (checked ? ' checked' : '') + '><span>' + esc(action.label) + '</span></label>';
+      var grants = demoGrantList(member, module.id);
+      var grantRows = grants.map(function (grant, grantIndex) {
+        return demoPermissionGrantRow(module, grant, grantIndex);
       }).join('');
+      var totalActions = grants.reduce(function (count, grant) {
+        return count + (grant && Array.isArray(grant.actions) ? grant.actions.length : 0);
+      }, 0);
+      var status = grants.length ? grants.length + ' portée(s) · ' + totalActions + ' droit(s)' : 'À définir';
+      var addDisabled = module.scopeable === false && grants.length ? ' disabled' : '';
       return '<details class="demo-module-permission"' + (moduleIndex === 0 ? ' open' : '') + '>' +
-        '<summary><span><strong>' + esc(module.name) + '</strong><small>' + (module.id === 'organization' ? 'Gestion de l’organisation de démonstration' : esc(module.status === 'available' ? 'Disponible en démo' : 'Module à venir')) + '</small></span><span class="permission-pending">' + (grant.actions && grant.actions.length ? grant.actions.length + ' droit(s)' : 'À définir') + '</span></summary>' +
+        '<summary><span><strong>' + esc(module.name) + '</strong><small>' + (module.id === 'organization' ? 'Gestion de l’organisation de démonstration' : esc(module.status === 'available' ? 'Disponible en démo' : 'Module à venir')) + '</small></span><span class="permission-pending" data-demo-module-count="' + esc(module.id) + '">' + status + '</span></summary>' +
         '<div class="demo-module-permission-body">' +
-          '<div class="field"><label for="demo-scope-' + esc(module.id) + '">Périmètre</label><select id="demo-scope-' + esc(module.id) + '" data-demo-scope-module="' + esc(module.id) + '">' + scopeOptions + '</select></div>' +
-          folderField +
-          '<fieldset class="demo-actions-fieldset"><legend>Actions proposées à accorder</legend><div class="demo-actions-grid">' + actions + '</div></fieldset>' +
+          '<p class="demo-no-grants" data-demo-no-grants="' + esc(module.id) + '"' + (grants.length ? ' hidden' : '') + '>Aucun droit explicite dans ce module.</p>' +
+          '<div class="demo-grants-list" data-demo-grant-list="' + esc(module.id) + '" data-demo-next-grant-index="' + grants.length + '">' + grantRows + '</div>' +
+          '<button type="button" class="demo-grant-add" data-demo-add-grant="' + esc(module.id) + '"' + addDisabled + '>＋ Ajouter une portée</button>' +
+          (module.scopeable === false ? '<span class="hint">Ce module s’applique à l’organisation entière.</span>' : '') +
         '</div>' +
       '</details>';
     }).join('');
     var body = '<form id="demo-access-form" novalidate>' +
-      '<div class="alert info">Refus par défaut : aucune action cochée = aucun accès. Le Superviseur général conserve l’administration de son organisation.</div>' +
+      '<div class="alert info">Refus par défaut. Les grants d’un même module se cumulent ; pour chaque portée, une action métier exige aussi « Consulter le module ».</div>' +
       '<div class="demo-access-list"><div class="demo-access-list-heading"><strong>Droits de ' + esc(member.name) + '</strong><span>PROPOSITION DE DÉMO</span></div>' + moduleRows + '</div>' +
-      '<p class="small muted">Toute action exige aussi « Consulter le module ». Le vocabulaire et les effets métier des actions restent à valider. Les portées dossier sont préparatoires : les données comptables de cette démo ne sont pas séparées par dossier.</p>' +
+      '<p class="small muted">Le vocabulaire et les effets métier des actions restent à valider. Plusieurs portées peuvent définir des actions différentes. Les portées dossier sont préparatoires : les données comptables ne sont pas séparées par dossier dans cette démo.</p>' +
     '</form>';
     var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button>' +
       '<button type="submit" class="btn btn-primary" form="demo-access-form">Enregistrer en démo</button>';
     openModal('Droits de démonstration', demoRoleLabel(member.role) + ' · ' + member.name, body, footer, true);
 
-    $$('[data-demo-scope-module]').forEach(function (select) {
+    var form = $('#demo-access-form');
+    $$('[data-demo-scope-module]', form).forEach(function (select) {
       select.addEventListener('change', function () {
         var moduleId = select.getAttribute('data-demo-scope-module');
-        var folderField = $('[data-demo-folder-field="' + moduleId + '"]');
+        var grantIndex = select.getAttribute('data-demo-scope-index');
+        var folderField = $('[data-demo-folder-field="' + moduleId + '"][data-demo-folder-index="' + grantIndex + '"]', form);
         if (folderField) folderField.hidden = select.value !== 'folder';
       });
     });
-    $('#demo-access-form').addEventListener('change', function (event) {
+    form.addEventListener('click', function (event) {
+      var addButton = event.target.closest('[data-demo-add-grant]');
+      if (addButton) {
+        event.preventDefault();
+        var moduleId = addButton.getAttribute('data-demo-add-grant');
+        var module = modules.find(function (item) { return item.id === moduleId; });
+        var list = $('[data-demo-grant-list="' + moduleId + '"]', form);
+        if (!module || !list || (module.scopeable === false && $$('[data-demo-grant-row]', list).length > 0)) return;
+        var grantIndex = Number(list.getAttribute('data-demo-next-grant-index')) || 0;
+        list.setAttribute('data-demo-next-grant-index', String(grantIndex + 1));
+        list.insertAdjacentHTML('beforeend', demoPermissionGrantRow(module, null, grantIndex));
+        updateDemoGrantModuleState(moduleId, module.scopeable);
+        return;
+      }
+      var removeButton = event.target.closest('[data-demo-remove-grant]');
+      if (removeButton) {
+        event.preventDefault();
+        var removeModuleId = removeButton.getAttribute('data-demo-remove-grant');
+        var removeIndex = removeButton.getAttribute('data-demo-grant-index');
+        var row = $('[data-demo-grant-row][data-demo-grant-module="' + removeModuleId + '"][data-demo-grant-index="' + removeIndex + '"]', form);
+        if (row) row.remove();
+        var removeModule = modules.find(function (item) { return item.id === removeModuleId; });
+        updateDemoGrantModuleState(removeModuleId, removeModule && removeModule.scopeable);
+      }
+    });
+    form.addEventListener('change', function (event) {
       var checkbox = event.target;
       if (!checkbox || !checkbox.matches('input[type="checkbox"][data-demo-action-module]')) return;
       var moduleId = checkbox.getAttribute('data-demo-action-module');
+      var grantIndex = checkbox.getAttribute('data-demo-action-index');
       var actionId = checkbox.getAttribute('data-demo-action-id');
-      var viewPermission = $('[data-demo-action-module="' + moduleId + '"][data-demo-action-id="module.view"]');
+      var viewPermission = $('[data-demo-action-module="' + moduleId + '"][data-demo-action-index="' + grantIndex + '"][data-demo-action-id="module.view"]', form);
       if (checkbox.checked && actionId !== 'module.view' && viewPermission) viewPermission.checked = true;
       if (!checkbox.checked && actionId === 'module.view') {
-        $$('[data-demo-action-module="' + moduleId + '"]').forEach(function (action) { action.checked = false; });
+        $$('[data-demo-action-module="' + moduleId + '"][data-demo-action-index="' + grantIndex + '"]', form).forEach(function (action) { action.checked = false; });
       }
+      var module = modules.find(function (item) { return item.id === moduleId; });
+      updateDemoGrantModuleState(moduleId, module && module.scopeable);
     });
-    $('#demo-access-form').addEventListener('submit', function (event) {
+    form.addEventListener('submit', function (event) {
       event.preventDefault();
       if (!hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageMembers', demoAccessContext('organization'))) {
         toast('Modification refusée par défaut : le droit de gestion des accès n’est pas accordé.', 'warning');
@@ -695,25 +768,39 @@
       }
       var grants = {};
       var invalidFolder = false;
+      var missingModuleView = false;
       modules.forEach(function (module) {
-        var checked = $$('[data-demo-action-module="' + module.id + '"]:checked').map(function (checkbox) {
-          return checkbox.getAttribute('data-demo-action-id');
+        var moduleGrants = [];
+        $$('[data-demo-grant-row][data-demo-grant-module="' + module.id + '"]', form).forEach(function (row) {
+          var grantIndex = row.getAttribute('data-demo-grant-index');
+          var checked = $$('[data-demo-action-module="' + module.id + '"][data-demo-action-index="' + grantIndex + '"]:checked', form).map(function (checkbox) {
+            return checkbox.getAttribute('data-demo-action-id');
+          });
+          if (!checked.length) return;
+          if (checked.some(function (actionId) { return actionId !== 'module.view'; }) && checked.indexOf('module.view') === -1) {
+            missingModuleView = true;
+            return;
+          }
+          var scope = $('[data-demo-scope-module="' + module.id + '"][data-demo-scope-index="' + grantIndex + '"]', form).value;
+          var folders = scope === 'folder'
+            ? String($('[data-demo-folder-names="' + module.id + '"][data-demo-folder-index="' + grantIndex + '"]', form).value || '').split(',').map(function (name) { return name.trim(); }).filter(Boolean)
+            : [];
+          if (scope === 'folder' && !folders.length) { invalidFolder = true; return; }
+          moduleGrants.push({ scope: { type: scope, folders: folders }, actions: checked });
         });
-        if (!checked.length) return;
-        var scope = $('[data-demo-scope-module="' + module.id + '"]').value;
-        var folders = scope === 'folder'
-          ? String($('[data-demo-folder-names="' + module.id + '"]').value || '').split(',').map(function (name) { return name.trim(); }).filter(Boolean)
-          : [];
-        if (scope === 'folder' && !folders.length) { invalidFolder = true; return; }
-        grants[module.id] = { scope: { type: scope, folders: folders }, actions: checked };
+        if (moduleGrants.length) grants[module.id] = moduleGrants;
       });
       if (invalidFolder) {
-        toast('Un droit limité à des dossiers doit préciser au moins un nom de dossier de démonstration.', 'warning');
+        toast('Chaque portée dossier avec des droits doit préciser au moins un nom de dossier de démonstration.', 'warning');
+        return;
+      }
+      if (missingModuleView) {
+        toast('Chaque action métier doit être accordée avec « Consulter le module » dans la même portée.', 'warning');
         return;
       }
       member.grants = grants;
       closeModal(true);
-      toast('Droits temporaires enregistrés. Le moteur applique le refus par défaut en démo.', 'success');
+      toast('Droits temporaires enregistrés. Le moteur cumule les grants explicites en démo.', 'success');
       render();
     });
   }
