@@ -1,6 +1,7 @@
-# PERFECTO — prototype statique de comptabilité générale
+# PERFECTO — suite modulaire (prototype statique)
 
-Prototype **sans Blazor, sans WebAssembly et sans étape de build** du module
+Prototype **sans Blazor, sans WebAssembly et sans étape de build** de la suite PERFECTO.
+Il comprend un écran de connexion de démonstration, un launcher central et le module
 « Comptabilité générale SYSCOHADA révisé » (Lot 1). L'application tient dans trois
 fichiers : `index.html`, `css/modern.css` et `js/app.js` (+ la couche de données
 `js/store.js`). Elle se déploie telle quelle sur n'importe quel hébergeur statique,
@@ -20,6 +21,8 @@ publier, un déploiement immédiat.
 
 | Écran | Contenu |
 |---|---|
+| Connexion (démo) | Écran d’entrée ; aucune authentification réelle ni donnée d’identification collectée |
+| Launcher | Présentation des modules annoncés ; accès à la Comptabilité générale, autres modules à venir |
 | Tableau de bord | Indicateurs (débit, crédit, résultat, pièces), dernières pièces, activité par journal, état des périodes |
 | Plan comptable | 18 comptes SYSCOHADA initiaux, recherche, filtres, création de compte, export CSV |
 | Journaux | Six journaux (AC, VE, BQ, CA, OD, PA) avec totaux et brouillons |
@@ -99,7 +102,7 @@ lui-même.
 ```
 index.html                    redirection vers modern-proto/ (déploiement racine)
 modern-proto/index.html        coquille de l'application (navigation, topbar)
-modern-proto/css/modern.css    design system autonome, responsive et imprimable
+modern-proto/css/modern.css    identité GOBEX (papier, encre, vert canard et or doux), responsive et imprimable
 modern-proto/js/store.js       données, règles métier, calculs, import/export
 modern-proto/js/app.js         routeur, vues, formulaires, interactions
 modern-proto/manifest.webmanifest  métadonnées PWA
@@ -122,9 +125,10 @@ ces tests ainsi qu'un contrôle de syntaxe et un test de service HTTP.
 
 ## Limites de cette prévisualisation
 
-Toujours celles du Lot 1 : pas de tiers/auxiliaires détaillés, d'extourne, de
-lettrage, de rapprochement bancaire, d'imports/exports PDF ou Excel, d'états
-financiers SYSCOHADA complets, d'authentification ni de synchronisation
-multi-utilisateur. Les données restent sur l'appareil (un seul utilisateur par
-navigateur). Ce prototype sert à valider les parcours et l'interface avant de
-brancher un stockage partagé.
+La connexion et le launcher sont des écrans de démonstration : il n'y a pas encore
+d'authentification réelle ni de connexion à Google Drive. Il n'y a pas non plus de
+synchronisation multi-utilisateur ; les données comptables restent locales dans le
+navigateur. Les limites comptables du Lot 1 restent applicables (notamment tiers et
+auxiliaires détaillés, extourne, lettrage, rapprochement bancaire, exports PDF/Excel
+et états financiers SYSCOHADA complets). Le prototype valide le parcours avant la
+conception du stockage partagé et de l'authentification.

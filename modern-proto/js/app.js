@@ -29,13 +29,15 @@
   }
 
   var ICONS = {
-    dashboard: '📊', accounts: '📒', journals: '🗂️', entry: '✍️', entries: '📄',
-    balance: '⚖️', journal: '📚', ledger: '🔎', periods: '🔒', settings: '⚙️'
+    dashboard: '▥', accounts: '▤', journals: '▦', entry: '＋', entries: '▤',
+    balance: '⚖︎', journal: '≡', ledger: '⌕', periods: '◷', settings: '⚙︎'
   };
 
-  var ROUTES = ['dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings'];
+  var ROUTES = ['login', 'launcher', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings'];
 
   var TITLES = {
+    login: ['Connexion', 'Accès à votre espace PERFECTO'],
+    launcher: ['Launcher', 'Modules de votre organisation'],
     dashboard: ['Tableau de bord', 'Vue d’ensemble de la comptabilité générale'],
     accounts: ['Plan comptable', 'Comptes SYSCOHADA révisé'],
     journals: ['Journaux comptables', 'Les six journaux du module'],
@@ -116,8 +118,8 @@
   function parseHash() {
     var raw = String(location.hash || '').replace(/^#\/?/, '');
     var parts = raw.split('?');
-    var route = parts[0] || 'dashboard';
-    if (ROUTES.indexOf(route) === -1) route = 'dashboard';
+    var route = parts[0] || 'login';
+    if (ROUTES.indexOf(route) === -1) route = 'login';
     var params = {};
     if (parts[1]) {
       parts[1].split('&').forEach(function (pair) {
@@ -140,9 +142,13 @@
     if (!view) return;
 
     closeModal(true);
+    var launcherMode = route === 'login' || route === 'launcher';
+    document.body.classList.toggle('launcher-mode', launcherMode);
 
     var html = '';
     switch (route) {
+      case 'login': html = viewLogin(); break;
+      case 'launcher': html = viewLauncher(); break;
       case 'dashboard': html = viewDashboard(); break;
       case 'accounts': html = viewAccounts(); break;
       case 'journals': html = viewJournals(); break;
@@ -153,12 +159,13 @@
       case 'ledger': html = viewLedger(); break;
       case 'periods': html = viewPeriods(); break;
       case 'settings': html = viewSettings(); break;
-      default: html = viewDashboard();
+      default: html = viewLogin();
     }
     view.innerHTML = html;
 
-    var title = TITLES[route] || TITLES.dashboard;
-    $('#page-title').textContent = title[0];
+    var title = TITLES[route] || TITLES.login;
+    var pageTitle = $('#page-title');
+    if (pageTitle) pageTitle.textContent = title[0];
     document.title = 'PERFECTO · ' + title[0];
 
     $$('[data-route]').forEach(function (link) {
@@ -218,9 +225,119 @@
     return '<span class="badge ' + esc(cls) + '">' + esc(nature) + '</span>';
   }
 
-  function pageHeader(title, subtitle, actions) {
-    return '<div class="page-header"><div><h2>' + esc(title) + '</h2><p>' + subtitle + '</p></div>' +
-      (actions ? '<div class="page-header-actions">' + actions + '</div>' : '') + '</div>';
+  function pageHeader(title, subtitle, actions, variant) {
+    var variantClass = variant ? ' ' + esc(variant) : '';
+    return '<div class="page-header' + variantClass + '">' +
+      '<div class="page-header-copy">' +
+        '<p class="page-kicker"><span class="page-kicker-rule" aria-hidden="true"></span> CABINET GOBEX · PERFECTO</p>' +
+        '<h2>' + esc(title) + '</h2><p class="page-description">' + subtitle + '</p>' +
+      '</div>' +
+      (actions ? '<div class="page-header-actions">' + actions + '</div>' : '') +
+      '</div>';
+  }
+
+  function viewLogin() {
+    return `
+      <div class="suite-screen login-screen">
+        <header class="suite-header">
+          <a class="suite-brand" href="#/login" aria-label="PERFECTO, accueil">
+            <span class="suite-mark">P<span>.</span></span>
+            <span class="suite-brand-copy"><strong>PERFECTO</strong><small>SUITE DE GESTION</small></span>
+          </a>
+          <div class="suite-header-note"><span class="suite-live-dot"></span>VERSION WEB · PROTOTYPE</div>
+        </header>
+        <main class="login-layout">
+          <section class="login-intro">
+            <p class="suite-kicker">L’ESPACE DE TRAVAIL DE VOTRE ORGANISATION</p>
+            <h1>Une suite de gestion.<br><em>Un seul point d’entrée.</em></h1>
+            <p class="login-lead">Retrouvez vos outils de gestion dans un environnement commun, organisé autour de votre organisation et de ses utilisateurs.</p>
+            <div class="login-highlights">
+              <div><span class="highlight-number">01</span><span><strong>Des modules réunis</strong><small>Comptabilité, RH, courriers, ventes et plus.</small></span></div>
+              <div><span class="highlight-number">02</span><span><strong>Un espace organisationnel</strong><small>Les accès sont définis selon les rôles accordés.</small></span></div>
+              <div><span class="highlight-number">03</span><span><strong>Vos données restent chez vous</strong><small>Le stockage cloud sera connecté après validation.</small></span></div>
+            </div>
+          </section>
+          <section class="login-card" aria-labelledby="login-heading">
+            <span class="login-card-label">ESPACE ORGANISATION</span>
+            <h2 id="login-heading">Bienvenue</h2>
+            <p class="login-card-copy">La connexion sécurisée sera configurée dans une prochaine étape.</p>
+            <div class="login-preview-field"><span>Adresse e-mail</span><span class="preview-placeholder">À configurer</span></div>
+            <div class="login-preview-field"><span>Mot de passe</span><span class="preview-placeholder">Non demandé en démonstration</span></div>
+            <button type="button" class="suite-primary-button" data-action="demo-login">Ouvrir la démonstration <span aria-hidden="true">→</span></button>
+            <p class="prototype-note"><strong>Prototype uniquement.</strong> Aucun compte ni mot de passe n’est demandé, enregistré ou transmis.</p>
+            <div class="login-card-divider"><span></span>PERFECTO<span></span></div>
+          </section>
+        </main>
+        <footer class="suite-footer"><span>PERFECTO · SUITE DE GESTION</span><span>Connexion réelle et Google Drive à configurer ensemble</span></footer>
+      </div>`;
+  }
+
+  function viewLauncher() {
+    return `
+      <div class="suite-screen launcher-screen">
+        <header class="suite-header launcher-header">
+          <a class="suite-brand" href="#/launcher" aria-label="PERFECTO, launcher">
+            <span class="suite-mark">P<span>.</span></span>
+            <span class="suite-brand-copy"><strong>PERFECTO</strong><small>SUITE DE GESTION</small></span>
+          </a>
+          <div class="launcher-nav"><span class="launcher-nav-active">LANCEUR</span><span>ESPACE DE TRAVAIL</span></div>
+          <button type="button" class="launcher-icon-button" data-action="launcher-info" aria-label="État du stockage" title="État du stockage">☁</button>
+        </header>
+        <main class="launcher-main">
+          <div class="workspace-strip">
+            <div><span class="workspace-caption">ORGANISATION</span><strong>Organisation de démonstration</strong></div>
+            <span class="role-chip">SUPERVISEUR GÉNÉRAL · DÉMO</span>
+            <button type="button" class="drive-status" data-action="launcher-info"><span class="drive-status-dot"></span>Google Drive <b>À connecter</b></button>
+          </div>
+          <section class="launcher-heading">
+            <div><p class="suite-kicker">VOTRE ESPACE DE TRAVAIL</p><h1>Vos applications</h1><p>Ouvrez un module pour commencer. Les modules en préparation seront activés progressivement.</p></div>
+            <div class="launcher-count"><strong>01</strong><span>module disponible<br>sur 05 annoncés</span></div>
+          </section>
+          <div class="launcher-section-heading"><h2>Modules PERFECTO</h2><span>5 modules · 1 disponible</span></div>
+          <div class="launcher-grid">
+            <article class="module-card module-accounting">
+              <div class="module-card-top"><span>MODULE 01</span><span class="module-status available"><i></i>DISPONIBLE</span></div>
+              <div class="module-icon">▤</div>
+              <p class="module-category">COMPTABILITÉ · SYSCOHADA</p>
+              <h3>Comptabilité générale</h3>
+              <p class="module-description">Journaux, pièces comptables, balance, journal des écritures et grand livre.</p>
+              <div class="module-card-bottom"><span>Lot 1 · Prototype</span><button type="button" class="module-open-button" data-action="open-module" data-module-id="accounting">Ouvrir le module <span aria-hidden="true">→</span></button></div>
+            </article>
+            <article class="module-card module-analytics">
+              <div class="module-card-top"><span>MODULE 02</span><span class="module-status planned"><i></i>À VENIR</span></div>
+              <div class="module-icon">∑</div><p class="module-category">PILOTAGE</p><h3>Comptabilité analytique</h3>
+              <p class="module-description">Suivi des coûts, axes analytiques et analyse de la performance.</p>
+              <div class="module-card-bottom"><span>En préparation</span><span class="module-disabled">Bientôt</span></div>
+            </article>
+            <article class="module-card module-hr">
+              <div class="module-card-top"><span>MODULE 03</span><span class="module-status planned"><i></i>À VENIR</span></div>
+              <div class="module-icon">◷</div><p class="module-category">RESSOURCES HUMAINES</p><h3>Paie &amp; RH</h3>
+              <p class="module-description">Gestion du personnel, suivi RH et préparation de la paie.</p>
+              <div class="module-card-bottom"><span>En préparation</span><span class="module-disabled">Bientôt</span></div>
+            </article>
+            <article class="module-card module-mail">
+              <div class="module-card-top"><span>MODULE 04</span><span class="module-status planned"><i></i>À VENIR</span></div>
+              <div class="module-icon">✉</div><p class="module-category">GESTION DOCUMENTAIRE</p><h3>Gestion des courriers</h3>
+              <p class="module-description">Enregistrement, suivi et classement des courriers de l’organisation.</p>
+              <div class="module-card-bottom"><span>En préparation</span><span class="module-disabled">Bientôt</span></div>
+            </article>
+            <article class="module-card module-sales">
+              <div class="module-card-top"><span>MODULE 05</span><span class="module-status planned"><i></i>À VENIR</span></div>
+              <div class="module-icon">◫</div><p class="module-category">ACTIVITÉ COMMERCIALE</p><h3>Ventes, stock &amp; facturation</h3>
+              <p class="module-description">Ventes, gestion des stocks et suivi de la facturation.</p>
+              <div class="module-card-bottom"><span>En préparation</span><span class="module-disabled">Bientôt</span></div>
+            </article>
+            <article class="module-card module-future">
+              <div class="module-card-top"><span>SUITE ÉVOLUTIVE</span><span class="module-status flexible"><i></i>ÉVOLUTIF</span></div>
+              <div class="module-icon">＋</div><p class="module-category">SELON VOS BESOINS</p><h3>D’autres modules</h3>
+              <p class="module-description">La suite pourra accueillir de nouveaux modules au fil des besoins de votre organisation.</p>
+              <div class="module-card-bottom"><span>Architecture modulaire</span><span class="module-disabled">À définir</span></div>
+            </article>
+          </div>
+          <div class="launcher-notice"><span class="launcher-notice-icon">i</span><span>Cette vue est une démonstration : seul le module de Comptabilité générale est actuellement fonctionnel. Google Drive n’est pas encore connecté.</span></div>
+        </main>
+        <footer class="suite-footer launcher-footer"><span>PERFECTO · ESPACE DE DÉMONSTRATION</span><button type="button" data-action="logout-demo">Retour à l’écran de connexion</button></footer>
+      </div>`;
   }
 
   function accountOptions(selected) {
@@ -305,28 +422,29 @@
     var html = pageHeader(
       'Tableau de bord',
       'Situation de l’exercice ' + S.EXERCICE + ' — données conservées dans le navigateur (localStorage).',
-      '<a class="btn btn-ghost" href="#/balance">⚖️ Balance</a>' +
-      '<a class="btn btn-primary" href="#/entry">＋ Nouvelle écriture</a>'
+      '<a class="btn btn-ghost" href="#/balance">⚖︎ Balance</a>' +
+      '<a class="btn btn-primary" href="#/entry">＋ Nouvelle écriture</a>',
+      'dashboard-featured'
     );
 
     html += '<div class="kpi-grid">' +
       '<article class="kpi-card">' +
-        '<div class="kpi-top"><span class="kpi-icon" aria-hidden="true">⬆️</span><span class="kpi-label">Débit validé</span></div>' +
+        '<div class="kpi-top"><span class="kpi-icon" aria-hidden="true">↑</span><span class="kpi-label">Débit validé</span></div>' +
         '<div class="kpi-value">' + moneyHtml(k.debit) + '</div>' +
         '<p class="kpi-foot">' + k.posted + ' pièce(s) validée(s)</p>' +
       '</article>' +
       '<article class="kpi-card green">' +
-        '<div class="kpi-top"><span class="kpi-icon" aria-hidden="true">⬇️</span><span class="kpi-label">Crédit validé</span></div>' +
+        '<div class="kpi-top"><span class="kpi-icon" aria-hidden="true">↓</span><span class="kpi-label">Crédit validé</span></div>' +
         '<div class="kpi-value">' + moneyHtml(k.credit) + '</div>' +
         '<p class="kpi-foot">' + (k.debit === k.credit ? 'Balance équilibrée' : 'Écart détecté') + '</p>' +
       '</article>' +
       '<article class="kpi-card orange">' +
-        '<div class="kpi-top"><span class="kpi-icon" aria-hidden="true">📈</span><span class="kpi-label">Résultat</span></div>' +
+        '<div class="kpi-top"><span class="kpi-icon" aria-hidden="true">↗</span><span class="kpi-label">Résultat</span></div>' +
         '<div class="kpi-value">' + moneyHtml(k.resultat) + '</div>' +
         '<p class="kpi-foot">Produits ' + money(k.produits) + ' − charges ' + money(k.charges) + '</p>' +
       '</article>' +
       '<article class="kpi-card violet">' +
-        '<div class="kpi-top"><span class="kpi-icon" aria-hidden="true">🧾</span><span class="kpi-label">Pièces</span></div>' +
+        '<div class="kpi-top"><span class="kpi-icon" aria-hidden="true">▤</span><span class="kpi-label">Pièces</span></div>' +
         '<div class="kpi-value">' + k.posted + '<small>validées</small></div>' +
         '<p class="kpi-foot">' + k.drafts + ' brouillon(s) en attente</p>' +
       '</article>' +
@@ -339,7 +457,7 @@
       '<a class="btn btn-ghost btn-sm" href="#/entries">Tout voir</a></div>';
 
     if (!recent.length) {
-      html += '<div class="empty-state"><div class="empty-icon">📄</div><strong>Aucune pièce</strong>Saisissez votre première écriture comptable.</div>';
+      html += '<div class="empty-state"><div class="empty-icon">▤</div><strong>Aucune pièce</strong>Saisissez votre première écriture comptable.</div>';
     } else {
       html += '<div class="table-wrap"><table class="data-table">' +
         '<thead><tr><th scope="col">Date</th><th scope="col">Référence</th><th scope="col">Libellé</th><th scope="col" class="num">Montant</th><th scope="col">Statut</th></tr></thead><tbody>' +
@@ -359,10 +477,10 @@
     html += '<section class="card panel">' +
       '<div class="panel-header"><div><h2>Accès rapides</h2><p class="sub">Les gestes du quotidien</p></div></div>' +
       '<div class="quick-actions" style="display:grid;gap:8px">' +
-        '<a class="btn btn-accent" href="#/entry">✍️ Saisir une écriture</a>' +
-        '<a class="btn btn-ghost" href="#/accounts">📒 Consulter le plan comptable</a>' +
-        '<a class="btn btn-ghost" href="#/ledger">🔎 Ouvrir le grand livre</a>' +
-        '<a class="btn btn-ghost" href="#/periods">🔒 Gérer les périodes (' + openCount + '/12 ouvertes)</a>' +
+        '<a class="btn btn-accent" href="#/entry">＋ Saisir une écriture</a>' +
+        '<a class="btn btn-ghost" href="#/accounts">▤ Consulter le plan comptable</a>' +
+        '<a class="btn btn-ghost" href="#/ledger">⌕ Ouvrir le grand livre</a>' +
+        '<a class="btn btn-ghost" href="#/periods">◷ Gérer les périodes (' + openCount + '/12 ouvertes)</a>' +
       '</div>' +
       '<div class="alert ' + (k.debit === k.credit ? 'success' : 'warning') + '" style="margin:16px 0 0">' +
         (k.debit === k.credit
@@ -414,7 +532,7 @@
     });
 
     var html = pageHeader('Plan comptable', 'Comptes du référentiel SYSCOHADA révisé, enrichis au fil des besoins.',
-      '<button type="button" class="btn btn-ghost" data-action="export-accounts-csv">⬇️ Export CSV</button>' +
+      '<button type="button" class="btn btn-ghost" data-action="export-accounts-csv">↓ Export CSV</button>' +
       '<button type="button" class="btn btn-primary" data-action="new-account">＋ Nouveau compte</button>');
 
     html += '<div class="card"><div class="panel">' +
@@ -688,7 +806,7 @@
             '<td class="num">' + amount(entryAmount(e)) + '</td>' +
             '<td>' + statusBadge(e.status) + '</td>' +
           '</tr>';
-        }).join('') : '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📄</div><strong>Aucune pièce</strong>Aucune pièce ne correspond à ces critères.</div></td></tr>') +
+        }).join('') : '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">▤</div><strong>Aucune pièce</strong>Aucune pièce ne correspond à ces critères.</div></td></tr>') +
       '</tbody></table></div>' +
     '</div></div>';
 
@@ -722,8 +840,8 @@
 
     var footer = '';
     if (e.status === 'draft') {
-      footer += '<button type="button" class="btn btn-danger" data-action="delete-draft" data-id="' + esc(e.id) + '">🗑 Supprimer</button>';
-      footer += '<button type="button" class="btn btn-ghost" data-action="edit-draft" data-id="' + esc(e.id) + '">✏️ Modifier</button>';
+      footer += '<button type="button" class="btn btn-danger" data-action="delete-draft" data-id="' + esc(e.id) + '">× Supprimer</button>';
+      footer += '<button type="button" class="btn btn-ghost" data-action="edit-draft" data-id="' + esc(e.id) + '">✎ Modifier</button>';
       footer += '<button type="button" class="btn btn-primary" data-action="validate-entry" data-id="' + esc(e.id) + '">✓ Valider la pièce</button>';
     }
     footer += '<button type="button" class="btn btn-ghost" data-action="close-modal">Fermer</button>';
@@ -745,8 +863,8 @@
     var balanced = totalDebit === totalCredit;
 
     var html = pageHeader('Balance générale', 'Les brouillons sont exclus. Les soldes sont exprimés en débit (D) ou crédit (C).',
-      '<button type="button" class="btn btn-ghost" data-action="export-balance-csv">⬇️ Export CSV</button>' +
-      '<button type="button" class="btn btn-ghost" data-action="print">🖨 Imprimer</button>');
+      '<button type="button" class="btn btn-ghost" data-action="export-balance-csv">↓ Export CSV</button>' +
+      '<button type="button" class="btn btn-ghost" data-action="print">⎙ Imprimer</button>');
 
     html += '<div class="alert ' + (balanced ? 'success' : 'warning') + '">' +
       (balanced
@@ -799,7 +917,7 @@
     var years = S.years();
 
     var html = pageHeader('Journal des écritures', 'Écritures validées de l’exercice, présentées chronologiquement.',
-      '<button type="button" class="btn btn-ghost" data-action="print">🖨 Imprimer</button>');
+      '<button type="button" class="btn btn-ghost" data-action="print">⎙ Imprimer</button>');
 
     html += '<div class="card"><div class="panel">' +
       '<div class="filter-row">' +
@@ -813,7 +931,7 @@
       '</div>';
 
     if (!list.length) {
-      html += '<div class="empty-state"><div class="empty-icon">📚</div><strong>Aucune écriture validée</strong>Aucune pièce ne correspond à ce filtre.</div>';
+      html += '<div class="empty-state"><div class="empty-icon">≡</div><strong>Aucune écriture validée</strong>Aucune pièce ne correspond à ce filtre.</div>';
     } else {
       html += list.map(function (e) {
         var t = S.totals(e.lines);
@@ -851,7 +969,7 @@
     var solde = data.balance;
 
     var html = pageHeader('Grand livre', 'Mouvements d’un compte et solde progressif, pièces validées uniquement.',
-      '<button type="button" class="btn btn-ghost" data-action="print">🖨 Imprimer</button>');
+      '<button type="button" class="btn btn-ghost" data-action="print">⎙ Imprimer</button>');
 
     html += '<div class="card"><div class="panel">' +
       '<div class="filter-row">' +
@@ -869,7 +987,7 @@
       '</div>';
 
       if (!data.rows.length) {
-        html += '<div class="empty-state"><div class="empty-icon">🔎</div><strong>Aucun mouvement</strong>Ce compte n’a pas encore été mouvementé par une pièce validée.</div>';
+        html += '<div class="empty-state"><div class="empty-icon">⌕</div><strong>Aucun mouvement</strong>Ce compte n’a pas encore été mouvementé par une pièce validée.</div>';
       } else {
         html += '<div class="table-wrap"><table class="data-table">' +
           '<caption>Grand livre ' + esc(acc.code) + ' — ' + esc(acc.label) + '</caption>' +
@@ -925,7 +1043,7 @@
           '<span>Débit validé : <strong>' + amount(p.debit) + ' XOF</strong></span>' +
         '</div>' +
         (isOpen
-          ? '<button type="button" class="btn btn-ghost btn-sm" data-action="close-period" data-year="' + p.year + '" data-month="' + p.month + '">🔒 Clôturer</button>'
+          ? '<button type="button" class="btn btn-ghost btn-sm" data-action="close-period" data-year="' + p.year + '" data-month="' + p.month + '">◷ Clôturer</button>'
           : '<button type="button" class="btn btn-ghost btn-sm" data-action="open-period" data-year="' + p.year + '" data-month="' + p.month + '">🔓 Réouvrir</button>') +
       '</article>';
     }).join('') + '</div>';
@@ -942,7 +1060,7 @@
     var swReady = 'serviceWorker' in navigator && !!navigator.serviceWorker.controller;
 
     var html = pageHeader('Données & application', 'Sauvegarde, restauration et installation — tout reste dans votre navigateur.',
-      '<button type="button" class="btn btn-ghost" data-action="print">🖨 Imprimer</button>');
+      '<button type="button" class="btn btn-ghost" data-action="print">⎙ Imprimer</button>');
 
     html += '<div class="grid-2">';
 
@@ -955,8 +1073,8 @@
         '<div class="total-item"><span>Espace utilisé</span><strong>' + sizeKb + ' Ko</strong></div>' +
       '</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-        '<button type="button" class="btn btn-primary" data-action="export-json">⬇️ Exporter (JSON)</button>' +
-        '<label class="btn btn-ghost" for="import-file" style="cursor:pointer">⬆️ Importer</label>' +
+        '<button type="button" class="btn btn-primary" data-action="export-json">↓ Exporter (JSON)</button>' +
+        '<label class="btn btn-ghost" for="import-file" style="cursor:pointer">↑ Importer</label>' +
         '<input id="import-file" type="file" accept="application/json,.json" class="sr-only">' +
         '<button type="button" class="btn btn-danger" data-action="reset-data">↺ Réinitialiser la démo</button>' +
       '</div>' +
@@ -1153,6 +1271,20 @@
     var id = trigger.getAttribute('data-id');
 
     switch (action) {
+      case 'demo-login':
+        navigate('#/launcher');
+        break;
+      case 'open-module':
+        if (trigger.getAttribute('data-module-id') === 'accounting') navigate('#/dashboard');
+        break;
+      case 'launcher-info':
+        openModal('Stockage de l’organisation', 'Google Drive sera le premier fournisseur cloud.',
+          '<div class="alert warning"><strong>Non connecté.</strong> Cette démonstration ne communique pas avec Google Drive et ne transfère aucune donnée.</div><p>La connexion au Drive de l’organisation, les droits d’accès et la stratégie de sauvegarde seront conçus avant toute synchronisation réelle.</p>',
+          '<button type="button" class="btn btn-primary" data-action="close-modal">Compris</button>');
+        break;
+      case 'logout-demo':
+        navigate('#/login');
+        break;
       case 'toggle-sidebar':
         toggleSidebar();
         break;
@@ -1350,7 +1482,7 @@
       if (btn) btn.hidden = false;
     });
 
-    if (!location.hash) location.replace('#/dashboard');
+    if (!location.hash) location.replace('#/login');
     render();
   }
 
