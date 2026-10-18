@@ -1723,6 +1723,7 @@ body.launcher-mode .content { background: #f7f6f0; }
 .member-identity strong { color: #263f46; font-size: .74rem; }
 .member-identity small { margin-top: 3px; color: #7a8781; font-size: .61rem; }
 .member-role-control select { width: 100%; min-height: 34px; padding: 5px 8px; border: 1px solid #d5dfd9; border-radius: 5px; color: #344d53; background: #fff; font-size: .7rem; }
+.member-role-control select:disabled { color: #78857f; background: #f5f7f3; cursor: not-allowed; opacity: .75; }
 .member-role-static { color: #71571f; font-size: .68rem; font-weight: 700; }
 .member-access-status { display: grid; gap: 4px; }
 .member-access-status span { color: #7b8782; font-size: .53rem; font-weight: 800; letter-spacing: .08em; }
@@ -1763,3 +1764,50 @@ body.launcher-mode .content { background: #f7f6f0; }
   .demo-access-row { grid-template-columns: 1fr; gap: 7px; }
   .member-row-action { flex-wrap: wrap; }
 }
+
+/* Sélecteur de profil et éditeur granulaire des droits de démonstration */
+.demo-profile-switch { display: grid; gap: 4px; min-width: 190px; }
+.demo-profile-switch > span { color: #6f7d77; font-size: .53rem; font-weight: 800; letter-spacing: .12em; }
+.demo-profile-switch select { max-width: 260px; min-height: 34px; padding: 5px 8px; border: 1px solid #d5dfd9; border-radius: 5px; color: #344d53; background: #fff; font-size: .67rem; }
+.org-manage-disabled { color: #7a8580; font-size: .65rem; font-weight: 700; white-space: nowrap; }
+.permission-root, .permission-explicit { display: inline-block; max-width: 190px; color: #385a51; font-size: .63rem; font-weight: 700; line-height: 1.45; }
+.permission-root { color: #80621e; }
+.permission-explicit { color: #687873; }
+.demo-module-permission { border-top: 1px solid #e9eeea; background: #fff; }
+.demo-module-permission > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; cursor: pointer; list-style: none; }
+.demo-module-permission > summary::-webkit-details-marker { display: none; }
+.demo-module-permission > summary::before { display: block; flex: 0 0 7px; width: 7px; height: 7px; margin-right: 1px; border-right: 1.5px solid #74827c; border-bottom: 1.5px solid #74827c; content: ''; transform: rotate(-45deg); transition: transform .15s ease; }
+.demo-module-permission[open] > summary::before { transform: rotate(45deg); }
+.demo-module-permission > summary > span:first-of-type { display: grid; flex: 1; gap: 3px; }
+.demo-module-permission > summary strong { color: #263f46; font-size: .7rem; }
+.demo-module-permission > summary small { color: #77837e; font-size: .59rem; }
+.demo-module-permission .permission-pending { flex: 0 0 auto; }
+.demo-module-permission-body { display: grid; gap: 12px; padding: 2px 12px 14px 31px; }
+.demo-module-permission-body .field { margin: 0; }
+.demo-module-permission-body .field > label { margin-bottom: 5px; font-size: .66rem; }
+.demo-module-permission-body .field select,
+.demo-module-permission-body .field input { min-height: 35px; font-size: .72rem; }
+.demo-module-permission-body .hint { margin-top: 5px; font-size: .61rem; }
+.demo-folder-field[hidden] { display: none !important; }
+.demo-actions-fieldset { min-width: 0; margin: 0; padding: 10px; border: 1px solid #e0e7e2; border-radius: 6px; }
+.demo-actions-fieldset legend { padding: 0 5px; color: #526661; font-size: .65rem; font-weight: 800; }
+.demo-actions-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 12px; }
+.demo-action-choice { display: flex; align-items: flex-start; gap: 7px; color: #435a59; cursor: pointer; font-size: .64rem; line-height: 1.4; }
+.demo-action-choice input { flex: 0 0 auto; margin: 2px 0 0; accent-color: #0e8e83; }
+.demo-access-list + .small { line-height: 1.55; }
+@media (max-width: 850px) {
+  .workspace-strip { gap: 11px; }
+  .demo-profile-switch { min-width: 170px; }
+}
+@media (max-width: 700px) {
+  .demo-profile-switch { width: 100%; min-width: 0; }
+  .demo-profile-switch select { width: 100%; max-width: none; }
+  .org-manage-disabled { white-space: normal; }
+}
+@media (max-width: 520px) {
+  .demo-actions-grid { grid-template-columns: 1fr; }
+  .demo-module-permission-body { padding-left: 14px; }
+}
+
+/* Les droits masquent les commandes indisponibles pour le profil simulé. */
+[hidden] { display: none !important; }

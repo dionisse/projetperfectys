@@ -2,10 +2,10 @@
 
 Prototype **sans Blazor, sans WebAssembly et sans étape de build** de la suite PERFECTO.
 Il comprend un écran de connexion de démonstration, un launcher central et le module
-« Comptabilité générale SYSCOHADA révisé » (Lot 1). L'application tient dans trois
-fichiers : `index.html`, `css/modern.css` et `js/app.js` (+ la couche de données
-`js/store.js`). Elle se déploie telle quelle sur n'importe quel hébergeur statique,
-y compris **Vercel**, sans configuration particulière.
+« Comptabilité générale SYSCOHADA révisé » (Lot 1). L’application utilise des fichiers
+HTML, CSS et JavaScript natifs : interface, catalogue, politique d’accès de démonstration
+et couche de données. Elle se déploie telle quelle sur tout hébergeur statique, y compris
+**Vercel**, sans étape de build.
 
 ## Pourquoi cette conversion ?
 
@@ -22,8 +22,8 @@ publier, un déploiement immédiat.
 | Écran | Contenu |
 |---|---|
 | Connexion (démo) | Aucun identifiant collecté ; e-mail/mot de passe et Google sont prévus, mais non actifs en démo |
-| Launcher | Catalogue modulaire, recherche et filtres ; accès à la Comptabilité générale, autres modules à venir |
-| Organisation & accès (démo) | Profils temporaires, niveaux de droits et périmètre organisation/dossiers en mémoire ; matrice réelle à valider |
+| Launcher | Catalogue modulaire, recherche et filtres ; ouverture selon les droits du profil simulé, autres modules à venir |
+| Organisation & accès (démo) | Profils temporaires et droits explicites par personne, module, périmètre et action ; refus par défaut |
 | Tableau de bord | Indicateurs (débit, crédit, résultat, pièces), dernières pièces, activité par journal, état des périodes |
 | Plan comptable | 18 comptes SYSCOHADA initiaux, recherche, filtres, création de compte, export CSV |
 | Journaux | Six journaux (AC, VE, BQ, CA, OD, PA) avec totaux et brouillons |
@@ -45,6 +45,12 @@ publier, un déploiement immédiat.
 - une pièce validée est immuable ;
 - les brouillons sont exclus des états ;
 - une période clôturée refuse les nouvelles pièces et la validation des brouillons.
+
+### Politique d’accès de démonstration
+
+Le refus est appliqué par défaut. Le Superviseur général dispose des droits d’administration sur son organisation de démonstration ; les profils gestionnaire et utilisateur/employé ne reçoivent aucun droit par leur rôle. Le Superviseur peut accorder explicitement à chaque profil des actions par module, sur l’organisation ou sur des noms de dossiers de démonstration. Toute action comptable exige aussi le droit de consulter son module.
+
+La règle de base est approuvée ; le vocabulaire des actions et leurs effets métier restent à examiner ensemble. Cette politique est exécutée côté client pour éprouver l’interface. Les profils, organisations et dossiers sont fictifs ; les dossiers ne sont pas des répertoires Drive et les données comptables ne sont pas isolées par dossier. Ces contrôles ne constituent pas une sécurité réelle, ne sont pas liés à une authentification et ne protègent pas les données.
 
 ### Données de démonstration
 
@@ -106,6 +112,7 @@ modern-proto/index.html        coquille de l'application (navigation, topbar)
 modern-proto/css/modern.css    identité GOBEX (papier, encre, vert canard et or doux), responsive et imprimable
 modern-proto/js/store.js       données, règles métier, calculs, import/export
 modern-proto/js/modules.js     catalogue déclaratif des modules du launcher
+modern-proto/js/permissions.js politique d’accès démo (refus par défaut)
 modern-proto/js/app.js         routeur, vues, formulaires, interactions
 modern-proto/manifest.webmanifest  métadonnées PWA
 modern-proto/service-worker.js cache hors ligne (réseau d'abord, cache en secours)
@@ -118,12 +125,11 @@ tests/store.test.js            tests des règles métier (Node, sans dépendance
 
 ```bash
 node tests/store.test.js
+node tests/modules.test.js
+node tests/permissions.test.js
 ```
 
-Les tests vérifient aussi l'unicité et les statuts du catalogue modulaire. Le script métier vérifie les totaux de démonstration, l'unicité des références,
-l'équilibre des pièces, le verrouillage des périodes, la validation des brouillons,
-le grand livre, l'ajout de compte et l'export/import. La CI GitHub Actions exécute
-ces tests ainsi qu'un contrôle de syntaxe et un test de service HTTP.
+Les tests couvrent les règles comptables, le catalogue modulaire et la politique d’accès de démonstration (refus par défaut, organisation, actions et périmètre dossier). La CI GitHub Actions exécute ces scénarios ainsi qu’un contrôle de syntaxe et un test de service HTTP.
 
 ## Limites de cette prévisualisation
 

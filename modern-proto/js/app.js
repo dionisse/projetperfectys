@@ -7,6 +7,7 @@
 
   var S = window.PerfectoStore;
   var ModuleRegistry = window.PerfectoModules;
+  var Permissions = window.PerfectoPermissions;
 
   /* ------------------------------ Utilitaires ------------------------------ */
   function esc(value) {
@@ -63,8 +64,115 @@
 
   var deferredInstallPrompt = null;
   var launcherUi = { filter: 'all', query: '' };
-  var demoMembers = [{ id: 'demo-supervisor', name: 'Compte superviseur (démo)', role: 'supervisor', access: {}, scope: { type: 'organization', folders: [] } }];
+  var DEMO_ORGANIZATION_ID = 'demo-org';
+  var ACCOUNTING_ROUTES = ['dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings'];
+  var ACCESS_MODULES = [{ id: 'organization', name: 'Organisation & accès', status: 'available', route: 'organization', scopeable: false }].concat(ModuleRegistry.all());
+  var demoMembers = [{ id: 'demo-supervisor', name: 'Compte superviseur (démo)', role: 'supervisor', organizationId: DEMO_ORGANIZATION_ID, grants: {} }];
+  var activeDemoMemberId = 'demo-supervisor';
   var demoMemberSequence = 0;
+
+  function getActiveDemoMember() {
+    return demoMembers.find(function (member) { return member.id === activeDemoMemberId; }) || demoMembers[0] || null;
+  }
+
+  function demoAccessContext(scopeType, folderName) {
+    return {
+      organizationId: DEMO_ORGANIZATION_ID,
+      scopeType: scopeType || 'organization',
+      folderName: folderName || null
+    };
+  }
+
+  function hasDemoPermission(member, moduleId, actionId, context) {
+    return Permissions.hasPermission(member, moduleId, actionId, context || demoAccessContext('organization'));
+  }
+
+  function demoActionRule(action, trigger) {
+    switch (action) {
+      case 'add-demo-member':
+      case 'configure-demo-access':
+      case 'remove-demo-member':
+        return { moduleId: 'organization', actionId: 'organization.manageMembers' };
+      case 'open-module':
+        return { moduleId: trigger && trigger.getAttribute('data-module-id'), actionId: 'module.view' };
+      case 'open-entry':
+        return { moduleId: 'accounting', actionId: 'module.view' };
+      case 'edit-draft':
+      case 'delete-draft':
+        return { moduleId: 'accounting', actionId: 'draft.edit' };
+      case 'validate-entry':
+        return { moduleId: 'accounting', actionId: 'entry.validate' };
+      case 'new-account':
+        return { moduleId: 'accounting', actionId: 'accounts.manage' };
+      case 'close-period':
+      case 'open-period':
+        return { moduleId: 'accounting', actionId: 'periods.manage' };
+      case 'reset-data':
+      case 'restore-local-backup':
+        return { moduleId: 'accounting', actionId: 'data.manage' };
+      case 'export-json':
+      case 'export-accounts-csv':
+      case 'export-balance-csv':
+      case 'print':
+        return { moduleId: 'accounting', actionId: 'data.export' };
+      case 'add-line':
+      case 'remove-line':
+        return { moduleId: 'accounting', actionId: parseHash().params.id ? 'draft.edit' : 'draft.create' };
+      default:
+        return null;
+    }
+  }
+
+  function canPerformDemoAction(action, trigger, shouldNotify) {
+    var rule = demoActionRule(action, trigger);
+    if (!rule) return true;
+    var allowed = !!rule.moduleId && hasDemoPermission(getActiveDemoMember(), rule.moduleId, rule.actionId, demoAccessContext('organization'));
+    if (!allowed && shouldNotify !== false) {
+      toast('Action refusée par défaut : le profil simulé ne possède pas le droit « ' + rule.actionId + ' ».', 'warning');
+    }
+    return allowed;
+  }
+
+  function applyDemoActionGates(root) {
+    if (!root) return;
+    $$('[data-action]', root).forEach(function (trigger) {
+      var action = trigger.getAttribute('data-action');
+      if (demoActionRule(action, trigger)) trigger.hidden = !canPerformDemoAction(action, trigger, false);
+    });
+    $$('a[href^="#/"]', root).forEach(function (link) {
+      var hash = link.getAttribute('href') || '';
+      var routePart = hash.replace(/^#\/?/, '').split('?')[0];
+      var requirement = null;
+      if (routePart === 'organization') requirement = { moduleId: 'organization', actionId: 'module.view' };
+      else if (ACCOUNTING_ROUTES.indexOf(routePart) !== -1) requirement = { moduleId: 'accounting', actionId: 'module.view' };
+      if (routePart === 'entry') {
+        var hasId = /(?:^|[?&])id=/.test(hash);
+        requirement = { moduleId: 'accounting', actionId: hasId ? 'draft.edit' : 'draft.create' };
+      }
+      if (requirement) link.hidden = !hasDemoPermission(getActiveDemoMember(), requirement.moduleId, requirement.actionId, demoAccessContext('organization'));
+    });
+    var form = $('#entry-form', root);
+    if (form) {
+      var editing = !!form.getAttribute('data-entry-id');
+      $$('[data-mode]', form).forEach(function (button) {
+        var mode = button.getAttribute('data-mode');
+        var actions = mode === 'posted'
+          ? [editing ? 'draft.edit' : 'draft.create', 'entry.validate']
+          : [editing ? 'draft.edit' : 'draft.create'];
+        var allowed = actions.every(function (actionId) { return hasDemoPermission(getActiveDemoMember(), 'accounting', actionId, demoAccessContext('organization')); });
+        button.hidden = !allowed;
+      });
+    }
+    var canManageOrganization = hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageMembers', demoAccessContext('organization'));
+    $$('[data-demo-member-role]', root).forEach(function (select) { select.disabled = !canManageOrganization; });
+    var importInput = $('#import-file', root);
+    if (importInput) {
+      var canManageData = hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.manage', demoAccessContext('organization'));
+      importInput.hidden = !canManageData;
+      var importLabel = $('label[for="import-file"]', root);
+      if (importLabel) importLabel.hidden = !canManageData;
+    }
+  }
 
   /* -------------------------------- Toasts --------------------------------- */
   function toast(message, type) {
@@ -99,6 +207,7 @@
           (footerHtml ? '<div class="modal-footer">' + footerHtml + '</div>' : '') +
         '</div>' +
       '</div>';
+    applyDemoActionGates(root);
     var backdrop = $('.modal-backdrop', root);
     if (backdrop) {
       backdrop.addEventListener('click', function (event) {
@@ -146,6 +255,27 @@
     var view = $('#view');
     if (!view) return;
 
+    var activeMember = getActiveDemoMember();
+    var orgContext = demoAccessContext('organization');
+    if (route === 'organization' && !hasDemoPermission(activeMember, 'organization', 'module.view', orgContext)) {
+      toast('Accès refusé : aucun droit de consultation de l’organisation n’est accordé à ce profil.', 'warning');
+      navigate('#/launcher');
+      return;
+    }
+    if (ACCOUNTING_ROUTES.indexOf(route) !== -1 && !hasDemoPermission(activeMember, 'accounting', 'module.view', orgContext)) {
+      toast('Aucun accès à la Comptabilité générale n’est accordé à ce profil de démonstration.', 'warning');
+      navigate('#/launcher');
+      return;
+    }
+    if (route === 'entry') {
+      var requiredEntryAction = parsed.params.id ? 'draft.edit' : 'draft.create';
+      if (!hasDemoPermission(activeMember, 'accounting', requiredEntryAction, orgContext)) {
+        toast('Ce profil ne possède pas le droit nécessaire pour cette saisie.', 'warning');
+        navigate('#/launcher');
+        return;
+      }
+    }
+
     closeModal(true);
     var launcherMode = route === 'login' || route === 'launcher' || route === 'organization';
     document.body.classList.toggle('launcher-mode', launcherMode);
@@ -168,6 +298,7 @@
       default: html = viewLogin();
     }
     view.innerHTML = html;
+    applyDemoActionGates(document);
 
     var title = TITLES[route] || TITLES.login;
     var pageTitle = $('#page-title');
@@ -281,10 +412,11 @@
 
   function launcherModuleCard(module, index) {
     var available = module.status === 'available' && module.route;
+    var permitted = available && hasDemoPermission(getActiveDemoMember(), module.id, 'module.view', demoAccessContext('organization'));
     var number = String(index + 1).padStart(2, '0');
-    var action = available
+    var action = permitted
       ? '<button type="button" class="module-open-button" data-action="open-module" data-module-id="' + esc(module.id) + '">Ouvrir le module <span aria-hidden="true">→</span></button>'
-      : '<span class="module-disabled">Bientôt</span>';
+      : (available ? '<span class="module-disabled">Accès à attribuer</span>' : '<span class="module-disabled">Bientôt</span>');
 
     var searchText = [module.name, module.category, module.description].join(' ');
     return '<article class="module-card module-' + esc(module.accent) + '" data-module-card data-is-module="true" data-module-status="' + esc(module.status) + '" data-module-search="' + esc(searchText) + '">' +
@@ -300,10 +432,18 @@
   function viewLauncher() {
     var modules = ModuleRegistry.all();
     var stats = ModuleRegistry.stats();
+    var activeMember = getActiveDemoMember();
     var availableLabel = String(stats.available).padStart(2, '0');
     var availableText = stats.available === 1 ? 'disponible' : 'disponibles';
     var availableNoun = stats.available === 1 ? 'module disponible' : 'modules disponibles';
     var cards = modules.map(launcherModuleCard).join('');
+    var profileOptions = demoMembers.map(function (member) {
+      var selected = member.id === activeDemoMemberId ? ' selected' : '';
+      return '<option value="' + esc(member.id) + '"' + selected + '>' + esc(demoRoleLabel(member.role) + ' · ' + member.name) + '</option>';
+    }).join('');
+    var organizationControl = hasDemoPermission(activeMember, 'organization', 'module.view', demoAccessContext('organization'))
+      ? '<a class="org-manage-link" href="#/organization">Organisation &amp; accès <span aria-hidden="true">→</span></a>'
+      : '<span class="org-manage-disabled" title="Aucun droit de consultation accordé à ce profil">Organisation &amp; accès · accès non accordé</span>';
 
     return `
       <div class="suite-screen launcher-screen">
@@ -318,12 +458,13 @@
         <main class="launcher-main">
           <div class="workspace-strip">
             <div><span class="workspace-caption">ORGANISATION</span><strong>Organisation de démonstration</strong></div>
-            <span class="role-chip">SUPERVISEUR GÉNÉRAL · DÉMO</span>
-            <a class="org-manage-link" href="#/organization">Organisation &amp; accès <span aria-hidden="true">→</span></a>
+            <span class="role-chip">${esc(demoRoleLabel(activeMember.role).toUpperCase())} · DÉMO</span>
+            <label class="demo-profile-switch"><span>PROFIL SIMULÉ</span><select id="demo-active-profile" aria-label="Choisir un profil de démonstration">${profileOptions}</select></label>
+            ${organizationControl}
             <button type="button" class="drive-status" data-action="launcher-info"><span class="drive-status-dot"></span>Google Drive <b>À connecter</b></button>
           </div>
           <section class="launcher-heading">
-            <div><p class="suite-kicker">VOTRE ESPACE DE TRAVAIL</p><h1>Vos applications</h1><p>Ouvrez un module pour commencer. Les modules en préparation seront activés progressivement.</p></div>
+            <div><p class="suite-kicker">VOTRE ESPACE DE TRAVAIL</p><h1>Vos applications</h1><p>Ouvrez un module accordé au profil simulé. Les accès non accordés sont refusés par défaut.</p></div>
             <div class="launcher-count"><strong>${availableLabel}</strong><span>${availableNoun}<br>sur ${String(stats.total).padStart(2, '0')} annoncés</span></div>
           </section>
           <div class="launcher-section-heading"><h2>Modules PERFECTO</h2><span>${stats.total} modules · ${stats.available} ${availableText}</span></div>
@@ -346,7 +487,7 @@
             </article>
           </div>
           <p class="launcher-empty-state" id="launcher-empty-state" hidden>Aucun module ne correspond à cette recherche ou à ce filtre.</p>
-          <div class="launcher-notice"><span class="launcher-notice-icon">i</span><span>Cette vue est une démonstration : seul le module de Comptabilité générale est actuellement fonctionnel. Google Drive n’est pas encore connecté.</span></div>
+          <div class="launcher-notice"><span class="launcher-notice-icon">i</span><span>Profil simulé uniquement : les contrôles d’accès servent à valider la logique et ne remplacent pas une authentification ou une sécurité serveur.</span></div>
         </main>
         <footer class="suite-footer launcher-footer"><span>PERFECTO · ESPACE DE DÉMONSTRATION</span><button type="button" data-action="logout-demo">Retour à l’écran de connexion</button></footer>
       </div>`;
@@ -367,27 +508,29 @@
           '<option value="manager"' + (member.role === 'manager' ? ' selected' : '') + '>Gestionnaire</option>' +
           '<option value="employee"' + (member.role === 'employee' ? ' selected' : '') + '>Utilisateur / employé</option>' +
         '</select>';
-    var removeControl = isSupervisor
-      ? '<span class="member-root-note">Rôle racine</span>'
-      : '<button type="button" class="member-remove-button" data-action="remove-demo-member" data-id="' + esc(member.id) + '">Retirer</button>';
-    var configured = Object.keys(member.access || {}).filter(function (moduleId) {
-      return member.access[moduleId] && member.access[moduleId] !== 'unset';
+    var memberActions = isSupervisor
+      ? '<span class="member-root-note">Administration racine</span>'
+      : '<button type="button" class="member-configure-button" data-action="configure-demo-access" data-id="' + esc(member.id) + '">Droits</button>' +
+        '<button type="button" class="member-remove-button" data-action="remove-demo-member" data-id="' + esc(member.id) + '">Retirer</button>';
+    var configured = Object.keys(member.grants || {}).filter(function (moduleId) {
+      return member.grants[moduleId] && Array.isArray(member.grants[moduleId].actions) && member.grants[moduleId].actions.length > 0;
     }).length;
-    var scope = member.scope && member.scope.type === 'folder'
-      ? (member.scope.folders.length + ' dossier(s) de démo')
-      : 'Organisation';
+    var folderScopes = Object.keys(member.grants || {}).filter(function (moduleId) {
+      var grant = member.grants[moduleId];
+      return grant && grant.scope && grant.scope.type === 'folder' && grant.scope.folders && grant.scope.folders.length;
+    }).length;
     var initials = member.role === 'supervisor' ? 'SG' : (member.role === 'manager' ? 'G' : 'U');
 
     return '<div class="organization-member-row">' +
       '<div class="member-identity"><span class="member-avatar ' + (isSupervisor ? 'is-root' : '') + '">' + initials + '</span><span><strong>' + esc(member.name) + '</strong><small>Profil temporaire de démonstration · aucune connexion réelle</small></span></div>' +
       '<div class="member-role-control">' + roleControl + '</div>' +
-      '<div class="member-access-status"><span>ACCÈS CONFIGURÉS · DÉMO</span><strong>' + configured + ' / ' + ModuleRegistry.stats().total + ' module(s) · ' + esc(scope) + '</strong></div>' +
-      '<div class="member-row-action"><button type="button" class="member-configure-button" data-action="configure-demo-access" data-id="' + esc(member.id) + '">Droits</button>' + removeControl + '</div>' +
+      '<div class="member-access-status"><span>DROITS EXPLICITES · DÉMO</span><strong>' + configured + ' / ' + ACCESS_MODULES.length + ' module(s) · ' + folderScopes + ' portée(s) dossier</strong></div>' +
+      '<div class="member-row-action">' + memberActions + '</div>' +
       '</div>';
   }
 
   function viewOrganization() {
-    var modules = ModuleRegistry.all();
+    var modules = ACCESS_MODULES;
     var managers = demoMembers.filter(function (member) { return member.role === 'manager'; }).length;
     var employees = demoMembers.filter(function (member) { return member.role === 'employee'; }).length;
     var memberRows = demoMembers.map(demoMemberRow).join('');
@@ -395,9 +538,9 @@
       var availability = module.status === 'available' ? 'Disponible en démo' : 'À venir';
       return '<tr>' +
         '<th scope="row"><strong>' + esc(module.name) + '</strong><small>' + esc(availability) + '</small></th>' +
-        '<td><span class="permission-pending">À valider</span></td>' +
-        '<td><span class="permission-pending">À valider</span></td>' +
-        '<td><span class="permission-pending">À valider</span></td>' +
+        '<td><span class="permission-root">Administration de l’organisation</span></td>' +
+        '<td><span class="permission-explicit">Aucun implicite · par personne</span></td>' +
+        '<td><span class="permission-explicit">Aucun implicite · par personne</span></td>' +
         '</tr>';
     }).join('');
 
@@ -413,7 +556,7 @@
         </header>
         <main class="organization-main">
           <section class="organization-heading">
-            <div><p class="suite-kicker">ESPACE DE TRAVAIL · DÉMONSTRATION</p><h1>Organisation &amp; accès</h1><p>La hiérarchie est illustrée par des profils temporaires de démonstration ; aucun compte réel n’est créé et aucun droit non validé n’est appliqué.</p></div>
+            <div><p class="suite-kicker">ESPACE DE TRAVAIL · DÉMONSTRATION</p><h1>Organisation &amp; accès</h1><p>Profils temporaires de démonstration : refus par défaut, administration par le Superviseur général et droits explicites par personne, module, périmètre et action.</p></div>
           </section>
           <div class="organization-summary-grid">
             <article class="organization-panel organization-identity">
@@ -440,14 +583,14 @@
             <p class="members-demo-note">Ces profils sont temporaires et restent en mémoire jusqu’au rechargement de la page. Aucun e-mail n’est demandé, aucun compte n’est créé et aucune invitation n’est envoyée.</p>
           </section>
           <section class="organization-panel access-design-panel">
-            <div class="access-design-heading"><div><div class="organization-panel-kicker">MODÈLE D’AUTORISATION</div><h2>Gabarit de droits par rôle</h2><p>Cette matrice reste à valider. Les propositions temporaires par profil se règlent avec le bouton « Droits » des membres.</p></div><span class="permission-pending">À VALIDER</span></div>
+            <div class="access-design-heading"><div><div class="organization-panel-kicker">POLITIQUE APPROUVÉE</div><h2>Règles d’accès de la démo</h2><p>Le profil de chaque gestionnaire ou employé se règle avec « Droits ». Aucun droit n’est hérité de son rôle ; le vocabulaire des actions reste à co-concevoir.</p></div><span class="permission-pending">REFUS PAR DÉFAUT</span></div>
             <div class="organization-table-wrap">
               <table class="organization-access-table">
                 <thead><tr><th scope="col">Module</th><th scope="col">Superviseur général</th><th scope="col">Gestionnaire</th><th scope="col">Utilisateur / employé</th></tr></thead>
                 <tbody>${rows}</tbody>
               </table>
             </div>
-            <div class="access-scope-note"><span class="launcher-notice-icon">i</span><p>La connexion des utilisateurs et les invitations resteront en démonstration jusqu’à l’activation des deux méthodes prévues : e-mail/mot de passe et compte Google. Aucun accès Google Drive n’est demandé ici.</p></div>
+            <div class="access-scope-note"><span class="launcher-notice-icon">i</span><p>Les droits sont évalués côté client pour éprouver les parcours. Ils ne protègent pas les données et ne sont liés ni à une authentification réelle ni à Google Drive.</p></div>
           </section>
         </main>
         <footer class="suite-footer launcher-footer"><span>PERFECTO · ESPACE DE DÉMONSTRATION</span><span>Authentification et droits réels à implémenter après validation</span></footer>
@@ -459,7 +602,7 @@
       '<div class="alert info">Prototype uniquement : ce profil temporaire ne crée pas de compte et n’envoie pas d’invitation.</div>' +
       '<div class="field"><label for="demo-member-role">Rôle à prévisualiser</label>' +
         '<select id="demo-member-role" name="role"><option value="manager">Gestionnaire</option><option value="employee">Utilisateur / employé</option></select></div>' +
-      '<p class="small muted">Les droits d’accès par module restent « à valider » et ne changent pas avec cette prévisualisation.</p>' +
+      '<p class="small muted">Le nouveau profil commence sans droit. Le Superviseur général peut attribuer explicitement ses actions et périmètres dans l’éditeur.</p>' +
     '</form>';
     var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button>' +
       '<button type="submit" class="btn btn-primary" form="demo-member-form">Ajouter le profil démo</button>';
@@ -468,14 +611,18 @@
     var form = $('#demo-member-form');
     form.addEventListener('submit', function (event) {
       event.preventDefault();
+      if (!hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageMembers', demoAccessContext('organization'))) {
+        toast('Ajout refusé par défaut : le droit de gestion des membres n’est pas accordé.', 'warning');
+        return;
+      }
       var role = $('#demo-member-role').value === 'manager' ? 'manager' : 'employee';
       demoMemberSequence += 1;
       demoMembers.push({
         id: 'demo-member-' + demoMemberSequence,
         name: 'Profil de démonstration ' + demoMemberSequence,
         role: role,
-        access: {},
-        scope: { type: 'organization', folders: [] }
+        organizationId: DEMO_ORGANIZATION_ID,
+        grants: {}
       });
       closeModal(true);
       toast('Profil temporaire ajouté. Aucune invitation n’a été envoyée.', 'success');
@@ -486,66 +633,84 @@
   function openDemoAccessModal(memberId) {
     var member = demoMembers.find(function (item) { return item.id === memberId; });
     if (!member) return;
-    var modules = ModuleRegistry.all();
-    var choices = [
-      ['unset', 'À définir'],
-      ['none', 'Aucun accès'],
-      ['read', 'Consultation'],
-      ['draft', 'Saisie / brouillons'],
-      ['validate', 'Validation des pièces'],
-      ['manage', 'Gestion du module']
-    ];
-    var moduleRows = modules.map(function (module) {
-      var current = member.access && member.access[module.id] || 'unset';
-      var options = choices.map(function (choice) {
-        return '<option value="' + choice[0] + '"' + (current === choice[0] ? ' selected' : '') + '>' + choice[1] + '</option>';
+    var modules = ACCESS_MODULES;
+    var moduleRows = modules.map(function (module, moduleIndex) {
+      var grant = member.grants && member.grants[module.id] || { scope: { type: 'organization', folders: [] }, actions: [] };
+      var scopeType = module.scopeable === false ? 'organization' : (grant.scope && grant.scope.type === 'folder' ? 'folder' : 'organization');
+      var folders = grant.scope && Array.isArray(grant.scope.folders) ? grant.scope.folders.join(', ') : '';
+      var scopeOptions = '<option value="organization"' + (scopeType === 'organization' ? ' selected' : '') + '>Organisation entière</option>';
+      if (module.scopeable !== false) scopeOptions += '<option value="folder"' + (scopeType === 'folder' ? ' selected' : '') + '>Dossier(s) précis</option>';
+      var folderField = module.scopeable === false ? '' :
+        '<div class="field demo-folder-field" data-demo-folder-field="' + esc(module.id) + '"' + (scopeType === 'folder' ? '' : ' hidden') + '><label for="demo-folders-' + esc(module.id) + '">Noms des dossiers de démo</label>' +
+          '<input id="demo-folders-' + esc(module.id) + '" data-demo-folder-names="' + esc(module.id) + '" type="text" value="' + esc(folders) + '" placeholder="Ex. Comptabilité 2026, Agence Nord">' +
+          '<span class="hint">Sépare plusieurs noms par une virgule. Aucun dossier Drive réel n’est sélectionné.</span></div>';
+      var actions = Permissions.actionsForModule(module.id).map(function (action) {
+        var checked = Array.isArray(grant.actions) && grant.actions.indexOf(action.id) !== -1;
+        return '<label class="demo-action-choice"><input type="checkbox" data-demo-action-module="' + esc(module.id) + '" data-demo-action-id="' + esc(action.id) + '"' + (checked ? ' checked' : '') + '><span>' + esc(action.label) + '</span></label>';
       }).join('');
-      return '<div class="demo-access-row"><div><strong>' + esc(module.name) + '</strong><small>' + esc(module.status === 'available' ? 'Disponible en démo' : 'Module à venir') + '</small></div>' +
-        '<label class="sr-only" for="demo-access-' + esc(module.id) + '">Droit pour ' + esc(module.name) + '</label>' +
-        '<select id="demo-access-' + esc(module.id) + '" data-demo-module-access="' + esc(module.id) + '">' + options + '</select></div>';
+      return '<details class="demo-module-permission"' + (moduleIndex === 0 ? ' open' : '') + '>' +
+        '<summary><span><strong>' + esc(module.name) + '</strong><small>' + (module.id === 'organization' ? 'Gestion de l’organisation de démonstration' : esc(module.status === 'available' ? 'Disponible en démo' : 'Module à venir')) + '</small></span><span class="permission-pending">' + (grant.actions && grant.actions.length ? grant.actions.length + ' droit(s)' : 'À définir') + '</span></summary>' +
+        '<div class="demo-module-permission-body">' +
+          '<div class="field"><label for="demo-scope-' + esc(module.id) + '">Périmètre</label><select id="demo-scope-' + esc(module.id) + '" data-demo-scope-module="' + esc(module.id) + '">' + scopeOptions + '</select></div>' +
+          folderField +
+          '<fieldset class="demo-actions-fieldset"><legend>Actions proposées à accorder</legend><div class="demo-actions-grid">' + actions + '</div></fieldset>' +
+        '</div>' +
+      '</details>';
     }).join('');
-    var scopeType = member.scope && member.scope.type === 'folder' ? 'folder' : 'organization';
-    var folderNames = member.scope && Array.isArray(member.scope.folders) ? member.scope.folders.join(', ') : '';
     var body = '<form id="demo-access-form" novalidate>' +
-      '<div class="alert info">Proposition de démonstration : ces réglages ne protègent pas les routes et ne sont pas envoyés au serveur.</div>' +
-      '<div class="field"><label for="demo-access-scope">Périmètre de ce profil</label><select id="demo-access-scope">' +
-        '<option value="organization"' + (scopeType === 'organization' ? ' selected' : '') + '>Organisation entière</option>' +
-        '<option value="folder"' + (scopeType === 'folder' ? ' selected' : '') + '>Dossier(s) de démonstration</option>' +
-      '</select></div>' +
-      '<div class="field demo-folder-field" id="demo-folder-field"' + (scopeType === 'folder' ? '' : ' hidden') + '><label for="demo-access-folders">Noms des dossiers de démo</label>' +
-        '<input id="demo-access-folders" type="text" value="' + esc(folderNames) + '" placeholder="Ex. Comptabilité 2026, Agence Nord">' +
-        '<span class="hint">Sépare plusieurs noms par une virgule. Aucun dossier Google Drive réel n’est sélectionné.</span></div>' +
-      '<div class="demo-access-list"><div class="demo-access-list-heading"><strong>Droits par module</strong><span>À valider</span></div>' + moduleRows + '</div>' +
-      '<p class="small muted">Les niveaux sont une proposition de vocabulaire. Leur sens exact et leur attribution restent à valider ensemble.</p>' +
+      '<div class="alert info">Refus par défaut : aucune action cochée = aucun accès. Le Superviseur général conserve l’administration de son organisation.</div>' +
+      '<div class="demo-access-list"><div class="demo-access-list-heading"><strong>Droits de ' + esc(member.name) + '</strong><span>PROPOSITION DE DÉMO</span></div>' + moduleRows + '</div>' +
+      '<p class="small muted">Toute action exige aussi « Consulter le module ». Le vocabulaire et les effets métier des actions restent à valider. Les portées dossier sont préparatoires : les données comptables de cette démo ne sont pas séparées par dossier.</p>' +
     '</form>';
     var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button>' +
       '<button type="submit" class="btn btn-primary" form="demo-access-form">Enregistrer en démo</button>';
     openModal('Droits de démonstration', demoRoleLabel(member.role) + ' · ' + member.name, body, footer, true);
 
-    var scopeSelect = $('#demo-access-scope');
-    var folderField = $('#demo-folder-field');
-    scopeSelect.addEventListener('change', function () {
-      folderField.hidden = scopeSelect.value !== 'folder';
+    $$('[data-demo-scope-module]').forEach(function (select) {
+      select.addEventListener('change', function () {
+        var moduleId = select.getAttribute('data-demo-scope-module');
+        var folderField = $('[data-demo-folder-field="' + moduleId + '"]');
+        if (folderField) folderField.hidden = select.value !== 'folder';
+      });
+    });
+    $('#demo-access-form').addEventListener('change', function (event) {
+      var checkbox = event.target;
+      if (!checkbox || !checkbox.matches('input[type="checkbox"][data-demo-action-module]')) return;
+      var moduleId = checkbox.getAttribute('data-demo-action-module');
+      var actionId = checkbox.getAttribute('data-demo-action-id');
+      var viewPermission = $('[data-demo-action-module="' + moduleId + '"][data-demo-action-id="module.view"]');
+      if (checkbox.checked && actionId !== 'module.view' && viewPermission) viewPermission.checked = true;
+      if (!checkbox.checked && actionId === 'module.view') {
+        $$('[data-demo-action-module="' + moduleId + '"]').forEach(function (action) { action.checked = false; });
+      }
     });
     $('#demo-access-form').addEventListener('submit', function (event) {
       event.preventDefault();
-      var folderNamesDraft = scopeSelect.value === 'folder'
-        ? String($('#demo-access-folders').value || '').split(',').map(function (name) { return name.trim(); }).filter(Boolean)
-        : [];
-      if (scopeSelect.value === 'folder' && folderNamesDraft.length === 0) {
-        toast('Indique au moins un nom de dossier de démonstration.', 'warning');
+      if (!hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageMembers', demoAccessContext('organization'))) {
+        toast('Modification refusée par défaut : le droit de gestion des accès n’est pas accordé.', 'warning');
         return;
       }
-      member.scope = {
-        type: scopeSelect.value === 'folder' ? 'folder' : 'organization',
-        folders: folderNamesDraft
-      };
-      member.access = {};
-      $$('[data-demo-module-access]').forEach(function (select) {
-        member.access[select.getAttribute('data-demo-module-access')] = select.value;
+      var grants = {};
+      var invalidFolder = false;
+      modules.forEach(function (module) {
+        var checked = $$('[data-demo-action-module="' + module.id + '"]:checked').map(function (checkbox) {
+          return checkbox.getAttribute('data-demo-action-id');
+        });
+        if (!checked.length) return;
+        var scope = $('[data-demo-scope-module="' + module.id + '"]').value;
+        var folders = scope === 'folder'
+          ? String($('[data-demo-folder-names="' + module.id + '"]').value || '').split(',').map(function (name) { return name.trim(); }).filter(Boolean)
+          : [];
+        if (scope === 'folder' && !folders.length) { invalidFolder = true; return; }
+        grants[module.id] = { scope: { type: scope, folders: folders }, actions: checked };
       });
+      if (invalidFolder) {
+        toast('Un droit limité à des dossiers doit préciser au moins un nom de dossier de démonstration.', 'warning');
+        return;
+      }
+      member.grants = grants;
       closeModal(true);
-      toast('Réglages de droits enregistrés pour cette session de démonstration.', 'success');
+      toast('Droits temporaires enregistrés. Le moteur applique le refus par défaut en démo.', 'success');
       render();
     });
   }
@@ -1385,6 +1550,12 @@
         var mode = submitter && submitter.getAttribute('data-mode') === 'posted' ? 'posted' : 'draft';
         var payload = collectEntryForm();
         var editingId = payload.id;
+        var requiredWriteActions = [editingId ? 'draft.edit' : 'draft.create'];
+        if (mode === 'posted') requiredWriteActions.push('entry.validate');
+        if (!requiredWriteActions.every(function (actionId) { return hasDemoPermission(getActiveDemoMember(), 'accounting', actionId, demoAccessContext('organization')); })) {
+          showFormErrors(['Action refusée par défaut : les droits de démonstration requis ne sont pas accordés.']);
+          return;
+        }
 
         if (mode === 'posted') {
           var check = S.validateEntry(payload, { requireBalanced: true, status: 'posted' });
@@ -1416,6 +1587,10 @@
           if (!file) return;
           var reader = new FileReader();
           reader.onload = function () {
+            if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.manage', demoAccessContext('organization'))) {
+              toast('Import refusé par défaut : ce profil ne peut pas gérer les données.', 'warning');
+              return;
+            }
             var result = S.importJson(String(reader.result || ''));
             if (!result.ok) { toast(result.errors[0] || 'Import impossible.', 'error'); return; }
             toast('Données importées avec succès.', 'success');
@@ -1431,6 +1606,16 @@
   }
 
   function bindLauncherView() {
+    var profileSelect = $('#demo-active-profile');
+    if (profileSelect) {
+      profileSelect.addEventListener('change', function () {
+        var selected = demoMembers.find(function (member) { return member.id === profileSelect.value; });
+        if (!selected) return;
+        activeDemoMemberId = selected.id;
+        toast('Profil simulé actif : ' + demoRoleLabel(selected.role) + '. Aucun compte réel n’est connecté.', 'info');
+        render();
+      });
+    }
     var search = $('#launcher-search');
     if (search) {
       search.value = launcherUi.query;
@@ -1445,11 +1630,16 @@
   function bindOrganizationView() {
     $$('[data-demo-member-role]').forEach(function (select) {
       select.addEventListener('change', function () {
+        if (!hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageMembers', demoAccessContext('organization'))) {
+          toast('Modification refusée par défaut : le droit de gestion des membres n’est pas accordé.', 'warning');
+          render();
+          return;
+        }
         var id = select.getAttribute('data-id');
         var member = demoMembers.find(function (item) { return item.id === id; });
         if (!member) return;
         member.role = select.value === 'manager' ? 'manager' : 'employee';
-        toast('Rôle de démonstration modifié. Les droits réels restent à valider.', 'success');
+        toast('Rôle de démonstration modifié. Aucun droit implicite n’a été ajouté.', 'success');
         render();
       });
     });
@@ -1545,6 +1735,7 @@
     if (!trigger) return;
     var action = trigger.getAttribute('data-action');
     var id = trigger.getAttribute('data-id');
+    if (!canPerformDemoAction(action, trigger)) { event.preventDefault(); return; }
 
     switch (action) {
       case 'launcher-filter':
@@ -1763,6 +1954,10 @@
     var form = $('#account-form');
     form.addEventListener('submit', function (event) {
       event.preventDefault();
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'accounts.manage', demoAccessContext('organization'))) {
+        toast('Création refusée par défaut : le droit « accounts.manage » n’est pas accordé.', 'warning');
+        return;
+      }
       var result = S.addAccount({
         code: $('#a-code').value,
         label: $('#a-label').value,
