@@ -1,0 +1,55 @@
+# PERFECTO — Backlog évolutif
+
+Ce document suit les décisions et les prochaines étapes du prototype natif. Les éléments de démonstration ne constituent pas une sécurité ni une intégration de production.
+
+## État actuel
+
+- Interface web en HTML, CSS et JavaScript natifs, sans build ; le parcours Windows reste une étape séparée.
+- Lot 1 de comptabilité générale fonctionnel en stockage local navigateur.
+- Dossiers comptables de démonstration isolés localement ; le jeu historique est conservé dans « Dossier principal ».
+- Connexion, profils, grants et dossiers ne sont pas encore reliés à une identité réelle ou à Google Drive.
+
+## Décisions confirmées
+
+- Refus par défaut ; le Superviseur général administre sa propre organisation.
+- Gestionnaires et employés n’héritent d’aucun droit de leur rôle.
+- Les grants sont additifs : une autorisation est accordée si au moins un grant correspondant couvre l’action et son périmètre. Il n’existe pas de refus implicite qui annule un autre grant.
+- Pour les actions métier, « Consulter le module » et l’action doivent figurer dans le même grant et la même portée.
+- Une portée organisationnelle couvre les dossiers de l’organisation ; une portée dossier ne couvre que les dossiers qu’elle désigne.
+- Ces règles sont utilisées pour éprouver les parcours côté client. Elles ne protègent pas les données.
+- Le cloud métier doit appartenir à l’organisation ; Google Drive est le fournisseur initial envisagé. Les données métier ne doivent pas être stockées dans une base applicative sur notre serveur.
+
+## Prochaine étape — co-conception du catalogue d’actions comptables
+
+Les identifiants ci-dessous sont reliés aux parcours actuels, mais leurs libellés et leurs effets restent à valider avec le métier, au fil de chaque module.
+
+| Identifiant de démonstration | Parcours actuellement associé |
+|---|---|
+| `module.view` | Consulter les écrans du module dans le dossier actif |
+| `draft.create` | Créer un brouillon ou une écriture |
+| `draft.edit` / `draft.delete` | Modifier ou supprimer un brouillon uniquement |
+| `entry.validate` | Valider définitivement une pièce équilibrée |
+| `accounts.create` | Ajouter un compte au plan comptable du dossier actif |
+| `period.close` / `period.reopen` | Clôturer ou rouvrir une période du dossier actif |
+| `data.import` / `data.export` | Importer ou exporter les données du dossier actif ; l’export couvre aussi certains états et impressions |
+| `data.reset` / `data.restore` | Réinitialiser ou restaurer les données du dossier actif |
+
+À examiner en priorité : distinguer éventuellement les exports JSON, CSV et impressions ; confirmer les droits exacts associés à la validation et à la restauration ; revoir ce catalogue quand les tiers, auxiliaires et autres parcours comptables seront développés. Les noms et regroupements pourront évoluer avec migration des données de droits.
+
+## Avant toute mise en production ou synchronisation réelle
+
+1. Concevoir et implémenter l’authentification e-mail/mot de passe et Google, les sessions et l’appartenance des utilisateurs aux organisations.
+2. Définir la structure de fichiers dans l’espace Google Drive appartenant à l’organisation, les autorisations réelles et la stratégie de sauvegarde/restauration.
+3. Appliquer les autorisations côté serveur et au niveau du stockage ; le contrôle client du prototype ne suffit pas.
+4. Définir l’audit métier, les révisions, les écritures simultanées et le traitement des conflits hors ligne/en ligne.
+5. Tester les migrations et restaurations sur des copies avant tout transfert de données réelles.
+
+## Incréments fonctionnels ultérieurs
+
+- Comptabilité générale : tiers et auxiliaires détaillés, numérotation, extourne, lettrage, rapprochement bancaire, pièces jointes et états financiers SYSCOHADA complets.
+- Comptabilité analytique, Paie & RH, Gestion de courriers, Vente/Stock/Facturation, puis autres modules selon les besoins de l’organisation.
+- Exécutable Windows : cadrage séparé après stabilisation des parcours web et des règles de stockage.
+
+## Hors périmètre de la démo actuelle
+
+Pas d’authentification réelle, de Google Drive, de synchronisation multi-utilisateur, de protection des données métier côté serveur ni de résolution des conflits. Les profils et grants de démonstration sont temporaires ; les dossiers comptables simulés restent locaux au navigateur.

@@ -55,6 +55,25 @@ test('un grant explicite est limité aux actions et à sa propre organisation', 
   assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'module.view', { organizationId: 'org-2' }), false);
 });
 
+test('les grants sont additifs, sans transférer les actions entre portées', () => {
+  const manager = {
+    role: 'manager', organizationId: 'org-1',
+    grants: { accounting: [
+      { scope: { type: 'organization' }, actions: ['module.view', 'accounts.create'] },
+      { scope: { type: 'folder', folders: ['Agence Nord'] }, actions: ['module.view', 'draft.create'] },
+      { scope: { type: 'folder', folders: ['Agence Sud'] }, actions: ['module.view'] }
+    ] }
+  };
+  const north = { organizationId: 'org-1', scopeType: 'folder', folderName: 'Agence Nord' };
+  const south = { organizationId: 'org-1', scopeType: 'folder', folderName: 'Agence Sud' };
+  assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'accounts.create', north), true, 'un grant organisationnel couvre ses dossiers');
+  assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'accounts.create', south), true, 'les grants organisationnels sont applicables dans chaque dossier de l’organisation');
+  assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'draft.create', north), true, 'le grant Nord ajoute ce droit');
+  assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'draft.create', south), false, 'le droit Nord ne se transfère pas au grant Sud');
+  manager.grants.accounting.push({ scope: { type: 'folder', folders: ['Agence Est'] }, actions: ['draft.delete'] });
+  assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'draft.delete', { organizationId: 'org-1', scopeType: 'folder', folderName: 'Agence Est' }), false, 'un droit métier reste refusé sans module.view dans le même grant');
+});
+
 test('un grant limité à des dossiers refuse tout autre dossier ou périmètre', () => {
   const employee = {
     role: 'employee', organizationId: 'org-1',
@@ -135,4 +154,4 @@ test('les actions sensibles restent indépendantes les unes des autres', () => {
   assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'data.restore', context), false);
 });
 
-console.log('Politique d’accès : 7 scénarios réussis.');
+console.log('Politique d’accès : 8 scénarios réussis.');

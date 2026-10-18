@@ -17,6 +17,8 @@ du Lot 1 en HTML/CSS/JavaScript natifs, avec les mêmes règles métier et une
 persistance locale. Résultat : plus de runtime à charger, plus d'artefacts à
 publier, un déploiement immédiat.
 
+Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKLOG.md).
+
 ## Fonctionnalités
 
 | Écran | Contenu |
@@ -50,7 +52,7 @@ publier, un déploiement immédiat.
 
 Le refus est appliqué par défaut. Le Superviseur général dispose des droits d’administration sur son organisation de démonstration ; les profils gestionnaire et utilisateur/employé ne reçoivent aucun droit par leur rôle. Les droits peuvent être accordés par module, sur l’organisation ou sur un ou plusieurs dossiers créés dans la démo. La sélection du dossier actif n’affiche que les dossiers autorisés au profil. Toute action comptable exige aussi le droit de consulter son module dans le même grant. Le prototype distingue les gestes disponibles (modifier/supprimer un brouillon, créer un compte, clôturer/réouvrir une période, importer, réinitialiser ou restaurer) et permet plusieurs grants par module ; dans cette proposition, les portées se cumulent et peuvent porter des ensembles d’actions différents.
 
-Les dossiers de démonstration possèdent désormais des jeux de données comptables séparés dans le navigateur : le jeu existant est conservé dans « Dossier principal » et un dossier nouvellement créé démarre sans écritures, avec le référentiel comptable et les journaux initiaux. Les gardes de navigation et d’action évaluent les droits dans le dossier sélectionné. La règle générale est approuvée ; le vocabulaire des actions, le cumul des grants et leurs effets métier restent à examiner ensemble. Cette simulation reste côté client : elle n’est ni une sécurité réelle ni une authentification, ne se synchronise pas avec Google Drive et ne prend pas en charge l’écriture simultanée multi-utilisateur.
+Les dossiers de démonstration possèdent désormais des jeux de données comptables séparés dans le navigateur : le jeu existant est conservé dans « Dossier principal » et un dossier nouvellement créé démarre sans écritures, avec le référentiel comptable et les journaux initiaux. Les gardes de navigation et d’action évaluent les droits dans le dossier sélectionné. Le refus par défaut et le cumul additif des grants sont confirmés ; une action métier doit partager son grant et sa portée avec « Consulter le module ». Le vocabulaire précis des actions et leurs effets métier restent à examiner ensemble, module par module. Cette simulation reste côté client : elle n’est ni une sécurité réelle ni une authentification, ne se synchronise pas avec Google Drive et ne prend pas en charge l’écriture simultanée multi-utilisateur.
 
 ### Données de démonstration
 
@@ -111,6 +113,7 @@ modern-proto/js/store.js       données, règles métier, calculs, import/export
 modern-proto/js/modules.js     catalogue déclaratif des modules du launcher
 modern-proto/js/permissions.js politique d’accès démo (refus par défaut)
 modern-proto/js/app.js         routeur, vues, formulaires et interactions sur les dossiers locaux
+BACKLOG.md                     décisions confirmées et étapes prévues
 modern-proto/manifest.webmanifest  métadonnées PWA
 modern-proto/service-worker.js cache hors ligne (réseau d'abord, cache en secours)
 modern-proto/icon-192.png      icônes de l'application
