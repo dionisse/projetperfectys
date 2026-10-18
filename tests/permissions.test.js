@@ -27,8 +27,11 @@ test('la gestion d’organisation peut être déléguée explicitement dans le b
   };
   assert.strictEqual(Permissions.hasPermission(manager, 'organization', 'module.view', context), true);
   assert.strictEqual(Permissions.hasPermission(manager, 'organization', 'organization.manageMembers', context), false, 'la consultation seule ne donne pas le droit de gérer');
+  assert.strictEqual(Permissions.hasPermission(manager, 'organization', 'organization.manageFolders', context), false, 'gérer les membres ne donne pas le droit de créer des dossiers');
   manager.grants.organization[0].actions.push('organization.manageMembers');
   assert.strictEqual(Permissions.hasPermission(manager, 'organization', 'organization.manageMembers', context), true);
+  manager.grants.organization[0].actions.push('organization.manageFolders');
+  assert.strictEqual(Permissions.hasPermission(manager, 'organization', 'organization.manageFolders', context), true);
   assert.strictEqual(Permissions.hasPermission(manager, 'organization', 'organization.manageMembers', { organizationId: 'org-2' }), false);
   manager.grants.organization[0].actions = ['organization.manageMembers'];
   assert.strictEqual(Permissions.hasPermission(manager, 'organization', 'organization.manageMembers', context), false, 'l’action déléguée exige aussi module.view');
@@ -109,6 +112,7 @@ test('les actions disponibles sont décrites par module', () => {
   assert(actions.includes('data.export'));
   assert(Permissions.actionsForModule('organization').some((action) => action.id === 'module.view'));
   assert(Permissions.actionsForModule('organization').some((action) => action.id === 'organization.manageMembers'));
+  assert(Permissions.actionsForModule('organization').some((action) => action.id === 'organization.manageFolders'));
   assert(Permissions.actionsForModule('analytics').some((action) => action.id === 'module.view'));
   assert.deepStrictEqual(Permissions.actionsForModule('unknown-module'), [], 'un module inconnu est refusé');
   const unknownGrant = { role: 'manager', organizationId: 'org-1', grants: { 'unknown-module': [{ scope: { type: 'organization' }, actions: ['module.view'] }] } };

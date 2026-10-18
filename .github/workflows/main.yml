@@ -49,9 +49,10 @@ jobs:
             echo "Syntaxe OK : $file"
           done
 
-      - name: Run business rules, module registry and access policy tests
+      - name: Run business rules, folder isolation, module registry and access policy tests
         run: |
           node tests/store.test.js
+          node tests/workspaces.test.js
           node tests/modules.test.js
           node tests/permissions.test.js
 

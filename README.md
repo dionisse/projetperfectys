@@ -23,7 +23,7 @@ publier, un déploiement immédiat.
 |---|---|
 | Connexion (démo) | Aucun identifiant collecté ; e-mail/mot de passe et Google sont prévus, mais non actifs en démo |
 | Launcher | Catalogue modulaire, recherche et filtres ; ouverture selon les droits du profil simulé, autres modules à venir |
-| Organisation & accès (démo) | Profils temporaires et droits explicites par personne, module, périmètre et action ; refus par défaut |
+| Organisation & accès (démo) | Profils temporaires, gestion des dossiers locaux et droits explicites par personne, module, dossier et action ; refus par défaut |
 | Tableau de bord | Indicateurs (débit, crédit, résultat, pièces), dernières pièces, activité par journal, état des périodes |
 | Plan comptable | 18 comptes SYSCOHADA initiaux, recherche, filtres, création de compte, export CSV |
 | Journaux | Six journaux (AC, VE, BQ, CA, OD, PA) avec totaux et brouillons |
@@ -48,16 +48,13 @@ publier, un déploiement immédiat.
 
 ### Politique d’accès de démonstration
 
-Le refus est appliqué par défaut. Le Superviseur général dispose des droits d’administration sur son organisation de démonstration ; les profils gestionnaire et utilisateur/employé ne reçoivent aucun droit par leur rôle. Le Superviseur peut accorder explicitement à chaque profil des actions par module, sur l’organisation ou sur des noms de dossiers de démonstration. Toute action comptable exige aussi le droit de consulter son module. Le prototype distingue maintenant les gestes disponibles (modifier/supprimer un brouillon, créer un compte, clôturer/réouvrir une période, importer, réinitialiser ou restaurer) au lieu de les regrouper sous un droit général. Il accepte aussi plusieurs grants par module : dans cette proposition, les portées se cumulent et peuvent porter des ensembles d’actions différents.
+Le refus est appliqué par défaut. Le Superviseur général dispose des droits d’administration sur son organisation de démonstration ; les profils gestionnaire et utilisateur/employé ne reçoivent aucun droit par leur rôle. Les droits peuvent être accordés par module, sur l’organisation ou sur un ou plusieurs dossiers créés dans la démo. La sélection du dossier actif n’affiche que les dossiers autorisés au profil. Toute action comptable exige aussi le droit de consulter son module dans le même grant. Le prototype distingue les gestes disponibles (modifier/supprimer un brouillon, créer un compte, clôturer/réouvrir une période, importer, réinitialiser ou restaurer) et permet plusieurs grants par module ; dans cette proposition, les portées se cumulent et peuvent porter des ensembles d’actions différents.
 
-La règle de base est approuvée ; ces identifiants, le vocabulaire des actions, le cumul des grants et leurs effets métier restent à examiner ensemble. Cette politique est exécutée côté client pour éprouver l’interface. Les profils, organisations et dossiers sont fictifs ; les dossiers ne sont pas des répertoires Drive et les données comptables ne sont pas isolées par dossier. Ces contrôles ne constituent pas une sécurité réelle, ne sont pas liés à une authentification et ne protègent pas les données.
+Les dossiers de démonstration possèdent désormais des jeux de données comptables séparés dans le navigateur : le jeu existant est conservé dans « Dossier principal » et un dossier nouvellement créé démarre sans écritures, avec le référentiel comptable et les journaux initiaux. Les gardes de navigation et d’action évaluent les droits dans le dossier sélectionné. La règle générale est approuvée ; le vocabulaire des actions, le cumul des grants et leurs effets métier restent à examiner ensemble. Cette simulation reste côté client : elle n’est ni une sécurité réelle ni une authentification, ne se synchronise pas avec Google Drive et ne prend pas en charge l’écriture simultanée multi-utilisateur.
 
 ### Données de démonstration
 
-18 comptes, 6 journaux, 3 pièces validées et 1 brouillon. Les mouvements validés
-sont équilibrés à **2 832 000 XOF** au débit comme au crédit ; le résultat de
-démonstration est de **242 000 XOF**. Tout est persisté dans `localStorage`
-(clé `perfecto.lot1.v1`) et reste disponible après rechargement.
+Le dossier principal conserve les 18 comptes, 6 journaux, 3 pièces validées et 1 brouillon historiques. Les mouvements validés sont équilibrés à **2 832 000 XOF** au débit comme au crédit ; le résultat de démonstration est de **242 000 XOF**. Le registre des dossiers et chaque jeu comptable sont persistés dans `localStorage`. Les nouveaux dossiers contiennent le plan de comptes, les journaux et les périodes initiales, sans écritures recopiées. Les profils et leurs grants de démonstration restent temporaires et ne survivent pas au rechargement.
 
 ## Lancer en local
 
@@ -113,23 +110,25 @@ modern-proto/css/modern.css    identité GOBEX (papier, encre, vert canard et or
 modern-proto/js/store.js       données, règles métier, calculs, import/export
 modern-proto/js/modules.js     catalogue déclaratif des modules du launcher
 modern-proto/js/permissions.js politique d’accès démo (refus par défaut)
-modern-proto/js/app.js         routeur, vues, formulaires, interactions
+modern-proto/js/app.js         routeur, vues, formulaires et interactions sur les dossiers locaux
 modern-proto/manifest.webmanifest  métadonnées PWA
 modern-proto/service-worker.js cache hors ligne (réseau d'abord, cache en secours)
 modern-proto/icon-192.png      icônes de l'application
 modern-proto/icon-512.png
 tests/store.test.js            tests des règles métier (Node, sans dépendance)
+tests/workspaces.test.js       tests de séparation des dossiers locaux
 ```
 
 ## Tests
 
 ```bash
 node tests/store.test.js
+node tests/workspaces.test.js
 node tests/modules.test.js
 node tests/permissions.test.js
 ```
 
-Les tests couvrent les règles comptables, le catalogue modulaire et la politique d’accès de démonstration (refus par défaut, organisation, actions et périmètre dossier). La CI GitHub Actions exécute ces scénarios ainsi qu’un contrôle de syntaxe et un test de service HTTP.
+Les tests couvrent les règles comptables, l’isolation des dossiers locaux, le catalogue modulaire et la politique d’accès de démonstration (refus par défaut, organisation, actions et périmètre dossier). La CI GitHub Actions exécute ces scénarios ainsi qu’un contrôle de syntaxe et un test de service HTTP.
 
 ## Limites de cette prévisualisation
 
@@ -137,8 +136,8 @@ La connexion et le launcher sont des écrans de démonstration : il n'y a pas en
 d'authentification réelle ni de connexion à Google Drive. Un point de restauration
 local conserve le dernier état comptable avant une modification, mais reste dans le
 même navigateur et ne remplace pas une sauvegarde externe indépendante. Il n'y a pas non plus de
-synchronisation multi-utilisateur ; les données comptables restent locales dans le
-navigateur. Les limites comptables du Lot 1 restent applicables (notamment tiers et
+synchronisation multi-utilisateur ; les dossiers et leurs données comptables restent
+locaux dans le navigateur et ne sont pas partagés entre appareils. Les limites comptables du Lot 1 restent applicables (notamment tiers et
 auxiliaires détaillés, extourne, lettrage, rapprochement bancaire, exports PDF/Excel
 et états financiers SYSCOHADA complets). Le prototype valide le parcours avant la
 conception du stockage partagé et de l'authentification.

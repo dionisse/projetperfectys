@@ -1824,3 +1824,33 @@ body.launcher-mode .content { background: #f7f6f0; }
 .demo-grant-add:disabled { color: #8a9690; background: #f4f5f2; cursor: not-allowed; }
 .demo-no-grants { color: #77837e; font-size: .66rem; }
 .demo-no-grants[hidden] { display: none !important; }
+
+/* Dossiers comptables locaux de démonstration et contexte visible */
+.demo-folder-switch { display: grid; gap: 4px; min-width: 160px; }
+.demo-folder-switch > span { color: #6f7d77; font-size: .53rem; font-weight: 800; letter-spacing: .12em; }
+.demo-folder-switch select { max-width: 230px; min-height: 34px; padding: 5px 8px; border: 1px solid #d5dfd9; border-radius: 5px; color: #344d53; background: #fff; font-size: .67rem; }
+.demo-folder-unavailable { color: #b77a34; font-size: .67rem; font-weight: 700; }
+.active-folder-indicator { max-width: 220px; overflow: hidden; padding: 6px 9px; border: 1px solid #d9e5df; border-radius: 5px; color: #416258; background: #f4f8f5; font-size: .61rem; font-weight: 800; letter-spacing: .04em; text-overflow: ellipsis; white-space: nowrap; }
+.demo-folders-panel { margin-bottom: 16px; }
+.demo-folder-list { display: grid; gap: 8px; margin-top: 14px; }
+.demo-folder-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #e2e9e4; border-radius: 7px; background: #fbfcfa; }
+.demo-folder-icon { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 7px; color: #16766d; background: #eaf4ef; }
+.demo-folder-row > span:nth-child(2) { display: grid; gap: 3px; }
+.demo-folder-row strong { color: #29454a; font-size: .76rem; }
+.demo-folder-row small { color: #77837e; font-size: .62rem; }
+.demo-folder-status { color: #78847d; font-size: .61rem; font-weight: 700; }
+.demo-folder-status.is-active { color: #08776e; }
+.demo-folder-create { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #e8eee9; }
+.demo-folder-create .field { margin: 0; }
+.demo-folder-create button { min-height: 38px; }
+.demo-folder-field select[multiple] { min-height: 84px; padding: 6px; }
+@media (max-width: 850px) {
+  .demo-folder-switch { min-width: 150px; }
+}
+@media (max-width: 700px) {
+  .demo-folder-switch { width: 100%; min-width: 0; }
+  .demo-folder-switch select { width: 100%; max-width: none; }
+  .demo-folder-create { grid-template-columns: 1fr; }
+  .demo-folder-create button { justify-self: start; }
+  .active-folder-indicator { max-width: 105px; padding: 5px 6px; font-size: .5rem; }
+}

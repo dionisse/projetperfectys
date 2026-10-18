@@ -8,6 +8,10 @@
 
   var STORAGE_KEY = 'perfecto.lot1.v1';
   var BACKUP_STORAGE_KEY = 'perfecto.lot1.backup.v1';
+  var FOLDERS_STORAGE_KEY = 'perfecto.folders.v1';
+  var ACTIVE_FOLDER_STORAGE_KEY = 'perfecto.activeFolder.v1';
+  var DEFAULT_FOLDER_ID = 'folder-main';
+  var DEFAULT_FOLDER_NAME = 'Dossier principal';
   var EXERCICE = 2026;
 
   var JOURNAUX = [
@@ -86,7 +90,7 @@
     return out;
   }
 
-  function initialState() {
+  function initialState(withSeedEntries) {
     return {
       version: 1,
       exercise: EXERCICE,
@@ -94,33 +98,133 @@
         return { code: a.code, label: a.label, cls: a.cls, nature: a.nature, aux: a.aux, active: true };
       }),
       journals: JOURNAUX.slice(),
-      entries: seedEntries(),
+      entries: withSeedEntries === false ? [] : seedEntries(),
       periods: seedPeriods()
     };
   }
 
   var state = null;
+  var folderCatalog = null;
+  var activeFolderId = null;
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
   }
 
+  function isFolderRecord(folder) {
+    return !!(folder && typeof folder.id === 'string' && folder.id && typeof folder.name === 'string' && folder.name.trim());
+  }
+
+  function saveFolderCatalog() {
+    try {
+      global.localStorage.setItem(FOLDERS_STORAGE_KEY, JSON.stringify(folderCatalog));
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function ensureFolderCatalog() {
+    if (folderCatalog) return;
+    try {
+      var raw = global.localStorage.getItem(FOLDERS_STORAGE_KEY);
+      var parsed = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(parsed) && parsed.every(isFolderRecord)) folderCatalog = parsed;
+    } catch (err) {
+      folderCatalog = null;
+    }
+    if (!folderCatalog) folderCatalog = [{ id: DEFAULT_FOLDER_ID, name: DEFAULT_FOLDER_NAME, seeded: true }];
+    if (!folderCatalog.some(function (folder) { return folder.id === DEFAULT_FOLDER_ID; })) {
+      folderCatalog.unshift({ id: DEFAULT_FOLDER_ID, name: DEFAULT_FOLDER_NAME, seeded: true });
+    }
+    try {
+      var selected = global.localStorage.getItem(ACTIVE_FOLDER_STORAGE_KEY);
+      activeFolderId = folderCatalog.some(function (folder) { return folder.id === selected; }) ? selected : DEFAULT_FOLDER_ID;
+    } catch (err) {
+      activeFolderId = DEFAULT_FOLDER_ID;
+    }
+    if (activeFolderId !== DEFAULT_FOLDER_ID && !folderCatalog.some(function (folder) { return folder.id === activeFolderId; })) activeFolderId = DEFAULT_FOLDER_ID;
+    saveFolderCatalog();
+    try { global.localStorage.setItem(ACTIVE_FOLDER_STORAGE_KEY, activeFolderId); } catch (err) { /* stockage indisponible */ }
+  }
+
+  function folderById(folderId) {
+    ensureFolderCatalog();
+    return folderCatalog.find(function (folder) { return folder.id === folderId; }) || null;
+  }
+
+  function currentFolderStorageKey() {
+    ensureFolderCatalog();
+    return activeFolderId === DEFAULT_FOLDER_ID ? STORAGE_KEY : STORAGE_KEY + '.folder.' + activeFolderId;
+  }
+
+  function currentBackupStorageKey() {
+    ensureFolderCatalog();
+    return activeFolderId === DEFAULT_FOLDER_ID ? BACKUP_STORAGE_KEY : BACKUP_STORAGE_KEY + '.folder.' + activeFolderId;
+  }
+
+  function folders() {
+    ensureFolderCatalog();
+    return clone(folderCatalog);
+  }
+
+  function currentFolder() {
+    ensureFolderCatalog();
+    return clone(folderById(activeFolderId));
+  }
+
+  function createFolder(name) {
+    ensureFolderCatalog();
+    var cleanName = String(name == null ? '' : name).trim().replace(/\s+/g, ' ');
+    if (!cleanName) return { ok: false, errors: ['Le nom du dossier est obligatoire.'] };
+    if (cleanName.length > 80) return { ok: false, errors: ['Le nom du dossier ne peut pas dépasser 80 caractères.'] };
+    if (/[\\/]/.test(cleanName)) return { ok: false, errors: ['Le nom ne peut pas contenir de barre oblique.'] };
+    var normalized = cleanName.toLocaleLowerCase();
+    if (folderCatalog.some(function (folder) { return folder.name.trim().toLocaleLowerCase() === normalized; })) {
+      return { ok: false, errors: ['Un dossier portant ce nom existe déjà dans l’organisation.'] };
+    }
+    var id;
+    do {
+      id = 'folder-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+    } while (folderCatalog.some(function (folder) { return folder.id === id; }));
+    var folder = { id: id, name: cleanName, seeded: false };
+    folderCatalog.push(folder);
+    if (!saveFolderCatalog()) {
+      folderCatalog.pop();
+      return { ok: false, errors: ['Impossible d’enregistrer le dossier dans ce navigateur.'] };
+    }
+    return { ok: true, errors: [], folder: clone(folder) };
+  }
+
+  function switchFolder(folderId) {
+    ensureFolderCatalog();
+    if (!folderById(folderId)) return { ok: false, errors: ['Dossier de démonstration introuvable.'] };
+    if (folderId === activeFolderId) return { ok: true, errors: [], folder: currentFolder() };
+    if (state && !save()) return { ok: false, errors: ['Impossible d’enregistrer le dossier actif avant le changement.'] };
+    activeFolderId = folderId;
+    state = null;
+    try { global.localStorage.setItem(ACTIVE_FOLDER_STORAGE_KEY, activeFolderId); } catch (err) { /* la sélection restera en mémoire */ }
+    return { ok: true, errors: [], folder: currentFolder(), state: load() };
+  }
+
   function load() {
     if (state) return state;
+    ensureFolderCatalog();
     try {
-      var raw = global.localStorage.getItem(STORAGE_KEY);
+      var raw = global.localStorage.getItem(currentFolderStorageKey());
       if (raw) {
         var parsed = JSON.parse(raw);
-        if (parsed && parsed.accounts && parsed.journals && parsed.entries) {
+        if (parsed && Array.isArray(parsed.accounts) && Array.isArray(parsed.journals) && Array.isArray(parsed.entries)) {
           state = parsed;
           ensurePeriodsForEntries();
           return state;
         }
       }
     } catch (err) {
-      /* Stockage indisponible ou corrompu : on repart sur les données de démonstration. */
+      /* Stockage indisponible ou corrompu : le dossier repart sur son état initial. */
     }
-    state = initialState();
+    var folder = folderById(activeFolderId);
+    state = initialState(!folder || folder.seeded !== false);
     save();
     return state;
   }
@@ -141,7 +245,7 @@
         createdAt: new Date().toISOString(),
         data: previous
       };
-      global.localStorage.setItem(BACKUP_STORAGE_KEY, JSON.stringify(snapshot));
+      global.localStorage.setItem(currentBackupStorageKey(), JSON.stringify(snapshot));
       return true;
     } catch (err) {
       return false;
@@ -151,10 +255,12 @@
   function save() {
     if (!state) return false;
     try {
+      ensureFolderCatalog();
+      var storageKey = currentFolderStorageKey();
       var serialized = JSON.stringify(state);
-      var previous = global.localStorage.getItem(STORAGE_KEY);
+      var previous = global.localStorage.getItem(storageKey);
       if (previous && previous !== serialized) snapshotPreviousState(previous);
-      global.localStorage.setItem(STORAGE_KEY, serialized);
+      global.localStorage.setItem(storageKey, serialized);
       return true;
     } catch (err) {
       return false;
@@ -162,7 +268,9 @@
   }
 
   function reset() {
-    state = initialState();
+    ensureFolderCatalog();
+    var folder = folderById(activeFolderId);
+    state = initialState(!folder || folder.seeded !== false);
     save();
     return state;
   }
@@ -539,6 +647,7 @@
       application: 'PERFECTO',
       module: 'Comptabilité générale SYSCOHADA',
       version: 1,
+      folder: currentFolder(),
       exportedAt: new Date().toISOString(),
       data: clone(load())
     };
@@ -563,7 +672,7 @@
 
   function readBackupSnapshot() {
     try {
-      var raw = global.localStorage.getItem(BACKUP_STORAGE_KEY);
+      var raw = global.localStorage.getItem(currentBackupStorageKey());
       if (!raw) return null;
       var snapshot = JSON.parse(raw);
       if (!snapshot || snapshot.application !== 'PERFECTO' || snapshot.version !== 1 || !isBackupData(snapshot.data)) return null;
@@ -632,6 +741,11 @@
   global.PerfectoStore = {
     STORAGE_KEY: STORAGE_KEY,
     EXERCICE: EXERCICE,
+    folders: folders,
+    currentFolder: currentFolder,
+    currentStorageKey: currentFolderStorageKey,
+    createFolder: createFolder,
+    switchFolder: switchFolder,
     load: load,
     save: save,
     reset: reset,

@@ -69,6 +69,7 @@
   var ACCESS_MODULES = [{ id: 'organization', name: 'Organisation & accès', status: 'available', route: 'organization', scopeable: false }].concat(ModuleRegistry.all());
   var demoMembers = [{ id: 'demo-supervisor', name: 'Compte superviseur (démo)', role: 'supervisor', organizationId: DEMO_ORGANIZATION_ID, grants: {} }];
   var activeDemoMemberId = 'demo-supervisor';
+  var activeDemoFolderId = S.currentFolder().id;
   var demoMemberSequence = 0;
 
   function getActiveDemoMember() {
@@ -89,6 +90,36 @@
     };
   }
 
+  function demoFolderById(folderId) {
+    return S.folders().find(function (folder) { return folder.id === folderId; }) || null;
+  }
+
+  function accountingAccessContext() {
+    var folder = activeDemoFolderId ? demoFolderById(activeDemoFolderId) : null;
+    return demoAccessContext('folder', folder && folder.name);
+  }
+
+  function permittedDemoFolders(member) {
+    return S.folders().filter(function (folder) {
+      return hasDemoPermission(member, 'accounting', 'module.view', demoAccessContext('folder', folder.name));
+    });
+  }
+
+  function ensureDemoFolderForMember(member) {
+    var permitted = permittedDemoFolders(member);
+    var selected = permitted.find(function (folder) { return folder.id === activeDemoFolderId; }) || permitted[0] || null;
+    if (!selected) {
+      activeDemoFolderId = null;
+      return permitted;
+    }
+    if (selected.id !== activeDemoFolderId) {
+      var switched = S.switchFolder(selected.id);
+      if (switched.ok) activeDemoFolderId = selected.id;
+      else return [];
+    }
+    return permitted;
+  }
+
   function hasDemoPermission(member, moduleId, actionId, context) {
     return Permissions.hasPermission(member, moduleId, actionId, context || demoAccessContext('organization'));
   }
@@ -99,6 +130,8 @@
       case 'configure-demo-access':
       case 'remove-demo-member':
         return { moduleId: 'organization', actionId: 'organization.manageMembers' };
+      case 'create-demo-folder':
+        return { moduleId: 'organization', actionId: 'organization.manageFolders' };
       case 'open-module':
         return { moduleId: trigger && trigger.getAttribute('data-module-id'), actionId: 'module.view' };
       case 'open-entry':
@@ -135,7 +168,8 @@
   function canPerformDemoAction(action, trigger, shouldNotify) {
     var rule = demoActionRule(action, trigger);
     if (!rule) return true;
-    var allowed = !!rule.moduleId && hasDemoPermission(getActiveDemoMember(), rule.moduleId, rule.actionId, demoAccessContext('organization'));
+    var context = rule.moduleId === 'accounting' ? accountingAccessContext() : demoAccessContext('organization');
+    var allowed = !!rule.moduleId && !!context && hasDemoPermission(getActiveDemoMember(), rule.moduleId, rule.actionId, context);
     if (!allowed && shouldNotify !== false) {
       toast('Action refusée par défaut : le profil simulé ne possède pas le droit « ' + rule.actionId + ' ».', 'warning');
     }
@@ -158,7 +192,10 @@
         var hasId = /(?:^|[?&])id=/.test(hash);
         requirement = { moduleId: 'accounting', actionId: hasId ? 'draft.edit' : 'draft.create' };
       }
-      if (requirement) link.hidden = !hasDemoPermission(getActiveDemoMember(), requirement.moduleId, requirement.actionId, demoAccessContext('organization'));
+      if (requirement) {
+        var context = requirement.moduleId === 'accounting' ? accountingAccessContext() : demoAccessContext('organization');
+        link.hidden = !hasDemoPermission(getActiveDemoMember(), requirement.moduleId, requirement.actionId, context);
+      }
     });
     var form = $('#entry-form', root);
     if (form) {
@@ -168,15 +205,19 @@
         var actions = mode === 'posted'
           ? [editing ? 'draft.edit' : 'draft.create', 'entry.validate']
           : [editing ? 'draft.edit' : 'draft.create'];
-        var allowed = actions.every(function (actionId) { return hasDemoPermission(getActiveDemoMember(), 'accounting', actionId, demoAccessContext('organization')); });
+        var context = accountingAccessContext();
+        var allowed = actions.every(function (actionId) { return hasDemoPermission(getActiveDemoMember(), 'accounting', actionId, context); });
         button.hidden = !allowed;
       });
     }
     var canManageOrganization = hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageMembers', demoAccessContext('organization'));
     $$('[data-demo-member-role]', root).forEach(function (select) { select.disabled = !canManageOrganization; });
+    var canManageFolders = hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageFolders', demoAccessContext('organization'));
+    var folderForm = $('#demo-folder-form', root);
+    if (folderForm) folderForm.hidden = !canManageFolders;
     var importInput = $('#import-file', root);
     if (importInput) {
-      var canImportData = hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', demoAccessContext('organization'));
+      var canImportData = hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext());
       importInput.hidden = !canImportData;
       var importLabel = $('label[for="import-file"]', root);
       if (importLabel) importLabel.hidden = !canImportData;
@@ -271,14 +312,14 @@
       navigate('#/launcher');
       return;
     }
-    if (ACCOUNTING_ROUTES.indexOf(route) !== -1 && !hasDemoPermission(activeMember, 'accounting', 'module.view', orgContext)) {
+    if (ACCOUNTING_ROUTES.indexOf(route) !== -1 && !hasDemoPermission(activeMember, 'accounting', 'module.view', accountingAccessContext())) {
       toast('Aucun accès à la Comptabilité générale n’est accordé à ce profil de démonstration.', 'warning');
       navigate('#/launcher');
       return;
     }
     if (route === 'entry') {
       var requiredEntryAction = parsed.params.id ? 'draft.edit' : 'draft.create';
-      if (!hasDemoPermission(activeMember, 'accounting', requiredEntryAction, orgContext)) {
+      if (!hasDemoPermission(activeMember, 'accounting', requiredEntryAction, accountingAccessContext())) {
         toast('Ce profil ne possède pas le droit nécessaire pour cette saisie.', 'warning');
         navigate('#/launcher');
         return;
@@ -308,6 +349,14 @@
     }
     view.innerHTML = html;
     applyDemoActionGates(document);
+
+    var folderIndicator = $('#active-folder-indicator');
+    if (folderIndicator) {
+      var inAccounting = ACCOUNTING_ROUTES.indexOf(route) !== -1;
+      folderIndicator.hidden = !inAccounting;
+      folderIndicator.textContent = inAccounting ? 'DOSSIER · ' + S.currentFolder().name : '';
+      folderIndicator.title = inAccounting ? 'Données locales isolées pour ce dossier de démonstration' : '';
+    }
 
     var title = TITLES[route] || TITLES.login;
     var pageTitle = $('#page-title');
@@ -421,7 +470,8 @@
 
   function launcherModuleCard(module, index) {
     var available = module.status === 'available' && module.route;
-    var permitted = available && hasDemoPermission(getActiveDemoMember(), module.id, 'module.view', demoAccessContext('organization'));
+    var moduleContext = module.id === 'accounting' ? accountingAccessContext() : demoAccessContext('organization');
+    var permitted = available && hasDemoPermission(getActiveDemoMember(), module.id, 'module.view', moduleContext);
     var number = String(index + 1).padStart(2, '0');
     var action = permitted
       ? '<button type="button" class="module-open-button" data-action="open-module" data-module-id="' + esc(module.id) + '">Ouvrir le module <span aria-hidden="true">→</span></button>'
@@ -442,6 +492,7 @@
     var modules = ModuleRegistry.all();
     var stats = ModuleRegistry.stats();
     var activeMember = getActiveDemoMember();
+    var accessibleFolders = ensureDemoFolderForMember(activeMember);
     var availableLabel = String(stats.available).padStart(2, '0');
     var availableText = stats.available === 1 ? 'disponible' : 'disponibles';
     var availableNoun = stats.available === 1 ? 'module disponible' : 'modules disponibles';
@@ -450,6 +501,11 @@
       var selected = member.id === activeDemoMemberId ? ' selected' : '';
       return '<option value="' + esc(member.id) + '"' + selected + '>' + esc(demoRoleLabel(member.role) + ' · ' + member.name) + '</option>';
     }).join('');
+    var folderControl = accessibleFolders.length
+      ? '<label class="demo-folder-switch"><span>DOSSIER COMPTABLE</span><select id="demo-active-folder" aria-label="Choisir un dossier comptable">' + accessibleFolders.map(function (folder) {
+          return '<option value="' + esc(folder.id) + '"' + (folder.id === activeDemoFolderId ? ' selected' : '') + '>' + esc(folder.name) + '</option>';
+        }).join('') + '</select></label>'
+      : '<span class="demo-folder-unavailable">Aucun dossier comptable autorisé</span>';
     var organizationControl = hasDemoPermission(activeMember, 'organization', 'module.view', demoAccessContext('organization'))
       ? '<a class="org-manage-link" href="#/organization">Organisation &amp; accès <span aria-hidden="true">→</span></a>'
       : '<span class="org-manage-disabled" title="Aucun droit de consultation accordé à ce profil">Organisation &amp; accès · accès non accordé</span>';
@@ -468,6 +524,7 @@
           <div class="workspace-strip">
             <div><span class="workspace-caption">ORGANISATION</span><strong>Organisation de démonstration</strong></div>
             <span class="role-chip">${esc(demoRoleLabel(activeMember.role).toUpperCase())} · DÉMO</span>
+            ${folderControl}
             <label class="demo-profile-switch"><span>PROFIL SIMULÉ</span><select id="demo-active-profile" aria-label="Choisir un profil de démonstration">${profileOptions}</select></label>
             ${organizationControl}
             <button type="button" class="drive-status" data-action="launcher-info"><span class="drive-status-dot"></span>Google Drive <b>À connecter</b></button>
@@ -546,6 +603,15 @@
     var managers = demoMembers.filter(function (member) { return member.role === 'manager'; }).length;
     var employees = demoMembers.filter(function (member) { return member.role === 'employee'; }).length;
     var memberRows = demoMembers.map(demoMemberRow).join('');
+    var activeMember = getActiveDemoMember();
+    var canManageFolders = hasDemoPermission(activeMember, 'organization', 'organization.manageFolders', demoAccessContext('organization'));
+    var visibleFolders = S.folders().filter(function (folder) {
+      return canManageFolders || hasDemoPermission(activeMember, 'accounting', 'module.view', demoAccessContext('folder', folder.name));
+    });
+    var folderRows = visibleFolders.map(function (folder) {
+      var active = folder.id === activeDemoFolderId;
+      return '<div class="demo-folder-row"><span class="demo-folder-icon" aria-hidden="true">▰</span><span><strong>' + esc(folder.name) + '</strong><small>' + (folder.seeded ? 'Dossier initial · données historiques conservées' : 'Dossier de démonstration · données distinctes') + '</small></span><span class="demo-folder-status' + (active ? ' is-active' : '') + '">' + (active ? 'Sélectionné' : 'Disponible') + '</span></div>';
+    }).join('');
     var rows = modules.map(function (module) {
       var availability = module.status === 'available' ? 'Disponible en démo' : 'À venir';
       return '<tr>' +
@@ -586,6 +652,15 @@
               <div class="role-level"><span class="role-level-number">03</span><div><strong>Utilisateurs / employés</strong><small>Accès selon l’affiliation et les droits accordés</small></div></div>
             </article>
           </div>
+          <section class="organization-panel demo-folders-panel">
+            <div class="members-heading"><div><div class="organization-panel-kicker">DONNÉES LOCALES · DÉMO</div><h2>Dossiers de travail</h2><p>Chaque dossier possède son propre jeu de données comptables sur cet appareil.</p></div><span class="permission-pending">${visibleFolders.length} dossier(s) visible(s)</span></div>
+            <div class="demo-folder-list">${folderRows || '<p class="small muted">Aucun dossier comptable n’est visible pour ce profil.</p>'}</div>
+            <form id="demo-folder-form" class="demo-folder-create" novalidate>
+              <div class="field"><label for="demo-folder-name">Nom du nouveau dossier</label><input id="demo-folder-name" name="name" type="text" maxlength="80" placeholder="Ex. Agence Nord" required><span class="hint">Les données ne sont pas copiées depuis un autre dossier.</span></div>
+              <button type="submit" class="btn btn-primary btn-sm" data-action="create-demo-folder">＋ Créer un dossier</button>
+            </form>
+            <p class="small muted">Ces dossiers sont locaux au navigateur et ne sont pas des répertoires Google Drive. Aucune synchronisation ni sécurité serveur n’est activée.</p>
+          </section>
           <section class="organization-panel members-panel">
             <div class="members-heading">
               <div><div class="organization-panel-kicker">PROFILS DE DÉMONSTRATION</div><h2>Membres de l’organisation</h2><p>${demoMembers.length} profil(s) · ${managers} gestionnaire(s) · ${employees} utilisateur(s)/employé(s)</p></div>
@@ -645,14 +720,18 @@
   function demoPermissionGrantRow(module, grant, grantIndex) {
     grant = grant || { scope: { type: 'organization', folders: [] }, actions: [] };
     var scopeType = module.scopeable === false ? 'organization' : (grant.scope && grant.scope.type === 'folder' ? 'folder' : 'organization');
-    var folders = grant.scope && Array.isArray(grant.scope.folders) ? grant.scope.folders.join(', ') : '';
+    var folders = grant.scope && Array.isArray(grant.scope.folders) ? grant.scope.folders : [];
     var scopeOptions = '<option value="organization"' + (scopeType === 'organization' ? ' selected' : '') + '>Organisation entière</option>';
     if (module.scopeable !== false) scopeOptions += '<option value="folder"' + (scopeType === 'folder' ? ' selected' : '') + '>Dossier(s) précis</option>';
+    var folderOptions = S.folders().map(function (folder) {
+      var selected = folders.some(function (name) { return String(name).trim().toLocaleLowerCase() === folder.name.trim().toLocaleLowerCase(); });
+      return '<option value="' + esc(folder.name) + '"' + (selected ? ' selected' : '') + '>' + esc(folder.name) + '</option>';
+    }).join('');
     var folderField = module.scopeable === false ? '' :
       '<div class="field demo-folder-field" data-demo-folder-field="' + esc(module.id) + '" data-demo-folder-index="' + grantIndex + '"' + (scopeType === 'folder' ? '' : ' hidden') + '>' +
-        '<label for="demo-folders-' + esc(module.id) + '-' + grantIndex + '">Noms des dossiers de démo</label>' +
-        '<input id="demo-folders-' + esc(module.id) + '-' + grantIndex + '" data-demo-folder-names="' + esc(module.id) + '" data-demo-folder-index="' + grantIndex + '" type="text" value="' + esc(folders) + '" placeholder="Ex. Comptabilité 2026, Agence Nord">' +
-        '<span class="hint">Sépare plusieurs noms par une virgule. Aucun dossier Drive réel n’est sélectionné.</span></div>';
+        '<label for="demo-folders-' + esc(module.id) + '-' + grantIndex + '">Dossier(s) de travail</label>' +
+        '<select id="demo-folders-' + esc(module.id) + '-' + grantIndex + '" data-demo-folder-names="' + esc(module.id) + '" data-demo-folder-index="' + grantIndex + '" multiple size="' + Math.max(2, Math.min(5, S.folders().length)) + '">' + folderOptions + '</select>' +
+        '<span class="hint">Ctrl/Cmd + clic pour en choisir plusieurs. Ces dossiers ne sont pas des liens Google Drive.</span></div>';
     var actions = Permissions.actionsForModule(module.id).map(function (action) {
       var checked = Array.isArray(grant.actions) && grant.actions.indexOf(action.id) !== -1;
       return '<label class="demo-action-choice"><input type="checkbox" data-demo-action-module="' + esc(module.id) + '" data-demo-action-index="' + grantIndex + '" data-demo-action-id="' + esc(action.id) + '"' + (checked ? ' checked' : '') + '><span>' + esc(action.label) + '</span></label>';
@@ -706,7 +785,7 @@
     var body = '<form id="demo-access-form" novalidate>' +
       '<div class="alert info">Refus par défaut. Les grants d’un même module se cumulent ; pour chaque portée, une action métier exige aussi « Consulter le module ».</div>' +
       '<div class="demo-access-list"><div class="demo-access-list-heading"><strong>Droits de ' + esc(member.name) + '</strong><span>PROPOSITION DE DÉMO</span></div>' + moduleRows + '</div>' +
-      '<p class="small muted">Le vocabulaire et les effets métier des actions restent à valider. Plusieurs portées peuvent définir des actions différentes. Les portées dossier sont préparatoires : les données comptables ne sont pas séparées par dossier dans cette démo.</p>' +
+      '<p class="small muted">Le vocabulaire et les effets métier des actions restent à valider. Plusieurs portées peuvent définir des actions différentes. En démo locale, les données sont isolées par dossier sur cet appareil ; aucun partage cloud n’est actif.</p>' +
     '</form>';
     var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button>' +
       '<button type="submit" class="btn btn-primary" form="demo-access-form">Enregistrer en démo</button>';
@@ -782,8 +861,9 @@
             return;
           }
           var scope = $('[data-demo-scope-module="' + module.id + '"][data-demo-scope-index="' + grantIndex + '"]', form).value;
-          var folders = scope === 'folder'
-            ? String($('[data-demo-folder-names="' + module.id + '"][data-demo-folder-index="' + grantIndex + '"]', form).value || '').split(',').map(function (name) { return name.trim(); }).filter(Boolean)
+          var folderSelect = $('[data-demo-folder-names="' + module.id + '"][data-demo-folder-index="' + grantIndex + '"]', form);
+          var folders = scope === 'folder' && folderSelect
+            ? Array.prototype.map.call(folderSelect.selectedOptions, function (option) { return option.value; })
             : [];
           if (scope === 'folder' && !folders.length) { invalidFolder = true; return; }
           moduleGrants.push({ scope: { type: scope, folders: folders }, actions: checked });
@@ -791,7 +871,7 @@
         if (moduleGrants.length) grants[module.id] = moduleGrants;
       });
       if (invalidFolder) {
-        toast('Chaque portée dossier avec des droits doit préciser au moins un nom de dossier de démonstration.', 'warning');
+        toast('Chaque portée dossier avec des droits doit sélectionner au moins un dossier de travail.', 'warning');
         return;
       }
       if (missingModuleView) {
@@ -1519,7 +1599,7 @@
   /* -------------------------------- Paramètres ----------------------------- */
   function viewSettings() {
     var raw = '';
-    try { raw = window.localStorage.getItem(S.STORAGE_KEY) || ''; } catch (err) { raw = ''; }
+    try { raw = window.localStorage.getItem(S.currentStorageKey()) || ''; } catch (err) { raw = ''; }
     var sizeKb = (raw.length / 1024).toFixed(1);
     var state = S.getState();
     var backupInfo = S.backupInfo();
@@ -1548,7 +1628,7 @@
         '<input id="import-file" type="file" accept="application/json,.json" class="sr-only">' +
         '<button type="button" class="btn btn-danger" data-action="reset-data">↺ Réinitialiser la démo</button>' +
       '</div>' +
-      '<p class="small muted mt-8">L’export produit un fichier JSON relisible par n’importe quel outil. L’import remplace toutes les données locales.</p>' +
+      '<p class="small muted mt-8">L’export identifie le dossier actif. L’import remplace uniquement les données du dossier actif.</p>' +
       '<div class="local-backup-box"><div class="local-backup-heading"><span>RESTAURATION LOCALE</span><b>1 point</b></div>' + backupMarkup +
       '<p class="small muted">Ce point reste dans ce navigateur et conserve uniquement l’état précédent. Il ne remplace pas une copie exportée sur un support indépendant.</p></div>' +
     '</section>';
@@ -1642,7 +1722,7 @@
         var editingId = payload.id;
         var requiredWriteActions = [editingId ? 'draft.edit' : 'draft.create'];
         if (mode === 'posted') requiredWriteActions.push('entry.validate');
-        if (!requiredWriteActions.every(function (actionId) { return hasDemoPermission(getActiveDemoMember(), 'accounting', actionId, demoAccessContext('organization')); })) {
+        if (!requiredWriteActions.every(function (actionId) { return hasDemoPermission(getActiveDemoMember(), 'accounting', actionId, accountingAccessContext()); })) {
           showFormErrors(['Action refusée par défaut : les droits de démonstration requis ne sont pas accordés.']);
           return;
         }
@@ -1677,7 +1757,7 @@
           if (!file) return;
           var reader = new FileReader();
           reader.onload = function () {
-            if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', demoAccessContext('organization'))) {
+            if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext())) {
               toast('Import refusé par défaut : ce profil ne peut pas gérer les données.', 'warning');
               return;
             }
@@ -1702,7 +1782,20 @@
         var selected = demoMembers.find(function (member) { return member.id === profileSelect.value; });
         if (!selected) return;
         activeDemoMemberId = selected.id;
+        ensureDemoFolderForMember(selected);
         toast('Profil simulé actif : ' + demoRoleLabel(selected.role) + '. Aucun compte réel n’est connecté.', 'info');
+        render();
+      });
+    }
+    var folderSelect = $('#demo-active-folder');
+    if (folderSelect) {
+      folderSelect.addEventListener('change', function () {
+        var folder = permittedDemoFolders(getActiveDemoMember()).find(function (item) { return item.id === folderSelect.value; });
+        if (!folder) { toast('Ce profil n’a pas accès à ce dossier.', 'warning'); render(); return; }
+        var result = S.switchFolder(folder.id);
+        if (!result.ok) { toast(result.errors[0] || 'Changement de dossier impossible.', 'error'); render(); return; }
+        activeDemoFolderId = folder.id;
+        toast('Dossier actif : ' + folder.name + '. Les données sont isolées localement pour la démonstration.', 'info');
         render();
       });
     }
@@ -1718,6 +1811,20 @@
   }
 
   function bindOrganizationView() {
+    var folderForm = $('#demo-folder-form');
+    if (folderForm) {
+      folderForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        if (!hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageFolders', demoAccessContext('organization'))) {
+          toast('Création refusée par défaut : le droit de gestion des dossiers n’est pas accordé.', 'warning');
+          return;
+        }
+        var result = S.createFolder($('#demo-folder-name', folderForm).value);
+        if (!result.ok) { toast(result.errors[0] || 'Création du dossier impossible.', 'warning'); return; }
+        toast('Dossier « ' + result.folder.name + ' » créé, sans copie de données.', 'success');
+        render();
+      });
+    }
     $$('[data-demo-member-role]').forEach(function (select) {
       select.addEventListener('change', function () {
         if (!hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageMembers', demoAccessContext('organization'))) {
@@ -1949,7 +2056,7 @@
         break;
       }
       case 'reset-data':
-        if (!window.confirm('Réinitialiser toutes les données locales avec la démonstration du Lot 1 ? Un point de restauration sera conservé avant le remplacement.')) break;
+        if (!window.confirm('Réinitialiser les données du dossier « ' + S.currentFolder().name + ' » ? Un point de restauration propre à ce dossier sera conservé avant le remplacement.')) break;
         S.reset();
         toast('Données de démonstration restaurées. L’état précédent reste récupérable localement.', 'success');
         render();
@@ -2044,7 +2151,7 @@
     var form = $('#account-form');
     form.addEventListener('submit', function (event) {
       event.preventDefault();
-      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'accounts.create', demoAccessContext('organization'))) {
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'accounts.create', accountingAccessContext())) {
         toast('Création refusée par défaut : le droit « accounts.create » n’est pas accordé.', 'warning');
         return;
       }

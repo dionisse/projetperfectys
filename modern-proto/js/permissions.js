@@ -33,7 +33,8 @@
 
   var ORGANIZATION_ACTIONS = [
     { id: 'module.view', label: 'Consulter l’organisation' },
-    { id: 'organization.manageMembers', label: 'Gérer les membres et les accès' }
+    { id: 'organization.manageMembers', label: 'Gérer les membres et les accès' },
+    { id: 'organization.manageFolders', label: 'Gérer les dossiers de démonstration' }
   ];
 
   function actionsForModule(moduleId) {
