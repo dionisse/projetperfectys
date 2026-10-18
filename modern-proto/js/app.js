@@ -34,11 +34,12 @@
     balance: '⚖︎', journal: '≡', ledger: '⌕', periods: '◷', settings: '⚙︎'
   };
 
-  var ROUTES = ['login', 'launcher', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings'];
+  var ROUTES = ['login', 'launcher', 'organization', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings'];
 
   var TITLES = {
     login: ['Connexion', 'Accès à votre espace PERFECTO'],
     launcher: ['Launcher', 'Modules de votre organisation'],
+    organization: ['Organisation & accès', 'Organisation, membres et droits d’accès'],
     dashboard: ['Tableau de bord', 'Vue d’ensemble de la comptabilité générale'],
     accounts: ['Plan comptable', 'Comptes SYSCOHADA révisé'],
     journals: ['Journaux comptables', 'Les six journaux du module'],
@@ -144,13 +145,14 @@
     if (!view) return;
 
     closeModal(true);
-    var launcherMode = route === 'login' || route === 'launcher';
+    var launcherMode = route === 'login' || route === 'launcher' || route === 'organization';
     document.body.classList.toggle('launcher-mode', launcherMode);
 
     var html = '';
     switch (route) {
       case 'login': html = viewLogin(); break;
       case 'launcher': html = viewLauncher(); break;
+      case 'organization': html = viewOrganization(); break;
       case 'dashboard': html = viewDashboard(); break;
       case 'accounts': html = viewAccounts(); break;
       case 'journals': html = viewJournals(); break;
@@ -262,7 +264,8 @@
           <section class="login-card" aria-labelledby="login-heading">
             <span class="login-card-label">ESPACE ORGANISATION</span>
             <h2 id="login-heading">Bienvenue</h2>
-            <p class="login-card-copy">La connexion sécurisée sera configurée dans une prochaine étape.</p>
+            <p class="login-card-copy">Choisis plus tard entre les deux méthodes prévues : e-mail et mot de passe, ou compte Google.</p>
+            <div class="login-methods"><span class="login-methods-caption">MÉTHODES PRÉVUES · NON ACTIVES EN DÉMO</span><div><span>E-mail + mot de passe</span><span>Google</span></div></div>
             <div class="login-preview-field"><span>Adresse e-mail</span><span class="preview-placeholder">À configurer</span></div>
             <div class="login-preview-field"><span>Mot de passe</span><span class="preview-placeholder">Non demandé en démonstration</span></div>
             <button type="button" class="suite-primary-button" data-action="demo-login">Ouvrir la démonstration <span aria-hidden="true">→</span></button>
@@ -314,6 +317,7 @@
           <div class="workspace-strip">
             <div><span class="workspace-caption">ORGANISATION</span><strong>Organisation de démonstration</strong></div>
             <span class="role-chip">SUPERVISEUR GÉNÉRAL · DÉMO</span>
+            <a class="org-manage-link" href="#/organization">Organisation &amp; accès <span aria-hidden="true">→</span></a>
             <button type="button" class="drive-status" data-action="launcher-info"><span class="drive-status-dot"></span>Google Drive <b>À connecter</b></button>
           </div>
           <section class="launcher-heading">
@@ -343,6 +347,63 @@
           <div class="launcher-notice"><span class="launcher-notice-icon">i</span><span>Cette vue est une démonstration : seul le module de Comptabilité générale est actuellement fonctionnel. Google Drive n’est pas encore connecté.</span></div>
         </main>
         <footer class="suite-footer launcher-footer"><span>PERFECTO · ESPACE DE DÉMONSTRATION</span><button type="button" data-action="logout-demo">Retour à l’écran de connexion</button></footer>
+      </div>`;
+  }
+
+  function viewOrganization() {
+    var modules = ModuleRegistry.all();
+    var rows = modules.map(function (module) {
+      var availability = module.status === 'available' ? 'Disponible en démo' : 'À venir';
+      return '<tr>' +
+        '<th scope="row"><strong>' + esc(module.name) + '</strong><small>' + esc(availability) + '</small></th>' +
+        '<td><span class="permission-pending">À valider</span></td>' +
+        '<td><span class="permission-pending">À valider</span></td>' +
+        '<td><span class="permission-pending">À valider</span></td>' +
+        '</tr>';
+    }).join('');
+
+    return `
+      <div class="suite-screen organization-screen">
+        <header class="suite-header launcher-header">
+          <a class="suite-brand" href="#/launcher" aria-label="Retour au launcher PERFECTO">
+            <span class="suite-mark">P<span>.</span></span>
+            <span class="suite-brand-copy"><strong>PERFECTO</strong><small>SUITE DE GESTION</small></span>
+          </a>
+          <div class="launcher-nav"><span class="launcher-nav-active">ORGANISATION &amp; ACCÈS</span></div>
+          <a class="org-back-link" href="#/launcher">← Retour aux modules</a>
+        </header>
+        <main class="organization-main">
+          <section class="organization-heading">
+            <div><p class="suite-kicker">ESPACE DE TRAVAIL · DÉMONSTRATION</p><h1>Organisation &amp; accès</h1><p>La hiérarchie et les droits de votre organisation, présentés sans créer de faux comptes ni appliquer de règles non validées.</p></div>
+          </section>
+          <div class="organization-summary-grid">
+            <article class="organization-panel organization-identity">
+              <div class="organization-panel-kicker">ESPACE ORGANISATIONNEL</div>
+              <h2>Organisation de démonstration</h2>
+              <p>L’espace cloud est destiné à appartenir à l’organisation, même si elle ne compte qu’une seule personne.</p>
+              <div class="organization-facts"><span>FOURNISSEUR INITIAL</span><strong>Google Drive · non connecté</strong></div>
+            </article>
+            <article class="organization-panel organization-structure">
+              <div class="organization-panel-kicker">HIÉRARCHIE CONFIRMÉE</div>
+              <div class="role-level"><span class="role-level-number">01</span><div><strong>Superviseur général</strong><small>Au niveau racine de l’organisation</small></div></div>
+              <div class="role-connector" aria-hidden="true"></div>
+              <div class="role-level"><span class="role-level-number">02</span><div><strong>Gestionnaire(s)</strong><small>Rattachés à l’organisation</small></div></div>
+              <div class="role-connector" aria-hidden="true"></div>
+              <div class="role-level"><span class="role-level-number">03</span><div><strong>Utilisateurs / employés</strong><small>Accès selon l’affiliation et les droits accordés</small></div></div>
+            </article>
+          </div>
+          <section class="organization-panel access-design-panel">
+            <div class="access-design-heading"><div><div class="organization-panel-kicker">MODÈLE D’AUTORISATION</div><h2>Accès par module</h2><p>La matrice est à valider ensemble. Les accès ne sont pas encore appliqués dans le prototype.</p></div><span class="permission-pending">À VALIDER</span></div>
+            <div class="organization-table-wrap">
+              <table class="organization-access-table">
+                <thead><tr><th scope="col">Module</th><th scope="col">Superviseur général</th><th scope="col">Gestionnaire</th><th scope="col">Utilisateur / employé</th></tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+            <div class="access-scope-note"><span class="launcher-notice-icon">i</span><p>La connexion des utilisateurs et les invitations resteront en démonstration jusqu’à l’activation des deux méthodes prévues : e-mail/mot de passe et compte Google. Aucun accès Google Drive n’est demandé ici.</p></div>
+          </section>
+        </main>
+        <footer class="suite-footer launcher-footer"><span>PERFECTO · ESPACE DE DÉMONSTRATION</span><span>Authentification et droits réels à implémenter après validation</span></footer>
       </div>`;
   }
 

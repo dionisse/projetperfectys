@@ -1631,3 +1631,64 @@ body.launcher-mode .content { background: #f7f6f0; }
 }
 .launcher-grid > [hidden],
 .launcher-empty-state[hidden] { display: none !important; }
+
+/* Vue de démonstration Organisation & accès */
+.organization-main { width: min(1120px, calc(100% - 48px)); flex: 1; margin: 0 auto; padding: 42px 0 48px; }
+.organization-heading { margin-bottom: 24px; }
+.organization-heading .suite-kicker { margin-bottom: 9px; }
+.organization-heading h1 { margin: 0; color: #172d38; font: 800 clamp(2rem, 4vw, 2.8rem)/1.12 'Manrope', sans-serif; letter-spacing: -.045em; }
+.organization-heading > div > p:last-child { max-width: 760px; margin: 10px 0 0; color: #63736e; font-size: .86rem; line-height: 1.6; }
+.organization-summary-grid { display: grid; grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr); gap: 14px; margin-bottom: 16px; }
+.organization-panel { border: 1px solid #dce4df; border-radius: 10px; background: #fff; box-shadow: 0 4px 14px rgba(23,45,56,.035); }
+.organization-identity, .organization-structure { padding: 21px 23px; }
+.organization-panel-kicker { color: #0b7d73; font-size: .59rem; font-weight: 800; letter-spacing: .13em; }
+.organization-identity h2 { margin: 13px 0 7px; color: #172d38; font: 700 1.12rem/1.35 'Manrope', sans-serif; }
+.organization-identity > p { max-width: 440px; margin: 0; color: #63736e; font-size: .78rem; line-height: 1.6; }
+.organization-facts { display: grid; gap: 5px; margin-top: 21px; padding-top: 14px; border-top: 1px solid #e7ece8; }
+.organization-facts span { color: #75817b; font-size: .56rem; font-weight: 800; letter-spacing: .12em; }
+.organization-facts strong { color: #354e53; font-size: .75rem; }
+.organization-structure { display: grid; align-content: start; }
+.role-level { display: flex; align-items: center; gap: 12px; padding: 11px 0; }
+.role-level-number { width: 28px; height: 28px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid #c8ded6; border-radius: 7px; color: #0b756c; background: #edf5f0; font: 800 .66rem 'Manrope', sans-serif; }
+.role-level strong, .role-level small { display: block; }
+.role-level strong { color: #203b44; font-size: .8rem; }
+.role-level small { margin-top: 3px; color: #75817b; font-size: .68rem; line-height: 1.45; }
+.role-connector { width: 1px; height: 10px; margin: -2px 0 -2px 13px; background: #c8d8d0; }
+.access-design-panel { padding: 21px 23px 18px; }
+.access-design-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 17px; }
+.access-design-heading h2 { margin: 7px 0 4px; color: #172d38; font: 700 1.08rem/1.3 'Manrope', sans-serif; }
+.access-design-heading p { margin: 0; color: #6c7a74; font-size: .75rem; line-height: 1.5; }
+.access-design-heading > .permission-pending { white-space: nowrap; }
+.organization-table-wrap { overflow-x: auto; }
+.organization-access-table { width: 100%; min-width: 660px; border-collapse: collapse; text-align: left; }
+.organization-access-table th, .organization-access-table td { padding: 11px 10px; border-bottom: 1px solid #e8ede9; vertical-align: middle; }
+.organization-access-table thead th { color: #62736d; background: #f5f7f3; font-size: .61rem; font-weight: 800; letter-spacing: .055em; }
+.organization-access-table thead th:first-child { border-radius: 5px 0 0 5px; }
+.organization-access-table thead th:last-child { border-radius: 0 5px 5px 0; }
+.organization-access-table tbody th { min-width: 210px; font-weight: 600; }
+.organization-access-table tbody th strong, .organization-access-table tbody th small { display: block; }
+.organization-access-table tbody th strong { color: #263f46; font-size: .75rem; }
+.organization-access-table tbody th small { margin-top: 3px; color: #77837e; font-size: .62rem; font-weight: 500; }
+.organization-access-table td { text-align: center; }
+.permission-pending { display: inline-flex; align-items: center; padding: 5px 8px; border: 1px solid #eadbb7; border-radius: 5px; color: #795d1f; background: #fbf6e9; font-size: .58rem; font-weight: 700; letter-spacing: .035em; }
+.access-scope-note { display: flex; align-items: flex-start; gap: 10px; margin-top: 16px; padding: 12px; border: 1px solid #e8e0c9; border-radius: 7px; background: #fbf9f2; }
+.access-scope-note .launcher-notice-icon { margin-top: 1px; }
+.access-scope-note p { margin: 0; color: #665b43; font-size: .7rem; line-height: 1.55; }
+.org-manage-link, .org-back-link { display: inline-flex; align-items: center; gap: 8px; color: #08776e; text-decoration: none; font-size: .69rem; font-weight: 700; white-space: nowrap; }
+.org-manage-link:hover, .org-back-link:hover { color: #075f58; text-decoration: underline; }
+.org-manage-link span { font-size: .9rem; }
+.org-back-link { padding: 8px 10px; border: 1px solid #d7e2dc; border-radius: 6px; background: #fff; }
+@media (max-width: 850px) {
+  .organization-summary-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 700px) {
+  .organization-main { width: calc(100% - 36px); padding: 30px 0 36px; }
+  .organization-panel, .organization-identity, .organization-structure, .access-design-panel { padding: 17px; }
+  .access-design-heading { flex-direction: column; }
+  .org-back-link { font-size: .63rem; }
+}
+
+.login-methods { margin: -7px 0 16px; }
+.login-methods-caption { display: block; margin-bottom: 7px; color: #77837e; font-size: .55rem; font-weight: 800; letter-spacing: .1em; }
+.login-methods > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.login-methods > div span { padding: 5px 8px; border: 1px solid #dce5df; border-radius: 5px; color: #405a5b; background: #f4f7f3; font-size: .65rem; font-weight: 700; }
