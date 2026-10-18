@@ -63,7 +63,7 @@
 
   var deferredInstallPrompt = null;
   var launcherUi = { filter: 'all', query: '' };
-  var demoMembers = [{ id: 'demo-supervisor', name: 'Compte superviseur (démo)', role: 'supervisor' }];
+  var demoMembers = [{ id: 'demo-supervisor', name: 'Compte superviseur (démo)', role: 'supervisor', access: {}, scope: { type: 'organization', folders: [] } }];
   var demoMemberSequence = 0;
 
   /* -------------------------------- Toasts --------------------------------- */
@@ -370,13 +370,19 @@
     var removeControl = isSupervisor
       ? '<span class="member-root-note">Rôle racine</span>'
       : '<button type="button" class="member-remove-button" data-action="remove-demo-member" data-id="' + esc(member.id) + '">Retirer</button>';
+    var configured = Object.keys(member.access || {}).filter(function (moduleId) {
+      return member.access[moduleId] && member.access[moduleId] !== 'unset';
+    }).length;
+    var scope = member.scope && member.scope.type === 'folder'
+      ? (member.scope.folders.length + ' dossier(s) de démo')
+      : 'Organisation';
     var initials = member.role === 'supervisor' ? 'SG' : (member.role === 'manager' ? 'G' : 'U');
 
     return '<div class="organization-member-row">' +
       '<div class="member-identity"><span class="member-avatar ' + (isSupervisor ? 'is-root' : '') + '">' + initials + '</span><span><strong>' + esc(member.name) + '</strong><small>Profil temporaire de démonstration · aucune connexion réelle</small></span></div>' +
       '<div class="member-role-control">' + roleControl + '</div>' +
-      '<div class="member-access-status"><span>ACCÈS AUX MODULES</span><strong>À valider</strong></div>' +
-      '<div class="member-row-action">' + removeControl + '</div>' +
+      '<div class="member-access-status"><span>ACCÈS CONFIGURÉS · DÉMO</span><strong>' + configured + ' / ' + ModuleRegistry.stats().total + ' module(s) · ' + esc(scope) + '</strong></div>' +
+      '<div class="member-row-action"><button type="button" class="member-configure-button" data-action="configure-demo-access" data-id="' + esc(member.id) + '">Droits</button>' + removeControl + '</div>' +
       '</div>';
   }
 
@@ -434,7 +440,7 @@
             <p class="members-demo-note">Ces profils sont temporaires et restent en mémoire jusqu’au rechargement de la page. Aucun e-mail n’est demandé, aucun compte n’est créé et aucune invitation n’est envoyée.</p>
           </section>
           <section class="organization-panel access-design-panel">
-            <div class="access-design-heading"><div><div class="organization-panel-kicker">MODÈLE D’AUTORISATION</div><h2>Accès par module</h2><p>La matrice est à valider ensemble. Les accès ne sont pas encore appliqués dans le prototype.</p></div><span class="permission-pending">À VALIDER</span></div>
+            <div class="access-design-heading"><div><div class="organization-panel-kicker">MODÈLE D’AUTORISATION</div><h2>Gabarit de droits par rôle</h2><p>Cette matrice reste à valider. Les propositions temporaires par profil se règlent avec le bouton « Droits » des membres.</p></div><span class="permission-pending">À VALIDER</span></div>
             <div class="organization-table-wrap">
               <table class="organization-access-table">
                 <thead><tr><th scope="col">Module</th><th scope="col">Superviseur général</th><th scope="col">Gestionnaire</th><th scope="col">Utilisateur / employé</th></tr></thead>
@@ -467,10 +473,79 @@
       demoMembers.push({
         id: 'demo-member-' + demoMemberSequence,
         name: 'Profil de démonstration ' + demoMemberSequence,
-        role: role
+        role: role,
+        access: {},
+        scope: { type: 'organization', folders: [] }
       });
       closeModal(true);
       toast('Profil temporaire ajouté. Aucune invitation n’a été envoyée.', 'success');
+      render();
+    });
+  }
+
+  function openDemoAccessModal(memberId) {
+    var member = demoMembers.find(function (item) { return item.id === memberId; });
+    if (!member) return;
+    var modules = ModuleRegistry.all();
+    var choices = [
+      ['unset', 'À définir'],
+      ['none', 'Aucun accès'],
+      ['read', 'Consultation'],
+      ['draft', 'Saisie / brouillons'],
+      ['validate', 'Validation des pièces'],
+      ['manage', 'Gestion du module']
+    ];
+    var moduleRows = modules.map(function (module) {
+      var current = member.access && member.access[module.id] || 'unset';
+      var options = choices.map(function (choice) {
+        return '<option value="' + choice[0] + '"' + (current === choice[0] ? ' selected' : '') + '>' + choice[1] + '</option>';
+      }).join('');
+      return '<div class="demo-access-row"><div><strong>' + esc(module.name) + '</strong><small>' + esc(module.status === 'available' ? 'Disponible en démo' : 'Module à venir') + '</small></div>' +
+        '<label class="sr-only" for="demo-access-' + esc(module.id) + '">Droit pour ' + esc(module.name) + '</label>' +
+        '<select id="demo-access-' + esc(module.id) + '" data-demo-module-access="' + esc(module.id) + '">' + options + '</select></div>';
+    }).join('');
+    var scopeType = member.scope && member.scope.type === 'folder' ? 'folder' : 'organization';
+    var folderNames = member.scope && Array.isArray(member.scope.folders) ? member.scope.folders.join(', ') : '';
+    var body = '<form id="demo-access-form" novalidate>' +
+      '<div class="alert info">Proposition de démonstration : ces réglages ne protègent pas les routes et ne sont pas envoyés au serveur.</div>' +
+      '<div class="field"><label for="demo-access-scope">Périmètre de ce profil</label><select id="demo-access-scope">' +
+        '<option value="organization"' + (scopeType === 'organization' ? ' selected' : '') + '>Organisation entière</option>' +
+        '<option value="folder"' + (scopeType === 'folder' ? ' selected' : '') + '>Dossier(s) de démonstration</option>' +
+      '</select></div>' +
+      '<div class="field demo-folder-field" id="demo-folder-field"' + (scopeType === 'folder' ? '' : ' hidden') + '><label for="demo-access-folders">Noms des dossiers de démo</label>' +
+        '<input id="demo-access-folders" type="text" value="' + esc(folderNames) + '" placeholder="Ex. Comptabilité 2026, Agence Nord">' +
+        '<span class="hint">Sépare plusieurs noms par une virgule. Aucun dossier Google Drive réel n’est sélectionné.</span></div>' +
+      '<div class="demo-access-list"><div class="demo-access-list-heading"><strong>Droits par module</strong><span>À valider</span></div>' + moduleRows + '</div>' +
+      '<p class="small muted">Les niveaux sont une proposition de vocabulaire. Leur sens exact et leur attribution restent à valider ensemble.</p>' +
+    '</form>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button>' +
+      '<button type="submit" class="btn btn-primary" form="demo-access-form">Enregistrer en démo</button>';
+    openModal('Droits de démonstration', demoRoleLabel(member.role) + ' · ' + member.name, body, footer, true);
+
+    var scopeSelect = $('#demo-access-scope');
+    var folderField = $('#demo-folder-field');
+    scopeSelect.addEventListener('change', function () {
+      folderField.hidden = scopeSelect.value !== 'folder';
+    });
+    $('#demo-access-form').addEventListener('submit', function (event) {
+      event.preventDefault();
+      var folderNamesDraft = scopeSelect.value === 'folder'
+        ? String($('#demo-access-folders').value || '').split(',').map(function (name) { return name.trim(); }).filter(Boolean)
+        : [];
+      if (scopeSelect.value === 'folder' && folderNamesDraft.length === 0) {
+        toast('Indique au moins un nom de dossier de démonstration.', 'warning');
+        return;
+      }
+      member.scope = {
+        type: scopeSelect.value === 'folder' ? 'folder' : 'organization',
+        folders: folderNamesDraft
+      };
+      member.access = {};
+      $$('[data-demo-module-access]').forEach(function (select) {
+        member.access[select.getAttribute('data-demo-module-access')] = select.value;
+      });
+      closeModal(true);
+      toast('Réglages de droits enregistrés pour cette session de démonstration.', 'success');
       render();
     });
   }
@@ -1486,6 +1561,9 @@
         break;
       case 'add-demo-member':
         openDemoMemberModal();
+        break;
+      case 'configure-demo-access':
+        openDemoAccessModal(id);
         break;
       case 'remove-demo-member': {
         var memberIndex = demoMembers.findIndex(function (member) { return member.id === id && member.role !== 'supervisor'; });
