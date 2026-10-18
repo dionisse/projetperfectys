@@ -6,6 +6,7 @@
   'use strict';
 
   var S = window.PerfectoStore;
+  var ModuleRegistry = window.PerfectoModules;
 
   /* ------------------------------ Utilitaires ------------------------------ */
   function esc(value) {
@@ -272,7 +273,31 @@
       </div>`;
   }
 
+  function launcherModuleCard(module, index) {
+    var available = module.status === 'available' && module.route;
+    var number = String(index + 1).padStart(2, '0');
+    var action = available
+      ? '<button type="button" class="module-open-button" data-action="open-module" data-module-id="' + esc(module.id) + '">Ouvrir le module <span aria-hidden="true">→</span></button>'
+      : '<span class="module-disabled">Bientôt</span>';
+
+    return '<article class="module-card module-' + esc(module.accent) + '">' +
+      '<div class="module-card-top"><span>MODULE ' + number + '</span><span class="module-status ' + esc(module.status) + '"><i></i>' + esc(module.statusLabel) + '</span></div>' +
+      '<div class="module-icon" aria-hidden="true">' + esc(module.icon) + '</div>' +
+      '<p class="module-category">' + esc(module.category) + '</p>' +
+      '<h3>' + esc(module.name) + '</h3>' +
+      '<p class="module-description">' + esc(module.description) + '</p>' +
+      '<div class="module-card-bottom"><span>' + esc(module.version) + '</span>' + action + '</div>' +
+      '</article>';
+  }
+
   function viewLauncher() {
+    var modules = ModuleRegistry.all();
+    var stats = ModuleRegistry.stats();
+    var availableLabel = String(stats.available).padStart(2, '0');
+    var availableText = stats.available === 1 ? 'disponible' : 'disponibles';
+    var availableNoun = stats.available === 1 ? 'module disponible' : 'modules disponibles';
+    var cards = modules.map(launcherModuleCard).join('');
+
     return `
       <div class="suite-screen launcher-screen">
         <header class="suite-header launcher-header">
@@ -291,45 +316,14 @@
           </div>
           <section class="launcher-heading">
             <div><p class="suite-kicker">VOTRE ESPACE DE TRAVAIL</p><h1>Vos applications</h1><p>Ouvrez un module pour commencer. Les modules en préparation seront activés progressivement.</p></div>
-            <div class="launcher-count"><strong>01</strong><span>module disponible<br>sur 05 annoncés</span></div>
+            <div class="launcher-count"><strong>${availableLabel}</strong><span>${availableNoun}<br>sur ${String(stats.total).padStart(2, '0')} annoncés</span></div>
           </section>
-          <div class="launcher-section-heading"><h2>Modules PERFECTO</h2><span>5 modules · 1 disponible</span></div>
+          <div class="launcher-section-heading"><h2>Modules PERFECTO</h2><span>${stats.total} modules · ${stats.available} ${availableText}</span></div>
           <div class="launcher-grid">
-            <article class="module-card module-accounting">
-              <div class="module-card-top"><span>MODULE 01</span><span class="module-status available"><i></i>DISPONIBLE</span></div>
-              <div class="module-icon">▤</div>
-              <p class="module-category">COMPTABILITÉ · SYSCOHADA</p>
-              <h3>Comptabilité générale</h3>
-              <p class="module-description">Journaux, pièces comptables, balance, journal des écritures et grand livre.</p>
-              <div class="module-card-bottom"><span>Lot 1 · Prototype</span><button type="button" class="module-open-button" data-action="open-module" data-module-id="accounting">Ouvrir le module <span aria-hidden="true">→</span></button></div>
-            </article>
-            <article class="module-card module-analytics">
-              <div class="module-card-top"><span>MODULE 02</span><span class="module-status planned"><i></i>À VENIR</span></div>
-              <div class="module-icon">∑</div><p class="module-category">PILOTAGE</p><h3>Comptabilité analytique</h3>
-              <p class="module-description">Suivi des coûts, axes analytiques et analyse de la performance.</p>
-              <div class="module-card-bottom"><span>En préparation</span><span class="module-disabled">Bientôt</span></div>
-            </article>
-            <article class="module-card module-hr">
-              <div class="module-card-top"><span>MODULE 03</span><span class="module-status planned"><i></i>À VENIR</span></div>
-              <div class="module-icon">◷</div><p class="module-category">RESSOURCES HUMAINES</p><h3>Paie &amp; RH</h3>
-              <p class="module-description">Gestion du personnel, suivi RH et préparation de la paie.</p>
-              <div class="module-card-bottom"><span>En préparation</span><span class="module-disabled">Bientôt</span></div>
-            </article>
-            <article class="module-card module-mail">
-              <div class="module-card-top"><span>MODULE 04</span><span class="module-status planned"><i></i>À VENIR</span></div>
-              <div class="module-icon">✉</div><p class="module-category">GESTION DOCUMENTAIRE</p><h3>Gestion des courriers</h3>
-              <p class="module-description">Enregistrement, suivi et classement des courriers de l’organisation.</p>
-              <div class="module-card-bottom"><span>En préparation</span><span class="module-disabled">Bientôt</span></div>
-            </article>
-            <article class="module-card module-sales">
-              <div class="module-card-top"><span>MODULE 05</span><span class="module-status planned"><i></i>À VENIR</span></div>
-              <div class="module-icon">◫</div><p class="module-category">ACTIVITÉ COMMERCIALE</p><h3>Ventes, stock &amp; facturation</h3>
-              <p class="module-description">Ventes, gestion des stocks et suivi de la facturation.</p>
-              <div class="module-card-bottom"><span>En préparation</span><span class="module-disabled">Bientôt</span></div>
-            </article>
+            ${cards}
             <article class="module-card module-future">
               <div class="module-card-top"><span>SUITE ÉVOLUTIVE</span><span class="module-status flexible"><i></i>ÉVOLUTIF</span></div>
-              <div class="module-icon">＋</div><p class="module-category">SELON VOS BESOINS</p><h3>D’autres modules</h3>
+              <div class="module-icon" aria-hidden="true">＋</div><p class="module-category">SELON VOS BESOINS</p><h3>D’autres modules</h3>
               <p class="module-description">La suite pourra accueillir de nouveaux modules au fil des besoins de votre organisation.</p>
               <div class="module-card-bottom"><span>Architecture modulaire</span><span class="module-disabled">À définir</span></div>
             </article>
@@ -1274,9 +1268,15 @@
       case 'demo-login':
         navigate('#/launcher');
         break;
-      case 'open-module':
-        if (trigger.getAttribute('data-module-id') === 'accounting') navigate('#/dashboard');
+      case 'open-module': {
+        var selectedModule = ModuleRegistry.get(trigger.getAttribute('data-module-id'));
+        if (selectedModule && selectedModule.status === 'available' && selectedModule.route) {
+          navigate('#/' + selectedModule.route);
+        } else if (selectedModule) {
+          toast(selectedModule.name + ' n’est pas encore disponible.', 'warning');
+        }
         break;
+      }
       case 'launcher-info':
         openModal('Stockage de l’organisation', 'Google Drive sera le premier fournisseur cloud.',
           '<div class="alert warning"><strong>Non connecté.</strong> Cette démonstration ne communique pas avec Google Drive et ne transfère aucune donnée.</div><p>La connexion au Drive de l’organisation, les droits d’accès et la stratégie de sauvegarde seront conçus avant toute synchronisation réelle.</p>',

@@ -104,6 +104,7 @@ index.html                    redirection vers modern-proto/ (déploiement racin
 modern-proto/index.html        coquille de l'application (navigation, topbar)
 modern-proto/css/modern.css    identité GOBEX (papier, encre, vert canard et or doux), responsive et imprimable
 modern-proto/js/store.js       données, règles métier, calculs, import/export
+modern-proto/js/modules.js     catalogue déclaratif des modules du launcher
 modern-proto/js/app.js         routeur, vues, formulaires, interactions
 modern-proto/manifest.webmanifest  métadonnées PWA
 modern-proto/service-worker.js cache hors ligne (réseau d'abord, cache en secours)
@@ -118,7 +119,7 @@ tests/store.test.js            tests des règles métier (Node, sans dépendance
 node tests/store.test.js
 ```
 
-Le script vérifie les totaux de démonstration, l'unicité des références,
+Les tests vérifient aussi l'unicité et les statuts du catalogue modulaire. Le script métier vérifie les totaux de démonstration, l'unicité des références,
 l'équilibre des pièces, le verrouillage des périodes, la validation des brouillons,
 le grand livre, l'ajout de compte et l'export/import. La CI GitHub Actions exécute
 ces tests ainsi qu'un contrôle de syntaxe et un test de service HTTP.
