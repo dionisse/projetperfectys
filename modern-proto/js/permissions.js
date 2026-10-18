@@ -10,11 +10,15 @@
   var ACCOUNTING_ACTIONS = [
     { id: 'module.view', label: 'Consulter le module' },
     { id: 'draft.create', label: 'Créer une écriture / un brouillon' },
-    { id: 'draft.edit', label: 'Modifier ou supprimer un brouillon' },
+    { id: 'draft.edit', label: 'Modifier un brouillon' },
+    { id: 'draft.delete', label: 'Supprimer un brouillon' },
     { id: 'entry.validate', label: 'Valider une écriture' },
-    { id: 'accounts.manage', label: 'Gérer le plan comptable' },
-    { id: 'periods.manage', label: 'Clôturer ou rouvrir les périodes' },
-    { id: 'data.manage', label: 'Importer ou réinitialiser les données' },
+    { id: 'accounts.create', label: 'Créer un compte comptable' },
+    { id: 'period.close', label: 'Clôturer une période' },
+    { id: 'period.reopen', label: 'Rouvrir une période' },
+    { id: 'data.import', label: 'Importer des données' },
+    { id: 'data.reset', label: 'Réinitialiser les données de démo' },
+    { id: 'data.restore', label: 'Restaurer un point local' },
     { id: 'data.export', label: 'Exporter les données et les états' }
   ];
 
@@ -22,6 +26,7 @@
     { id: 'module.view', label: 'Consulter le module' },
     { id: 'record.create', label: 'Créer / saisir' },
     { id: 'record.edit', label: 'Modifier' },
+    { id: 'record.delete', label: 'Supprimer' },
     { id: 'record.validate', label: 'Valider / approuver' },
     { id: 'module.manage', label: 'Gérer le module' }
   ];

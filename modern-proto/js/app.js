@@ -98,18 +98,21 @@
       case 'open-entry':
         return { moduleId: 'accounting', actionId: 'module.view' };
       case 'edit-draft':
-      case 'delete-draft':
         return { moduleId: 'accounting', actionId: 'draft.edit' };
+      case 'delete-draft':
+        return { moduleId: 'accounting', actionId: 'draft.delete' };
       case 'validate-entry':
         return { moduleId: 'accounting', actionId: 'entry.validate' };
       case 'new-account':
-        return { moduleId: 'accounting', actionId: 'accounts.manage' };
+        return { moduleId: 'accounting', actionId: 'accounts.create' };
       case 'close-period':
+        return { moduleId: 'accounting', actionId: 'period.close' };
       case 'open-period':
-        return { moduleId: 'accounting', actionId: 'periods.manage' };
+        return { moduleId: 'accounting', actionId: 'period.reopen' };
       case 'reset-data':
+        return { moduleId: 'accounting', actionId: 'data.reset' };
       case 'restore-local-backup':
-        return { moduleId: 'accounting', actionId: 'data.manage' };
+        return { moduleId: 'accounting', actionId: 'data.restore' };
       case 'export-json':
       case 'export-accounts-csv':
       case 'export-balance-csv':
@@ -167,10 +170,10 @@
     $$('[data-demo-member-role]', root).forEach(function (select) { select.disabled = !canManageOrganization; });
     var importInput = $('#import-file', root);
     if (importInput) {
-      var canManageData = hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.manage', demoAccessContext('organization'));
-      importInput.hidden = !canManageData;
+      var canImportData = hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', demoAccessContext('organization'));
+      importInput.hidden = !canImportData;
       var importLabel = $('label[for="import-file"]', root);
-      if (importLabel) importLabel.hidden = !canManageData;
+      if (importLabel) importLabel.hidden = !canImportData;
     }
   }
 
@@ -1587,7 +1590,7 @@
           if (!file) return;
           var reader = new FileReader();
           reader.onload = function () {
-            if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.manage', demoAccessContext('organization'))) {
+            if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', demoAccessContext('organization'))) {
               toast('Import refusé par défaut : ce profil ne peut pas gérer les données.', 'warning');
               return;
             }
@@ -1954,8 +1957,8 @@
     var form = $('#account-form');
     form.addEventListener('submit', function (event) {
       event.preventDefault();
-      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'accounts.manage', demoAccessContext('organization'))) {
-        toast('Création refusée par défaut : le droit « accounts.manage » n’est pas accordé.', 'warning');
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'accounts.create', demoAccessContext('organization'))) {
+        toast('Création refusée par défaut : le droit « accounts.create » n’est pas accordé.', 'warning');
         return;
       }
       var result = S.addAccount({

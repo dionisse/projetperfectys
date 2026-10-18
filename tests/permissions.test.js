@@ -78,7 +78,8 @@ test('un grant limité à des dossiers refuse tout autre dossier ou périmètre'
 test('le Superviseur général gère son organisation, pas une autre', () => {
   const supervisor = { role: 'supervisor', organizationId: 'org-1' };
   assert.strictEqual(Permissions.hasPermission(supervisor, 'organization', 'organization.manageMembers', context), true);
-  assert.strictEqual(Permissions.hasPermission(supervisor, 'accounting', 'data.manage', context), true);
+  assert.strictEqual(Permissions.hasPermission(supervisor, 'accounting', 'data.reset', context), true);
+  assert.strictEqual(Permissions.hasPermission(supervisor, 'accounting', 'data.restore', context), true);
   assert.strictEqual(Permissions.hasPermission(supervisor, 'organization', 'organization.manageMembers', { organizationId: 'org-2' }), false);
 });
 
@@ -87,7 +88,14 @@ test('les actions disponibles sont décrites par module', () => {
   assert(actions.includes('module.view'));
   assert(actions.includes('draft.create'));
   assert(actions.includes('entry.validate'));
-  assert(actions.includes('data.manage'));
+  assert(actions.includes('draft.delete'));
+  assert(actions.includes('accounts.create'));
+  assert(actions.includes('period.close'));
+  assert(actions.includes('period.reopen'));
+  assert(actions.includes('data.import'));
+  assert(actions.includes('data.reset'));
+  assert(actions.includes('data.restore'));
+  assert(actions.includes('data.export'));
   assert(Permissions.actionsForModule('organization').some((action) => action.id === 'module.view'));
   assert(Permissions.actionsForModule('organization').some((action) => action.id === 'organization.manageMembers'));
   assert(Permissions.actionsForModule('analytics').some((action) => action.id === 'module.view'));
@@ -97,4 +105,19 @@ test('les actions disponibles sont décrites par module', () => {
   assert.strictEqual(Permissions.hasPermission({ role: 'supervisor', organizationId: 'org-1' }, 'accounting', 'unknown.action', context), false);
 });
 
-console.log('Politique d’accès : 6 scénarios réussis.');
+test('les actions sensibles restent indépendantes les unes des autres', () => {
+  const manager = {
+    role: 'manager', organizationId: 'org-1',
+    grants: { accounting: { scope: { type: 'organization' }, actions: ['module.view', 'draft.edit', 'accounts.create', 'period.close', 'data.import'] } }
+  };
+  assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'draft.edit', context), true);
+  assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'draft.delete', context), false);
+  assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'accounts.create', context), true);
+  assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'period.close', context), true);
+  assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'period.reopen', context), false);
+  assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'data.import', context), true);
+  assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'data.reset', context), false);
+  assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'data.restore', context), false);
+});
+
+console.log('Politique d’accès : 7 scénarios réussis.');
