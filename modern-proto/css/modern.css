@@ -1604,3 +1604,30 @@ body.launcher-mode .content { background: #f7f6f0; }
 @media (max-width: 700px) {
   .suite-screen .suite-header { background: rgba(255,255,255,.82); }
 }
+
+/* Recherche et filtres du launcher */
+.launcher-tools { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 8px; }
+.launcher-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+.launcher-filter {
+  min-height: 36px; display: inline-flex; align-items: center; gap: 9px;
+  padding: 0 11px; border: 1px solid transparent; border-radius: 6px;
+  color: #65746e; background: transparent; cursor: pointer; font-size: .72rem; font-weight: 700;
+}
+.launcher-filter span { color: #718078; font-size: .64rem; font-weight: 600; }
+.launcher-filter:hover { border-color: #dce5df; color: #172d38; background: #fff; }
+.launcher-filter.is-active { border-color: #c9dfd7; color: #086e65; background: #eaf4ef; }
+.launcher-filter.is-active span { color: #086e65; }
+.launcher-search { min-width: min(280px, 38vw); height: 38px; display: flex; align-items: center; gap: 9px; padding: 0 11px; border: 1px solid #d5dfd9; border-radius: 6px; color: #718078; background: #fff; }
+.launcher-search:focus-within { border-color: #0e8e83; box-shadow: 0 0 0 3px rgba(14,142,131,.11); }
+.launcher-search > span:first-child { font-size: 1rem; }
+.launcher-search input { width: 100%; min-width: 0; padding: 0; border: 0; outline: 0; color: #172d38; background: transparent; box-shadow: none; font: inherit; font-size: .75rem; }
+.launcher-search input:focus { border: 0; outline: 0; box-shadow: none; }
+.launcher-search input::placeholder { color: #8a9791; }
+.launcher-result-count { min-height: 14px; margin: 0 0 10px; color: #718078; font-size: .65rem; }
+.launcher-empty-state { margin: 8px 0 14px; padding: 26px 16px; border: 1px dashed #cbd7d0; border-radius: 8px; color: #64736e; background: rgba(255,255,255,.6); text-align: center; font-size: .82rem; }
+@media (max-width: 700px) {
+  .launcher-tools { align-items: stretch; flex-direction: column; gap: 10px; }
+  .launcher-search { width: 100%; min-width: 0; }
+}
+.launcher-grid > [hidden],
+.launcher-empty-state[hidden] { display: none !important; }

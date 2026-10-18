@@ -22,7 +22,7 @@ publier, un déploiement immédiat.
 | Écran | Contenu |
 |---|---|
 | Connexion (démo) | Écran d’entrée ; aucune authentification réelle ni donnée d’identification collectée |
-| Launcher | Présentation des modules annoncés ; accès à la Comptabilité générale, autres modules à venir |
+| Launcher | Catalogue modulaire, recherche et filtres ; accès à la Comptabilité générale, autres modules à venir |
 | Tableau de bord | Indicateurs (débit, crédit, résultat, pièces), dernières pièces, activité par journal, état des périodes |
 | Plan comptable | 18 comptes SYSCOHADA initiaux, recherche, filtres, création de compte, export CSV |
 | Journaux | Six journaux (AC, VE, BQ, CA, OD, PA) avec totaux et brouillons |

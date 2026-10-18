@@ -61,6 +61,7 @@
   };
 
   var deferredInstallPrompt = null;
+  var launcherUi = { filter: 'all', query: '' };
 
   /* -------------------------------- Toasts --------------------------------- */
   function toast(message, type) {
@@ -280,7 +281,8 @@
       ? '<button type="button" class="module-open-button" data-action="open-module" data-module-id="' + esc(module.id) + '">Ouvrir le module <span aria-hidden="true">→</span></button>'
       : '<span class="module-disabled">Bientôt</span>';
 
-    return '<article class="module-card module-' + esc(module.accent) + '">' +
+    var searchText = [module.name, module.category, module.description].join(' ');
+    return '<article class="module-card module-' + esc(module.accent) + '" data-module-card data-is-module="true" data-module-status="' + esc(module.status) + '" data-module-search="' + esc(searchText) + '">' +
       '<div class="module-card-top"><span>MODULE ' + number + '</span><span class="module-status ' + esc(module.status) + '"><i></i>' + esc(module.statusLabel) + '</span></div>' +
       '<div class="module-icon" aria-hidden="true">' + esc(module.icon) + '</div>' +
       '<p class="module-category">' + esc(module.category) + '</p>' +
@@ -319,15 +321,25 @@
             <div class="launcher-count"><strong>${availableLabel}</strong><span>${availableNoun}<br>sur ${String(stats.total).padStart(2, '0')} annoncés</span></div>
           </section>
           <div class="launcher-section-heading"><h2>Modules PERFECTO</h2><span>${stats.total} modules · ${stats.available} ${availableText}</span></div>
+          <div class="launcher-tools">
+            <div class="launcher-filters" role="group" aria-label="Filtrer les modules">
+              <button type="button" class="launcher-filter is-active" data-action="launcher-filter" data-filter-value="all" aria-pressed="true">Tous <span>${String(stats.total).padStart(2, '0')}</span></button>
+              <button type="button" class="launcher-filter" data-action="launcher-filter" data-filter-value="available" aria-pressed="false">Disponibles <span>${String(stats.available).padStart(2, '0')}</span></button>
+              <button type="button" class="launcher-filter" data-action="launcher-filter" data-filter-value="planned" aria-pressed="false">À venir <span>${String(stats.planned).padStart(2, '0')}</span></button>
+            </div>
+            <label class="launcher-search"><span aria-hidden="true">⌕</span><span class="sr-only">Rechercher un module</span><input id="launcher-search" type="search" placeholder="Rechercher un module…" value="${esc(launcherUi.query)}" autocomplete="off"></label>
+          </div>
+          <p class="launcher-result-count" id="launcher-result-count" aria-live="polite"></p>
           <div class="launcher-grid">
             ${cards}
-            <article class="module-card module-future">
+            <article class="module-card module-future" data-module-card data-is-module="false" data-module-status="future" data-module-search="d’autres modules suite évolutive besoins organisation">
               <div class="module-card-top"><span>SUITE ÉVOLUTIVE</span><span class="module-status flexible"><i></i>ÉVOLUTIF</span></div>
               <div class="module-icon" aria-hidden="true">＋</div><p class="module-category">SELON VOS BESOINS</p><h3>D’autres modules</h3>
               <p class="module-description">La suite pourra accueillir de nouveaux modules au fil des besoins de votre organisation.</p>
               <div class="module-card-bottom"><span>Architecture modulaire</span><span class="module-disabled">À définir</span></div>
             </article>
           </div>
+          <p class="launcher-empty-state" id="launcher-empty-state" hidden>Aucun module ne correspond à cette recherche ou à ce filtre.</p>
           <div class="launcher-notice"><span class="launcher-notice-icon">i</span><span>Cette vue est une démonstration : seul le module de Comptabilité générale est actuellement fonctionnel. Google Drive n’est pas encore connecté.</span></div>
         </main>
         <footer class="suite-footer launcher-footer"><span>PERFECTO · ESPACE DE DÉMONSTRATION</span><button type="button" data-action="logout-demo">Retour à l’écran de connexion</button></footer>
@@ -1114,6 +1126,11 @@
 
   /* ------------------------------ Liaisons vue ----------------------------- */
   function bindView(route) {
+    if (route === 'launcher') {
+      bindLauncherView();
+      return;
+    }
+
     if (route === 'entry') {
       var form = $('#entry-form');
       if (!form) return;
@@ -1198,6 +1215,43 @@
     }
   }
 
+  function bindLauncherView() {
+    var search = $('#launcher-search');
+    if (search) {
+      search.value = launcherUi.query;
+      search.addEventListener('input', function () {
+        launcherUi.query = search.value;
+        applyLauncherFilters();
+      });
+    }
+    applyLauncherFilters();
+  }
+
+  function applyLauncherFilters() {
+    var query = String(launcherUi.query || '').trim().toLowerCase();
+    var visibleModules = 0;
+    $$('[data-module-card]').forEach(function (card) {
+      var status = card.getAttribute('data-module-status');
+      var text = String(card.getAttribute('data-module-search') || '').toLowerCase();
+      var matchesFilter = launcherUi.filter === 'all'
+        ? true
+        : status === launcherUi.filter;
+      var matchesQuery = !query || text.indexOf(query) !== -1;
+      var visible = matchesFilter && matchesQuery;
+      card.hidden = !visible;
+      if (visible && card.getAttribute('data-is-module') === 'true') visibleModules += 1;
+    });
+
+    var count = $('#launcher-result-count');
+    if (count) {
+      count.textContent = visibleModules === 1
+        ? '1 module affiché'
+        : visibleModules + ' modules affichés';
+    }
+    var empty = $('#launcher-empty-state');
+    if (empty) empty.hidden = visibleModules !== 0;
+  }
+
   /* ------------------------- Actions & interactions ------------------------ */
   function closeSidebar() {
     var sidebar = $('#sidebar');
@@ -1265,6 +1319,15 @@
     var id = trigger.getAttribute('data-id');
 
     switch (action) {
+      case 'launcher-filter':
+        launcherUi.filter = trigger.getAttribute('data-filter-value') || 'all';
+        $$('[data-action="launcher-filter"]').forEach(function (button) {
+          var active = button.getAttribute('data-filter-value') === launcherUi.filter;
+          button.classList.toggle('is-active', active);
+          button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+        applyLauncherFilters();
+        break;
       case 'demo-login':
         navigate('#/launcher');
         break;
