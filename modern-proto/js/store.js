@@ -8,10 +8,14 @@
 
   var STORAGE_KEY = 'perfecto.lot1.v1';
   var BACKUP_STORAGE_KEY = 'perfecto.lot1.backup.v1';
-  var FOLDERS_STORAGE_KEY = 'perfecto.folders.v1';
-  var ACTIVE_FOLDER_STORAGE_KEY = 'perfecto.activeFolder.v1';
+  var DOSSIERS_STORAGE_KEY = 'perfecto.dossiers.v1';
+  var LEGACY_FOLDERS_STORAGE_KEY = 'perfecto.folders.v1';
+  var ACTIVE_DOSSIER_STORAGE_KEY = 'perfecto.activeDossier.v1';
+  var LEGACY_ACTIVE_FOLDER_STORAGE_KEY = 'perfecto.activeFolder.v1';
   var DEFAULT_FOLDER_ID = 'folder-main';
-  var DEFAULT_FOLDER_NAME = 'Dossier principal';
+  var DEFAULT_FOLDER_NAME = 'Entreprise de démonstration';
+  var DEFAULT_ACCOUNTING_TYPE = 'Comptabilité révisée SYSCOHADA';
+  var DEFAULT_ACCOUNTING_TYPE_CODE = 'COR';
   var EXERCICE = 2026;
 
   var JOURNAUX = [
@@ -82,24 +86,38 @@
     ];
   }
 
-  function seedPeriods() {
+  function cyclePeriods(startDate, endDate) {
+    var start = String(startDate || EXERCICE + '-01-01');
+    var end = String(endDate || EXERCICE + '-12-31');
+    var year = Number(start.slice(0, 4));
+    var month = Number(start.slice(5, 7));
+    var endYear = Number(end.slice(0, 4));
+    var endMonth = Number(end.slice(5, 7));
     var out = [];
-    for (var m = 1; m <= 12; m++) {
-      out.push({ year: EXERCICE, month: m, status: 'open' });
+    while (year < endYear || (year === endYear && month <= endMonth)) {
+      out.push({ year: year, month: month, status: 'open' });
+      month += 1;
+      if (month > 12) { month = 1; year += 1; }
     }
     return out;
   }
 
-  function initialState(withSeedEntries) {
+  function initialState(withSeedEntries, dossier) {
+    dossier = dossier || {};
+    var exerciseYear = Number(dossier.exerciseYear) || EXERCICE;
+    var cycleStart = dossier.cycleStart || exerciseYear + '-01-01';
+    var cycleEnd = dossier.cycleEnd || exerciseYear + '-12-31';
     return {
       version: 1,
-      exercise: EXERCICE,
+      exercise: exerciseYear,
+      cycleStart: cycleStart,
+      cycleEnd: cycleEnd,
       accounts: COMPTES.map(function (a) {
         return { code: a.code, label: a.label, cls: a.cls, nature: a.nature, aux: a.aux, active: true };
       }),
       journals: JOURNAUX.slice(),
       entries: withSeedEntries === false ? [] : seedEntries(),
-      periods: seedPeriods()
+      periods: cyclePeriods(cycleStart, cycleEnd)
     };
   }
 
@@ -111,13 +129,71 @@
     return JSON.parse(JSON.stringify(value));
   }
 
-  function isFolderRecord(folder) {
-    return !!(folder && typeof folder.id === 'string' && folder.id && typeof folder.name === 'string' && folder.name.trim());
+  function normalizeCode(value) {
+    return String(value == null ? '' : value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
+  function suggestedClientCode(name) {
+    var words = String(name || '').trim().split(/\s+/).filter(Boolean);
+    var generic = ['CABINET', 'AGENCE', 'ENTREPRISE', 'SOCIETE', 'SARL', 'SA', 'ETS', 'ETABLISSEMENTS', 'GROUPE', 'CLIENT', 'BUREAU', 'DE', 'DU', 'DES', 'LA', 'LE'];
+    var useful = words.filter(function (word) { return generic.indexOf(normalizeCode(word)) === -1; });
+    var source = useful[0] || words[words.length - 1] || 'DEM';
+    return normalizeCode(source).slice(0, 3) || 'DEM';
+  }
+
+  function referenceFor(typeCode, clientCode, exerciseYear) {
+    return normalizeCode(typeCode) + '-' + normalizeCode(clientCode) + String(exerciseYear);
+  }
+
+  function defaultDossier() {
+    return {
+      id: DEFAULT_FOLDER_ID,
+      name: DEFAULT_FOLDER_NAME,
+      clientName: DEFAULT_FOLDER_NAME,
+      clientCode: 'DEM',
+      accountingTypeLabel: DEFAULT_ACCOUNTING_TYPE,
+      accountingTypeCode: DEFAULT_ACCOUNTING_TYPE_CODE,
+      exerciseYear: EXERCICE,
+      cycleStart: '2026-01-01',
+      cycleEnd: '2026-12-31',
+      reference: 'COR-DEM2026',
+      seeded: true
+    };
+  }
+
+  function normalizeDossier(record, index) {
+    var legacyName = String(record && (record.clientName || record.name) || (index === 0 ? DEFAULT_FOLDER_NAME : 'Dossier de démonstration')).trim();
+    var exerciseYear = Number(record && (record.exerciseYear || record.cycleYear)) || EXERCICE;
+    var isMain = record && record.id === DEFAULT_FOLDER_ID;
+    var clientCode = normalizeCode(record && record.clientCode) || (isMain ? 'DEM' : suggestedClientCode(legacyName));
+    var accountingTypeCode = normalizeCode(record && (record.accountingTypeCode || record.typeCode)) || DEFAULT_ACCOUNTING_TYPE_CODE;
+    var accountingTypeLabel = String(record && (record.accountingTypeLabel || record.accountingType) || DEFAULT_ACCOUNTING_TYPE).trim();
+    var cycleStart = String(record && record.cycleStart || exerciseYear + '-01-01');
+    var cycleEnd = String(record && record.cycleEnd || exerciseYear + '-12-31');
+    if (!parseIsoDate(cycleStart) || !parseIsoDate(cycleEnd) || cycleEnd < cycleStart) {
+      cycleStart = exerciseYear + '-01-01';
+      cycleEnd = exerciseYear + '-12-31';
+    }
+    exerciseYear = Number(cycleStart.slice(0, 4)) || exerciseYear;
+    var name = legacyName || DEFAULT_FOLDER_NAME;
+    return {
+      id: record && typeof record.id === 'string' && record.id ? record.id : (index === 0 ? DEFAULT_FOLDER_ID : 'dossier-migrated-' + index),
+      name: name,
+      clientName: name,
+      clientCode: clientCode,
+      accountingTypeLabel: accountingTypeLabel,
+      accountingTypeCode: accountingTypeCode,
+      exerciseYear: exerciseYear,
+      cycleStart: cycleStart,
+      cycleEnd: cycleEnd,
+      reference: String(record && record.reference || referenceFor(accountingTypeCode, clientCode, exerciseYear)),
+      seeded: record && record.seeded !== false
+    };
   }
 
   function saveFolderCatalog() {
     try {
-      global.localStorage.setItem(FOLDERS_STORAGE_KEY, JSON.stringify(folderCatalog));
+      global.localStorage.setItem(DOSSIERS_STORAGE_KEY, JSON.stringify(folderCatalog));
       return true;
     } catch (err) {
       return false;
@@ -126,31 +202,126 @@
 
   function ensureFolderCatalog() {
     if (folderCatalog) return;
+    var parsed = null;
     try {
-      var raw = global.localStorage.getItem(FOLDERS_STORAGE_KEY);
-      var parsed = raw ? JSON.parse(raw) : null;
-      if (Array.isArray(parsed) && parsed.every(isFolderRecord)) folderCatalog = parsed;
+      var raw = global.localStorage.getItem(DOSSIERS_STORAGE_KEY) || global.localStorage.getItem(LEGACY_FOLDERS_STORAGE_KEY);
+      parsed = raw ? JSON.parse(raw) : null;
     } catch (err) {
-      folderCatalog = null;
+      parsed = null;
     }
-    if (!folderCatalog) folderCatalog = [{ id: DEFAULT_FOLDER_ID, name: DEFAULT_FOLDER_NAME, seeded: true }];
-    if (!folderCatalog.some(function (folder) { return folder.id === DEFAULT_FOLDER_ID; })) {
-      folderCatalog.unshift({ id: DEFAULT_FOLDER_ID, name: DEFAULT_FOLDER_NAME, seeded: true });
-    }
+    if (Array.isArray(parsed)) folderCatalog = parsed.map(normalizeDossier);
+    if (!folderCatalog) folderCatalog = [defaultDossier()];
+    if (!folderCatalog.some(function (dossier) { return dossier.id === DEFAULT_FOLDER_ID; })) folderCatalog.unshift(defaultDossier());
+
+    var usedReferences = {};
+    folderCatalog.forEach(function (dossier, index) {
+      var baseCode = dossier.clientCode;
+      var suffix = index + 1;
+      while (usedReferences[dossier.reference]) {
+        dossier.clientCode = baseCode.slice(0, Math.max(1, 2 - String(suffix).length)) + String(suffix++);
+        dossier.reference = referenceFor(dossier.accountingTypeCode, dossier.clientCode, dossier.exerciseYear);
+      }
+      usedReferences[dossier.reference] = true;
+    });
+
     try {
-      var selected = global.localStorage.getItem(ACTIVE_FOLDER_STORAGE_KEY);
-      activeFolderId = folderCatalog.some(function (folder) { return folder.id === selected; }) ? selected : DEFAULT_FOLDER_ID;
+      var selected = global.localStorage.getItem(ACTIVE_DOSSIER_STORAGE_KEY) || global.localStorage.getItem(LEGACY_ACTIVE_FOLDER_STORAGE_KEY);
+      activeFolderId = folderCatalog.some(function (dossier) { return dossier.id === selected; }) ? selected : DEFAULT_FOLDER_ID;
     } catch (err) {
       activeFolderId = DEFAULT_FOLDER_ID;
     }
-    if (activeFolderId !== DEFAULT_FOLDER_ID && !folderCatalog.some(function (folder) { return folder.id === activeFolderId; })) activeFolderId = DEFAULT_FOLDER_ID;
+    if (!folderCatalog.some(function (dossier) { return dossier.id === activeFolderId; })) activeFolderId = DEFAULT_FOLDER_ID;
     saveFolderCatalog();
-    try { global.localStorage.setItem(ACTIVE_FOLDER_STORAGE_KEY, activeFolderId); } catch (err) { /* stockage indisponible */ }
+    try { global.localStorage.setItem(ACTIVE_DOSSIER_STORAGE_KEY, activeFolderId); } catch (err) { /* stockage indisponible */ }
   }
 
   function folderById(folderId) {
     ensureFolderCatalog();
-    return folderCatalog.find(function (folder) { return folder.id === folderId; }) || null;
+    return folderCatalog.find(function (dossier) { return dossier.id === folderId; }) || null;
+  }
+
+  function dossiers() {
+    ensureFolderCatalog();
+    return clone(folderCatalog);
+  }
+
+  function currentDossier() {
+    ensureFolderCatalog();
+    return clone(folderById(activeFolderId));
+  }
+
+  function parseIsoDate(value) {
+    var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+    if (!match) return null;
+    var year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+    var date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? date : null;
+  }
+
+  function createDossier(data) {
+    ensureFolderCatalog();
+    var input = data || {};
+    var name = String(input.clientName || input.name || '').trim().replace(/\s+/g, ' ');
+    var clientCode = normalizeCode(input.clientCode);
+    var accountingTypeLabel = String(input.accountingTypeLabel || '').trim();
+    var accountingTypeCode = normalizeCode(input.accountingTypeCode || 'COR');
+    var cycleStart = String(input.cycleStart || '');
+    var cycleEnd = String(input.cycleEnd || '');
+    var startDate = parseIsoDate(cycleStart);
+    var endDate = parseIsoDate(cycleEnd);
+    var errors = [];
+    if (!name) errors.push('Le nom de l’entreprise cliente est obligatoire.');
+    if (name.length > 120) errors.push('Le nom de l’entreprise ne peut pas dépasser 120 caractères.');
+    if (!accountingTypeLabel) errors.push('Le type de comptabilité est obligatoire.');
+    if (accountingTypeLabel.length > 80) errors.push('Le type de comptabilité ne peut pas dépasser 80 caractères.');
+    if (!/^[A-Z0-9]{2,6}$/.test(accountingTypeCode)) errors.push('Le code du type doit contenir de 2 à 6 lettres ou chiffres.');
+    if (!clientCode) errors.push('Le code du dossier est obligatoire.');
+    else if (!/^[A-Z0-9]{2,8}$/.test(clientCode)) errors.push('Le code du dossier doit contenir de 2 à 8 lettres ou chiffres.');
+    if (!startDate || !endDate || endDate < startDate) errors.push('Le cycle comptable doit préciser des dates valides, dans l’ordre chronologique.');
+    if (startDate && endDate && cyclePeriods(cycleStart, cycleEnd).length > 18) errors.push('Le cycle ne peut pas dépasser 18 mois dans cette version.');
+    var exerciseYear = startDate ? startDate.getUTCFullYear() : EXERCICE;
+    var reference = referenceFor(accountingTypeCode, clientCode, exerciseYear);
+    if (folderCatalog.some(function (dossier) { return dossier.reference.toLocaleLowerCase() === reference.toLocaleLowerCase(); })) {
+      errors.push('La référence « ' + reference + ' » existe déjà. Choisissez un autre code de dossier ou un autre exercice.');
+    }
+    if (errors.length) return { ok: false, errors: errors };
+
+    var id;
+    do {
+      id = 'dossier-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+    } while (folderCatalog.some(function (dossier) { return dossier.id === id; }));
+    var dossier = {
+      id: id,
+      name: name,
+      clientName: name,
+      clientCode: clientCode,
+      accountingTypeLabel: accountingTypeLabel,
+      accountingTypeCode: accountingTypeCode,
+      exerciseYear: exerciseYear,
+      cycleStart: cycleStart,
+      cycleEnd: cycleEnd,
+      reference: reference,
+      seeded: false
+    };
+    folderCatalog.push(dossier);
+    if (!saveFolderCatalog()) {
+      folderCatalog.pop();
+      return { ok: false, errors: ['Impossible d’enregistrer le dossier dans ce navigateur.'] };
+    }
+    return { ok: true, errors: [], dossier: clone(dossier), folder: clone(dossier) };
+  }
+
+  function createFolder(name) {
+    var cleanName = String(name == null ? '' : name).trim();
+    var code = suggestedClientCode(cleanName);
+    return createDossier({
+      clientName: cleanName,
+      clientCode: code,
+      accountingTypeLabel: DEFAULT_ACCOUNTING_TYPE,
+      accountingTypeCode: DEFAULT_ACCOUNTING_TYPE_CODE,
+      cycleStart: EXERCICE + '-01-01',
+      cycleEnd: EXERCICE + '-12-31'
+    });
   }
 
   function currentFolderStorageKey() {
@@ -163,48 +334,15 @@
     return activeFolderId === DEFAULT_FOLDER_ID ? BACKUP_STORAGE_KEY : BACKUP_STORAGE_KEY + '.folder.' + activeFolderId;
   }
 
-  function folders() {
-    ensureFolderCatalog();
-    return clone(folderCatalog);
-  }
-
-  function currentFolder() {
-    ensureFolderCatalog();
-    return clone(folderById(activeFolderId));
-  }
-
-  function createFolder(name) {
-    ensureFolderCatalog();
-    var cleanName = String(name == null ? '' : name).trim().replace(/\s+/g, ' ');
-    if (!cleanName) return { ok: false, errors: ['Le nom du dossier est obligatoire.'] };
-    if (cleanName.length > 80) return { ok: false, errors: ['Le nom du dossier ne peut pas dépasser 80 caractères.'] };
-    if (/[\\/]/.test(cleanName)) return { ok: false, errors: ['Le nom ne peut pas contenir de barre oblique.'] };
-    var normalized = cleanName.toLocaleLowerCase();
-    if (folderCatalog.some(function (folder) { return folder.name.trim().toLocaleLowerCase() === normalized; })) {
-      return { ok: false, errors: ['Un dossier portant ce nom existe déjà dans l’organisation.'] };
-    }
-    var id;
-    do {
-      id = 'folder-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
-    } while (folderCatalog.some(function (folder) { return folder.id === id; }));
-    var folder = { id: id, name: cleanName, seeded: false };
-    folderCatalog.push(folder);
-    if (!saveFolderCatalog()) {
-      folderCatalog.pop();
-      return { ok: false, errors: ['Impossible d’enregistrer le dossier dans ce navigateur.'] };
-    }
-    return { ok: true, errors: [], folder: clone(folder) };
-  }
-
   function switchFolder(folderId) {
     ensureFolderCatalog();
-    if (!folderById(folderId)) return { ok: false, errors: ['Dossier de démonstration introuvable.'] };
-    if (folderId === activeFolderId) return { ok: true, errors: [], folder: currentFolder() };
+    if (!folderById(folderId)) return { ok: false, errors: ['Dossier client introuvable.'] };
+    if (folderId === activeFolderId) return { ok: true, errors: [], dossier: currentDossier(), folder: currentDossier() };
     if (state && !save()) return { ok: false, errors: ['Impossible d’enregistrer le dossier actif avant le changement.'] };
     activeFolderId = folderId;
     state = null;
-    try { global.localStorage.setItem(ACTIVE_FOLDER_STORAGE_KEY, activeFolderId); } catch (err) { /* la sélection restera en mémoire */ }
-    return { ok: true, errors: [], folder: currentFolder(), state: load() };
+    try { global.localStorage.setItem(ACTIVE_DOSSIER_STORAGE_KEY, activeFolderId); } catch (err) { /* la sélection restera en mémoire */ }
+    return { ok: true, errors: [], dossier: currentDossier(), folder: currentDossier(), state: load() };
   }
 
   function load() {
@@ -216,6 +354,14 @@
         var parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.accounts) && Array.isArray(parsed.journals) && Array.isArray(parsed.entries)) {
           state = parsed;
+          var dossier = folderById(activeFolderId);
+          var fallbackStart = (dossier && dossier.cycleStart) || EXERCICE + '-01-01';
+          var fallbackEnd = (dossier && dossier.cycleEnd) || EXERCICE + '-12-31';
+          if (!parseIsoDate(state.cycleStart) || !parseIsoDate(state.cycleEnd) || state.cycleEnd < state.cycleStart) {
+            state.cycleStart = fallbackStart;
+            state.cycleEnd = fallbackEnd;
+          }
+          state.exercise = Number(state.cycleStart.slice(0, 4)) || Number(dossier && dossier.exerciseYear) || EXERCICE;
           ensurePeriodsForEntries();
           return state;
         }
@@ -223,8 +369,8 @@
     } catch (err) {
       /* Stockage indisponible ou corrompu : le dossier repart sur son état initial. */
     }
-    var folder = folderById(activeFolderId);
-    state = initialState(!folder || folder.seeded !== false);
+    var dossier = folderById(activeFolderId);
+    state = initialState(!dossier || dossier.seeded !== false, dossier);
     save();
     return state;
   }
@@ -269,13 +415,15 @@
 
   function reset() {
     ensureFolderCatalog();
-    var folder = folderById(activeFolderId);
-    state = initialState(!folder || folder.seeded !== false);
+    var dossier = folderById(activeFolderId);
+    state = initialState(!dossier || dossier.seeded !== false, dossier);
     save();
     return state;
   }
 
   function getState() { return load(); }
+
+  function exercise() { return Number(load().exercise) || EXERCICE; }
 
   /* ---------------- Référentiels ---------------- */
   function accounts() { return load().accounts; }
@@ -327,10 +475,7 @@
   }
 
   function years() {
-    var st = load();
-    var set = {};
-    st.periods.forEach(function (p) { set[p.year] = true; });
-    return Object.keys(set).map(Number).sort();
+    return [exercise()];
   }
 
   function setPeriod(year, month, status) {
@@ -385,11 +530,12 @@
       errors.push('La référence « ' + reference + ' » existe déjà.');
     }
     if (!journal(journalCode)) errors.push('Le journal sélectionné est inconnu.');
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      errors.push('La date de la pièce est obligatoire.');
+    if (!parseIsoDate(date)) {
+      errors.push('La date de la pièce est obligatoire et doit être une date valide.');
     } else {
       var y = Number(date.slice(0, 4));
       var m = Number(date.slice(5, 7));
+      if (date < st.cycleStart || date > st.cycleEnd) errors.push('La date doit se situer dans le cycle du dossier (' + st.cycleStart + ' au ' + st.cycleEnd + ').');
       if (periodStatus(y, m) === 'closed') {
         errors.push('La période ' + monthLabel(m) + ' ' + y + ' est clôturée.');
       }
@@ -478,6 +624,10 @@
     if (!existing) return { ok: false, errors: ['Pièce introuvable.'] };
     if (existing.status === 'posted') return { ok: false, errors: ['Cette pièce est déjà validée.'] };
 
+    var st = load();
+    if (existing.date < st.cycleStart || existing.date > st.cycleEnd) {
+      return { ok: false, errors: ['La date doit se situer dans le cycle du dossier (' + st.cycleStart + ' au ' + st.cycleEnd + ').'] };
+    }
     var year = Number(existing.date.slice(0, 4));
     var month = Number(existing.date.slice(5, 7));
     if (periodStatus(year, month) === 'closed') {
@@ -531,7 +681,10 @@
 
   /* ---------------- Calculs comptables ---------------- */
   function postedEntries() {
-    return entries().filter(function (e) { return e.status === 'posted'; });
+    var st = load();
+    return st.entries.filter(function (e) {
+      return e.status === 'posted' && e.date >= st.cycleStart && e.date <= st.cycleEnd;
+    });
   }
 
   function balance() {
@@ -583,6 +736,7 @@
   }
 
   function kpis() {
+    var st = load();
     var rows = balance();
     var debit = rows.reduce(function (s, r) { return s + r.debit; }, 0);
     var credit = rows.reduce(function (s, r) { return s + r.credit; }, 0);
@@ -602,13 +756,16 @@
       resultat: produits - charges,
       tresorerie: tresorerie,
       posted: postedEntries().length,
-      drafts: entries().filter(function (e) { return e.status === 'draft'; }).length
+      drafts: st.entries.filter(function (e) { return e.status === 'draft' && e.date >= st.cycleStart && e.date <= st.cycleEnd; }).length
     };
   }
 
   function journalStats() {
+    var st = load();
     return journals().map(function (j) {
-      var list = entries().filter(function (e) { return e.journal === j.code; });
+      var list = st.entries.filter(function (e) {
+        return e.journal === j.code && e.date >= st.cycleStart && e.date <= st.cycleEnd;
+      });
       var posted = list.filter(function (e) { return e.status === 'posted'; });
       var t = { debit: 0, credit: 0 };
       posted.forEach(function (e) {
@@ -628,12 +785,14 @@
   }
 
   function periodStats(year) {
-    ensureYear(year);
-    save();
     var st = load();
-    return st.periods.filter(function (p) { return p.year === year; }).map(function (p) {
+    if (Number(year) !== Number(st.exercise)) return [];
+    var cycleMonthKeys = {};
+    cyclePeriods(st.cycleStart, st.cycleEnd).forEach(function (period) { cycleMonthKeys[period.year + '-' + period.month] = true; });
+    return st.periods.filter(function (p) { return !!cycleMonthKeys[p.year + '-' + p.month]; }).map(function (p) {
       var list = st.entries.filter(function (e) {
-        return Number(e.date.slice(0, 4)) === p.year && Number(e.date.slice(5, 7)) === p.month;
+        return e.date >= st.cycleStart && e.date <= st.cycleEnd &&
+          Number(e.date.slice(0, 4)) === p.year && Number(e.date.slice(5, 7)) === p.month;
       });
       var posted = list.filter(function (e) { return e.status === 'posted'; });
       var debit = posted.reduce(function (s, e) { return s + totals(e.lines).debit; }, 0);
@@ -647,7 +806,7 @@
       application: 'PERFECTO',
       module: 'Comptabilité générale SYSCOHADA',
       version: 1,
-      folder: currentFolder(),
+      dossier: currentDossier(),
       exportedAt: new Date().toISOString(),
       data: clone(load())
     };
@@ -661,6 +820,10 @@
       if (!data || !Array.isArray(data.accounts) || !Array.isArray(data.journals) || !Array.isArray(data.entries) || !Array.isArray(data.periods)) {
         return { ok: false, errors: ['Fichier invalide : structure PERFECTO attendue.'] };
       }
+      var dossier = currentDossier();
+      data.exercise = dossier.exerciseYear;
+      data.cycleStart = dossier.cycleStart;
+      data.cycleEnd = dossier.cycleEnd;
       state = data;
       ensurePeriodsForEntries();
       save();
@@ -741,15 +904,20 @@
   global.PerfectoStore = {
     STORAGE_KEY: STORAGE_KEY,
     EXERCICE: EXERCICE,
-    folders: folders,
-    currentFolder: currentFolder,
+    dossiers: dossiers,
+    currentDossier: currentDossier,
     currentStorageKey: currentFolderStorageKey,
+    createDossier: createDossier,
+    switchDossier: switchFolder,
+    folders: dossiers,
+    currentFolder: currentDossier,
     createFolder: createFolder,
     switchFolder: switchFolder,
     load: load,
     save: save,
     reset: reset,
     getState: getState,
+    exercise: exercise,
     accounts: accounts,
     account: account,
     journals: journals,

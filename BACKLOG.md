@@ -6,7 +6,8 @@ Ce document suit les décisions et les prochaines étapes du prototype natif. Le
 
 - Interface web en HTML, CSS et JavaScript natifs, sans build ; le parcours Windows reste une étape séparée.
 - Lot 1 de comptabilité générale fonctionnel en stockage local navigateur.
-- Dossiers comptables de démonstration isolés localement ; le jeu historique est conservé dans « Dossier principal ».
+- Référence dossier `COR-GOD2026` prise en charge ; un cycle non calendaire juillet 2026–juin 2027 est géré en 12 périodes mensuelles.
+- Page multi-dossiers clients en place : la Comptabilité ouvre la liste avant le tableau de bord ; création avec nom, code, type comptable, référence et cycle.
 - Connexion, profils, grants et dossiers ne sont pas encore reliés à une identité réelle ou à Google Drive.
 
 ## Décisions confirmées
@@ -15,7 +16,8 @@ Ce document suit les décisions et les prochaines étapes du prototype natif. Le
 - Gestionnaires et employés n’héritent d’aucun droit de leur rôle.
 - Les grants sont additifs : une autorisation est accordée si au moins un grant correspondant couvre l’action et son périmètre. Il n’existe pas de refus implicite qui annule un autre grant.
 - Pour les actions métier, « Consulter le module » et l’action doivent figurer dans le même grant et la même portée.
-- Une portée organisationnelle couvre les dossiers de l’organisation ; une portée dossier ne couvre que les dossiers qu’elle désigne.
+- Une portée organisationnelle couvre les dossiers de l’organisation ; une portée dossier ne couvre que les identifiants de dossiers clients qu’elle désigne.
+- Le code du dossier client est saisi explicitement et reste éditable ; aucune règle automatique depuis le nom de l’entreprise n’est imposée.
 - Ces règles sont utilisées pour éprouver les parcours côté client. Elles ne protègent pas les données.
 - Le cloud métier doit appartenir à l’organisation ; Google Drive est le fournisseur initial envisagé. Les données métier ne doivent pas être stockées dans une base applicative sur notre serveur.
 
@@ -25,7 +27,7 @@ Les identifiants ci-dessous sont reliés aux parcours actuels, mais leurs libell
 
 | Identifiant de démonstration | Parcours actuellement associé |
 |---|---|
-| `module.view` | Consulter les écrans du module dans le dossier actif |
+| `module.view` | Consulter les écrans du module dans un dossier client autorisé |
 | `draft.create` | Créer un brouillon ou une écriture |
 | `draft.edit` / `draft.delete` | Modifier ou supprimer un brouillon uniquement |
 | `entry.validate` | Valider définitivement une pièce équilibrée |
@@ -52,4 +54,4 @@ Les identifiants ci-dessous sont reliés aux parcours actuels, mais leurs libell
 
 ## Hors périmètre de la démo actuelle
 
-Pas d’authentification réelle, de Google Drive, de synchronisation multi-utilisateur, de protection des données métier côté serveur ni de résolution des conflits. Les profils et grants de démonstration sont temporaires ; les dossiers comptables simulés restent locaux au navigateur.
+Pas d’authentification réelle, de Google Drive, de synchronisation multi-utilisateur, de protection des données métier côté serveur ni de résolution des conflits. Les profils et grants de démonstration sont temporaires ; les dossiers clients et leurs données comptables simulés restent locaux au navigateur. Les cycles peuvent commencer et finir sur des dates personnalisées, mais sont limités à 18 mois dans cette version et sont gérés par périodes mensuelles.

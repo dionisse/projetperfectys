@@ -34,7 +34,7 @@
   var ORGANIZATION_ACTIONS = [
     { id: 'module.view', label: 'Consulter l’organisation' },
     { id: 'organization.manageMembers', label: 'Gérer les membres et les accès' },
-    { id: 'organization.manageFolders', label: 'Gérer les dossiers de démonstration' }
+    { id: 'organization.manageDossiers', label: 'Créer des dossiers clients' }
   ];
 
   function actionsForModule(moduleId) {
@@ -59,9 +59,18 @@
   function scopeAllows(scope, context) {
     if (!scope || !context) return false;
     if (scope.type === 'organization') return true;
-    if (scope.type !== 'folder' || context.scopeType !== 'folder' || !Array.isArray(scope.folders) || !context.folderName) return false;
-    var folder = normalize(context.folderName);
-    return !!folder && scope.folders.some(function (name) { return normalize(name) === folder; });
+    var isDossierScope = scope.type === 'dossier' || scope.type === 'folder';
+    var isDossierContext = context.scopeType === 'dossier' || context.scopeType === 'folder';
+    if (!isDossierScope || !isDossierContext) return false;
+    if (Array.isArray(scope.dossiers) && context.dossierId) {
+      return scope.dossiers.some(function (id) { return String(id) === String(context.dossierId); });
+    }
+    // Compatibilité avec les grants antérieurs enregistrés par nom de dossier.
+    var names = Array.isArray(scope.folders) ? scope.folders : scope.dossiers;
+    var contextName = context.dossierName || context.folderName;
+    if (!Array.isArray(names) || !contextName) return false;
+    var dossierName = normalize(contextName);
+    return !!dossierName && names.some(function (name) { return normalize(name) === dossierName; });
   }
 
   function sameOrganization(member, context) {

@@ -14,7 +14,7 @@ assert.deepStrictEqual(stats, { total: 5, available: 1, planned: 4 });
 const accounting = modules.get('accounting');
 assert(accounting, 'la Comptabilité générale est dans le catalogue');
 assert.strictEqual(accounting.status, 'available');
-assert.strictEqual(accounting.route, 'dashboard');
+assert.strictEqual(accounting.route, 'dossiers', 'le module ouvre d’abord la liste multi-dossiers clients');
 
 catalog.filter((module) => module.status === 'planned').forEach((module) => {
   assert.strictEqual(module.route, null, `${module.id} ne doit pas lancer une route non implémentée`);

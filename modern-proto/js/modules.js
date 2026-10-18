@@ -18,7 +18,7 @@
       status: 'available',
       statusLabel: 'DISPONIBLE',
       version: 'Lot 1 · Prototype',
-      route: 'dashboard'
+      route: 'dossiers'
     },
     {
       id: 'analytics',

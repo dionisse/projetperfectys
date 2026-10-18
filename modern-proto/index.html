@@ -30,7 +30,10 @@
 
       <nav class="sidebar-nav">
         <div class="nav-section">
-          <p class="nav-section-heading">Pilotage</p>
+          <p class="nav-section-heading">Comptabilité générale</p>
+          <a href="#/dossiers" data-route="dossiers">
+            <span class="nav-icon" aria-hidden="true">▰</span>Dossiers clients
+          </a>
           <a href="#/dashboard" data-route="dashboard">
             <span class="nav-icon" aria-hidden="true">▥</span>Tableau de bord
           </a>
@@ -94,7 +97,7 @@
           <a class="btn btn-ghost launcher-return" href="#/launcher"><span aria-hidden="true">←</span> <span class="btn-label">Modules</span></a>
           <span class="active-folder-indicator" id="active-folder-indicator" hidden></span>
           <span class="topbar-date" id="topbar-date"></span>
-          <a class="btn btn-primary" href="#/entry">＋ <span class="btn-label">Nouvelle écriture</span></a>
+          <a class="btn btn-primary" id="topbar-new-entry" href="#/entry">＋ <span class="btn-label">Nouvelle écriture</span></a>
         </div>
       </header>
 

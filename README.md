@@ -25,7 +25,8 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 |---|---|
 | Connexion (démo) | Aucun identifiant collecté ; e-mail/mot de passe et Google sont prévus, mais non actifs en démo |
 | Launcher | Catalogue modulaire, recherche et filtres ; ouverture selon les droits du profil simulé, autres modules à venir |
-| Organisation & accès (démo) | Profils temporaires, gestion des dossiers locaux et droits explicites par personne, module, dossier et action ; refus par défaut |
+| Organisation & accès (démo) | Profils temporaires et droits explicites par personne, module, entreprise cliente, dossier et action ; refus par défaut |
+| Dossiers clients | Liste multi-dossiers ouverte depuis le module Comptabilité ; création d’entreprise, code, type comptable, référence et cycle paramétrable |
 | Tableau de bord | Indicateurs (débit, crédit, résultat, pièces), dernières pièces, activité par journal, état des périodes |
 | Plan comptable | 18 comptes SYSCOHADA initiaux, recherche, filtres, création de compte, export CSV |
 | Journaux | Six journaux (AC, VE, BQ, CA, OD, PA) avec totaux et brouillons |
@@ -34,7 +35,7 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 | Balance générale | Débit, crédit et solde par compte, contrôle d'équilibre, export CSV, impression |
 | Journal des écritures | Écritures validées chronologiques, filtre journal/exercice, impression |
 | Grand livre | Mouvements par compte et solde progressif |
-| Périodes | Douze mois de l'exercice, ouverture et clôture persistées |
+| Périodes | Périodes mensuelles couvrant le cycle défini pour le dossier (calendaire ou non), ouverture et clôture persistées |
 | Données & application | Export/import JSON, point de restauration local avant modification, restauration, installation PWA |
 
 ### Règles métier appliquées
@@ -50,13 +51,15 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 
 ### Politique d’accès de démonstration
 
-Le refus est appliqué par défaut. Le Superviseur général dispose des droits d’administration sur son organisation de démonstration ; les profils gestionnaire et utilisateur/employé ne reçoivent aucun droit par leur rôle. Les droits peuvent être accordés par module, sur l’organisation ou sur un ou plusieurs dossiers créés dans la démo. La sélection du dossier actif n’affiche que les dossiers autorisés au profil. Toute action comptable exige aussi le droit de consulter son module dans le même grant. Le prototype distingue les gestes disponibles (modifier/supprimer un brouillon, créer un compte, clôturer/réouvrir une période, importer, réinitialiser ou restaurer) et permet plusieurs grants par module ; dans cette proposition, les portées se cumulent et peuvent porter des ensembles d’actions différents.
+Le refus est appliqué par défaut. Le Superviseur général administre son organisation de démonstration ; les profils gestionnaire et utilisateur/employé ne reçoivent aucun droit par leur rôle. Les droits peuvent être accordés par personne, module, organisation ou identifiant de dossier client, et action. Toute action comptable exige aussi le droit de consulter le module dans le même grant et la même portée. Plusieurs grants par module se cumulent sans transférer une action d’un dossier client à un autre.
 
-Les dossiers de démonstration possèdent désormais des jeux de données comptables séparés dans le navigateur : le jeu existant est conservé dans « Dossier principal » et un dossier nouvellement créé démarre sans écritures, avec le référentiel comptable et les journaux initiaux. Les gardes de navigation et d’action évaluent les droits dans le dossier sélectionné. Le refus par défaut et le cumul additif des grants sont confirmés ; une action métier doit partager son grant et sa portée avec « Consulter le module ». Le vocabulaire précis des actions et leurs effets métier restent à examiner ensemble, module par module. Cette simulation reste côté client : elle n’est ni une sécurité réelle ni une authentification, ne se synchronise pas avec Google Drive et ne prend pas en charge l’écriture simultanée multi-utilisateur.
+Un dossier désigne une entreprise cliente enregistrée pour traitement. Le module Comptabilité ouvre d’abord la liste des dossiers autorisés ; l’ouverture d’une entreprise conduit ensuite à son tableau de bord. La création définit le nom du client, un code de dossier éditable, le type de comptabilité et les dates de début/fin du cycle. La référence suit le format `CODETYPE-CODECLIENTANNÉE` : Cabinet Godwin, comptabilité révisée (`COR`), code `GOD` et exercice 2026 donnent `COR-GOD2026`. Le code est saisi explicitement et reste modifiable ; aucune règle automatique n’est imposée depuis le nom. L’unicité de la référence est vérifiée.
+
+Chaque dossier a des données comptables isolées dans le navigateur. Le jeu historique principal et ses écritures sont conservés ; tout nouveau dossier démarre sans recopier ces écritures, avec le référentiel comptable initial. Le moteur garde les périodes mensuelles dans les bornes du cycle et refuse les nouvelles écritures hors cycle. Les cycles non calendaires sont pris en charge ; cette version limite un cycle à 18 mois. Le registre de dossiers migre les métadonnées héritées tout en conservant les anciennes clés et données comptables. Cette simulation reste côté client : elle n’est ni une sécurité réelle ni une authentification, ne se synchronise pas avec Google Drive et ne prend pas en charge l’écriture simultanée multi-utilisateur.
 
 ### Données de démonstration
 
-Le dossier principal conserve les 18 comptes, 6 journaux, 3 pièces validées et 1 brouillon historiques. Les mouvements validés sont équilibrés à **2 832 000 XOF** au débit comme au crédit ; le résultat de démonstration est de **242 000 XOF**. Le registre des dossiers et chaque jeu comptable sont persistés dans `localStorage`. Les nouveaux dossiers contiennent le plan de comptes, les journaux et les périodes initiales, sans écritures recopiées. Les profils et leurs grants de démonstration restent temporaires et ne survivent pas au rechargement.
+Le dossier principal conserve les 18 comptes, 6 journaux, 3 pièces validées et 1 brouillon historiques. Les mouvements validés sont équilibrés à **2 832 000 XOF** au débit comme au crédit ; le résultat de démonstration est de **242 000 XOF**. Le registre des dossiers clients et chaque jeu comptable sont persistés dans `localStorage`. Chaque nouveau dossier reçoit le plan de comptes, les journaux et les périodes de son cycle, sans écritures recopiées. Les profils et leurs grants de démonstration restent temporaires et ne survivent pas au rechargement.
 
 ## Lancer en local
 
@@ -109,17 +112,17 @@ lui-même.
 index.html                    redirection vers modern-proto/ (déploiement racine)
 modern-proto/index.html        coquille de l'application (navigation, topbar)
 modern-proto/css/modern.css    identité GOBEX (papier, encre, vert canard et or doux), responsive et imprimable
-modern-proto/js/store.js       données, règles métier, calculs, import/export
+modern-proto/js/store.js       dossiers clients, cycles, données isolées, règles métier, calculs, import/export
 modern-proto/js/modules.js     catalogue déclaratif des modules du launcher
 modern-proto/js/permissions.js politique d’accès démo (refus par défaut)
-modern-proto/js/app.js         routeur, vues, formulaires et interactions sur les dossiers locaux
+modern-proto/js/app.js         routeur, vues multi-dossiers, formulaires et interactions comptables
 BACKLOG.md                     décisions confirmées et étapes prévues
 modern-proto/manifest.webmanifest  métadonnées PWA
 modern-proto/service-worker.js cache hors ligne (réseau d'abord, cache en secours)
 modern-proto/icon-192.png      icônes de l'application
 modern-proto/icon-512.png
 tests/store.test.js            tests des règles métier (Node, sans dépendance)
-tests/workspaces.test.js       tests de séparation des dossiers locaux
+tests/workspaces.test.js       tests de migration, références, cycles et isolation des dossiers clients
 ```
 
 ## Tests
@@ -131,7 +134,7 @@ node tests/modules.test.js
 node tests/permissions.test.js
 ```
 
-Les tests couvrent les règles comptables, l’isolation des dossiers locaux, le catalogue modulaire et la politique d’accès de démonstration (refus par défaut, organisation, actions et périmètre dossier). La CI GitHub Actions exécute ces scénarios ainsi qu’un contrôle de syntaxe et un test de service HTTP.
+Les tests couvrent les règles comptables, la migration, les références, les cycles et l’isolation des dossiers clients, le catalogue modulaire et la politique d’accès de démonstration (refus par défaut, organisation, actions et portée par identifiant de dossier). La CI GitHub Actions exécute ces scénarios ainsi qu’un contrôle de syntaxe et un test de service HTTP.
 
 ## Limites de cette prévisualisation
 

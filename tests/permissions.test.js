@@ -27,11 +27,11 @@ test('la gestion d’organisation peut être déléguée explicitement dans le b
   };
   assert.strictEqual(Permissions.hasPermission(manager, 'organization', 'module.view', context), true);
   assert.strictEqual(Permissions.hasPermission(manager, 'organization', 'organization.manageMembers', context), false, 'la consultation seule ne donne pas le droit de gérer');
-  assert.strictEqual(Permissions.hasPermission(manager, 'organization', 'organization.manageFolders', context), false, 'gérer les membres ne donne pas le droit de créer des dossiers');
+  assert.strictEqual(Permissions.hasPermission(manager, 'organization', 'organization.manageDossiers', context), false, 'gérer les membres ne donne pas le droit de créer des dossiers clients');
   manager.grants.organization[0].actions.push('organization.manageMembers');
   assert.strictEqual(Permissions.hasPermission(manager, 'organization', 'organization.manageMembers', context), true);
-  manager.grants.organization[0].actions.push('organization.manageFolders');
-  assert.strictEqual(Permissions.hasPermission(manager, 'organization', 'organization.manageFolders', context), true);
+  manager.grants.organization[0].actions.push('organization.manageDossiers');
+  assert.strictEqual(Permissions.hasPermission(manager, 'organization', 'organization.manageDossiers', context), true);
   assert.strictEqual(Permissions.hasPermission(manager, 'organization', 'organization.manageMembers', { organizationId: 'org-2' }), false);
   manager.grants.organization[0].actions = ['organization.manageMembers'];
   assert.strictEqual(Permissions.hasPermission(manager, 'organization', 'organization.manageMembers', context), false, 'l’action déléguée exige aussi module.view');
@@ -72,6 +72,18 @@ test('les grants sont additifs, sans transférer les actions entre portées', ()
   assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'draft.create', south), false, 'le droit Nord ne se transfère pas au grant Sud');
   manager.grants.accounting.push({ scope: { type: 'folder', folders: ['Agence Est'] }, actions: ['draft.delete'] });
   assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'draft.delete', { organizationId: 'org-1', scopeType: 'folder', folderName: 'Agence Est' }), false, 'un droit métier reste refusé sans module.view dans le même grant');
+});
+
+test('les portées client utilisent les identifiants de dossiers, même si des noms se ressemblent', () => {
+  const employee = {
+    role: 'employee', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view', 'draft.create'] }] }
+  };
+  const first = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1', dossierName: 'Cabinet Godwin' };
+  const second = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-2', dossierName: 'Cabinet Godwin' };
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'module.view', first), true);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'draft.create', first), true);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'module.view', second), false, 'une portée identifiée ne s’étend pas à un autre dossier portant le même nom');
 });
 
 test('un grant limité à des dossiers refuse tout autre dossier ou périmètre', () => {
@@ -131,7 +143,7 @@ test('les actions disponibles sont décrites par module', () => {
   assert(actions.includes('data.export'));
   assert(Permissions.actionsForModule('organization').some((action) => action.id === 'module.view'));
   assert(Permissions.actionsForModule('organization').some((action) => action.id === 'organization.manageMembers'));
-  assert(Permissions.actionsForModule('organization').some((action) => action.id === 'organization.manageFolders'));
+  assert(Permissions.actionsForModule('organization').some((action) => action.id === 'organization.manageDossiers'));
   assert(Permissions.actionsForModule('analytics').some((action) => action.id === 'module.view'));
   assert.deepStrictEqual(Permissions.actionsForModule('unknown-module'), [], 'un module inconnu est refusé');
   const unknownGrant = { role: 'manager', organizationId: 'org-1', grants: { 'unknown-module': [{ scope: { type: 'organization' }, actions: ['module.view'] }] } };
@@ -154,4 +166,4 @@ test('les actions sensibles restent indépendantes les unes des autres', () => {
   assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'data.restore', context), false);
 });
 
-console.log('Politique d’accès : 8 scénarios réussis.');
+console.log('Politique d’accès : 9 scénarios réussis.');

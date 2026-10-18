@@ -35,12 +35,13 @@
     balance: '⚖︎', journal: '≡', ledger: '⌕', periods: '◷', settings: '⚙︎'
   };
 
-  var ROUTES = ['login', 'launcher', 'organization', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings'];
+  var ROUTES = ['login', 'launcher', 'organization', 'dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings'];
 
   var TITLES = {
     login: ['Connexion', 'Accès à votre espace PERFECTO'],
     launcher: ['Launcher', 'Modules de votre organisation'],
     organization: ['Organisation & accès', 'Organisation, membres et droits d’accès'],
+    dossiers: ['Dossiers clients', 'Entreprises clientes et cycles comptables'],
     dashboard: ['Tableau de bord', 'Vue d’ensemble de la comptabilité générale'],
     accounts: ['Plan comptable', 'Comptes SYSCOHADA révisé'],
     journals: ['Journaux comptables', 'Les six journaux du module'],
@@ -57,19 +58,19 @@
     accounts: { q: '', cls: '', nature: '' },
     entries: { q: '', status: '', journal: '' },
     balance: { cls: '', q: '' },
-    journal: { journal: '', year: String(S.EXERCICE) },
+    journal: { journal: '', year: String(S.exercise()) },
     ledger: { account: '521100' },
-    periods: { year: S.EXERCICE }
+    periods: { year: S.exercise() }
   };
 
   var deferredInstallPrompt = null;
   var launcherUi = { filter: 'all', query: '' };
   var DEMO_ORGANIZATION_ID = 'demo-org';
-  var ACCOUNTING_ROUTES = ['dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings'];
+  var ACCOUNTING_ROUTES = ['dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings'];
   var ACCESS_MODULES = [{ id: 'organization', name: 'Organisation & accès', status: 'available', route: 'organization', scopeable: false }].concat(ModuleRegistry.all());
   var demoMembers = [{ id: 'demo-supervisor', name: 'Compte superviseur (démo)', role: 'supervisor', organizationId: DEMO_ORGANIZATION_ID, grants: {} }];
   var activeDemoMemberId = 'demo-supervisor';
-  var activeDemoFolderId = S.currentFolder().id;
+  var activeDemoDossierId = S.currentDossier().id;
   var demoMemberSequence = 0;
 
   function getActiveDemoMember() {
@@ -82,39 +83,42 @@
     return grants && typeof grants === 'object' ? [grants] : [];
   }
 
-  function demoAccessContext(scopeType, folderName) {
+  function demoAccessContext(scopeType, dossier) {
+    dossier = dossier || null;
     return {
       organizationId: DEMO_ORGANIZATION_ID,
       scopeType: scopeType || 'organization',
-      folderName: folderName || null
+      dossierId: dossier && dossier.id || null,
+      dossierName: dossier && dossier.name || null,
+      folderName: dossier && dossier.name || null
     };
   }
 
-  function demoFolderById(folderId) {
-    return S.folders().find(function (folder) { return folder.id === folderId; }) || null;
+  function demoDossierById(dossierId) {
+    return S.dossiers().find(function (dossier) { return dossier.id === dossierId; }) || null;
   }
 
-  function accountingAccessContext() {
-    var folder = activeDemoFolderId ? demoFolderById(activeDemoFolderId) : null;
-    return demoAccessContext('folder', folder && folder.name);
+  function accountingAccessContext(dossier) {
+    var selected = dossier || (activeDemoDossierId ? demoDossierById(activeDemoDossierId) : null);
+    return demoAccessContext('dossier', selected);
   }
 
-  function permittedDemoFolders(member) {
-    return S.folders().filter(function (folder) {
-      return hasDemoPermission(member, 'accounting', 'module.view', demoAccessContext('folder', folder.name));
+  function permittedDemoDossiers(member) {
+    return S.dossiers().filter(function (dossier) {
+      return hasDemoPermission(member, 'accounting', 'module.view', accountingAccessContext(dossier));
     });
   }
 
-  function ensureDemoFolderForMember(member) {
-    var permitted = permittedDemoFolders(member);
-    var selected = permitted.find(function (folder) { return folder.id === activeDemoFolderId; }) || permitted[0] || null;
+  function ensureDemoDossierForMember(member) {
+    var permitted = permittedDemoDossiers(member);
+    var selected = permitted.find(function (dossier) { return dossier.id === activeDemoDossierId; }) || permitted[0] || null;
     if (!selected) {
-      activeDemoFolderId = null;
+      activeDemoDossierId = null;
       return permitted;
     }
-    if (selected.id !== activeDemoFolderId) {
-      var switched = S.switchFolder(selected.id);
-      if (switched.ok) activeDemoFolderId = selected.id;
+    if (selected.id !== activeDemoDossierId) {
+      var switched = S.switchDossier(selected.id);
+      if (switched.ok) activeDemoDossierId = selected.id;
       else return [];
     }
     return permitted;
@@ -130,8 +134,10 @@
       case 'configure-demo-access':
       case 'remove-demo-member':
         return { moduleId: 'organization', actionId: 'organization.manageMembers' };
-      case 'create-demo-folder':
-        return { moduleId: 'organization', actionId: 'organization.manageFolders' };
+      case 'create-demo-dossier':
+        return { moduleId: 'organization', actionId: 'organization.manageDossiers' };
+      case 'open-dossier':
+        return { moduleId: 'accounting', actionId: 'module.view' };
       case 'open-module':
         return { moduleId: trigger && trigger.getAttribute('data-module-id'), actionId: 'module.view' };
       case 'open-entry':
@@ -168,8 +174,17 @@
   function canPerformDemoAction(action, trigger, shouldNotify) {
     var rule = demoActionRule(action, trigger);
     if (!rule) return true;
-    var context = rule.moduleId === 'accounting' ? accountingAccessContext() : demoAccessContext('organization');
-    var allowed = !!rule.moduleId && !!context && hasDemoPermission(getActiveDemoMember(), rule.moduleId, rule.actionId, context);
+    var member = getActiveDemoMember();
+    var selectedDossier = action === 'open-dossier' && trigger ? demoDossierById(trigger.getAttribute('data-id')) : null;
+    var context = rule.moduleId === 'accounting'
+      ? accountingAccessContext(selectedDossier || undefined)
+      : demoAccessContext('organization');
+    var allowed;
+    if (action === 'open-module' && rule.moduleId === 'accounting') {
+      allowed = permittedDemoDossiers(member).length > 0 || hasDemoPermission(member, 'organization', 'organization.manageDossiers', demoAccessContext('organization'));
+    } else {
+      allowed = !!rule.moduleId && !!context && hasDemoPermission(member, rule.moduleId, rule.actionId, context);
+    }
     if (!allowed && shouldNotify !== false) {
       toast('Action refusée par défaut : le profil simulé ne possède pas le droit « ' + rule.actionId + ' ».', 'warning');
     }
@@ -187,7 +202,11 @@
       var routePart = hash.replace(/^#\/?/, '').split('?')[0];
       var requirement = null;
       if (routePart === 'organization') requirement = { moduleId: 'organization', actionId: 'module.view' };
-      else if (ACCOUNTING_ROUTES.indexOf(routePart) !== -1) requirement = { moduleId: 'accounting', actionId: 'module.view' };
+      else if (routePart === 'dossiers') {
+        link.hidden = permittedDemoDossiers(getActiveDemoMember()).length === 0 &&
+          !hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageDossiers', demoAccessContext('organization'));
+        return;
+      } else if (ACCOUNTING_ROUTES.indexOf(routePart) !== -1) requirement = { moduleId: 'accounting', actionId: 'module.view' };
       if (routePart === 'entry') {
         var hasId = /(?:^|[?&])id=/.test(hash);
         requirement = { moduleId: 'accounting', actionId: hasId ? 'draft.edit' : 'draft.create' };
@@ -212,9 +231,9 @@
     }
     var canManageOrganization = hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageMembers', demoAccessContext('organization'));
     $$('[data-demo-member-role]', root).forEach(function (select) { select.disabled = !canManageOrganization; });
-    var canManageFolders = hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageFolders', demoAccessContext('organization'));
-    var folderForm = $('#demo-folder-form', root);
-    if (folderForm) folderForm.hidden = !canManageFolders;
+    var canManageDossiers = hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageDossiers', demoAccessContext('organization'));
+    var dossierForm = $('#dossier-create-form', root);
+    if (dossierForm) dossierForm.hidden = !canManageDossiers;
     var importInput = $('#import-file', root);
     if (importInput) {
       var canImportData = hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext());
@@ -312,9 +331,17 @@
       navigate('#/launcher');
       return;
     }
-    if (ACCOUNTING_ROUTES.indexOf(route) !== -1 && !hasDemoPermission(activeMember, 'accounting', 'module.view', accountingAccessContext())) {
+    if (route === 'dossiers') {
+      var canOpenDossierList = permittedDemoDossiers(activeMember).length > 0 ||
+        hasDemoPermission(activeMember, 'organization', 'organization.manageDossiers', orgContext);
+      if (!canOpenDossierList) {
+        toast('Aucun dossier client accessible n’est accordé à ce profil de démonstration.', 'warning');
+        navigate('#/launcher');
+        return;
+      }
+    } else if (ACCOUNTING_ROUTES.indexOf(route) !== -1 && !hasDemoPermission(activeMember, 'accounting', 'module.view', accountingAccessContext())) {
       toast('Aucun accès à la Comptabilité générale n’est accordé à ce profil de démonstration.', 'warning');
-      navigate('#/launcher');
+      navigate('#/dossiers');
       return;
     }
     if (route === 'entry') {
@@ -335,6 +362,7 @@
       case 'login': html = viewLogin(); break;
       case 'launcher': html = viewLauncher(); break;
       case 'organization': html = viewOrganization(); break;
+      case 'dossiers': html = viewDossiers(); break;
       case 'dashboard': html = viewDashboard(); break;
       case 'accounts': html = viewAccounts(); break;
       case 'journals': html = viewJournals(); break;
@@ -353,10 +381,18 @@
     var folderIndicator = $('#active-folder-indicator');
     if (folderIndicator) {
       var inAccounting = ACCOUNTING_ROUTES.indexOf(route) !== -1;
+      var activeDossier = S.currentDossier();
+      var visibleDossierCount = route === 'dossiers' ? permittedDemoDossiers(activeMember).length : 0;
       folderIndicator.hidden = !inAccounting;
-      folderIndicator.textContent = inAccounting ? 'DOSSIER · ' + S.currentFolder().name : '';
-      folderIndicator.title = inAccounting ? 'Données locales isolées pour ce dossier de démonstration' : '';
+      folderIndicator.textContent = route === 'dossiers'
+        ? 'DOSSIERS CLIENTS · ' + visibleDossierCount + (visibleDossierCount === 1 ? ' dossier visible' : ' dossiers visibles')
+        : (inAccounting && activeDossier ? activeDossier.reference : '');
+      folderIndicator.title = route === 'dossiers'
+        ? 'Liste multi-dossiers accessible à ce profil de démonstration'
+        : (inAccounting ? 'Dossier client isolé localement · ' + (activeDossier && activeDossier.name || '') : '');
     }
+    var topbarEntry = $('a[href="#/entry"].btn.btn-primary');
+    if (topbarEntry && route === 'dossiers') topbarEntry.hidden = true;
 
     var title = TITLES[route] || TITLES.login;
     var pageTitle = $('#page-title');
@@ -471,7 +507,10 @@
   function launcherModuleCard(module, index) {
     var available = module.status === 'available' && module.route;
     var moduleContext = module.id === 'accounting' ? accountingAccessContext() : demoAccessContext('organization');
-    var permitted = available && hasDemoPermission(getActiveDemoMember(), module.id, 'module.view', moduleContext);
+    var activeMember = getActiveDemoMember();
+    var permitted = available && (module.id === 'accounting'
+      ? (permittedDemoDossiers(activeMember).length > 0 || hasDemoPermission(activeMember, 'organization', 'organization.manageDossiers', demoAccessContext('organization')))
+      : hasDemoPermission(activeMember, module.id, 'module.view', moduleContext));
     var number = String(index + 1).padStart(2, '0');
     var action = permitted
       ? '<button type="button" class="module-open-button" data-action="open-module" data-module-id="' + esc(module.id) + '">Ouvrir le module <span aria-hidden="true">→</span></button>'
@@ -492,7 +531,7 @@
     var modules = ModuleRegistry.all();
     var stats = ModuleRegistry.stats();
     var activeMember = getActiveDemoMember();
-    var accessibleFolders = ensureDemoFolderForMember(activeMember);
+    var accessibleDossiers = ensureDemoDossierForMember(activeMember);
     var availableLabel = String(stats.available).padStart(2, '0');
     var availableText = stats.available === 1 ? 'disponible' : 'disponibles';
     var availableNoun = stats.available === 1 ? 'module disponible' : 'modules disponibles';
@@ -501,11 +540,11 @@
       var selected = member.id === activeDemoMemberId ? ' selected' : '';
       return '<option value="' + esc(member.id) + '"' + selected + '>' + esc(demoRoleLabel(member.role) + ' · ' + member.name) + '</option>';
     }).join('');
-    var folderControl = accessibleFolders.length
-      ? '<label class="demo-folder-switch"><span>DOSSIER COMPTABLE</span><select id="demo-active-folder" aria-label="Choisir un dossier comptable">' + accessibleFolders.map(function (folder) {
-          return '<option value="' + esc(folder.id) + '"' + (folder.id === activeDemoFolderId ? ' selected' : '') + '>' + esc(folder.name) + '</option>';
+    var folderControl = accessibleDossiers.length
+      ? '<label class="demo-folder-switch"><span>DOSSIER CLIENT ACTIF</span><select id="demo-active-folder" aria-label="Choisir un dossier client actif">' + accessibleDossiers.map(function (dossier) {
+          return '<option value="' + esc(dossier.id) + '"' + (dossier.id === activeDemoDossierId ? ' selected' : '') + '>' + esc(dossier.clientName) + ' · ' + esc(dossier.reference) + '</option>';
         }).join('') + '</select></label>'
-      : '<span class="demo-folder-unavailable">Aucun dossier comptable autorisé</span>';
+      : '<span class="demo-folder-unavailable">Aucun dossier client autorisé</span>';
     var organizationControl = hasDemoPermission(activeMember, 'organization', 'module.view', demoAccessContext('organization'))
       ? '<a class="org-manage-link" href="#/organization">Organisation &amp; accès <span aria-hidden="true">→</span></a>'
       : '<span class="org-manage-disabled" title="Aucun droit de consultation accordé à ce profil">Organisation &amp; accès · accès non accordé</span>';
@@ -583,9 +622,10 @@
         return grant && Array.isArray(grant.actions) && grant.actions.length > 0;
       });
     }).length;
-    var folderScopes = ACCESS_MODULES.reduce(function (count, module) {
+    var dossierScopes = ACCESS_MODULES.reduce(function (count, module) {
       return count + demoGrantList(member, module.id).filter(function (grant) {
-        return grant && grant.scope && grant.scope.type === 'folder' && grant.scope.folders && grant.scope.folders.length;
+        return grant && grant.scope && (grant.scope.type === 'dossier' || grant.scope.type === 'folder') &&
+          ((Array.isArray(grant.scope.dossiers) && grant.scope.dossiers.length) || (Array.isArray(grant.scope.folders) && grant.scope.folders.length));
       }).length;
     }, 0);
     var initials = member.role === 'supervisor' ? 'SG' : (member.role === 'manager' ? 'G' : 'U');
@@ -593,9 +633,98 @@
     return '<div class="organization-member-row">' +
       '<div class="member-identity"><span class="member-avatar ' + (isSupervisor ? 'is-root' : '') + '">' + initials + '</span><span><strong>' + esc(member.name) + '</strong><small>Profil temporaire de démonstration · aucune connexion réelle</small></span></div>' +
       '<div class="member-role-control">' + roleControl + '</div>' +
-      '<div class="member-access-status"><span>DROITS EXPLICITES · DÉMO</span><strong>' + configured + ' / ' + ACCESS_MODULES.length + ' module(s) · ' + folderScopes + ' portée(s) dossier</strong></div>' +
+      '<div class="member-access-status"><span>DROITS EXPLICITES · DÉMO</span><strong>' + configured + ' / ' + ACCESS_MODULES.length + ' module(s) · ' + dossierScopes + ' portée(s) dossier</strong></div>' +
       '<div class="member-row-action">' + memberActions + '</div>' +
       '</div>';
+  }
+
+  function dossierCard(dossier) {
+    return '<article class="client-dossier-card">' +
+      '<div class="dossier-card-top"><span class="dossier-type-label">' + esc(dossier.accountingTypeLabel) + '</span><span class="dossier-local-tag"><i></i>LOCAL · DÉMO</span></div>' +
+      '<div class="dossier-card-identity"><div class="dossier-client-mark" aria-hidden="true">' + esc((dossier.clientCode || 'D').slice(0, 1)) + '</div><div><h3>' + esc(dossier.clientName || dossier.name) + '</h3><span class="dossier-reference">' + esc(dossier.reference) + '</span></div></div>' +
+      '<div class="dossier-card-cycle"><span>EXERCICE ' + esc(dossier.exerciseYear) + '</span><strong>' + dateLabel(dossier.cycleStart) + ' <i>→</i> ' + dateLabel(dossier.cycleEnd) + '</strong></div>' +
+      '<div class="dossier-card-foot"><span>Code dossier <strong>' + esc(dossier.clientCode) + '</strong></span><button type="button" class="btn btn-primary btn-sm" data-action="open-dossier" data-id="' + esc(dossier.id) + '">Ouvrir le dossier <span aria-hidden="true">→</span></button></div>' +
+      '</article>';
+  }
+
+  function viewDossiers() {
+    var member = getActiveDemoMember();
+    var accessible = permittedDemoDossiers(member);
+    var canCreate = hasDemoPermission(member, 'organization', 'organization.manageDossiers', demoAccessContext('organization'));
+    var html = pageHeader(
+      'Dossiers clients',
+      'Sélectionnez une entreprise cliente pour ouvrir sa comptabilité. Chaque dossier conserve ses propres données et son cycle comptable.',
+      '<a class="btn btn-ghost" href="#/launcher">← Modules</a>',
+      'dossiers-page-header'
+    );
+    html += '<div class="dossiers-summary"><div><span class="dossiers-summary-icon" aria-hidden="true">▰</span><span><strong>' + accessible.length + ' dossier' + (accessible.length === 1 ? '' : 's') + ' accessible' + (accessible.length === 1 ? '' : 's') + '</strong><small>Accès évalué par le profil simulé</small></span></div><span class="dossiers-demo-note">Données locales · aucune synchronisation</span></div>';
+    html += '<section class="dossiers-section"><div class="dossiers-section-heading"><div><p class="page-kicker">COMPTABILITÉ GÉNÉRALE</p><h3>Vos entreprises clientes</h3></div><span>' + accessible.length + ' résultat' + (accessible.length === 1 ? '' : 's') + '</span></div>';
+    html += accessible.length
+      ? '<div class="client-dossier-grid">' + accessible.map(dossierCard).join('') + '</div>'
+      : '<div class="dossiers-empty"><span aria-hidden="true">▰</span><strong>Aucun dossier client visible</strong><p>Un accès explicite à un dossier doit être accordé à ce profil, ou un dossier peut être créé par un profil autorisé.</p></div>';
+    html += '</section>';
+    if (canCreate) {
+      var currentYear = Number(S.todayIso().slice(0, 4)) || S.exercise();
+      html += '<section class="dossier-create-panel"><div class="dossier-create-heading"><div><p class="page-kicker">NOUVEAU CLIENT</p><h3>Créer un dossier client</h3><p>Enregistrez l’entreprise, le type de comptabilité et son exercice.</p></div><span class="dossier-create-icon" aria-hidden="true">＋</span></div>' +
+        '<form id="dossier-create-form" class="dossier-create-form" novalidate>' +
+          '<div class="dossier-form-grid">' +
+            '<div class="field dossier-field-wide"><label for="dossier-client-name">Entreprise cliente <span aria-hidden="true">*</span></label><input id="dossier-client-name" name="clientName" type="text" maxlength="120" placeholder="Ex. Cabinet Godwin" autocomplete="organization" required></div>' +
+            '<div class="field"><label for="dossier-client-code">Code du dossier <span aria-hidden="true">*</span></label><input id="dossier-client-code" name="clientCode" type="text" maxlength="8" minlength="2" placeholder="Ex. GOD" required><span class="hint">Code saisi librement, de 2 à 8 caractères.</span></div>' +
+            '<div class="field"><label for="dossier-type-label">Type de comptabilité <span aria-hidden="true">*</span></label><input id="dossier-type-label" name="accountingTypeLabel" type="text" maxlength="80" value="Comptabilité révisée SYSCOHADA" required></div>' +
+            '<div class="field"><label for="dossier-type-code">Code du type</label><input id="dossier-type-code" name="accountingTypeCode" type="text" minlength="2" maxlength="6" value="COR" required><span class="hint">Ex. COR pour comptabilité révisée.</span></div>' +
+            '<div class="field"><label for="dossier-cycle-start">Début du cycle <span aria-hidden="true">*</span></label><input id="dossier-cycle-start" name="cycleStart" type="date" value="' + currentYear + '-01-01" required></div>' +
+            '<div class="field"><label for="dossier-cycle-end">Fin du cycle <span aria-hidden="true">*</span></label><input id="dossier-cycle-end" name="cycleEnd" type="date" value="' + currentYear + '-12-31" required></div>' +
+          '</div>' +
+          '<div class="dossier-reference-preview" id="dossier-reference-preview" aria-live="polite"></div>' +
+          '<div class="dossier-create-footer"><p>La création n’effectue aucune copie. Le cycle est géré par périodes mensuelles dans ce prototype.</p><button type="submit" class="btn btn-primary" data-action="create-demo-dossier">＋ Créer le dossier</button></div>' +
+        '</form></section>';
+    } else {
+      html += '<div class="dossier-create-restricted"><span>i</span><p>La création d’un dossier client n’est pas accordée à ce profil de démonstration.</p></div>';
+    }
+    html += '<p class="dossiers-storage-footnote">Ce prototype conserve les données dans le navigateur de cet appareil. Il ne se connecte ni à Google Drive ni à un service cloud.</p>';
+    return html;
+  }
+
+  function bindDossiersView() {
+    var form = $('#dossier-create-form');
+    if (!form) return;
+    var nameInput = $('#dossier-client-name', form);
+    var codeInput = $('#dossier-client-code', form);
+    var typeCodeInput = $('#dossier-type-code', form);
+    var startInput = $('#dossier-cycle-start', form);
+    var preview = $('#dossier-reference-preview');
+    function updateReferencePreview() {
+      var clientCode = String(codeInput.value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      var typeCode = String(typeCodeInput.value || 'COR').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      var exerciseYear = String(startInput.value || '').slice(0, 4) || String(S.exercise());
+      if (!clientCode) {
+        preview.textContent = 'La référence sera calculée après saisie du code dossier et de l’exercice.';
+        return;
+      }
+      var reference = (typeCode || 'COR') + '-' + clientCode + exerciseYear;
+      preview.innerHTML = 'Référence proposée <strong>' + esc(reference) + '</strong> · elle pourra être créée si elle est unique.';
+    }
+    [nameInput, codeInput].forEach(function (input) { input.addEventListener('input', updateReferencePreview); });
+    [typeCodeInput, startInput].forEach(function (input) { input.addEventListener('input', updateReferencePreview); input.addEventListener('change', updateReferencePreview); });
+    updateReferencePreview();
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageDossiers', demoAccessContext('organization'))) {
+        toast('Création refusée : ce profil ne possède pas le droit de créer des dossiers clients.', 'warning');
+        return;
+      }
+      var result = S.createDossier({
+        clientName: nameInput.value,
+        clientCode: codeInput.value,
+        accountingTypeLabel: $('#dossier-type-label', form).value,
+        accountingTypeCode: typeCodeInput.value,
+        cycleStart: startInput.value,
+        cycleEnd: $('#dossier-cycle-end', form).value
+      });
+      if (!result.ok) { toast(result.errors[0] || 'Création du dossier impossible.', 'warning'); return; }
+      toast('Dossier « ' + result.dossier.clientName + ' » créé sous la référence ' + result.dossier.reference + '.', 'success');
+      render();
+    });
   }
 
   function viewOrganization() {
@@ -604,13 +733,10 @@
     var employees = demoMembers.filter(function (member) { return member.role === 'employee'; }).length;
     var memberRows = demoMembers.map(demoMemberRow).join('');
     var activeMember = getActiveDemoMember();
-    var canManageFolders = hasDemoPermission(activeMember, 'organization', 'organization.manageFolders', demoAccessContext('organization'));
-    var visibleFolders = S.folders().filter(function (folder) {
-      return canManageFolders || hasDemoPermission(activeMember, 'accounting', 'module.view', demoAccessContext('folder', folder.name));
-    });
-    var folderRows = visibleFolders.map(function (folder) {
-      var active = folder.id === activeDemoFolderId;
-      return '<div class="demo-folder-row"><span class="demo-folder-icon" aria-hidden="true">▰</span><span><strong>' + esc(folder.name) + '</strong><small>' + (folder.seeded ? 'Dossier initial · données historiques conservées' : 'Dossier de démonstration · données distinctes') + '</small></span><span class="demo-folder-status' + (active ? ' is-active' : '') + '">' + (active ? 'Sélectionné' : 'Disponible') + '</span></div>';
+    var visibleDossiers = permittedDemoDossiers(activeMember);
+    var dossierRows = visibleDossiers.map(function (dossier) {
+      var active = dossier.id === activeDemoDossierId;
+      return '<div class="demo-folder-row"><span class="demo-folder-icon" aria-hidden="true">▰</span><span><strong>' + esc(dossier.clientName) + ' · ' + esc(dossier.reference) + '</strong><small>' + esc(dossier.accountingTypeLabel) + ' · ' + dateLabel(dossier.cycleStart) + ' au ' + dateLabel(dossier.cycleEnd) + (dossier.seeded ? ' · données historiques conservées' : ' · données isolées') + '</small></span><span class="demo-folder-status' + (active ? ' is-active' : '') + '">' + (active ? 'Actif' : 'Visible') + '</span></div>';
     }).join('');
     var rows = modules.map(function (module) {
       var availability = module.status === 'available' ? 'Disponible en démo' : 'À venir';
@@ -653,13 +779,9 @@
             </article>
           </div>
           <section class="organization-panel demo-folders-panel">
-            <div class="members-heading"><div><div class="organization-panel-kicker">DONNÉES LOCALES · DÉMO</div><h2>Dossiers de travail</h2><p>Chaque dossier possède son propre jeu de données comptables sur cet appareil.</p></div><span class="permission-pending">${visibleFolders.length} dossier(s) visible(s)</span></div>
-            <div class="demo-folder-list">${folderRows || '<p class="small muted">Aucun dossier comptable n’est visible pour ce profil.</p>'}</div>
-            <form id="demo-folder-form" class="demo-folder-create" novalidate>
-              <div class="field"><label for="demo-folder-name">Nom du nouveau dossier</label><input id="demo-folder-name" name="name" type="text" maxlength="80" placeholder="Ex. Agence Nord" required><span class="hint">Les données ne sont pas copiées depuis un autre dossier.</span></div>
-              <button type="submit" class="btn btn-primary btn-sm" data-action="create-demo-folder">＋ Créer un dossier</button>
-            </form>
-            <p class="small muted">Ces dossiers sont locaux au navigateur et ne sont pas des répertoires Google Drive. Aucune synchronisation ni sécurité serveur n’est activée.</p>
+            <div class="members-heading"><div><div class="organization-panel-kicker">ENTREPRISES CLIENTES · DÉMO</div><h2>Dossiers clients</h2><p>Chaque entreprise dispose de son type de comptabilité, de son cycle et de ses données locales isolées.</p></div><span class="permission-pending">${visibleDossiers.length} dossier(s) visible(s)</span></div>
+            <div class="demo-folder-list">${dossierRows || '<p class="small muted">Aucun dossier client n’est visible pour ce profil.</p>'}</div>
+            <div class="organization-dossier-footer"><p class="small muted">Ces données ne sont pas des répertoires Google Drive : aucune synchronisation ni sécurité serveur n’est activée.</p><a class="btn btn-ghost btn-sm" href="#/dossiers">Ouvrir la liste des dossiers <span aria-hidden="true">→</span></a></div>
           </section>
           <section class="organization-panel members-panel">
             <div class="members-heading">
@@ -718,20 +840,24 @@
   }
 
   function demoPermissionGrantRow(module, grant, grantIndex) {
-    grant = grant || { scope: { type: 'organization', folders: [] }, actions: [] };
-    var scopeType = module.scopeable === false ? 'organization' : (grant.scope && grant.scope.type === 'folder' ? 'folder' : 'organization');
-    var folders = grant.scope && Array.isArray(grant.scope.folders) ? grant.scope.folders : [];
+    grant = grant || { scope: { type: 'organization', dossiers: [] }, actions: [] };
+    var priorScope = grant.scope && grant.scope.type;
+    var scopeType = module.scopeable === false ? 'organization' : (priorScope === 'dossier' || priorScope === 'folder' ? 'dossier' : 'organization');
+    var selectedDossiers = grant.scope && Array.isArray(grant.scope.dossiers) ? grant.scope.dossiers : (grant.scope && Array.isArray(grant.scope.folders) ? grant.scope.folders : []);
     var scopeOptions = '<option value="organization"' + (scopeType === 'organization' ? ' selected' : '') + '>Organisation entière</option>';
-    if (module.scopeable !== false) scopeOptions += '<option value="folder"' + (scopeType === 'folder' ? ' selected' : '') + '>Dossier(s) précis</option>';
-    var folderOptions = S.folders().map(function (folder) {
-      var selected = folders.some(function (name) { return String(name).trim().toLocaleLowerCase() === folder.name.trim().toLocaleLowerCase(); });
-      return '<option value="' + esc(folder.name) + '"' + (selected ? ' selected' : '') + '>' + esc(folder.name) + '</option>';
+    if (module.scopeable !== false) scopeOptions += '<option value="dossier"' + (scopeType === 'dossier' ? ' selected' : '') + '>Dossier(s) client(s) précis</option>';
+    var dossierList = S.dossiers();
+    var dossierOptions = dossierList.map(function (dossier) {
+      var selected = selectedDossiers.some(function (value) {
+        return String(value) === String(dossier.id) || String(value).trim().toLocaleLowerCase() === dossier.name.trim().toLocaleLowerCase();
+      });
+      return '<option value="' + esc(dossier.id) + '"' + (selected ? ' selected' : '') + '>' + esc(dossier.clientName) + ' · ' + esc(dossier.reference) + '</option>';
     }).join('');
-    var folderField = module.scopeable === false ? '' :
-      '<div class="field demo-folder-field" data-demo-folder-field="' + esc(module.id) + '" data-demo-folder-index="' + grantIndex + '"' + (scopeType === 'folder' ? '' : ' hidden') + '>' +
-        '<label for="demo-folders-' + esc(module.id) + '-' + grantIndex + '">Dossier(s) de travail</label>' +
-        '<select id="demo-folders-' + esc(module.id) + '-' + grantIndex + '" data-demo-folder-names="' + esc(module.id) + '" data-demo-folder-index="' + grantIndex + '" multiple size="' + Math.max(2, Math.min(5, S.folders().length)) + '">' + folderOptions + '</select>' +
-        '<span class="hint">Ctrl/Cmd + clic pour en choisir plusieurs. Ces dossiers ne sont pas des liens Google Drive.</span></div>';
+    var dossierField = module.scopeable === false ? '' :
+      '<div class="field demo-folder-field" data-demo-dossier-field="' + esc(module.id) + '" data-demo-dossier-index="' + grantIndex + '"' + (scopeType === 'dossier' ? '' : ' hidden') + '>' +
+        '<label for="demo-dossiers-' + esc(module.id) + '-' + grantIndex + '">Dossier(s) client(s)</label>' +
+        '<select id="demo-dossiers-' + esc(module.id) + '-' + grantIndex + '" data-demo-dossier-ids="' + esc(module.id) + '" data-demo-dossier-index="' + grantIndex + '" multiple size="' + Math.max(2, Math.min(5, dossierList.length)) + '">' + dossierOptions + '</select>' +
+        '<span class="hint">Ctrl/Cmd + clic pour sélectionner plusieurs entreprises clientes.</span></div>';
     var actions = Permissions.actionsForModule(module.id).map(function (action) {
       var checked = Array.isArray(grant.actions) && grant.actions.indexOf(action.id) !== -1;
       return '<label class="demo-action-choice"><input type="checkbox" data-demo-action-module="' + esc(module.id) + '" data-demo-action-index="' + grantIndex + '" data-demo-action-id="' + esc(action.id) + '"' + (checked ? ' checked' : '') + '><span>' + esc(action.label) + '</span></label>';
@@ -739,7 +865,7 @@
     return '<section class="demo-scope-grant" data-demo-grant-row data-demo-grant-module="' + esc(module.id) + '" data-demo-grant-index="' + grantIndex + '">' +
       '<div class="demo-scope-grant-heading"><strong>Portée ' + (grantIndex + 1) + '</strong><button type="button" class="demo-grant-remove" data-demo-remove-grant="' + esc(module.id) + '" data-demo-grant-index="' + grantIndex + '">Retirer</button></div>' +
       '<div class="field"><label for="demo-scope-' + esc(module.id) + '-' + grantIndex + '">Périmètre</label><select id="demo-scope-' + esc(module.id) + '-' + grantIndex + '" data-demo-scope-module="' + esc(module.id) + '" data-demo-scope-index="' + grantIndex + '">' + scopeOptions + '</select></div>' +
-      folderField +
+      dossierField +
       '<fieldset class="demo-actions-fieldset"><legend>Actions proposées à accorder</legend><div class="demo-actions-grid">' + actions + '</div></fieldset>' +
       '</section>';
   }
@@ -796,8 +922,8 @@
       select.addEventListener('change', function () {
         var moduleId = select.getAttribute('data-demo-scope-module');
         var grantIndex = select.getAttribute('data-demo-scope-index');
-        var folderField = $('[data-demo-folder-field="' + moduleId + '"][data-demo-folder-index="' + grantIndex + '"]', form);
-        if (folderField) folderField.hidden = select.value !== 'folder';
+        var dossierField = $('[data-demo-dossier-field="' + moduleId + '"][data-demo-dossier-index="' + grantIndex + '"]', form);
+        if (dossierField) dossierField.hidden = select.value !== 'dossier';
       });
     });
     form.addEventListener('click', function (event) {
@@ -846,7 +972,7 @@
         return;
       }
       var grants = {};
-      var invalidFolder = false;
+      var invalidDossierScope = false;
       var missingModuleView = false;
       modules.forEach(function (module) {
         var moduleGrants = [];
@@ -861,17 +987,17 @@
             return;
           }
           var scope = $('[data-demo-scope-module="' + module.id + '"][data-demo-scope-index="' + grantIndex + '"]', form).value;
-          var folderSelect = $('[data-demo-folder-names="' + module.id + '"][data-demo-folder-index="' + grantIndex + '"]', form);
-          var folders = scope === 'folder' && folderSelect
-            ? Array.prototype.map.call(folderSelect.selectedOptions, function (option) { return option.value; })
+          var dossierSelect = $('[data-demo-dossier-ids="' + module.id + '"][data-demo-dossier-index="' + grantIndex + '"]', form);
+          var dossierIds = scope === 'dossier' && dossierSelect
+            ? Array.prototype.map.call(dossierSelect.selectedOptions, function (option) { return option.value; })
             : [];
-          if (scope === 'folder' && !folders.length) { invalidFolder = true; return; }
-          moduleGrants.push({ scope: { type: scope, folders: folders }, actions: checked });
+          if (scope === 'dossier' && !dossierIds.length) { invalidDossierScope = true; return; }
+          moduleGrants.push({ scope: { type: scope, dossiers: dossierIds }, actions: checked });
         });
         if (moduleGrants.length) grants[module.id] = moduleGrants;
       });
-      if (invalidFolder) {
-        toast('Chaque portée dossier avec des droits doit sélectionner au moins un dossier de travail.', 'warning');
+      if (invalidDossierScope) {
+        toast('Chaque portée limitée doit sélectionner au moins un dossier client.', 'warning');
         return;
       }
       if (missingModuleView) {
@@ -959,14 +1085,17 @@
   /* ------------------------------- Dashboard ------------------------------- */
   function viewDashboard() {
     var k = S.kpis();
-    var recent = sortedEntries(S.entries()).slice(0, 6);
+    var dossier = S.currentDossier();
+    var exerciseYear = S.exercise();
+    var recent = sortedEntries(S.entries().filter(function (entry) { return entry.date >= dossier.cycleStart && entry.date <= dossier.cycleEnd; })).slice(0, 6);
     var stats = S.journalStats();
-    var periods = S.periodStats(S.EXERCICE);
+    var periods = S.periodStats(exerciseYear);
     var openCount = periods.filter(function (p) { return p.status === 'open'; }).length;
 
     var html = pageHeader(
       'Tableau de bord',
-      'Situation de l’exercice ' + S.EXERCICE + ' — données conservées dans le navigateur (localStorage).',
+      'Entreprise cliente : <strong>' + esc(dossier.clientName) + '</strong> · ' + esc(dossier.accountingTypeLabel) + ' · ' + esc(dossier.reference) + ' · exercice ' + exerciseYear + ' (' + dateLabel(dossier.cycleStart) + ' au ' + dateLabel(dossier.cycleEnd) + '). Données conservées localement dans ce prototype.',
+      '<a class="btn btn-ghost" href="#/dossiers">← Tous les dossiers</a>' +
       '<a class="btn btn-ghost" href="#/balance">⚖︎ Balance</a>' +
       '<a class="btn btn-primary" href="#/entry">＋ Nouvelle écriture</a>',
       'dashboard-featured'
@@ -1025,7 +1154,7 @@
         '<a class="btn btn-accent" href="#/entry">＋ Saisir une écriture</a>' +
         '<a class="btn btn-ghost" href="#/accounts">▤ Consulter le plan comptable</a>' +
         '<a class="btn btn-ghost" href="#/ledger">⌕ Ouvrir le grand livre</a>' +
-        '<a class="btn btn-ghost" href="#/periods">◷ Gérer les périodes (' + openCount + '/12 ouvertes)</a>' +
+        '<a class="btn btn-ghost" href="#/periods">◷ Gérer les périodes (' + openCount + '/' + periods.length + ' ouvertes)</a>' +
       '</div>' +
       '<div class="alert ' + (k.debit === k.credit ? 'success' : 'warning') + '" style="margin:16px 0 0">' +
         (k.debit === k.credit
@@ -1050,7 +1179,7 @@
     '</section>';
 
     html += '<section class="card panel">' +
-      '<div class="panel-header"><div><h2>Exercice ' + S.EXERCICE + '</h2><p class="sub">État des périodes</p></div>' +
+      '<div class="panel-header"><div><h2>Exercice ' + exerciseYear + '</h2><p class="sub">' + dateLabel(dossier.cycleStart) + ' au ' + dateLabel(dossier.cycleEnd) + '</p></div>' +
       '<a class="btn btn-ghost btn-sm" href="#/periods">Gérer</a></div>' +
       '<div class="table-wrap"><table class="data-table"><thead><tr><th scope="col">Mois</th><th scope="col" class="num">Pièces</th><th scope="col">État</th></tr></thead><tbody>' +
         periods.map(function (p) {
@@ -1160,7 +1289,9 @@
         };
       }
     }
-    var date = S.todayIso();
+    var dossier = S.currentDossier();
+    var today = S.todayIso();
+    var date = today >= dossier.cycleStart && today <= dossier.cycleEnd ? today : dossier.cycleStart;
     var journal = 'OD';
     return {
       id: null,
@@ -1451,10 +1582,12 @@
   /* ---------------------------- Journal des écritures ---------------------- */
   function viewJournal() {
     var filter = ui.journal;
-    var year = Number(filter.year) || S.EXERCICE;
+    var dossier = S.currentDossier();
+    var year = S.exercise();
+    ui.journal.year = String(year);
     var list = sortedEntries(S.postedEntries()).filter(function (e) {
       if (e.journal !== filter.journal && filter.journal) return false;
-      if (Number(String(e.date).slice(0, 4)) !== year) return false;
+      if (e.date < dossier.cycleStart || e.date > dossier.cycleEnd) return false;
       return true;
     });
     var totalDebit = list.reduce(function (s, e) { return s + S.totals(e.lines).debit; }, 0);
@@ -1562,12 +1695,12 @@
 
   /* --------------------------------- Périodes ------------------------------ */
   function viewPeriods() {
-    var year = Number(ui.periods.year) || S.EXERCICE;
+    var dossier = S.currentDossier();
+    var year = S.exercise();
+    ui.periods.year = year;
     var list = S.periodStats(year);
     var openCount = list.filter(function (p) { return p.status === 'open'; }).length;
-    var years = S.years();
-    if (years.indexOf(year) === -1) years.push(year);
-    years.sort();
+    var years = [year];
 
     var html = pageHeader('Périodes comptables', 'Une période clôturée refuse les nouvelles pièces et la validation des brouillons.',
       '<div class="field"><label class="sr-only" for="f-periods-year">Exercice</label>' +
@@ -1575,7 +1708,7 @@
         years.map(function (y) { return '<option value="' + y + '"' + (y === year ? ' selected' : '') + '>Exercice ' + y + '</option>'; }).join('') +
         '</select></div>');
 
-    html += '<div class="alert info">Exercice <strong>' + year + '</strong> : ' + openCount + ' période(s) ouverte(s) sur 12. ' +
+    html += '<div class="alert info">Exercice <strong>' + year + '</strong> (' + dateLabel(dossier.cycleStart) + ' au ' + dateLabel(dossier.cycleEnd) + ') : ' + openCount + ' période(s) ouverte(s) sur ' + list.length + '. ' +
       'La clôture est immédiate et persistée localement.</div>';
 
     html += '<div class="period-grid">' + list.map(function (p) {
@@ -1674,6 +1807,10 @@
   function bindView(route) {
     if (route === 'launcher') {
       bindLauncherView();
+      return;
+    }
+    if (route === 'dossiers') {
+      bindDossiersView();
       return;
     }
     if (route === 'organization') {
@@ -1782,7 +1919,7 @@
         var selected = demoMembers.find(function (member) { return member.id === profileSelect.value; });
         if (!selected) return;
         activeDemoMemberId = selected.id;
-        ensureDemoFolderForMember(selected);
+        ensureDemoDossierForMember(selected);
         toast('Profil simulé actif : ' + demoRoleLabel(selected.role) + '. Aucun compte réel n’est connecté.', 'info');
         render();
       });
@@ -1790,12 +1927,12 @@
     var folderSelect = $('#demo-active-folder');
     if (folderSelect) {
       folderSelect.addEventListener('change', function () {
-        var folder = permittedDemoFolders(getActiveDemoMember()).find(function (item) { return item.id === folderSelect.value; });
-        if (!folder) { toast('Ce profil n’a pas accès à ce dossier.', 'warning'); render(); return; }
-        var result = S.switchFolder(folder.id);
+        var dossier = permittedDemoDossiers(getActiveDemoMember()).find(function (item) { return item.id === folderSelect.value; });
+        if (!dossier) { toast('Ce profil n’a pas accès à ce dossier client.', 'warning'); render(); return; }
+        var result = S.switchDossier(dossier.id);
         if (!result.ok) { toast(result.errors[0] || 'Changement de dossier impossible.', 'error'); render(); return; }
-        activeDemoFolderId = folder.id;
-        toast('Dossier actif : ' + folder.name + '. Les données sont isolées localement pour la démonstration.', 'info');
+        activeDemoDossierId = dossier.id;
+        toast('Dossier actif : ' + dossier.clientName + ' · ' + dossier.reference + '. Les données restent isolées localement pour la démonstration.', 'info');
         render();
       });
     }
@@ -1811,20 +1948,6 @@
   }
 
   function bindOrganizationView() {
-    var folderForm = $('#demo-folder-form');
-    if (folderForm) {
-      folderForm.addEventListener('submit', function (event) {
-        event.preventDefault();
-        if (!hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageFolders', demoAccessContext('organization'))) {
-          toast('Création refusée par défaut : le droit de gestion des dossiers n’est pas accordé.', 'warning');
-          return;
-        }
-        var result = S.createFolder($('#demo-folder-name', folderForm).value);
-        if (!result.ok) { toast(result.errors[0] || 'Création du dossier impossible.', 'warning'); return; }
-        toast('Dossier « ' + result.folder.name + ' » créé, sans copie de données.', 'success');
-        render();
-      });
-    }
     $$('[data-demo-member-role]').forEach(function (select) {
       select.addEventListener('change', function () {
         if (!hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageMembers', demoAccessContext('organization'))) {
@@ -1971,6 +2094,18 @@
         }
         break;
       }
+      case 'open-dossier': {
+        var dossier = permittedDemoDossiers(getActiveDemoMember()).find(function (item) { return item.id === id; });
+        if (!dossier || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'module.view', accountingAccessContext(dossier))) {
+          toast('Ouverture refusée : ce profil ne possède pas de droit sur ce dossier client.', 'warning');
+          break;
+        }
+        var switchedDossier = S.switchDossier(dossier.id);
+        if (!switchedDossier.ok) { toast(switchedDossier.errors[0] || 'Ouverture du dossier impossible.', 'error'); break; }
+        activeDemoDossierId = dossier.id;
+        navigate('#/dashboard');
+        break;
+      }
       case 'launcher-info':
         openModal('Stockage de l’organisation', 'Google Drive sera le premier fournisseur cloud.',
           '<div class="alert warning"><strong>Non connecté.</strong> Cette démonstration ne communique pas avec Google Drive et ne transfère aucune donnée.</div><p>La connexion au Drive de l’organisation, les droits d’accès et la stratégie de sauvegarde seront conçus avant toute synchronisation réelle.</p>',
@@ -2056,7 +2191,7 @@
         break;
       }
       case 'reset-data':
-        if (!window.confirm('Réinitialiser les données du dossier « ' + S.currentFolder().name + ' » ? Un point de restauration propre à ce dossier sera conservé avant le remplacement.')) break;
+        if (!window.confirm('Réinitialiser les données du dossier « ' + S.currentDossier().name + ' » ? Un point de restauration propre à ce dossier sera conservé avant le remplacement.')) break;
         S.reset();
         toast('Données de démonstration restaurées. L’état précédent reste récupérable localement.', 'success');
         render();
