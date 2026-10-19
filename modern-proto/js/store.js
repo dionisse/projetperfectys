@@ -30,6 +30,7 @@
 
   var ACCOUNTING_CHART = global.PerfectoAccountingChart || null;
   var ACCOUNTING_CHART_VERSION = ACCOUNTING_CHART ? ACCOUNTING_CHART.VERSION : 0;
+  var SUPPLIER_REGISTRY_VERSION = 1;
   var LEGACY_COMPTES = [
     { code: '101200', label: 'Capital social', cls: 1, nature: 'Passif', aux: false },
     { code: '162100', label: 'Emprunt bancaire', cls: 1, nature: 'Passif', aux: false },
@@ -157,6 +158,21 @@
     return result;
   }
 
+  function upgradeSupplierRegistry(data) {
+    var result = { data: data, changed: false };
+    if (!data) return result;
+    var suppliers = Array.isArray(data.suppliers) ? data.suppliers : [];
+    var currentVersion = Number(data.supplierRegistryVersion);
+    if (!Array.isArray(data.suppliers) || !Number.isFinite(currentVersion) || currentVersion < SUPPLIER_REGISTRY_VERSION) {
+      result.data = Object.assign({}, data, {
+        supplierRegistryVersion: SUPPLIER_REGISTRY_VERSION,
+        suppliers: suppliers
+      });
+      result.changed = true;
+    }
+    return result;
+  }
+
   function seedEntries() {
     return [
       {
@@ -225,7 +241,9 @@
       accounts: initialAccounts(withSeedEntries),
       journals: JOURNAUX.slice(),
       entries: withSeedEntries === false ? [] : seedEntries(),
-      periods: cyclePeriods(cycleStart, cycleEnd)
+      periods: cyclePeriods(cycleStart, cycleEnd),
+      supplierRegistryVersion: SUPPLIER_REGISTRY_VERSION,
+      suppliers: []
     };
   }
 
@@ -476,6 +494,9 @@
 
   function hasReadableAccountingRecords(data) {
     return !!data && Array.isArray(data.accounts) && Array.isArray(data.journals) && Array.isArray(data.entries) &&
+      (data.suppliers === undefined || (Array.isArray(data.suppliers) && data.suppliers.every(function (supplier) {
+        return !!supplier && typeof supplier === 'object' && !Array.isArray(supplier);
+      }))) &&
       data.accounts.every(function (account) { return !!account && typeof account === 'object' && !Array.isArray(account); }) &&
       data.journals.every(function (journal) { return !!journal && typeof journal === 'object' && !Array.isArray(journal); }) &&
       data.entries.every(function (entry) {
@@ -538,9 +559,10 @@
           }
           if (!recoveryIssue) {
             var chartUpgrade = upgradeAccountingChart(state);
-            if (chartUpgrade.changed) {
-              state = chartUpgrade.data;
-              // Conserver une copie restaurable avant d’enregistrer le référentiel enrichi.
+            var supplierUpgrade = upgradeSupplierRegistry(chartUpgrade.data);
+            if (chartUpgrade.changed || supplierUpgrade.changed) {
+              state = supplierUpgrade.data;
+              // Conserver une copie restaurable avant d’enregistrer les référentiels enrichis.
               if (snapshotPreviousState(raw)) save();
             }
           }
@@ -558,8 +580,7 @@
   }
 
   function isBackupData(data) {
-    return !!data && Array.isArray(data.accounts) && Array.isArray(data.journals) &&
-      Array.isArray(data.entries) && Array.isArray(data.periods);
+    return hasReadableAccountingRecords(data) && Array.isArray(data.periods);
   }
 
   function writeBackupSnapshot(data) {
@@ -626,6 +647,149 @@
 
   function journal(code) {
     return load().journals.find(function (j) { return j.code === code; }) || null;
+  }
+
+  function supplierRecordsForState(st) {
+    if (!Array.isArray(st.suppliers)) {
+      st.suppliers = [];
+      st.supplierRegistryVersion = SUPPLIER_REGISTRY_VERSION;
+    }
+    return st.suppliers;
+  }
+
+  function suppliers() {
+    var st = load();
+    return Array.isArray(st.suppliers) ? st.suppliers : [];
+  }
+
+  function supplier(idOrCode) {
+    var key = String(idOrCode == null ? '' : idOrCode);
+    var normalizedCode = key.toLocaleUpperCase();
+    return suppliers().find(function (record) {
+      return record.id === key || String(record.code || '').toLocaleUpperCase() === normalizedCode;
+    }) || null;
+  }
+
+  function normalizeSupplierCode(value) {
+    return String(value == null ? '' : value).trim().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').toLocaleUpperCase();
+  }
+
+  function supplierAccount(code) {
+    var supplierRoots = ['401', '402', '404', '408', '409'];
+    return load().accounts.find(function (account) {
+      var accountCode = String(account.code);
+      var supplierControl = supplierRoots.some(function (rootCode) { return accountCode.indexOf(rootCode) === 0; });
+      return accountCode === String(code) && supplierControl && Number(account.cls || accountCode.charAt(0)) === 4 &&
+        account.aux === true && account.active !== false && account.postable !== false;
+    }) || null;
+  }
+
+  function validateSupplierInput(input, excludeId) {
+    input = input || {};
+    var errors = [];
+    var code = normalizeSupplierCode(input.code);
+    var name = String(input.name == null ? '' : input.name).trim();
+    var accountCode = String(input.accountCode == null ? '' : input.accountCode).trim();
+    var email = String(input.email == null ? '' : input.email).trim();
+    var paymentTermDays = input.paymentTermDays === '' || input.paymentTermDays == null ? 30 : Number(input.paymentTermDays);
+
+    if (!code) errors.push('Le code fournisseur est obligatoire.');
+    else if (!/^[A-Z0-9][A-Z0-9._/-]{0,31}$/.test(code)) errors.push('Le code fournisseur doit contenir au plus 32 caractères : lettres, chiffres, point, tiret, barre oblique ou souligné.');
+    if (!name) errors.push('La raison sociale est obligatoire.');
+    else if (name.length > 150) errors.push('La raison sociale ne peut pas dépasser 150 caractères.');
+    if (suppliers().some(function (record) {
+      return record.id !== excludeId && String(record.code || '').toLocaleUpperCase() === code;
+    })) errors.push('Ce code fournisseur existe déjà dans le dossier.');
+    if (!supplierAccount(accountCode)) errors.push('Choisissez un compte collectif fournisseur actif de classe 4 (401, 402, 404, 408 ou 409).');
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.push('L’adresse e-mail du fournisseur n’est pas valide.');
+    if (!Number.isInteger(paymentTermDays) || paymentTermDays < 0 || paymentTermDays > 3650) errors.push('Le délai de règlement doit être un nombre entier compris entre 0 et 3 650 jours.');
+
+    var fields = [
+      ['contactName', 'Le nom du contact', 120], ['ifu', 'Le numéro IFU', 50],
+      ['rccm', 'Le numéro RCCM', 80], ['phone', 'Le téléphone', 40],
+      ['address', 'L’adresse', 255], ['notes', 'La note', 1000]
+    ];
+    fields.forEach(function (field) {
+      if (String(input[field[0]] == null ? '' : input[field[0]]).trim().length > field[2]) {
+        errors.push(field[1] + ' ne peut pas dépasser ' + field[2] + ' caractères.');
+      }
+    });
+    if (email.length > 254) errors.push('L’adresse e-mail ne peut pas dépasser 254 caractères.');
+
+    return {
+      ok: errors.length === 0,
+      errors: errors,
+      value: {
+        code: code,
+        auxiliaryAccountCode: accountCode + '-' + code,
+        name: name,
+        contactName: String(input.contactName == null ? '' : input.contactName).trim(),
+        ifu: String(input.ifu == null ? '' : input.ifu).trim(),
+        rccm: String(input.rccm == null ? '' : input.rccm).trim(),
+        email: email,
+        phone: String(input.phone == null ? '' : input.phone).trim(),
+        address: String(input.address == null ? '' : input.address).trim(),
+        accountCode: accountCode,
+        paymentTermDays: paymentTermDays,
+        notes: String(input.notes == null ? '' : input.notes).trim()
+      }
+    };
+  }
+
+  function createSupplier(input) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Création bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var records = supplierRecordsForState(st);
+    var validation = validateSupplierInput(input);
+    if (!validation.ok) return validation;
+    var id;
+    do {
+      id = 'supplier-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+    } while (records.some(function (record) { return record.id === id; }));
+    var timestamp = new Date().toISOString();
+    var record = Object.assign({ id: id, active: true, createdAt: timestamp, updatedAt: timestamp }, validation.value);
+    records.push(record);
+    if (!save()) {
+      records.pop();
+      return { ok: false, errors: ['Impossible d’enregistrer le fournisseur dans le stockage local de ce dossier.'] };
+    }
+    return { ok: true, errors: [], supplier: clone(record) };
+  }
+
+  function updateSupplier(id, input) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Modification bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var records = supplierRecordsForState(st);
+    var index = records.findIndex(function (record) { return record.id === id; });
+    if (index < 0) return { ok: false, errors: ['Fournisseur introuvable dans le dossier actif.'] };
+    var validation = validateSupplierInput(input, id);
+    if (!validation.ok) return validation;
+    var previous = records[index];
+    var updated = Object.assign({}, previous, validation.value, { id: previous.id, createdAt: previous.createdAt, updatedAt: new Date().toISOString() });
+    records[index] = updated;
+    if (!save()) {
+      records[index] = previous;
+      return { ok: false, errors: ['Impossible d’enregistrer les modifications du fournisseur dans le stockage local.'] };
+    }
+    return { ok: true, errors: [], supplier: clone(updated) };
+  }
+
+  function setSupplierActive(id, active) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Modification bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var record = supplierRecordsForState(st).find(function (item) { return item.id === id; });
+    if (!record) return { ok: false, errors: ['Fournisseur introuvable dans le dossier actif.'] };
+    var previousActive = record.active !== false;
+    var previousUpdatedAt = record.updatedAt;
+    record.active = active === true;
+    record.updatedAt = new Date().toISOString();
+    if (!save()) {
+      record.active = previousActive;
+      record.updatedAt = previousUpdatedAt;
+      return { ok: false, errors: ['Impossible d’enregistrer le changement d’état du fournisseur.'] };
+    }
+    return { ok: true, errors: [], supplier: clone(record) };
   }
 
   function entries() { return load().entries; }
@@ -1045,7 +1209,7 @@
       data.exercise = dossier.exerciseYear;
       data.cycleStart = dossier.cycleStart;
       data.cycleEnd = dossier.cycleEnd;
-      data = upgradeAccountingChart(data).data;
+      data = upgradeSupplierRegistry(upgradeAccountingChart(data).data).data;
       state = data;
       ensurePeriodsForEntries();
       if (!save()) {
@@ -1391,7 +1555,7 @@
       if (!preserveCorruptRaw()) return { ok: false, errors: ['Restauration bloquée : la copie brute endommagée n’a pas pu être conservée. Téléchargez-la ou libérez de l’espace.'] };
       var previousState = state;
       var previousIssue = recoveryIssue;
-      var recoveredState = upgradeAccountingChart(clone(snapshot.data)).data;
+      var recoveredState = upgradeSupplierRegistry(upgradeAccountingChart(clone(snapshot.data)).data).data;
       state = recoveredState;
       try {
         ensurePeriodsForEntries();
@@ -1406,7 +1570,7 @@
     }
 
     var previousState = state ? clone(state) : null;
-    state = upgradeAccountingChart(clone(snapshot.data)).data;
+    state = upgradeSupplierRegistry(upgradeAccountingChart(clone(snapshot.data)).data).data;
     ensurePeriodsForEntries();
     if (!save()) {
       state = previousState;
@@ -1466,6 +1630,11 @@
     account: account,
     journals: journals,
     journal: journal,
+    suppliers: suppliers,
+    supplier: supplier,
+    createSupplier: createSupplier,
+    updateSupplier: updateSupplier,
+    setSupplierActive: setSupplierActive,
     entries: entries,
     entry: entry,
     periods: periods,

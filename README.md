@@ -39,6 +39,7 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 | Dossiers clients | Liste multi-dossiers ouverte depuis le module Comptabilité ; création d’entreprise, code, type comptable, référence et cycle paramétrable |
 | Tableau de bord | Indicateurs (débit, crédit, résultat, pièces), dernières pièces, activité par journal, état des périodes |
 | Plan comptable | Référentiel complet de 147 comptes fourni, classes et sous-classes, descriptions d’usage, recherche/filtres, comptes personnalisés et export CSV enrichi ; comptes historiques conservés sans réécriture des pièces |
+| Fournisseurs | Répertoire local isolé par dossier : création, modification, recherche, archivage, IFU/RCCM, contacts, compte général de rattachement et code auxiliaire individualisé ; aucune facture, aucun règlement, mouvement auxiliaire, lettrage ni centralisation n’est généré |
 | Journaux | Six journaux (AC, VE, BQ, CA, OD, PA) avec totaux et brouillons |
 | Saisie d'écriture | Saisie multiligne, contrôle d'équilibre en direct, référence auto, brouillon ou validation |
 | Pièces comptables | Liste filtrable, détail en modale, validation, modification et suppression des brouillons |
@@ -47,6 +48,12 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 | Grand livre | Mouvements par compte et solde progressif |
 | Périodes | Périodes mensuelles couvrant le cycle défini pour le dossier (calendaire ou non), ouverture et clôture persistées |
 | Données & application | Sauvegarde/restauration native JSON, point de restauration local avant modification, installation PWA |
+
+### Référentiel fournisseurs — première version
+
+Le sous-menu **Définitions → Fournisseurs** gère un répertoire local propre à chaque dossier client. Une fiche comprend le code unique, la raison sociale, les coordonnées, l’IFU, le RCCM, un compte général collectif fournisseur de classe 4 et le code auxiliaire individuel composé du compte et du code fournisseur, ainsi qu’un délai indicatif de règlement. Les fiches peuvent être recherchées, modifiées, archivées puis réactivées ; aucune suppression définitive n’est proposée.
+
+Les données sont conservées dans la base locale du dossier et incluses dans la sauvegarde JSON. Les anciennes pièces et leurs montants ne sont jamais réécrits. Cette première étape ne génère ni facture, ni paiement, ni mouvement tiers, lettrage ou solde auxiliaire. Les fichiers PERFECTO-AUXILIAIRE restent des échanges de fichiers : **seules les opérations provenant des modules PERFECTO internes pourront alimenter une centralisation**. L’interface est masquée sur le parcours téléphone, réservé aux Éditions en lecture seule.
 
 ### Interopérabilité comptable — incrément v1
 
@@ -61,7 +68,7 @@ Le menu **Fichier** propose le format neutre `PERFECTO-ECHANGE` version 1 en cla
 - Les balances de mouvements, balances auxiliaires ou états financiers ne sont pas acceptées par le modèle `PERFECTO-BALANCE`. L’import des soldes n’active pas encore la fonction distincte de report à nouveau de fin d’exercice.
 - Le format commun est la première passerelle Excel/CSV, **pas encore un import direct des formats propriétaires** de Sage Comptabilité, PERFECTO historique, HYPERSOFT ou ODOO. Ces profils seront développés par version après réception et validation de fichiers d’exemple anonymisés.
 - Le JSON de **Données & application** reste une sauvegarde/restauration native PERFECTO et ne doit pas être confondu avec un fichier d’échange.
-- Les tiers, les données analytiques et le multidevise restent hors de ce premier incrément. Les données sont lues et produites dans le navigateur ; aucun fichier n’est envoyé à un serveur.
+- Les mouvements auxiliaires et soldes tiers, les données analytiques et le multidevise restent hors de ce premier incrément d’interopérabilité. Le référentiel fournisseurs est distinct des imports d’écritures et ne déclenche aucune centralisation. Les données sont lues et produites dans le navigateur ; aucun fichier n’est envoyé à un serveur.
 
 ### Consolidation avant résultat — première étape
 

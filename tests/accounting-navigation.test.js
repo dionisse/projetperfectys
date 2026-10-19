@@ -48,6 +48,9 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
 
 const findTab = (groupId, tabId) => nav.getTab(groupId, tabId);
 assert.equal(findTab('definitions', 'general-accounts').status, 'active');
+assert.equal(findTab('definitions', 'suppliers').status, 'partial');
+assert.ok(findTab('definitions', 'suppliers').reason.includes('archivage'));
+assert.ok(findTab('definitions', 'suppliers').reason.includes('centralisation'));
 assert.equal(findTab('definitions', 'journals').status, 'active');
 assert.equal(findTab('saisie', 'journal-entry').status, 'active');
 assert.equal(findTab('fichier', 'export-other').status, 'partial');

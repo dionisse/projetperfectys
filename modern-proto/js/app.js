@@ -72,7 +72,8 @@
     balance: { cls: '', q: '' },
     journal: { journal: '', year: String(S.exercise()) },
     ledger: { account: '521' },
-    periods: { year: S.exercise() }
+    periods: { year: S.exercise() },
+    suppliers: { q: '', status: 'active' }
   };
 
   var deferredInstallPrompt = null;
@@ -236,6 +237,17 @@
         return { moduleId: 'accounting', actionId: 'entry.validate' };
       case 'new-account':
         return { moduleId: 'accounting', actionId: 'accounts.create' };
+      case 'new-supplier':
+        return { moduleId: 'accounting', actionId: 'suppliers.create' };
+      case 'edit-supplier':
+        return { moduleId: 'accounting', actionId: 'suppliers.edit' };
+      case 'archive-supplier':
+        return { moduleId: 'accounting', actionId: 'suppliers.archive' };
+      case 'save-supplier':
+        return {
+          moduleId: 'accounting',
+          actionId: trigger && trigger.getAttribute('data-supplier-mode') === 'edit' ? 'suppliers.edit' : 'suppliers.create'
+        };
       case 'close-period':
         return { moduleId: 'accounting', actionId: 'period.close' };
       case 'open-period':
@@ -4371,6 +4383,131 @@
       '</div>';
   }
 
+  function supplierAccountLabel(record) {
+    var account = S.account(record.accountCode);
+    return account ? account.code + ' · ' + account.label : String(record.accountCode || 'Compte non disponible');
+  }
+
+  function filteredSuppliers(records, query, status) {
+    var needle = String(query || '').trim().toLocaleLowerCase();
+    return records.filter(function (record) {
+      var active = record.active !== false;
+      if (status === 'active' && !active) return false;
+      if (status === 'archived' && active) return false;
+      if (!needle) return true;
+      var searchable = [
+        record.code, record.auxiliaryAccountCode, record.name, record.contactName, record.ifu, record.rccm,
+        record.email, record.phone, record.address, record.notes, supplierAccountLabel(record)
+      ].join(' ').toLocaleLowerCase();
+      return searchable.indexOf(needle) !== -1;
+    });
+  }
+
+  function supplierRowsHtml(records) {
+    var filter = ui.suppliers || { q: '', status: 'active' };
+    return filteredSuppliers(records, filter.q, filter.status).map(function (record) {
+      var active = record.active !== false;
+      var coordinates = [
+        record.ifu ? 'IFU : ' + record.ifu : '',
+        record.rccm ? 'RCCM : ' + record.rccm : '',
+        record.email || '', record.phone || ''
+      ].filter(Boolean).map(esc).join('<br>') || '<span class="muted">Non renseignées</span>';
+      var contact = [record.contactName, record.address].filter(Boolean).map(esc).join('<br>');
+      return '<tr>' +
+        '<td><strong>' + esc(record.code) + '</strong></td>' +
+        '<td><strong>' + esc(record.name) + '</strong>' + (contact ? '<br><small>' + contact + '</small>' : '') + '</td>' +
+        '<td>' + coordinates + '</td>' +
+        '<td><strong>' + esc(record.auxiliaryAccountCode || (record.accountCode + '-' + record.code)) + '</strong><br><small>Compte général : ' + esc(supplierAccountLabel(record)) + '</small><br><small>' + Number(record.paymentTermDays || 0) + ' jour(s)</small></td>' +
+        '<td><span class="badge ' + (active ? 'actif' : 'passif') + '">' + (active ? 'Actif' : 'Archivé') + '</span></td>' +
+        '<td><div class="supplier-row-actions">' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-action="edit-supplier" data-id="' + esc(record.id) + '" aria-label="Modifier la fiche de ' + esc(record.name) + '">Modifier</button>' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-action="archive-supplier" data-id="' + esc(record.id) + '" aria-label="' + (active ? 'Archiver ' : 'Réactiver ') + esc(record.name) + '">' + (active ? 'Archiver' : 'Réactiver') + '</button>' +
+        '</div></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function viewSuppliers() {
+    var records = S.suppliers().slice().sort(function (a, b) { return String(a.name).localeCompare(String(b.name), 'fr'); });
+    var activeCount = records.filter(function (record) { return record.active !== false; }).length;
+    var archivedCount = records.length - activeCount;
+    var filter = ui.suppliers || (ui.suppliers = { q: '', status: 'active' });
+    var options = [
+      { value: 'active', label: 'Fournisseurs actifs' },
+      { value: 'archived', label: 'Fournisseurs archivés' },
+      { value: 'all', label: 'Tous les fournisseurs' }
+    ].map(function (option) {
+      return '<option value="' + option.value + '"' + (filter.status === option.value ? ' selected' : '') + '>' + option.label + '</option>';
+    }).join('');
+    var visibleCount = filteredSuppliers(records, filter.q, filter.status).length;
+    var emptyMessage = records.length
+      ? 'Aucun fournisseur ne correspond à cette recherche et à ce filtre.'
+      : 'Aucun fournisseur n’est encore enregistré dans ce dossier. Utilisez « Nouveau fournisseur » pour créer la première fiche.';
+    return '<div class="exchange-workspace supplier-workspace" id="supplier-workspace">' +
+      '<div class="alert info"><div><strong>Référentiel local du dossier client.</strong> Les fournisseurs, coordonnées et comptes de rattachement restent isolés dans ce dossier et sur cet appareil. Modifier ou archiver une fiche ne réécrit aucune écriture historique. Ce référentiel ne crée pas de facture, règlement, mouvement auxiliaire, lettrage ou centralisation : les échanges de fichiers restent des échanges, et les centralisations sont réservées aux lots des modules PERFECTO internes.</div></div>' +
+      '<div class="exchange-summary-grid supplier-summary-grid" aria-label="Résumé du référentiel fournisseurs">' +
+        '<div><small>Fournisseurs actifs</small><strong>' + activeCount + '</strong></div>' +
+        '<div><small>Fournisseurs archivés</small><strong>' + archivedCount + '</strong></div>' +
+        '<div><small>Résultats affichés</small><strong id="supplier-visible-count">' + visibleCount + '</strong></div>' +
+      '</div>' +
+      '<section class="exchange-card supplier-directory-card">' +
+        '<div class="supplier-directory-head"><div><h4>Répertoire des fournisseurs</h4><p>Identité, contacts, IFU/RCCM, compte auxiliaire et délai indicatif de règlement.</p></div>' +
+          '<button type="button" class="btn btn-primary" data-action="new-supplier">＋ Nouveau fournisseur</button></div>' +
+        '<form id="supplier-filter-form" class="supplier-filter-controls" role="search">' +
+          '<label class="field"><span>Rechercher</span><input id="supplier-search" type="search" value="' + esc(filter.q) + '" placeholder="Code, raison sociale, IFU, contact…" autocomplete="off"></label>' +
+          '<label class="field"><span>État</span><select id="supplier-status">' + options + '</select></label>' +
+        '</form>' +
+        '<p class="supplier-result-note" id="supplier-result-note">' + visibleCount + (visibleCount === 1 ? ' fournisseur affiché.' : ' fournisseurs affichés.') + '</p>' +
+        '<div class="table-wrap exchange-table-wrap supplier-table-wrap" id="supplier-table-wrap"' + (visibleCount ? '' : ' hidden') + '>' +
+          '<table class="exchange-mapping-table supplier-table"><caption class="sr-only">Fournisseurs du dossier client actif</caption><thead><tr>' +
+            '<th>Code</th><th>Raison sociale / contact</th><th>Coordonnées administratives</th><th>Compte / délai</th><th>État</th><th>Actions</th>' +
+          '</tr></thead><tbody id="supplier-rows">' + supplierRowsHtml(records) + '</tbody></table>' +
+        '</div>' +
+        '<div id="supplier-list-empty" class="empty-state supplier-empty"' + (visibleCount ? ' hidden' : '') + '><span class="empty-state-icon">⌕</span><h3>Aucun résultat</h3><p>' + esc(emptyMessage) + '</p></div>' +
+      '</section>' +
+      '<p class="exchange-footnote">La sauvegarde et l’export JSON de la base comptable incluent ce référentiel local. Aucun service PERFECTO distant ne reçoit ces données.</p>' +
+    '</div>';
+  }
+
+  function refreshSupplierRows() {
+    var records = S.suppliers().slice().sort(function (a, b) { return String(a.name).localeCompare(String(b.name), 'fr'); });
+    var filter = ui.suppliers || { q: '', status: 'active' };
+    var visible = filteredSuppliers(records, filter.q, filter.status);
+    var rows = $('#supplier-rows');
+    var tableWrap = $('#supplier-table-wrap');
+    var empty = $('#supplier-list-empty');
+    var count = $('#supplier-visible-count');
+    var note = $('#supplier-result-note');
+    if (rows) rows.innerHTML = supplierRowsHtml(records);
+    if (tableWrap) tableWrap.hidden = visible.length === 0;
+    if (empty) {
+      empty.hidden = visible.length !== 0;
+      var message = records.length
+        ? 'Aucun fournisseur ne correspond à cette recherche et à ce filtre.'
+        : 'Aucun fournisseur n’est encore enregistré dans ce dossier. Utilisez « Nouveau fournisseur » pour créer la première fiche.';
+      empty.querySelector('p').textContent = message;
+    }
+    if (count) count.textContent = String(visible.length);
+    if (note) note.textContent = visible.length + (visible.length === 1 ? ' fournisseur affiché.' : ' fournisseurs affichés.');
+    applyDemoActionGates(rows);
+  }
+
+  function bindSupplierView() {
+    var form = $('#supplier-filter-form');
+    if (!form) return;
+    var search = $('#supplier-search', form);
+    var status = $('#supplier-status', form);
+    function update() {
+      ui.suppliers = ui.suppliers || { q: '', status: 'active' };
+      ui.suppliers.q = search ? search.value : '';
+      ui.suppliers.status = status ? status.value : 'active';
+      refreshSupplierRows();
+    }
+    form.addEventListener('submit', function (event) { event.preventDefault(); });
+    if (search) search.addEventListener('input', update);
+    if (status) status.addEventListener('change', update);
+  }
+
   function viewAccountingMenu(params) {
     params = params || {};
     var phone = isPhoneViewport();
@@ -4411,6 +4548,9 @@
       ? '<p class="menu-item-reason">' + esc(tab.reason) + '</p>'
       : '';
     var exchangeFeature = '';
+    if (group.id === 'definitions' && tab.id === 'suppliers') {
+      exchangeFeature = viewSuppliers();
+    }
     if (group.id === 'fichier') {
       switch (tab.id) {
         case 'export-other': exchangeFeature = viewAccountingExchangeExport(); break;
@@ -4468,6 +4608,7 @@
     }
     if (route === 'menu') {
       var menuParams = parseHash().params;
+      if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'suppliers') bindSupplierView();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-other') bindAccountingExchangeImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-balance') bindAccountingBalanceImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-payroll') bindPayrollCentralization();
@@ -4840,6 +4981,26 @@
       case 'new-account':
         openAccountModal();
         break;
+      case 'new-supplier':
+        openSupplierModal();
+        break;
+      case 'edit-supplier':
+        if (id) openSupplierModal(id);
+        break;
+      case 'archive-supplier': {
+        var supplierRecord = S.supplier(id);
+        if (!supplierRecord) { toast('Fournisseur introuvable dans le dossier actif.', 'error'); break; }
+        var activateSupplier = supplierRecord.active === false;
+        var confirmation = activateSupplier
+          ? 'Réactiver le fournisseur « ' + supplierRecord.name + ' » ?'
+          : 'Archiver le fournisseur « ' + supplierRecord.name + ' » ? Il restera conservé et ses écritures historiques ne seront pas modifiées.';
+        if (!window.confirm(confirmation)) break;
+        var supplierState = S.setSupplierActive(id, activateSupplier);
+        if (!supplierState.ok) { toast(supplierState.errors[0] || 'Changement d’état impossible.', 'error'); break; }
+        toast(activateSupplier ? 'Fournisseur réactivé.' : 'Fournisseur archivé.', 'success');
+        render();
+        break;
+      }
       case 'add-line': {
         var body = $('#lines-body');
         if (body) {
@@ -5097,6 +5258,87 @@
     });
     var sel = $('[data-field="account"]', row);
     if (sel) sel.addEventListener('change', updateEntryTotals);
+  }
+
+  function openSupplierModal(id) {
+    var existing = id ? S.supplier(id) : null;
+    if (id && !existing) { toast('Fournisseur introuvable dans le dossier actif.', 'error'); return; }
+    var mode = existing ? 'edit' : 'create';
+    var supplierRoots = ['401', '402', '404', '408', '409'];
+    var accounts = S.accounts().filter(function (account) {
+      var code = String(account.code);
+      return supplierRoots.some(function (rootCode) { return code.indexOf(rootCode) === 0; }) &&
+        Number(account.cls || code.charAt(0)) === 4 && account.aux === true &&
+        account.active !== false && account.postable !== false;
+    }).sort(function (a, b) { return String(a.code).localeCompare(String(b.code)); });
+    if (!accounts.length) {
+      toast('Aucun compte auxiliaire fournisseur actif de classe 4 n’est disponible dans ce dossier.', 'warning');
+      return;
+    }
+    var defaultAccount = accounts.find(function (account) { return account.code === '401'; }) || accounts[0];
+    var selectedAccount = existing && accounts.some(function (account) { return account.code === existing.accountCode; })
+      ? existing.accountCode : defaultAccount.code;
+    var accountOptions = accounts.map(function (account) {
+      return '<option value="' + esc(account.code) + '"' + (account.code === selectedAccount ? ' selected' : '') + '>' +
+        esc(account.code + ' · ' + account.label) + '</option>';
+    }).join('');
+    var value = function (key) { return esc(existing && existing[key] != null ? existing[key] : ''); };
+    var body = '<form id="supplier-form" novalidate data-supplier-id="' + esc(existing && existing.id || '') + '">' +
+      '<div id="supplier-errors" aria-live="assertive"></div>' +
+      '<div class="form-grid supplier-form-grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">' +
+        '<div class="field"><label for="supplier-code">Code fournisseur <span aria-hidden="true">*</span></label>' +
+          '<input id="supplier-code" name="code" type="text" maxlength="32" placeholder="Ex. FOUR-001" value="' + value('code') + '" required autocomplete="off"><span class="hint">Code unique dans ce dossier : lettres, chiffres, point, tiret, barre ou souligné.</span></div>' +
+        '<div class="field"><label for="supplier-name">Raison sociale <span aria-hidden="true">*</span></label>' +
+          '<input id="supplier-name" name="name" type="text" maxlength="150" placeholder="Ex. Société béninoise de fournitures" value="' + value('name') + '" required></div>' +
+        '<div class="field"><label for="supplier-ifu">Numéro IFU</label><input id="supplier-ifu" name="ifu" type="text" maxlength="50" value="' + value('ifu') + '"></div>' +
+        '<div class="field"><label for="supplier-rccm">Numéro RCCM</label><input id="supplier-rccm" name="rccm" type="text" maxlength="80" value="' + value('rccm') + '"></div>' +
+        '<div class="field"><label for="supplier-contact">Nom du contact</label><input id="supplier-contact" name="contactName" type="text" maxlength="120" value="' + value('contactName') + '"></div>' +
+        '<div class="field"><label for="supplier-email">Adresse e-mail</label><input id="supplier-email" name="email" type="email" maxlength="254" value="' + value('email') + '"></div>' +
+        '<div class="field"><label for="supplier-phone">Téléphone</label><input id="supplier-phone" name="phone" type="tel" maxlength="40" value="' + value('phone') + '"></div>' +
+        '<div class="field"><label for="supplier-account">Compte général de rattachement <span aria-hidden="true">*</span></label><select id="supplier-account" name="accountCode" required>' + accountOptions + '</select><span class="hint">Le compte auxiliaire individuel associe ce compte au code fournisseur (ex. 401-FOUR-001) ; aucune écriture n’est générée.</span></div>' +
+        '<div class="field"><label for="supplier-terms">Délai indicatif de règlement (jours)</label><input id="supplier-terms" name="paymentTermDays" type="number" min="0" max="3650" step="1" value="' + esc(existing ? existing.paymentTermDays : 30) + '"></div>' +
+        '<div class="field supplier-address-field"><label for="supplier-address">Adresse</label><input id="supplier-address" name="address" type="text" maxlength="255" value="' + value('address') + '"></div>' +
+        '<div class="field supplier-notes-field"><label for="supplier-notes">Notes internes</label><textarea id="supplier-notes" name="notes" rows="3" maxlength="1000">' + value('notes') + '</textarea></div>' +
+      '</div>' +
+    '</form>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button>' +
+      '<button type="submit" class="btn btn-primary" form="supplier-form" data-action="save-supplier" data-supplier-mode="' + mode + '">' +
+        (existing ? 'Enregistrer les modifications' : 'Créer le fournisseur') + '</button>';
+    openModal(existing ? 'Modifier le fournisseur' : 'Nouveau fournisseur',
+      existing ? 'Fiche du dossier ' + esc(S.currentDossier().reference) : 'Création d’une fiche dans le dossier ' + esc(S.currentDossier().reference),
+      body, footer, true);
+
+    var form = $('#supplier-form');
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var actionId = mode === 'edit' ? 'suppliers.edit' : 'suppliers.create';
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', actionId, accountingAccessContext())) {
+        toast('Action refusée par défaut : le droit « ' + actionId + ' » n’est pas accordé.', 'warning');
+        return;
+      }
+      var supplierInput = {
+        code: $('#supplier-code').value,
+        name: $('#supplier-name').value,
+        ifu: $('#supplier-ifu').value,
+        rccm: $('#supplier-rccm').value,
+        contactName: $('#supplier-contact').value,
+        email: $('#supplier-email').value,
+        phone: $('#supplier-phone').value,
+        accountCode: $('#supplier-account').value,
+        paymentTermDays: $('#supplier-terms').value,
+        address: $('#supplier-address').value,
+        notes: $('#supplier-notes').value
+      };
+      var result = existing ? S.updateSupplier(existing.id, supplierInput) : S.createSupplier(supplierInput);
+      if (!result.ok) {
+        $('#supplier-errors').innerHTML = '<div class="alert error" role="alert"><ul style="margin:0 0 0 18px">' +
+          result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
+        return;
+      }
+      toast(existing ? 'Fiche fournisseur mise à jour.' : 'Fournisseur ' + result.supplier.code + ' créé.', 'success');
+      closeModal(true);
+      render();
+    });
   }
 
   function openAccountModal() {

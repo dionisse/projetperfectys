@@ -2386,6 +2386,27 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
 .exchange-context-confirm input { flex: 0 0 auto; margin-top: 2px; accent-color: #8d671e; }
 .exchange-preview-footer { display: flex; justify-content: flex-end; padding-top: 2px; }
 
+/* Référentiel local des fournisseurs */
+.supplier-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.supplier-directory-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
+.supplier-directory-head h4 { margin-bottom: 4px; }
+.supplier-directory-head p { margin: 0; color: #6d7c74; font-size: .7rem; line-height: 1.5; }
+.supplier-directory-head .btn { flex: 0 0 auto; }
+.supplier-filter-controls { display: grid; grid-template-columns: minmax(220px, 1.4fr) minmax(180px, .6fr); align-items: end; gap: 11px; margin: 12px 0 4px; }
+.supplier-filter-controls .field { margin: 0; }
+.supplier-result-note { margin: 8px 0 !important; color: #75847b; font-size: .65rem !important; }
+.supplier-table { min-width: 950px; }
+.supplier-table th,
+.supplier-table td { vertical-align: top; }
+.supplier-table td { line-height: 1.5; }
+.supplier-table td strong { color: #344d43; }
+.supplier-table td small { color: #77847d; font-size: .64rem; }
+.supplier-row-actions { display: flex; flex-wrap: wrap; gap: 5px; min-width: 142px; }
+.supplier-row-actions .btn { white-space: nowrap; }
+.supplier-empty { margin-top: 9px; padding: 16px 12px; border: 1px dashed #dce5de; border-radius: 8px; background: #fbfcfa; }
+.supplier-form-grid .supplier-address-field,
+.supplier-form-grid .supplier-notes-field { grid-column: 1 / -1; }
+.supplier-form-grid textarea { resize: vertical; }
 
 .consolidation-filter-card > h4 { margin-top: 2px; }
 .consolidation-filter-card .alert { margin: 0 0 15px; }
@@ -2513,6 +2534,12 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
   .sales-demo-create,
   .payroll-centralization-controls,
   .sales-centralization-controls { grid-template-columns: minmax(0, 1fr); }
+  .supplier-directory-head { align-items: stretch; flex-direction: column; }
+  .supplier-directory-head .btn { justify-content: center; }
+  .supplier-filter-controls { grid-template-columns: minmax(0, 1fr); }
+  .supplier-form-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .supplier-form-grid .supplier-address-field,
+  .supplier-form-grid .supplier-notes-field { grid-column: auto; }
   .payroll-demo-create .btn,
   .sales-demo-create .btn,
   .payroll-centralization-workspace .empty-state .btn,

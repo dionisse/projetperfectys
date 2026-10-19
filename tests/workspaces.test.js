@@ -8,9 +8,13 @@ const assert = require('node:assert/strict');
 const STANDARD_ACCOUNT_COUNT = require('../modern-proto/js/accounting-chart.js').accountCount();
 
 const values = new Map();
+let storageWritesBlocked = false;
 const localStorage = {
   getItem(key) { return values.has(key) ? values.get(key) : null; },
-  setItem(key, value) { values.set(key, String(value)); },
+  setItem(key, value) {
+    if (storageWritesBlocked) throw new Error('quota simulé');
+    values.set(key, String(value));
+  },
   removeItem(key) { values.delete(key); }
 };
 
@@ -58,6 +62,16 @@ store = loadStore();
 const main = store.currentDossier();
 assert.equal(main.id, 'folder-main');
 assert.equal(store.entries().length, 4, 'le dossier historique de démonstration conserve ses données');
+const preSupplierState = JSON.parse(JSON.stringify(store.getState()));
+delete preSupplierState.suppliers;
+delete preSupplierState.supplierRegistryVersion;
+values.set('perfecto.lot1.v1', JSON.stringify(preSupplierState));
+store = loadStore();
+assert.equal(store.suppliers().length, 0, 'la migration ajoute un référentiel vide aux anciennes bases valides');
+const migratedState = JSON.parse(values.get('perfecto.lot1.v1'));
+assert.equal(migratedState.supplierRegistryVersion, 1);
+assert.equal(migratedState.suppliers.length, 0);
+assert.equal(store.backupInfo().available, true, 'la migration conserve un point local de restauration');
 
 const created = store.createDossier({
   clientName: 'Cabinet Godwin',
@@ -112,6 +126,36 @@ assert.equal(store.accounts().length, STANDARD_ACCOUNT_COUNT, 'le plan complet e
 assert.equal(store.exercise(), 2026);
 assert.equal(store.periodStats(2026).length, 12, 'le cycle juillet 2026 — juin 2027 contient ses 12 périodes civiles');
 assert.equal(store.periodStats(2027).length, 0, 'la liste de périodes est rattachée à l’exercice sélectionné');
+assert.equal(store.suppliers().length, 0, 'le nouveau dossier démarre sans fournisseurs hérités d’un autre dossier');
+const entriesBeforeSupplier = store.entries().length;
+const supplier = store.createSupplier({
+  code: 'four-001', name: 'Fournitures du Littoral SARL', ifu: 'IFU-FOUR-001', rccm: 'RB/COT/26 B 12345',
+  contactName: 'Aïcha Mensah', email: 'contact@fournitures.bj', phone: '+229 01 23 45 67',
+  address: 'Cotonou, Bénin', accountCode: '401', paymentTermDays: 30, notes: 'Livraison à convenir'
+});
+assert.equal(supplier.ok, true, supplier.errors.join(' '));
+assert.equal(store.entries().length, entriesBeforeSupplier, 'la fiche fournisseur ne crée aucune écriture comptable');
+assert.equal(supplier.supplier.code, 'FOUR-001', 'le code est nettoyé et normalisé en majuscules');
+assert.equal(supplier.supplier.auxiliaryAccountCode, '401-FOUR-001', 'le compte auxiliaire individuel associe le compte général et le code fournisseur');
+assert.equal(store.supplier('four-001').id, supplier.supplier.id, 'la recherche fournisseur accepte le code sans sensibilité à la casse');
+assert.equal(store.createSupplier({ code: 'FOUR-001', name: 'Doublon', accountCode: '401' }).ok, false, 'le code est unique dans le dossier');
+assert.equal(store.createSupplier({ code: 'FOUR-002', name: 'E-mail invalide', accountCode: '401', email: 'adresse invalide' }).ok, false);
+assert.equal(store.createSupplier({ code: 'FOUR-003', name: 'Compte non auxiliaire', accountCode: '521' }).ok, false);
+assert.equal(store.createSupplier({ code: 'FOUR-004', name: 'Compte client incorrect', accountCode: '411' }).ok, false, 'un compte auxiliaire client ne peut pas être choisi pour un fournisseur');
+const supplierEdit = store.updateSupplier(supplier.supplier.id, {
+  ...supplier.supplier, name: 'Fournitures du Littoral', paymentTermDays: 45, accountCode: '401'
+});
+assert.equal(supplierEdit.ok, true, supplierEdit.errors.join(' '));
+assert.equal(store.supplier(supplier.supplier.id).name, 'Fournitures du Littoral');
+assert.equal(store.supplier(supplier.supplier.id).paymentTermDays, 45);
+assert.equal(store.setSupplierActive(supplier.supplier.id, false).supplier.active, false, 'l’archivage conserve la fiche');
+assert.equal(store.suppliers().length, 1);
+assert.equal(store.setSupplierActive(supplier.supplier.id, true).supplier.active, true, 'une fiche archivée peut être réactivée');
+storageWritesBlocked = true;
+const failedSupplierSave = store.createSupplier({ code: 'FOUR-FAIL', name: 'Ne doit pas être sauvegardé', accountCode: '401' });
+storageWritesBlocked = false;
+assert.equal(failedSupplierSave.ok, false, 'une panne de stockage annule la création');
+assert.equal(store.suppliers().length, 1, 'une création non persistée est retirée de l’état en mémoire');
 const outsideCycle = store.validateEntry({
   reference: 'OD-2026-OUT', journal: 'OD', date: '2026-06-30', description: 'Hors cycle',
   lines: [{ account: '601', debit: 1000, credit: 0 }, { account: '401', debit: 0, credit: 1000 }]
@@ -132,13 +176,21 @@ assert.equal(store.backupInfo().entryCount, 1);
 
 assert.equal(store.switchDossier(main.id).ok, true);
 assert.equal(store.entries().length, 4, 'le changement de dossier restaure les données principales');
-assert.equal(store.backupInfo().available, false, 'les points de restauration sont isolés par dossier');
+assert.equal(store.backupInfo().available, true, 'la migration du dossier principal a créé son propre point de restauration');
+assert.equal(store.backupInfo().entryCount, 4, 'le point local du dossier principal ne reprend pas les données du dossier client');
 assert.equal(store.switchDossier(created.dossier.id).ok, true);
 assert.equal(store.entries().length, 1, 'les écritures restent persistées dans leur propre dossier');
 assert.equal(store.accounts().length, STANDARD_ACCOUNT_COUNT + 1);
 assert.equal(store.restoreBackup().ok, true);
 assert.equal(store.accounts().length, STANDARD_ACCOUNT_COUNT, 'la restauration remplace uniquement les données du dossier actif');
 assert.equal(store.entries().length, 1);
+assert.equal(store.suppliers().length, 1, 'le point de restauration contient le référentiel fournisseur du dossier');
+assert.equal(store.suppliers()[0].active, true);
+
+assert.equal(store.switchDossier(main.id).ok, true);
+assert.equal(store.suppliers().length, 0, 'le référentiel du nouveau dossier ne fuit pas vers le dossier principal');
+assert.equal(store.switchDossier(created.dossier.id).ok, true);
+assert.equal(store.suppliers().length, 1, 'le fournisseur revient en sélectionnant son dossier');
 
 store = loadStore();
 assert.equal(store.currentDossier().id, created.dossier.id, 'la sélection de dossier est conservée localement');
@@ -149,5 +201,9 @@ assert.equal(store.currentDossier().email, 'contact@godwin.bj');
 assert.equal(store.currentDossier().phone, '+229 01 02 03 04');
 assert.equal(store.entries().length, 1, 'les données du dossier survivent au rechargement');
 assert.equal(store.accounts().length, STANDARD_ACCOUNT_COUNT);
+assert.equal(store.suppliers().length, 1, 'le référentiel fournisseurs survit au rechargement');
+assert.equal(store.suppliers()[0].name, 'Fournitures du Littoral');
+assert.equal(store.suppliers()[0].accountCode, '401');
+assert.equal(store.suppliers()[0].auxiliaryAccountCode, '401-FOUR-001');
 assert.deepEqual(store.dossiers().map(dossier => dossier.name), ['Entreprise de démonstration', 'Cabinet Godwin', 'Dossier, autre']);
-console.log('Dossiers clients : migration, référence, cycle et isolation — OK');
+console.log('Dossiers clients et fournisseurs : migration, cycle, persistance et isolation — OK');

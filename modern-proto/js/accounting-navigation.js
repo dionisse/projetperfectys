@@ -24,7 +24,7 @@
     {
       id: 'definitions', label: 'Définitions', icon: '▧', defaultTab: 'general-accounts', tabs: [
         { id: 'general-accounts', label: 'Comptes généraux', status: 'active', reason: 'Plan complet des 147 comptes fournis, classés par classe et sous-classe ; les comptes historiques sont conservés pour compatibilité.', actions: [{ label: 'Ouvrir le plan comptable', route: 'accounts' }] },
-        { id: 'suppliers', label: 'Fournisseurs', status: 'planned', reason: 'Comptabilité auxiliaire générale à construire.' },
+        { id: 'suppliers', label: 'Fournisseurs', status: 'partial', reason: 'Répertoire local par dossier : création, modification, recherche et archivage des fiches avec code, raison sociale, contacts, IFU/RCCM, compte collectif de classe 4 et code auxiliaire individuel. Les factures, règlements, mouvements auxiliaires, lettrage et soldes tiers restent à construire. Les échanges de fichiers ne déclenchent pas de centralisation ; celle-ci est réservée aux modules PERFECTO internes.' },
         { id: 'clients', label: 'Clients', status: 'planned', reason: 'Comptabilité auxiliaire générale à construire.' },
         { id: 'personnel', label: 'Personnel', status: 'planned', reason: 'Comptes et auxiliaires du personnel à construire dans le périmètre général.' },
         { id: 'other-debtors-creditors', label: 'Débiteurs et créditeurs divers', status: 'planned', reason: 'Comptabilité auxiliaire générale à construire.' },

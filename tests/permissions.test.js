@@ -136,6 +136,9 @@ test('les actions disponibles sont décrites par module', () => {
   assert(actions.includes('centralization.cancel'));
   assert(actions.includes('draft.delete'));
   assert(actions.includes('accounts.create'));
+  assert(actions.includes('suppliers.create'));
+  assert(actions.includes('suppliers.edit'));
+  assert(actions.includes('suppliers.archive'));
   assert(actions.includes('period.close'));
   assert(actions.includes('period.reopen'));
   assert(actions.includes('data.import'));
@@ -196,4 +199,16 @@ test('les actions sensibles restent indépendantes les unes des autres', () => {
   assert.strictEqual(Permissions.hasPermission(cancellationManager, 'accounting', 'centralization.cancel', { ...cancellationContext, dossierId: 'dossier-2' }), false, 'le droit reste limité au dossier accordé');
 });
 
-console.log('Politique d’accès : 9 scénarios réussis.');
+test('les actions du référentiel fournisseurs sont explicites et limitées au dossier accordé', () => {
+  const supplierManager = {
+    role: 'manager', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view', 'suppliers.create', 'suppliers.edit'] }] }
+  };
+  const supplierContext = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  assert.strictEqual(Permissions.hasPermission(supplierManager, 'accounting', 'suppliers.create', supplierContext), true);
+  assert.strictEqual(Permissions.hasPermission(supplierManager, 'accounting', 'suppliers.edit', supplierContext), true);
+  assert.strictEqual(Permissions.hasPermission(supplierManager, 'accounting', 'suppliers.archive', supplierContext), false, 'archiver reste un droit distinct');
+  assert.strictEqual(Permissions.hasPermission(supplierManager, 'accounting', 'suppliers.create', { ...supplierContext, dossierId: 'dossier-2' }), false);
+});
+
+console.log('Politique d’accès : 10 scénarios réussis.');
