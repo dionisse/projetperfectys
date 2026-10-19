@@ -30,6 +30,7 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Comptes généraux',
   'Fournisseurs',
   'Clients',
+  'Prestations',
   'Personnel',
   'Localisation des immobilisations corporelles',
   'Éléments immobilisés',
@@ -56,6 +57,9 @@ assert.ok(findTab('definitions', 'suppliers').reason.includes('centralisation'))
 assert.equal(findTab('definitions', 'clients').status, 'partial');
 assert.ok(findTab('definitions', 'clients').reason.includes('CLI'));
 assert.ok(findTab('definitions', 'clients').reason.includes('dossiers clients du cabinet'));
+assert.equal(findTab('definitions', 'services').status, 'partial');
+assert.ok(findTab('definitions', 'services').reason.includes('Référentiel local'));
+assert.ok(findTab('definitions', 'services').reason.includes('facturation'));
 assert.equal(findTab('definitions', 'other-debtors-creditors').status, 'partial');
 assert.ok(findTab('definitions', 'other-debtors-creditors').reason.includes('DEB/CRE'));
 assert.equal(findTab('definitions', 'personnel').status, 'partial');

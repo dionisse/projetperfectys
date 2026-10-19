@@ -41,6 +41,7 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 | Plan comptable | Référentiel complet de 147 comptes fourni, classes et sous-classes, descriptions d’usage, recherche/filtres, création, modification et suppression contrôlée ; les numéros utilisés dans les pièces, les rattachements clients/fournisseurs/tiers divers/personnel ou les sous-comptes sont protégés, sans réécriture de l’historique |
 | Fournisseurs | Répertoire local isolé par dossier : code automatique modifiable, création, modification, archivage/réactivation et suppression des fiches non référencées ; IFU/RCCM, contacts, compte général et auxiliaire individualisé ; aucune facture, aucun règlement, mouvement auxiliaire, lettrage ni centralisation n’est généré |
 | Clients | Répertoire des tiers clients de l’entreprise suivie, distinct des dossiers clients du cabinet : code `CLI` automatique/modifiable, création, modification et suppression protégée dès qu’une pièce ou un mouvement comptable référence la fiche ; aucune facture, règlement ni écriture n’est généré |
+| Prestations | Catalogue local par dossier, code `PRE` non réutilisé, désignation, description, recherche, archivage et réactivation ; prix, fiscalité et facturation restent à construire |
 | Débiteurs et créditeurs divers | Répertoire mixte avec type débiteur/créditeur, code `DEB`/`CRE` automatique, compte auxiliaire 47 et modification/suppression protégées |
 | Personnel | Répertoire local des membres du personnel, code `PER` automatique, fonction, service, contacts et compte auxiliaire 42 ; sans salaires ni contrats |
 | Localisation des immobilisations corporelles | Arborescence locale de niveaux et d’emplacements modifiables (code `LOC`, parent/enfant, adresse, responsable), réutilisable depuis les fiches immobilisées |
@@ -75,6 +76,12 @@ Les données et l’historique des codes sont conservés dans la base locale du 
 Le sous-menu **Définitions → Clients** gère par dossier un répertoire de tiers clients pour l’entreprise suivie. Il ne s’agit pas de la liste des entreprises clientes du cabinet : cette dernière reste le registre multi-dossiers ouvert avant le tableau de bord Comptabilité. Une fiche client contient un code `CLI` proposé automatiquement à l’enregistrement et modifiable, le nom/raison sociale, les coordonnées, l’IFU/RCCM, un compte collectif client de classe 4, un code auxiliaire individuel et un délai indicatif de règlement. La liste est recherchable ; les fiches peuvent être créées, modifiées et supprimées.
 
 Les codes attribués, y compris les anciens codes modifiés ou supprimés, restent réservés dans le dossier. La suppression, le changement de code ou de compte collectif est refusé dès qu’une pièce (brouillon ou validée) ou un mouvement comptable référence le client ; un compte général collectif ne peut pas non plus être modifié ou supprimé tant qu’un client y est rattaché. Ces fiches ne créent pas de facture, règlement, lettrage, solde auxiliaire ni écriture. Les centralisations ne sont alimentées que par les modules PERFECTO internes, pas par un fichier d’échange ou un logiciel tiers. Le répertoire est exclu du parcours téléphone, limité à la consultation des Éditions.
+
+### Prestations — référentiel local partiel
+
+Le sous-menu **Définitions → Prestations** permet de tenir, dans chaque dossier, un catalogue simple de prestations avec code `PRE` proposé automatiquement (modifiable et jamais réattribué), désignation, description et état actif/archivé. La liste peut être recherchée et filtrée ; une fiche peut être modifiée, archivée, réactivée ou supprimée si aucune écriture ne la référence. Les codes et les fiches sont conservés localement par dossier, migrés sans réécrire les pièces et inclus dans les sauvegardes/restaurations JSON.
+
+Ce premier incrément est un référentiel de définition uniquement : il ne fixe aucun prix, taux de TVA ou compte de produit, ne crée pas de facture et ne génère pas d’écriture. Le rattachement opérationnel au module **Ventes, stock & facturation** reste à construire après validation des règles métier.
 
 ### Débiteurs et créditeurs divers — étape partielle
 

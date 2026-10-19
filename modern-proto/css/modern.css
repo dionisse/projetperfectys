@@ -2407,8 +2407,9 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
 .exchange-context-confirm input { flex: 0 0 auto; margin-top: 2px; accent-color: #8d671e; }
 .exchange-preview-footer { display: flex; justify-content: flex-end; padding-top: 2px; }
 
-/* Référentiel local des fournisseurs */
-.supplier-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* Référentiels locaux */
+.supplier-summary-grid,
+.service-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .client-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .supplier-directory-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
 .supplier-directory-head h4 { margin-bottom: 4px; }
@@ -2426,6 +2427,14 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
 .supplier-row-actions { display: flex; flex-wrap: wrap; gap: 5px; min-width: 236px; }
 .supplier-row-actions .btn { white-space: nowrap; }
 .client-table { min-width: 1010px; }
+.service-table { min-width: 740px; }
+.service-table th,
+.service-table td { vertical-align: top; }
+.service-table td { line-height: 1.5; }
+.service-table td small { color: #77847d; font-size: .64rem; }
+.service-row-actions { min-width: 280px; }
+.service-form-grid .service-description-field { grid-column: 1 / -1; }
+.service-form-grid textarea { resize: vertical; }
 .client-table th,
 .client-table td { vertical-align: top; }
 .client-table td { line-height: 1.5; }
@@ -2575,9 +2584,11 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
   .supplier-directory-head { align-items: stretch; flex-direction: column; }
   .supplier-directory-head .btn { justify-content: center; }
   .supplier-filter-controls { grid-template-columns: minmax(0, 1fr); }
-  .supplier-form-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .supplier-form-grid,
+  .service-form-grid { grid-template-columns: minmax(0, 1fr) !important; }
   .supplier-form-grid .supplier-address-field,
-  .supplier-form-grid .supplier-notes-field { grid-column: auto; }
+  .supplier-form-grid .supplier-notes-field,
+  .service-form-grid .service-description-field { grid-column: auto; }
   .payroll-demo-create .btn,
   .sales-demo-create .btn,
   .payroll-centralization-workspace .empty-state .btn,

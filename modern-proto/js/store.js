@@ -44,6 +44,7 @@
   var JOURNAL_REGISTRY_VERSION = 3;
   var SUPPLIER_REGISTRY_VERSION = 2;
   var CLIENT_REGISTRY_VERSION = 1;
+  var SERVICE_REGISTRY_VERSION = 1;
   var OTHER_PARTY_REGISTRY_VERSION = 1;
   var PERSONNEL_REGISTRY_VERSION = 1;
   var FIXED_ASSET_LOCATION_REGISTRY_VERSION = 1;
@@ -207,6 +208,19 @@
     return history;
   }
 
+  function normalizeServiceCode(value) {
+    return normalizeSupplierCode(value);
+  }
+
+  function normalizeServiceCodeHistory(values) {
+    var history = [];
+    (Array.isArray(values) ? values : []).forEach(function (value) {
+      var code = normalizeServiceCode(value);
+      if (code && history.indexOf(code) === -1) history.push(code);
+    });
+    return history;
+  }
+
   function upgradeAuxiliaryRegistries(data) {
     var result = { data: data, changed: false };
     if (!data) return result;
@@ -214,6 +228,28 @@
     var clients = Array.isArray(data.clients) ? data.clients : [];
     var otherParties = Array.isArray(data.otherParties) ? data.otherParties : [];
     var personnel = Array.isArray(data.personnel) ? data.personnel : [];
+    var serviceSource = Array.isArray(data.services) ? data.services : [];
+    var services = serviceSource.filter(function (record) { return record && typeof record === 'object' && !Array.isArray(record); })
+      .map(function (record) {
+        var code = normalizeServiceCode(record.code);
+        return Object.assign({}, record, {
+          id: String(record.id || 'service-legacy-' + code),
+          code: code,
+          name: String(record.name == null ? record.label || '' : record.name).trim(),
+          description: String(record.description || ''),
+          active: record.active !== false
+        });
+      });
+    var serviceCodeHistory = normalizeServiceCodeHistory(
+      (Array.isArray(data.serviceCodeHistory) ? data.serviceCodeHistory : []).concat(services.map(function (record) { return record.code; }))
+    );
+    var serviceSequence = Number(data.serviceSequence);
+    if (!Number.isInteger(serviceSequence) || serviceSequence < 1) serviceSequence = 1;
+    serviceCodeHistory.forEach(function (code) {
+      var match = /^PRE-(\d+)$/.exec(code);
+      if (match) serviceSequence = Math.max(serviceSequence, Number(match[1]) + 1);
+    });
+    var currentServiceVersion = Number(data.serviceRegistryVersion);
     var histories = {
       supplier: normalizeIdentificationHistory('supplier',
         (Array.isArray(data.supplierCodeHistory) ? data.supplierCodeHistory : []).concat(suppliers.map(function (record) { return record && record.code; }))),
@@ -248,6 +284,10 @@
       !Array.isArray(data.clients) || !Number.isFinite(currentClientVersion) || currentClientVersion < CLIENT_REGISTRY_VERSION ||
       !Array.isArray(data.otherParties) || !Number.isFinite(currentOtherPartyVersion) || currentOtherPartyVersion < OTHER_PARTY_REGISTRY_VERSION ||
       !Array.isArray(data.personnel) || !Number.isFinite(currentPersonnelVersion) || currentPersonnelVersion < PERSONNEL_REGISTRY_VERSION ||
+      !Array.isArray(data.services) || !Number.isFinite(currentServiceVersion) || currentServiceVersion < SERVICE_REGISTRY_VERSION ||
+      JSON.stringify(data.services || []) !== JSON.stringify(services) ||
+      JSON.stringify(data.serviceCodeHistory || []) !== JSON.stringify(serviceCodeHistory) ||
+      Number(data.serviceSequence) !== serviceSequence ||
       JSON.stringify(data.supplierCodeHistory || []) !== JSON.stringify(histories.supplier) ||
       JSON.stringify(data.clientCodeHistory || []) !== JSON.stringify(histories.client) ||
       JSON.stringify(data.debtorCodeHistory || []) !== JSON.stringify(histories.debtor) ||
@@ -258,6 +298,10 @@
       result.data = Object.assign({}, data, {
         supplierRegistryVersion: SUPPLIER_REGISTRY_VERSION,
         clientRegistryVersion: Math.max(Number.isFinite(currentClientVersion) ? currentClientVersion : 0, CLIENT_REGISTRY_VERSION),
+        serviceRegistryVersion: SERVICE_REGISTRY_VERSION,
+        services: services,
+        serviceCodeHistory: serviceCodeHistory,
+        serviceSequence: serviceSequence,
         otherPartyRegistryVersion: Math.max(Number.isFinite(currentOtherPartyVersion) ? currentOtherPartyVersion : 0, OTHER_PARTY_REGISTRY_VERSION),
         personnelRegistryVersion: Math.max(Number.isFinite(currentPersonnelVersion) ? currentPersonnelVersion : 0, PERSONNEL_REGISTRY_VERSION),
         suppliers: suppliers,
@@ -613,6 +657,10 @@
       deletedStandardAccountCodes: [],
       supplierRegistryVersion: SUPPLIER_REGISTRY_VERSION,
       clientRegistryVersion: CLIENT_REGISTRY_VERSION,
+      serviceRegistryVersion: SERVICE_REGISTRY_VERSION,
+      services: [],
+      serviceCodeHistory: [],
+      serviceSequence: 1,
       otherPartyRegistryVersion: OTHER_PARTY_REGISTRY_VERSION,
       personnelRegistryVersion: PERSONNEL_REGISTRY_VERSION,
       fixedAssetLocationRegistryVersion: FIXED_ASSET_LOCATION_REGISTRY_VERSION,
@@ -893,6 +941,9 @@
         return !!record && typeof record === 'object' && !Array.isArray(record);
       }))) &&
       (data.personnel === undefined || (Array.isArray(data.personnel) && data.personnel.every(function (record) {
+        return !!record && typeof record === 'object' && !Array.isArray(record);
+      }))) &&
+      (data.services === undefined || (Array.isArray(data.services) && data.services.every(function (record) {
         return !!record && typeof record === 'object' && !Array.isArray(record);
       }))) &&
       (data.deletedStandardAccountCodes === undefined || (Array.isArray(data.deletedStandardAccountCodes) && data.deletedStandardAccountCodes.every(function (code) { return typeof code === 'string'; }))) &&
@@ -1353,6 +1404,161 @@
       return { ok: false, errors: ['Attribution impossible : stockage local indisponible ou plein.'] };
     }
     return { ok: true, errors: [], code: normalized };
+  }
+
+  function services() {
+    var st = load();
+    return Array.isArray(st.services) ? st.services : [];
+  }
+
+  function service(idOrCode) {
+    var key = String(idOrCode == null ? '' : idOrCode);
+    var normalizedCode = normalizeServiceCode(key);
+    return services().find(function (record) {
+      return record.id === key || normalizeServiceCode(record.code) === normalizedCode;
+    }) || null;
+  }
+
+  function nextServiceCode() {
+    var st = load();
+    var reserved = Object.create(null);
+    (Array.isArray(st.serviceCodeHistory) ? st.serviceCodeHistory : []).forEach(function (code) {
+      reserved[normalizeServiceCode(code)] = true;
+    });
+    services().forEach(function (record) { reserved[normalizeServiceCode(record.code)] = true; });
+    var sequence = Number(st.serviceSequence) || 1;
+    var candidate;
+    do {
+      candidate = 'PRE-' + String(sequence).padStart(4, '0');
+      sequence += 1;
+    } while (reserved[candidate]);
+    return candidate;
+  }
+
+  function reserveServiceCode(st, code) {
+    if (!Array.isArray(st.serviceCodeHistory)) st.serviceCodeHistory = [];
+    if (!Number.isInteger(Number(st.serviceSequence)) || Number(st.serviceSequence) < 1) st.serviceSequence = 1;
+    var normalized = normalizeServiceCode(code);
+    if (normalized && st.serviceCodeHistory.indexOf(normalized) === -1) st.serviceCodeHistory.push(normalized);
+    var match = /^PRE-(\d+)$/.exec(normalized);
+    if (match) st.serviceSequence = Math.max(Number(st.serviceSequence) || 1, Number(match[1]) + 1);
+  }
+
+  function validateServiceInput(input, excludeId) {
+    input = input || {};
+    var errors = [];
+    var code = normalizeServiceCode(input.code);
+    var name = String(input.name == null ? '' : input.name).trim();
+    var description = String(input.description == null ? '' : input.description).trim();
+    var current = excludeId ? service(excludeId) : null;
+    if (!code) errors.push('Le code de la prestation est obligatoire.');
+    else if (!/^[A-Z0-9][A-Z0-9._/-]{0,31}$/.test(code)) errors.push('Le code doit contenir au plus 32 caractères : lettres, chiffres, point, tiret, barre oblique ou souligné.');
+    if (!name) errors.push('La désignation de la prestation est obligatoire.');
+    else if (name.length > 150) errors.push('La désignation ne peut pas dépasser 150 caractères.');
+    if (description.length > 1000) errors.push('La description ne peut pas dépasser 1 000 caractères.');
+    if (services().some(function (record) { return record.id !== excludeId && normalizeServiceCode(record.code) === code; })) {
+      errors.push('Ce code de prestation existe déjà dans le dossier.');
+    }
+    var st = load();
+    if (Array.isArray(st.serviceCodeHistory) && st.serviceCodeHistory.indexOf(code) !== -1 && code !== normalizeServiceCode(current && current.code)) {
+      errors.push('Ce code de prestation a déjà été attribué dans ce dossier et ne peut pas être réutilisé.');
+    }
+    return {
+      ok: errors.length === 0,
+      errors: errors,
+      value: { code: code, name: name, description: description }
+    };
+  }
+
+  function createService(input) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Création bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    input = Object.assign({}, input || {});
+    if (!String(input.code || '').trim()) input.code = nextServiceCode();
+    var validation = validateServiceInput(input);
+    if (!validation.ok) return validation;
+    var previousState = clone(st);
+    var id;
+    do { id = 'service-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7); }
+    while (services().some(function (record) { return record.id === id; }));
+    var timestamp = new Date().toISOString();
+    var record = Object.assign({ id: id, active: true, createdAt: timestamp, updatedAt: timestamp }, validation.value);
+    st.services.push(record);
+    reserveServiceCode(st, record.code);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer la prestation dans le stockage local de ce dossier.'] };
+    }
+    return { ok: true, errors: [], service: clone(record) };
+  }
+
+  function serviceReferenceCount(idOrRecord, st) {
+    st = st || load();
+    var record = idOrRecord && typeof idOrRecord === 'object' ? idOrRecord : service(idOrRecord);
+    if (!record) return 0;
+    return registryRecordReferenceCount(st, record, 'service|prestation');
+  }
+
+  function updateService(id, input) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Modification bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var index = st.services.findIndex(function (record) { return record.id === id; });
+    if (index < 0) return { ok: false, errors: ['Prestation introuvable dans le dossier actif.'] };
+    var previous = st.services[index];
+    var validation = validateServiceInput(input, id);
+    if (!validation.ok) return validation;
+    var references = serviceReferenceCount(previous, st);
+    if (references && validation.value.code !== normalizeServiceCode(previous.code)) {
+      return { ok: false, errors: ['Le code ne peut pas être modifié : ' + references + ' écriture(s) ou mouvement(s) font référence à cette prestation.'] };
+    }
+    var previousState = clone(st);
+    var updated = Object.assign({}, previous, validation.value, {
+      id: previous.id,
+      active: input.active == null ? previous.active !== false : input.active !== false,
+      createdAt: previous.createdAt,
+      updatedAt: new Date().toISOString()
+    });
+    st.services[index] = updated;
+    reserveServiceCode(st, previous.code);
+    reserveServiceCode(st, updated.code);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer les modifications de la prestation.'] };
+    }
+    return { ok: true, errors: [], service: clone(updated) };
+  }
+
+  function setServiceActive(id, active) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Modification bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var record = services().find(function (item) { return item.id === id; });
+    if (!record) return { ok: false, errors: ['Prestation introuvable dans le dossier actif.'] };
+    var previousState = clone(st);
+    record.active = active === true;
+    record.updatedAt = new Date().toISOString();
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer le changement d’état de la prestation.'] };
+    }
+    return { ok: true, errors: [], service: clone(record) };
+  }
+
+  function deleteService(id) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Suppression bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var records = st.services || [];
+    var index = records.findIndex(function (record) { return record.id === id; });
+    if (index < 0) return { ok: false, errors: ['Prestation introuvable dans le dossier actif.'] };
+    var record = records[index];
+    var references = serviceReferenceCount(record, st);
+    if (references) return { ok: false, errors: ['Suppression refusée : ' + references + ' écriture(s) ou mouvement(s) historique(s) référencent cette prestation. Archivez-la pour conserver la traçabilité.'] };
+    var previousState = clone(st);
+    records.splice(index, 1);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Suppression impossible : stockage local indisponible ou plein. La prestation est conservée.'] };
+    }
+    return { ok: true, errors: [], service: clone(record) };
   }
 
   function suppliers() {
@@ -3646,6 +3852,14 @@
     otherPartyIdentityChangeCheck: otherPartyIdentityChangeCheck,
     personnel: personnel,
     personnelRecord: personnelRecord,
+    services: services,
+    service: service,
+    nextServiceCode: nextServiceCode,
+    createService: createService,
+    updateService: updateService,
+    setServiceActive: setServiceActive,
+    deleteService: deleteService,
+    serviceReferenceCount: serviceReferenceCount,
     createPersonnel: createPersonnel,
     updatePersonnel: updatePersonnel,
     deletePersonnel: deletePersonnel,

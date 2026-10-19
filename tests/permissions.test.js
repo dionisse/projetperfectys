@@ -158,6 +158,10 @@ test('les actions disponibles sont décrites par module', () => {
   assert(actions.includes('clients.create'));
   assert(actions.includes('clients.edit'));
   assert(actions.includes('clients.delete'));
+  assert(actions.includes('services.create'));
+  assert(actions.includes('services.edit'));
+  assert(actions.includes('services.archive'));
+  assert(actions.includes('services.delete'));
   assert(actions.includes('otherParties.create'));
   assert(actions.includes('otherParties.edit'));
   assert(actions.includes('otherParties.delete'));
@@ -267,6 +271,19 @@ test('clients.create, clients.edit et clients.delete sont des droits distincts l
   clientManager.grants.accounting[0].actions.push('clients.delete');
   assert.strictEqual(Permissions.hasPermission(clientManager, 'accounting', 'clients.delete', clientContext), true);
   assert.strictEqual(Permissions.hasPermission(clientManager, 'accounting', 'clients.delete', { ...clientContext, dossierId: 'dossier-2' }), false);
+});
+
+test('les droits du référentiel des prestations sont distincts et limités au dossier', () => {
+  const member = {
+    role: 'manager', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view', 'services.create', 'services.edit'] }] }
+  };
+  const context = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'services.create', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'services.edit', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'services.archive', context), false);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'services.delete', context), false);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'services.create', { ...context, dossierId: 'dossier-2' }), false);
 });
 
 test('les droits débiteurs/créditeurs divers sont distincts et limités au dossier', () => {

@@ -286,6 +286,19 @@
           moduleId: 'accounting',
           actionId: trigger && trigger.getAttribute('data-client-mode') === 'edit' ? 'clients.edit' : 'clients.create'
         };
+      case 'new-service':
+        return { moduleId: 'accounting', actionId: 'services.create' };
+      case 'edit-service':
+        return { moduleId: 'accounting', actionId: 'services.edit' };
+      case 'archive-service':
+        return { moduleId: 'accounting', actionId: 'services.archive' };
+      case 'delete-service':
+        return { moduleId: 'accounting', actionId: 'services.delete' };
+      case 'save-service':
+        return {
+          moduleId: 'accounting',
+          actionId: trigger && trigger.getAttribute('data-service-mode') === 'edit' ? 'services.edit' : 'services.create'
+        };
       case 'new-other-party':
         return { moduleId: 'accounting', actionId: 'otherParties.create' };
       case 'edit-other-party':
@@ -4766,6 +4779,114 @@
     if (search) search.addEventListener('input', update);
   }
 
+  function filteredServices(records, query, status) {
+    var needle = String(query || '').trim().toLocaleLowerCase();
+    return records.filter(function (record) {
+      if (status === 'active' && record.active === false) return false;
+      if (status === 'archived' && record.active !== false) return false;
+      if (!needle) return true;
+      return [record.code, record.name, record.description].join(' ').toLocaleLowerCase().indexOf(needle) !== -1;
+    });
+  }
+
+  function serviceRowsHtml(records) {
+    var filter = ui.services || { q: '', status: 'active' };
+    return filteredServices(records, filter.q, filter.status).map(function (record) {
+      var archived = record.active === false;
+      var referenceCount = S.serviceReferenceCount(record.id);
+      return '<tr>' +
+        '<td><strong>' + esc(record.code) + '</strong></td>' +
+        '<td><strong>' + esc(record.name) + '</strong>' + (record.description ? '<br><small>' + esc(record.description) + '</small>' : '') + '</td>' +
+        '<td><span class="badge ' + (archived ? 'draft' : 'posted') + '">' + (archived ? 'Archivée' : 'Active') + '</span></td>' +
+        '<td><div class="supplier-row-actions service-row-actions">' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-action="edit-service" data-id="' + esc(record.id) + '" aria-label="Modifier la prestation ' + esc(record.name) + '">Modifier</button>' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-action="archive-service" data-id="' + esc(record.id) + '">' + (archived ? 'Réactiver' : 'Archiver') + '</button>' +
+          '<button type="button" class="btn btn-ghost btn-sm btn-danger-quiet" data-action="delete-service" data-id="' + esc(record.id) + '"' + (referenceCount ? ' disabled title="Une écriture ou un mouvement référence cette prestation ; archivez-la plutôt."' : '') + '>Supprimer</button>' +
+        '</div></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function viewServices() {
+    var records = S.services().slice().sort(function (a, b) { return String(a.name).localeCompare(String(b.name), 'fr'); });
+    var activeCount = records.filter(function (record) { return record.active !== false; }).length;
+    var archivedCount = records.length - activeCount;
+    var filter = ui.services || (ui.services = { q: '', status: 'active' });
+    var statusOptions = [
+      { value: 'active', label: 'Prestations actives' },
+      { value: 'archived', label: 'Prestations archivées' },
+      { value: 'all', label: 'Toutes les prestations' }
+    ].map(function (option) {
+      return '<option value="' + option.value + '"' + (filter.status === option.value ? ' selected' : '') + '>' + option.label + '</option>';
+    }).join('');
+    var visibleCount = filteredServices(records, filter.q, filter.status).length;
+    var emptyMessage = records.length
+      ? 'Aucune prestation ne correspond à cette recherche et à ce filtre.'
+      : 'Aucune prestation n’est encore définie dans ce dossier. Créez une fiche pour commencer le référentiel.';
+    return '<div class="exchange-workspace service-workspace" id="service-workspace">' +
+      '<div class="alert info"><div><strong>Référentiel local des prestations du dossier.</strong> Cette étape conserve le code, la désignation, une description et l’état actif ou archivé. Elle ne crée pas de facture, de prix, de TVA, d’écriture ou de centralisation ; les règles de vente et le lien avec Ventes, stock & facturation restent à construire.</div></div>' +
+      '<div class="exchange-summary-grid service-summary-grid" aria-label="Résumé des prestations">' +
+        '<div><small>Prestations actives</small><strong>' + activeCount + '</strong></div>' +
+        '<div><small>Prestations archivées</small><strong>' + archivedCount + '</strong></div>' +
+        '<div><small>Résultats affichés</small><strong id="service-visible-count">' + visibleCount + '</strong></div>' +
+      '</div>' +
+      '<section class="exchange-card service-directory-card">' +
+        '<div class="supplier-directory-head"><div><h4>Catalogue des prestations</h4><p>Codes uniques par dossier, désignations modifiables et archivage réversible.</p></div>' +
+          '<button type="button" class="btn btn-primary" data-action="new-service">＋ Nouvelle prestation</button></div>' +
+        '<form id="service-filter-form" class="supplier-filter-controls service-filter-controls" role="search">' +
+          '<label class="field"><span>Rechercher</span><input id="service-search" type="search" value="' + esc(filter.q) + '" placeholder="Code, désignation, description…" autocomplete="off"></label>' +
+          '<label class="field"><span>État</span><select id="service-status">' + statusOptions + '</select></label>' +
+        '</form>' +
+        '<p class="supplier-result-note" id="service-result-note">' + visibleCount + (visibleCount === 1 ? ' prestation affichée.' : ' prestations affichées.') + '</p>' +
+        '<div class="table-wrap exchange-table-wrap service-table-wrap" id="service-table-wrap"' + (visibleCount ? '' : ' hidden') + '>' +
+          '<table class="exchange-mapping-table service-table"><caption class="sr-only">Prestations du dossier actif</caption><thead><tr>' +
+            '<th>Code</th><th>Désignation / description</th><th>État</th><th>Actions</th>' +
+          '</tr></thead><tbody id="service-rows">' + serviceRowsHtml(records) + '</tbody></table>' +
+        '</div>' +
+        '<div id="service-list-empty" class="empty-state supplier-empty"' + (visibleCount ? ' hidden' : '') + '><span class="empty-state-icon">▧</span><h3>Aucune prestation à afficher</h3><p>' + esc(emptyMessage) + '</p></div>' +
+      '</section>' +
+      '<p class="exchange-footnote">Les codes supprimés restent réservés et ne seront pas réattribués. Le référentiel est isolé par dossier et inclus dans les sauvegardes et exports JSON locaux.</p>' +
+    '</div>';
+  }
+
+  function refreshServiceRows() {
+    var records = S.services().slice().sort(function (a, b) { return String(a.name).localeCompare(String(b.name), 'fr'); });
+    var filter = ui.services || { q: '', status: 'active' };
+    var visible = filteredServices(records, filter.q, filter.status);
+    var rows = $('#service-rows');
+    var tableWrap = $('#service-table-wrap');
+    var empty = $('#service-list-empty');
+    var count = $('#service-visible-count');
+    var note = $('#service-result-note');
+    if (rows) rows.innerHTML = serviceRowsHtml(records);
+    if (tableWrap) tableWrap.hidden = visible.length === 0;
+    if (empty) {
+      empty.hidden = visible.length !== 0;
+      empty.querySelector('p').textContent = records.length
+        ? 'Aucune prestation ne correspond à cette recherche et à ce filtre.'
+        : 'Aucune prestation n’est encore définie dans ce dossier. Créez une fiche pour commencer le référentiel.';
+    }
+    if (count) count.textContent = String(visible.length);
+    if (note) note.textContent = visible.length + (visible.length === 1 ? ' prestation affichée.' : ' prestations affichées.');
+    applyDemoActionGates(rows);
+  }
+
+  function bindServicesView() {
+    var form = $('#service-filter-form');
+    if (!form) return;
+    var search = $('#service-search', form);
+    var status = $('#service-status', form);
+    function update() {
+      ui.services = ui.services || { q: '', status: 'active' };
+      ui.services.q = search ? search.value : '';
+      ui.services.status = status ? status.value : 'active';
+      refreshServiceRows();
+    }
+    form.addEventListener('submit', function (event) { event.preventDefault(); });
+    if (search) search.addEventListener('input', update);
+    if (status) status.addEventListener('change', update);
+  }
+
   function openClientModal(id) {
     var existing = id ? S.client(id) : null;
     if (id && !existing) { toast('Client introuvable dans le dossier actif.', 'error'); return; }
@@ -5831,6 +5952,8 @@
       exchangeFeature = viewSuppliers();
     } else if (group.id === 'definitions' && tab.id === 'clients') {
       exchangeFeature = viewClients();
+    } else if (group.id === 'definitions' && tab.id === 'services') {
+      exchangeFeature = viewServices();
     } else if (group.id === 'definitions' && tab.id === 'other-debtors-creditors') {
       exchangeFeature = viewOtherParties();
     } else if (group.id === 'definitions' && tab.id === 'personnel') {
@@ -5899,6 +6022,7 @@
       var menuParams = parseHash().params;
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'suppliers') bindSupplierView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'clients') bindClientView();
+      if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'services') bindServicesView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'other-debtors-creditors') bindOtherPartyView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'personnel') bindPersonnelView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'fixed-asset-locations') bindFixedAssetLocationView();
@@ -6378,6 +6502,44 @@
         render();
         break;
       }
+      case 'new-service':
+        openServiceModal();
+        break;
+      case 'edit-service':
+        if (id) openServiceModal(id);
+        break;
+      case 'archive-service': {
+        if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'services.archive', accountingAccessContext())) {
+          toast('Action refusée par défaut : le droit « services.archive » n’est pas accordé.', 'warning');
+          break;
+        }
+        var serviceToArchive = S.service(id);
+        if (!serviceToArchive) { toast('Prestation introuvable dans le dossier actif.', 'error'); break; }
+        var reactivateService = serviceToArchive.active === false;
+        var serviceConfirmation = reactivateService
+          ? 'Réactiver la prestation « ' + serviceToArchive.name + ' » ?'
+          : 'Archiver la prestation « ' + serviceToArchive.name + ' » ? Elle restera conservée dans le dossier.';
+        if (!window.confirm(serviceConfirmation)) break;
+        var serviceState = S.setServiceActive(id, reactivateService);
+        if (!serviceState.ok) { toast(serviceState.errors[0] || 'Changement d’état impossible.', 'error'); break; }
+        toast(reactivateService ? 'Prestation réactivée.' : 'Prestation archivée.', 'success');
+        render();
+        break;
+      }
+      case 'delete-service': {
+        if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'services.delete', accountingAccessContext())) {
+          toast('Suppression refusée par défaut : le droit « services.delete » n’est pas accordé.', 'warning');
+          break;
+        }
+        var serviceToDelete = S.service(id);
+        if (!serviceToDelete) { toast('Prestation introuvable dans le dossier actif.', 'error'); break; }
+        if (!window.confirm('Supprimer définitivement la prestation « ' + serviceToDelete.name + ' » ? Son code restera réservé.')) break;
+        var serviceDeletion = S.deleteService(id);
+        if (!serviceDeletion.ok) { toast(serviceDeletion.errors.join(' ') || 'Suppression impossible.', 'warning'); break; }
+        toast('Prestation supprimée. Son code ne sera pas réattribué.', 'success');
+        render();
+        break;
+      }
       case 'new-other-party':
         openOtherPartyModal();
         break;
@@ -6718,6 +6880,54 @@
     });
     var sel = $('[data-field="account"]', row);
     if (sel) sel.addEventListener('change', updateEntryTotals);
+  }
+
+  function openServiceModal(id) {
+    var existing = id ? S.service(id) : null;
+    if (id && !existing) { toast('Prestation introuvable dans le dossier actif.', 'error'); return; }
+    var mode = existing ? 'edit' : 'create';
+    var code = existing ? existing.code : S.nextServiceCode();
+    var value = function (key) { return esc(existing && existing[key] != null ? existing[key] : (key === 'code' ? code : '')); };
+    var body = '<form id="service-form" novalidate>' +
+      '<div id="service-errors" aria-live="assertive"></div>' +
+      '<div class="form-grid service-form-grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">' +
+        '<div class="field"><label for="service-code">Code de la prestation <span aria-hidden="true">*</span></label>' +
+          '<input id="service-code" name="code" type="text" maxlength="32" value="' + value('code') + '" placeholder="Ex. PRE-0001" required autocomplete="off"><span class="hint">Proposé automatiquement, modifiable ; un code attribué ne sera pas réutilisé.</span></div>' +
+        '<div class="field"><label for="service-name">Désignation <span aria-hidden="true">*</span></label>' +
+          '<input id="service-name" name="name" type="text" maxlength="150" value="' + value('name') + '" placeholder="Ex. Conseil en gestion" required></div>' +
+        '<div class="field service-description-field"><label for="service-description">Description / périmètre</label>' +
+          '<textarea id="service-description" name="description" rows="4" maxlength="1000" placeholder="Décrivez la prestation sans créer de tarif ou de règle fiscale">' + value('description') + '</textarea></div>' +
+      '</div>' +
+    '</form>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button>' +
+      '<button type="submit" class="btn btn-primary" form="service-form" data-action="save-service" data-service-mode="' + mode + '">' +
+        (existing ? 'Enregistrer les modifications' : 'Créer la prestation') + '</button>';
+    openModal(existing ? 'Modifier la prestation' : 'Nouvelle prestation',
+      'Référentiel du dossier ' + esc(S.currentDossier().reference), body, footer, true);
+
+    var form = $('#service-form');
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var actionId = mode === 'edit' ? 'services.edit' : 'services.create';
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', actionId, accountingAccessContext())) {
+        toast('Action refusée par défaut : le droit « ' + actionId + ' » n’est pas accordé.', 'warning');
+        return;
+      }
+      var input = {
+        code: $('#service-code').value,
+        name: $('#service-name').value,
+        description: $('#service-description').value
+      };
+      var result = existing ? S.updateService(existing.id, input) : S.createService(input);
+      if (!result.ok) {
+        $('#service-errors').innerHTML = '<div class="alert error" role="alert"><ul style="margin:0 0 0 18px">' +
+          result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
+        return;
+      }
+      toast(existing ? 'Fiche prestation mise à jour.' : 'Prestation ' + result.service.code + ' créée.', 'success');
+      closeModal(true);
+      render();
+    });
   }
 
   function openSupplierModal(id) {

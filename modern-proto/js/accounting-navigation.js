@@ -30,7 +30,7 @@
         { id: 'other-debtors-creditors', label: 'Débiteurs et créditeurs divers', status: 'partial', reason: 'Répertoire local par dossier des tiers débiteurs et créditeurs de la famille 47 : codes DEB/CRE automatiques et modifiables, fiches éditables et suppression protégée si une pièce comptable les référence. Les mouvements et règlements restent à construire ; les centralisations sont réservées aux modules PERFECTO internes.' },
         { id: 'responsibility-centers', label: 'Centre de responsabilité (analytique)', status: 'inactive', reason: 'Relève de la comptabilité analytique, module séparé.' },
         { id: 'activity-domains', label: 'Domaines d’activité (analytique)', status: 'inactive', reason: 'Relève de la comptabilité analytique, module séparé.' },
-        { id: 'services', label: 'Prestations', status: 'review', reason: 'Rattachement à confirmer ; reste inactif en attendant votre décision.' },
+        { id: 'services', label: 'Prestations', status: 'partial', reason: 'Référentiel local des prestations par dossier (code, désignation, description et état). Aucune facture, TVA, tarification ou écriture n’est générée ; le lien au module Ventes, stock & facturation reste à construire.' },
         { id: 'expense-categories', label: 'Catégories de dépenses (analytique)', status: 'inactive', reason: 'Relève de la comptabilité analytique, module séparé.' },
         { id: 'funding-sources', label: 'Sources de financement (analytique)', status: 'inactive', reason: 'Relève de la comptabilité analytique, module séparé.' },
         { id: 'alternate-accounts', label: 'Comptes alternatifs (analytique)', status: 'inactive', reason: 'Relève de la comptabilité analytique, module séparé.' },
