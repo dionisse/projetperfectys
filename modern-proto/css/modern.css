@@ -2049,57 +2049,70 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
   font-size: clamp(1.35rem, 2vw, 1.8rem);
   letter-spacing: -.045em;
 }
+.accounting-menu-layout {
+  display: grid;
+  grid-template-columns: clamp(180px, 22vw, 255px) minmax(0, 1fr);
+  align-items: start;
+  gap: 17px;
+}
 .accounting-subtabs {
   display: flex;
-  gap: 4px;
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
-  padding: 0 1px 7px;
-  border-bottom: 1px solid var(--line);
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  max-height: min(66vh, 680px);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding: 1px 7px 2px 1px;
+  border-right: 1px solid var(--line);
   scrollbar-color: #c5d5ce transparent;
   scrollbar-width: thin;
 }
 .accounting-subtab {
-  display: flex;
+  display: grid;
   flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  max-width: 250px;
-  min-height: 43px;
-  padding: 8px 12px;
-  border: 1px solid transparent;
-  border-radius: 7px 7px 0 0;
-  color: #687a73;
-  background: transparent;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  width: 100%;
+  max-width: none;
+  min-height: 51px;
+  padding: 9px 10px;
+  border: 1px solid #e6ece7;
+  border-radius: 7px;
+  color: #52665e;
+  background: #fff;
   font-size: .72rem;
   font-weight: 700;
-  line-height: 1.25;
+  line-height: 1.3;
   text-align: left;
   text-decoration: none;
   white-space: normal;
 }
-.accounting-subtab span { min-width: 0; overflow-wrap: anywhere; }
-.accounting-subtab:hover { color: #166b61; background: #f1f6f2; }
+.accounting-subtab-label { min-width: 0; overflow-wrap: anywhere; }
+.accounting-subtab-state { color: #718078; font-size: .57rem; font-weight: 650; letter-spacing: .015em; }
+.accounting-subtab:hover { color: #166b61; border-color: #cfe3d9; background: #f4f9f6; }
 .accounting-subtab[data-menu-status="inactive"],
 .accounting-subtab[data-menu-status="planned"],
 .accounting-subtab[data-menu-status="review"] { color: #6f7c75; }
-.accounting-subtab[data-menu-status="inactive"]:not(.is-active) { background: #fafbf9; }
+.accounting-subtab[data-menu-status="inactive"]:not(.is-active) { background: #f7f8f6; }
+.accounting-subtab[data-menu-status="inactive"] .accounting-subtab-state,
+.accounting-subtab[data-menu-status="review"] .accounting-subtab-state { color: #7c817d; }
+.accounting-subtab[data-menu-status="planned"] .accounting-subtab-state { color: #637c8e; }
 .accounting-subtab.is-active {
   color: #116e63;
-  background: #fff;
-  border-color: #dce7e1;
-  border-bottom-color: #fff;
-  box-shadow: inset 0 2px 0 var(--primary);
+  border-color: #cfe4d9;
+  border-left: 3px solid var(--primary);
+  background: #edf7f2;
+  box-shadow: none;
 }
-.accounting-subtab i { color: #a0aaa4; font-style: normal; font-size: 1.1rem; }
-.menu-status-legend { display: flex; flex-wrap: wrap; gap: 9px 16px; margin: 10px 2px 0; }
+.accounting-menu-detail { min-width: 0; }
+.menu-status-legend { display: flex; flex-wrap: wrap; gap: 9px 16px; margin: 1px 2px 11px; }
 .menu-status-legend > span { display: inline-flex; align-items: center; gap: 6px; color: #65756d; font-size: .61rem; font-weight: 700; }
 .legend-dot { width: 7px; height: 7px; border-radius: 50%; background: #138b78; }
 .legend-dot-planned { background: #7d98ab; }
 .legend-dot-inactive { background: #b3bcb6; }
 .accounting-menu-panel {
-  margin-top: 17px;
+  margin-top: 0;
   padding: clamp(18px, 3vw, 29px);
   border: 1px solid #e1e8e3;
   border-radius: 11px;
@@ -2211,9 +2224,11 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
 
 @media (max-width: 700px) {
   .accounting-menu-heading { align-items: flex-start; flex-direction: column; gap: 9px; }
-  .accounting-subtabs { margin-right: -12px; margin-left: -12px; padding-right: 12px; padding-left: 12px; }
-  .accounting-subtab { max-width: 205px; min-height: 44px; padding: 8px 10px; font-size: .68rem; }
+  .accounting-menu-layout { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .accounting-subtabs { max-height: 225px; padding: 0 4px 8px 0; border-right: 0; border-bottom: 1px solid var(--line); }
+  .accounting-subtab { min-height: 46px; padding: 8px 9px; font-size: .68rem; }
   .accounting-menu-panel { padding: 16px 13px; }
+  .menu-status-legend { gap: 7px 12px; margin-bottom: 9px; }
   .accounting-menu-panel-head { align-items: flex-start; flex-direction: column; }
   .menu-child { grid-template-columns: minmax(0, 1fr); }
   .menu-child .menu-status { justify-self: start; }

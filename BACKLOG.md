@@ -8,7 +8,7 @@ Ce document suit les décisions et les prochaines étapes du prototype natif. Le
 - Lot 1 de comptabilité générale fonctionnel en stockage local navigateur.
 - Référence dossier `COR-GOD2026` prise en charge ; un cycle non calendaire juillet 2026–juin 2027 est géré en 12 périodes mensuelles.
 - Page multi-dossiers clients en place : la Comptabilité ouvre la liste avant le tableau de bord ; création avec nom, code, type comptable, référence et cycle, ainsi que coordonnées client facultatives (adresse, IFU, RCCM, email, téléphone).
-- Navigation Comptabilité générale organisée en huit menus latéraux, sous-menus en onglets et éléments imbriqués en listes ; fonctionnalités hors périmètre visibles mais inactives.
+- Navigation Comptabilité générale organisée en huit menus latéraux, sous-menus en onglets verticaux et éléments imbriqués en listes ; fonctionnalités hors périmètre visibles mais inactives.
 - Sur téléphone, consultation limitée au menu Éditions (balance, journal, grand livre) ; opérations de saisie et création de dossier réservées à l’ordinateur ou à la tablette.
 - Connexion, profils, grants et dossiers ne sont pas encore reliés à une identité réelle ou à Google Drive.
 

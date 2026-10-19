@@ -1901,6 +1901,11 @@
     return '<span class="menu-status menu-status-' + esc(status) + '">' + esc(label) + '</span>';
   }
 
+  function menuShortStatus(status) {
+    var labels = { active: 'Disponible', partial: 'Partiel', planned: 'À construire', inactive: 'Inactif', review: 'À confirmer', mixed: 'Partiel' };
+    return labels[status] || 'Inactif';
+  }
+
   function menuActionLink(action, status) {
     if (!action || !action.route || (status !== 'active' && status !== 'partial' && status !== 'mixed')) return '';
     var href = action.route === 'menu' ? accountingMenuHash(action.group, action.tab) : '#/' + action.route;
@@ -1937,7 +1942,8 @@
       return '<a role="tab" id="accounting-tab-' + esc(item.id) + '" aria-controls="accounting-menu-tabpanel" aria-selected="' + (active ? 'true' : 'false') + '"' +
         (active ? ' aria-current="page"' : '') +
         ' class="accounting-subtab' + (active ? ' is-active' : '') + '" data-menu-status="' + esc(item.status) + '" title="' + esc(AccountingNavigation.statusLabels[item.status] + (item.reason ? ' — ' + item.reason : '')) + '" href="' + esc(accountingMenuHash(group.id, item.id)) + '">' +
-        '<span>' + esc(item.label) + '</span>' + (item.status === 'inactive' || item.status === 'review' || item.status === 'planned' ? '<i aria-hidden="true">·</i>' : '') +
+        '<span class="accounting-subtab-label">' + esc(item.label) + '</span>' +
+        '<small class="accounting-subtab-state">' + esc(menuShortStatus(item.status)) + '</small>' +
         '</a>';
     }).join('');
     var statusLegend = '<div class="menu-status-legend" aria-label="Légende des statuts">' +
@@ -1963,16 +1969,20 @@
     return '<section class="accounting-menu-page" aria-label="Menu ' + esc(group.label) + '">' +
       '<div class="accounting-menu-heading"><div><p class="page-kicker">COMPTABILITÉ GÉNÉRALE · ' + esc(context.reference || '') + '</p><h2>' + esc(group.label) + '</h2></div>' + phoneContext + '</div>' +
       reportNote +
-      '<nav class="accounting-subtabs" role="tablist" aria-label="Sous-menus ' + esc(group.label) + '">' + tabs + '</nav>' +
-      statusLegend +
-      '<section class="accounting-menu-panel" id="accounting-menu-tabpanel" role="tabpanel" aria-labelledby="accounting-tab-' + esc(tab.id) + '">' +
-        '<div class="accounting-menu-panel-head"><div><p class="page-kicker">SOUS-MENU</p><h3>' + esc(tab.label) + '</h3></div>' + menuStatusBadge(tab.status) + '</div>' +
-        details + irreversible +
-        (childList ? '<div class="menu-children-wrap"><h4>Éléments de ce sous-menu</h4>' + childList + '</div>' : '') +
-        (actions ? '<div class="menu-actions">' + actions + '</div>' : '') +
-        emptyActionNote +
-      '</section>' +
-      '<p class="menu-data-boundary">Les opérations et écritures de ce dossier restent isolées de celles des autres clients.</p>' +
+      '<div class="accounting-menu-layout">' +
+        '<nav class="accounting-subtabs" role="tablist" aria-orientation="vertical" aria-label="Sous-menus ' + esc(group.label) + '">' + tabs + '</nav>' +
+        '<div class="accounting-menu-detail">' +
+          statusLegend +
+          '<section class="accounting-menu-panel" id="accounting-menu-tabpanel" role="tabpanel" aria-labelledby="accounting-tab-' + esc(tab.id) + '">' +
+            '<div class="accounting-menu-panel-head"><div><p class="page-kicker">SOUS-MENU</p><h3>' + esc(tab.label) + '</h3></div>' + menuStatusBadge(tab.status) + '</div>' +
+            details + irreversible +
+            (childList ? '<div class="menu-children-wrap"><h4>Éléments de ce sous-menu</h4>' + childList + '</div>' : '') +
+            (actions ? '<div class="menu-actions">' + actions + '</div>' : '') +
+            emptyActionNote +
+          '</section>' +
+          '<p class="menu-data-boundary">Les opérations et écritures de ce dossier restent isolées de celles des autres clients.</p>' +
+        '</div>' +
+      '</div>' +
     '</section>';
   }
 
