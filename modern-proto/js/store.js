@@ -1014,6 +1014,7 @@
       record.sourceReference = String(original.reference || '');
       record.sourceJournal = String(original.journal || '');
       record.sourceStatus = String(original.sourceStatus || '');
+      if (original.sourceMetadata && typeof original.sourceMetadata === 'object') record.sourceMetadata = clone(original.sourceMetadata);
       record.importBatchId = batchId;
       record.importedAt = now;
       if (status === 'posted') record.postedAt = now;

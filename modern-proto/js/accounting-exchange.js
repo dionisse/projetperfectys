@@ -8,6 +8,17 @@
 
   var FORMAT = 'PERFECTO-ECHANGE';
   var VERSION = '1';
+  var BALANCE_FORMAT = 'PERFECTO-BALANCE';
+  var BALANCE_VERSION = '1';
+  var BALANCE_HEADERS = [
+    'FORMAT', 'VERSION', 'SYSTEME_SOURCE', 'REFERENCE_DOSSIER', 'EXERCICE', 'DATE_BALANCE',
+    'REFERENCE_BALANCE', 'CODE_COMPTE', 'LIBELLE_COMPTE', 'SOLDE_DEBITEUR_XOF',
+    'SOLDE_CREDITEUR_XOF', 'ID_SOURCE'
+  ];
+  var BALANCE_TEXT_HEADERS = [
+    'SYSTEME_SOURCE', 'REFERENCE_DOSSIER', 'DATE_BALANCE', 'REFERENCE_BALANCE',
+    'CODE_COMPTE', 'LIBELLE_COMPTE', 'ID_SOURCE'
+  ];
   var HEADERS = [
     'FORMAT', 'VERSION', 'SYSTEME_SOURCE', 'REFERENCE_DOSSIER', 'EXERCICE',
     'CODE_JOURNAL', 'LIBELLE_JOURNAL', 'DATE', 'REFERENCE_PIECE', 'LIBELLE_PIECE',
@@ -283,6 +294,125 @@
     };
   }
 
+  function parseBalance(text) {
+    var parsedRows = parseRows(text);
+    if (!parsedRows.ok) return { ok: false, errors: parsedRows.errors, rows: [], metadata: null, totalDebit: 0, totalCredit: 0 };
+    var rows = parsedRows.rows;
+    if (!rows.length) return { ok: false, errors: ['Le fichier de balance est vide.'], rows: [], metadata: null, totalDebit: 0, totalCredit: 0 };
+
+    var headers = rows[0].map(function (header) { return String(header || '').trim().toUpperCase(); });
+    var duplicateHeaders = headers.filter(function (header, index) { return headers.indexOf(header) !== index; });
+    if (duplicateHeaders.length) {
+      return { ok: false, errors: ['Le fichier de balance contient des colonnes répétées : ' + duplicateHeaders.join(', ') + '.'], rows: [], metadata: null, totalDebit: 0, totalCredit: 0 };
+    }
+    var missingHeaders = BALANCE_HEADERS.filter(function (header) { return headers.indexOf(header) === -1; });
+    var extraHeaders = headers.filter(function (header) { return BALANCE_HEADERS.indexOf(header) === -1; });
+    if (missingHeaders.length || extraHeaders.length) {
+      var schemaMessage = 'Colonnes attendues pour une balance nette : ' + BALANCE_HEADERS.join(' ; ') + '.';
+      if (missingHeaders.length) schemaMessage += ' Manquantes : ' + missingHeaders.join(', ') + '.';
+      if (extraHeaders.length) schemaMessage += ' Non reconnues : ' + extraHeaders.join(', ') + '.';
+      return { ok: false, errors: [schemaMessage], rows: [], metadata: null, totalDebit: 0, totalCredit: 0 };
+    }
+
+    var columnIndex = {};
+    headers.forEach(function (header, index) { columnIndex[header] = index; });
+    var errors = [];
+    var parsedAccounts = [];
+    var seenAccounts = Object.create(null);
+    var metadata = null;
+    var totalDebit = 0;
+    var totalCredit = 0;
+
+    rows.slice(1).forEach(function (cells, index) {
+      var rowNumber = index + 2;
+      if (cells.length > headers.length && cells.slice(headers.length).some(function (value) { return String(value).trim() !== ''; })) {
+        errors.push('Ligne ' + rowNumber + ' : nombre de colonnes supérieur à l’en-tête de balance.');
+        return;
+      }
+      while (cells.length < headers.length) cells.push('');
+      var record = {};
+      BALANCE_HEADERS.forEach(function (header) {
+        var value = String(cells[columnIndex[header]] == null ? '' : cells[columnIndex[header]]).trim();
+        record[header] = BALANCE_TEXT_HEADERS.indexOf(header) !== -1 ? unprotectSpreadsheetText(value).trim() : value;
+      });
+      if (BALANCE_HEADERS.every(function (header) { return record[header] === ''; })) return;
+
+      if (record.FORMAT !== BALANCE_FORMAT) errors.push('Ligne ' + rowNumber + ' : format attendu « ' + BALANCE_FORMAT + ' ».');
+      if (record.VERSION !== BALANCE_VERSION) errors.push('Ligne ' + rowNumber + ' : version de balance non prise en charge (attendu : ' + BALANCE_VERSION + ').');
+      if (!record.SYSTEME_SOURCE || record.SYSTEME_SOURCE.length > 40) errors.push('Ligne ' + rowNumber + ' : système source obligatoire (40 caractères maximum).');
+      if (!record.REFERENCE_DOSSIER || record.REFERENCE_DOSSIER.length > 100) errors.push('Ligne ' + rowNumber + ' : référence du dossier source obligatoire (100 caractères maximum).');
+      if (!/^\d{4}$/.test(record.EXERCICE)) errors.push('Ligne ' + rowNumber + ' : exercice source attendu sur quatre chiffres.');
+      if (!validIsoDate(record.DATE_BALANCE)) errors.push('Ligne ' + rowNumber + ' : date de balance invalide ; format attendu AAAA-MM-JJ.');
+      if (!record.REFERENCE_BALANCE || record.REFERENCE_BALANCE.length > 100) errors.push('Ligne ' + rowNumber + ' : référence de balance obligatoire (100 caractères maximum).');
+      if (!record.CODE_COMPTE || record.CODE_COMPTE.length > 30) errors.push('Ligne ' + rowNumber + ' : code compte obligatoire (30 caractères maximum).');
+      if (record.LIBELLE_COMPTE.length > MAX_TEXT_LENGTH) errors.push('Ligne ' + rowNumber + ' : libellé de compte trop long.');
+      if (record.ID_SOURCE.length > 100) errors.push('Ligne ' + rowNumber + ' : ID_SOURCE ne peut pas dépasser 100 caractères.');
+
+      var debit = parseAmount(record.SOLDE_DEBITEUR_XOF, rowNumber, 'SOLDE_DEBITEUR_XOF', errors);
+      var credit = parseAmount(record.SOLDE_CREDITEUR_XOF, rowNumber, 'SOLDE_CREDITEUR_XOF', errors);
+      if (debit === 0 && credit === 0 && record.CODE_COMPTE) errors.push('Ligne ' + rowNumber + ' : le solde net doit être débiteur ou créditeur ; les soldes nuls sont à omettre.');
+      if (debit > 0 && credit > 0) errors.push('Ligne ' + rowNumber + ' : un solde net ne peut pas être débiteur et créditeur simultanément.');
+
+      var accountKey = normalizeToken(record.CODE_COMPTE).replace(/\s+/g, '');
+      if (record.CODE_COMPTE && seenAccounts[accountKey]) errors.push('Ligne ' + rowNumber + ' : compte source « ' + record.CODE_COMPTE + ' » répété dans la balance.');
+      else if (record.CODE_COMPTE) seenAccounts[accountKey] = true;
+
+      var rowMetadata = {
+        format: record.FORMAT,
+        version: record.VERSION,
+        sourceSystem: record.SYSTEME_SOURCE,
+        dossierReference: record.REFERENCE_DOSSIER,
+        exercise: Number(record.EXERCICE),
+        balanceDate: record.DATE_BALANCE,
+        balanceReference: record.REFERENCE_BALANCE,
+        sourceId: record.ID_SOURCE
+      };
+      if (!metadata) metadata = rowMetadata;
+      else {
+        if (metadata.format !== rowMetadata.format || metadata.version !== rowMetadata.version ||
+            metadata.sourceSystem !== rowMetadata.sourceSystem || metadata.dossierReference !== rowMetadata.dossierReference ||
+            metadata.exercise !== rowMetadata.exercise || metadata.balanceDate !== rowMetadata.balanceDate ||
+            metadata.balanceReference !== rowMetadata.balanceReference) {
+          errors.push('Ligne ' + rowNumber + ' : les métadonnées de balance doivent être identiques dans tout le fichier.');
+        }
+        if (metadata.sourceId !== rowMetadata.sourceId) {
+          errors.push('Ligne ' + rowNumber + ' : ID_SOURCE doit être identique sur toutes les lignes ou rester vide partout.');
+          if (!metadata.sourceId && rowMetadata.sourceId) metadata.sourceId = rowMetadata.sourceId;
+        }
+      }
+
+      totalDebit += debit;
+      totalCredit += credit;
+      if (!Number.isSafeInteger(totalDebit) || !Number.isSafeInteger(totalCredit)) errors.push('Ligne ' + rowNumber + ' : le total de la balance dépasse la capacité numérique sûre.');
+      parsedAccounts.push({
+        account: record.CODE_COMPTE,
+        accountLabel: record.LIBELLE_COMPTE,
+        debit: debit,
+        credit: credit,
+        sourceRow: rowNumber
+      });
+    });
+
+    if (!parsedAccounts.length) errors.push('Le fichier ne contient aucun solde de compte à importer.');
+    if (parsedAccounts.length && totalDebit !== totalCredit) {
+      errors.push('Balance déséquilibrée : total débiteur ' + totalDebit + ' XOF, total créditeur ' + totalCredit + ' XOF. Aucun import ne sera effectué.');
+    }
+    return {
+      ok: errors.length === 0,
+      errors: errors,
+      rows: parsedAccounts,
+      metadata: metadata,
+      lineCount: parsedAccounts.length,
+      totalDebit: totalDebit,
+      totalCredit: totalCredit,
+      delimiter: parsedRows.delimiter
+    };
+  }
+
+  function templateBalance() {
+    return toCsv([], BALANCE_HEADERS);
+  }
+
   function buildEntryRows(data, entries) {
     var dossier = data.dossier || {};
     var accountMap = {};
@@ -533,6 +663,42 @@
     return compressWorkbook(workbookSheetDefinitions(data || {}, [], false));
   }
 
+  function balanceWorkbookSheetDefinitions(data) {
+    var dossier = data && data.dossier || {};
+    var accounts = data && data.accounts || [];
+    var instructions = [
+      ['PERFECTO-BALANCE', 'Version ' + BALANCE_VERSION],
+      ['Feuille à importer', 'Balance'],
+      ['Dossier', 'Feuille de repère du dossier PERFECTO cible ; renseigner les métadonnées de la source dans la feuille Balance.'],
+      ['Périmètre', 'Soldes nets par compte uniquement ; ne pas saisir les mouvements de la période.'],
+      ['Compte', 'Une seule ligne par compte source ; associer les codes au plan du dossier cible dans PERFECTO.'],
+      ['Soldes', 'Renseigner un solde débiteur OU créditeur en XOF entiers. Omettre les soldes nuls.'],
+      ['Contrôle', 'Le total débiteur doit être égal au total créditeur ; sinon la reprise est refusée.'],
+      ['Métadonnées', 'Répéter FORMAT, VERSION, SYSTEME_SOURCE, REFERENCE_DOSSIER, EXERCICE, DATE_BALANCE et REFERENCE_BALANCE sur chaque ligne.'],
+      ['ID_SOURCE', 'Facultatif, mais s’il est renseigné, conserver la même valeur sur toutes les lignes pour bloquer un doublon d’import.'],
+      ['Import', 'PERFECTO ajoutera une seule pièce au journal et à la date choisis ; les données du dossier ne seront pas remplacées.'],
+      ['Sécurité', 'Classeur sans macros ; les formules sont refusées dans la feuille Balance.']
+    ];
+    var dossierRows = [
+      ['REFERENCE_DOSSIER', 'NOM_DOSSIER', 'EXERCICE', 'DEBUT_CYCLE', 'FIN_CYCLE', 'DEVISE'],
+      [dossier.reference || '', dossier.name || dossier.clientName || '', dossier.exerciseYear || '', dossier.cycleStart || '', dossier.cycleEnd || '', 'XOF']
+    ];
+    var accountHeaders = ['CODE_COMPTE', 'LIBELLE_COMPTE', 'CLASSE_COMPTE', 'NATURE_COMPTE', 'AUXILIAIRE', 'ACTIF'];
+    var accountRows = [accountHeaders].concat(accounts.slice().sort(function (a, b) { return String(a.code).localeCompare(String(b.code)); }).map(function (account) {
+      return [account.code, account.label, account.cls, account.nature, account.aux ? 'OUI' : 'NON', account.active === false ? 'NON' : 'OUI'];
+    }));
+    return [
+      { name: 'Instructions', rows: instructions, autoFilter: false },
+      { name: 'Dossier', rows: dossierRows, autoFilter: true },
+      { name: 'Comptes', rows: accountRows, autoFilter: true },
+      { name: 'Balance', rows: [BALANCE_HEADERS], autoFilter: true }
+    ];
+  }
+
+  function templateBalanceWorkbook(data) {
+    return compressWorkbook(balanceWorkbookSheetDefinitions(data || {}));
+  }
+
   function readZipDirectory(bytes) {
     function u16(offset) { return bytes[offset] | (bytes[offset + 1] << 8); }
     function u32(offset) { return (bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) | (bytes[offset + 3] << 24)) >>> 0; }
@@ -644,13 +810,14 @@
     return date.getUTCFullYear() + '-' + String(date.getUTCMonth() + 1).padStart(2, '0') + '-' + String(date.getUTCDate()).padStart(2, '0');
   }
 
-  function readSheetRows(bytes, path, sharedStrings, date1904) {
-    if (!bytes[path]) throw new Error('Feuille Écritures introuvable dans le classeur.');
+  function readSheetRows(bytes, path, sharedStrings, date1904, expectedHeaders) {
+    var headersExpected = expectedHeaders || HEADERS;
+    if (!bytes[path]) throw new Error('Feuille de données introuvable dans le classeur.');
     var doc = parseXml(decodeUtf8(bytes[path]));
     var sheetData = elementsByName(doc, 'sheetData')[0];
     if (!sheetData) throw new Error('La feuille Excel ne contient pas de tableau de données.');
     var rowNodes = directChildrenByName(sheetData, 'row');
-    if (rowNodes.length > MAX_DATA_ROWS + 20) throw new Error('La feuille Écritures dépasse la limite de lignes autorisée.');
+    if (rowNodes.length > MAX_DATA_ROWS + 20) throw new Error('La feuille Excel dépasse la limite de lignes autorisée.');
     var matrix = rowNodes.map(function (rowNode) {
       var values = [];
       var cellNodes = directChildrenByName(rowNode, 'c');
@@ -683,11 +850,12 @@
     var headerLimit = Math.min(20, matrix.length);
     for (var rowIndex = 0; rowIndex < headerLimit; rowIndex += 1) {
       var normalized = matrix[rowIndex].map(function (value) { return String(value || '').trim().toUpperCase(); });
-      if (HEADERS.every(function (header) { return normalized.indexOf(header) !== -1; })) { headerIndex = rowIndex; break; }
+      if (headersExpected.every(function (header) { return normalized.indexOf(header) !== -1; })) { headerIndex = rowIndex; break; }
     }
-    if (headerIndex < 0) throw new Error('La feuille Écritures ne contient pas l’en-tête complet PERFECTO-ÉCHANGE v1.');
+    if (headerIndex < 0) throw new Error('La feuille ne contient pas l’en-tête complet du modèle attendu.');
     var header = matrix[headerIndex].map(function (value) { return String(value || '').trim().toUpperCase(); });
     var dateIndex = header.indexOf('DATE');
+    if (dateIndex < 0) dateIndex = header.indexOf('DATE_BALANCE');
     var result = matrix.slice(headerIndex);
     if (dateIndex >= 0) result.slice(1).forEach(function (row) {
       if (row[dateIndex] && /^\d+(?:\.\d+)?$/.test(row[dateIndex])) row[dateIndex] = excelSerialDate(row[dateIndex], date1904);
@@ -701,42 +869,55 @@
     }).join('\r\n') + '\r\n';
   }
 
+  function readWorkbookRows(input, preferredSheetName, expectedHeaders) {
+    if (!root.fflate || typeof root.fflate.unzipSync !== 'function') throw new Error('Le module local de lecture Excel n’est pas disponible.');
+    var bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+    if (!bytes.length || bytes.length > MAX_WORKBOOK_BYTES) throw new Error('Le classeur doit faire au plus 5 Mo.');
+    var zipNames = readZipDirectory(bytes);
+    if (zipNames.some(function (name) { return /vbaProject\.bin$/i.test(name); })) throw new Error('Les classeurs avec macros VBA ne sont pas acceptés.');
+    var files = root.fflate.unzipSync(bytes);
+    if (!files['xl/workbook.xml'] || !files['xl/_rels/workbook.xml.rels']) throw new Error('Le fichier n’est pas un classeur Excel OOXML valide.');
+    var workbookDoc = parseXml(decodeUtf8(files['xl/workbook.xml']));
+    var relationDoc = parseXml(decodeUtf8(files['xl/_rels/workbook.xml.rels']));
+    var relationships = Object.create(null);
+    elementsByName(relationDoc, 'Relationship').forEach(function (relationship) {
+      relationships[relationship.getAttribute('Id')] = relationship.getAttribute('Target');
+    });
+    var sheetNodes = elementsByName(workbookDoc, 'sheet');
+    var sheets = sheetNodes.map(function (sheet) {
+      var relId = sheet.getAttribute('r:id') || sheet.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+      return { name: sheet.getAttribute('name') || '', path: resolveSheetTarget(relationships[relId]) };
+    });
+    var sharedStrings = readSharedStrings(files);
+    var workbookProperties = elementsByName(workbookDoc, 'workbookPr')[0];
+    var date1904 = workbookProperties && ['1', 'true'].indexOf(String(workbookProperties.getAttribute('date1904')).toLowerCase()) !== -1;
+    var expectedSheet = normalizeToken(preferredSheetName).replace(/[^A-Z0-9]/g, '');
+    var candidate = sheets.find(function (sheet) { return normalizeToken(sheet.name).replace(/[^A-Z0-9]/g, '') === expectedSheet; });
+    var rows = null;
+    if (candidate) rows = readSheetRows(files, candidate.path, sharedStrings, date1904, expectedHeaders);
+    else {
+      for (var sheetIndex = 0; sheetIndex < sheets.length && !rows; sheetIndex += 1) {
+        try { rows = readSheetRows(files, sheets[sheetIndex].path, sharedStrings, date1904, expectedHeaders); }
+        catch (sheetError) { if (sheetIndex === sheets.length - 1) throw sheetError; }
+      }
+    }
+    if (!rows) throw new Error('Aucune feuille « ' + preferredSheetName + ' » conforme au modèle attendu n’a été trouvée.');
+    return rows;
+  }
+
   function parseWorkbook(input) {
     try {
-      if (!root.fflate || typeof root.fflate.unzipSync !== 'function') throw new Error('Le module local de lecture Excel n’est pas disponible.');
-      var bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
-      if (!bytes.length || bytes.length > MAX_WORKBOOK_BYTES) throw new Error('Le classeur doit faire au plus 5 Mo.');
-      var zipNames = readZipDirectory(bytes);
-      if (zipNames.some(function (name) { return /vbaProject\.bin$/i.test(name); })) throw new Error('Les classeurs avec macros VBA ne sont pas acceptés.');
-      var files = root.fflate.unzipSync(bytes);
-      if (!files['xl/workbook.xml'] || !files['xl/_rels/workbook.xml.rels']) throw new Error('Le fichier n’est pas un classeur Excel OOXML valide.');
-      var workbookDoc = parseXml(decodeUtf8(files['xl/workbook.xml']));
-      var relationDoc = parseXml(decodeUtf8(files['xl/_rels/workbook.xml.rels']));
-      var relationships = Object.create(null);
-      elementsByName(relationDoc, 'Relationship').forEach(function (relationship) {
-        relationships[relationship.getAttribute('Id')] = relationship.getAttribute('Target');
-      });
-      var sheetNodes = elementsByName(workbookDoc, 'sheet');
-      var sheets = sheetNodes.map(function (sheet) {
-        var relId = sheet.getAttribute('r:id') || sheet.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
-        return { name: sheet.getAttribute('name') || '', path: resolveSheetTarget(relationships[relId]) };
-      });
-      var sharedStrings = readSharedStrings(files);
-      var workbookProperties = elementsByName(workbookDoc, 'workbookPr')[0];
-      var date1904 = workbookProperties && ['1', 'true'].indexOf(String(workbookProperties.getAttribute('date1904')).toLowerCase()) !== -1;
-      var candidate = sheets.find(function (sheet) { return normalizeToken(sheet.name).replace(/[^A-Z0-9]/g, '') === 'ECRITURES'; });
-      var rows = null;
-      if (candidate) rows = readSheetRows(files, candidate.path, sharedStrings, date1904);
-      else {
-        for (var sheetIndex = 0; sheetIndex < sheets.length && !rows; sheetIndex += 1) {
-          try { rows = readSheetRows(files, sheets[sheetIndex].path, sharedStrings, date1904); }
-          catch (sheetError) { if (sheetIndex === sheets.length - 1) throw sheetError; }
-        }
-      }
-      if (!rows) throw new Error('Aucune feuille d’écritures PERFECTO-ÉCHANGE n’a été trouvée.');
-      return parse(matrixCsv(rows));
+      return parse(matrixCsv(readWorkbookRows(input, 'Ecritures', HEADERS)));
     } catch (err) {
       return { ok: false, errors: [err.message || 'Classeur Excel illisible.'], entries: [], metadata: null };
+    }
+  }
+
+  function parseBalanceWorkbook(input) {
+    try {
+      return parseBalance(matrixCsv(readWorkbookRows(input, 'Balance', BALANCE_HEADERS)));
+    } catch (err) {
+      return { ok: false, errors: [err.message || 'Classeur de balance illisible.'], rows: [], metadata: null, totalDebit: 0, totalCredit: 0 };
     }
   }
 
@@ -744,6 +925,9 @@
     FORMAT: FORMAT,
     VERSION: VERSION,
     HEADERS: HEADERS.slice(),
+    BALANCE_FORMAT: BALANCE_FORMAT,
+    BALANCE_VERSION: BALANCE_VERSION,
+    BALANCE_HEADERS: BALANCE_HEADERS.slice(),
     parse: parse,
     template: template,
     exportEntries: exportEntries,
@@ -751,7 +935,11 @@
     exportJournals: exportJournals,
     exportWorkbook: exportWorkbook,
     templateWorkbook: templateWorkbook,
-    parseWorkbook: parseWorkbook
+    parseWorkbook: parseWorkbook,
+    parseBalance: parseBalance,
+    templateBalance: templateBalance,
+    templateBalanceWorkbook: templateBalanceWorkbook,
+    parseBalanceWorkbook: parseBalanceWorkbook
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PerfectoAccountingExchange = api;

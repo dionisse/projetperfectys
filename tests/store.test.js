@@ -244,6 +244,7 @@ test('écritures importées comme brouillons, traçabilité et doublons refusés
   const source = [{
     reference: 'OD-2026-EXCHANGE-002', journal: 'OD', date: '2026-08-13', description: 'Reprise Excel',
     sourceSystem: 'EXCEL', sourceId: 'excel-002', sourceStatus: 'posted',
+    sourceMetadata: { format: 'PERFECTO-BALANCE', version: '1', dossierReference: 'COR-SOURCE', exercise: 2026, balanceDate: '2026-08-12', balanceReference: 'TB-2026' },
     lines: [
       { account: '601100', accountLabel: 'Achats', debit: 2500, credit: 0 },
       { account: '401100', accountLabel: 'Fournisseurs', debit: 0, credit: 2500 }
@@ -259,6 +260,7 @@ test('écritures importées comme brouillons, traçabilité et doublons refusés
   assert.strictEqual(imported.sourceSystem, 'EXCEL');
   assert.strictEqual(imported.sourceId, 'excel-002');
   assert.strictEqual(imported.sourceStatus, 'posted');
+  assert.deepStrictEqual(imported.sourceMetadata, source[0].sourceMetadata);
   assert.strictEqual(imported.lines[0].sourceAccountCode, '601100');
   const duplicate = S.previewExchangeImport(source, 'draft', { sourceSystem: 'EXCEL' });
   assert.strictEqual(duplicate.ok, false);

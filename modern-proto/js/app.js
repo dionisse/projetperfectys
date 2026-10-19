@@ -68,6 +68,7 @@
 
   var deferredInstallPrompt = null;
   var exchangeImportSession = null;
+  var balanceImportSession = null;
   var launcherUi = { filter: 'all', query: '' };
   var DEMO_ORGANIZATION_ID = 'demo-org';
   var ACCOUNTING_ROUTES = ['dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings', 'menu'];
@@ -185,6 +186,7 @@
       case 'restore-local-backup':
         return { moduleId: 'accounting', actionId: 'data.restore' };
       case 'commit-accounting-exchange-import':
+      case 'commit-accounting-balance-import':
         return { moduleId: 'accounting', actionId: 'data.import' };
       case 'export-json':
       case 'export-accounts-csv':
@@ -193,6 +195,8 @@
       case 'export-accounting-workbook':
       case 'download-accounting-exchange-template':
       case 'download-accounting-workbook-template':
+      case 'download-accounting-balance-template':
+      case 'download-accounting-balance-workbook-template':
       case 'export-accounting-chart':
       case 'export-accounting-journals':
       case 'print':
@@ -281,6 +285,13 @@
       exchangeImportInput.hidden = !canImportExchange;
       var exchangeImportLabel = $('#exchange-import-label', root);
       if (exchangeImportLabel) exchangeImportLabel.hidden = !canImportExchange;
+    }
+    var balanceImportInput = $('#balance-import-file', root);
+    if (balanceImportInput) {
+      var canImportBalance = hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext());
+      balanceImportInput.hidden = !canImportBalance;
+      var balanceImportLabel = $('#balance-import-label', root);
+      if (balanceImportLabel) balanceImportLabel.hidden = !canImportBalance;
     }
   }
 
@@ -372,6 +383,7 @@
     }
     var view = $('#view');
     if (!view) return;
+    if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'import-balance')) balanceImportSession = null;
 
     var activeMember = getActiveDemoMember();
     var orgContext = demoAccessContext('organization');
@@ -2030,6 +2042,60 @@
     '</div>';
   }
 
+  function viewAccountingBalanceImport() {
+    var dossier = S.currentDossier();
+    var journals = S.journals();
+    var defaultJournal = journals.find(function (journal) { return journal.code === 'OD'; }) || journals[0] || null;
+    var session = balanceImportSession;
+    var targetDate = session ? session.targetDate : dossier.cycleStart;
+    var targetJournal = session ? session.targetJournal : (defaultJournal && defaultJournal.code || '');
+    var targetReference = session ? session.targetReference : 'BAL-' + dossier.exerciseYear + '-001';
+    var targetMode = session ? session.mode : 'draft';
+    return '<div class="exchange-workspace balance-import-workspace">' +
+      '<div class="alert warning"><div><strong>Reprise de soldes, distincte de l’import des écritures</strong><br>Ce parcours accepte une balance générale de soldes nets : une ligne par compte, avec un solde débiteur ou créditeur. Il ne reprend pas les mouvements de la période ni les colonnes débit/crédit cumulées.</div></div>' +
+      '<div class="alert info"><div>Chaque solde sera transformé en ligne d’une seule pièce de reprise, dans le journal et à la date de destination choisis. L’import s’ajoute aux écritures existantes et ne remplace ni ne supprime aucune donnée. Pour éviter un cumul accidentel, vérifiez que cette reprise correspond bien au dossier actif.</div></div>' +
+      '<section class="exchange-card"><p class="page-kicker">MODÈLES DE BALANCE</p><h4>Préparer le fichier source</h4>' +
+        '<p>Utilisez le format versionné `PERFECTO-BALANCE` v1. La feuille Excel à importer s’appelle « Balance » ; les feuilles Dossier et Comptes sont fournies à titre de référence.</p>' +
+        '<div class="exchange-button-row"><button type="button" class="btn btn-primary" data-action="download-accounting-balance-workbook-template">↓ Modèle Excel (.xlsx)</button>' +
+        '<button type="button" class="btn btn-ghost" data-action="download-accounting-balance-template">↓ Modèle CSV</button></div>' +
+      '</section>' +
+      '<div class="exchange-import-controls balance-import-controls">' +
+        '<div class="field"><label for="balance-import-file">Fichier de balance CSV ou Excel</label>' +
+          '<input id="balance-import-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>' +
+          '<label id="balance-import-label" class="btn btn-primary exchange-file-picker" for="balance-import-file">↑ Choisir un CSV ou un classeur Excel</label>' +
+          '<span class="hint">Jusqu’à 5 Mo · modèle PERFECTO-BALANCE v1 · les formules et macros ne sont pas acceptées.</span></div>' +
+        '<div class="field"><label for="balance-import-date">Date de comptabilisation de la reprise</label><input id="balance-import-date" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(targetDate) + '" required>' +
+          '<span class="hint">La date de la balance source reste enregistrée dans son contexte ; cette date situe la pièce dans le dossier cible.</span></div>' +
+        '<div class="field"><label for="balance-import-journal">Journal de reprise dans le dossier cible</label><select id="balance-import-journal" required>' + journals.map(function (journal) {
+          return '<option value="' + esc(journal.code) + '"' + (journal.code === targetJournal ? ' selected' : '') + '>' + esc(journal.code + ' — ' + journal.label) + '</option>';
+        }).join('') + '</select><span class="hint">Aucun journal n’est créé automatiquement.</span></div>' +
+        '<div class="field"><label for="balance-import-reference">Référence de la pièce de reprise</label><input id="balance-import-reference" type="text" maxlength="100" value="' + esc(targetReference) + '" required>' +
+          '<span class="hint">La référence doit être unique dans le dossier ; elle reste modifiable.</span></div>' +
+        '<div class="field"><label for="balance-import-mode">Statut de la pièce créée</label><select id="balance-import-mode"><option value="draft"' + (targetMode === 'draft' ? ' selected' : '') + '>Créer un brouillon (recommandé)</option><option value="posted"' + (targetMode === 'posted' ? ' selected' : '') + '>Importer comme écriture validée</option></select>' +
+          '<span class="hint">La validation exige une période ouverte, l’équilibre de la pièce et le droit « Valider une écriture ».</span></div>' +
+      '</div>' +
+      '<div id="balance-import-preview" class="exchange-preview" aria-live="polite"><div class="empty-state"><strong>Aucune balance analysée</strong><span>Choisissez un fichier pour contrôler les comptes, les totaux et les correspondances avant toute écriture.</span></div></div>' +
+      viewBalanceImportFormatGuide() +
+      '<p class="exchange-footnote">Import comptable de la balance générale en soldes nets uniquement. Une balance de mouvements, une balance auxiliaire ou un état financier nécessitent un format distinct.</p>' +
+    '</div>';
+  }
+
+  function viewBalanceImportFormatGuide() {
+    var rules = [
+      ['FORMAT / VERSION', 'Valeurs fixes : PERFECTO-BALANCE / 1.'],
+      ['SYSTEME_SOURCE', 'Logiciel ou origine de la balance (par exemple SAGE, ODOO, HYPERSOFT ou EXCEL).'],
+      ['REFERENCE_DOSSIER / EXERCICE / DATE_BALANCE', 'Contexte de la balance source ; les métadonnées sont répétées à l’identique sur chaque ligne.'],
+      ['REFERENCE_BALANCE', 'Référence source identique sur toutes les lignes ; utilisée avec le logiciel source pour détecter un nouvel import en doublon.'],
+      ['CODE_COMPTE / LIBELLE_COMPTE', 'Code et intitulé source ; chaque code doit être associé explicitement à un compte existant du plan cible.'],
+      ['SOLDE_DEBITEUR_XOF / SOLDE_CREDITEUR_XOF', 'Soldes nets en XOF entiers sans séparateur ni décimale ; un seul côté par compte, les soldes nuls sont omis.'],
+      ['ID_SOURCE', 'Facultatif ; s’il est rempli, garder une valeur identique sur toutes les lignes de la balance.']
+    ];
+    return '<details class="exchange-mapping exchange-format-guide"><summary>Voir les colonnes et contrôles du format PERFECTO-BALANCE v1</summary>' +
+      '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Colonne(s)</th><th>Règle</th></tr></thead><tbody>' +
+      rules.map(function (row) { return '<tr><td><strong>' + esc(row[0]) + '</strong></td><td>' + esc(row[1]) + '</td></tr>'; }).join('') +
+      '</tbody></table></div><p class="small muted">Le total des soldes débiteurs doit égaler celui des soldes créditeurs. Une différence bloque la prévisualisation et l’import.</p></details>';
+  }
+
   function exchangeMappingsHtml(session, kind) {
     var isAccount = kind === 'account';
     var sourceMap = isAccount ? session.accountMap : session.journalMap;
@@ -2218,6 +2284,330 @@
     });
   }
 
+  function balanceSourceEntry(session) {
+    var metadata = session.parseResult.metadata || {};
+    var sourceId = metadata.sourceId || [
+      'PERFECTO-BALANCE', metadata.sourceSystem, metadata.dossierReference,
+      metadata.exercise, metadata.balanceDate, metadata.balanceReference
+    ].join(':');
+    return {
+      reference: String(session.targetReference || '').trim(),
+      journal: String(session.targetJournal || '').trim(),
+      date: String(session.targetDate || '').trim(),
+      description: 'Reprise de la balance ' + String(metadata.balanceReference || '') + ' au ' + String(metadata.balanceDate || ''),
+      sourceSystem: String(metadata.sourceSystem || 'EXCEL').trim().toUpperCase(),
+      sourceId: String(sourceId),
+      sourceMetadata: {
+        format: metadata.format,
+        version: metadata.version,
+        sourceSystem: metadata.sourceSystem,
+        dossierReference: metadata.dossierReference,
+        exercise: metadata.exercise,
+        balanceDate: metadata.balanceDate,
+        balanceReference: metadata.balanceReference,
+        sourceId: metadata.sourceId || ''
+      },
+      lines: session.parseResult.rows.map(function (row) {
+        return {
+          account: row.account,
+          accountLabel: row.accountLabel,
+          debit: row.debit,
+          credit: row.credit,
+          sourceRow: row.sourceRow
+        };
+      })
+    };
+  }
+
+  function balanceAccountMappingsHtml(session) {
+    var catalog = Object.create(null);
+    session.parseResult.rows.forEach(function (row) {
+      if (!catalog[row.account]) catalog[row.account] = row.accountLabel || '';
+    });
+    var codes = Object.keys(catalog).sort(function (a, b) { return a.localeCompare(b); });
+    if (!codes.length) return '';
+    var accounts = S.accounts();
+    var hasUnmapped = codes.some(function (code) { return !session.accountMap[code]; });
+    return '<details class="exchange-mapping"' + (hasUnmapped ? ' open' : '') + '><summary>Correspondance des comptes (' + codes.length + ' codes source)</summary>' +
+      '<p class="small muted">Associez chaque compte source au plan comptable PERFECTO. Les comptes inconnus ne seront pas créés et plusieurs comptes ne sont associés qu’après votre choix explicite.</p>' +
+      '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Code source</th><th>Libellé source</th><th>Correspondance PERFECTO</th></tr></thead><tbody>' +
+      codes.map(function (code) {
+        var mappedCode = session.accountMap[code] || '';
+        var options = '<option value="">— Choisir une correspondance —</option>' + accounts.map(function (account) {
+          var inactive = account.active === false ? ' · inactif' : '';
+          return '<option value="' + esc(account.code) + '"' + (account.code === mappedCode ? ' selected' : '') + '>' + esc(account.code + ' — ' + account.label + inactive) + '</option>';
+        }).join('');
+        return '<tr><td><strong>' + esc(code) + '</strong></td><td>' + esc(catalog[code] || '—') + '</td><td><select aria-label="Associer le compte source ' + esc(code) + '" data-balance-account-map="' + esc(code) + '">' + options + '</select></td></tr>';
+      }).join('') +
+      '</tbody></table></div></details>';
+  }
+
+  function balanceLinesPreviewHtml(session) {
+    var rows = session.parseResult.rows || [];
+    var visibleRows = rows.slice(0, 20);
+    var body = visibleRows.map(function (row) {
+      var mappedCode = session.accountMap[row.account] || '';
+      var mappedAccount = mappedCode ? S.account(mappedCode) : null;
+      var mappingLabel = mappedAccount ? mappedAccount.code + ' — ' + mappedAccount.label : 'À associer';
+      return '<tr><td><strong>' + esc(row.account) + '</strong></td><td>' + esc(row.accountLabel || '—') + '</td><td class="numeric">' + esc(amount(row.debit)) + '</td><td class="numeric">' + esc(amount(row.credit)) + '</td><td>' + esc(mappingLabel) + '</td></tr>';
+    }).join('');
+    var rowLimitNote = rows.length > visibleRows.length
+      ? '<p class="small muted">Affichage des ' + visibleRows.length + ' premières lignes sur ' + rows.length + ' ; les correspondances de tous les comptes sont disponibles juste en dessous.</p>'
+      : '';
+    return '<section class="exchange-card balance-lines-preview"><p class="page-kicker">APERÇU DE LA BALANCE</p><h4>' + rows.length + ' compte(s) source</h4>' +
+      '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Code source</th><th>Libellé source</th><th class="numeric">Solde débiteur (XOF)</th><th class="numeric">Solde créditeur (XOF)</th><th>Compte cible</th></tr></thead><tbody>' + body + '</tbody></table></div>' + rowLimitNote + '</section>';
+  }
+
+  function renderBalanceImportPreview() {
+    var host = $('#balance-import-preview');
+    var session = balanceImportSession;
+    if (!host || !session) return;
+    var parsed = session.parseResult;
+    if (!parsed || !parsed.ok) {
+      var parseErrors = parsed && parsed.errors || ['La balance n’a pas pu être analysée.'];
+      host.innerHTML = '<div class="alert error"><div><strong>Balance non reconnue ou invalide</strong><ul>' +
+        parseErrors.slice(0, 20).map(function (message) { return '<li>' + esc(message) + '</li>'; }).join('') +
+        (parseErrors.length > 20 ? '<li>… et ' + (parseErrors.length - 20) + ' autre(s) erreur(s).</li>' : '') +
+        '</ul></div></div>';
+      session.analysis = null;
+      return;
+    }
+
+    var dateInput = $('#balance-import-date');
+    var journalInput = $('#balance-import-journal');
+    var referenceInput = $('#balance-import-reference');
+    var modeSelect = $('#balance-import-mode');
+    if (dateInput) session.targetDate = dateInput.value;
+    if (journalInput) session.targetJournal = journalInput.value;
+    if (referenceInput) session.targetReference = referenceInput.value;
+    if (modeSelect) session.mode = modeSelect.value === 'posted' ? 'posted' : 'draft';
+
+    var metadata = parsed.metadata || {};
+    var target = S.currentDossier();
+    var contextMismatch = metadata.dossierReference !== target.reference || Number(metadata.exercise) !== Number(target.exerciseYear);
+    var existingPostedCount = S.entries().filter(function (entry) {
+      return entry.status === 'posted' && entry.date >= target.cycleStart && entry.date <= target.cycleEnd;
+    }).length;
+    var sourceEntry = balanceSourceEntry(session);
+    var options = { sourceSystem: metadata.sourceSystem, accountMap: session.accountMap, journalMap: Object.create(null) };
+    var analysis = S.previewExchangeImport([sourceEntry], session.mode, options);
+    session.analysis = analysis;
+    session.previewEntry = sourceEntry;
+    var canPost = hasDemoPermission(getActiveDemoMember(), 'accounting', 'entry.validate', accountingAccessContext());
+    var permissionBlocked = session.mode === 'posted' && !canPost;
+    var contextBlocked = contextMismatch && !session.contextConfirmed;
+    var additiveBlocked = existingPostedCount > 0 && !session.additiveConfirmed;
+    var canCommit = analysis.ok && !permissionBlocked && !contextBlocked && !additiveBlocked;
+    var summary = '<div class="exchange-summary-grid">' +
+      '<div><small>Fichier</small><strong>' + esc(session.fileName || '—') + '</strong></div>' +
+      '<div><small>Balance source</small><strong>' + esc(metadata.sourceSystem || '—') + ' · ' + esc(metadata.balanceReference || '—') + '</strong></div>' +
+      '<div><small>Soldes nets équilibrés</small><strong>' + parsed.lineCount + ' compte(s) · ' + amount(parsed.totalDebit) + ' XOF</strong></div>' +
+      '<div><small>Dossier source / actif</small><strong>' + esc(metadata.dossierReference || '—') + ' → ' + esc(target.reference) + '</strong></div>' +
+      '<div><small>Date source / reprise</small><strong>' + esc(metadata.balanceDate || '—') + ' → ' + esc(session.targetDate || '—') + '</strong></div>' +
+      '<div><small>Écriture cible</small><strong>' + esc(session.targetJournal || '—') + ' · ' + esc(session.targetReference || '—') + '</strong></div>' +
+      '</div>';
+    var warnings = analysis.warnings.length
+      ? '<div class="alert warning"><div><strong>À vérifier</strong><ul>' + analysis.warnings.map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('') + '</ul></div></div>'
+      : '';
+    var errors = analysis.errors.length
+      ? '<div class="alert error"><div><strong>' + analysis.errors.length + ' contrôle(s) bloquant(s)</strong><ul>' +
+        analysis.errors.slice(0, 20).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') +
+        (analysis.errors.length > 20 ? '<li>… et ' + (analysis.errors.length - 20) + ' autre(s) erreur(s).</li>' : '') +
+        '</ul></div></div>'
+      : '<div class="alert success"><div><strong>Contrôles réussis</strong><br>' + analysis.balancedCount + ' pièce équilibrée · ' + parsed.lineCount + ' solde(s) net(s) · débit et crédit ' + amount(parsed.totalDebit) + ' XOF.</div></div>';
+    var context = contextMismatch
+      ? '<label class="exchange-context-confirm"><input id="balance-import-confirm-target" type="checkbox"' + (session.contextConfirmed ? ' checked' : '') + '> Je confirme la reprise de la balance source (' + esc(metadata.dossierReference || 'sans référence') + ', exercice ' + esc(metadata.exercise) + ', au ' + esc(metadata.balanceDate) + ') dans le dossier actif ' + esc(target.reference) + ' (exercice ' + esc(target.exerciseYear) + ').</label>'
+      : '';
+    var additiveWarning = existingPostedCount
+      ? '<div class="alert warning"><div><strong>Le dossier contient déjà ' + existingPostedCount + ' écriture(s) validée(s) sur le cycle.</strong><br>À sa validation, la pièce de reprise s’ajoutera à ces écritures, sans les remplacer. Pour éviter un double comptage, vérifiez que cette reprise est intentionnelle ou utilisez un dossier cible vide.<label class="exchange-context-confirm"><input id="balance-import-confirm-additive" type="checkbox"' + (session.additiveConfirmed ? ' checked' : '') + '> Je confirme que la reprise est additive et ne doit pas remplacer les écritures existantes.</label></div></div>'
+      : '';
+    var permission = permissionBlocked
+      ? '<div class="alert warning">Ce profil peut importer, mais ne possède pas le droit « Valider une écriture ». Choisissez le mode brouillon ou demandez ce droit.</div>'
+      : '';
+    var statusLabel = session.mode === 'posted' ? 'écriture validée' : 'brouillon';
+    var button = '<button type="button" class="btn btn-primary" data-action="commit-accounting-balance-import"' + (canCommit ? '' : ' disabled') + '>Ajouter la pièce de reprise comme ' + statusLabel + '</button>';
+
+    host.innerHTML = summary +
+      '<div class="exchange-mode-note">L’import créera une seule pièce avec une ligne par compte, comme ' + statusLabel + '. Elle ne modifiera aucun solde avant validation si elle est enregistrée en brouillon.</div>' +
+      balanceLinesPreviewHtml(session) + balanceAccountMappingsHtml(session) + warnings + errors + context + additiveWarning + permission +
+      '<div class="exchange-preview-footer">' + button + '</div>';
+    applyDemoActionGates(host);
+
+    $$('[data-balance-account-map]', host).forEach(function (select) {
+      select.addEventListener('change', function () {
+        session.accountMap[select.getAttribute('data-balance-account-map')] = select.value;
+        session.contextConfirmed = !!(host.querySelector('#balance-import-confirm-target') && host.querySelector('#balance-import-confirm-target').checked);
+        session.additiveConfirmed = !!(host.querySelector('#balance-import-confirm-additive') && host.querySelector('#balance-import-confirm-additive').checked);
+        renderBalanceImportPreview();
+      });
+    });
+    var confirmContext = $('#balance-import-confirm-target', host);
+    if (confirmContext) {
+      confirmContext.addEventListener('change', function () {
+        session.contextConfirmed = confirmContext.checked;
+        renderBalanceImportPreview();
+      });
+    }
+    var confirmAdditive = $('#balance-import-confirm-additive', host);
+    if (confirmAdditive) {
+      confirmAdditive.addEventListener('change', function () {
+        session.additiveConfirmed = confirmAdditive.checked;
+        renderBalanceImportPreview();
+      });
+    }
+  }
+
+  function bindAccountingBalanceImport() {
+    var fileInput = $('#balance-import-file');
+    var previewHost = $('#balance-import-preview');
+    var modeSelect = $('#balance-import-mode');
+    if (!fileInput || !previewHost || !modeSelect) return;
+
+    function syncBalanceControls() {
+      if (!balanceImportSession) return;
+      balanceImportSession.targetDate = ($('#balance-import-date') || {}).value || '';
+      balanceImportSession.targetJournal = ($('#balance-import-journal') || {}).value || '';
+      balanceImportSession.targetReference = ($('#balance-import-reference') || {}).value || '';
+      balanceImportSession.mode = modeSelect.value === 'posted' ? 'posted' : 'draft';
+      balanceImportSession.contextConfirmed = !!($('#balance-import-confirm-target') && $('#balance-import-confirm-target').checked);
+      balanceImportSession.additiveConfirmed = !!($('#balance-import-confirm-additive') && $('#balance-import-confirm-additive').checked);
+      renderBalanceImportPreview();
+    }
+
+    modeSelect.addEventListener('change', syncBalanceControls);
+    ['balance-import-date', 'balance-import-journal', 'balance-import-reference'].forEach(function (id) {
+      var control = $('#' + id);
+      if (control) control.addEventListener('change', syncBalanceControls);
+    });
+    fileInput.addEventListener('change', function () {
+      var file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      var isWorkbook = /\.xlsx$/i.test(file.name || '') || file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      var currentDossier = S.currentDossier();
+      var initialJournal = ($('#balance-import-journal') || {}).value || '';
+      var initialDate = ($('#balance-import-date') || {}).value || currentDossier.cycleStart;
+      var initialReference = ($('#balance-import-reference') || {}).value || '';
+      var initialMode = modeSelect.value === 'posted' ? 'posted' : 'draft';
+      if (file.size > 5 * 1024 * 1024) {
+        balanceImportSession = {
+          fileName: file.name,
+          targetDossierId: currentDossier.id,
+          targetDate: initialDate,
+          targetJournal: initialJournal,
+          targetReference: initialReference,
+          mode: initialMode,
+          accountMap: Object.create(null),
+          contextConfirmed: false,
+          additiveConfirmed: false,
+          parseResult: { ok: false, errors: ['Le fichier dépasse la limite de 5 Mo. Divisez-le en lots plus petits.'] }
+        };
+        renderBalanceImportPreview();
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function () {
+        var parseResult = isWorkbook
+          ? AccountingExchange.parseBalanceWorkbook(new Uint8Array(reader.result || new ArrayBuffer(0)))
+          : AccountingExchange.parseBalance(String(reader.result || ''));
+        var accountMap = Object.create(null);
+        if (parseResult.ok) {
+          parseResult.rows.forEach(function (row) {
+            if (!Object.prototype.hasOwnProperty.call(accountMap, row.account)) accountMap[row.account] = S.account(row.account) ? row.account : '';
+          });
+        }
+        balanceImportSession = {
+          fileName: file.name,
+          targetDossierId: currentDossier.id,
+          targetDate: initialDate,
+          targetJournal: initialJournal,
+          targetReference: initialReference,
+          mode: initialMode,
+          accountMap: accountMap,
+          contextConfirmed: false,
+          additiveConfirmed: false,
+          parseResult: parseResult,
+          analysis: null
+        };
+        renderBalanceImportPreview();
+      };
+      reader.onerror = function () {
+        balanceImportSession = {
+          fileName: file.name,
+          targetDossierId: currentDossier.id,
+          targetDate: initialDate,
+          targetJournal: initialJournal,
+          targetReference: initialReference,
+          mode: initialMode,
+          accountMap: Object.create(null),
+          contextConfirmed: false,
+          additiveConfirmed: false,
+          parseResult: { ok: false, errors: ['Lecture du fichier impossible.'] }
+        };
+        renderBalanceImportPreview();
+      };
+      if (isWorkbook) reader.readAsArrayBuffer(file);
+      else reader.readAsText(file, 'UTF-8');
+    });
+  }
+
+  function commitAccountingBalanceImport() {
+    var session = balanceImportSession;
+    if (!session || !session.parseResult || !session.parseResult.ok) {
+      toast('Aucune balance valide n’est prête à être importée.', 'error');
+      return;
+    }
+    if (session.targetDossierId !== S.currentDossier().id) {
+      toast('Le dossier actif a changé depuis l’analyse. Rechargez la balance pour éviter une reprise dans le mauvais dossier.', 'error');
+      balanceImportSession = null;
+      render();
+      return;
+    }
+    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext())) {
+      toast('Import refusé par défaut : ce profil ne possède pas le droit data.import.', 'warning');
+      return;
+    }
+    var mode = ($('#balance-import-mode') || {}).value === 'posted' ? 'posted' : 'draft';
+    if (mode === 'posted' && !hasDemoPermission(getActiveDemoMember(), 'accounting', 'entry.validate', accountingAccessContext())) {
+      toast('Validation refusée : le droit « Valider une écriture » est requis pour importer cette balance comme écriture validée.', 'warning');
+      return;
+    }
+    session.targetDate = ($('#balance-import-date') || {}).value || '';
+    session.targetJournal = ($('#balance-import-journal') || {}).value || '';
+    session.targetReference = ($('#balance-import-reference') || {}).value || '';
+    session.mode = mode;
+    var metadata = session.parseResult.metadata || {};
+    var sourceEntry = balanceSourceEntry(session);
+    var options = { sourceSystem: metadata.sourceSystem, accountMap: session.accountMap, journalMap: Object.create(null) };
+    var analysis = S.previewExchangeImport([sourceEntry], mode, options);
+    session.analysis = analysis;
+    session.previewEntry = sourceEntry;
+    var target = S.currentDossier();
+    var contextMismatch = metadata.dossierReference !== target.reference || Number(metadata.exercise) !== Number(target.exerciseYear);
+    var existingPostedCount = S.entries().filter(function (entry) {
+      return entry.status === 'posted' && entry.date >= target.cycleStart && entry.date <= target.cycleEnd;
+    }).length;
+    var additiveBlocked = existingPostedCount > 0 && !session.additiveConfirmed;
+    if (!analysis.ok || (contextMismatch && !session.contextConfirmed) || additiveBlocked) {
+      renderBalanceImportPreview();
+      toast(contextMismatch && !session.contextConfirmed
+        ? 'Confirmez le dossier source et l’exercice de destination avant la reprise.'
+        : (additiveBlocked ? 'Confirmez que la balance doit être ajoutée aux écritures déjà validées.' : 'La reprise est bloquée par les contrôles affichés dans l’aperçu.'), 'warning');
+      return;
+    }
+    var modeLabel = mode === 'posted' ? 'écriture validée' : 'brouillon';
+    var existingNote = existingPostedCount ? ' Les ' + existingPostedCount + ' écritures déjà validées seront conservées ; la reprise, une fois validée, se cumulera avec elles.' : '';
+    if (!window.confirm('Ajouter une pièce de reprise (' + session.parseResult.lineCount + ' compte(s), ' + amount(session.parseResult.totalDebit) + ' XOF) comme ' + modeLabel + ' au dossier « ' + target.reference + ' » ?' + existingNote + ' Aucune donnée ne sera remplacée. Un point de restauration local sera créé avant l’ajout.')) return;
+    var result = S.importExchange([sourceEntry], mode, options);
+    if (!result.ok) {
+      toast(result.errors[0] || 'Reprise de balance impossible.', 'error');
+      renderBalanceImportPreview();
+      return;
+    }
+    balanceImportSession = null;
+    toast('Balance reprise dans une pièce ' + modeLabel + ' ; point de restauration local créé.', 'success');
+    render();
+  }
+
   function commitAccountingExchangeImport() {
     var session = exchangeImportSession;
     if (!session || !session.parseResult || !session.parseResult.ok) {
@@ -2312,7 +2702,9 @@
       : '';
     var exchangeFeature = group.id === 'fichier' && tab.id === 'export-other'
       ? viewAccountingExchangeExport()
-      : (group.id === 'fichier' && tab.id === 'import-other' ? viewAccountingExchangeImport() : '');
+      : (group.id === 'fichier' && tab.id === 'import-other'
+        ? viewAccountingExchangeImport()
+        : (group.id === 'fichier' && tab.id === 'import-balance' ? viewAccountingBalanceImport() : ''));
     var emptyActionNote = !actions && !childList && !exchangeFeature
       ? '<p class="menu-disabled-note">Aucune action n’est disponible pour cet élément.</p>'
       : '';
@@ -2355,6 +2747,7 @@
     if (route === 'menu') {
       var menuParams = parseHash().params;
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-other') bindAccountingExchangeImport();
+      if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-balance') bindAccountingBalanceImport();
       return;
     }
 
@@ -2758,6 +3151,9 @@
       case 'commit-accounting-exchange-import':
         commitAccountingExchangeImport();
         break;
+      case 'commit-accounting-balance-import':
+        commitAccountingBalanceImport();
+        break;
       case 'export-accounting-workbook': {
         var workbookDossier = S.currentDossier();
         var workbookStem = 'perfecto-' + safeFilePart(workbookDossier.reference) + '-' + S.exercise();
@@ -2788,6 +3184,27 @@
         } catch (exchangeError) {
           toast(exchangeError.message || 'Export impossible : les écritures doivent être contrôlées.', 'error');
         }
+        break;
+      }
+      case 'download-accounting-balance-workbook-template': {
+        var balanceTemplateDossier = S.currentDossier();
+        try {
+          var balanceWorkbookTemplate = AccountingExchange.templateBalanceWorkbook({
+            dossier: balanceTemplateDossier,
+            accounts: S.accounts(),
+            journals: S.journals()
+          });
+          downloadFile('perfecto-balance-v1-modele-' + safeFilePart(balanceTemplateDossier.reference) + '.xlsx', balanceWorkbookTemplate, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+          toast('Modèle Excel de balance PERFECTO-BALANCE v1 téléchargé.', 'success');
+        } catch (balanceTemplateError) {
+          toast(balanceTemplateError.message || 'Modèle Excel de balance impossible à générer.', 'error');
+        }
+        break;
+      }
+      case 'download-accounting-balance-template': {
+        var balanceCsvDossier = S.currentDossier();
+        downloadFile('perfecto-balance-v1-modele-' + safeFilePart(balanceCsvDossier.reference) + '.csv', AccountingExchange.templateBalance(), 'text/csv;charset=utf-8');
+        toast('Modèle CSV de balance PERFECTO-BALANCE v1 téléchargé.', 'success');
         break;
       }
       case 'download-accounting-workbook-template': {

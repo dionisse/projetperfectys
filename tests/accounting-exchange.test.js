@@ -85,6 +85,42 @@ const templateSheetXml = new TextDecoder().decode(workbookTemplate['xl/worksheet
 assert.ok(templateSheetXml.includes('REFERENCE_PIECE'));
 assert.ok(!templateSheetXml.includes('OD-2026-900'));
 
+const balanceSourceRows = [
+  ['PERFECTO-BALANCE', '1', 'SAGE', 'COR-SOURCE', '2025', '2025-12-31', 'BAL-2025-12', '601100', 'Achats de marchandises', '125000', '0', 'sage-bal-2025-12'],
+  ['PERFECTO-BALANCE', '1', 'SAGE', 'COR-SOURCE', '2025', '2025-12-31', 'BAL-2025-12', '401100', 'Fournisseurs', '0', '125000', 'sage-bal-2025-12']
+];
+const balanceCsv = '\uFEFF' + [Exchange.BALANCE_HEADERS, ...balanceSourceRows]
+  .map(row => row.map(value => '\"' + String(value).replace(/\"/g, '\"\"') + '\"').join(';')).join('\r\n') + '\r\n';
+const parsedBalance = Exchange.parseBalance(balanceCsv);
+assert.equal(parsedBalance.ok, true, parsedBalance.errors.join('\n'));
+assert.equal(parsedBalance.rows.length, 2);
+assert.equal(parsedBalance.totalDebit, 125000);
+assert.equal(parsedBalance.totalCredit, 125000);
+assert.equal(parsedBalance.metadata.balanceDate, '2025-12-31');
+assert.equal(parsedBalance.metadata.balanceReference, 'BAL-2025-12');
+assert.equal(parsedBalance.rows[0].account, '601100');
+assert.equal(parsedBalance.rows[1].credit, 125000);
+assert.equal(Exchange.parseBalance(Exchange.templateBalance()).ok, false, 'Un modèle vide ne doit pas être importable.');
+const unbalancedBalance = Exchange.parseBalance(balanceCsv.replace('"125000"', '"124999"'));
+assert.equal(unbalancedBalance.ok, false);
+assert.ok(unbalancedBalance.errors.some(error => error.includes('Balance déséquilibrée')));
+const duplicateBalance = Exchange.parseBalance('\uFEFF' + [Exchange.BALANCE_HEADERS, ...balanceSourceRows, balanceSourceRows[0]]
+  .map(row => row.map(value => '\"' + String(value).replace(/\"/g, '\"\"') + '\"').join(';')).join('\r\n') + '\r\n');
+assert.equal(duplicateBalance.ok, false);
+assert.ok(duplicateBalance.errors.some(error => error.includes('compte source') && error.includes('répété')));
+const inconsistentSourceIdRows = balanceSourceRows.map(row => row.slice());
+inconsistentSourceIdRows[1][11] = '';
+const inconsistentSourceIdBalance = Exchange.parseBalance('\uFEFF' + [Exchange.BALANCE_HEADERS, ...inconsistentSourceIdRows]
+  .map(row => row.map(value => '\"' + String(value).replace(/\"/g, '\"\"') + '\"').join(';')).join('\r\n') + '\r\n');
+assert.equal(inconsistentSourceIdBalance.ok, false);
+assert.ok(inconsistentSourceIdBalance.errors.some(error => error.includes('ID_SOURCE doit être identique')));
+const balanceWorkbookTemplate = fflate.unzipSync(Exchange.templateBalanceWorkbook({ dossier, accounts, journals }));
+const balanceWorkbookXml = new TextDecoder().decode(balanceWorkbookTemplate['xl/workbook.xml']);
+assert.ok(balanceWorkbookXml.includes('name="Balance"'));
+const balanceSheetXml = new TextDecoder().decode(balanceWorkbookTemplate['xl/worksheets/sheet4.xml']);
+assert.ok(balanceSheetXml.includes('SOLDE_DEBITEUR_XOF'));
+assert.ok(balanceSheetXml.includes('REFERENCE_BALANCE'));
+
 const accountCsv = Exchange.exportAccounts(accounts);
 assert.equal(accountCsv.charCodeAt(0), 0xFEFF);
 assert.ok(accountCsv.includes('"CODE_COMPTE";"LIBELLE_COMPTE"'));
@@ -111,4 +147,4 @@ const wrongColumns = Exchange.parse('\uFEFFCODE;LIBELLE\r\n1;Essai\r\n');
 assert.equal(wrongColumns.ok, false);
 assert.ok(wrongColumns.errors[0].includes('Colonnes attendues'));
 
-console.log('Interopérabilité PERFECTO-ÉCHANGE v1 : export Excel/CSV, regroupement, sécurité et validation — OK');
+console.log('Interopérabilité PERFECTO-ÉCHANGE et PERFECTO-BALANCE v1 : export, import, contrôles et modèles Excel/CSV — OK');
