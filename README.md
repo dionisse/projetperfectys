@@ -31,6 +31,7 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 | Paie & RH (étape partielle) | Registre local de lots internes, approbation et lien vers la centralisation ; les calculs de paie et fonctions RH complètes restent à construire |
 | Ventes, stock & facturation (étape partielle) | Lots locaux de ventes et d’approvisionnement, approbation et centralisation interne ; facturation, fiscalité et valorisation de stock réelles à construire |
 | Annulation d’une centralisation | Brouillon interne supprimable sans effet comptable ; pièce validée annulée par écriture inverse traçable, sans toucher à l’originale. Paie & RH et Ventes/Stock/Facturation uniquement ; imports et logiciels tiers exclus |
+| Consolidation avant résultat | Journal groupé consultable et exportable par période et journal, agrégé par compte général ; chaque ligne source conserve sa pièce, son journal, sa date, son numéro de ligne et son origine. Lecture seule : aucune écriture n’est ajoutée au grand livre |
 | Organisation & accès (démo) | Profils temporaires et droits explicites par personne, module, entreprise cliente, dossier et action ; refus par défaut |
 | Dossiers clients | Liste multi-dossiers ouverte depuis le module Comptabilité ; création d’entreprise, code, type comptable, référence et cycle paramétrable |
 | Tableau de bord | Indicateurs (débit, crédit, résultat, pièces), dernières pièces, activité par journal, état des périodes |
@@ -58,6 +59,17 @@ Le menu **Fichier** propose le format neutre `PERFECTO-ECHANGE` version 1 en cla
 - Le format commun est la première passerelle Excel/CSV, **pas encore un import direct des formats propriétaires** de Sage Comptabilité, PERFECTO historique, HYPERSOFT ou ODOO. Ces profils seront développés par version après réception et validation de fichiers d’exemple anonymisés.
 - Le JSON de **Données & application** reste une sauvegarde/restauration native PERFECTO et ne doit pas être confondu avec un fichier d’échange.
 - Les tiers, les données analytiques et le multidevise restent hors de ce premier incrément. Les données sont lues et produites dans le navigateur ; aucun fichier n’est envoyé à un serveur.
+
+### Consolidation avant résultat — première étape
+
+Le sous-menu **Fichier → Consolidation avant résultat** présente un journal groupé en lecture seule pour le dossier actif. L’utilisateur sélectionne une période comprise dans le cycle du dossier et, au besoin, un journal source ; les pièces validées sont regroupées par compte général avec leurs totaux débit/crédit et le solde net. Les brouillons et les pièces hors période sont exclus.
+
+- Chaque ligne agrégée expose le nombre de mouvements sources et permet de consulter leurs provenances : date, journal, référence de pièce, numéro de ligne, système/module d’origine, référence et identifiant source lorsqu’ils existent.
+- L’export CSV UTF-8 reprend les mouvements source, le compte de regroupement et les métadonnées de provenance afin de conserver une traçabilité ligne par ligne.
+- L’équilibre est contrôlé au niveau de chaque pièce source et de la sélection totale. Une pièce invalide ou non équilibrée bloque la présentation/export de totaux qui pourraient induire en erreur.
+- Cette première étape **ne calcule pas le résultat**, ne crée ni ne valide aucune écriture et ne modifie pas le grand livre. Les règles de toute consolidation après résultat ou d’éventuels traitements de clôture restent à définir séparément.
+
+Le prototype ne suppose pas encore de consolidation multi-sociétés, d’élimination intragroupe, de retraitement fiscal ou de conversion de devises : ces opérations nécessiteraient des règles et un périmètre métier explicites.
 
 ### Centralisation auxiliaire depuis les modules maison — à construire
 

@@ -10,6 +10,7 @@
   var Permissions = window.PerfectoPermissions;
   var AccountingNavigation = window.PerfectoAccountingNavigation;
   var AccountingExchange = window.PerfectoAccountingExchange;
+  var AccountingConsolidation = window.PerfectoAccountingConsolidation;
   var PayrollHR = window.PerfectoPayrollHR;
   var PayrollCentralization = window.PerfectoPayrollCentralization;
   var SalesOperations = window.PerfectoSalesOperations;
@@ -79,6 +80,7 @@
   var payrollCentralizationSession = null;
   var salesCentralizationSession = null;
   var centralizationCancellationSession = null;
+  var consolidationBeforeResultSession = null;
   var launcherUi = { filter: 'all', query: '' };
   var DEMO_ORGANIZATION_ID = 'demo-org';
   var ACCOUNTING_ROUTES = ['dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings', 'menu'];
@@ -207,6 +209,8 @@
         return { moduleId: 'accounting', actionId: 'draft.delete' };
       case 'commit-centralization-cancellation':
         return { moduleId: 'accounting', actionId: 'centralization.cancel' };
+      case 'export-accounting-consolidation-before-result':
+        return { moduleId: 'accounting', actionId: 'data.export' };
       case 'open-entry':
         return { moduleId: 'accounting', actionId: 'module.view' };
       case 'edit-draft':
@@ -439,6 +443,7 @@
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'centralize-payroll')) payrollCentralizationSession = null;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'centralize-sales')) salesCentralizationSession = null;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'cancel-centralization')) centralizationCancellationSession = null;
+    if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'consolidate-before-result')) consolidationBeforeResultSession = null;
 
     var activeMember = getActiveDemoMember();
     var orgContext = demoAccessContext('organization');
@@ -3843,6 +3848,201 @@
     return '<div class="alert info"><div><strong>Centralisation auxiliaire depuis les modules maison uniquement.</strong><br>Ce parcours sera activé lorsque les modules PERFECTO de gestion des tiers et de leurs mouvements fourniront leurs données internes. Le format pivot CSV/Excel PERFECTO-AUXILIAIRE v1 est réservé à l’interopérabilité ; aucun fichier ni logiciel tiers ne peut alimenter cette centralisation.</div></div>';
   }
 
+  function ensureConsolidationBeforeResultSession() {
+    var dossier = S.currentDossier();
+    if (!consolidationBeforeResultSession || consolidationBeforeResultSession.dossierId !== dossier.id) {
+      consolidationBeforeResultSession = {
+        dossierId: dossier.id,
+        dateStart: dossier.cycleStart,
+        dateEnd: dossier.cycleEnd,
+        journalCode: ''
+      };
+    }
+    return consolidationBeforeResultSession;
+  }
+
+  function consolidationSourceSummary(source) {
+    var details = [];
+    var moduleLabels = {
+      'payroll-hr': 'Paie & RH (module PERFECTO)',
+      'sales-stock-invoicing': 'Ventes, stock & facturation (module PERFECTO)'
+    };
+    if (source.sourceModule) details.push('module : ' + (moduleLabels[source.sourceModule] || source.sourceModule));
+    if (source.sourceRunReference) details.push('lot : ' + source.sourceRunReference);
+    if (source.sourceReference) details.push('référence source : ' + source.sourceReference);
+    if (source.sourceId) details.push('ID source : ' + source.sourceId);
+    if (source.originalReference) details.push('pièce d’origine : ' + source.originalReference);
+    return details.length ? details.join(' · ') : 'Origine PERFECTO · pièce comptable source';
+  }
+
+  function renderAccountingConsolidationPreview() {
+    var session = ensureConsolidationBeforeResultSession();
+    var dossier = S.currentDossier();
+    var result = AccountingConsolidation.consolidate(S.entries(), {
+      dateStart: session.dateStart,
+      dateEnd: session.dateEnd,
+      cycleStart: dossier.cycleStart,
+      cycleEnd: dossier.cycleEnd,
+      journalCode: session.journalCode,
+      accounts: S.accounts()
+    });
+    if (!result.ok) {
+      return '<div class="alert error"><div><strong>Consolidation impossible : les données sélectionnées ne peuvent pas être totalisées de façon sûre.</strong><ul>' +
+        result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') +
+        '</ul></div></div>';
+    }
+    if (!result.movementCount) {
+      return '<div class="empty-state"><span class="empty-state-icon">⌕</span><h3>Aucun mouvement validé pour cette sélection</h3><p>Vérifiez la période ou le journal choisi. Les brouillons sont exclus du journal groupé.</p></div>';
+    }
+
+    var balanceAlert = result.balanced
+      ? '<div class="alert success"><div><strong>Équilibre contrôlé.</strong> Le total débit est égal au total crédit pour les pièces validées sélectionnées.</div></div>'
+      : '<div class="alert warning"><div><strong>Écart de consolidation.</strong> Les totaux sélectionnés ne sont pas équilibrés ; vérifiez le périmètre et les pièces sources avant toute utilisation.</div></div>';
+    var summary = '<div class="exchange-summary-grid consolidation-summary-grid">' +
+      '<div><small>Pièces validées</small><strong>' + result.entriesCount + '</strong></div>' +
+      '<div><small>Lignes sources</small><strong>' + result.movementCount + '</strong></div>' +
+      '<div><small>Total débit</small><strong>' + esc(money(result.totalDebit)) + '</strong></div>' +
+      '<div><small>Total crédit</small><strong>' + esc(money(result.totalCredit)) + '</strong></div>' +
+      '</div>' +
+      (result.excludedDraftEntries ? '<p class="exchange-footnote">' + result.excludedDraftEntries + ' brouillon(s) exclu(s) du regroupement.</p>' : '');
+
+    var rows = result.rows.map(function (row) {
+      var provenanceRows = row.provenance.map(function (source) {
+        var sourceSystem = source.sourceSystem || 'PERFECTO · saisie comptable';
+        var pieceReference = source.reference || source.entryId || 'Pièce sans référence';
+        return '<tr>' +
+          '<td>' + esc(dateLabel(source.date)) + '</td>' +
+          '<td><strong>' + esc(source.journal || '—') + '</strong></td>' +
+          '<td><strong>' + esc(pieceReference) + '</strong>' + (source.description ? '<br><span class="small muted">' + esc(source.description) + '</span>' : '') + '</td>' +
+          '<td>Ligne ' + source.lineNumber + '</td>' +
+          '<td>' + esc(sourceSystem) + '<br><span class="small muted">' + esc(consolidationSourceSummary(source)) + '</span></td>' +
+          '<td class="text-right">' + esc(amount(source.debit)) + '</td>' +
+          '<td class="text-right">' + esc(amount(source.credit)) + '</td>' +
+          '</tr>';
+      }).join('');
+      var provenance = '<details class="consolidation-provenance"><summary>' + row.provenanceCount + ' ligne(s) source · consulter la provenance</summary>' +
+        '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Date source</th><th>Journal</th><th>Pièce source</th><th>Ligne</th><th>Origine</th><th>Débit XOF</th><th>Crédit XOF</th></tr></thead><tbody>' + provenanceRows + '</tbody></table></div></details>';
+      return '<tr>' +
+        '<td><strong>' + esc(row.account) + '</strong></td>' +
+        '<td>' + esc(row.accountLabel || 'Compte sans intitulé') + '</td>' +
+        '<td class="text-right">' + esc(amount(row.debit)) + '</td>' +
+        '<td class="text-right">' + esc(amount(row.credit)) + '</td>' +
+        '<td class="text-right">' + esc(amount(row.balance)) + '</td>' +
+        '<td>' + provenance + '</td>' +
+        '</tr>';
+    }).join('');
+    var table = '<div class="exchange-card consolidation-journal-card"><h4>Journal groupé par compte général</h4>' +
+      '<p>Chaque ligne agrégée conserve le détail de ses mouvements sources : date, journal, pièce, numéro de ligne et origine éventuelle.</p>' +
+      '<div class="exchange-table-wrap"><table class="exchange-mapping-table consolidation-journal-table"><thead><tr><th>Compte</th><th>Intitulé</th><th>Débit XOF</th><th>Crédit XOF</th><th>Solde débiteur / créditeur</th><th>Provenance des lignes</th></tr></thead><tbody>' + rows + '</tbody>' +
+      '<tfoot><tr><th colspan="2">Total du journal groupé</th><th class="text-right">' + esc(amount(result.totalDebit)) + '</th><th class="text-right">' + esc(amount(result.totalCredit)) + '</th><th colspan="2">' + (result.balanced ? 'Équilibré' : 'À contrôler') + '</th></tr></tfoot></table></div></div>';
+    var actions = '<div class="exchange-preview-footer consolidation-actions">' +
+      '<button type="button" class="btn btn-ghost" data-action="print">⎙ Imprimer</button>' +
+      '<button type="button" class="btn btn-primary" data-action="export-accounting-consolidation-before-result">↓ Exporter le détail CSV avec provenance</button>' +
+      '</div>';
+    return '<div class="exchange-preview consolidation-result">' + balanceAlert + summary + table + actions +
+      '<p class="exchange-footnote">Dossier : ' + esc(dossier.reference) + ' · période : ' + esc(dateLabel(result.dateStart)) + ' au ' + esc(dateLabel(result.dateEnd)) +
+      (result.journalCode ? ' · journal : ' + esc(result.journalCode) : ' · tous les journaux') +
+      '. Aucun brouillon ni nouvelle écriture n’est ajouté au grand livre.</p></div>';
+  }
+
+  function viewAccountingConsolidationBeforeResult() {
+    var dossier = S.currentDossier();
+    var session = ensureConsolidationBeforeResultSession();
+    var journalOptions = '<option value="">Tous les journaux</option>' + S.journals().map(function (journal) {
+      return '<option value="' + esc(journal.code) + '"' + (journal.code === session.journalCode ? ' selected' : '') + '>' + esc(journal.code + ' · ' + journal.label) + '</option>';
+    }).join('');
+    return '<div class="exchange-workspace consolidation-workspace">' +
+      '<section class="exchange-card consolidation-filter-card" aria-labelledby="consolidation-filter-heading">' +
+        '<p class="page-kicker">REGROUPEMENT COMPTABLE · LECTURE SEULE</p>' +
+        '<h4 id="consolidation-filter-heading">Journal groupé avant résultat</h4>' +
+        '<p>Synthèse des écritures validées du dossier, regroupées par compte général. La provenance de chaque ligne source reste consultable dans le journal et dans l’export détaillé.</p>' +
+        '<div class="alert info"><div><strong>Traitement non comptabilisant.</strong> Cette consolidation prépare une vue regroupée ; elle ne crée, ne modifie et ne valide aucune écriture dans le grand livre.</div></div>' +
+        '<form class="consolidation-filter-form" id="consolidation-before-result-form">' +
+          '<label class="field"><span>Date de début</span><input id="consolidation-date-start" type="date" value="' + esc(session.dateStart) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required /></label>' +
+          '<label class="field"><span>Date de fin</span><input id="consolidation-date-end" type="date" value="' + esc(session.dateEnd) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required /></label>' +
+          '<label class="field"><span>Journal source</span><select id="consolidation-journal">' + journalOptions + '</select></label>' +
+          '<button type="submit" class="btn btn-primary">Afficher le journal groupé</button>' +
+        '</form>' +
+      '</section>' +
+      '<div id="consolidation-before-result-output" aria-live="polite">' + renderAccountingConsolidationPreview() + '</div>' +
+    '</div>';
+  }
+
+  function bindAccountingConsolidationBeforeResult() {
+    var form = $('#consolidation-before-result-form');
+    if (!form) return;
+    function updatePreview() {
+      var session = ensureConsolidationBeforeResultSession();
+      session.dateStart = ($('#consolidation-date-start') || {}).value || '';
+      session.dateEnd = ($('#consolidation-date-end') || {}).value || '';
+      session.journalCode = ($('#consolidation-journal') || {}).value || '';
+      var output = $('#consolidation-before-result-output');
+      if (output) output.innerHTML = renderAccountingConsolidationPreview();
+      applyDemoActionGates(output);
+    }
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      updatePreview();
+    });
+    ['consolidation-date-start', 'consolidation-date-end', 'consolidation-journal'].forEach(function (id) {
+      var input = document.getElementById(id);
+      if (input) input.addEventListener('change', updatePreview);
+    });
+  }
+
+  function exportAccountingConsolidationBeforeResult() {
+    var session = ensureConsolidationBeforeResultSession();
+    var dossier = S.currentDossier();
+    var result = AccountingConsolidation.consolidate(S.entries(), {
+      dateStart: session.dateStart,
+      dateEnd: session.dateEnd,
+      cycleStart: dossier.cycleStart,
+      cycleEnd: dossier.cycleEnd,
+      journalCode: session.journalCode,
+      accounts: S.accounts()
+    });
+    if (!result.ok || !result.movementCount) {
+      toast(result.errors[0] || 'Aucune ligne consolidée à exporter.', 'warning');
+      return;
+    }
+    var rows = [
+      ['PERFECTO-CONSOLIDATION-AVANT-RESULTAT', '1'],
+      ['DOSSIER', dossier.reference],
+      ['EXERCICE', S.exercise()],
+      ['DATE_DEBUT', result.dateStart],
+      ['DATE_FIN', result.dateEnd],
+      ['JOURNAL_SOURCE', result.journalCode || 'TOUS'],
+      [],
+      ['CODE_COMPTE', 'INTITULE_COMPTE', 'DATE_SOURCE', 'JOURNAL_SOURCE', 'REFERENCE_PIECE_SOURCE', 'ID_PIECE_PERFECTO', 'NUMERO_LIGNE_SOURCE', 'LIBELLE_PIECE_SOURCE', 'DEBIT_XOF', 'CREDIT_XOF', 'SYSTEME_SOURCE', 'REFERENCE_SOURCE', 'ID_SOURCE', 'MODULE_SOURCE', 'LOT_SOURCE', 'REFERENCE_PIECE_ORIGINE']
+    ];
+    result.rows.forEach(function (row) {
+      row.provenance.forEach(function (source) {
+        rows.push([
+          row.account,
+          row.accountLabel,
+          source.date,
+          source.journal,
+          source.reference,
+          source.entryId,
+          source.lineNumber,
+          source.description,
+          source.debit,
+          source.credit,
+          source.sourceSystem || 'PERFECTO · saisie comptable',
+          source.sourceReference,
+          source.sourceId,
+          source.sourceModule,
+          source.sourceRunReference,
+          source.originalReference
+        ]);
+      });
+    });
+    rows.push([], ['TOTAL_JOURNAL_GROUPE', '', '', '', '', '', '', '', result.totalDebit, result.totalCredit]);
+    var fileName = 'perfecto-' + safeFilePart(dossier.reference) + '-consolidation-avant-resultat-' + result.dateStart + '-' + result.dateEnd + '.csv';
+    downloadFile(fileName, toCsv(rows), 'text/csv;charset=utf-8');
+    toast('Journal groupé exporté avec la provenance de chaque mouvement source.', 'success');
+  }
+
   function viewAccountingMenu(params) {
     params = params || {};
     var phone = isPhoneViewport();
@@ -3891,6 +4091,7 @@
         case 'centralize-payroll': exchangeFeature = viewAccountingPayrollCentralization(); break;
         case 'centralize-sales': exchangeFeature = viewAccountingSalesCentralization(); break;
         case 'cancel-centralization': exchangeFeature = viewAccountingCentralizationCancellation(); break;
+        case 'consolidate-before-result': exchangeFeature = viewAccountingConsolidationBeforeResult(); break;
         default: break;
       }
     }
@@ -3940,6 +4141,7 @@
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-payroll') bindPayrollCentralization();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-sales') bindSalesCentralization();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'cancel-centralization') bindCentralizationCancellation();
+      if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'consolidate-before-result') bindAccountingConsolidationBeforeResult();
       return;
     }
 
@@ -4378,6 +4580,9 @@
         break;
       case 'commit-centralization-cancellation':
         commitCentralizationCancellation();
+        break;
+      case 'export-accounting-consolidation-before-result':
+        exportAccountingConsolidationBeforeResult();
         break;
       case 'export-accounting-workbook': {
         var workbookDossier = S.currentDossier();

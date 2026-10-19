@@ -2386,6 +2386,60 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
 .exchange-context-confirm input { flex: 0 0 auto; margin-top: 2px; accent-color: #8d671e; }
 .exchange-preview-footer { display: flex; justify-content: flex-end; padding-top: 2px; }
 
+
+.consolidation-filter-card > h4 { margin-top: 2px; }
+.consolidation-filter-card .alert { margin: 0 0 15px; }
+.consolidation-filter-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(145px, .75fr)) minmax(220px, 1.1fr) auto;
+  align-items: end;
+  gap: 12px;
+  margin-top: 16px;
+}
+.consolidation-filter-form .field { min-width: 0; margin: 0; }
+.consolidation-filter-form .field > span { display: block; margin-bottom: 6px; color: #52665e; font-size: .66rem; font-weight: 750; }
+.consolidation-filter-form input,
+.consolidation-filter-form select { width: 100%; min-height: 39px; padding: 7px 9px; border: 1px solid #dfe7e0; border-radius: 6px; color: #33483f; background: #fff; font: inherit; font-size: .73rem; }
+.consolidation-filter-form > .btn { justify-content: center; min-height: 39px; white-space: nowrap; }
+.consolidation-summary-grid strong { font-variant-numeric: tabular-nums; }
+.consolidation-journal-card > p { margin-bottom: 13px; color: #6d7c74; font-size: .68rem; line-height: 1.55; }
+.consolidation-journal-table { min-width: 920px; }
+.consolidation-journal-table td { vertical-align: top; }
+.consolidation-journal-table td:nth-child(2) { min-width: 180px; }
+.consolidation-journal-table tfoot th { padding: 10px; border-top: 1px solid #dfe7e0; color: #314a41; background: #f5f8f5; font-size: .66rem; }
+.consolidation-provenance { min-width: 230px; }
+.consolidation-provenance > summary { padding: 7px 9px; border: 1px solid #e1e9e3; border-radius: 5px; color: #236d61; background: #f5faf6; font-size: .64rem; font-weight: 750; line-height: 1.4; cursor: pointer; }
+.consolidation-provenance[open] > summary { border-radius: 5px 5px 0 0; }
+.consolidation-provenance .exchange-table-wrap { max-width: min(920px, 58vw); border: 1px solid #e1e9e3; border-top: 0; }
+.consolidation-provenance .exchange-mapping-table { min-width: 850px; font-size: .62rem; }
+.consolidation-provenance .exchange-mapping-table th { white-space: nowrap; }
+.consolidation-provenance .exchange-mapping-table td { white-space: normal; }
+.consolidation-provenance .small { display: inline-block; max-width: 340px; overflow-wrap: anywhere; line-height: 1.45; }
+.consolidation-actions { justify-content: flex-end; gap: 9px; }
+.consolidation-result > .exchange-footnote { margin-top: 0; }
+
+@media (max-width: 850px) {
+  .consolidation-filter-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .consolidation-filter-form > .btn { grid-column: 1 / -1; }
+  .consolidation-provenance .exchange-table-wrap { max-width: 75vw; }
+}
+@media (max-width: 700px) {
+  .consolidation-filter-form { grid-template-columns: minmax(0, 1fr); }
+  .consolidation-filter-form > .btn { grid-column: auto; width: 100%; }
+  .consolidation-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .consolidation-actions { align-items: stretch; flex-direction: column; }
+  .consolidation-actions .btn { justify-content: center; }
+  .consolidation-provenance .exchange-table-wrap { max-width: calc(100vw - 64px); }
+}
+@media print {
+  .consolidation-filter-card,
+  .consolidation-actions { display: none !important; }
+  .consolidation-provenance:not([open]) > .exchange-table-wrap { display: block !important; }
+  .consolidation-provenance > summary { border: 0; padding-left: 0; color: #333; background: transparent; }
+  .consolidation-provenance .exchange-table-wrap { max-width: none; overflow: visible; }
+  .consolidation-journal-table { min-width: 0; font-size: 7pt; }
+}
+
 @media (max-width: 700px) {
   .payroll-demo-create,
   .sales-demo-create,
