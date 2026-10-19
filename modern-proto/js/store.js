@@ -28,16 +28,20 @@
     { code: 'PA', label: 'Journal de paie', type: 'Paie' }
   ];
   var RETIRED_JOURNAL_CODES = ['RAN'];
+  var JOURNAL_OPERATION_NATURES = [
+    'Opérations courantes', 'Amortissements automatiques', 'Abonnements', 'Centralisation',
+    'Résultat de l’exercice', 'Inventaire', 'Immobilisations', 'Caisse en temps réel'
+  ];
   var SYSTEM_JOURNAUX = [
-    { code: 'AMO', label: 'Journal des amortissements automatiques', type: 'Automatique', referencePrefix: 'AMO', systemKey: 'fixed-asset-depreciation', systemSource: 'PERFECTO-IMMOBILISATIONS-AMORTISSEMENT', description: 'Réservé aux opérations générées par le système d’immobilisations ; aucune saisie manuelle.' },
-    { code: 'ABO', label: 'Journal abonnements', type: 'Automatique', referencePrefix: 'ABO', systemKey: 'recurring-subscriptions', systemSource: 'PERFECTO-ABONNEMENTS', description: 'Réservé aux abonnements générés par le système ; la génération reste à construire.' },
-    { code: 'CEN', label: 'Journal des Centralisations', type: 'Automatique', referencePrefix: 'CEN', systemKey: 'internal-centralizations', systemSource: 'PERFECTO-CENTRALISATIONS-INTERNES', description: 'Réservé aux centralisations produites par les modules PERFECTO internes ; saisie et import tiers interdits.' },
-    { code: 'RPE', label: 'Journal Résultat de la période', type: 'Automatique', referencePrefix: 'RPE', systemKey: 'period-result', systemSource: 'PERFECTO-RESULTAT-PERIODE', description: 'Réservé au traitement interne du résultat de la période ; règles et génération à construire.' }
+    { code: 'AMO', label: 'Journal des amortissements automatiques', type: 'Automatique', operationNature: 'Amortissements automatiques', referencePrefix: 'AMO', systemKey: 'fixed-asset-depreciation', systemSource: 'PERFECTO-IMMOBILISATIONS-AMORTISSEMENT', description: 'Réservé aux opérations générées par le système d’immobilisations ; aucune saisie manuelle.' },
+    { code: 'ABO', label: 'Journal abonnements', type: 'Automatique', operationNature: 'Abonnements', referencePrefix: 'ABO', systemKey: 'recurring-subscriptions', systemSource: 'PERFECTO-ABONNEMENTS', description: 'Réservé aux abonnements générés par le système ; la génération reste à construire.' },
+    { code: 'CEN', label: 'Journal des Centralisations', type: 'Automatique', operationNature: 'Centralisation', referencePrefix: 'CEN', systemKey: 'internal-centralizations', systemSource: 'PERFECTO-CENTRALISATIONS-INTERNES', description: 'Réservé aux centralisations produites par les modules PERFECTO internes ; saisie et import tiers interdits.' },
+    { code: 'RPE', label: 'Journal Résultat de la période', type: 'Automatique', operationNature: 'Résultat de l’exercice', referencePrefix: 'RPE', systemKey: 'period-result', systemSource: 'PERFECTO-RESULTAT-PERIODE', description: 'Réservé au traitement interne du résultat de la période ; règles et génération à construire.' }
   ];
 
   var ACCOUNTING_CHART = global.PerfectoAccountingChart || null;
   var ACCOUNTING_CHART_VERSION = ACCOUNTING_CHART ? ACCOUNTING_CHART.VERSION : 0;
-  var JOURNAL_REGISTRY_VERSION = 2;
+  var JOURNAL_REGISTRY_VERSION = 3;
   var SUPPLIER_REGISTRY_VERSION = 2;
   var CLIENT_REGISTRY_VERSION = 1;
   var OTHER_PARTY_REGISTRY_VERSION = 1;
@@ -407,6 +411,26 @@
     return String(value == null ? '' : value).trim().toLocaleUpperCase();
   }
 
+  function normalizeStoredAuthorizedAccounts(value) {
+    if (value == null || value === '*') return '*';
+    var source = Array.isArray(value) ? value : String(value).split(',');
+    var codes = [];
+    var invalid = false;
+    source.forEach(function (item) {
+      var code = String(item == null ? '' : item).trim();
+      if (code === '*') {
+        if (source.length === 1) codes = ['*'];
+        else invalid = true;
+        return;
+      }
+      if (!/^[1-8][0-9]{1,7}$/.test(code)) { invalid = true; return; }
+      if (codes.indexOf(code) === -1) codes.push(code);
+    });
+    if (invalid || !codes.length) return [];
+    if (codes[0] === '*') return '*';
+    return codes;
+  }
+
   function standardJournalRecord(definition, existing) {
     existing = existing || {};
     var code = String(existing.code == null ? definition.code : existing.code).trim();
@@ -414,8 +438,10 @@
       code: code,
       label: String(existing.label == null || existing.label === '' ? definition.label : existing.label).trim(),
       type: String(existing.type == null || existing.type === '' ? definition.type : existing.type).trim(),
+      operationNature: JOURNAL_OPERATION_NATURES.indexOf(existing.operationNature) !== -1 ? existing.operationNature : JOURNAL_OPERATION_NATURES[0],
       id: String(existing.id || 'journal-standard-' + definition.code),
       referencePrefix: normalizeJournalPrefix(existing.referencePrefix || code),
+      authorizedAccounts: normalizeStoredAuthorizedAccounts(existing.authorizedAccounts),
       description: String(existing.description || ''),
       active: existing.active !== false,
       origin: 'standard',
@@ -431,8 +457,10 @@
       code: definition.code,
       label: definition.label,
       type: definition.type,
+      operationNature: definition.operationNature,
       id: 'journal-system-' + definition.systemKey,
       referencePrefix: definition.referencePrefix,
+      authorizedAccounts: '*',
       description: definition.description,
       active: true,
       origin: 'system',
@@ -449,8 +477,10 @@
       code: 'RAN',
       label: 'Ancien journal RAN (historique)',
       type: 'Historique retiré',
+      operationNature: '',
       id: String(existing.id || 'journal-retired-report-a-nouveau'),
       referencePrefix: normalizeJournalPrefix(existing.referencePrefix || 'RAN'),
+      authorizedAccounts: '*',
       description: 'Journal automatique retiré. Conservé uniquement pour les écritures historiques ; aucune nouvelle écriture ni modification n’est autorisée.',
       active: false,
       origin: 'retired-system',
@@ -470,8 +500,10 @@
       code: code,
       label: String(record.label == null || record.label === '' ? code : record.label).trim(),
       type: String(record.type == null || record.type === '' ? 'Divers' : record.type).trim(),
+      operationNature: JOURNAL_OPERATION_NATURES.indexOf(record.operationNature) !== -1 ? record.operationNature : 'Opérations courantes',
       id: String(record.id || migratedId),
       referencePrefix: normalizeJournalPrefix(record.referencePrefix || code),
+      authorizedAccounts: normalizeStoredAuthorizedAccounts(record.authorizedAccounts),
       description: String(record.description || ''),
       active: record.active !== false,
       origin: 'user',
@@ -1051,6 +1083,40 @@
     }).length;
   }
 
+  function accountAllowedForJournalRecord(journalRecord, accountCode) {
+    if (!journalRecord) return false;
+    var allowed = journalRecord.authorizedAccounts;
+    return allowed === '*' || (Array.isArray(allowed) && allowed.indexOf(String(accountCode == null ? '' : accountCode)) !== -1);
+  }
+
+  function journalAllowsAccount(journalCode, accountCode) {
+    return accountAllowedForJournalRecord(journal(journalCode), accountCode);
+  }
+
+  function parseAuthorizedAccounts(value) {
+    var raw = Array.isArray(value) ? value.join(',') : String(value == null ? '' : value);
+    raw = raw.trim();
+    if (raw === '*') return { ok: true, errors: [], value: '*' };
+    var errors = [];
+    if (raw.length > 1000) return { ok: false, errors: ['La liste des comptes autorisés ne peut pas dépasser 1 000 caractères.'], value: [] };
+    if (!raw) return { ok: false, errors: ['Indiquez « * » pour tous les comptes ou saisissez des numéros séparés par des virgules.'], value: [] };
+    if (raw.indexOf('*') !== -1) errors.push('Le caractère « * » doit être utilisé seul pour autoriser tous les comptes.');
+    var codes = [];
+    raw.split(',').forEach(function (part) {
+      var code = String(part || '').trim();
+      if (!code) {
+        errors.push('La liste des comptes autorisés contient un élément vide. Séparez les numéros par une virgule.');
+        return;
+      }
+      if (!/^[1-8][0-9]{1,7}$/.test(code)) {
+        errors.push('Le numéro de compte « ' + code + ' » doit contenir de 2 à 8 chiffres et commencer par une classe de 1 à 8.');
+        return;
+      }
+      if (codes.indexOf(code) === -1) codes.push(code);
+    });
+    return { ok: errors.length === 0, errors: errors, value: codes };
+  }
+
   function validateJournalInput(input, existing) {
     input = input || {};
     var errors = [];
@@ -1058,9 +1124,20 @@
     var code = normalizeJournalCode(input.code);
     var label = String(input.label == null ? '' : input.label).trim();
     var type = String(input.type == null ? '' : input.type).trim();
+    var operationNature = input.operationNature == null
+      ? (existing && existing.operationNature || JOURNAL_OPERATION_NATURES[0])
+      : String(input.operationNature).trim();
+    var authorizedInput = input.authorizedAccounts == null
+      ? (existing ? existing.authorizedAccounts : '*')
+      : input.authorizedAccounts;
+    var authorizedValidation = parseAuthorizedAccounts(authorizedInput);
     var referencePrefix = normalizeJournalPrefix(input.referencePrefix || code);
     var description = String(input.description == null ? '' : input.description).trim();
     var reservedCodes = Array.isArray(st.journalCodeHistory) ? st.journalCodeHistory.map(normalizeJournalCode) : [];
+    if (JOURNAL_OPERATION_NATURES.indexOf(operationNature) === -1) {
+      errors.push('Choisissez une nature d’opérations dans la liste proposée.');
+    }
+    if (!authorizedValidation.ok) errors = errors.concat(authorizedValidation.errors);
 
     if (!/^[A-Z0-9][A-Z0-9_-]{0,7}$/.test(code)) errors.push('Le code du journal est obligatoire (8 caractères maximum : lettres, chiffres, tiret ou souligné).');
     if (!label) errors.push('Le libellé du journal est obligatoire.');
@@ -1104,7 +1181,9 @@
         code: code,
         label: label,
         type: type,
+        operationNature: operationNature,
         referencePrefix: referencePrefix,
+        authorizedAccounts: authorizedValidation.value,
         description: description,
         active: input.active !== false
       }
@@ -2614,6 +2693,10 @@
         errors.push(label + 'le compte est obligatoire.');
         return;
       }
+      if (journalRecord && !accountAllowedForJournalRecord(journalRecord, acc)) {
+        errors.push(label + 'le compte ' + acc + ' n’est pas autorisé pour le journal « ' + journalRecord.code + ' ».');
+        return;
+      }
       if (accountRecord.active === false) {
         errors.push(label + 'le compte sélectionné est inactif.');
         return;
@@ -2710,6 +2793,12 @@
     }
     if (existingJournal && existingJournal.systemManaged && existing.sourceSystem !== existingJournal.systemSource) {
       return { ok: false, errors: ['Validation refusée : l’écriture du journal automatique ne porte pas une provenance système conforme.'] };
+    }
+    var unauthorizedLine = (existing.lines || []).find(function (line) {
+      return !accountAllowedForJournalRecord(existingJournal, line.account);
+    });
+    if (unauthorizedLine) {
+      return { ok: false, errors: ['Validation refusée : le compte ' + unauthorizedLine.account + ' n’est pas autorisé pour le journal « ' + (existingJournal ? existingJournal.code : existing.journal) + ' ».'] };
     }
 
     var st = load();
@@ -3530,6 +3619,8 @@
     account: account,
     journals: journals,
     journal: journal,
+    journalOperationNatures: function () { return JOURNAL_OPERATION_NATURES.slice(); },
+    journalAllowsAccount: journalAllowsAccount,
     nextJournalCode: nextJournalCode,
     journalEntryCount: journalEntryCount,
     createJournal: createJournal,

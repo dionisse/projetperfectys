@@ -1352,7 +1352,7 @@
     });
   }
 
-  function accountOptions(selected) {
+  function accountOptions(selected, journalCode) {
     var groups = {
       1: 'Classe 1 — Ressources durables',
       2: 'Classe 2 — Actif immobilisé',
@@ -1363,15 +1363,27 @@
       7: 'Classe 7 — Produits',
       8: 'Classe 8 — Autres charges et produits'
     };
+    var availableAccounts = postingAccounts().filter(function (account) {
+      return !journalCode || S.journalAllowsAccount(journalCode, account.code);
+    });
+    var selectedAccount = selected ? S.account(selected) : null;
+    var selectedIsAvailable = availableAccounts.some(function (account) { return String(account.code) === String(selected); });
     var html = '<option value="">— Choisir un compte —</option>';
     Object.keys(groups).forEach(function (cls) {
-      var opts = postingAccounts().filter(function (a) { return a.cls === Number(cls); }).map(function (a) {
-        var historical = a.legacy ? ' · historique' : '';
-        return '<option value="' + esc(a.code) + '"' + (a.code === selected ? ' selected' : '') + '>' +
-          esc(a.code + ' — ' + a.label + historical) + '</option>';
+      var opts = availableAccounts.filter(function (account) { return account.cls === Number(cls); }).map(function (account) {
+        var historical = account.legacy ? ' · historique' : '';
+        return '<option value="' + esc(account.code) + '"' + (String(account.code) === String(selected) ? ' selected' : '') + '>' +
+          esc(account.code + ' — ' + account.label + historical) + '</option>';
       }).join('');
       if (opts) html += '<optgroup label="' + groups[cls] + '">' + opts + '</optgroup>';
     });
+    if (journalCode && selectedAccount && !selectedIsAvailable) {
+      var selectionIssue = !S.journalAllowsAccount(journalCode, selectedAccount.code)
+        ? 'non autorisé'
+        : (selectedAccount.active === false ? 'inactif' : 'non imputable');
+      html += '<optgroup label="À corriger — compte ' + selectionIssue + '"><option value="' + esc(selectedAccount.code) + '" selected>' +
+        esc(selectedAccount.code + ' — ' + selectedAccount.label + ' · ' + selectionIssue) + '</option></optgroup>';
+    }
     return html;
   }
 
@@ -1660,6 +1672,8 @@
         '<div class="journal-tags"><span class="badge plain">' + esc(kind) + '</span><span class="badge ' + (record.active === false ? 'draft' : 'posted') + '">' + activeLabel + '</span></div>' +
         '<dl>' +
           '<dt>Préfixe des références</dt><dd>' + esc(references) + '-AAAA-001</dd>' +
+          '<dt>Nature des opérations</dt><dd>' + esc(record.operationNature || '—') + '</dd>' +
+          '<dt>Comptes autorisés</dt><dd class="journal-account-list">' + esc(record.authorizedAccounts === '*' ? 'Tous les comptes' : (Array.isArray(record.authorizedAccounts) ? record.authorizedAccounts.join(', ') : 'Tous les comptes')) + '</dd>' +
           '<dt>Pièces sur le cycle</dt><dd>' + item.count + '</dd>' +
           '<dt>Validées / brouillons</dt><dd>' + item.posted + ' / ' + item.drafts + '</dd>' +
           '<dt>Total débit</dt><dd>' + amount(item.debit) + ' XOF</dd>' +
@@ -1709,9 +1723,9 @@
     };
   }
 
-  function lineRowHtml(line) {
+  function lineRowHtml(line, journalCode) {
     return '<div class="line-row">' +
-      '<select data-field="account" aria-label="Compte de la ligne">' + accountOptions(line.account) + '</select>' +
+      '<select data-field="account" aria-label="Compte de la ligne">' + accountOptions(line.account, journalCode) + '</select>' +
       '<input type="number" data-field="debit" min="0" step="1" inputmode="numeric" value="' + esc(line.debit) + '" placeholder="0" aria-label="Montant au débit">' +
       '<input type="number" data-field="credit" min="0" step="1" inputmode="numeric" value="' + esc(line.credit) + '" placeholder="0" aria-label="Montant au crédit">' +
       '<button type="button" class="line-remove" data-action="remove-line" aria-label="Supprimer cette ligne">✕</button>' +
@@ -1739,7 +1753,7 @@
           '<input id="e-reference" name="reference" type="text" required value="' + esc(model.reference) + '" data-auto="' + (editing ? 'false' : 'true') + '" autocomplete="off">' +
           '<span class="hint">Unique, proposée automatiquement par journal.</span></div>' +
         '<div class="field"><label for="e-journal">Journal</label>' +
-          '<select id="e-journal" name="journal" required>' + journalOptions(model.journal) + '</select></div>' +
+          '<select id="e-journal" name="journal" required>' + journalOptions(model.journal) + '</select><span class="hint">Les comptes proposés sont filtrés selon les autorisations du journal.</span></div>' +
         '<div class="field"><label for="e-date">Date</label>' +
           '<input id="e-date" name="date" type="date" required value="' + esc(model.date) + '"></div>' +
         '<div class="field"><label for="e-description">Libellé</label>' +
@@ -1751,7 +1765,7 @@
         '<button type="button" class="btn btn-ghost btn-sm" data-action="add-line">＋ Ajouter une ligne</button></div>' +
 
       '<div class="lines-head" aria-hidden="true"><span>Compte</span><span>Débit (XOF)</span><span>Crédit (XOF)</span><span></span></div>' +
-      '<div class="lines-editor" id="lines-body">' + model.lines.map(lineRowHtml).join('') + '</div>' +
+      '<div class="lines-editor" id="lines-body">' + model.lines.map(function (line) { return lineRowHtml(line, model.journal); }).join('') + '</div>' +
 
       '<div class="entry-footer">' +
         '<div class="totals-inline">' +
@@ -5914,6 +5928,12 @@
         if (input) input.addEventListener('change', function () {
           syncReferenceFromContext();
           updatePeriodNotice();
+          if (id === 'e-journal') {
+            $$('#lines-body [data-field="account"]').forEach(function (select) {
+              var selectedAccount = select.value;
+              select.innerHTML = accountOptions(selectedAccount, input.value);
+            });
+          }
         });
       });
 
@@ -6444,7 +6464,7 @@
       case 'add-line': {
         var body = $('#lines-body');
         if (body) {
-          body.insertAdjacentHTML('beforeend', lineRowHtml({ account: '', debit: '', credit: '' }));
+          body.insertAdjacentHTML('beforeend', lineRowHtml({ account: '', debit: '', credit: '' }, ($('#e-journal') || {}).value || ''));
           bindNewLine(body.lastElementChild);
           updateEntryTotals();
         }
@@ -6856,6 +6876,13 @@
     var lockedCode = !!(existing && (existing.isStandard || S.journalEntryCount(existing.id) > 0));
     var codeValue = existing ? existing.code : S.nextJournalCode();
     var prefixValue = existing ? (existing.referencePrefix || existing.code) : codeValue;
+    var operationNature = existing && existing.operationNature || 'Opérations courantes';
+    var authorizedAccounts = existing && existing.authorizedAccounts != null
+      ? (existing.authorizedAccounts === '*' ? '*' : (Array.isArray(existing.authorizedAccounts) ? existing.authorizedAccounts.join(', ') : String(existing.authorizedAccounts)))
+      : '*';
+    var operationNatureOptions = S.journalOperationNatures().map(function (nature) {
+      return '<option value="' + esc(nature) + '"' + (nature === operationNature ? ' selected' : '') + '>' + esc(nature) + '</option>';
+    }).join('');
     var codeHint = existing && existing.isStandard
       ? 'Code standard conservé pour préserver les parcours existants.'
       : (lockedCode ? 'Code verrouillé car ce journal possède déjà des écritures.' : 'Code libre, unique dans le dossier (8 caractères maximum).');
@@ -6865,6 +6892,8 @@
         '<div class="field"><label for="j-code">Code du journal</label><input id="j-code" name="code" type="text" maxlength="8" pattern="[A-Za-z0-9_-]{1,8}" value="' + esc(codeValue) + '" required' + (lockedCode ? ' readonly' : '') + '><span class="hint">' + esc(codeHint) + '</span></div>' +
         '<div class="field"><label for="j-label">Libellé</label><input id="j-label" name="label" type="text" maxlength="80" placeholder="Ex. Journal des prestations" value="' + esc(existing ? existing.label : '') + '" required></div>' +
         '<div class="field"><label for="j-type">Type de journal</label><input id="j-type" name="type" type="text" list="journal-type-suggestions" maxlength="40" placeholder="Ex. Vente, Trésorerie, Divers" value="' + esc(existing ? existing.type : '') + '" required><datalist id="journal-type-suggestions"><option value="Achat"><option value="Vente"><option value="Trésorerie"><option value="Divers"><option value="Paie"><option value="Automatique"></datalist><span class="hint">Choisissez une suggestion ou saisissez votre propre type.</span></div>' +
+        '<div class="field"><label for="j-operation-nature">Nature des opérations</label><select id="j-operation-nature" name="operationNature" required>' + operationNatureOptions + '</select></div>' +
+        '<div class="field"><label for="j-authorized-accounts">Comptes autorisés</label><input id="j-authorized-accounts" name="authorizedAccounts" type="text" maxlength="1000" value="' + esc(authorizedAccounts) + '" placeholder="* ou 601100, 401100" required><span class="hint">Saisissez « * » pour tous les comptes, ou des numéros de compte de 2 à 8 chiffres (classes 1 à 8) séparés par des virgules.</span></div>' +
         '<div class="field"><label for="j-reference-prefix">Préfixe de référence</label><input id="j-reference-prefix" name="referencePrefix" type="text" maxlength="8" pattern="[A-Za-z0-9_-]{1,8}" value="' + esc(prefixValue) + '" required><span class="hint">Les références seront proposées sous la forme « PRÉFIXE-ANNÉE-001 ».</span></div>' +
         '<div class="field" style="grid-column:1 / -1"><label for="j-description">Description / utilisation</label><textarea id="j-description" name="description" rows="3" maxlength="240" placeholder="Précisez les opérations à enregistrer dans ce journal">' + esc(existing ? existing.description : '') + '</textarea></div>' +
         '<label class="journal-active-toggle"><input id="j-active" name="active" type="checkbox"' + (!existing || existing.active !== false ? ' checked' : '') + '> <span><strong>Journal actif</strong><small>Un journal inactif reste consultable, mais ne reçoit plus de nouvelles écritures.</small></span></label>' +
@@ -6895,6 +6924,8 @@
         code: $('#j-code').value,
         label: $('#j-label').value,
         type: $('#j-type').value,
+        operationNature: $('#j-operation-nature').value,
+        authorizedAccounts: $('#j-authorized-accounts').value,
         referencePrefix: $('#j-reference-prefix').value,
         description: $('#j-description').value,
         active: $('#j-active').checked

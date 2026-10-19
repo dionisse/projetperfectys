@@ -71,6 +71,16 @@ test('six journaux standards et quatre journaux automatiques sont présents dès
   assert.equal(store.journal('amo').systemSource, 'PERFECTO-IMMOBILISATIONS-AMORTISSEMENT');
   assert.equal(store.journal('cen').systemSource, 'PERFECTO-CENTRALISATIONS-INTERNES');
   assert.equal(store.journal('rpe').label, 'Journal Résultat de la période');
+  assert.deepEqual(JSON.parse(JSON.stringify(store.journalOperationNatures())), [
+    'Opérations courantes', 'Amortissements automatiques', 'Abonnements', 'Centralisation',
+    'Résultat de l’exercice', 'Inventaire', 'Immobilisations', 'Caisse en temps réel'
+  ]);
+  assert.equal(store.journal('AMO').operationNature, 'Amortissements automatiques');
+  assert.equal(store.journal('ABO').operationNature, 'Abonnements');
+  assert.equal(store.journal('CEN').operationNature, 'Centralisation');
+  assert.equal(store.journal('RPE').operationNature, 'Résultat de l’exercice');
+  assert.equal(store.journal('AC').operationNature, 'Opérations courantes');
+  assert.equal(store.journal('AC').authorizedAccounts, '*');
   assert.equal(store.nextJournalCode(), 'J01');
 });
 
@@ -88,12 +98,39 @@ test('une ancienne base à six journaux migre sans réécrire ses écritures', (
   env.values.set(env.store.STORAGE_KEY, JSON.stringify(legacy));
   const migrated = env.loadStore();
   assert.equal(migrated.journals().length, 11, 'les dix journaux intégrés et le journal utilisateur historique sont conservés');
-  assert.equal(migrated.getState().journalRegistryVersion, 2);
+  assert.equal(migrated.getState().journalRegistryVersion, 3);
   assert.equal(migrated.journal('CST').origin, 'user');
   assert.equal(migrated.journal('CST').referencePrefix, 'PC');
+  assert.equal(migrated.journal('CST').operationNature, 'Opérations courantes');
+  assert.equal(migrated.journal('CST').authorizedAccounts, '*');
+  assert.equal(migrated.journal('AC').authorizedAccounts, '*');
   assert.equal(migrated.journal('CST').active, false);
   assert.equal(JSON.stringify(migrated.entries()), entriesBefore);
   assert.ok(migrated.getState().journalCodeHistory.includes('AMO'));
+});
+
+test('migration d’un registre v2 ajoute les nouveaux paramètres avec des valeurs compatibles', () => {
+  const env = createEnvironment();
+  const custom = env.store.createJournal({
+    code: 'CST', label: 'Journal historique', type: 'Divers', referencePrefix: 'CST'
+  });
+  assert.equal(custom.ok, true, custom.errors.join(' '));
+  const legacy = JSON.parse(JSON.stringify(env.store.getState()));
+  const entriesBefore = JSON.stringify(legacy.entries);
+  legacy.journalRegistryVersion = 2;
+  legacy.journals = legacy.journals.map(record => {
+    const oldRecord = Object.assign({}, record);
+    delete oldRecord.operationNature;
+    delete oldRecord.authorizedAccounts;
+    return oldRecord;
+  });
+  env.values.set(env.store.STORAGE_KEY, JSON.stringify(legacy));
+  const migrated = env.loadStore();
+  assert.equal(migrated.getState().journalRegistryVersion, 3);
+  assert.equal(migrated.journal('CST').operationNature, 'Opérations courantes');
+  assert.equal(migrated.journal('CST').authorizedAccounts, '*');
+  assert.equal(migrated.journal('AC').authorizedAccounts, '*');
+  assert.equal(JSON.stringify(migrated.entries()), entriesBefore);
 });
 
 test('migration retire le journal RAN v1 s’il ne porte aucune écriture et réserve son code', () => {
@@ -106,7 +143,7 @@ test('migration retire le journal RAN v1 s’il ne porte aucune écriture et ré
   const migrated = env.loadStore();
   assert.equal(migrated.journal('RAN'), null);
   assert.ok(migrated.getState().journalCodeHistory.includes('RAN'));
-  assert.equal(migrated.getState().journalRegistryVersion, 2);
+  assert.equal(migrated.getState().journalRegistryVersion, 3);
   assert.equal(migrated.journal('CEN').systemManaged, true);
   assert.equal(migrated.journal('RPE').systemManaged, true);
 });
@@ -230,6 +267,75 @@ test('les quatre journaux système sont non modifiables et refusent saisie/impor
     });
     store.save();
     assert.equal(store.postEntry('manual-system-' + code).ok, false);
+  });
+});
+
+test('les natures et comptes autorisés sont normalisés, persistés et restaurés après rechargement', () => {
+  const env = createEnvironment();
+  const created = env.store.createJournal({
+    code: 'VTE', label: 'Ventes ciblées', type: 'Vente', operationNature: 'Inventaire',
+    authorizedAccounts: '601100, 401100, 601100', referencePrefix: 'VTC'
+  });
+  assert.equal(created.ok, true, created.errors.join(' '));
+  assert.equal(created.journal.operationNature, 'Inventaire');
+  assert.deepEqual(JSON.parse(JSON.stringify(created.journal.authorizedAccounts)), ['601100', '401100']);
+  const persisted = env.loadStore();
+  assert.deepEqual(JSON.parse(JSON.stringify(persisted.journal('VTE').authorizedAccounts)), ['601100', '401100']);
+  assert.equal(persisted.journalAllowsAccount('VTE', '601100'), true);
+  assert.equal(persisted.journalAllowsAccount('VTE', '401100'), true);
+  assert.equal(persisted.journalAllowsAccount('VTE', '411100'), false);
+
+  const updated = persisted.updateJournal('VTE', {
+    code: 'VTE', label: 'Ventes ciblées', type: 'Vente', operationNature: 'Caisse en temps réel',
+    authorizedAccounts: '*', referencePrefix: 'VTC', description: 'Paramètres mis à jour.', active: true
+  });
+  assert.equal(updated.ok, true, updated.errors.join(' '));
+  const reloaded = env.loadStore();
+  assert.equal(reloaded.journal('VTE').operationNature, 'Caisse en temps réel');
+  assert.equal(reloaded.journal('VTE').authorizedAccounts, '*');
+  assert.equal(reloaded.journalAllowsAccount('VTE', '411100'), true);
+});
+
+test('les comptes autorisés valident les brouillons et sont revérifiés au moment de la validation', () => {
+  const { store } = createEnvironment();
+  const created = store.createJournal({
+    code: 'LIM', label: 'Journal limité', type: 'Divers', operationNature: 'Opérations courantes',
+    authorizedAccounts: '601100', referencePrefix: 'LIM'
+  });
+  assert.equal(created.ok, true, created.errors.join(' '));
+  const denied = store.createEntry(entryPayload('LIM', 'LIM-2026-001'), 'draft');
+  assert.equal(denied.ok, false);
+  assert.match(denied.errors.join(' '), /401100 n’est pas autorisé/);
+
+  const widened = store.updateJournal('LIM', {
+    code: 'LIM', label: 'Journal limité', type: 'Divers', operationNature: 'Opérations courantes',
+    authorizedAccounts: '601100, 401100', referencePrefix: 'LIM', active: true
+  });
+  assert.equal(widened.ok, true, widened.errors.join(' '));
+  const draft = store.createEntry(entryPayload('LIM', 'LIM-2026-002'), 'draft');
+  assert.equal(draft.ok, true, draft.errors.join(' '));
+
+  const narrowed = store.updateJournal('LIM', {
+    code: 'LIM', label: 'Journal limité', type: 'Divers', operationNature: 'Opérations courantes',
+    authorizedAccounts: '601100', referencePrefix: 'LIM', active: true
+  });
+  assert.equal(narrowed.ok, true, narrowed.errors.join(' '));
+  const posted = store.postEntry(draft.entry.id);
+  assert.equal(posted.ok, false);
+  assert.match(posted.errors.join(' '), /401100 n’est pas autorisé/);
+});
+
+test('création d’un journal refuse une nature ou une liste de comptes invalide', () => {
+  const { store } = createEnvironment();
+  const input = { code: 'BAD', label: 'Journal invalide', type: 'Divers', referencePrefix: 'BAD' };
+  assert.equal(store.createJournal(Object.assign({}, input, { operationNature: 'Nature inconnue' })).ok, false);
+  ['601100,', '601100,abc', '*, 601100', ''].forEach(accounts => {
+    const result = store.createJournal(Object.assign({}, input, {
+      code: 'BAD' + (accounts ? String(accounts.length) : '0'),
+      referencePrefix: 'B' + (accounts ? String(accounts.length) : '0'),
+      authorizedAccounts: accounts
+    }));
+    assert.equal(result.ok, false, 'liste invalide acceptée : ' + accounts);
   });
 });
 
