@@ -14,6 +14,7 @@
   var PayrollCentralization = window.PerfectoPayrollCentralization;
   var SalesOperations = window.PerfectoSalesOperations;
   var SalesCentralization = window.PerfectoSalesCentralization;
+  var CentralizationCancellation = window.PerfectoCentralizationCancellation;
 
   /* ------------------------------ Utilitaires ------------------------------ */
   function esc(value) {
@@ -77,6 +78,7 @@
   var balanceImportSession = null;
   var payrollCentralizationSession = null;
   var salesCentralizationSession = null;
+  var centralizationCancellationSession = null;
   var launcherUi = { filter: 'all', query: '' };
   var DEMO_ORGANIZATION_ID = 'demo-org';
   var ACCOUNTING_ROUTES = ['dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings', 'menu'];
@@ -199,6 +201,12 @@
         return { moduleId: 'accounting', actionId: 'module.view' };
       case 'commit-accounting-sales-centralization':
         return { moduleId: 'accounting', actionId: 'data.import' };
+      case 'select-centralization-cancellation':
+        return { moduleId: 'accounting', actionId: 'module.view' };
+      case 'cancel-draft-centralization':
+        return { moduleId: 'accounting', actionId: 'draft.delete' };
+      case 'commit-centralization-cancellation':
+        return { moduleId: 'accounting', actionId: 'centralization.cancel' };
       case 'open-entry':
         return { moduleId: 'accounting', actionId: 'module.view' };
       case 'edit-draft':
@@ -430,6 +438,7 @@
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'import-balance')) balanceImportSession = null;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'centralize-payroll')) payrollCentralizationSession = null;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'centralize-sales')) salesCentralizationSession = null;
+    if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'cancel-centralization')) centralizationCancellationSession = null;
 
     var activeMember = getActiveDemoMember();
     var orgContext = demoAccessContext('organization');
@@ -462,6 +471,12 @@
       return;
     }
     if (route === 'entry') {
+      var entryBeingEdited = parsed.params.id ? S.entry(parsed.params.id) : null;
+      if (entryBeingEdited && entryBeingEdited.status === 'draft' && CentralizationCancellation.isCancellationEntry(entryBeingEdited)) {
+        toast('Un brouillon d’annulation est immuable. Supprimez-le et recommencez l’annulation si une correction est nécessaire.', 'warning');
+        navigate('#/entries');
+        return;
+      }
       var requiredEntryAction = parsed.params.id ? 'draft.edit' : 'draft.create';
       if (!hasDemoPermission(activeMember, 'accounting', requiredEntryAction, accountingAccessContext())) {
         toast('Ce profil ne possède pas le droit nécessaire pour cette saisie.', 'warning');
@@ -1701,11 +1716,19 @@
       '</tbody><tfoot><tr><td colspan="2">Totaux</td><td class="num">' + amount(t.debit) + '</td><td class="num">' + amount(t.credit) + '</td></tr></tfoot></table></div>' +
       '<div class="alert ' + (t.balanced ? 'success' : 'warning') + '" style="margin-top:16px">' +
         (t.balanced ? '✅ Pièce équilibrée.' : '⚠️ Pièce déséquilibrée (brouillon).') + '</div>';
+    var isCancellationEntry = CentralizationCancellation.isCancellationEntry(e);
+    if (isCancellationEntry) {
+      var cancellationMetadata = e.sourceMetadata || {};
+      body += '<div class="alert info" style="margin-top:16px"><div><strong>Écriture inverse liée à ' + esc(cancellationMetadata.originalReference || 'la pièce d’origine') + '.</strong>' +
+        (cancellationMetadata.cancellationReason ? '<br>Motif : ' + esc(cancellationMetadata.cancellationReason) : '') +
+        (S.entry(cancellationMetadata.originalEntryId) ? '<br><button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px" data-action="open-entry" data-id="' + esc(cancellationMetadata.originalEntryId) + '">Consulter la pièce d’origine</button>' : '') +
+        '</div></div>';
+    }
 
     var footer = '';
     if (e.status === 'draft') {
       footer += '<button type="button" class="btn btn-danger" data-action="delete-draft" data-id="' + esc(e.id) + '">× Supprimer</button>';
-      footer += '<button type="button" class="btn btn-ghost" data-action="edit-draft" data-id="' + esc(e.id) + '">✎ Modifier</button>';
+      if (!isCancellationEntry) footer += '<button type="button" class="btn btn-ghost" data-action="edit-draft" data-id="' + esc(e.id) + '">✎ Modifier</button>';
       footer += '<button type="button" class="btn btn-primary" data-action="validate-entry" data-id="' + esc(e.id) + '">✓ Valider la pièce</button>';
     }
     footer += '<button type="button" class="btn btn-ghost" data-action="close-modal">Fermer</button>';
@@ -3438,6 +3461,353 @@
     '</div>';
   }
 
+  function cancellationSourceLabel(moduleId) {
+    return moduleId === 'payroll-hr'
+      ? 'Paie & RH'
+      : (moduleId === 'sales-stock-invoicing' ? 'Ventes, stock & facturation' : 'Source interne');
+  }
+
+  function canViewCentralizationSource(entry, dossier, member) {
+    var moduleId = CentralizationCancellation.sourceModuleForEntry(entry);
+    return !!moduleId && hasDemoPermission(member || getActiveDemoMember(), moduleId, 'module.view', accountingAccessContext(dossier));
+  }
+
+  function accessibleInternalCentralizations(dossier) {
+    var member = getActiveDemoMember();
+    return sortedEntries(S.entries()).filter(function (entry) {
+      return CentralizationCancellation.isInternalCentralization(entry) &&
+        (entry.status === 'draft' || entry.status === 'posted') &&
+        canViewCentralizationSource(entry, dossier, member);
+    });
+  }
+
+  function cancellationDateIsOpen(date, dossier) {
+    if (!date || date < dossier.cycleStart || date > dossier.cycleEnd || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date)) return false;
+    return S.periodStatus(Number(date.slice(0, 4)), Number(date.slice(5, 7))) !== 'closed';
+  }
+
+  function defaultCentralizationCancellationDate(original, dossier) {
+    if (original && cancellationDateIsOpen(original.date, dossier)) return original.date;
+    var today = S.todayIso();
+    if (cancellationDateIsOpen(today, dossier)) return today;
+    var startYear = Number(dossier.cycleStart.slice(0, 4));
+    var startMonth = Number(dossier.cycleStart.slice(5, 7));
+    var endYear = Number(dossier.cycleEnd.slice(0, 4));
+    var endMonth = Number(dossier.cycleEnd.slice(5, 7));
+    var monthCount = (endYear - startYear) * 12 + endMonth - startMonth;
+    for (var offset = 0; offset <= monthCount; offset += 1) {
+      var absoluteMonth = startYear * 12 + startMonth - 1 + offset;
+      var year = Math.floor(absoluteMonth / 12);
+      var month = absoluteMonth % 12 + 1;
+      var monthStart = String(year).padStart(4, '0') + '-' + String(month).padStart(2, '0') + '-01';
+      var candidate = offset === 0 && dossier.cycleStart.slice(8, 10) > '01' ? dossier.cycleStart : monthStart;
+      if (candidate <= dossier.cycleEnd && cancellationDateIsOpen(candidate, dossier)) return candidate;
+    }
+    return '';
+  }
+
+  function createCentralizationCancellationSession(original, dossier) {
+    var journal = original && S.journal(original.journal) ? original.journal : '';
+    if (!journal) journal = (S.journals().find(function (item) { return item.code === 'OD'; }) || S.journals()[0] || {}).code || '';
+    var date = defaultCentralizationCancellationDate(original, dossier);
+    return {
+      originalEntryId: original.id,
+      targetDossierId: dossier.id,
+      targetDate: date,
+      targetJournal: journal,
+      targetReference: S.nextReference(journal, date),
+      reason: '',
+      mode: 'draft'
+    };
+  }
+
+  function viewAccountingCentralizationCancellation() {
+    var dossier = S.currentDossier();
+    var entries = accessibleInternalCentralizations(dossier);
+    var allEntries = S.entries();
+    var session = centralizationCancellationSession && centralizationCancellationSession.targetDossierId === dossier.id
+      ? centralizationCancellationSession
+      : null;
+    var selectedOriginal = session && entries.find(function (entry) { return entry.id === session.originalEntryId; }) || null;
+    if (selectedOriginal && (selectedOriginal.status !== 'posted' || CentralizationCancellation.findReversal(allEntries, selectedOriginal))) {
+      centralizationCancellationSession = null;
+      selectedOriginal = null;
+      session = null;
+    }
+
+    var rows = entries.map(function (entry) {
+      var moduleId = CentralizationCancellation.sourceModuleForEntry(entry);
+      var metadata = entry.sourceMetadata || {};
+      var reversal = CentralizationCancellation.findReversal(allEntries, entry);
+      var state = '';
+      var action = '';
+      if (reversal && reversal.status === 'posted') {
+        state = '<span class="badge posted">Annulée</span><small>Écriture inverse validée : ' + esc(reversal.reference) + ' · original conservé</small>';
+      } else if (reversal && reversal.status === 'draft') {
+        state = '<span class="badge draft">Annulation en brouillon</span><small>' + esc(reversal.reference) + ' · à valider dans les pièces comptables</small>';
+      } else if (entry.status === 'draft') {
+        state = '<span class="badge draft">Brouillon non comptabilisé</span><small>Aucun effet sur le grand livre</small>';
+        action = '<button type="button" class="btn btn-danger btn-sm" data-action="cancel-draft-centralization" data-id="' + esc(entry.id) + '">Supprimer le brouillon</button>';
+      } else {
+        state = '<span class="badge posted">Validée · non annulée</span><small>Une écriture inverse sera ajoutée ; l’originale restera intacte</small>';
+        action = '<button type="button" class="btn btn-primary btn-sm" data-action="select-centralization-cancellation" data-id="' + esc(entry.id) + '">Préparer l’annulation</button>';
+      }
+      if (reversal && reversal.sourceMetadata && reversal.sourceMetadata.cancellationReason) {
+        state += '<small>Motif : ' + esc(reversal.sourceMetadata.cancellationReason) + '</small>';
+      }
+      return '<tr' + (selectedOriginal && selectedOriginal.id === entry.id ? ' class="is-selected"' : '') + '>' +
+        '<td><strong>' + esc(entry.reference) + '</strong><br><span class="small muted">' + esc(cancellationSourceLabel(moduleId)) + ' · ' + esc(metadata.runReference || 'lot interne') + '</span></td>' +
+        '<td>' + esc(dateLabel(entry.date)) + '<br><span class="small muted">Journal ' + esc(entry.journal) + ' · ' + esc(amount(entryAmount(entry))) + ' XOF</span></td>' +
+        '<td>' + state + '</td><td>' + action + '</td></tr>';
+    }).join('');
+    var empty = entries.length
+      ? ''
+      : '<div class="empty-state"><strong>Aucune centralisation interne accessible dans ce dossier</strong><span>Seules les pièces issues de Paie & RH ou de Ventes, stock & facturation apparaissent ici. Les imports Excel/CSV et logiciels tiers sont exclus. Accordez aussi le droit de consultation du module source pour afficher ses centralisations.</span></div>';
+
+    var controls = '';
+    var preview = '';
+    if (selectedOriginal && session) {
+      var canPost = hasDemoPermission(getActiveDemoMember(), 'accounting', 'entry.validate', accountingAccessContext(dossier));
+      if (!canPost && session.mode === 'posted') session.mode = 'draft';
+      var postedOption = canPost
+        ? '<option value="posted"' + (session.mode === 'posted' ? ' selected' : '') + '>Créer et valider immédiatement l’écriture inverse</option>'
+        : '';
+      controls = '<section class="exchange-card centralization-cancellation-controls"><p class="page-kicker">ÉCRITURE INVERSE</p><h4>Annuler la pièce ' + esc(selectedOriginal.reference) + '</h4>' +
+        '<div class="alert warning"><div><strong>La pièce validée ne sera ni modifiée ni supprimée.</strong><br>L’annulation ajoutera les mêmes lignes avec débits et crédits inversés. En mode brouillon, l’effet prendra place dans le grand livre seulement après validation.</div></div>' +
+        '<div class="exchange-import-controls">' +
+          '<div class="field"><label for="centralization-cancellation-date">Date de l’écriture inverse</label><input id="centralization-cancellation-date" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(session.targetDate) + '" required><span class="hint">La date doit se trouver dans le cycle du dossier et une période ouverte. Si la période d’origine est clôturée, une date ouverte est proposée.</span></div>' +
+          '<div class="field"><label for="centralization-cancellation-journal">Journal</label><select id="centralization-cancellation-journal" required>' + journalOptions(session.targetJournal) + '</select></div>' +
+          '<div class="field"><label for="centralization-cancellation-reason">Motif de l’annulation</label><textarea id="centralization-cancellation-reason" maxlength="250" rows="2" required placeholder="Ex. erreur de compte ou lot centralisé en double">' + esc(session.reason || '') + '</textarea><span class="hint">Ce motif sera conservé dans la provenance de l’écriture inverse (250 caractères maximum).</span></div>' +
+          '<div class="field"><label for="centralization-cancellation-reference">Référence de l’écriture inverse</label><input id="centralization-cancellation-reference" type="text" maxlength="100" value="' + esc(session.targetReference) + '" required></div>' +
+          '<div class="field"><label for="centralization-cancellation-mode">Enregistrement</label><select id="centralization-cancellation-mode"><option value="draft"' + (session.mode === 'draft' ? ' selected' : '') + '>Créer un brouillon (recommandé)</option>' + postedOption + '</select><span class="hint">La validation immédiate requiert aussi le droit « Valider une écriture ».</span></div>' +
+        '</div></section>';
+      preview = '<div id="centralization-cancellation-preview" class="exchange-preview" aria-live="polite"><div class="empty-state"><strong>Vérification de l’écriture inverse</strong><span>Les montants, le dossier, la période et la provenance vont être contrôlés.</span></div></div>';
+    }
+
+    return '<div class="exchange-workspace centralization-cancellation-workspace">' +
+      '<div class="alert info"><div><strong>Annulation réservée aux centralisations PERFECTO internes.</strong><br>Le périmètre couvre les pièces de Paie & RH et de Ventes, stock & facturation dans le dossier actif. Les fichiers d’échange et logiciels tiers ne sont pas sélectionnables.</div></div>' +
+      '<section class="exchange-card"><p class="page-kicker">HISTORIQUE DES CENTRALISATIONS INTERNES</p><h4>' + entries.length + ' pièce(s) accessible(s)</h4>' + empty +
+        (entries.length ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Pièce d’origine / module source</th><th>Date et montant</th><th>État de l’annulation</th><th>Action</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '') +
+      '</section>' + controls + preview +
+      '<p class="exchange-footnote">Un brouillon non comptabilisé peut être supprimé sans toucher au lot source, puis retransféré si nécessaire. Une pièce validée est immuable : son écriture inverse est liée à l’original, protégée contre les doublons et précédée d’un point de restauration local.</p>' +
+    '</div>';
+  }
+
+  function selectCentralizationCancellation(entryId) {
+    var dossier = S.currentDossier();
+    var original = S.entry(entryId);
+    if (!original || !CentralizationCancellation.isInternalCentralization(original) || original.status !== 'posted' ||
+        !canViewCentralizationSource(original, dossier, getActiveDemoMember())) {
+      toast('Cette pièce n’est pas une centralisation interne validée accessible dans le dossier actif.', 'warning');
+      return;
+    }
+    if (CentralizationCancellation.findReversal(S.entries(), original)) {
+      toast('Une annulation existe déjà pour cette pièce ; aucun doublon ne sera créé.', 'warning');
+      render();
+      return;
+    }
+    centralizationCancellationSession = createCentralizationCancellationSession(original, dossier);
+    render();
+  }
+
+  function bindCentralizationCancellation() {
+    var session = centralizationCancellationSession;
+    var dossier = S.currentDossier();
+    if (!session || session.targetDossierId !== dossier.id) return;
+    var dateInput = $('#centralization-cancellation-date');
+    var journalInput = $('#centralization-cancellation-journal');
+    var reasonInput = $('#centralization-cancellation-reason');
+    var referenceInput = $('#centralization-cancellation-reference');
+    var modeInput = $('#centralization-cancellation-mode');
+    function syncAndPreview() {
+      if (dateInput) session.targetDate = dateInput.value;
+      if (journalInput) session.targetJournal = journalInput.value;
+      if (reasonInput) session.reason = reasonInput.value;
+      if (referenceInput) session.targetReference = referenceInput.value;
+      if (modeInput) session.mode = modeInput.value === 'posted' ? 'posted' : 'draft';
+      renderCentralizationCancellationPreview();
+    }
+    [dateInput, journalInput, reasonInput, referenceInput, modeInput].forEach(function (control) {
+      if (!control) return;
+      control.addEventListener(control === referenceInput || control === reasonInput ? 'input' : 'change', syncAndPreview);
+      if (control === referenceInput || control === reasonInput) control.addEventListener('change', syncAndPreview);
+    });
+    renderCentralizationCancellationPreview();
+  }
+
+  function renderCentralizationCancellationPreview() {
+    var host = $('#centralization-cancellation-preview');
+    var session = centralizationCancellationSession;
+    if (!host || !session) return;
+    var dossier = S.currentDossier();
+    var member = getActiveDemoMember();
+    var original = S.entry(session.originalEntryId);
+    if (!original || session.targetDossierId !== dossier.id || !CentralizationCancellation.isInternalCentralization(original) ||
+        original.status !== 'posted' || !canViewCentralizationSource(original, dossier, member)) {
+      host.innerHTML = '<div class="alert error"><strong>Pièce d’origine indisponible.</strong> Le dossier, le statut ou le droit de consultation du module source ne correspond plus.</div>';
+      return;
+    }
+    var existingReversal = CentralizationCancellation.findReversal(S.entries(), original);
+    if (existingReversal) {
+      host.innerHTML = '<div class="alert warning"><strong>Une annulation est déjà liée à ' + esc(original.reference) + '.</strong> Écriture ' + esc(existingReversal.reference) + ' · statut ' + esc(existingReversal.status === 'posted' ? 'validée' : 'brouillon') + '.</div>';
+      return;
+    }
+    var dateInput = $('#centralization-cancellation-date');
+    var journalInput = $('#centralization-cancellation-journal');
+    var reasonInput = $('#centralization-cancellation-reason');
+    var referenceInput = $('#centralization-cancellation-reference');
+    var modeInput = $('#centralization-cancellation-mode');
+    if (dateInput) session.targetDate = dateInput.value;
+    if (journalInput) session.targetJournal = journalInput.value;
+    if (reasonInput) session.reason = reasonInput.value;
+    if (referenceInput) session.targetReference = referenceInput.value;
+    if (modeInput) session.mode = modeInput.value === 'posted' ? 'posted' : 'draft';
+
+    var built = CentralizationCancellation.buildReversalEntry(original, {
+      date: session.targetDate,
+      journal: session.targetJournal,
+      reference: session.targetReference,
+      reason: session.reason
+    });
+    var analysis = built.ok
+      ? S.previewExchangeImport([built.entry], session.mode, {
+        sourceSystem: CentralizationCancellation.CANCELLATION_SOURCE,
+        accountMap: Object.create(null),
+        journalMap: Object.create(null)
+      })
+      : { ok: false, errors: built.errors, warnings: [], entries: [] };
+    session.previewEntry = built.entry;
+    session.analysis = analysis;
+    var canCancel = hasDemoPermission(member, 'accounting', 'centralization.cancel', accountingAccessContext(dossier));
+    var canPost = hasDemoPermission(member, 'accounting', 'entry.validate', accountingAccessContext(dossier));
+    var permissionBlocked = !canCancel || (session.mode === 'posted' && !canPost);
+    var canCommit = built.ok && analysis.ok && !permissionBlocked;
+    var originalRows = (original.lines || []).map(function (line, index) {
+      var reversed = built.ok ? built.entry.lines[index] : null;
+      var account = S.account(line.account);
+      return '<tr><td><strong>' + esc(line.account) + '</strong><br><span class="small muted">' + esc(account ? account.label : (line.accountLabel || '')) + '</span></td>' +
+        '<td class="numeric">' + esc(amount(line.debit)) + '</td><td class="numeric">' + esc(amount(line.credit)) + '</td>' +
+        '<td class="numeric">' + (reversed ? esc(amount(reversed.debit)) : '—') + '</td><td class="numeric">' + (reversed ? esc(amount(reversed.credit)) : '—') + '</td></tr>';
+    }).join('');
+    var totals = built.ok ? S.totals(built.entry.lines) : { debit: 0, credit: 0, balanced: false };
+    var summary = '<div class="exchange-summary-grid">' +
+      '<div><small>Pièce d’origine</small><strong>' + esc(original.reference) + ' · validée</strong></div>' +
+      '<div><small>Source maison</small><strong>' + esc(cancellationSourceLabel(CentralizationCancellation.sourceModuleForEntry(original))) + '</strong></div>' +
+      '<div><small>Date source → annulation</small><strong>' + esc(dateLabel(original.date)) + ' → ' + esc(dateLabel(session.targetDate)) + '</strong></div>' +
+      '<div><small>Journal inverse</small><strong>' + esc(session.targetJournal || '—') + ' · ' + esc(session.targetReference || '—') + '</strong></div>' +
+      '</div>';
+    var table = '<section class="exchange-card"><p class="page-kicker">COMPARAISON DES MOUVEMENTS</p><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Compte</th><th class="numeric">Origine débit</th><th class="numeric">Origine crédit</th><th class="numeric">Annulation débit</th><th class="numeric">Annulation crédit</th></tr></thead><tbody>' + originalRows +
+      '</tbody><tfoot><tr><td>Totaux</td><td class="numeric">' + esc(amount(S.totals(original.lines).debit)) + '</td><td class="numeric">' + esc(amount(S.totals(original.lines).credit)) + '</td><td class="numeric">' + esc(amount(totals.debit)) + '</td><td class="numeric">' + esc(amount(totals.credit)) + '</td></tr></tfoot></table></div></section>';
+    var warnings = (analysis.warnings || []).length
+      ? '<div class="alert warning"><div><strong>À vérifier</strong><ul>' + analysis.warnings.map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('') + '</ul></div></div>'
+      : '';
+    var errorsList = built.ok ? (analysis.errors || []) : built.errors;
+    var errors = errorsList.length
+      ? '<div class="alert error"><div><strong>' + errorsList.length + ' contrôle(s) bloquant(s)</strong><ul>' + errorsList.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div></div>'
+      : '<div class="alert success"><div><strong>Écriture inverse équilibrée.</strong><br>' + esc(amount(totals.debit)) + ' XOF au débit comme au crédit · la provenance de l’original sera conservée.</div></div>';
+    var permissionNote = permissionBlocked
+      ? '<div class="alert warning">' + (!canCancel ? 'Le droit « Annuler une centralisation interne » est requis.' : 'Le droit « Valider une écriture » est requis pour comptabiliser immédiatement l’écriture inverse.') + '</div>'
+      : '';
+    var buttonLabel = session.mode === 'posted' ? 'Annuler et comptabiliser' : 'Créer le brouillon d’annulation';
+    var button = '<button type="button" class="btn btn-primary" data-action="commit-centralization-cancellation"' + (canCommit ? '' : ' disabled') + '>' + buttonLabel + '</button>';
+    host.innerHTML = summary + table + warnings + errors + permissionNote +
+      '<div class="exchange-preview-footer">' + button + '</div>';
+    applyDemoActionGates(host);
+  }
+
+  function commitCentralizationCancellation() {
+    var session = centralizationCancellationSession;
+    var dossier = S.currentDossier();
+    var member = getActiveDemoMember();
+    if (!session || session.targetDossierId !== dossier.id) {
+      toast('Sélectionnez une centralisation interne validée dans le dossier actif.', 'error');
+      return;
+    }
+    var original = S.entry(session.originalEntryId);
+    if (!original || !CentralizationCancellation.isInternalCentralization(original) || original.status !== 'posted' ||
+        !canViewCentralizationSource(original, dossier, member)) {
+      toast('Annulation refusée : la pièce n’est pas une centralisation interne validée accessible.', 'warning');
+      render();
+      return;
+    }
+    if (CentralizationCancellation.findReversal(S.entries(), original)) {
+      toast('Annulation refusée : une écriture inverse est déjà liée à cette pièce.', 'warning');
+      render();
+      return;
+    }
+    var mode = ($('#centralization-cancellation-mode') || {}).value === 'posted' ? 'posted' : 'draft';
+    if (!hasDemoPermission(member, 'accounting', 'centralization.cancel', accountingAccessContext(dossier)) ||
+        (mode === 'posted' && !hasDemoPermission(member, 'accounting', 'entry.validate', accountingAccessContext(dossier)))) {
+      toast('Annulation refusée : les droits d’annulation et, le cas échéant, de validation sont requis.', 'warning');
+      renderCentralizationCancellationPreview();
+      return;
+    }
+    session.targetDate = ($('#centralization-cancellation-date') || {}).value || '';
+    session.targetJournal = ($('#centralization-cancellation-journal') || {}).value || '';
+    session.targetReference = ($('#centralization-cancellation-reference') || {}).value || '';
+    session.reason = ($('#centralization-cancellation-reason') || {}).value || '';
+    session.mode = mode;
+    var built = CentralizationCancellation.buildReversalEntry(original, {
+      date: session.targetDate,
+      journal: session.targetJournal,
+      reference: session.targetReference,
+      reason: session.reason
+    });
+    if (!built.ok) {
+      renderCentralizationCancellationPreview();
+      toast(built.errors[0] || 'Écriture inverse invalide.', 'error');
+      return;
+    }
+    var options = {
+      sourceSystem: CentralizationCancellation.CANCELLATION_SOURCE,
+      accountMap: Object.create(null),
+      journalMap: Object.create(null)
+    };
+    var analysis = S.previewExchangeImport([built.entry], mode, options);
+    session.analysis = analysis;
+    session.previewEntry = built.entry;
+    if (!analysis.ok) {
+      renderCentralizationCancellationPreview();
+      toast(analysis.errors[0] || 'Les contrôles comptables bloquent cette annulation.', 'warning');
+      return;
+    }
+    var statusLabel = mode === 'posted' ? 'validée immédiatement' : 'créée en brouillon';
+    if (!window.confirm('Annuler la centralisation « ' + original.reference + ' » en ajoutant l’écriture inverse « ' + session.targetReference + ' », ' + statusLabel + ' dans le journal ' + session.targetJournal + ' au ' + session.targetDate + ' ? La pièce d’origine reste intacte et un point de restauration local sera créé.')) return;
+    var result = S.importExchange([built.entry], mode, options);
+    if (!result.ok) {
+      toast(result.errors[0] || 'Écriture inverse impossible à enregistrer.', 'error');
+      renderCentralizationCancellationPreview();
+      return;
+    }
+    centralizationCancellationSession = null;
+    toast(mode === 'posted'
+      ? 'Écriture inverse comptabilisée ; la pièce d’origine reste intacte.'
+      : 'Brouillon d’annulation créé ; validez-le dans les pièces comptables pour prendre effet.', 'success');
+    render();
+  }
+
+  function cancelDraftCentralization(entryId) {
+    var dossier = S.currentDossier();
+    var entry = S.entry(entryId);
+    if (!entry || !CentralizationCancellation.isInternalCentralization(entry) || entry.status !== 'draft' ||
+        !canViewCentralizationSource(entry, dossier, getActiveDemoMember())) {
+      toast('Suppression refusée : le brouillon n’est pas une centralisation interne accessible.', 'warning');
+      return;
+    }
+    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'draft.delete', accountingAccessContext(dossier))) {
+      toast('Le droit « Supprimer un brouillon » est requis.', 'warning');
+      return;
+    }
+    if (!window.confirm('Supprimer le brouillon de centralisation « ' + entry.reference + ' » ? Il n’a aucun effet sur le grand livre. Le lot interne source restera intact et pourra être retransféré. Un point de restauration local sera conservé.')) return;
+    var result = S.deleteDraft(entry.id);
+    if (!result.ok) {
+      toast(result.errors[0] || 'Suppression du brouillon impossible.', 'error');
+      return;
+    }
+    toast('Brouillon supprimé ; le lot interne source n’a pas été modifié.', 'success');
+    render();
+  }
+
   function createDemoSalesRun() {
     var dossier = S.currentDossier();
     if (!hasDemoPermission(getActiveDemoMember(), 'sales-stock-invoicing', 'record.create', salesAccessContext(dossier))) {
@@ -3511,17 +3881,19 @@
     var details = tab.reason
       ? '<p class="menu-item-reason">' + esc(tab.reason) + '</p>'
       : '';
-    var exchangeFeature = group.id === 'fichier' && tab.id === 'export-other'
-      ? viewAccountingExchangeExport()
-      : (group.id === 'fichier' && tab.id === 'import-other'
-        ? viewAccountingExchangeImport()
-        : (group.id === 'fichier' && tab.id === 'import-balance'
-          ? viewAccountingBalanceImport()
-          : (group.id === 'fichier' && tab.id === 'centralize-auxiliary'
-            ? viewInternalAuxiliaryCentralization()
-            : (group.id === 'fichier' && tab.id === 'centralize-payroll'
-              ? viewAccountingPayrollCentralization()
-              : (group.id === 'fichier' && tab.id === 'centralize-sales' ? viewAccountingSalesCentralization() : '')))));
+    var exchangeFeature = '';
+    if (group.id === 'fichier') {
+      switch (tab.id) {
+        case 'export-other': exchangeFeature = viewAccountingExchangeExport(); break;
+        case 'import-other': exchangeFeature = viewAccountingExchangeImport(); break;
+        case 'import-balance': exchangeFeature = viewAccountingBalanceImport(); break;
+        case 'centralize-auxiliary': exchangeFeature = viewInternalAuxiliaryCentralization(); break;
+        case 'centralize-payroll': exchangeFeature = viewAccountingPayrollCentralization(); break;
+        case 'centralize-sales': exchangeFeature = viewAccountingSalesCentralization(); break;
+        case 'cancel-centralization': exchangeFeature = viewAccountingCentralizationCancellation(); break;
+        default: break;
+      }
+    }
     var emptyActionNote = !actions && !childList && !exchangeFeature
       ? '<p class="menu-disabled-note">Aucune action n’est disponible pour cet élément.</p>'
       : '';
@@ -3567,6 +3939,7 @@
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-balance') bindAccountingBalanceImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-payroll') bindPayrollCentralization();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-sales') bindSalesCentralization();
+      if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'cancel-centralization') bindCentralizationCancellation();
       return;
     }
 
@@ -3996,6 +4369,15 @@
         break;
       case 'commit-accounting-sales-centralization':
         commitAccountingSalesCentralization();
+        break;
+      case 'select-centralization-cancellation':
+        selectCentralizationCancellation(id);
+        break;
+      case 'cancel-draft-centralization':
+        cancelDraftCentralization(id);
+        break;
+      case 'commit-centralization-cancellation':
+        commitCentralizationCancellation();
         break;
       case 'export-accounting-workbook': {
         var workbookDossier = S.currentDossier();

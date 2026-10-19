@@ -15,6 +15,7 @@ Ce document suit les décisions et les prochaines étapes du prototype natif. Le
 - La centralisation des salaires lit exclusivement un lot approuvé du module maison Paie & RH ; elle n’accepte aucun fichier ni logiciel tiers.
 - Ventes, stock & facturation : registre local partiel de lots d’exemples internes, approbation et lien de centralisation vers la Comptabilité. Les factures réelles, la fiscalité, les règlements et la valorisation des stocks restent à construire.
 - La centralisation des opérations commerciales consomme exclusivement un lot approuvé de Ventes, stock & facturation ; aucun fichier ni logiciel tiers ne l’alimente. Les lots de démonstration n’effectuent aucun calcul fiscal ou de valorisation.
+- Annulation des centralisations internes Paie & RH et Ventes : les brouillons sans effet peuvent être supprimés (avec restauration locale) ; les pièces validées restent immuables et sont annulées par une écriture inverse liée à l’original. Les imports de fichiers et logiciels tiers sont exclus ; une seule annulation est permise par pièce.
 - La centralisation auxiliaire est à construire depuis les futurs modules PERFECTO de gestion des tiers et mouvements ; le parcours utilisateur reste désactivé jusqu’à leur intégration.
 - Les profils natifs Sage Comptabilité, PERFECTO historique, HYPERSOFT et ODOO ne sont pas encore implémentés ; ils nécessitent des exemples anonymisés et une validation par version.
 - Connexion, profils, grants et dossiers ne sont pas encore reliés à une identité réelle ou à Google Drive.
@@ -34,6 +35,8 @@ Ce document suit les décisions et les prochaines étapes du prototype natif. Le
 - La centralisation auxiliaire depuis les modules maison n’est pas encore active : elle dépend des futurs registres internes de tiers et mouvements. Le pivot `PERFECTO-AUXILIAIRE` v1 est un modèle d’interopérabilité et ne peut pas alimenter une centralisation.
 - La centralisation des salaires part de lots approuvés dans Paie & RH, les transforme en une pièce générale au journal `PA` par défaut, ajoute en brouillon, conserve la provenance et bloque les doublons. Le jeu de paie démo n’effectue aucun calcul légal.
 - La centralisation commerciale part de lots approuvés produits par le module maison Ventes, stock & facturation, ajoute une pièce générale au journal `VE` par défaut et bloque les doublons ; aucun fichier tiers ne peut l’alimenter. Le lot démo ne calcule ni fiscalité ni valorisation de stock.
+- L’annulation sélectionne uniquement les pièces centralisées par les modules maison Paie & RH et Ventes, stock & facturation. Un brouillon est supprimé sans toucher au lot source ; une pièce validée exige une écriture inverse équilibrée et traçable, avec motif obligatoire, sans modification/suppression de l’original. Le brouillon inverse préparé est immuable ; une correction passe par sa suppression puis une nouvelle préparation. La période cible doit être ouverte dans le cycle ; une annulation unique est liée à chaque pièce d’origine.
+- L’action `centralization.cancel` est distincte de l’import de données et de la validation d’écriture ; le traitement en brouillon est recommandé, et la validation immédiate requiert séparément `entry.validate`.
 - Comptabilité générale et comptabilité analytique sont deux modules séparés et interopérables ; l’analytique exploite les données issues de la comptabilité générale sans y intégrer ses propres définitions analytiques.
 - Sur téléphone, seul le parcours de consultation des Éditions est prévu ; l’application de saisie est destinée à l’ordinateur ou à la tablette.
 - Les fonctions analytiques, dépendantes de modules futurs ou à confirmer restent inactives jusqu’à une décision explicite ; les fonctions générales non encore réalisées sont étiquetées « À construire ».
@@ -50,6 +53,7 @@ Les identifiants ci-dessous sont reliés aux parcours actuels, mais leurs libell
 | `draft.create` | Créer un brouillon ou une écriture |
 | `draft.edit` / `draft.delete` | Modifier ou supprimer un brouillon uniquement |
 | `entry.validate` | Valider définitivement une pièce équilibrée |
+| `centralization.cancel` | Préparer l’écriture inverse d’une centralisation interne ; validation immédiate toujours séparée |
 | `accounts.create` | Ajouter un compte au plan comptable du dossier actif |
 | `period.close` / `period.reopen` | Clôturer ou rouvrir une période du dossier actif |
 | `data.import` / `data.export` | Importer ou exporter les données du dossier actif ; l’export couvre aussi certains états et impressions |

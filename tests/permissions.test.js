@@ -133,6 +133,7 @@ test('les actions disponibles sont décrites par module', () => {
   assert(actions.includes('module.view'));
   assert(actions.includes('draft.create'));
   assert(actions.includes('entry.validate'));
+  assert(actions.includes('centralization.cancel'));
   assert(actions.includes('draft.delete'));
   assert(actions.includes('accounts.create'));
   assert(actions.includes('period.close'));
@@ -185,6 +186,14 @@ test('les actions sensibles restent indépendantes les unes des autres', () => {
   assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'data.import', context), true);
   assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'data.reset', context), false);
   assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'data.restore', context), false);
+  const cancellationManager = {
+    role: 'manager', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view', 'centralization.cancel'] }] }
+  };
+  const cancellationContext = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  assert.strictEqual(Permissions.hasPermission(cancellationManager, 'accounting', 'centralization.cancel', cancellationContext), true);
+  assert.strictEqual(Permissions.hasPermission(cancellationManager, 'accounting', 'entry.validate', cancellationContext), false, 'le droit d’annulation n’accorde pas implicitement la validation');
+  assert.strictEqual(Permissions.hasPermission(cancellationManager, 'accounting', 'centralization.cancel', { ...cancellationContext, dossierId: 'dossier-2' }), false, 'le droit reste limité au dossier accordé');
 });
 
 console.log('Politique d’accès : 9 scénarios réussis.');

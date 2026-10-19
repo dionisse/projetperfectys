@@ -178,6 +178,22 @@ test('validation d’un brouillon puis immuabilité', () => {
   assert.strictEqual(S.deleteDraft(draft.entry.id).ok, false);
 });
 
+test('une suppression de brouillon échoue sans l’effacer si le stockage est plein', () => {
+  const draft = S.createEntry({
+    reference: 'OD-2026-108', journal: 'OD', date: '2026-06-06', description: 'Suppression protégée',
+    lines: [
+      { account: '622100', debit: 2500, credit: 0 },
+      { account: '401100', debit: 0, credit: 2500 }
+    ]
+  }, 'draft');
+  assert.strictEqual(draft.ok, true, draft.errors.join(' '));
+  storageWritesBlocked = true;
+  const removed = S.deleteDraft(draft.entry.id);
+  storageWritesBlocked = false;
+  assert.strictEqual(removed.ok, false);
+  assert.ok(S.entry(draft.entry.id), 'le brouillon reste présent en mémoire si l’enregistrement échoue');
+});
+
 test('brouillons exclus de la balance', () => {
   const draftTotal = S.entries()
     .filter((e) => e.status === 'draft')

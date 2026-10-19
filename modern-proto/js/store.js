@@ -631,6 +631,9 @@
     var existing = entry(id);
     if (!existing) return { ok: false, errors: ['Pièce introuvable.'] };
     if (existing.status !== 'draft') return { ok: false, errors: ['Une pièce validée ne peut plus être modifiée.'] };
+    if (existing.sourceSystem === 'PERFECTO-ANNULATION-CENTRALISATION' && existing.sourceMetadata && existing.sourceMetadata.operation === 'centralization-reversal') {
+      return { ok: false, errors: ['Une écriture inverse est immuable après sa préparation. Supprimez ce brouillon et recommencez l’annulation si une correction est nécessaire.'] };
+    }
     payload.id = id;
     var result = validateEntry(payload, { requireBalanced: false, status: 'draft' });
     if (!result.ok) return result;
@@ -670,8 +673,15 @@
     if (!existing) return { ok: false, errors: ['Pièce introuvable.'] };
     if (existing.status !== 'draft') return { ok: false, errors: ['Seuls les brouillons peuvent être supprimés.'] };
     var st = load();
+    var previousState = clone(st);
+    if (!writeBackupSnapshot(previousState)) {
+      return { ok: false, errors: ['Suppression impossible : le point de restauration local n’a pas pu être créé. Le brouillon est conservé.'] };
+    }
     st.entries = st.entries.filter(function (e) { return e.id !== id; });
-    save();
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Suppression impossible : stockage local indisponible ou plein. Le brouillon est conservé.'] };
+    }
     return { ok: true, errors: [] };
   }
 

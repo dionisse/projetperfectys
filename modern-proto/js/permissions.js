@@ -13,6 +13,7 @@
     { id: 'draft.edit', label: 'Modifier un brouillon' },
     { id: 'draft.delete', label: 'Supprimer un brouillon' },
     { id: 'entry.validate', label: 'Valider une écriture' },
+    { id: 'centralization.cancel', label: 'Annuler une centralisation interne' },
     { id: 'accounts.create', label: 'Créer un compte comptable' },
     { id: 'period.close', label: 'Clôturer une période' },
     { id: 'period.reopen', label: 'Rouvrir une période' },

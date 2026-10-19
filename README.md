@@ -30,6 +30,7 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 | Launcher | Catalogue modulaire, recherche et filtres ; Comptabilité générale disponible, Paie & RH et Ventes/Stock/Facturation partiels, autres modules à venir selon les droits du profil simulé |
 | Paie & RH (étape partielle) | Registre local de lots internes, approbation et lien vers la centralisation ; les calculs de paie et fonctions RH complètes restent à construire |
 | Ventes, stock & facturation (étape partielle) | Lots locaux de ventes et d’approvisionnement, approbation et centralisation interne ; facturation, fiscalité et valorisation de stock réelles à construire |
+| Annulation d’une centralisation | Brouillon interne supprimable sans effet comptable ; pièce validée annulée par écriture inverse traçable, sans toucher à l’originale. Paie & RH et Ventes/Stock/Facturation uniquement ; imports et logiciels tiers exclus |
 | Organisation & accès (démo) | Profils temporaires et droits explicites par personne, module, entreprise cliente, dossier et action ; refus par défaut |
 | Dossiers clients | Liste multi-dossiers ouverte depuis le module Comptabilité ; création d’entreprise, code, type comptable, référence et cycle paramétrable |
 | Tableau de bord | Indicateurs (débit, crédit, résultat, pièces), dernières pièces, activité par journal, état des périodes |
@@ -83,6 +84,18 @@ Le module **Ventes, stock & facturation** conserve localement, par dossier clien
 - Les comptes source sont associés à des comptes existants du plan actif ; les mouvements sont agrégés par compte cible dans une pièce générale unique, au journal `VE` par défaut.
 - Le brouillon est le mode par défaut ; la date, le journal, la référence, les permissions, l’équilibre, le point de restauration local et l’anti-doublon sont contrôlés.
 - Le jeu d’exemple est fictif : **aucune facture réelle, TVA, marge, coût de revient, valorisation du stock ou règle fiscale n’est calculé**. Le cycle complet des clients, articles, tarifs, règlements, inventaires et retours reste à construire.
+
+### Annulation d’une centralisation — première étape
+
+Le sous-menu **Fichier → Annulation d’une centralisation** ne sélectionne que les écritures reliées aux flux internes PERFECTO de **Paie & RH** et de **Ventes, stock & facturation**. Une pièce issue d’Excel/CSV ou d’un logiciel tiers (Sage, PERFECTO historique, HYPERSOFT, ODOO, etc.) n’est pas éligible.
+
+- Un brouillon de centralisation n’ayant pas d’effet sur le grand livre peut être supprimé avec le droit `draft.delete`. Le lot interne source reste intact et peut être retransféré ; la suppression conserve un point de restauration local.
+- Une centralisation déjà validée n’est jamais modifiée ni supprimée. Son annulation crée une nouvelle pièce dont chaque débit/crédit est inversé, liée explicitement à la pièce d’origine et à son lot source ; le motif de l’annulation est obligatoire et conservé dans la provenance.
+- Le droit dédié `centralization.cancel` est requis pour préparer l’écriture inverse. La validation immédiate requiert également `entry.validate` ; sinon, l’écriture inverse est créée en brouillon et prend effet seulement après validation dans les pièces comptables.
+- La date de l’écriture inverse doit rester dans le cycle du dossier et une période ouverte. Si la période d’origine est clôturée, une date ouverte du cycle est proposée. Les références, comptes, équilibre, doublons et périodes sont contrôlés ; un point de restauration local précède l’ajout.
+- Une seule écriture inverse est autorisée par pièce d’origine. Le brouillon inverse préparé est immuable ; s’il doit être corrigé avant validation, supprimez-le et recommencez avec un nouveau motif. Une annulation déjà préparée bloque une seconde tentative ; la pièce d’origine demeure visible et inchangée.
+
+Cette étape est un prototype local de navigateur, pas un journal d’audit multi-utilisateur de production. Les annulations concurrentes, l’identité réelle du valideur et l’audit serveur devront être conçus avec le stockage partagé de l’organisation.
 
 En-tête stable de la feuille `Ecritures` et du CSV : `FORMAT;VERSION;SYSTEME_SOURCE;REFERENCE_DOSSIER;EXERCICE;CODE_JOURNAL;LIBELLE_JOURNAL;DATE;REFERENCE_PIECE;LIBELLE_PIECE;CODE_COMPTE;LIBELLE_COMPTE;CLASSE_COMPTE;NATURE_COMPTE;DEBIT_XOF;CREDIT_XOF;STATUT_SOURCE;ID_SOURCE`. Les colonnes peuvent être réordonnées, mais pas supprimées ni renommées dans cette version. Les montants sont des entiers sans séparateurs ; `ID_SOURCE` est répété sur chaque ligne de la même pièce.
 
@@ -170,6 +183,7 @@ modern-proto/js/store.js       dossiers clients, cycles, données isolées, règ
 modern-proto/js/modules.js     catalogue déclaratif des modules du launcher
 modern-proto/js/permissions.js politique d’accès démo (refus par défaut)
 modern-proto/js/accounting-navigation.js  menus, sous-menus et états d’activation du Lot 1
+modern-proto/js/centralization-cancellation.js  contrôle des sources internes et construction d’écritures inverses
 modern-proto/js/app.js         routeur, vues multi-dossiers, formulaires et interactions comptables
 BACKLOG.md                     décisions confirmées et étapes prévues
 modern-proto/manifest.webmanifest  métadonnées PWA
@@ -188,9 +202,10 @@ node tests/workspaces.test.js
 node tests/modules.test.js
 node tests/permissions.test.js
 node tests/accounting-navigation.test.js
+node tests/centralization-cancellation.test.js
 ```
 
-Les tests couvrent les règles comptables, la migration, les références, les cycles et l’isolation des dossiers clients, le catalogue modulaire, la politique d’accès de démonstration (refus par défaut, organisation, actions et portée par identifiant de dossier) ainsi que la hiérarchie et les états du menu comptable. La CI GitHub Actions exécute ces scénarios ainsi qu’un contrôle de syntaxe et un test de service HTTP.
+Les tests couvrent les règles comptables, la migration, les références, les cycles et l’isolation des dossiers clients, le catalogue modulaire, la politique d’accès de démonstration (refus par défaut, organisation, actions et portée par identifiant de dossier), la hiérarchie du menu et l’annulation des centralisations internes (provenance, écriture inverse, immuabilité, anti-doublon et brouillons). La CI GitHub Actions exécute ces scénarios ainsi qu’un contrôle de syntaxe et un test de service HTTP.
 
 ## Limites de cette prévisualisation
 
