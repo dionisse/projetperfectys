@@ -63,11 +63,17 @@ console.log('Référentiel des journaux');
 test('huit journaux standards et deux journaux automatiques sont présents dès la création du dossier', () => {
   const { store } = createEnvironment();
   assert.equal(store.journals().length, 10);
-  assert.deepEqual(JSON.parse(JSON.stringify(store.journals().filter(record => record.isStandard).map(record => record.code))), ['AC', 'VE', 'BQ', 'CA', 'OD', 'PA', 'ABO', 'CEN']);
+  assert.deepEqual(JSON.parse(JSON.stringify(store.journals().filter(record => record.isStandard).map(record => record.code))), ['ACH', 'VTE', 'BQ', 'CA', 'OD', 'PA', 'ABO', 'CEN']);
   assert.deepEqual(JSON.parse(JSON.stringify(store.journals().filter(record => record.systemManaged).map(record => record.code))), ['AMO', 'RPE']);
   assert.equal(store.journal('RAN'), null);
   assert.ok(store.getState().journalCodeHistory.includes('RAN'), 'le code retiré reste réservé');
+  assert.ok(store.getState().journalCodeHistory.includes('AC'), 'l’ancien code de journal reste réservé');
+  assert.ok(store.getState().journalCodeHistory.includes('VE'), 'l’ancien code de journal reste réservé');
+  assert.equal(store.journal('AC'), null, 'un nouveau dossier n’expose pas l’ancien code Achats');
+  assert.equal(store.journal('VE'), null, 'un nouveau dossier n’expose pas l’ancien code Ventes');
   assert.equal(store.createJournal({ code: 'RAN', label: 'Tentative de retour', type: 'Divers', referencePrefix: 'RAN2' }).ok, false);
+  assert.equal(store.createJournal({ code: 'AC', label: 'Tentative de retour', type: 'Divers', referencePrefix: 'ACX' }).ok, false);
+  assert.equal(store.createJournal({ code: 'VE', label: 'Tentative de retour', type: 'Divers', referencePrefix: 'VEX' }).ok, false);
   assert.equal(store.journal('amo').systemSource, 'PERFECTO-IMMOBILISATIONS-AMORTISSEMENT');
   assert.equal(store.journal('ABO').systemSource, '');
   assert.equal(store.journal('CEN').systemSource, '');
@@ -75,7 +81,11 @@ test('huit journaux standards et deux journaux automatiques sont présents dès 
   assert.equal(store.journal('CEN').type, 'Centralisation');
   assert.equal(store.journal('ABO').description.includes('aucune écriture n’est générée automatiquement'), true);
   assert.equal(store.journal('CEN').description.includes('tableaux de passage'), true);
-  assert.equal(store.journal('rpe').label, 'Journal Résultat de la période');
+  assert.deepEqual(JSON.parse(JSON.stringify(store.journals().map(record => record.label))), [
+    'Achats', 'Ventes', 'Banques', 'Caisse', 'Opérations diverses', 'Paie', 'Abonnements', 'Centralisations',
+    'Amortissements automatiques', 'Résultat de la période'
+  ]);
+  assert.equal(store.journal('rpe').label, 'Résultat de la période');
   assert.deepEqual(JSON.parse(JSON.stringify(store.journalOperationNatures())), [
     'Opérations courantes', 'Amortissements automatiques', 'Abonnements', 'Centralisation',
     'Résultat de l’exercice', 'Inventaire', 'Immobilisations', 'Caisse en temps réel'
@@ -84,16 +94,34 @@ test('huit journaux standards et deux journaux automatiques sont présents dès 
   assert.equal(store.journal('ABO').operationNature, 'Abonnements');
   assert.equal(store.journal('CEN').operationNature, 'Centralisation');
   assert.equal(store.journal('RPE').operationNature, 'Résultat de l’exercice');
-  assert.equal(store.journal('AC').operationNature, 'Opérations courantes');
-  assert.equal(store.journal('AC').authorizedAccounts, '*');
+  assert.equal(store.journal('ACH').operationNature, 'Opérations courantes');
+  assert.equal(store.journal('ACH').authorizedAccounts, '*');
   assert.equal(store.nextJournalCode(), 'J01');
 });
 
 test('une ancienne base à six journaux migre sans réécrire ses écritures', () => {
   const env = createEnvironment();
   const legacy = JSON.parse(JSON.stringify(env.store.getState()));
+  legacy.entries = legacy.entries.map(entry => {
+    const previous = Object.assign({}, entry);
+    if (previous.journal === 'ACH') {
+      previous.journal = 'AC';
+      previous.reference = String(previous.reference).replace(/^ACH-/, 'AC-');
+    } else if (previous.journal === 'VTE') {
+      previous.journal = 'VE';
+      previous.reference = String(previous.reference).replace(/^VTE-/, 'VE-');
+    }
+    return previous;
+  });
   const entriesBefore = JSON.stringify(legacy.entries);
-  legacy.journals = legacy.journals.filter(record => ['AC', 'VE', 'BQ', 'CA', 'OD', 'PA'].includes(record.code)).map(({ code, label, type }) => ({ code, label, type }));
+  legacy.journals = [
+    { code: 'AC', label: 'Journal des achats', type: 'Achat' },
+    { code: 'VE', label: 'Journal des ventes', type: 'Vente' },
+    { code: 'BQ', label: 'Journal de banque', type: 'Trésorerie' },
+    { code: 'CA', label: 'Journal de caisse', type: 'Trésorerie' },
+    { code: 'OD', label: 'Opérations diverses', type: 'Divers' },
+    { code: 'PA', label: 'Journal de paie', type: 'Paie' }
+  ];
   legacy.journals.push({
     id: 'journal-previous-custom', code: 'CST', label: 'Journal personnalisé ancien', type: 'Projet',
     referencePrefix: 'PC', description: 'Registre conservé lors de la migration.', active: false
@@ -102,16 +130,31 @@ test('une ancienne base à six journaux migre sans réécrire ses écritures', (
   delete legacy.journalCodeHistory;
   env.values.set(env.store.STORAGE_KEY, JSON.stringify(legacy));
   const migrated = env.loadStore();
-  assert.equal(migrated.journals().length, 11, 'les dix journaux intégrés et le journal utilisateur historique sont conservés');
-  assert.equal(migrated.getState().journalRegistryVersion, 4);
+  assert.equal(migrated.journals().length, 13, 'les dix journaux courants, deux anciens codes historiques et le journal utilisateur sont conservés');
+  assert.equal(migrated.getState().journalRegistryVersion, 5);
+  assert.equal(migrated.journal('ACH').label, 'Achats');
+  assert.equal(migrated.journal('VTE').label, 'Ventes');
+  assert.equal(migrated.journal('ACH').referencePrefix, 'ACH');
+  assert.equal(migrated.journal('VTE').referencePrefix, 'VTE');
+  assert.equal(migrated.journal('AC').retired, true);
+  assert.equal(migrated.journal('AC').replacedBy, 'ACH');
+  assert.equal(migrated.journal('VE').retired, true);
+  assert.equal(migrated.journal('VE').replacedBy, 'VTE');
   assert.equal(migrated.journal('CST').origin, 'user');
   assert.equal(migrated.journal('CST').referencePrefix, 'PC');
   assert.equal(migrated.journal('CST').operationNature, 'Opérations courantes');
   assert.equal(migrated.journal('CST').authorizedAccounts, '*');
-  assert.equal(migrated.journal('AC').authorizedAccounts, '*');
   assert.equal(migrated.journal('CST').active, false);
-  assert.equal(JSON.stringify(migrated.entries()), entriesBefore);
+  assert.equal(migrated.createEntry(entryPayload('AC', 'AC-2026-901'), 'draft').ok, false);
+  assert.equal(migrated.entry('seed-2').journal, 'AC');
+  assert.equal(migrated.entry('seed-2').reference, 'AC-2026-001');
+  assert.equal(JSON.stringify(migrated.entries()), entriesBefore, 'les écritures et leurs anciens codes restent strictement inchangés');
   assert.ok(migrated.getState().journalCodeHistory.includes('AMO'));
+  assert.ok(migrated.getState().journalCodeHistory.includes('AC'));
+  assert.ok(migrated.getState().journalCodeHistory.includes('ACH'));
+  const migratedState = JSON.stringify(migrated.getState());
+  const reloaded = env.loadStore();
+  assert.equal(JSON.stringify(reloaded.getState()), migratedState, 'la migration est idempotente au rechargement');
 });
 
 test('migration d’un registre v2 ajoute les nouveaux paramètres avec des valeurs compatibles', () => {
@@ -131,10 +174,10 @@ test('migration d’un registre v2 ajoute les nouveaux paramètres avec des vale
   });
   env.values.set(env.store.STORAGE_KEY, JSON.stringify(legacy));
   const migrated = env.loadStore();
-  assert.equal(migrated.getState().journalRegistryVersion, 4);
+  assert.equal(migrated.getState().journalRegistryVersion, 5);
   assert.equal(migrated.journal('CST').operationNature, 'Opérations courantes');
   assert.equal(migrated.journal('CST').authorizedAccounts, '*');
-  assert.equal(migrated.journal('AC').authorizedAccounts, '*');
+  assert.equal(migrated.journal('ACH').authorizedAccounts, '*');
   assert.equal(JSON.stringify(migrated.entries()), entriesBefore);
 });
 
@@ -168,8 +211,33 @@ test('migration déclassifie ABO et CEN sans modifier les pièces qui les réfé
     assert.equal(migrated.journal(code).type, code === 'ABO' ? 'Abonnement' : 'Centralisation');
     assert.equal(migrated.journal(code).systemSource, '');
   });
-  assert.equal(migrated.getState().journalRegistryVersion, 4);
+  assert.equal(migrated.getState().journalRegistryVersion, 5);
   assert.equal(JSON.stringify(migrated.entries()), entriesBefore, 'les écritures et leurs références de journal sont conservées à l’identique');
+});
+
+test('migration renomme les libellés de tous les journaux sans modifier les pièces', () => {
+  const env = createEnvironment();
+  const legacy = JSON.parse(JSON.stringify(env.store.getState()));
+  legacy.journalRegistryVersion = 4;
+  const previousLabels = {
+    BQ: 'Journal de banque', CA: 'Journal de caisse', PA: 'Journal de paie',
+    ABO: 'Journal abonnements', CEN: 'Journal des Centralisations',
+    AMO: 'Journal des amortissements automatiques', RPE: 'Journal Résultat de la période'
+  };
+  legacy.journals = legacy.journals.map(record => Object.assign({}, record, {
+    label: previousLabels[record.code] || record.label
+  }));
+  const entriesBefore = JSON.stringify(legacy.entries);
+  env.values.set(env.store.STORAGE_KEY, JSON.stringify(legacy));
+  const migrated = env.loadStore();
+  const expectedLabels = {
+    ACH: 'Achats', VTE: 'Ventes', BQ: 'Banques', CA: 'Caisse', OD: 'Opérations diverses',
+    PA: 'Paie', ABO: 'Abonnements', CEN: 'Centralisations',
+    AMO: 'Amortissements automatiques', RPE: 'Résultat de la période'
+  };
+  Object.keys(expectedLabels).forEach(code => assert.equal(migrated.journal(code).label, expectedLabels[code]));
+  assert.equal(migrated.getState().journalRegistryVersion, 5);
+  assert.equal(JSON.stringify(migrated.entries()), entriesBefore, 'les données comptables sont inchangées');
 });
 
 test('les journaux ABO et CEN ne sont plus verrouillés comme des journaux système', () => {
@@ -203,7 +271,7 @@ test('migration retire le journal RAN v1 s’il ne porte aucune écriture et ré
   const migrated = env.loadStore();
   assert.equal(migrated.journal('RAN'), null);
   assert.ok(migrated.getState().journalCodeHistory.includes('RAN'));
-  assert.equal(migrated.getState().journalRegistryVersion, 4);
+  assert.equal(migrated.getState().journalRegistryVersion, 5);
   assert.equal(migrated.journal('ABO').systemManaged, false);
   assert.equal(migrated.journal('ABO').type, 'Abonnement');
   assert.equal(migrated.journal('CEN').systemManaged, false);
@@ -253,7 +321,7 @@ test('création illimitée par dossier, paramètres libres et préfixe de réfé
 test('unicité du code et du préfixe, puis code réservé après suppression', () => {
   const { store } = createEnvironment();
   assert.equal(store.createJournal({ code: 'ac', label: 'Double', type: 'Divers', referencePrefix: 'DBL' }).ok, false);
-  assert.equal(store.createJournal({ code: 'J01', label: 'Premier', type: 'Divers', referencePrefix: 'AC' }).ok, false);
+  assert.equal(store.createJournal({ code: 'J01', label: 'Premier', type: 'Divers', referencePrefix: 'ACH' }).ok, false);
   const created = store.createJournal({ code: 'J01', label: 'Journal test', type: 'Divers', referencePrefix: 'TST' });
   assert.equal(created.ok, true, created.errors.join(' '));
   assert.equal(store.deleteJournal(created.journal.id).ok, true);
@@ -263,18 +331,18 @@ test('unicité du code et du préfixe, puis code réservé après suppression', 
 
 test('les journaux référencés gardent leur code et ne peuvent pas être supprimés', () => {
   const { store } = createEnvironment();
-  const created = store.createJournal({ code: 'VTE', label: 'Ventes spéciales', type: 'Vente', referencePrefix: 'VTS' });
+  const created = store.createJournal({ code: 'JVT', label: 'Ventes spéciales', type: 'Vente', referencePrefix: 'VTS' });
   assert.equal(created.ok, true, created.errors.join(' '));
-  const payload = entryPayload('VTE', store.nextReference('VTE', '2026-03-15'));
+  const payload = entryPayload('JVT', store.nextReference('JVT', '2026-03-15'));
   const draft = store.createEntry(payload, 'draft');
   assert.equal(draft.ok, true, draft.errors.join(' '));
-  assert.equal(store.journalEntryCount('VTE'), 1);
-  assert.equal(store.nextReference('VTE', '2026-03-15'), 'VTS-2026-002');
-  const rename = store.updateJournal('VTE', { code: 'VT2', label: 'Ventes spéciales', type: 'Vente', referencePrefix: 'VTS', description: '', active: true });
+  assert.equal(store.journalEntryCount('JVT'), 1);
+  assert.equal(store.nextReference('JVT', '2026-03-15'), 'VTS-2026-002');
+  const rename = store.updateJournal('JVT', { code: 'VT2', label: 'Ventes spéciales', type: 'Vente', referencePrefix: 'VTS', description: '', active: true });
   assert.equal(rename.ok, false);
   assert.match(rename.errors.join(' '), /code ne peut plus changer/);
-  assert.equal(store.deleteJournal('VTE').ok, false);
-  assert.match(store.deleteJournal('VTE').errors.join(' '), /archivez-le/);
+  assert.equal(store.deleteJournal('JVT').ok, false);
+  assert.match(store.deleteJournal('JVT').errors.join(' '), /archivez-le/);
 });
 
 test('inactivation, modification d’un brouillon existant et refus des nouvelles écritures', () => {
@@ -292,12 +360,12 @@ test('inactivation, modification d’un brouillon existant et refus des nouvelle
   assert.equal(store.postEntry(draft.entry.id).ok, true, 'un brouillon déjà enregistré peut encore être validé');
 });
 
-test('codes et libellés des journaux standards sont protégés, leurs paramètres restent modifiables', () => {
+test('codes des journaux standards protégés et libellés modifiables', () => {
   const { store } = createEnvironment();
-  assert.equal(store.deleteJournal('AC').ok, false);
-  const codeChange = store.updateJournal('AC', { code: 'ACH', label: 'Achats', type: 'Achat', referencePrefix: 'AC', active: true });
+  assert.equal(store.deleteJournal('ACH').ok, false);
+  const codeChange = store.updateJournal('ACH', { code: 'ACH2', label: 'Achats', type: 'Achat', referencePrefix: 'ACH', active: true });
   assert.equal(codeChange.ok, false);
-  const labelChange = store.updateJournal('AC', { code: 'AC', label: 'Achats et frais', type: 'Achat', referencePrefix: 'AC', active: true });
+  const labelChange = store.updateJournal('ACH', { code: 'ACH', label: 'Achats et frais', type: 'Achat', referencePrefix: 'ACH', active: true });
   assert.equal(labelChange.ok, true, labelChange.errors.join(' '));
 });
 
@@ -336,27 +404,27 @@ test('les deux journaux système restent non modifiables et refusent saisie/impo
 test('les natures et comptes autorisés sont normalisés, persistés et restaurés après rechargement', () => {
   const env = createEnvironment();
   const created = env.store.createJournal({
-    code: 'VTE', label: 'Ventes ciblées', type: 'Vente', operationNature: 'Inventaire',
+    code: 'VTC', label: 'Ventes ciblées', type: 'Vente', operationNature: 'Inventaire',
     authorizedAccounts: '601100, 401100, 601100', referencePrefix: 'VTC'
   });
   assert.equal(created.ok, true, created.errors.join(' '));
   assert.equal(created.journal.operationNature, 'Inventaire');
   assert.deepEqual(JSON.parse(JSON.stringify(created.journal.authorizedAccounts)), ['601100', '401100']);
   const persisted = env.loadStore();
-  assert.deepEqual(JSON.parse(JSON.stringify(persisted.journal('VTE').authorizedAccounts)), ['601100', '401100']);
-  assert.equal(persisted.journalAllowsAccount('VTE', '601100'), true);
-  assert.equal(persisted.journalAllowsAccount('VTE', '401100'), true);
-  assert.equal(persisted.journalAllowsAccount('VTE', '411100'), false);
+  assert.deepEqual(JSON.parse(JSON.stringify(persisted.journal('VTC').authorizedAccounts)), ['601100', '401100']);
+  assert.equal(persisted.journalAllowsAccount('VTC', '601100'), true);
+  assert.equal(persisted.journalAllowsAccount('VTC', '401100'), true);
+  assert.equal(persisted.journalAllowsAccount('VTC', '411100'), false);
 
-  const updated = persisted.updateJournal('VTE', {
-    code: 'VTE', label: 'Ventes ciblées', type: 'Vente', operationNature: 'Caisse en temps réel',
+  const updated = persisted.updateJournal('VTC', {
+    code: 'VTC', label: 'Ventes ciblées', type: 'Vente', operationNature: 'Caisse en temps réel',
     authorizedAccounts: '*', referencePrefix: 'VTC', description: 'Paramètres mis à jour.', active: true
   });
   assert.equal(updated.ok, true, updated.errors.join(' '));
   const reloaded = env.loadStore();
-  assert.equal(reloaded.journal('VTE').operationNature, 'Caisse en temps réel');
-  assert.equal(reloaded.journal('VTE').authorizedAccounts, '*');
-  assert.equal(reloaded.journalAllowsAccount('VTE', '411100'), true);
+  assert.equal(reloaded.journal('VTC').operationNature, 'Caisse en temps réel');
+  assert.equal(reloaded.journal('VTC').authorizedAccounts, '*');
+  assert.equal(reloaded.journalAllowsAccount('VTC', '411100'), true);
 });
 
 test('les comptes autorisés valident les brouillons et sont revérifiés au moment de la validation', () => {

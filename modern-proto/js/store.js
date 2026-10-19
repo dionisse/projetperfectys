@@ -20,28 +20,28 @@
   var EXERCICE = 2026;
 
   var JOURNAUX = [
-    { code: 'AC', label: 'Journal des achats', type: 'Achat' },
-    { code: 'VE', label: 'Journal des ventes', type: 'Vente' },
-    { code: 'BQ', label: 'Journal de banque', type: 'Trésorerie' },
-    { code: 'CA', label: 'Journal de caisse', type: 'Trésorerie' },
-    { code: 'OD', label: 'Opérations diverses', type: 'Divers' },
-    { code: 'PA', label: 'Journal de paie', type: 'Paie' },
-    { code: 'ABO', label: 'Journal abonnements', type: 'Abonnement', operationNature: 'Abonnements', referencePrefix: 'ABO', description: 'Journal spécialisé des abonnements de charges ou de produits. Les schémas de répartition et d’anticipation restent à construire ; aucune écriture n’est générée automatiquement.' },
-    { code: 'CEN', label: 'Journal des Centralisations', type: 'Centralisation', operationNature: 'Centralisation', referencePrefix: 'CEN', description: 'Journal spécialisé des centralisations comptables entre dossiers PERFECTO. Le transfert, les tableaux de passage et les contrôles de cohérence restent à construire.' }
+    { code: 'ACH', label: 'Achats', type: 'Achat', referencePrefix: 'ACH', legacyCodes: ['AC'], legacyLabels: ['Journal des achats'] },
+    { code: 'VTE', label: 'Ventes', type: 'Vente', referencePrefix: 'VTE', legacyCodes: ['VE'], legacyLabels: ['Journal des ventes'] },
+    { code: 'BQ', label: 'Banques', type: 'Trésorerie', referencePrefix: 'BQ', legacyLabels: ['Journal de banque'] },
+    { code: 'CA', label: 'Caisse', type: 'Trésorerie', referencePrefix: 'CA', legacyLabels: ['Journal de caisse'] },
+    { code: 'OD', label: 'Opérations diverses', type: 'Divers', referencePrefix: 'OD' },
+    { code: 'PA', label: 'Paie', type: 'Paie', referencePrefix: 'PA', legacyLabels: ['Journal de paie'] },
+    { code: 'ABO', label: 'Abonnements', type: 'Abonnement', operationNature: 'Abonnements', referencePrefix: 'ABO', legacyLabels: ['Journal abonnements'], description: 'Journal spécialisé des abonnements de charges ou de produits. Les schémas de répartition et d’anticipation restent à construire ; aucune écriture n’est générée automatiquement.' },
+    { code: 'CEN', label: 'Centralisations', type: 'Centralisation', operationNature: 'Centralisation', referencePrefix: 'CEN', legacyLabels: ['Journal des Centralisations'], description: 'Journal spécialisé des centralisations comptables entre dossiers PERFECTO. Le transfert, les tableaux de passage et les contrôles de cohérence restent à construire.' }
   ];
-  var RETIRED_JOURNAL_CODES = ['RAN'];
+  var RETIRED_JOURNAL_CODES = ['RAN', 'AC', 'VE'];
   var JOURNAL_OPERATION_NATURES = [
     'Opérations courantes', 'Amortissements automatiques', 'Abonnements', 'Centralisation',
     'Résultat de l’exercice', 'Inventaire', 'Immobilisations', 'Caisse en temps réel'
   ];
   var SYSTEM_JOURNAUX = [
-    { code: 'AMO', label: 'Journal des amortissements automatiques', type: 'Automatique', operationNature: 'Amortissements automatiques', referencePrefix: 'AMO', systemKey: 'fixed-asset-depreciation', systemSource: 'PERFECTO-IMMOBILISATIONS-AMORTISSEMENT', description: 'Réservé aux opérations générées par le système d’immobilisations ; aucune saisie manuelle.' },
-    { code: 'RPE', label: 'Journal Résultat de la période', type: 'Automatique', operationNature: 'Résultat de l’exercice', referencePrefix: 'RPE', systemKey: 'period-result', systemSource: 'PERFECTO-RESULTAT-PERIODE', description: 'Réservé au traitement interne du résultat de la période ; règles et génération à construire.' }
+    { code: 'AMO', label: 'Amortissements automatiques', type: 'Automatique', operationNature: 'Amortissements automatiques', referencePrefix: 'AMO', systemKey: 'fixed-asset-depreciation', systemSource: 'PERFECTO-IMMOBILISATIONS-AMORTISSEMENT', description: 'Réservé aux opérations générées par le système d’immobilisations ; aucune saisie manuelle.' },
+    { code: 'RPE', label: 'Résultat de la période', type: 'Automatique', operationNature: 'Résultat de l’exercice', referencePrefix: 'RPE', systemKey: 'period-result', systemSource: 'PERFECTO-RESULTAT-PERIODE', description: 'Réservé au traitement interne du résultat de la période ; règles et génération à construire.' }
   ];
 
   var ACCOUNTING_CHART = global.PerfectoAccountingChart || null;
   var ACCOUNTING_CHART_VERSION = ACCOUNTING_CHART ? ACCOUNTING_CHART.VERSION : 0;
-  var JOURNAL_REGISTRY_VERSION = 4;
+  var JOURNAL_REGISTRY_VERSION = 5;
   var SUPPLIER_REGISTRY_VERSION = 2;
   var CLIENT_REGISTRY_VERSION = 1;
   var SERVICE_REGISTRY_VERSION = 1;
@@ -404,7 +404,7 @@
         ]
       },
       {
-        id: 'seed-2', reference: 'AC-2026-001', journal: 'AC', date: '2026-01-12',
+        id: 'seed-2', reference: 'ACH-2026-001', journal: 'ACH', date: '2026-01-12',
         description: 'Achat de marchandises à crédit', status: 'posted',
         lines: [
           { account: '601100', debit: 500000, credit: 0 },
@@ -413,7 +413,7 @@
         ]
       },
       {
-        id: 'seed-3', reference: 'VE-2026-001', journal: 'VE', date: '2026-01-20',
+        id: 'seed-3', reference: 'VTE-2026-001', journal: 'VTE', date: '2026-01-20',
         description: 'Prestations de services (exonérées de TVA)', status: 'posted',
         lines: [
           { account: '411100', debit: 742000, credit: 0 },
@@ -477,18 +477,25 @@
 
   function standardJournalRecord(definition, existing) {
     existing = existing || {};
-    var code = String(existing.code == null ? definition.code : existing.code).trim();
+    var previousCode = normalizeJournalCode(existing.code == null ? definition.code : existing.code);
+    var legacyCodeChanged = Array.isArray(definition.legacyCodes) && definition.legacyCodes.indexOf(previousCode) !== -1;
+    var code = legacyCodeChanged ? definition.code : String(existing.code == null ? definition.code : existing.code).trim();
     var migratedFromSystem = existing.systemManaged === true || existing.origin === 'system';
+    var previousLabel = String(existing.label == null ? '' : existing.label).trim();
+    var legacyLabels = Array.isArray(definition.legacyLabels) ? definition.legacyLabels : [];
+    var labelNeedsUpdate = !previousLabel || legacyCodeChanged || legacyLabels.indexOf(previousLabel) !== -1 || migratedFromSystem;
+    var existingPrefix = normalizeJournalPrefix(existing.referencePrefix || previousCode);
+    var prefixNeedsUpdate = legacyCodeChanged && (!existing.referencePrefix || existingPrefix === previousCode);
     var definitionNature = JOURNAL_OPERATION_NATURES.indexOf(definition.operationNature) !== -1
       ? definition.operationNature
       : JOURNAL_OPERATION_NATURES[0];
     return {
       code: code,
-      label: String(existing.label == null || existing.label === '' ? definition.label : existing.label).trim(),
+      label: String(labelNeedsUpdate ? definition.label : previousLabel).trim(),
       type: String(migratedFromSystem || existing.type == null || existing.type === '' ? definition.type : existing.type).trim(),
       operationNature: JOURNAL_OPERATION_NATURES.indexOf(existing.operationNature) !== -1 ? existing.operationNature : definitionNature,
       id: String(existing.id || 'journal-standard-' + definition.code),
-      referencePrefix: normalizeJournalPrefix(existing.referencePrefix || definition.referencePrefix || code),
+      referencePrefix: normalizeJournalPrefix(prefixNeedsUpdate ? (definition.referencePrefix || definition.code) : (existing.referencePrefix || definition.referencePrefix || code)),
       authorizedAccounts: normalizeStoredAuthorizedAccounts(existing.authorizedAccounts),
       description: String(migratedFromSystem ? (definition.description || '') : (existing.description || definition.description || '')).trim(),
       active: existing.active !== false,
@@ -540,6 +547,35 @@
     };
   }
 
+  function retiredRenamedJournalRecord(existing, definition, legacyCode) {
+    existing = existing || {};
+    var oldLabel = String(existing.label == null ? '' : existing.label).trim();
+    var legacyLabels = Array.isArray(definition.legacyLabels) ? definition.legacyLabels : [];
+    var isExistingAlias = existing.retired === true && existing.origin === 'retired-standard' && normalizeJournalCode(existing.replacedBy) === definition.code;
+    var description = isExistingAlias && String(existing.description || '').trim()
+      ? String(existing.description).trim()
+      : 'Code remplacé par ' + definition.code + ' ; conservé uniquement pour les écritures historiques. Aucune nouvelle écriture, modification ou suppression n’est autorisée.';
+    if (!isExistingAlias && oldLabel && legacyLabels.indexOf(oldLabel) === -1) description += ' Ancien libellé : ' + oldLabel + '.';
+    return {
+      code: legacyCode,
+      replacedBy: definition.code,
+      label: 'Ancien journal ' + definition.label,
+      type: 'Historique retiré',
+      operationNature: JOURNAL_OPERATION_NATURES.indexOf(existing.operationNature) !== -1 ? existing.operationNature : (definition.operationNature || 'Opérations courantes'),
+      id: String(existing.id || 'journal-retired-' + legacyCode.toLocaleUpperCase()),
+      referencePrefix: normalizeJournalPrefix(existing.referencePrefix || legacyCode),
+      authorizedAccounts: normalizeStoredAuthorizedAccounts(existing.authorizedAccounts),
+      description: description,
+      active: false,
+      origin: 'retired-standard',
+      isStandard: false,
+      systemManaged: false,
+      systemKey: '',
+      systemSource: '',
+      retired: true
+    };
+  }
+
   function userJournalRecord(record) {
     var code = String(record.code == null ? '' : record.code).trim();
     var normalized = normalizeJournalCode(code).replace(/[^A-Z0-9_-]/g, '-') || 'LEGACY';
@@ -570,6 +606,12 @@
       .concat(SYSTEM_JOURNAUX.map(systemJournalRecord));
   }
 
+  function legacyStandardJournalDefinition(code) {
+    return JOURNAUX.find(function (definition) {
+      return Array.isArray(definition.legacyCodes) && definition.legacyCodes.indexOf(code) !== -1;
+    }) || null;
+  }
+
   function upgradeJournals(data) {
     var result = { data: data, changed: false };
     if (!data) return result;
@@ -581,8 +623,13 @@
 
     var records = [];
     var seen = Object.create(null);
-    var hasHistoricalReportEntries = Array.isArray(data.entries) && data.entries.some(function (entryRecord) {
-      return entryRecord && normalizeJournalCode(entryRecord.journal) === 'RAN';
+    var hasHistoricalReportEntries = false;
+    var historicalRenamedJournalCodes = Object.create(null);
+    (Array.isArray(data.entries) ? data.entries : []).forEach(function (entryRecord) {
+      if (!entryRecord) return;
+      var entryJournalCode = normalizeJournalCode(entryRecord.journal);
+      if (entryJournalCode === 'RAN') hasHistoricalReportEntries = true;
+      if (legacyStandardJournalDefinition(entryJournalCode)) historicalRenamedJournalCodes[entryJournalCode] = true;
     });
     source.forEach(function (record) {
       if (!record || typeof record !== 'object' || Array.isArray(record)) {
@@ -600,9 +647,22 @@
         if (hasHistoricalReportEntries) records.push(retiredReportJournalRecord(record));
         return;
       }
+      var renamedDefinition = legacyStandardJournalDefinition(normalized);
+      if (renamedDefinition) {
+        if (historicalRenamedJournalCodes[normalized]) records.push(retiredRenamedJournalRecord(record, renamedDefinition, normalized));
+        return;
+      }
       if (systemByCode[normalized]) records.push(systemJournalRecord(systemByCode[normalized]));
       else if (standardByCode[normalized]) records.push(standardJournalRecord(standardByCode[normalized], record));
       else records.push(userJournalRecord(record));
+    });
+
+    JOURNAUX.forEach(function (definition) {
+      (Array.isArray(definition.legacyCodes) ? definition.legacyCodes : []).forEach(function (legacyCode) {
+        if (!historicalRenamedJournalCodes[legacyCode] || seen[legacyCode]) return;
+        seen[legacyCode] = true;
+        records.push(retiredRenamedJournalRecord(null, definition, legacyCode));
+      });
     });
 
     if (hasHistoricalReportEntries && !seen.RAN) {

@@ -98,7 +98,7 @@ test('mouvements validés équilibrés à 2 832 000 XOF', () => {
 
 console.log('Pièces et contrôles');
 test('référence proposée par journal', () => {
-  assert.strictEqual(S.nextReference('AC', '2026-03-01'), 'AC-2026-002');
+  assert.strictEqual(S.nextReference('ACH', '2026-03-01'), 'ACH-2026-002');
   assert.strictEqual(S.nextReference('BQ', '2026-03-01'), 'BQ-2026-002');
 });
 

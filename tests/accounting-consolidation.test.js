@@ -11,7 +11,7 @@ const accounts = [
 ];
 const entries = [
   {
-    id: 'entry-ac-1', reference: 'AC-2026-001', journal: 'AC', date: '2026-01-05',
+    id: 'entry-ac-1', reference: 'ACH-2026-001', journal: 'ACH', date: '2026-01-05',
     description: 'Achat de fournitures', status: 'posted', sourceSystem: 'SAGE', sourceId: 'sage-doc-01',
     sourceReference: 'FACT-01', lines: [
       { account: '601100', debit: 100, credit: 0 },
@@ -35,14 +35,14 @@ const entries = [
     ]
   },
   {
-    id: 'entry-ve-outside', reference: 'VE-2025-001', journal: 'VE', date: '2025-12-31',
+    id: 'entry-ve-outside', reference: 'VTE-2025-001', journal: 'VTE', date: '2025-12-31',
     description: 'Hors période', status: 'posted', lines: [
       { account: '601100', debit: 700, credit: 0 },
       { account: '401100', debit: 0, credit: 700 }
     ]
   },
   {
-    id: 'entry-ve-in-period', reference: 'VE-2026-001', journal: 'VE', date: '2026-01-20',
+    id: 'entry-ve-in-period', reference: 'VTE-2026-001', journal: 'VTE', date: '2026-01-20',
     description: 'Vente', status: 'posted', lines: [
       { account: '401100', debit: 25, credit: 0 },
       { account: '601100', debit: 0, credit: 25 }
@@ -72,7 +72,7 @@ assert.equal(purchases.debit, 150);
 assert.equal(purchases.credit, 25);
 assert.equal(purchases.balance, 125);
 assert.equal(purchases.provenanceCount, 3);
-assert.deepEqual(purchases.provenance.map(source => source.reference), ['AC-2026-001', 'PA-2026-001', 'VE-2026-001']);
+assert.deepEqual(purchases.provenance.map(source => source.reference), ['ACH-2026-001', 'PA-2026-001', 'VTE-2026-001']);
 assert.equal(purchases.provenance[0].lineNumber, 1);
 assert.equal(purchases.provenance[0].sourceSystem, 'SAGE');
 assert.equal(purchases.provenance[0].sourceReference, 'FACT-01');
@@ -81,7 +81,7 @@ assert.equal(purchases.provenance[1].sourceRunReference, 'PAIE-2026-01');
 assert.ok(purchases.provenance.every(source => source.entryId && source.journal && source.date && source.lineNumber));
 
 const onlyPurchasesJournal = consolidate(entries, {
-  dateStart: '2026-01-01', dateEnd: '2026-01-31', journalCode: 'AC', accounts
+  dateStart: '2026-01-01', dateEnd: '2026-01-31', journalCode: 'ACH', accounts
 });
 assert.equal(onlyPurchasesJournal.ok, true);
 assert.equal(onlyPurchasesJournal.entriesCount, 1);

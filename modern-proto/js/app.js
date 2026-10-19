@@ -1400,6 +1400,16 @@
     return html;
   }
 
+  function journalDisplayName(record) {
+    if (!record) return '';
+    var code = String(record.code || '').trim();
+    var label = String(record.label || code).trim();
+    if (!code) return label;
+    var suffix = ' (' + code + ')';
+    if (label.slice(-suffix.length).toLocaleUpperCase() === suffix.toLocaleUpperCase()) return label;
+    return label + suffix;
+  }
+
   function journalOptions(selected, includeAll, includeSystem, includeInactive) {
     var html = includeAll ? '<option value="">Tous les journaux</option>' : '<option value="">— Choisir un journal —</option>';
     html += S.journals().filter(function (record) {
@@ -1410,7 +1420,7 @@
       var stateLabel = record.active === false ? ' · inactif' : '';
       var systemLabel = record.systemManaged ? ' · système' : '';
       return '<option value="' + esc(record.code) + '"' + (record.code === selected ? ' selected' : '') + '>' +
-        esc(record.code) + ' — ' + esc(record.label + stateLabel + systemLabel) + '</option>';
+        esc(journalDisplayName(record) + stateLabel + systemLabel) + '</option>';
     }).join('');
     return html;
   }
@@ -1545,7 +1555,7 @@
       '<a class="btn btn-ghost btn-sm" href="#/journals">Détail</a></div>' +
       '<div class="table-wrap"><table class="data-table"><thead><tr><th scope="col">Journal</th><th scope="col" class="num">Pièces</th><th scope="col" class="num">Débit</th><th scope="col" class="num">Crédit</th></tr></thead><tbody>' +
         stats.map(function (s) {
-          return '<tr><td><span class="code-chip">' + esc(s.journal.code) + '</span> <span class="muted">' + esc(s.journal.label) + '</span></td>' +
+          return '<tr><td><span class="muted">' + esc(journalDisplayName(s.journal)) + '</span></td>' +
             '<td class="num">' + s.posted + '</td><td class="num">' + amount(s.debit) + '</td><td class="num">' + amount(s.credit) + '</td></tr>';
         }).join('') +
       '</tbody></table></div>' +
@@ -1664,7 +1674,7 @@
       '<div><strong>' + stats.length + '</strong><span>journaux au total</span></div>' +
     '</div>' +
     (managementAllowed ? '' : '<div class="alert info">La création, la modification et la saisie sont masquées sur téléphone. Utilisez le menu Éditions pour consulter les écritures.</div>') +
-    '<div class="alert info journal-system-note"><strong>Journaux système protégés.</strong> <code>AMO</code> (amortissements automatiques) et <code>RPE</code> (résultat de la période) restent réservés aux traitements système. <code>ABO</code> (abonnements) et <code>CEN</code> (centralisations) sont des journaux standards dédiés : leurs traitements spécifiques sont à construire. La centralisation de lots internes Paie &amp; RH et Ventes vers <code>PA</code> et <code>VE</code> reste distincte du futur transfert entre dossiers. La simulation d’amortissement demeure indicative et ne comptabilise rien.</div>' +
+    '<div class="alert info journal-system-note"><strong>Journaux système protégés.</strong> <code>AMO</code> (amortissements automatiques) et <code>RPE</code> (résultat de la période) restent réservés aux traitements système. <code>ABO</code> (abonnements) et <code>CEN</code> (centralisations) sont des journaux standards dédiés : leurs traitements spécifiques sont à construire. La centralisation de lots internes Paie &amp; RH et Ventes vers <code>Paie (PA)</code> et <code>Ventes (VTE)</code> reste distincte du futur transfert entre dossiers. La simulation d’amortissement demeure indicative et ne comptabilise rien.</div>' +
     '<div class="journal-grid">' + stats.map(function (item) {
       var record = item.journal;
       var systemManaged = !!record.systemManaged;
@@ -1680,8 +1690,7 @@
         actions += '<button type="button" class="btn btn-ghost btn-sm btn-danger" data-action="delete-journal" data-id="' + esc(record.code) + '"' + (count ? ' disabled title="Ce journal contient des écritures : il peut être désactivé, mais pas supprimé."' : '') + '>Supprimer</button>';
       }
       return '<article class="journal-card' + (systemManaged ? ' system-managed' : '') + (record.retired ? ' journal-retired' : '') + (record.active === false ? ' journal-inactive' : '') + '">' +
-        '<div class="journal-head"><span class="journal-code">' + esc(record.code) + '</span>' +
-          '<div><h3>' + esc(record.label) + '</h3><span class="journal-meta">Type : ' + esc(record.type) + '</span></div></div>' +
+        '<div class="journal-head"><div><h3>' + esc(journalDisplayName(record)) + '</h3><span class="journal-meta">Type : ' + esc(record.type) + '</span></div></div>' +
         '<div class="journal-tags"><span class="badge plain">' + esc(kind) + '</span><span class="badge ' + (record.active === false ? 'draft' : 'posted') + '">' + activeLabel + '</span></div>' +
         '<dl>' +
           '<dt>Préfixe des références</dt><dd>' + esc(references) + '-AAAA-001</dd>' +
@@ -1907,7 +1916,7 @@
           return '<tr class="clickable" data-action="open-entry" data-id="' + esc(e.id) + '">' +
             '<td class="nowrap">' + dateLabel(e.date) + '</td>' +
             '<td><button type="button" class="btn btn-ghost btn-sm" data-action="open-entry" data-id="' + esc(e.id) + '">' + esc(e.reference) + '</button></td>' +
-            '<td><span class="code-chip">' + esc(e.journal) + '</span></td>' +
+            '<td>' + esc(journalDisplayName(S.journal(e.journal)) || e.journal) + '</td>' +
             '<td class="muted">' + esc(e.description || '—') + '</td>' +
             '<td class="num">' + amount(entryAmount(e)) + '</td>' +
             '<td>' + statusBadge(e.status) + '</td>' +
@@ -1927,7 +1936,7 @@
 
     var body = '<div class="form-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:16px">' +
       '<div class="total-item"><span>Date</span><strong>' + dateLabel(e.date) + '</strong></div>' +
-      '<div class="total-item"><span>Journal</span><strong>' + esc(e.journal) + ' — ' + esc(journal ? journal.label : '') + '</strong></div>' +
+      '<div class="total-item"><span>Journal</span><strong>' + esc(journal ? journalDisplayName(journal) : e.journal) + '</strong></div>' +
       '<div class="total-item"><span>Statut</span><div>' + statusBadge(e.status) + '</div></div>' +
       '</div>' +
       '<p class="muted" style="margin-bottom:16px">' + esc(e.description || 'Aucun libellé') + '</p>' +
@@ -2063,7 +2072,7 @@
           '<div class="entry-block-head">' +
             '<span class="ref">' + esc(e.reference) + '</span>' +
             '<span class="badge plain">' + dateLabel(e.date) + '</span>' +
-            '<span class="badge plain">' + esc(e.journal) + '</span>' +
+            '<span class="badge plain">' + esc(journalDisplayName(S.journal(e.journal)) || e.journal) + '</span>' +
             '<span class="desc">' + esc(e.description || '—') + '</span>' +
             '<span class="spacer"></span>' +
             '<span class="small muted">Débit ' + money(t.debit) + ' · Crédit ' + money(t.credit) + '</span>' +
@@ -2120,7 +2129,7 @@
           data.rows.map(function (r) {
             return '<tr><td class="nowrap">' + dateLabel(r.date) + '</td>' +
               '<td><button type="button" class="btn btn-ghost btn-sm" data-action="open-entry" data-id="' + esc(findEntryId(r.reference)) + '">' + esc(r.reference) + '</button></td>' +
-              '<td><span class="code-chip">' + esc(r.journal) + '</span></td>' +
+              '<td>' + esc(journalDisplayName(S.journal(r.journal)) || r.journal) + '</td>' +
               '<td class="muted">' + esc(r.description || '—') + '</td>' +
               '<td class="num">' + (r.debit ? amount(r.debit) : '—') + '</td>' +
               '<td class="num">' + (r.credit ? amount(r.credit) : '—') + '</td>' +
@@ -2368,7 +2377,7 @@
 
   function viewAccountingBalanceImport() {
     var dossier = S.currentDossier();
-    var journals = S.journals();
+    var journals = S.journals().filter(function (journal) { return !journal.retired && !journal.systemManaged && journal.code !== 'CEN'; });
     var defaultJournal = journals.find(function (journal) { return journal.code === 'OD'; }) || journals[0] || null;
     var session = balanceImportSession;
     var targetDate = session ? session.targetDate : dossier.cycleStart;
@@ -2391,7 +2400,7 @@
         '<div class="field"><label for="balance-import-date">Date de comptabilisation de la reprise</label><input id="balance-import-date" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(targetDate) + '" required>' +
           '<span class="hint">La date de la balance source reste enregistrée dans son contexte ; cette date situe la pièce dans le dossier cible.</span></div>' +
         '<div class="field"><label for="balance-import-journal">Journal de reprise dans le dossier cible</label><select id="balance-import-journal" required>' + journals.map(function (journal) {
-          return '<option value="' + esc(journal.code) + '"' + (journal.code === targetJournal ? ' selected' : '') + '>' + esc(journal.code + ' — ' + journal.label) + '</option>';
+          return '<option value="' + esc(journal.code) + '"' + (journal.code === targetJournal ? ' selected' : '') + '>' + esc(journalDisplayName(journal)) + '</option>';
         }).join('') + '</select><span class="hint">Aucun journal n’est créé automatiquement.</span></div>' +
         '<div class="field"><label for="balance-import-reference">Référence de la pièce de reprise</label><input id="balance-import-reference" type="text" maxlength="100" value="' + esc(targetReference) + '" required>' +
           '<span class="hint">La référence doit être unique dans le dossier ; elle reste modifiable.</span></div>' +
@@ -2437,7 +2446,7 @@
     });
     var codes = Object.keys(catalog).sort(function (a, b) { return a.localeCompare(b); });
     if (!codes.length) return '';
-    var targetOptions = isAccount ? postingAccounts() : S.journals();
+    var targetOptions = isAccount ? postingAccounts() : S.journals().filter(function (journal) { return !journal.retired && !journal.systemManaged && journal.code !== 'CEN'; });
     var label = isAccount ? 'comptes' : 'journaux';
     var hasUnmapped = codes.some(function (code) { return !sourceMap[code]; });
     return '<details class="exchange-mapping"' + (hasUnmapped ? ' open' : '') + '><summary>Correspondance des ' + label + ' (' + codes.length + ' codes source)</summary>' +
@@ -2451,8 +2460,9 @@
         var options = '<option value="">— Choisir une correspondance —</option>' + targetOptions.map(function (target) {
           var selected = target.code === mappedCode ? ' selected' : '';
           var targetLabel = target.label || target.type || '';
-          var inactive = isAccount && target.active === false ? ' · inactif' : '';
-          return '<option value="' + esc(target.code) + '"' + selected + '>' + esc(target.code + ' — ' + targetLabel + inactive) + '</option>';
+          var inactive = target.active === false ? ' · inactif' : '';
+          var displayLabel = isAccount ? target.code + ' — ' + targetLabel + inactive : journalDisplayName(target) + inactive;
+          return '<option value="' + esc(target.code) + '"' + selected + '>' + esc(displayLabel) + '</option>';
         }).join('');
         return '<tr><td><strong>' + esc(code) + '</strong></td><td>' + esc(sourceLabel || '—') + '</td><td><select aria-label="Associer ' + esc(code) + '" data-exchange-' + (isAccount ? 'account' : 'journal') + '-map="' + esc(code) + '">' + options + '</select></td></tr>';
       }).join('') +
@@ -3364,7 +3374,7 @@
     var controls = selectedRun && !linkedEntry
       ? '<div class="exchange-import-controls payroll-centralization-controls">' +
         '<div class="field"><label for="payroll-centralization-date">Date de la pièce générale</label><input id="payroll-centralization-date" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(targetDate) + '" required><span class="hint">La date proposée vient du lot approuvé ; elle doit rester dans le cycle du dossier.</span></div>' +
-        '<div class="field"><label for="payroll-centralization-journal">Journal général</label><select id="payroll-centralization-journal" required>' + S.journals().map(function (journal) { return '<option value="' + esc(journal.code) + '"' + (journal.code === targetJournal ? ' selected' : '') + '>' + esc(journal.code + ' — ' + journal.label) + '</option>'; }).join('') + '</select><span class="hint">Le journal « PA » est proposé par défaut ; aucun journal n’est créé.</span></div>' +
+        '<div class="field"><label for="payroll-centralization-journal">Journal général</label><select id="payroll-centralization-journal" required>' + S.journals().filter(function (journal) { return !journal.retired && !journal.systemManaged && journal.code !== 'CEN'; }).map(function (journal) { return '<option value="' + esc(journal.code) + '"' + (journal.code === targetJournal ? ' selected' : '') + '>' + esc(journalDisplayName(journal)) + '</option>'; }).join('') + '</select><span class="hint">Le journal « Paie (PA) » est proposé par défaut ; aucun journal n’est créé.</span></div>' +
         '<div class="field"><label for="payroll-centralization-reference">Référence comptable</label><input id="payroll-centralization-reference" type="text" maxlength="100" value="' + esc(targetReference) + '" required></div>' +
         '<div class="field"><label for="payroll-centralization-mode">Statut de la pièce</label><select id="payroll-centralization-mode"><option value="draft"' + (targetMode === 'draft' ? ' selected' : '') + '>Créer un brouillon (recommandé)</option><option value="posted"' + (targetMode === 'posted' ? ' selected' : '') + '>Importer comme écriture validée</option></select><span class="hint">La validation exige une période ouverte et les droits comptables nécessaires.</span></div>' +
       '</div>'
@@ -3384,14 +3394,14 @@
       var code = String(line.accountCode || '').trim();
       if (!Object.prototype.hasOwnProperty.call(accountMap, code)) accountMap[code] = S.account(code) ? code : '';
     });
-    var defaultJournal = S.journals().find(function (journal) { return journal.code === 'VE'; }) || S.journals().find(function (journal) { return journal.code === 'OD'; }) || S.journals()[0];
+    var defaultJournal = S.journals().find(function (journal) { return journal.code === 'VTE'; }) || S.journals().find(function (journal) { return journal.code === 'OD'; }) || S.journals()[0];
     var parts = run.period.split('-');
     return {
       runId: run.id,
       targetDossierId: dossier.id,
       targetDate: run.date,
       targetJournal: defaultJournal && defaultJournal.code || '',
-      targetReference: 'VE-' + parts[0] + '-' + parts[1] + '-001',
+      targetReference: 'VTE-' + parts[0] + '-' + parts[1] + '-001',
       mode: 'draft',
       accountMap: accountMap,
       additiveConfirmed: false,
@@ -3665,8 +3675,8 @@
     var selectedRun = existingSession && approvedRuns.find(function (run) { return run.id === existingSession.runId; }) || approvedRuns[0] || null;
     var linkedEntry = selectedRun && salesEntryForRun(selectedRun, dossier.id);
     var targetDate = existingSession && selectedRun && existingSession.runId === selectedRun.id ? existingSession.targetDate : (selectedRun && selectedRun.date || '');
-    var targetJournal = existingSession && selectedRun && existingSession.runId === selectedRun.id ? existingSession.targetJournal : (S.journals().find(function (journal) { return journal.code === 'VE'; }) || S.journals()[0] || {}).code || '';
-    var targetReference = existingSession && selectedRun && existingSession.runId === selectedRun.id ? existingSession.targetReference : (selectedRun ? 'VE-' + selectedRun.period + '-001' : '');
+    var targetJournal = existingSession && selectedRun && existingSession.runId === selectedRun.id ? existingSession.targetJournal : (S.journals().find(function (journal) { return journal.code === 'VTE'; }) || S.journals()[0] || {}).code || '';
+    var targetReference = existingSession && selectedRun && existingSession.runId === selectedRun.id ? existingSession.targetReference : (selectedRun ? 'VTE-' + selectedRun.period + '-001' : '');
     var targetMode = existingSession && selectedRun && existingSession.runId === selectedRun.id ? existingSession.mode : 'draft';
     var options = approvedRuns.map(function (run) {
       var linked = salesEntryForRun(run, dossier.id);
@@ -3682,7 +3692,7 @@
     var controls = selectedRun && !linkedEntry
       ? '<div class="exchange-import-controls sales-centralization-controls">' +
         '<div class="field"><label for="sales-centralization-date">Date de la pièce générale</label><input id="sales-centralization-date" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(targetDate) + '" required><span class="hint">La date proposée vient du lot approuvé ; elle doit rester dans le cycle du dossier.</span></div>' +
-        '<div class="field"><label for="sales-centralization-journal">Journal général</label><select id="sales-centralization-journal" required>' + S.journals().map(function (journal) { return '<option value="' + esc(journal.code) + '"' + (journal.code === targetJournal ? ' selected' : '') + '>' + esc(journal.code + ' — ' + journal.label) + '</option>'; }).join('') + '</select><span class="hint">Le journal « VE » est proposé par défaut ; aucun journal n’est créé.</span></div>' +
+        '<div class="field"><label for="sales-centralization-journal">Journal général</label><select id="sales-centralization-journal" required>' + S.journals().filter(function (journal) { return !journal.retired && !journal.systemManaged && journal.code !== 'CEN'; }).map(function (journal) { return '<option value="' + esc(journal.code) + '"' + (journal.code === targetJournal ? ' selected' : '') + '>' + esc(journalDisplayName(journal)) + '</option>'; }).join('') + '</select><span class="hint">Le journal « Ventes (VTE) » est proposé par défaut ; aucun journal n’est créé.</span></div>' +
         '<div class="field"><label for="sales-centralization-reference">Référence comptable</label><input id="sales-centralization-reference" type="text" maxlength="100" value="' + esc(targetReference) + '" required></div>' +
         '<div class="field"><label for="sales-centralization-mode">Statut de la pièce</label><select id="sales-centralization-mode"><option value="draft"' + (targetMode === 'draft' ? ' selected' : '') + '>Créer un brouillon (recommandé)</option><option value="posted"' + (targetMode === 'posted' ? ' selected' : '') + '>Importer comme écriture validée</option></select><span class="hint">La validation exige une période ouverte et les droits comptables nécessaires.</span></div>' +
       '</div>'
@@ -3742,8 +3752,11 @@
   }
 
   function createCentralizationCancellationSession(original, dossier) {
-    var journal = original && S.journal(original.journal) ? original.journal : '';
-    if (!journal) journal = (S.journals().find(function (item) { return item.code === 'OD'; }) || S.journals()[0] || {}).code || '';
+    var originalJournal = original && S.journal(original.journal);
+    var candidateCode = originalJournal && originalJournal.retired ? originalJournal.replacedBy : (originalJournal && originalJournal.code);
+    var candidateJournal = candidateCode && S.journal(candidateCode);
+    var journal = candidateJournal && !candidateJournal.retired && !candidateJournal.systemManaged ? candidateJournal.code : '';
+    if (!journal) journal = (S.journals().find(function (item) { return item.code === 'OD' && !item.retired && !item.systemManaged; }) || S.journals()[0] || {}).code || '';
     var date = defaultCentralizationCancellationDate(original, dossier);
     return {
       originalEntryId: original.id,
@@ -3792,7 +3805,7 @@
       }
       return '<tr' + (selectedOriginal && selectedOriginal.id === entry.id ? ' class="is-selected"' : '') + '>' +
         '<td><strong>' + esc(entry.reference) + '</strong><br><span class="small muted">' + esc(cancellationSourceLabel(moduleId)) + ' · ' + esc(metadata.runReference || 'lot interne') + '</span></td>' +
-        '<td>' + esc(dateLabel(entry.date)) + '<br><span class="small muted">Journal ' + esc(entry.journal) + ' · ' + esc(amount(entryAmount(entry))) + ' XOF</span></td>' +
+        '<td>' + esc(dateLabel(entry.date)) + '<br><span class="small muted">Journal ' + esc(journalDisplayName(S.journal(entry.journal)) || entry.journal) + ' · ' + esc(amount(entryAmount(entry))) + ' XOF</span></td>' +
         '<td>' + state + '</td><td>' + action + '</td></tr>';
     }).join('');
     var empty = entries.length
@@ -4209,7 +4222,7 @@
       '</div>';
     return '<div class="exchange-preview consolidation-result">' + balanceAlert + summary + table + actions +
       '<p class="exchange-footnote">Dossier : ' + esc(dossier.reference) + ' · période : ' + esc(dateLabel(result.dateStart)) + ' au ' + esc(dateLabel(result.dateEnd)) +
-      (result.journalCode ? ' · journal : ' + esc(result.journalCode) : ' · tous les journaux') +
+      (result.journalCode ? ' · journal : ' + esc(journalDisplayName(S.journal(result.journalCode)) || result.journalCode) : ' · tous les journaux') +
       '. Aucun brouillon ni nouvelle écriture n’est ajouté au grand livre.</p></div>';
   }
 
@@ -4219,7 +4232,7 @@
     var dossier = S.currentDossier();
     var prefix = 'consolidation-' + stageOptions.key + '-result';
     var journalOptions = '<option value="">Tous les journaux</option>' + S.journals().map(function (journal) {
-      return '<option value="' + esc(journal.code) + '"' + (journal.code === session.journalCode ? ' selected' : '') + '>' + esc(journal.code + ' · ' + journal.label) + '</option>';
+      return '<option value="' + esc(journal.code) + '"' + (journal.code === session.journalCode ? ' selected' : '') + '>' + esc(journalDisplayName(journal)) + '</option>';
     }).join('');
     return '<div class="exchange-workspace consolidation-workspace">' +
       '<section class="exchange-card consolidation-filter-card" aria-labelledby="' + prefix + '-heading">' +
@@ -6441,7 +6454,7 @@
         }
         var journalToDelete = S.journal(id);
         if (!journalToDelete) { toast('Journal introuvable dans le dossier actif.', 'error'); break; }
-        if (!window.confirm('Supprimer le journal « ' + journalToDelete.code + ' — ' + journalToDelete.label + ' » ? Son code restera réservé et ne pourra pas être réattribué.')) break;
+        if (!window.confirm('Supprimer le journal « ' + journalDisplayName(journalToDelete) + ' » ? Son code restera réservé et ne pourra pas être réattribué.')) break;
         var journalDeletion = S.deleteJournal(journalToDelete.id);
         if (!journalDeletion.ok) { toast(journalDeletion.errors.join(' ') || 'Suppression impossible.', 'warning'); break; }
         toast('Journal supprimé. Son code ne sera pas réattribué.', 'success');
@@ -7112,7 +7125,7 @@
     var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button>' +
       '<button type="submit" class="btn btn-primary" form="journal-form" data-action="save-journal" data-journal-mode="' + mode + '">' +
         (existing ? 'Enregistrer les paramètres' : 'Créer le journal') + '</button>';
-    openModal(existing ? 'Paramètres du journal ' + esc(existing.code) : 'Créer un journal',
+    openModal(existing ? 'Paramètres du journal ' + esc(journalDisplayName(existing)) : 'Créer un journal',
       existing ? 'Les écritures historiques sont conservées.' : 'Le nouveau journal sera propre à ce dossier client.', body, footer, true);
 
     var form = $('#journal-form');
@@ -7146,7 +7159,7 @@
           result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
         return;
       }
-      toast(existing ? 'Paramètres du journal ' + result.journal.code + ' mis à jour.' : 'Journal ' + result.journal.code + ' créé.', 'success');
+      toast(existing ? 'Paramètres du journal ' + journalDisplayName(result.journal) + ' mis à jour.' : 'Journal ' + journalDisplayName(result.journal) + ' créé.', 'success');
       closeModal(true);
       render();
     });

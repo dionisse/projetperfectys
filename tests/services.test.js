@@ -76,7 +76,7 @@ test('les codes et désignations sont validés et les références protègent le
   const created = store.createService({ code: 'CONSULT', name: 'Consultation' });
   assert.equal(created.ok, true, created.errors.join(' '));
   assert.equal(store.createService({ code: 'consult', name: 'Doublon' }).ok, false);
-  store.getState().entries.push({ id: 'service-entry', journal: 'VE', serviceCode: 'CONSULT', lines: [] });
+  store.getState().entries.push({ id: 'service-entry', journal: 'VTE', serviceCode: 'CONSULT', lines: [] });
   assert.equal(store.serviceReferenceCount(created.service.id), 1);
   const changedCode = store.updateService(created.service.id, { code: 'CONSULT-2', name: 'Consultation' });
   assert.equal(changedCode.ok, false);

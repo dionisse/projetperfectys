@@ -42,7 +42,7 @@ assert.equal(Cancellation.sourceModuleForEntry(payrollEntry), 'payroll-hr');
 const salesEntry = {
   ...payrollEntry,
   id: 'internal-sales-entry',
-  reference: 'VE-2026-CENT-001',
+  reference: 'VTE-2026-CENT-001',
   sourceSystem: 'PERFECTO-VENTES-STOCK-FACTURATION',
   sourceId: 'PERFECTO-VENTES-STOCK-FACTURATION:dossier-1:run-2',
   sourceMetadata: { feed: 'internal', sourceModule: 'sales-stock-invoicing', runId: 'run-2', runReference: 'VENTE-2026-08-001' }

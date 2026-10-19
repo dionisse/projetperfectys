@@ -19,7 +19,7 @@ const entries = [
     ]
   },
   {
-    id: 'purchase-1', reference: 'AC-2026-001', journal: 'AC', date: '2026-01-12', status: 'posted',
+    id: 'purchase-1', reference: 'ACH-2026-001', journal: 'ACH', date: '2026-01-12', status: 'posted',
     lines: [
       { account: '601100', debit: 500, credit: 0 },
       { account: '401100', debit: 0, credit: 500 }
