@@ -9,7 +9,7 @@ const stats = modules.stats();
 
 assert.strictEqual(catalog.length, 5, 'le launcher annonce cinq modules');
 assert.strictEqual(new Set(ids).size, ids.length, 'les identifiants des modules sont uniques');
-assert.deepStrictEqual(stats, { total: 5, available: 2, planned: 3 });
+assert.deepStrictEqual(stats, { total: 5, available: 3, planned: 2 });
 
 const accounting = modules.get('accounting');
 assert(accounting, 'la Comptabilité générale est dans le catalogue');
@@ -22,10 +22,16 @@ assert.strictEqual(payroll.status, 'partial', 'seul le flux interne de centralis
 assert.strictEqual(payroll.route, 'payroll');
 assert.strictEqual(payroll.scopeable, true, 'les droits Paie & RH peuvent être limités au dossier client');
 
+const sales = modules.get('sales-stock-invoicing');
+assert(sales, 'Ventes, stock & facturation est dans le catalogue');
+assert.strictEqual(sales.status, 'partial', 'seul le flux interne de démonstration est disponible');
+assert.strictEqual(sales.route, 'sales');
+assert.strictEqual(sales.scopeable, true, 'les droits Ventes, stock & facturation peuvent être limités au dossier client');
+
 catalog.filter((module) => module.status === 'planned').forEach((module) => {
   assert.strictEqual(module.route, null, `${module.id} ne doit pas lancer une route non implémentée`);
   assert(module.name && module.description && module.category, `${module.id} doit avoir ses métadonnées`);
 });
 
 assert.strictEqual(modules.get('module-inconnu'), null, 'un module inconnu renvoie null');
-console.log('Catalogue des modules : 5 modules, 2 accessibles dont Paie & RH partiel, 3 à venir — OK');
+console.log('Catalogue des modules : 5 modules, 3 accessibles dont Paie & RH et Ventes, stock & facturation partiels, 2 à venir — OK');

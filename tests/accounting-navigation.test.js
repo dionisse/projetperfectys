@@ -21,6 +21,7 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Importation d’une balance générale',
   'Centralisation auxiliaire interne',
   'Centralisation des salaires depuis Paie et RH',
+  'Centralisation des opérations depuis Vente, Stock et Facturation',
   'Comptes généraux',
   'Fournisseurs',
   'Clients',
@@ -54,6 +55,9 @@ assert.ok(findTab('fichier', 'centralize-auxiliary').reason.includes('n’alimen
 assert.equal(findTab('fichier', 'centralize-payroll').status, 'partial');
 assert.ok(findTab('fichier', 'centralize-payroll').reason.includes('module interne Paie & RH'));
 assert.ok(findTab('fichier', 'centralize-payroll').reason.includes('sans import de fichier externe'));
+assert.equal(findTab('fichier', 'centralize-sales').status, 'partial');
+assert.ok(findTab('fichier', 'centralize-sales').reason.includes('module maison Ventes, stock & facturation'));
+assert.ok(findTab('fichier', 'centralize-sales').reason.includes('sans fichier ni logiciel tiers'));
 assert.equal(findTab('editions', 'journals').status, 'active');
 assert.equal(findTab('editions', 'general-accounts').status, 'active');
 assert.equal(findTab('editions', 'analytic-statements').status, 'inactive');

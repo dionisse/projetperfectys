@@ -27,8 +27,9 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 | Fichier & interopérabilité | PERFECTO-ÉCHANGE v1 pour les écritures et PERFECTO-BALANCE v1 pour les soldes nets, avec modèles CSV/Excel, aperçu, correspondances, contrôles et point de restauration. Le pivot PERFECTO-AUXILIAIRE v1 est documenté/testé mais n’alimente aucune centralisation. Adaptateurs natifs Sage, PERFECTO historique, HYPERSOFT et ODOO à construire |
 | Téléphone | Consultation limitée aux Éditions (balance, journal, grand livre) ; aucune saisie comptable ni création de dossier sur téléphone |
 | Connexion (démo) | Aucun identifiant collecté ; e-mail/mot de passe et Google sont prévus, mais non actifs en démo |
-| Launcher | Catalogue modulaire, recherche et filtres ; ouverture selon les droits du profil simulé, autres modules à venir |
+| Launcher | Catalogue modulaire, recherche et filtres ; Comptabilité générale disponible, Paie & RH et Ventes/Stock/Facturation partiels, autres modules à venir selon les droits du profil simulé |
 | Paie & RH (étape partielle) | Registre local de lots internes, approbation et lien vers la centralisation ; les calculs de paie et fonctions RH complètes restent à construire |
+| Ventes, stock & facturation (étape partielle) | Lots locaux de ventes et d’approvisionnement, approbation et centralisation interne ; facturation, fiscalité et valorisation de stock réelles à construire |
 | Organisation & accès (démo) | Profils temporaires et droits explicites par personne, module, entreprise cliente, dossier et action ; refus par défaut |
 | Dossiers clients | Liste multi-dossiers ouverte depuis le module Comptabilité ; création d’entreprise, code, type comptable, référence et cycle paramétrable |
 | Tableau de bord | Indicateurs (débit, crédit, résultat, pièces), dernières pièces, activité par journal, état des périodes |
@@ -73,6 +74,15 @@ Le module **Paie & RH** expose un registre interne de lots de paie isolé par do
 - Les comptes source sont associés à des comptes existants du plan actif, les débits et crédits sont agrégés séparément par compte cible et le lot crée une seule pièce dans le journal de paie `PA` par défaut.
 - L’écriture est un brouillon par défaut, précédée d’un point de restauration local ; la provenance interne est conservée et un même lot ne peut pas être centralisé deux fois.
 - Le registre démo n’effectue **aucun calcul de salaire, cotisation, impôt ou retenue légale**. La gestion des employés, contrats, règles de paie, validations RH et synchronisation multi-utilisateur restent à construire. Les montants présentés sont fictifs.
+
+### Ventes, stock & facturation et centralisation des opérations — étape partielle
+
+Le module **Ventes, stock & facturation** conserve localement, par dossier client, des lots d’opérations internes. En démo, un lot fictif regroupe une facture de vente et une réception d’approvisionnement avec leur journal comptable équilibré ; le lot doit être approuvé avant transfert.
+
+- La centralisation lit exclusivement les lots approuvés du module maison. Aucun CSV/Excel, fichier tiers ou logiciel externe ne peut alimenter ce parcours.
+- Les comptes source sont associés à des comptes existants du plan actif ; les mouvements sont agrégés par compte cible dans une pièce générale unique, au journal `VE` par défaut.
+- Le brouillon est le mode par défaut ; la date, le journal, la référence, les permissions, l’équilibre, le point de restauration local et l’anti-doublon sont contrôlés.
+- Le jeu d’exemple est fictif : **aucune facture réelle, TVA, marge, coût de revient, valorisation du stock ou règle fiscale n’est calculé**. Le cycle complet des clients, articles, tarifs, règlements, inventaires et retours reste à construire.
 
 En-tête stable de la feuille `Ecritures` et du CSV : `FORMAT;VERSION;SYSTEME_SOURCE;REFERENCE_DOSSIER;EXERCICE;CODE_JOURNAL;LIBELLE_JOURNAL;DATE;REFERENCE_PIECE;LIBELLE_PIECE;CODE_COMPTE;LIBELLE_COMPTE;CLASSE_COMPTE;NATURE_COMPTE;DEBIT_XOF;CREDIT_XOF;STATUT_SOURCE;ID_SOURCE`. Les colonnes peuvent être réordonnées, mais pas supprimées ni renommées dans cette version. Les montants sont des entiers sans séparateurs ; `ID_SOURCE` est répété sur chaque ligne de la même pièce.
 

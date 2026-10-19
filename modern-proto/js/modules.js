@@ -61,13 +61,14 @@
       id: 'sales-stock-invoicing',
       name: 'Ventes, stock & facturation',
       category: 'ACTIVITÉ COMMERCIALE',
-      description: 'Ventes, gestion des stocks et suivi de la facturation.',
+      description: 'Lots internes d’opérations commerciales et transfert contrôlé vers la comptabilité ; facturation, fiscalité et valorisation des stocks complètes à construire.',
       icon: '◫',
       accent: 'sales',
-      status: 'planned',
-      statusLabel: 'À VENIR',
-      version: 'En préparation',
-      route: null
+      status: 'partial',
+      statusLabel: 'PARTIEL · DÉMO',
+      version: 'Étape intégration opérations',
+      route: 'sales',
+      scopeable: true
     }
   ].map(function (module) { return Object.freeze(module); });
 

@@ -12,6 +12,8 @@
   var AccountingExchange = window.PerfectoAccountingExchange;
   var PayrollHR = window.PerfectoPayrollHR;
   var PayrollCentralization = window.PerfectoPayrollCentralization;
+  var SalesOperations = window.PerfectoSalesOperations;
+  var SalesCentralization = window.PerfectoSalesCentralization;
 
   /* ------------------------------ Utilitaires ------------------------------ */
   function esc(value) {
@@ -39,13 +41,14 @@
     balance: '⚖︎', journal: '≡', ledger: '⌕', periods: '◷', settings: '⚙︎'
   };
 
-  var ROUTES = ['login', 'launcher', 'organization', 'payroll', 'dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings', 'menu'];
+  var ROUTES = ['login', 'launcher', 'organization', 'payroll', 'sales', 'dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings', 'menu'];
 
   var TITLES = {
     login: ['Connexion', 'Accès à votre espace PERFECTO'],
     launcher: ['Launcher', 'Modules de votre organisation'],
     organization: ['Organisation & accès', 'Organisation, membres et droits d’accès'],
     payroll: ['Paie & RH', 'Lots de paie internes · prototype de centralisation'],
+    sales: ['Ventes, stock & facturation', 'Lots d’opérations internes · prototype de centralisation'],
     dossiers: ['Dossiers clients', 'Entreprises clientes et cycles comptables'],
     dashboard: ['Tableau de bord', 'Vue d’ensemble de la comptabilité générale'],
     accounts: ['Plan comptable', 'Comptes SYSCOHADA révisé'],
@@ -73,6 +76,7 @@
   var exchangeImportSession = null;
   var balanceImportSession = null;
   var payrollCentralizationSession = null;
+  var salesCentralizationSession = null;
   var launcherUi = { filter: 'all', query: '' };
   var DEMO_ORGANIZATION_ID = 'demo-org';
   var ACCOUNTING_ROUTES = ['dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings', 'menu'];
@@ -138,6 +142,10 @@
     return accountingAccessContext(dossier || S.currentDossier());
   }
 
+  function salesAccessContext(dossier) {
+    return accountingAccessContext(dossier || S.currentDossier());
+  }
+
   function permittedDemoDossiers(member) {
     return S.dossiers().filter(function (dossier) {
       return hasDemoPermission(member, 'accounting', 'module.view', accountingAccessContext(dossier));
@@ -182,6 +190,14 @@
       case 'open-accounting-payroll-centralization':
         return { moduleId: 'accounting', actionId: 'module.view' };
       case 'commit-accounting-payroll-centralization':
+        return { moduleId: 'accounting', actionId: 'data.import' };
+      case 'create-demo-sales-run':
+        return { moduleId: 'sales-stock-invoicing', actionId: 'record.create' };
+      case 'approve-internal-sales-run':
+        return { moduleId: 'sales-stock-invoicing', actionId: 'record.validate' };
+      case 'open-accounting-sales-centralization':
+        return { moduleId: 'accounting', actionId: 'module.view' };
+      case 'commit-accounting-sales-centralization':
         return { moduleId: 'accounting', actionId: 'data.import' };
       case 'open-entry':
         return { moduleId: 'accounting', actionId: 'module.view' };
@@ -232,7 +248,9 @@
     var selectedDossier = action === 'open-dossier' && trigger ? demoDossierById(trigger.getAttribute('data-id')) : null;
     var context = rule.moduleId === 'accounting'
       ? accountingAccessContext(selectedDossier || undefined)
-      : (rule.moduleId === 'payroll-hr' ? payrollAccessContext(selectedDossier || undefined) : demoAccessContext('organization'));
+      : (rule.moduleId === 'payroll-hr'
+        ? payrollAccessContext(selectedDossier || undefined)
+        : (rule.moduleId === 'sales-stock-invoicing' ? salesAccessContext(selectedDossier || undefined) : demoAccessContext('organization')));
     var allowed;
     if (action === 'open-module' && rule.moduleId === 'accounting') {
       allowed = permittedDemoDossiers(member).length > 0 || hasDemoPermission(member, 'organization', 'organization.manageDossiers', demoAccessContext('organization'));
@@ -257,6 +275,7 @@
       var requirement = null;
       if (routePart === 'organization') requirement = { moduleId: 'organization', actionId: 'module.view' };
       else if (routePart === 'payroll') requirement = { moduleId: 'payroll-hr', actionId: 'module.view' };
+      else if (routePart === 'sales') requirement = { moduleId: 'sales-stock-invoicing', actionId: 'module.view' };
       else if (routePart === 'dossiers') {
         link.hidden = permittedDemoDossiers(getActiveDemoMember()).length === 0 &&
           !hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageDossiers', demoAccessContext('organization'));
@@ -269,7 +288,9 @@
       if (requirement) {
         var context = requirement.moduleId === 'accounting'
           ? accountingAccessContext()
-          : (requirement.moduleId === 'payroll-hr' ? payrollAccessContext() : demoAccessContext('organization'));
+          : (requirement.moduleId === 'payroll-hr'
+            ? payrollAccessContext()
+            : (requirement.moduleId === 'sales-stock-invoicing' ? salesAccessContext() : demoAccessContext('organization')));
         link.hidden = !hasDemoPermission(getActiveDemoMember(), requirement.moduleId, requirement.actionId, context);
       }
     });
@@ -396,7 +417,7 @@
     var phoneRouteAllowed = route === 'dossiers' ||
       (route === 'menu' && parsed.params.g === 'editions') ||
       PHONE_REPORT_ROUTES.indexOf(route) !== -1;
-    if (phoneViewport && route === 'payroll') {
+    if (phoneViewport && (route === 'payroll' || route === 'sales')) {
       navigate(accountingMenuHash('editions', 'general-accounts'));
       return;
     }
@@ -408,6 +429,7 @@
     if (!view) return;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'import-balance')) balanceImportSession = null;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'centralize-payroll')) payrollCentralizationSession = null;
+    if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'centralize-sales')) salesCentralizationSession = null;
 
     var activeMember = getActiveDemoMember();
     var orgContext = demoAccessContext('organization');
@@ -418,6 +440,11 @@
     }
     if (route === 'payroll' && !hasDemoPermission(activeMember, 'payroll-hr', 'module.view', payrollAccessContext())) {
       toast('Accès refusé : aucun droit de consultation de Paie & RH n’est accordé à ce profil.', 'warning');
+      navigate('#/launcher');
+      return;
+    }
+    if (route === 'sales' && !hasDemoPermission(activeMember, 'sales-stock-invoicing', 'module.view', salesAccessContext())) {
+      toast('Accès refusé : aucun droit de consultation de Ventes, stock & facturation n’est accordé à ce profil.', 'warning');
       navigate('#/launcher');
       return;
     }
@@ -457,6 +484,7 @@
       case 'launcher': html = viewLauncher(); break;
       case 'organization': html = viewOrganization(); break;
       case 'payroll': html = viewPayrollModule(); break;
+      case 'sales': html = viewSalesModule(); break;
       case 'dossiers': html = viewDossiers(); break;
       case 'dashboard': html = viewDashboard(); break;
       case 'accounts': html = viewAccounts(); break;
@@ -476,7 +504,7 @@
 
     var folderIndicator = $('#active-folder-indicator');
     if (folderIndicator) {
-      var inAccounting = ACCOUNTING_ROUTES.indexOf(route) !== -1 || route === 'payroll';
+      var inAccounting = ACCOUNTING_ROUTES.indexOf(route) !== -1 || route === 'payroll' || route === 'sales';
       var activeDossier = S.currentDossier();
       var visibleDossierCount = route === 'dossiers' ? permittedDemoDossiers(activeMember).length : 0;
       folderIndicator.hidden = !inAccounting;
@@ -490,7 +518,7 @@
     var dossiersReturn = $('#dossier-list-return');
     if (dossiersReturn) dossiersReturn.hidden = !selectedDossierMode;
     var topbarEntry = $('a[href="#/entry"].btn.btn-primary');
-    if (topbarEntry && (route === 'dossiers' || route === 'payroll')) topbarEntry.hidden = true;
+    if (topbarEntry && (route === 'dossiers' || route === 'payroll' || route === 'sales')) topbarEntry.hidden = true;
 
     var title = TITLES[route] || TITLES.login;
     if (route === 'menu') {
@@ -501,7 +529,9 @@
     var pageTitle = $('#page-title');
     if (pageTitle) pageTitle.textContent = title[0];
     var topbarEyebrow = $('.topbar-titles .eyebrow');
-    if (topbarEyebrow) topbarEyebrow.textContent = route === 'payroll' ? 'CABINET GOBEX · Paie & RH' : 'CABINET GOBEX · Comptabilité générale';
+    if (topbarEyebrow) topbarEyebrow.textContent = route === 'payroll'
+      ? 'CABINET GOBEX · Paie & RH'
+      : (route === 'sales' ? 'CABINET GOBEX · Ventes, stock & facturation' : 'CABINET GOBEX · Comptabilité générale');
     document.title = 'PERFECTO · ' + title[0];
 
     $$('[data-route]').forEach(function (link) {
@@ -631,7 +661,9 @@
     var available = (module.status === 'available' || module.status === 'partial') && module.route;
     var moduleContext = module.id === 'accounting'
       ? accountingAccessContext()
-      : (module.id === 'payroll-hr' ? payrollAccessContext() : demoAccessContext('organization'));
+      : (module.id === 'payroll-hr'
+        ? payrollAccessContext()
+        : (module.id === 'sales-stock-invoicing' ? salesAccessContext() : demoAccessContext('organization')));
     var activeMember = getActiveDemoMember();
     var permitted = available && (module.id === 'accounting'
       ? (permittedDemoDossiers(activeMember).length > 0 || hasDemoPermission(activeMember, 'organization', 'organization.manageDossiers', demoAccessContext('organization')))
@@ -2692,6 +2724,57 @@
     '</div>';
   }
 
+  function salesEntryForRun(run, dossierId) {
+    if (!run || !SalesOperations) return null;
+    var sourceId = SalesOperations.sourceId(dossierId, run.id);
+    return S.entries().find(function (entry) {
+      return entry.sourceSystem === 'PERFECTO-VENTES-STOCK-FACTURATION' && entry.sourceId === sourceId;
+    }) || null;
+  }
+
+  function viewSalesModule() {
+    var dossier = S.currentDossier();
+    var runs = SalesOperations.runs(dossier.id);
+    var firstPeriod = SalesOperations.periodForDate(dossier.cycleStart);
+    var lastPeriod = SalesOperations.periodForDate(dossier.cycleEnd);
+    var rows = runs.map(function (run) {
+      var linkedEntry = salesEntryForRun(run, dossier.id);
+      var status = linkedEntry
+        ? '<span class="badge posted">Transféré en comptabilité</span><small>' + esc(linkedEntry.reference) + ' · ' + esc(linkedEntry.status === 'posted' ? 'validée' : 'brouillon') + '</small>'
+        : (run.status === 'approved'
+          ? '<span class="badge posted">Approuvé · prêt</span>'
+          : '<span class="badge draft">Brouillon opérations</span>');
+      var action = linkedEntry
+        ? '<span class="small muted">Lot déjà centralisé</span>'
+        : (run.status === 'approved'
+          ? '<button type="button" class="btn btn-primary btn-sm" data-action="open-accounting-sales-centralization">Centraliser dans la Comptabilité</button>'
+          : '<button type="button" class="btn btn-ghost btn-sm" data-action="approve-internal-sales-run" data-id="' + esc(run.id) + '">Contrôler et approuver</button>');
+      return '<tr><td><strong>' + esc(run.reference) + '</strong><br><span class="small muted">' + esc(run.origin === 'demo' ? 'Jeu d’exemple interne' : 'Lot Ventes, stock & facturation') + '</span></td>' +
+        '<td>' + esc(run.period) + '<br><span class="small muted">Date source au ' + esc(dateLabel(run.date)) + '</span></td>' +
+        '<td class="numeric">' + Number(run.invoiceCount || 0) + '</td>' +
+        '<td class="numeric">' + Number(run.stockMovementCount || 0) + '</td>' +
+        '<td class="numeric">' + esc(amount(run.totals && run.totals.invoicedSales || 0)) + '</td>' +
+        '<td class="numeric">' + esc(amount(run.totals && run.totals.stockPurchases || 0)) + '</td>' +
+        '<td>' + status + '</td><td>' + action + '</td></tr>';
+    }).join('');
+    var empty = runs.length
+      ? ''
+      : '<div class="empty-state"><strong>Aucun lot d’opérations dans ce dossier</strong><span>Créez un lot fictif interne pour vérifier le flux vers la Comptabilité. Aucun fichier externe n’est accepté.</span></div>';
+    return '<div class="sales-module-workspace">' +
+      pageHeader('Ventes, stock & facturation', 'Dossier client : <strong>' + esc(dossier.clientName) + '</strong> · ' + esc(dossier.reference) + ' · source interne pour la centralisation comptable.', '<a class="btn btn-ghost" href="#/launcher">← Modules</a>') +
+      '<div class="alert warning"><div><strong>Étape de raccordement interne · démonstration</strong><br>Les lots d’exemple sont fictifs. Cette version ne calcule pas la TVA, les marges, les coûts de revient ni la valorisation du stock ; elle n’accepte aucun export/import tiers.</div></div>' +
+      '<section class="exchange-card"><p class="page-kicker">SOURCE INTERNE DES OPÉRATIONS</p><h3>Lots du dossier</h3>' +
+        '<p>Le lot regroupe les pièces issues des ventes facturées et des mouvements d’approvisionnement du module maison. Il doit être approuvé avant tout transfert ; son identifiant interne bloque un second transfert.</p>' +
+        '<div class="sales-demo-create"><div class="field"><label for="sales-demo-period">Période de l’exemple interne</label><input id="sales-demo-period" type="month" min="' + esc(firstPeriod) + '" max="' + esc(lastPeriod) + '" value="' + esc(firstPeriod) + '"><span class="hint">La période doit se situer dans le cycle du dossier actif.</span></div>' +
+        '<button type="button" class="btn btn-primary" data-action="create-demo-sales-run">＋ Créer un lot fictif d’opérations</button></div>' +
+      '</section>' +
+      '<section class="exchange-card"><p class="page-kicker">SUIVI DES LOTS</p><h3>' + runs.length + ' lot(s) enregistré(s)</h3>' + empty +
+        (runs.length ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Référence interne</th><th>Période</th><th class="numeric">Factures</th><th class="numeric">Mouvements stock</th><th class="numeric">Ventes fictives (XOF)</th><th class="numeric">Approvisionnements fictifs (XOF)</th><th>État</th><th>Action</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '') +
+      '</section>' +
+      '<div class="alert info"><div>Les données du module sont isolées par dossier client dans ce navigateur. La gestion complète des clients/articles, des tarifs, de la fiscalité, des retours, des règlements, des inventaires et de la synchronisation multi-utilisateur reste à construire.</div></div>' +
+    '</div>';
+  }
+
   function createPayrollCentralizationSession(run, dossier) {
     var accountMap = Object.create(null);
     run.accountingLines.forEach(function (line) {
@@ -3037,6 +3120,355 @@
     '</div>';
   }
 
+  function createSalesCentralizationSession(run, dossier) {
+    var accountMap = Object.create(null);
+    run.accountingLines.forEach(function (line) {
+      var code = String(line.accountCode || '').trim();
+      if (!Object.prototype.hasOwnProperty.call(accountMap, code)) accountMap[code] = S.account(code) ? code : '';
+    });
+    var defaultJournal = S.journals().find(function (journal) { return journal.code === 'VE'; }) || S.journals().find(function (journal) { return journal.code === 'OD'; }) || S.journals()[0];
+    var parts = run.period.split('-');
+    return {
+      runId: run.id,
+      targetDossierId: dossier.id,
+      targetDate: run.date,
+      targetJournal: defaultJournal && defaultJournal.code || '',
+      targetReference: 'VE-' + parts[0] + '-' + parts[1] + '-001',
+      mode: 'draft',
+      accountMap: accountMap,
+      additiveConfirmed: false,
+      aggregateResult: null,
+      analysis: null
+    };
+  }
+
+  function salesCentralizationEntry(session, run) {
+    var aggregate = session.aggregateResult;
+    var totals = run.totals || {};
+    return {
+      reference: String(session.targetReference || '').trim(),
+      journal: String(session.targetJournal || '').trim(),
+      date: String(session.targetDate || '').trim(),
+      description: 'Centralisation ventes, stock et facturation ' + String(run.period || '') + ' · ' + String(run.reference || ''),
+      sourceSystem: 'PERFECTO-VENTES-STOCK-FACTURATION',
+      sourceId: SalesOperations.sourceId(run.dossierId, run.id),
+      sourceStatus: run.status,
+      sourceMetadata: {
+        sourceModule: 'sales-stock-invoicing',
+        sourceModuleVersion: SalesOperations.VERSION,
+        feed: 'internal',
+        runId: run.id,
+        runReference: run.reference,
+        period: run.period,
+        sourceOperationsDate: run.date,
+        invoiceCount: Number(run.invoiceCount) || 0,
+        stockMovementCount: Number(run.stockMovementCount) || 0,
+        invoicedSales: Number(totals.invoicedSales) || 0,
+        stockPurchases: Number(totals.stockPurchases) || 0,
+        sourceLineCount: run.accountingLines.length,
+        totalDebit: aggregate.totalDebit,
+        totalCredit: aggregate.totalCredit,
+        accountMappings: aggregate.accountMappings,
+        demonstrationData: run.origin === 'demo',
+        taxCalculated: false,
+        stockValuationCalculated: false
+      },
+      lines: aggregate.lines
+    };
+  }
+
+  function salesCentralizationMappingsHtml(session, run) {
+    var catalog = Object.create(null);
+    run.accountingLines.forEach(function (line) {
+      var code = String(line.accountCode || '').trim();
+      if (!catalog[code]) catalog[code] = { label: line.accountLabel || '' };
+    });
+    var codes = Object.keys(catalog).sort(function (a, b) { return a.localeCompare(b); });
+    var accounts = S.accounts();
+    return '<details class="exchange-mapping"' + (codes.some(function (code) { return !session.accountMap[code]; }) ? ' open' : '') + '><summary>Correspondance des comptes du journal interne (' + codes.length + ' codes)</summary>' +
+      '<p class="small muted">Les comptes sont produits par Ventes, stock & facturation. Associez chaque compte source à un compte existant du plan du dossier ; aucun compte ne sera créé.</p>' +
+      '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Compte source</th><th>Libellé source</th><th>Compte cible</th></tr></thead><tbody>' +
+      codes.map(function (code) {
+        var mappedCode = session.accountMap[code] || '';
+        var options = '<option value="">— Choisir une correspondance —</option>' + accounts.map(function (account) {
+          var inactive = account.active === false ? ' · inactif' : '';
+          return '<option value="' + esc(account.code) + '"' + (account.code === mappedCode ? ' selected' : '') + '>' + esc(account.code + ' — ' + account.label + inactive) + '</option>';
+        }).join('');
+        return '<tr><td><strong>' + esc(code) + '</strong></td><td>' + esc(catalog[code].label || '—') + '</td><td><select aria-label="Associer le compte source ' + esc(code) + '" data-sales-account-map="' + esc(code) + '">' + options + '</select></td></tr>';
+      }).join('') + '</tbody></table></div></details>';
+  }
+
+  function salesCentralizationOutputHtml(lines) {
+    return '<section class="exchange-card"><p class="page-kicker">PIÈCE GÉNÉRALE PRÉVISIONNELLE</p><h4>' + lines.length + ' ligne(s) après agrégation par compte cible</h4>' +
+      '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Compte cible</th><th class="numeric">Débit (XOF)</th><th class="numeric">Crédit (XOF)</th></tr></thead><tbody>' +
+      lines.map(function (line) { return '<tr><td><strong>' + esc(line.account) + ' — ' + esc(line.accountLabel) + '</strong></td><td class="numeric">' + esc(amount(line.debit)) + '</td><td class="numeric">' + esc(amount(line.credit)) + '</td></tr>'; }).join('') +
+      '</tbody></table></div></section>';
+  }
+
+  function renderSalesCentralizationPreview() {
+    var host = $('#sales-centralization-preview');
+    var session = salesCentralizationSession;
+    if (!host || !session) return;
+    var dossier = S.currentDossier();
+    var run = SalesOperations.getRun(dossier.id, session.runId);
+    if (!run || run.status !== 'approved' || session.targetDossierId !== dossier.id) {
+      host.innerHTML = '<div class="alert error"><strong>Lot interne indisponible.</strong> Rechargez la liste Ventes, stock & facturation avant de poursuivre.</div>';
+      session.aggregateResult = null;
+      session.analysis = null;
+      return;
+    }
+    var dateInput = $('#sales-centralization-date');
+    var journalInput = $('#sales-centralization-journal');
+    var referenceInput = $('#sales-centralization-reference');
+    var modeSelect = $('#sales-centralization-mode');
+    if (dateInput) session.targetDate = dateInput.value;
+    if (journalInput) session.targetJournal = journalInput.value;
+    if (referenceInput) session.targetReference = referenceInput.value;
+    if (modeSelect) session.mode = modeSelect.value === 'posted' ? 'posted' : 'draft';
+
+    var aggregate = SalesCentralization.aggregate(run, session.accountMap, S.accounts());
+    session.aggregateResult = aggregate;
+    var sourceEntry = aggregate.ok ? salesCentralizationEntry(session, run) : null;
+    var options = { sourceSystem: 'PERFECTO-VENTES-STOCK-FACTURATION', accountMap: Object.create(null), journalMap: Object.create(null) };
+    var analysis = aggregate.ok
+      ? S.previewExchangeImport([sourceEntry], session.mode, options)
+      : { ok: false, errors: aggregate.errors, warnings: [], balancedCount: 0 };
+    session.analysis = analysis;
+    session.previewEntry = sourceEntry;
+    var canImport = hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext());
+    var canViewSales = hasDemoPermission(getActiveDemoMember(), 'sales-stock-invoicing', 'module.view', salesAccessContext());
+    var canPost = hasDemoPermission(getActiveDemoMember(), 'accounting', 'entry.validate', accountingAccessContext());
+    var permissionBlocked = !canImport || !canViewSales || (session.mode === 'posted' && !canPost);
+    var existingPostedCount = S.entries().filter(function (entry) {
+      return entry.status === 'posted' && entry.date >= dossier.cycleStart && entry.date <= dossier.cycleEnd;
+    }).length;
+    var additiveBlocked = existingPostedCount > 0 && !session.additiveConfirmed;
+    var canCommit = aggregate.ok && analysis.ok && !permissionBlocked && !additiveBlocked;
+    var totals = run.totals || {};
+    var summary = '<div class="exchange-summary-grid">' +
+      '<div><small>Module source</small><strong>Ventes, stock & facturation · interne</strong></div>' +
+      '<div><small>Lot approuvé</small><strong>' + esc(run.reference) + '</strong></div>' +
+      '<div><small>Période / opérations</small><strong>' + esc(run.period) + ' · ' + Number(run.invoiceCount || 0) + ' facture(s), ' + Number(run.stockMovementCount || 0) + ' mouvement(s) de stock</strong></div>' +
+      '<div><small>Ventes illustratives</small><strong>' + amount(totals.invoicedSales || 0) + ' XOF</strong></div>' +
+      '<div><small>Approvisionnements illustratifs</small><strong>' + amount(totals.stockPurchases || 0) + ' XOF</strong></div>' +
+      '<div><small>Date source → comptabilisation</small><strong>' + esc(dateLabel(run.date)) + ' → ' + esc(session.targetDate || '—') + '</strong></div>' +
+      '</div>';
+    var sourceRows = run.accountingLines.map(function (line) {
+      var operationLabel = line.operationType === 'customer-invoice' ? 'Facture ' : (line.operationType === 'stock-receipt' ? 'Stock ' : 'Opération ');
+      return '<tr><td>' + esc(operationLabel + (line.operationReference || '')) + '</td><td><strong>' + esc(line.accountCode) + '</strong><br><span class="small muted">' + esc(line.accountLabel || '') + '</span></td><td>' + esc(line.description || '') + '</td><td class="numeric">' + esc(amount(line.debit)) + '</td><td class="numeric">' + esc(amount(line.credit)) + '</td></tr>';
+    }).join('');
+    var sourceTable = '<section class="exchange-card"><p class="page-kicker">JOURNAL COMPTABLE PRODUIT PAR LE MODULE MAISON</p><h4>' + run.accountingLines.length + ' ligne(s) source</h4><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Opération source</th><th>Compte source</th><th>Libellé</th><th class="numeric">Débit (XOF)</th><th class="numeric">Crédit (XOF)</th></tr></thead><tbody>' + sourceRows + '</tbody></table></div></section>';
+    var warningsList = (aggregate.warnings || []).concat(analysis.warnings || []);
+    var warnings = warningsList.length
+      ? '<div class="alert warning"><div><strong>À vérifier</strong><ul>' + warningsList.slice(0, 20).map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('') + '</ul></div></div>'
+      : '';
+    var errorsList = aggregate.ok ? analysis.errors : aggregate.errors;
+    var errors = errorsList.length
+      ? '<div class="alert error"><div><strong>' + errorsList.length + ' contrôle(s) bloquant(s)</strong><ul>' + errorsList.slice(0, 20).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div></div>'
+      : '<div class="alert success"><div><strong>Journal interne équilibré et comptes associés.</strong><br>' + amount(aggregate.totalDebit) + ' XOF au débit comme au crédit · ' + aggregate.lines.length + ' ligne(s) générales prévues.</div></div>';
+    var additiveWarning = existingPostedCount
+      ? '<div class="alert warning"><div><strong>Le dossier contient déjà ' + existingPostedCount + ' écriture(s) validée(s) sur le cycle.</strong><br>La centralisation s’ajoutera au grand livre ; vérifiez que ce lot n’est pas déjà comptabilisé.<label class="exchange-context-confirm"><input id="sales-centralization-confirm-additive" type="checkbox"' + (session.additiveConfirmed ? ' checked' : '') + '> Je confirme l’ajout sans remplacement des écritures existantes.</label></div></div>'
+      : '';
+    var permissionNote = permissionBlocked
+      ? '<div class="alert warning">Droits requis : consulter Ventes, stock & facturation, importer dans la Comptabilité et, pour une écriture validée, disposer aussi du droit de validation comptable.</div>'
+      : '';
+    var button = '<button type="button" class="btn btn-primary" data-action="commit-accounting-sales-centralization"' + (canCommit ? '' : ' disabled') + '>Centraliser comme ' + (session.mode === 'posted' ? 'écriture validée' : 'brouillon') + '</button>';
+    host.innerHTML = summary + sourceTable + salesCentralizationMappingsHtml(session, run) +
+      (aggregate.ok ? salesCentralizationOutputHtml(aggregate.lines) : '') + warnings + errors + additiveWarning + permissionNote +
+      '<div class="exchange-preview-footer">' + button + '</div>';
+    applyDemoActionGates(host);
+    $$('[data-sales-account-map]', host).forEach(function (select) {
+      select.addEventListener('change', function () {
+        session.accountMap[select.getAttribute('data-sales-account-map')] = select.value;
+        session.additiveConfirmed = !!(host.querySelector('#sales-centralization-confirm-additive') && host.querySelector('#sales-centralization-confirm-additive').checked);
+        renderSalesCentralizationPreview();
+      });
+    });
+    var confirmAdditive = $('#sales-centralization-confirm-additive', host);
+    if (confirmAdditive) confirmAdditive.addEventListener('change', function () {
+      session.additiveConfirmed = confirmAdditive.checked;
+      renderSalesCentralizationPreview();
+    });
+  }
+
+  function bindSalesCentralization() {
+    var runSelect = $('#sales-centralization-run');
+    var previewHost = $('#sales-centralization-preview');
+    if (!runSelect) return;
+    var dossier = S.currentDossier();
+    function selectRun(runId) {
+      var run = SalesOperations.getRun(dossier.id, runId);
+      if (!run || run.status !== 'approved') {
+        salesCentralizationSession = null;
+        return;
+      }
+      salesCentralizationSession = createSalesCentralizationSession(run, dossier);
+      render();
+    }
+    runSelect.addEventListener('change', function () { selectRun(runSelect.value); });
+    if (!previewHost) return;
+    if (!salesCentralizationSession || salesCentralizationSession.targetDossierId !== dossier.id || salesCentralizationSession.runId !== runSelect.value) {
+      var selectedRun = SalesOperations.getRun(dossier.id, runSelect.value);
+      if (!selectedRun) return;
+      salesCentralizationSession = createSalesCentralizationSession(selectedRun, dossier);
+      salesCentralizationSession.targetDate = ($('#sales-centralization-date') || {}).value || selectedRun.date;
+      salesCentralizationSession.targetJournal = ($('#sales-centralization-journal') || {}).value || salesCentralizationSession.targetJournal;
+      salesCentralizationSession.targetReference = ($('#sales-centralization-reference') || {}).value || salesCentralizationSession.targetReference;
+      salesCentralizationSession.mode = ($('#sales-centralization-mode') || {}).value === 'posted' ? 'posted' : 'draft';
+    }
+    function syncControls() {
+      if (!salesCentralizationSession) return;
+      salesCentralizationSession.targetDate = ($('#sales-centralization-date') || {}).value || '';
+      salesCentralizationSession.targetJournal = ($('#sales-centralization-journal') || {}).value || '';
+      salesCentralizationSession.targetReference = ($('#sales-centralization-reference') || {}).value || '';
+      salesCentralizationSession.mode = ($('#sales-centralization-mode') || {}).value === 'posted' ? 'posted' : 'draft';
+      salesCentralizationSession.additiveConfirmed = !!($('#sales-centralization-confirm-additive') && $('#sales-centralization-confirm-additive').checked);
+      renderSalesCentralizationPreview();
+    }
+    ['sales-centralization-date', 'sales-centralization-journal', 'sales-centralization-reference', 'sales-centralization-mode'].forEach(function (id) {
+      var control = $('#' + id);
+      if (control) control.addEventListener('change', syncControls);
+    });
+    renderSalesCentralizationPreview();
+  }
+
+  function commitAccountingSalesCentralization() {
+    var session = salesCentralizationSession;
+    var dossier = S.currentDossier();
+    if (!session || session.targetDossierId !== dossier.id) {
+      toast('Aucun lot Ventes, stock & facturation prêt dans le dossier actif.', 'error');
+      return;
+    }
+    var run = SalesOperations.getRun(dossier.id, session.runId);
+    if (!run || run.status !== 'approved') {
+      toast('Centralisation refusée : seul un lot interne approuvé dans Ventes, stock & facturation peut être transmis.', 'warning');
+      return;
+    }
+    if (!hasDemoPermission(getActiveDemoMember(), 'sales-stock-invoicing', 'module.view', salesAccessContext(dossier)) ||
+        !hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext(dossier))) {
+      toast('Centralisation refusée : les droits de consultation du module maison et d’import comptable sont requis.', 'warning');
+      return;
+    }
+    var mode = ($('#sales-centralization-mode') || {}).value === 'posted' ? 'posted' : 'draft';
+    if (mode === 'posted' && !hasDemoPermission(getActiveDemoMember(), 'accounting', 'entry.validate', accountingAccessContext(dossier))) {
+      toast('Validation refusée : le droit « Valider une écriture » est requis.', 'warning');
+      return;
+    }
+    session.targetDate = ($('#sales-centralization-date') || {}).value || '';
+    session.targetJournal = ($('#sales-centralization-journal') || {}).value || '';
+    session.targetReference = ($('#sales-centralization-reference') || {}).value || '';
+    session.mode = mode;
+    var aggregate = SalesCentralization.aggregate(run, session.accountMap, S.accounts());
+    session.aggregateResult = aggregate;
+    if (!aggregate.ok) {
+      renderSalesCentralizationPreview();
+      toast('Le journal interne est bloqué par les contrôles affichés.', 'warning');
+      return;
+    }
+    var sourceEntry = salesCentralizationEntry(session, run);
+    var options = { sourceSystem: 'PERFECTO-VENTES-STOCK-FACTURATION', accountMap: Object.create(null), journalMap: Object.create(null) };
+    var analysis = S.previewExchangeImport([sourceEntry], mode, options);
+    session.analysis = analysis;
+    session.previewEntry = sourceEntry;
+    var linkedEntry = salesEntryForRun(run, dossier.id);
+    var existingPostedCount = S.entries().filter(function (entry) { return entry.status === 'posted' && entry.date >= dossier.cycleStart && entry.date <= dossier.cycleEnd; }).length;
+    var additiveBlocked = existingPostedCount > 0 && !session.additiveConfirmed;
+    if (linkedEntry || !analysis.ok || additiveBlocked) {
+      renderSalesCentralizationPreview();
+      toast(linkedEntry
+        ? 'Ce lot Ventes, stock & facturation a déjà été centralisé ; le doublon est refusé.'
+        : (additiveBlocked ? 'Confirmez l’ajout au grand livre existant.' : 'La centralisation est bloquée par les contrôles affichés.'), 'warning');
+      return;
+    }
+    var statusLabel = mode === 'posted' ? 'écriture validée' : 'brouillon';
+    var additiveNote = existingPostedCount ? ' Les écritures validées présentes seront conservées ; aucun mouvement existant ne sera remplacé.' : '';
+    if (!window.confirm('Transférer le lot interne « ' + run.reference + ' » (' + run.period + ') vers la Comptabilité comme ' + statusLabel + ', dans le journal ' + session.targetJournal + ' au ' + session.targetDate + ' ?' + additiveNote + ' Un point de restauration local sera créé.')) return;
+    var result = S.importExchange([sourceEntry], mode, options);
+    if (!result.ok) {
+      toast(result.errors[0] || 'Centralisation impossible.', 'error');
+      renderSalesCentralizationPreview();
+      return;
+    }
+    salesCentralizationSession = null;
+    toast('Lot interne centralisé dans la Comptabilité ; point de restauration local créé.', 'success');
+    render();
+  }
+
+  function viewAccountingSalesCentralization() {
+    var dossier = S.currentDossier();
+    if (!hasDemoPermission(getActiveDemoMember(), 'sales-stock-invoicing', 'module.view', salesAccessContext(dossier))) {
+      return '<div class="alert error"><div><strong>Accès Ventes, stock & facturation requis.</strong><br>Ce profil ne peut pas consulter les lots d’opérations du dossier actif.</div></div>';
+    }
+    var runs = SalesOperations.runs(dossier.id);
+    var approvedRuns = runs.filter(function (run) { return run.status === 'approved'; });
+    var existingSession = salesCentralizationSession && salesCentralizationSession.targetDossierId === dossier.id
+      ? salesCentralizationSession
+      : null;
+    var selectedRun = existingSession && approvedRuns.find(function (run) { return run.id === existingSession.runId; }) || approvedRuns[0] || null;
+    var linkedEntry = selectedRun && salesEntryForRun(selectedRun, dossier.id);
+    var targetDate = existingSession && selectedRun && existingSession.runId === selectedRun.id ? existingSession.targetDate : (selectedRun && selectedRun.date || '');
+    var targetJournal = existingSession && selectedRun && existingSession.runId === selectedRun.id ? existingSession.targetJournal : (S.journals().find(function (journal) { return journal.code === 'VE'; }) || S.journals()[0] || {}).code || '';
+    var targetReference = existingSession && selectedRun && existingSession.runId === selectedRun.id ? existingSession.targetReference : (selectedRun ? 'VE-' + selectedRun.period + '-001' : '');
+    var targetMode = existingSession && selectedRun && existingSession.runId === selectedRun.id ? existingSession.mode : 'draft';
+    var options = approvedRuns.map(function (run) {
+      var linked = salesEntryForRun(run, dossier.id);
+      var label = run.reference + ' · ' + run.period + ' · ' + Number(run.invoiceCount || 0) + ' facture(s), ' + Number(run.stockMovementCount || 0) + ' mouvement(s)' + (linked ? ' · déjà transféré' : '');
+      return '<option value="' + esc(run.id) + '"' + (selectedRun && run.id === selectedRun.id ? ' selected' : '') + '>' + esc(label) + '</option>';
+    }).join('');
+    var noRun = !approvedRuns.length
+      ? '<div class="empty-state"><strong>Aucun lot approuvé à centraliser</strong><span>' + (runs.length ? runs.length + ' lot(s) restent en brouillon. Approuvez-les dans le module Ventes, stock & facturation avant transfert.' : 'Créez et approuvez un lot interne dans Ventes, stock & facturation. Aucun fichier externe ne peut alimenter ce parcours.') + '</span><a class="btn btn-primary" href="#/sales">Ouvrir Ventes, stock & facturation</a></div>'
+      : '';
+    var linkedNotice = linkedEntry
+      ? '<div class="alert success"><div><strong>Ce lot a déjà été transféré vers la Comptabilité.</strong><br>Pièce ' + esc(linkedEntry.reference) + ' · statut ' + esc(linkedEntry.status === 'posted' ? 'validé' : 'brouillon') + '. Une seconde centralisation est bloquée par l’identifiant source interne.</div></div>'
+      : '';
+    var controls = selectedRun && !linkedEntry
+      ? '<div class="exchange-import-controls sales-centralization-controls">' +
+        '<div class="field"><label for="sales-centralization-date">Date de la pièce générale</label><input id="sales-centralization-date" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(targetDate) + '" required><span class="hint">La date proposée vient du lot approuvé ; elle doit rester dans le cycle du dossier.</span></div>' +
+        '<div class="field"><label for="sales-centralization-journal">Journal général</label><select id="sales-centralization-journal" required>' + S.journals().map(function (journal) { return '<option value="' + esc(journal.code) + '"' + (journal.code === targetJournal ? ' selected' : '') + '>' + esc(journal.code + ' — ' + journal.label) + '</option>'; }).join('') + '</select><span class="hint">Le journal « VE » est proposé par défaut ; aucun journal n’est créé.</span></div>' +
+        '<div class="field"><label for="sales-centralization-reference">Référence comptable</label><input id="sales-centralization-reference" type="text" maxlength="100" value="' + esc(targetReference) + '" required></div>' +
+        '<div class="field"><label for="sales-centralization-mode">Statut de la pièce</label><select id="sales-centralization-mode"><option value="draft"' + (targetMode === 'draft' ? ' selected' : '') + '>Créer un brouillon (recommandé)</option><option value="posted"' + (targetMode === 'posted' ? ' selected' : '') + '>Importer comme écriture validée</option></select><span class="hint">La validation exige une période ouverte et les droits comptables nécessaires.</span></div>' +
+      '</div>'
+      : '';
+    return '<div class="exchange-workspace sales-centralization-workspace">' +
+      '<div class="alert info"><div><strong>Flux interne Ventes, stock & facturation → Comptabilité</strong><br>La source est exclusivement un lot approuvé produit dans le module maison. Aucun CSV, Excel ou logiciel tiers n’est lu par ce parcours ; les règles de facturation et de valorisation du stock restent à construire.</div></div>' +
+      (approvedRuns.length ? '<div class="field sales-run-selector"><label for="sales-centralization-run">Lot interne approuvé</label><select id="sales-centralization-run">' + options + '</select></div>' : '') +
+      noRun + linkedNotice + controls +
+      (selectedRun && !linkedEntry ? '<div id="sales-centralization-preview" class="exchange-preview" aria-live="polite"><div class="empty-state"><strong>Analyse du lot d’opérations</strong><span>Contrôlez le journal interne et les correspondances avant l’ajout au grand livre.</span></div></div>' : '') +
+      '<p class="exchange-footnote">L’ajout crée une seule pièce générale, conserve le lot source, crée un point de restauration local et n’écrase aucune écriture. Chaque lot interne ne peut être centralisé qu’une fois.</p>' +
+    '</div>';
+  }
+
+  function createDemoSalesRun() {
+    var dossier = S.currentDossier();
+    if (!hasDemoPermission(getActiveDemoMember(), 'sales-stock-invoicing', 'record.create', salesAccessContext(dossier))) {
+      toast('Création refusée : le droit de saisie dans Ventes, stock & facturation n’est pas accordé.', 'warning');
+      return;
+    }
+    var period = ($('#sales-demo-period') || {}).value || '';
+    var result = SalesOperations.createDemoRun(dossier, period);
+    if (!result.ok) {
+      toast(result.errors[0] || 'Création du lot d’opérations impossible.', 'error');
+      return;
+    }
+    toast('Lot fictif créé dans le registre interne Ventes, stock & facturation. Contrôlez-le avant approbation.', 'success');
+    render();
+  }
+
+  function approveInternalSalesRun(runId) {
+    var dossier = S.currentDossier();
+    if (!hasDemoPermission(getActiveDemoMember(), 'sales-stock-invoicing', 'record.validate', salesAccessContext(dossier))) {
+      toast('Approbation refusée : le droit de validation dans Ventes, stock & facturation n’est pas accordé.', 'warning');
+      return;
+    }
+    var result = SalesOperations.approveRun(dossier, runId);
+    if (!result.ok) {
+      toast(result.errors[0] || 'Approbation du lot impossible.', 'error');
+      return;
+    }
+    toast('Lot d’opérations approuvé dans le module maison ; il est prêt pour la centralisation interne.', 'success');
+    render();
+  }
+
   function viewInternalAuxiliaryCentralization() {
     return '<div class="alert info"><div><strong>Centralisation auxiliaire depuis les modules maison uniquement.</strong><br>Ce parcours sera activé lorsque les modules PERFECTO de gestion des tiers et de leurs mouvements fourniront leurs données internes. Le format pivot CSV/Excel PERFECTO-AUXILIAIRE v1 est réservé à l’interopérabilité ; aucun fichier ni logiciel tiers ne peut alimenter cette centralisation.</div></div>';
   }
@@ -3087,7 +3519,9 @@
           ? viewAccountingBalanceImport()
           : (group.id === 'fichier' && tab.id === 'centralize-auxiliary'
             ? viewInternalAuxiliaryCentralization()
-            : (group.id === 'fichier' && tab.id === 'centralize-payroll' ? viewAccountingPayrollCentralization() : ''))));
+            : (group.id === 'fichier' && tab.id === 'centralize-payroll'
+              ? viewAccountingPayrollCentralization()
+              : (group.id === 'fichier' && tab.id === 'centralize-sales' ? viewAccountingSalesCentralization() : '')))));
     var emptyActionNote = !actions && !childList && !exchangeFeature
       ? '<p class="menu-disabled-note">Aucune action n’est disponible pour cet élément.</p>'
       : '';
@@ -3132,6 +3566,7 @@
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-other') bindAccountingExchangeImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-balance') bindAccountingBalanceImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-payroll') bindPayrollCentralization();
+      if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-sales') bindSalesCentralization();
       return;
     }
 
@@ -3431,6 +3866,15 @@
       case 'open-accounting-payroll-centralization':
         navigate(accountingMenuHash('fichier', 'centralize-payroll'));
         break;
+      case 'create-demo-sales-run':
+        createDemoSalesRun();
+        break;
+      case 'approve-internal-sales-run':
+        approveInternalSalesRun(id);
+        break;
+      case 'open-accounting-sales-centralization':
+        navigate(accountingMenuHash('fichier', 'centralize-sales'));
+        break;
       case 'open-dossier': {
         var dossier = permittedDemoDossiers(getActiveDemoMember()).find(function (item) { return item.id === id; });
         if (!dossier || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'module.view', accountingAccessContext(dossier))) {
@@ -3549,6 +3993,9 @@
         break;
       case 'commit-accounting-payroll-centralization':
         commitAccountingPayrollCentralization();
+        break;
+      case 'commit-accounting-sales-centralization':
+        commitAccountingSalesCentralization();
         break;
       case 'export-accounting-workbook': {
         var workbookDossier = S.currentDossier();

@@ -13,6 +13,8 @@ Ce document suit les décisions et les prochaines étapes du prototype natif. Le
 - Menu Fichier : PERFECTO-ÉCHANGE v1 (écritures) et PERFECTO-BALANCE v1 (soldes nets) proposent des imports/exports contrôlés. Le format pivot PERFECTO-AUXILIAIRE v1 est documenté/testé, mais n’est pas exposé comme import ni comme source d’une centralisation.
 - Paie & RH : registre local partiel de lots internes, approbation et lien de centralisation vers la Comptabilité. Les calculs de paie et fonctions RH complètes restent à construire ; les données fictives de démonstration ne sont pas calculées légalement.
 - La centralisation des salaires lit exclusivement un lot approuvé du module maison Paie & RH ; elle n’accepte aucun fichier ni logiciel tiers.
+- Ventes, stock & facturation : registre local partiel de lots d’exemples internes, approbation et lien de centralisation vers la Comptabilité. Les factures réelles, la fiscalité, les règlements et la valorisation des stocks restent à construire.
+- La centralisation des opérations commerciales consomme exclusivement un lot approuvé de Ventes, stock & facturation ; aucun fichier ni logiciel tiers ne l’alimente. Les lots de démonstration n’effectuent aucun calcul fiscal ou de valorisation.
 - La centralisation auxiliaire est à construire depuis les futurs modules PERFECTO de gestion des tiers et mouvements ; le parcours utilisateur reste désactivé jusqu’à leur intégration.
 - Les profils natifs Sage Comptabilité, PERFECTO historique, HYPERSOFT et ODOO ne sont pas encore implémentés ; ils nécessitent des exemples anonymisés et une validation par version.
 - Connexion, profils, grants et dossiers ne sont pas encore reliés à une identité réelle ou à Google Drive.
@@ -31,6 +33,7 @@ Ce document suit les décisions et les prochaines étapes du prototype natif. Le
 - Les centralisations entre modules PERFECTO lisent exclusivement les données des modules maison. Les formats de fichier et adaptateurs tiers relèvent de l’interopérabilité, pas de ces transferts internes.
 - La centralisation auxiliaire depuis les modules maison n’est pas encore active : elle dépend des futurs registres internes de tiers et mouvements. Le pivot `PERFECTO-AUXILIAIRE` v1 est un modèle d’interopérabilité et ne peut pas alimenter une centralisation.
 - La centralisation des salaires part de lots approuvés dans Paie & RH, les transforme en une pièce générale au journal `PA` par défaut, ajoute en brouillon, conserve la provenance et bloque les doublons. Le jeu de paie démo n’effectue aucun calcul légal.
+- La centralisation commerciale part de lots approuvés produits par le module maison Ventes, stock & facturation, ajoute une pièce générale au journal `VE` par défaut et bloque les doublons ; aucun fichier tiers ne peut l’alimenter. Le lot démo ne calcule ni fiscalité ni valorisation de stock.
 - Comptabilité générale et comptabilité analytique sont deux modules séparés et interopérables ; l’analytique exploite les données issues de la comptabilité générale sans y intégrer ses propres définitions analytiques.
 - Sur téléphone, seul le parcours de consultation des Éditions est prévu ; l’application de saisie est destinée à l’ordinateur ou à la tablette.
 - Les fonctions analytiques, dépendantes de modules futurs ou à confirmer restent inactives jusqu’à une décision explicite ; les fonctions générales non encore réalisées sont étiquetées « À construire ».
@@ -66,7 +69,7 @@ Les identifiants ci-dessous sont reliés aux parcours actuels, mais leurs libell
 
 - Interopérabilité : faire valider avec un spécialiste Excel les modèles `PERFECTO-ÉCHANGE`, `PERFECTO-BALANCE` et `PERFECTO-AUXILIAIRE` et leurs règles métier ; développer les adaptateurs directs Sage Comptabilité, PERFECTO historique, HYPERSOFT et ODOO, un par version, avec des fichiers réels anonymisés et des tests de rapprochement. Les balances de mouvements et autres états restent à cadrer séparément.
 - Comptabilité générale : tiers et auxiliaires détaillés, numérotation, extourne, lettrage, rapprochement bancaire, pièces jointes et états financiers SYSCOHADA complets.
-- Compléter Paie & RH : dossier du personnel, contrats, règles de calcul de paie, cotisations/retenues et validations métier. Construire ensuite Gestion de courriers et Vente/Stock/Facturation ; leurs centralisations comptables devront lire les données des modules maison correspondants.
+- Compléter Paie & RH : dossier du personnel, contrats, règles de calcul de paie, cotisations/retenues et validations métier. Compléter Ventes, stock & facturation : articles, clients, factures, règlements, règles fiscales, retours et valorisation des stocks. Construire ensuite Gestion de courriers ; chaque centralisation comptable devra lire les données du module maison correspondant.
 - Exécutable Windows : cadrage séparé après stabilisation des parcours web et des règles de stockage.
 
 ## Hors périmètre de la démo actuelle
