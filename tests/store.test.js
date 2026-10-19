@@ -62,12 +62,12 @@ function test(name, fn) {
 }
 
 console.log('Référentiel de démonstration');
-test('147 comptes standards, 18 comptes historiques, 6 journaux standards et 3 journaux système', () => {
+test('147 comptes standards, 18 comptes historiques, 6 journaux standards et 4 journaux système', () => {
   assert.strictEqual(STANDARD_ACCOUNT_COUNT, 147);
   assert.strictEqual(S.accounts().length, STANDARD_ACCOUNT_COUNT + 18);
-  assert.strictEqual(S.journals().length, 9);
+  assert.strictEqual(S.journals().length, 10);
   assert.strictEqual(S.journals().filter((journal) => journal.isStandard).length, 6);
-  assert.strictEqual(S.journals().filter((journal) => journal.systemManaged).length, 3);
+  assert.strictEqual(S.journals().filter((journal) => journal.systemManaged).length, 4);
   assert.strictEqual(S.postedEntries().length, 3);
   assert.strictEqual(S.entries().filter((e) => e.status === 'draft').length, 1);
 });

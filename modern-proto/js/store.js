@@ -27,15 +27,17 @@
     { code: 'OD', label: 'Opérations diverses', type: 'Divers' },
     { code: 'PA', label: 'Journal de paie', type: 'Paie' }
   ];
+  var RETIRED_JOURNAL_CODES = ['RAN'];
   var SYSTEM_JOURNAUX = [
     { code: 'AMO', label: 'Journal des amortissements automatiques', type: 'Automatique', referencePrefix: 'AMO', systemKey: 'fixed-asset-depreciation', systemSource: 'PERFECTO-IMMOBILISATIONS-AMORTISSEMENT', description: 'Réservé aux opérations générées par le système d’immobilisations ; aucune saisie manuelle.' },
     { code: 'ABO', label: 'Journal abonnements', type: 'Automatique', referencePrefix: 'ABO', systemKey: 'recurring-subscriptions', systemSource: 'PERFECTO-ABONNEMENTS', description: 'Réservé aux abonnements générés par le système ; la génération reste à construire.' },
-    { code: 'RAN', label: 'Journal Report à Nouveau', type: 'Automatique', referencePrefix: 'RAN', systemKey: 'opening-balance', systemSource: 'PERFECTO-REPORT-A-NOUVEAU', description: 'Réservé au report à nouveau généré par le système ; le transfert d’exercice reste à construire.' }
+    { code: 'CEN', label: 'Journal des Centralisations', type: 'Automatique', referencePrefix: 'CEN', systemKey: 'internal-centralizations', systemSource: 'PERFECTO-CENTRALISATIONS-INTERNES', description: 'Réservé aux centralisations produites par les modules PERFECTO internes ; saisie et import tiers interdits.' },
+    { code: 'RPE', label: 'Journal Résultat de la période', type: 'Automatique', referencePrefix: 'RPE', systemKey: 'period-result', systemSource: 'PERFECTO-RESULTAT-PERIODE', description: 'Réservé au traitement interne du résultat de la période ; règles et génération à construire.' }
   ];
 
   var ACCOUNTING_CHART = global.PerfectoAccountingChart || null;
   var ACCOUNTING_CHART_VERSION = ACCOUNTING_CHART ? ACCOUNTING_CHART.VERSION : 0;
-  var JOURNAL_REGISTRY_VERSION = 1;
+  var JOURNAL_REGISTRY_VERSION = 2;
   var SUPPLIER_REGISTRY_VERSION = 2;
   var CLIENT_REGISTRY_VERSION = 1;
   var OTHER_PARTY_REGISTRY_VERSION = 1;
@@ -441,6 +443,25 @@
     };
   }
 
+  function retiredReportJournalRecord(existing) {
+    existing = existing || {};
+    return {
+      code: 'RAN',
+      label: 'Ancien journal RAN (historique)',
+      type: 'Historique retiré',
+      id: String(existing.id || 'journal-retired-report-a-nouveau'),
+      referencePrefix: normalizeJournalPrefix(existing.referencePrefix || 'RAN'),
+      description: 'Journal automatique retiré. Conservé uniquement pour les écritures historiques ; aucune nouvelle écriture ni modification n’est autorisée.',
+      active: false,
+      origin: 'retired-system',
+      isStandard: false,
+      systemManaged: false,
+      systemKey: '',
+      systemSource: '',
+      retired: true
+    };
+  }
+
   function userJournalRecord(record) {
     var code = String(record.code == null ? '' : record.code).trim();
     var normalized = normalizeJournalCode(code).replace(/[^A-Z0-9_-]/g, '-') || 'LEGACY';
@@ -480,6 +501,9 @@
 
     var records = [];
     var seen = Object.create(null);
+    var hasHistoricalReportEntries = Array.isArray(data.entries) && data.entries.some(function (entryRecord) {
+      return entryRecord && normalizeJournalCode(entryRecord.journal) === 'RAN';
+    });
     source.forEach(function (record) {
       if (!record || typeof record !== 'object' || Array.isArray(record)) {
         records.push(record);
@@ -492,10 +516,19 @@
         return;
       }
       seen[normalized] = true;
+      if (normalized === 'RAN') {
+        if (hasHistoricalReportEntries) records.push(retiredReportJournalRecord(record));
+        return;
+      }
       if (systemByCode[normalized]) records.push(systemJournalRecord(systemByCode[normalized]));
       else if (standardByCode[normalized]) records.push(standardJournalRecord(standardByCode[normalized], record));
       else records.push(userJournalRecord(record));
     });
+
+    if (hasHistoricalReportEntries && !seen.RAN) {
+      seen.RAN = true;
+      records.push(retiredReportJournalRecord(null));
+    }
 
     defaultJournalRecords().forEach(function (record) {
       var normalized = normalizeJournalCode(record.code);
@@ -508,6 +541,7 @@
     (Array.isArray(data.journalCodeHistory) ? data.journalCodeHistory : [])
       .concat(source.map(function (record) { return record && record.code; }))
       .concat(records.map(function (record) { return record.code; }))
+      .concat(RETIRED_JOURNAL_CODES)
       .forEach(function (value) {
         var code = normalizeJournalCode(value);
         if (code && history.indexOf(code) === -1) history.push(code);
@@ -541,7 +575,7 @@
       accounts: initialAccounts(withSeedEntries),
       journalRegistryVersion: JOURNAL_REGISTRY_VERSION,
       journals: defaultJournalRecords(),
-      journalCodeHistory: defaultJournalRecords().map(function (journal) { return normalizeJournalCode(journal.code); }),
+      journalCodeHistory: defaultJournalRecords().map(function (journal) { return normalizeJournalCode(journal.code); }).concat(RETIRED_JOURNAL_CODES),
       entries: withSeedEntries === false ? [] : seedEntries(),
       periods: cyclePeriods(cycleStart, cycleEnd),
       deletedStandardAccountCodes: [],
@@ -1040,6 +1074,7 @@
       errors.push('Le code d’un journal standard ne peut pas être modifié.');
     }
     if (existing && existing.systemManaged) errors.push('Un journal automatique géré par le système ne peut pas être modifié.');
+    if (existing && existing.retired) errors.push('Ce journal a été retiré et ne peut plus être modifié.');
 
     var sameCode = journal(code);
     if (code && sameCode && (!existing || sameCode.id !== existing.id)) {
@@ -1106,6 +1141,7 @@
     var existing = journalByIdentifier(identifier);
     if (!existing) return { ok: false, errors: ['Journal introuvable.'] };
     if (existing.systemManaged) return { ok: false, errors: ['Ce journal est réservé au système et ne peut pas être modifié.'] };
+    if (existing.retired) return { ok: false, errors: ['Ce journal a été retiré et ne peut plus être modifié.'] };
     var validation = validateJournalInput(input, existing);
     if (!validation.ok) return validation;
     var st = load();
@@ -1127,6 +1163,7 @@
     var existing = journalByIdentifier(identifier);
     if (!existing) return { ok: false, errors: ['Journal introuvable.'] };
     if (existing.systemManaged || existing.isStandard) return { ok: false, errors: ['Un journal standard ou géré par le système ne peut pas être supprimé.'] };
+    if (existing.retired) return { ok: false, errors: ['Ce journal historique retiré est conservé pour préserver ses écritures.'] };
     var count = journalEntryCount(existing.id);
     if (count > 0) return { ok: false, errors: ['Ce journal possède ' + count + ' écriture(s) ; archivez-le plutôt que de le supprimer.'] };
     var st = load();
@@ -2540,6 +2577,9 @@
       errors.push('Le journal sélectionné est inconnu.');
     } else {
       journalCode = journalRecord.code;
+      if (journalRecord.retired) {
+        errors.push('Ce journal a été retiré ; aucune nouvelle écriture n’est autorisée.');
+      }
       if (journalRecord.systemManaged && opts.systemSource !== journalRecord.systemSource) {
         errors.push('Ce journal est réservé aux écritures générées par le système ; la saisie manuelle et l’import sont interdits.');
       }
@@ -2640,8 +2680,9 @@
     var existing = entry(id);
     if (!existing) return { ok: false, errors: ['Pièce introuvable.'] };
     if (existing.status !== 'draft') return { ok: false, errors: ['Une pièce validée ne peut plus être modifiée.'] };
-    if (journal(existing.journal) && journal(existing.journal).systemManaged) {
-      return { ok: false, errors: ['Une écriture d’un journal automatique est gérée par le système et ne peut pas être modifiée manuellement.'] };
+    var existingJournal = journal(existing.journal);
+    if (existingJournal && (existingJournal.systemManaged || existingJournal.retired)) {
+      return { ok: false, errors: ['Une écriture d’un journal automatique ou retiré ne peut pas être modifiée manuellement.'] };
     }
     if (existing.sourceSystem === 'PERFECTO-ANNULATION-CENTRALISATION' && existing.sourceMetadata && existing.sourceMetadata.operation === 'centralization-reversal') {
       return { ok: false, errors: ['Une écriture inverse est immuable après sa préparation. Supprimez ce brouillon et recommencez l’annulation si une correction est nécessaire.'] };
@@ -2664,6 +2705,9 @@
     if (!existing) return { ok: false, errors: ['Pièce introuvable.'] };
     if (existing.status === 'posted') return { ok: false, errors: ['Cette pièce est déjà validée.'] };
     var existingJournal = journal(existing.journal);
+    if (existingJournal && existingJournal.retired) {
+      return { ok: false, errors: ['Validation refusée : le journal de cette écriture a été retiré.'] };
+    }
     if (existingJournal && existingJournal.systemManaged && existing.sourceSystem !== existingJournal.systemSource) {
       return { ok: false, errors: ['Validation refusée : l’écriture du journal automatique ne porte pas une provenance système conforme.'] };
     }
@@ -2691,8 +2735,9 @@
     var existing = entry(id);
     if (!existing) return { ok: false, errors: ['Pièce introuvable.'] };
     if (existing.status !== 'draft') return { ok: false, errors: ['Seuls les brouillons peuvent être supprimés.'] };
-    if (journal(existing.journal) && journal(existing.journal).systemManaged) {
-      return { ok: false, errors: ['Ce brouillon est rattaché à un journal automatique ; sa suppression manuelle est interdite.'] };
+    var existingJournal = journal(existing.journal);
+    if (existingJournal && (existingJournal.systemManaged || existingJournal.retired)) {
+      return { ok: false, errors: ['Ce brouillon est rattaché à un journal automatique ou retiré ; sa suppression manuelle est interdite.'] };
     }
     var st = load();
     var previousState = clone(st);

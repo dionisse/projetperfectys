@@ -1624,7 +1624,7 @@
     var managementAllowed = !isPhoneViewport();
     var standardCount = stats.filter(function (item) { return item.journal.isStandard; }).length;
     var systemCount = stats.filter(function (item) { return item.journal.systemManaged; }).length;
-    var userCount = stats.filter(function (item) { return !item.journal.isStandard && !item.journal.systemManaged; }).length;
+    var userCount = stats.filter(function (item) { return !item.journal.isStandard && !item.journal.systemManaged && !item.journal.retired; }).length;
     var headerActions = managementAllowed
       ? '<button type="button" class="btn btn-primary" data-action="new-journal">＋ Créer un journal</button><a class="btn btn-ghost" href="#/entry">＋ Nouvelle écriture</a>'
       : '<a class="btn btn-ghost" href="#/menu?g=editions&amp;t=journals">Consulter les écritures</a>';
@@ -1639,22 +1639,22 @@
       '<div><strong>' + stats.length + '</strong><span>journaux au total</span></div>' +
     '</div>' +
     (managementAllowed ? '' : '<div class="alert info">La création, la modification et la saisie sont masquées sur téléphone. Utilisez le menu Éditions pour consulter les écritures.</div>') +
-    '<div class="alert info journal-system-note"><strong>Journaux automatiques protégés.</strong> Les journaux Amortissements, Abonnements et Report à Nouveau sont alimentés uniquement par PERFECTO : leur saisie manuelle et leur import sont bloqués. Les traitements qui généreront leurs écritures restent à construire ; la simulation d’amortissement disponible demeure indicative et ne comptabilise rien.</div>' +
+    '<div class="alert info journal-system-note"><strong>Journaux automatiques protégés.</strong> Les journaux Amortissements, Abonnements, Centralisations et Résultat de la période (`AMO`, `ABO`, `CEN`, `RPE`) sont réservés aux traitements internes de PERFECTO ; la saisie manuelle et les imports y sont bloqués. Le routage vers ces journaux automatiques reste à construire : les flux de centralisation déjà livrés vers `PA` et `VE` ne sont pas modifiés par cette correction. La simulation d’amortissement demeure indicative et ne comptabilise rien.</div>' +
     '<div class="journal-grid">' + stats.map(function (item) {
       var record = item.journal;
       var systemManaged = !!record.systemManaged;
-      var kind = systemManaged ? 'Automatique · système' : (record.isStandard ? 'Standard modifiable' : 'Créé par l’utilisateur');
+      var kind = record.retired ? 'Historique retiré' : (systemManaged ? 'Automatique · système' : (record.isStandard ? 'Standard modifiable' : 'Créé par l’utilisateur'));
       var activeLabel = record.active === false ? 'Inactif' : 'Actif';
       var references = record.referencePrefix || record.code;
       var count = S.journalEntryCount(record.id);
       var actions = '<a class="btn btn-ghost btn-sm" href="#/journal?journal=' + encodeURIComponent(record.code) + '">Voir le journal</a>';
-      if (managementAllowed && !systemManaged) {
+      if (managementAllowed && !systemManaged && !record.retired) {
         actions += '<button type="button" class="btn btn-ghost btn-sm" data-action="edit-journal" data-id="' + esc(record.code) + '">Paramètres</button>';
       }
-      if (managementAllowed && !systemManaged && !record.isStandard) {
+      if (managementAllowed && !systemManaged && !record.retired && !record.isStandard) {
         actions += '<button type="button" class="btn btn-ghost btn-sm btn-danger" data-action="delete-journal" data-id="' + esc(record.code) + '"' + (count ? ' disabled title="Ce journal contient des écritures : il peut être désactivé, mais pas supprimé."' : '') + '>Supprimer</button>';
       }
-      return '<article class="journal-card' + (systemManaged ? ' system-managed' : '') + (record.active === false ? ' journal-inactive' : '') + '">' +
+      return '<article class="journal-card' + (systemManaged ? ' system-managed' : '') + (record.retired ? ' journal-retired' : '') + (record.active === false ? ' journal-inactive' : '') + '">' +
         '<div class="journal-head"><span class="journal-code">' + esc(record.code) + '</span>' +
           '<div><h3>' + esc(record.label) + '</h3><span class="journal-meta">Type : ' + esc(record.type) + '</span></div></div>' +
         '<div class="journal-tags"><span class="badge plain">' + esc(kind) + '</span><span class="badge ' + (record.active === false ? 'draft' : 'posted') + '">' + activeLabel + '</span></div>' +
@@ -1917,9 +1917,9 @@
       '<div class="alert ' + (t.balanced ? 'success' : 'warning') + '" style="margin-top:16px">' +
         (t.balanced ? '✅ Pièce équilibrée.' : '⚠️ Pièce déséquilibrée (brouillon).') + '</div>';
     var isCancellationEntry = CentralizationCancellation.isCancellationEntry(e);
-    var isSystemManagedJournal = !!(journal && journal.systemManaged);
+    var isSystemManagedJournal = !!(journal && (journal.systemManaged || journal.retired));
     if (isSystemManagedJournal) {
-      body += '<div class="alert info" style="margin-top:16px"><strong>Journal alimenté par le système.</strong> La modification et la suppression manuelles sont désactivées.</div>';
+      body += '<div class="alert info" style="margin-top:16px"><strong>' + (journal.retired ? 'Journal historique retiré.' : 'Journal alimenté par le système.') + '</strong> La modification et la suppression manuelles sont désactivées.</div>';
     }
     if (isCancellationEntry) {
       var cancellationMetadata = e.sourceMetadata || {};
@@ -1935,7 +1935,7 @@
         footer += '<button type="button" class="btn btn-danger" data-action="delete-draft" data-id="' + esc(e.id) + '">× Supprimer</button>';
         if (!isCancellationEntry) footer += '<button type="button" class="btn btn-ghost" data-action="edit-draft" data-id="' + esc(e.id) + '">✎ Modifier</button>';
       }
-      if (!isCancellationEntry && (!isSystemManagedJournal || e.sourceSystem === journal.systemSource)) {
+      if (!isCancellationEntry && (!isSystemManagedJournal || (journal.systemManaged && e.sourceSystem === journal.systemSource))) {
         footer += '<button type="button" class="btn btn-primary" data-action="validate-entry" data-id="' + esc(e.id) + '">✓ Valider la pièce</button>';
       }
     }

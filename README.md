@@ -45,7 +45,7 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 | Personnel | Répertoire local des membres du personnel, code `PER` automatique, fonction, service, contacts et compte auxiliaire 42 ; sans salaires ni contrats |
 | Localisation des immobilisations corporelles | Arborescence locale de niveaux et d’emplacements modifiables (code `LOC`, parent/enfant, adresse, responsable), réutilisable depuis les fiches immobilisées |
 | Éléments immobilisés | Registre local par dossier pour les trois natures, paramètres et comptes associés ; simulation linéaire indicative, convention explicitement choisie, lecture seule sans écriture |
-| Journaux | Six journaux standards, trois journaux système protégés et création illimitée de journaux par dossier ; paramètres, statuts et références automatiques |
+| Journaux | Six journaux standards, quatre journaux système protégés et création illimitée de journaux par dossier ; paramètres, statuts et références automatiques |
 | Saisie d'écriture | Saisie multiligne, contrôle d'équilibre en direct, référence auto, brouillon ou validation |
 | Pièces comptables | Liste filtrable, détail en modale, validation, modification et suppression des brouillons |
 | Balance générale | Débit, crédit et solde par compte, contrôle d'équilibre, export CSV, impression |
@@ -60,7 +60,9 @@ Le sous-menu **Définitions → Journaux** conserve les six journaux standards `
 
 Les codes sont uniques dans le dossier et ne sont jamais réattribués après suppression. Le code des six journaux standards est conservé ; le code d’un journal utilisateur est verrouillé dès qu’une écriture le référence. Un journal personnalisé portant des écritures ne peut pas être supprimé : il peut être désactivé pour conserver l’historique. Les créations, modifications et suppressions ont des droits de démonstration distincts (`journals.create`, `journals.edit`, `journals.delete`) et restent refusées par défaut aux profils non autorisés.
 
-Les trois journaux automatiques demandés sont présents et non modifiables : `AMO` — Journal des amortissements automatiques, `ABO` — Journal abonnements, et `RAN` — Journal Report à Nouveau. La saisie manuelle et l’import dans ces journaux sont bloqués ; ils sont réservés aux écritures produites par les traitements internes de PERFECTO. **Leur génération automatique effective reste à construire** : en particulier, la simulation linéaire d’immobilisations reste indicative et ne produit aucune écriture. Les paramètres et l’historique du registre sont isolés par dossier, enregistrés dans le stockage local du prototype et inclus dans les exports/restaurations JSON ; la migration ajoute les trois journaux système aux anciens dossiers sans réécrire leurs pièces.
+Quatre journaux automatiques sont présents et non modifiables : `AMO` — Journal des amortissements automatiques, `ABO` — Journal abonnements, `CEN` — Journal des Centralisations et `RPE` — Journal Résultat de la période. La saisie manuelle et l’import y sont bloqués ; `CEN` est réservé aux traitements issus des modules PERFECTO internes, jamais à un fichier ou logiciel tiers. Le routage actuel des centralisations Paie et Ventes vers `PA` et `VE` reste inchangé. Les générations dans `AMO`, `ABO`, `CEN` et `RPE` restent à construire ; la simulation linéaire d’immobilisations reste indicative et ne produit aucune écriture.
+
+Le journal `RAN` — Report à Nouveau a été retiré du registre automatique et son code est réservé pour éviter sa réattribution. À la migration, il est supprimé s’il ne contient aucune écriture ; s’il porte un historique, il est conservé sous « Ancien journal RAN (historique) », inactif et verrouillé, afin de ne pas laisser d’écritures orphelines. Les paramètres et l’historique des journaux sont isolés par dossier, enregistrés dans le stockage local et inclus dans les exports/restaurations JSON.
 
 ### Référentiel fournisseurs — évolution
 
@@ -217,7 +219,7 @@ Chaque dossier a des données comptables isolées dans le navigateur. Le jeu his
 
 ### Données de démonstration
 
-Le dossier principal conserve ses 18 comptes de démonstration historiques en plus des 147 comptes du référentiel fourni, 6 journaux standards, 3 journaux automatiques système vides par défaut, 3 pièces validées et 1 brouillon. Les comptes historiques restent identifiables et utilisables pour assurer la continuité ; aucune référence ni aucun montant des pièces validées n’est réécrit. Les mouvements validés restent équilibrés à **2 832 000 XOF** au débit comme au crédit ; le résultat de démonstration reste de **242 000 XOF**. Le registre des dossiers clients et chaque jeu comptable sont persistés dans `localStorage`. Chaque nouveau dossier reçoit le plan de comptes, les journaux et les périodes de son cycle, sans écritures recopiées. Les profils et leurs grants de démonstration restent temporaires et ne survivent pas au rechargement.
+Le dossier principal conserve ses 18 comptes de démonstration historiques en plus des 147 comptes du référentiel fourni, 6 journaux standards, 4 journaux automatiques système vides par défaut, 3 pièces validées et 1 brouillon. Les comptes historiques restent identifiables et utilisables pour assurer la continuité ; aucune référence ni aucun montant des pièces validées n’est réécrit. Les mouvements validés restent équilibrés à **2 832 000 XOF** au débit comme au crédit ; le résultat de démonstration reste de **242 000 XOF**. Le registre des dossiers clients et chaque jeu comptable sont persistés dans `localStorage`. Chaque nouveau dossier reçoit le plan de comptes, les journaux et les périodes de son cycle, sans écritures recopiées. Les profils et leurs grants de démonstration restent temporaires et ne survivent pas au rechargement.
 
 ## Lancer en local
 

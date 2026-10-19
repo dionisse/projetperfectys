@@ -668,6 +668,7 @@ input[readonly] { background: var(--bg-subtle); color: var(--muted); }
 .journal-card dt { color: var(--muted); }
 .journal-card dd { margin: 0; font-weight: 650; font-variant-numeric: tabular-nums; text-align: right; }
 .journal-card.system-managed { background: #fbfcfa; border-style: dashed; }
+.journal-card.journal-retired { background: #faf8f3; border-style: dashed; }
 .journal-card.journal-inactive { opacity: .78; }
 .journal-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
 .journal-description { margin: 12px 0 0; color: var(--muted); font-size: .78rem; line-height: 1.5; }

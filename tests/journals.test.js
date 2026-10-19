@@ -39,6 +39,15 @@ function entryPayload(journal, reference) {
   };
 }
 
+function oldReportJournal() {
+  return {
+    code: 'RAN', label: 'Journal Report à Nouveau', type: 'Automatique', id: 'journal-system-opening-balance',
+    referencePrefix: 'RAN', description: 'Réservé au report à nouveau.', active: true,
+    origin: 'system', isStandard: false, systemManaged: true,
+    systemKey: 'opening-balance', systemSource: 'PERFECTO-REPORT-A-NOUVEAU'
+  };
+}
+
 function test(name, fn) {
   try {
     fn();
@@ -51,12 +60,17 @@ function test(name, fn) {
 }
 
 console.log('Référentiel des journaux');
-test('six journaux standards et trois journaux automatiques sont présents dès la création du dossier', () => {
+test('six journaux standards et quatre journaux automatiques sont présents dès la création du dossier', () => {
   const { store } = createEnvironment();
-  assert.equal(store.journals().length, 9);
+  assert.equal(store.journals().length, 10);
   assert.deepEqual(JSON.parse(JSON.stringify(store.journals().filter(record => record.isStandard).map(record => record.code))), ['AC', 'VE', 'BQ', 'CA', 'OD', 'PA']);
-  assert.deepEqual(JSON.parse(JSON.stringify(store.journals().filter(record => record.systemManaged).map(record => record.code))), ['AMO', 'ABO', 'RAN']);
+  assert.deepEqual(JSON.parse(JSON.stringify(store.journals().filter(record => record.systemManaged).map(record => record.code))), ['AMO', 'ABO', 'CEN', 'RPE']);
+  assert.equal(store.journal('RAN'), null);
+  assert.ok(store.getState().journalCodeHistory.includes('RAN'), 'le code retiré reste réservé');
+  assert.equal(store.createJournal({ code: 'RAN', label: 'Tentative de retour', type: 'Divers', referencePrefix: 'RAN2' }).ok, false);
   assert.equal(store.journal('amo').systemSource, 'PERFECTO-IMMOBILISATIONS-AMORTISSEMENT');
+  assert.equal(store.journal('cen').systemSource, 'PERFECTO-CENTRALISATIONS-INTERNES');
+  assert.equal(store.journal('rpe').label, 'Journal Résultat de la période');
   assert.equal(store.nextJournalCode(), 'J01');
 });
 
@@ -73,13 +87,51 @@ test('une ancienne base à six journaux migre sans réécrire ses écritures', (
   delete legacy.journalCodeHistory;
   env.values.set(env.store.STORAGE_KEY, JSON.stringify(legacy));
   const migrated = env.loadStore();
-  assert.equal(migrated.journals().length, 10, 'les neuf journaux intégrés et le journal utilisateur historique sont conservés');
-  assert.equal(migrated.getState().journalRegistryVersion, 1);
+  assert.equal(migrated.journals().length, 11, 'les dix journaux intégrés et le journal utilisateur historique sont conservés');
+  assert.equal(migrated.getState().journalRegistryVersion, 2);
   assert.equal(migrated.journal('CST').origin, 'user');
   assert.equal(migrated.journal('CST').referencePrefix, 'PC');
   assert.equal(migrated.journal('CST').active, false);
   assert.equal(JSON.stringify(migrated.entries()), entriesBefore);
   assert.ok(migrated.getState().journalCodeHistory.includes('AMO'));
+});
+
+test('migration retire le journal RAN v1 s’il ne porte aucune écriture et réserve son code', () => {
+  const env = createEnvironment();
+  const legacy = JSON.parse(JSON.stringify(env.store.getState()));
+  legacy.journalRegistryVersion = 1;
+  legacy.journals.push(oldReportJournal());
+  legacy.journalCodeHistory.push('RAN');
+  env.values.set(env.store.STORAGE_KEY, JSON.stringify(legacy));
+  const migrated = env.loadStore();
+  assert.equal(migrated.journal('RAN'), null);
+  assert.ok(migrated.getState().journalCodeHistory.includes('RAN'));
+  assert.equal(migrated.getState().journalRegistryVersion, 2);
+  assert.equal(migrated.journal('CEN').systemManaged, true);
+  assert.equal(migrated.journal('RPE').systemManaged, true);
+});
+
+test('si RAN porte des écritures anciennes, le registre conserve une entrée historique retirée et verrouillée', () => {
+  const env = createEnvironment();
+  const legacy = JSON.parse(JSON.stringify(env.store.getState()));
+  legacy.journalRegistryVersion = 1;
+  legacy.journals.push(oldReportJournal());
+  legacy.journalCodeHistory.push('RAN');
+  legacy.entries.push(Object.assign({ id: 'ran-historique', status: 'draft' }, entryPayload('RAN', 'RAN-2026-900')));
+  env.values.set(env.store.STORAGE_KEY, JSON.stringify(legacy));
+  const migrated = env.loadStore();
+  const retired = migrated.journal('RAN');
+  assert.equal(retired.retired, true);
+  assert.equal(retired.systemManaged, false);
+  assert.equal(retired.active, false);
+  assert.equal(retired.label, 'Ancien journal RAN (historique)');
+  assert.equal(migrated.entry('ran-historique').journal, 'RAN');
+  assert.equal(migrated.createEntry(entryPayload('RAN', 'RAN-2026-901'), 'draft').ok, false);
+  assert.equal(migrated.updateJournal('RAN', { code: 'RAN', label: 'Réactiver', type: 'Divers', referencePrefix: 'RAN', active: true }).ok, false);
+  assert.equal(migrated.deleteJournal('RAN').ok, false);
+  assert.equal(migrated.updateDraft('ran-historique', entryPayload('RAN', 'RAN-2026-900')).ok, false);
+  assert.equal(migrated.deleteDraft('ran-historique').ok, false);
+  assert.equal(migrated.postEntry('ran-historique').ok, false);
 });
 
 test('création illimitée par dossier, paramètres libres et préfixe de référence', () => {
@@ -149,9 +201,9 @@ test('codes et libellés des journaux standards sont protégés, leurs paramètr
   assert.equal(labelChange.ok, true, labelChange.errors.join(' '));
 });
 
-test('les trois journaux système sont non modifiables et refusent saisie/import manuel', () => {
+test('les quatre journaux système sont non modifiables et refusent saisie/import manuel', () => {
   const { store } = createEnvironment();
-  ['AMO', 'ABO', 'RAN'].forEach(code => {
+  ['AMO', 'ABO', 'CEN', 'RPE'].forEach(code => {
     const record = store.journal(code);
     assert.equal(store.updateJournal(code, { code, label: 'Tentative', type: 'Divers', referencePrefix: code, active: true }).ok, false);
     assert.equal(store.deleteJournal(code).ok, false);
