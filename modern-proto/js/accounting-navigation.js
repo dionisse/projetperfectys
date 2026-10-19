@@ -43,7 +43,7 @@
             { id: 'cash-flow-natures', label: 'Natures des flux de trésorerie', status: 'inactive' }
           ]
         },
-        { id: 'fixed-asset-locations', label: 'Localisation des immobilisations corporelles', status: 'planned', reason: 'Référentiel général à construire avec la gestion des immobilisations.' },
+        { id: 'fixed-asset-locations', label: 'Localisation des immobilisations corporelles', status: 'partial', reason: 'Référentiel hiérarchique par dossier : codes, niveaux et désignations modifiables, rattachement parent/enfant, adresse et responsable. La gestion des immobilisations, leurs affectations et leurs amortissements reste à construire.' },
         { id: 'fixed-assets', label: 'Éléments immobilisés', status: 'planned', reason: 'Fonction générale à construire avant le calcul des amortissements.' },
         { id: 'journals', label: 'Journaux', status: 'active', reason: 'Référentiel de journaux actuellement disponible.', actions: [{ label: 'Consulter les journaux comptables', route: 'journals' }] }
       ]

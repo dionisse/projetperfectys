@@ -277,4 +277,16 @@ test('les droits Personnel sont indépendants et limités au dossier', () => {
   assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'personnel.delete', { ...context, dossierId: 'dossier-2' }), false);
 });
 
-console.log('Politique d’accès : 14 scénarios réussis.');
+test('les droits des localisations d’immobilisations sont distincts et limités au dossier', () => {
+  const member = {
+    role: 'manager', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view', 'fixedAssetLocations.create', 'fixedAssetLocations.edit'] }] }
+  };
+  const context = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'fixedAssetLocations.create', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'fixedAssetLocations.edit', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'fixedAssetLocations.delete', context), false);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'fixedAssetLocations.delete', { ...context, dossierId: 'dossier-2' }), false);
+});
+
+console.log('Politique d’accès : scénarios réussis.');

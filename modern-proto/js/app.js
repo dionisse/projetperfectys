@@ -295,6 +295,17 @@
           moduleId: 'accounting',
           actionId: trigger && trigger.getAttribute('data-personnel-mode') === 'edit' ? 'personnel.edit' : 'personnel.create'
         };
+      case 'new-fixed-asset-location':
+        return { moduleId: 'accounting', actionId: 'fixedAssetLocations.create' };
+      case 'edit-fixed-asset-location':
+        return { moduleId: 'accounting', actionId: 'fixedAssetLocations.edit' };
+      case 'delete-fixed-asset-location':
+        return { moduleId: 'accounting', actionId: 'fixedAssetLocations.delete' };
+      case 'save-fixed-asset-location':
+        return {
+          moduleId: 'accounting',
+          actionId: trigger && trigger.getAttribute('data-fixed-asset-location-mode') === 'edit' ? 'fixedAssetLocations.edit' : 'fixedAssetLocations.create'
+        };
       case 'close-period':
         return { moduleId: 'accounting', actionId: 'period.close' };
       case 'open-period':
@@ -5095,6 +5106,220 @@
     });
   }
 
+  function fixedAssetLocationPathLabel(record, records) {
+    var parts = [];
+    var current = record;
+    var visited = Object.create(null);
+    var byId = Object.create(null);
+    records.forEach(function (item) { byId[item.id] = item; });
+    while (current && !visited[current.id]) {
+      visited[current.id] = true;
+      parts.unshift(String(current.name || current.code || 'Emplacement'));
+      current = current.parentId ? byId[current.parentId] : null;
+    }
+    return parts.join(' › ');
+  }
+
+  function fixedAssetLocationTree(records, query) {
+    var byId = Object.create(null);
+    var children = Object.create(null);
+    var selected = Object.create(null);
+    var visited = Object.create(null);
+    var q = String(query || '').trim().toLocaleLowerCase('fr');
+    records.forEach(function (record) { byId[record.id] = record; });
+    var matches = records.filter(function (record) {
+      if (!q) return true;
+      var searchable = [record.code, record.level, record.name, record.address, record.responsible, record.notes, fixedAssetLocationPathLabel(record, records)].join(' ').toLocaleLowerCase('fr');
+      return searchable.indexOf(q) !== -1;
+    });
+    if (!q) records.forEach(function (record) { selected[record.id] = true; });
+    else matches.forEach(function (record) {
+      var current = record;
+      var ancestors = Object.create(null);
+      while (current && !ancestors[current.id]) {
+        ancestors[current.id] = true;
+        selected[current.id] = true;
+        current = current.parentId ? byId[current.parentId] : null;
+      }
+    });
+    records.forEach(function (record) {
+      var parentId = String(record.parentId || '');
+      if (parentId && parentId !== String(record.id) && byId[parentId]) {
+        if (!children[parentId]) children[parentId] = [];
+        children[parentId].push(record);
+      }
+    });
+    Object.keys(children).forEach(function (parentId) {
+      children[parentId].sort(function (a, b) { return String(a.name).localeCompare(String(b.name), 'fr'); });
+    });
+    var roots = records.filter(function (record) {
+      var parentId = String(record.parentId || '');
+      return !parentId || parentId === String(record.id) || !byId[parentId];
+    }).sort(function (a, b) { return String(a.name).localeCompare(String(b.name), 'fr'); });
+    var rows = [];
+    function visit(record, depth) {
+      if (!record || visited[record.id]) return;
+      visited[record.id] = true;
+      if (selected[record.id]) rows.push({ record: record, depth: depth });
+      (children[record.id] || []).forEach(function (child) { visit(child, depth + 1); });
+    }
+    roots.forEach(function (record) { visit(record, 0); });
+    records.forEach(function (record) { if (!visited[record.id]) visit(record, 0); });
+    return { rows: rows, matchCount: matches.length };
+  }
+
+  function fixedAssetLocationDescendantIds(records, rootId) {
+    var descendants = Object.create(null);
+    var changed = true;
+    while (changed) {
+      changed = false;
+      records.forEach(function (record) {
+        if (String(record.id) === String(rootId) || descendants[record.id]) return;
+        if (String(record.parentId || '') === String(rootId) || descendants[String(record.parentId || '')]) {
+          descendants[record.id] = true;
+          changed = true;
+        }
+      });
+    }
+    return descendants;
+  }
+
+  function fixedAssetLocationParentOptions(records, selectedParentId, excludeId) {
+    var excluded = excludeId ? fixedAssetLocationDescendantIds(records, excludeId) : Object.create(null);
+    var tree = fixedAssetLocationTree(records, '');
+    return '<option value="">Aucun — emplacement racine</option>' + tree.rows.filter(function (row) {
+      return String(row.record.id) !== String(excludeId || '') && !excluded[row.record.id];
+    }).map(function (row) {
+      var indent = new Array(Math.min(row.depth, 8) + 1).join('— ');
+      var label = indent + (row.record.code ? row.record.code + ' · ' : '') + row.record.name + ' (' + row.record.level + ')';
+      return '<option value="' + esc(row.record.id) + '"' + (String(row.record.id) === String(selectedParentId || '') ? ' selected' : '') + '>' + esc(label) + '</option>';
+    }).join('');
+  }
+
+  function fixedAssetLocationRowsHtml(records, query) {
+    var tree = fixedAssetLocationTree(records, query);
+    var byId = Object.create(null);
+    records.forEach(function (record) { byId[record.id] = record; });
+    return tree.rows.map(function (row) {
+      var record = row.record;
+      var parent = record.parentId ? byId[record.parentId] : null;
+      var depth = Math.min(row.depth, 8);
+      return '<tr>' +
+        '<td><strong>' + esc(record.code) + '</strong></td>' +
+        '<td><span class="fixed-asset-location-level">' + esc(record.level) + '</span></td>' +
+        '<td><div class="fixed-asset-location-tree-node" style="padding-inline-start:' + (depth * 20) + 'px"><span class="fixed-asset-location-tree-marker" aria-hidden="true">' + (row.depth ? '↳' : '⌂') + '</span><div><strong>' + esc(record.name) + '</strong><small>' + esc(parent ? 'Sous-emplacement de ' + parent.name : 'Emplacement racine') + '</small></div></div></td>' +
+        '<td>' + (record.address ? esc(record.address) : '<span class="muted">Non renseignée</span>') + '</td>' +
+        '<td>' + (record.responsible ? esc(record.responsible) : '<span class="muted">Non renseigné</span>') + '</td>' +
+        '<td><div class="supplier-row-actions"><button type="button" class="btn btn-ghost btn-sm" data-action="edit-fixed-asset-location" data-id="' + esc(record.id) + '" aria-label="Modifier la localisation ' + esc(record.name) + '">Modifier</button><button type="button" class="btn btn-ghost btn-sm btn-danger-quiet" data-action="delete-fixed-asset-location" data-id="' + esc(record.id) + '" aria-label="Supprimer la localisation ' + esc(record.name) + '" title="Refusée si l’emplacement possède des enfants ou référence une immobilisation.">Supprimer</button></div></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function viewFixedAssetLocations() {
+    var records = S.fixedAssetLocations();
+    var filter = ui.fixedAssetLocations || (ui.fixedAssetLocations = { q: '' });
+    var tree = fixedAssetLocationTree(records, filter.q);
+    var rootCount = records.filter(function (record) { return !record.parentId || !records.some(function (candidate) { return candidate.id === record.parentId; }); }).length;
+    var emptyMessage = records.length
+      ? 'Aucun emplacement ne correspond à cette recherche.'
+      : 'Aucun emplacement n’est encore enregistré dans ce dossier. Créez d’abord un site ou un emplacement racine.';
+    return '<div class="exchange-workspace fixed-asset-location-workspace" id="fixed-asset-location-workspace">' +
+      '<div class="alert info"><div><strong>Référentiel hiérarchique du dossier actif.</strong> Créez les niveaux utiles à votre organisation — par exemple site, bâtiment, étage, local ou zone — puis rattachez chaque emplacement à son parent. Le niveau, le code et les champs descriptifs restent modifiables ; aucune immobilisation, écriture ou dotation aux amortissements n’est créée ici.</div></div>' +
+      '<div class="exchange-summary-grid fixed-asset-location-summary-grid" aria-label="Résumé des localisations d’immobilisations"><div><small>Emplacements enregistrés</small><strong>' + records.length + '</strong></div><div><small>Emplacements racines</small><strong>' + rootCount + '</strong></div><div><small>Résultats de recherche</small><strong id="fixed-asset-location-visible-count">' + tree.matchCount + '</strong></div></div>' +
+      '<section class="exchange-card fixed-asset-location-directory-card">' +
+        '<div class="supplier-directory-head"><div><h4>Localisations des immobilisations corporelles</h4><p>Arborescence modifiable, sans limite métier fixe sur le nombre de niveaux.</p></div><button type="button" class="btn btn-primary" data-action="new-fixed-asset-location">＋ Nouvel emplacement</button></div>' +
+        '<form id="fixed-asset-location-filter-form" class="supplier-filter-controls client-filter-controls" role="search"><label class="field"><span>Rechercher dans les codes, niveaux et emplacements</span><input id="fixed-asset-location-search" type="search" value="' + esc(filter.q) + '" placeholder="Code, site, bâtiment, local, responsable…" autocomplete="off"></label></form>' +
+        '<p class="supplier-result-note" id="fixed-asset-location-result-note">' + tree.matchCount + (tree.matchCount === 1 ? ' emplacement correspondant.' : ' emplacements correspondants.') + '</p>' +
+        '<div class="table-wrap exchange-table-wrap fixed-asset-location-table-wrap" id="fixed-asset-location-table-wrap"' + (tree.matchCount ? '' : ' hidden') + '><table class="exchange-mapping-table fixed-asset-location-table"><caption class="sr-only">Arborescence des localisations d’immobilisations du dossier actif</caption><thead><tr><th>Code</th><th>Niveau</th><th>Emplacement hiérarchisé</th><th>Adresse / précision</th><th>Responsable / service</th><th>Actions</th></tr></thead><tbody id="fixed-asset-location-rows">' + fixedAssetLocationRowsHtml(records, filter.q) + '</tbody></table></div>' +
+        '<div id="fixed-asset-location-list-empty" class="empty-state registry-empty"' + (tree.matchCount ? ' hidden' : '') + '><span class="empty-state-icon">⌕</span><h3>Aucun résultat</h3><p>' + esc(emptyMessage) + '</p></div>' +
+      '</section>' +
+      '<p class="exchange-footnote">Les localisations restent dans les données locales et la sauvegarde JSON du dossier actif. L’affectation aux fiches d’immobilisations sera activée avec le registre des immobilisations.</p>' +
+    '</div>';
+  }
+
+  function refreshFixedAssetLocationRows() {
+    var records = S.fixedAssetLocations();
+    var filter = ui.fixedAssetLocations || { q: '' };
+    var tree = fixedAssetLocationTree(records, filter.q);
+    var rows = $('#fixed-asset-location-rows');
+    var tableWrap = $('#fixed-asset-location-table-wrap');
+    var empty = $('#fixed-asset-location-list-empty');
+    var count = $('#fixed-asset-location-visible-count');
+    var note = $('#fixed-asset-location-result-note');
+    if (rows) rows.innerHTML = fixedAssetLocationRowsHtml(records, filter.q);
+    if (tableWrap) tableWrap.hidden = tree.matchCount === 0;
+    if (empty) {
+      empty.hidden = tree.matchCount !== 0;
+      empty.querySelector('p').textContent = records.length
+        ? 'Aucun emplacement ne correspond à cette recherche.'
+        : 'Aucun emplacement n’est encore enregistré dans ce dossier. Créez d’abord un site ou un emplacement racine.';
+    }
+    if (count) count.textContent = String(tree.matchCount);
+    if (note) note.textContent = tree.matchCount + (tree.matchCount === 1 ? ' emplacement correspondant.' : ' emplacements correspondants.');
+    applyDemoActionGates(rows);
+  }
+
+  function bindFixedAssetLocationView() {
+    var form = $('#fixed-asset-location-filter-form');
+    if (!form) return;
+    var search = $('#fixed-asset-location-search', form);
+    function update() {
+      ui.fixedAssetLocations = ui.fixedAssetLocations || { q: '' };
+      ui.fixedAssetLocations.q = search ? search.value : '';
+      refreshFixedAssetLocationRows();
+    }
+    form.addEventListener('submit', function (event) { event.preventDefault(); });
+    if (search) search.addEventListener('input', update);
+  }
+
+  function openFixedAssetLocationModal(id) {
+    var existing = id ? S.fixedAssetLocation(id) : null;
+    if (id && !existing) { toast('Emplacement d’immobilisation introuvable dans le dossier actif.', 'error'); return; }
+    var records = S.fixedAssetLocations();
+    var suggestedCode = existing ? existing.code : S.nextFixedAssetLocationCode();
+    var value = function (key, fallback) { return esc(existing && existing[key] != null ? existing[key] : (fallback == null ? '' : fallback)); };
+    var parentOptions = fixedAssetLocationParentOptions(records, existing && existing.parentId, existing && existing.id);
+    var body = '<form id="fixed-asset-location-form" novalidate><div id="fixed-asset-location-errors" aria-live="assertive"></div>' +
+      '<div class="form-grid fixed-asset-location-form-grid">' +
+        '<div class="field"><label for="fixed-asset-location-code">Code <span aria-hidden="true">*</span></label><input id="fixed-asset-location-code" name="code" type="text" maxlength="32" value="' + value('code', suggestedCode) + '" placeholder="Ex. LOC-0001" required autocomplete="off"><span class="hint">Code proposé automatiquement, modifiable avant enregistrement et non réutilisé après attribution.</span></div>' +
+        '<div class="field"><label for="fixed-asset-location-level">Niveau hiérarchique <span aria-hidden="true">*</span></label><input id="fixed-asset-location-level" name="level" type="text" maxlength="80" list="fixed-asset-location-level-options" value="' + value('level') + '" placeholder="Ex. Site, bâtiment, étage, local…" required><datalist id="fixed-asset-location-level-options"><option value="Site"><option value="Bâtiment"><option value="Étage"><option value="Local"><option value="Zone"><option value="Service"><option value="Atelier"></datalist><span class="hint">Saisissez votre propre niveau si nécessaire ; ce champ est libre et modifiable.</span></div>' +
+        '<div class="field"><label for="fixed-asset-location-name">Désignation <span aria-hidden="true">*</span></label><input id="fixed-asset-location-name" name="name" type="text" maxlength="150" value="' + value('name') + '" placeholder="Ex. Siège de Cotonou" required></div>' +
+        '<div class="field"><label for="fixed-asset-location-parent">Emplacement parent</label><select id="fixed-asset-location-parent" name="parentId">' + parentOptions + '</select><span class="hint">Laissez « emplacement racine » pour créer un site ou un point de départ. Les descendants ne peuvent pas devenir parents.</span></div>' +
+        '<div class="field"><label for="fixed-asset-location-address">Adresse ou précision</label><input id="fixed-asset-location-address" name="address" type="text" maxlength="255" value="' + value('address') + '" placeholder="Adresse, aile, repère…"></div>' +
+        '<div class="field"><label for="fixed-asset-location-responsible">Responsable ou service</label><input id="fixed-asset-location-responsible" name="responsible" type="text" maxlength="150" value="' + value('responsible') + '" placeholder="Service ou responsable du lieu"></div>' +
+        '<div class="field fixed-asset-location-notes-field"><label for="fixed-asset-location-notes">Notes</label><textarea id="fixed-asset-location-notes" name="notes" rows="3" maxlength="1000" placeholder="Informations complémentaires">' + value('notes') + '</textarea></div>' +
+      '</div></form>';
+    var mode = existing ? 'edit' : 'create';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="submit" class="btn btn-primary" form="fixed-asset-location-form" data-action="save-fixed-asset-location" data-fixed-asset-location-mode="' + mode + '">' + (existing ? 'Enregistrer les modifications' : 'Enregistrer l’emplacement') + '</button>';
+    openModal(existing ? 'Modifier une localisation' : 'Nouvelle localisation d’immobilisation', 'Référentiel local du dossier ' + esc(S.currentDossier().reference), body, footer, true);
+    var form = $('#fixed-asset-location-form');
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var actionId = mode === 'edit' ? 'fixedAssetLocations.edit' : 'fixedAssetLocations.create';
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', actionId, accountingAccessContext())) {
+        toast('Action refusée par défaut : le droit « ' + actionId + ' » n’est pas accordé.', 'warning');
+        return;
+      }
+      var input = {
+        code: $('#fixed-asset-location-code').value,
+        level: $('#fixed-asset-location-level').value,
+        name: $('#fixed-asset-location-name').value,
+        parentId: $('#fixed-asset-location-parent').value,
+        address: $('#fixed-asset-location-address').value,
+        responsible: $('#fixed-asset-location-responsible').value,
+        notes: $('#fixed-asset-location-notes').value
+      };
+      var result = existing ? S.updateFixedAssetLocation(existing.id, input) : S.createFixedAssetLocation(input);
+      if (!result.ok) {
+        $('#fixed-asset-location-errors').innerHTML = '<div class="alert error" role="alert"><ul style="margin:0 0 0 18px">' + result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
+        return;
+      }
+      toast(existing ? 'Localisation mise à jour.' : 'Emplacement ' + result.location.code + ' enregistré.', 'success');
+      closeModal(true);
+      render();
+    });
+  }
+
   function viewAccountingMenu(params) {
     params = params || {};
     var phone = isPhoneViewport();
@@ -5143,6 +5368,8 @@
       exchangeFeature = viewOtherParties();
     } else if (group.id === 'definitions' && tab.id === 'personnel') {
       exchangeFeature = viewPersonnel();
+    } else if (group.id === 'definitions' && tab.id === 'fixed-asset-locations') {
+      exchangeFeature = viewFixedAssetLocations();
     }
     if (group.id === 'fichier') {
       switch (tab.id) {
@@ -5205,6 +5432,7 @@
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'clients') bindClientView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'other-debtors-creditors') bindOtherPartyView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'personnel') bindPersonnelView();
+      if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'fixed-asset-locations') bindFixedAssetLocationView();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-other') bindAccountingExchangeImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-balance') bindAccountingBalanceImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-payroll') bindPayrollCentralization();
@@ -5691,6 +5919,26 @@
         var personnelDeletion = S.deletePersonnel(id);
         if (!personnelDeletion.ok) { toast(personnelDeletion.errors.join(' ') || 'Suppression impossible.', 'warning'); break; }
         toast('Fiche du personnel supprimée. Son code ne sera pas réattribué.', 'success');
+        render();
+        break;
+      }
+      case 'new-fixed-asset-location':
+        openFixedAssetLocationModal();
+        break;
+      case 'edit-fixed-asset-location':
+        if (id) openFixedAssetLocationModal(id);
+        break;
+      case 'delete-fixed-asset-location': {
+        if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'fixedAssetLocations.delete', accountingAccessContext())) {
+          toast('Suppression refusée par défaut : le droit « fixedAssetLocations.delete » n’est pas accordé.', 'warning');
+          break;
+        }
+        var locationToDelete = S.fixedAssetLocation(id);
+        if (!locationToDelete) { toast('Emplacement d’immobilisation introuvable.', 'error'); break; }
+        if (!window.confirm('Supprimer l’emplacement « ' + locationToDelete.name + ' » ? La suppression sera refusée s’il possède des sous-emplacements ou référence une immobilisation.')) break;
+        var locationDeletion = S.deleteFixedAssetLocation(id);
+        if (!locationDeletion.ok) { toast(locationDeletion.errors.join(' ') || 'Suppression impossible.', 'warning'); break; }
+        toast('Emplacement supprimé. Son code ne sera pas réattribué.', 'success');
         render();
         break;
       }

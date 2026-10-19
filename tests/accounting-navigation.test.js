@@ -31,6 +31,7 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Fournisseurs',
   'Clients',
   'Personnel',
+  'Localisation des immobilisations corporelles',
   'Frais sur véhicules',
   'Bénéficiaires de frais de mission',
   'Natures des flux de trésorerie',
@@ -58,6 +59,9 @@ assert.equal(findTab('definitions', 'other-debtors-creditors').status, 'partial'
 assert.ok(findTab('definitions', 'other-debtors-creditors').reason.includes('DEB/CRE'));
 assert.equal(findTab('definitions', 'personnel').status, 'partial');
 assert.ok(findTab('definitions', 'personnel').reason.includes('PER'));
+assert.equal(findTab('definitions', 'fixed-asset-locations').status, 'partial');
+assert.ok(findTab('definitions', 'fixed-asset-locations').reason.includes('hiérarchique'));
+assert.ok(findTab('definitions', 'fixed-asset-locations').reason.includes('parent/enfant'));
 assert.equal(findTab('definitions', 'journals').status, 'active');
 assert.equal(findTab('saisie', 'journal-entry').status, 'active');
 assert.equal(findTab('fichier', 'export-other').status, 'partial');

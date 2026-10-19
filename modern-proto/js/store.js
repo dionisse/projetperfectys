@@ -34,6 +34,7 @@
   var CLIENT_REGISTRY_VERSION = 1;
   var OTHER_PARTY_REGISTRY_VERSION = 1;
   var PERSONNEL_REGISTRY_VERSION = 1;
+  var FIXED_ASSET_LOCATION_REGISTRY_VERSION = 1;
   var LEGACY_COMPTES = [
     { code: '101200', label: 'Capital social', cls: 1, nature: 'Passif', aux: false },
     { code: '162100', label: 'Emprunt bancaire', cls: 1, nature: 'Passif', aux: false },
@@ -262,6 +263,43 @@
     return result;
   }
 
+  function normalizeFixedAssetLocationCode(value) {
+    return String(value == null ? '' : value).trim().toLocaleUpperCase();
+  }
+
+  function upgradeFixedAssetLocations(data) {
+    var result = { data: data, changed: false };
+    if (!data) return result;
+    var locations = Array.isArray(data.fixedAssetLocations) ? data.fixedAssetLocations : [];
+    var history = [];
+    (Array.isArray(data.fixedAssetLocationCodeHistory) ? data.fixedAssetLocationCodeHistory : [])
+      .concat(locations.map(function (record) { return record && record.code; }))
+      .forEach(function (value) {
+        var code = normalizeFixedAssetLocationCode(value);
+        if (code && history.indexOf(code) === -1) history.push(code);
+      });
+    var sequence = Number(data.fixedAssetLocationSequence);
+    if (!Number.isInteger(sequence) || sequence < 1) sequence = 1;
+    history.forEach(function (code) {
+      var match = /^LOC-(\d+)$/.exec(code);
+      if (match) sequence = Math.max(sequence, Number(match[1]) + 1);
+    });
+    var currentVersion = Number(data.fixedAssetLocationRegistryVersion);
+    var changed = !Array.isArray(data.fixedAssetLocations) || !Number.isFinite(currentVersion) || currentVersion < FIXED_ASSET_LOCATION_REGISTRY_VERSION ||
+      JSON.stringify(data.fixedAssetLocationCodeHistory || []) !== JSON.stringify(history) ||
+      Number(data.fixedAssetLocationSequence) !== sequence;
+    if (changed) {
+      result.data = Object.assign({}, data, {
+        fixedAssetLocationRegistryVersion: Math.max(Number.isFinite(currentVersion) ? currentVersion : 0, FIXED_ASSET_LOCATION_REGISTRY_VERSION),
+        fixedAssetLocations: locations,
+        fixedAssetLocationCodeHistory: history,
+        fixedAssetLocationSequence: sequence
+      });
+      result.changed = true;
+    }
+    return result;
+  }
+
   function seedEntries() {
     return [
       {
@@ -336,6 +374,10 @@
       clientRegistryVersion: CLIENT_REGISTRY_VERSION,
       otherPartyRegistryVersion: OTHER_PARTY_REGISTRY_VERSION,
       personnelRegistryVersion: PERSONNEL_REGISTRY_VERSION,
+      fixedAssetLocationRegistryVersion: FIXED_ASSET_LOCATION_REGISTRY_VERSION,
+      fixedAssetLocations: [],
+      fixedAssetLocationCodeHistory: [],
+      fixedAssetLocationSequence: 1,
       suppliers: [],
       clients: [],
       otherParties: [],
@@ -672,8 +714,9 @@
           if (!recoveryIssue) {
             var chartUpgrade = upgradeAccountingChart(state);
             var registryUpgrade = upgradeAuxiliaryRegistries(chartUpgrade.data);
-            if (chartUpgrade.changed || registryUpgrade.changed) {
-              state = registryUpgrade.data;
+            var locationUpgrade = upgradeFixedAssetLocations(registryUpgrade.data);
+            if (chartUpgrade.changed || registryUpgrade.changed || locationUpgrade.changed) {
+              state = locationUpgrade.data;
               // Conserver une copie restaurable avant d’enregistrer les référentiels enrichis.
               if (snapshotPreviousState(raw)) save();
             }
@@ -1575,6 +1618,196 @@
     return { ok: true, errors: [], personnel: clone(record) };
   }
 
+  /* ---------------- Localisations des immobilisations -------------------- */
+  function fixedAssetLocationRecordsForState(st) {
+    if (!Array.isArray(st.fixedAssetLocations)) st.fixedAssetLocations = [];
+    if (!Array.isArray(st.fixedAssetLocationCodeHistory)) st.fixedAssetLocationCodeHistory = [];
+    if (!Number.isInteger(Number(st.fixedAssetLocationSequence)) || Number(st.fixedAssetLocationSequence) < 1) st.fixedAssetLocationSequence = 1;
+    return st.fixedAssetLocations;
+  }
+
+  function fixedAssetLocations() {
+    var st = load();
+    return Array.isArray(st.fixedAssetLocations) ? st.fixedAssetLocations : [];
+  }
+
+  function fixedAssetLocation(idOrCode) {
+    var key = String(idOrCode == null ? '' : idOrCode);
+    var normalizedCode = normalizeFixedAssetLocationCode(key);
+    return fixedAssetLocations().find(function (record) {
+      return record.id === key || normalizeFixedAssetLocationCode(record.code) === normalizedCode;
+    }) || null;
+  }
+
+  function nextFixedAssetLocationCode() {
+    var st = load();
+    if (recoveryIssue) return '';
+    var records = fixedAssetLocationRecordsForState(st);
+    var history = st.fixedAssetLocationCodeHistory;
+    records.forEach(function (record) {
+      var code = normalizeFixedAssetLocationCode(record && record.code);
+      if (code && history.indexOf(code) === -1) history.push(code);
+    });
+    var sequence = Number(st.fixedAssetLocationSequence) || 1;
+    var candidate;
+    do {
+      candidate = 'LOC-' + String(sequence).padStart(4, '0');
+      sequence += 1;
+    } while (history.indexOf(candidate) !== -1);
+    return candidate;
+  }
+
+  function reserveFixedAssetLocationCode(st, code) {
+    fixedAssetLocationRecordsForState(st);
+    var normalized = normalizeFixedAssetLocationCode(code);
+    if (normalized && st.fixedAssetLocationCodeHistory.indexOf(normalized) === -1) st.fixedAssetLocationCodeHistory.push(normalized);
+    var match = /^LOC-(\d+)$/.exec(normalized);
+    if (match) st.fixedAssetLocationSequence = Math.max(Number(st.fixedAssetLocationSequence) || 1, Number(match[1]) + 1);
+  }
+
+  function fixedAssetLocationReferenceCount(record, st) {
+    var fields = ['fixedAssets', 'fixedAssetItems', 'immobilisations', 'immobilizations'];
+    var referenceIds = Object.create(null);
+    var count = 0;
+    fields.forEach(function (field) {
+      (Array.isArray(st[field]) ? st[field] : []).forEach(function (asset, index) {
+        if (!asset || typeof asset !== 'object') return;
+        var locationId = asset.locationId || asset.fixedAssetLocationId || asset.immobilisationLocationId;
+        var locationCode = asset.locationCode || asset.fixedAssetLocationCode;
+        if (String(locationId || '') !== String(record.id) && normalizeFixedAssetLocationCode(locationCode) !== normalizeFixedAssetLocationCode(record.code)) return;
+        var key = asset.id ? String(asset.id) : field + ':' + index;
+        if (referenceIds[key]) return;
+        referenceIds[key] = true;
+        count += 1;
+      });
+    });
+    return count;
+  }
+
+  function fixedAssetLocationWouldCreateCycle(id, parentId, records) {
+    var cursor = String(parentId || '');
+    var visited = Object.create(null);
+    while (cursor) {
+      if (cursor === String(id || '')) return true;
+      if (visited[cursor]) return true;
+      visited[cursor] = true;
+      var parent = records.find(function (record) { return record.id === cursor; });
+      if (!parent) return false;
+      cursor = String(parent.parentId || '');
+    }
+    return false;
+  }
+
+  function validateFixedAssetLocationInput(input, excludeId) {
+    input = input || {};
+    var errors = [];
+    var st = load();
+    var records = fixedAssetLocationRecordsForState(st);
+    var code = normalizeFixedAssetLocationCode(input.code);
+    var name = String(input.name == null ? '' : input.name).trim();
+    var level = String(input.level == null ? '' : input.level).trim();
+    var parentId = String(input.parentId == null ? '' : input.parentId).trim();
+    var address = String(input.address == null ? '' : input.address).trim();
+    var responsible = String(input.responsible == null ? '' : input.responsible).trim();
+    var notes = String(input.notes == null ? '' : input.notes).trim();
+    var currentRecord = excludeId ? records.find(function (record) { return record.id === excludeId; }) : null;
+    var currentCode = currentRecord ? normalizeFixedAssetLocationCode(currentRecord.code) : '';
+
+    if (!code) errors.push('Le code de localisation est obligatoire.');
+    else if (!/^[A-Z0-9][A-Z0-9._/-]{0,31}$/.test(code)) errors.push('Le code doit contenir au plus 32 caractères : lettres, chiffres, point, tiret, barre oblique ou souligné.');
+    if (!name) errors.push('La désignation de l’emplacement est obligatoire.');
+    else if (name.length > 150) errors.push('La désignation ne peut pas dépasser 150 caractères.');
+    if (!level) errors.push('Le niveau hiérarchique est obligatoire (par exemple : site, bâtiment, étage ou local).');
+    else if (level.length > 80) errors.push('Le niveau hiérarchique ne peut pas dépasser 80 caractères.');
+    if (records.some(function (record) { return record.id !== excludeId && normalizeFixedAssetLocationCode(record.code) === code; })) errors.push('Ce code de localisation existe déjà dans le dossier.');
+    if (Array.isArray(st.fixedAssetLocationCodeHistory) && st.fixedAssetLocationCodeHistory.indexOf(code) !== -1 && code !== currentCode) errors.push('Ce code de localisation a déjà été attribué dans ce dossier et ne peut pas être réutilisé.');
+    if (parentId) {
+      var parent = records.find(function (record) { return record.id === parentId; });
+      if (!parent) errors.push('L’emplacement parent choisi n’existe plus dans le dossier actif.');
+      else if (fixedAssetLocationWouldCreateCycle(excludeId, parentId, records)) errors.push('Cette hiérarchie créerait une boucle : un emplacement ne peut pas devenir son propre parent ou celui de l’un de ses ancêtres.');
+    }
+    [
+      [address, 'L’adresse ou la précision de localisation', 255],
+      [responsible, 'Le responsable ou service', 150],
+      [notes, 'La note', 1000]
+    ].forEach(function (field) {
+      if (field[0].length > field[2]) errors.push(field[1] + ' ne peut pas dépasser ' + field[2] + ' caractères.');
+    });
+    return {
+      ok: errors.length === 0,
+      errors: errors,
+      value: { code: code, name: name, level: level, parentId: parentId, address: address, responsible: responsible, notes: notes }
+    };
+  }
+
+  function createFixedAssetLocation(input) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Création bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var records = fixedAssetLocationRecordsForState(st);
+    input = Object.assign({}, input || {});
+    if (!String(input.code || '').trim()) input.code = nextFixedAssetLocationCode();
+    var validation = validateFixedAssetLocationInput(input);
+    if (!validation.ok) return validation;
+    var previousState = clone(st);
+    var id;
+    do { id = 'fixed-asset-location-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7); }
+    while (records.some(function (record) { return record.id === id; }));
+    var timestamp = new Date().toISOString();
+    var record = Object.assign({ id: id, createdAt: timestamp, updatedAt: timestamp }, validation.value);
+    records.push(record);
+    reserveFixedAssetLocationCode(st, record.code);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer l’emplacement dans le stockage local de ce dossier.'] };
+    }
+    return { ok: true, errors: [], location: clone(record) };
+  }
+
+  function updateFixedAssetLocation(id, input) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Modification bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var records = fixedAssetLocationRecordsForState(st);
+    var index = records.findIndex(function (record) { return record.id === id; });
+    if (index < 0) return { ok: false, errors: ['Emplacement d’immobilisation introuvable dans le dossier actif.'] };
+    var previous = records[index];
+    var validation = validateFixedAssetLocationInput(input, id);
+    if (!validation.ok) return validation;
+    var referenceCount = fixedAssetLocationReferenceCount(previous, st);
+    if (referenceCount && (validation.value.code !== normalizeFixedAssetLocationCode(previous.code) || validation.value.parentId !== String(previous.parentId || ''))) {
+      return { ok: false, errors: ['Le code et le rattachement hiérarchique ne peuvent pas être modifiés : ' + referenceCount + ' immobilisation(s) utilisent déjà cet emplacement.'] };
+    }
+    var previousState = clone(st);
+    var updated = Object.assign({}, previous, validation.value, { id: previous.id, createdAt: previous.createdAt, updatedAt: new Date().toISOString() });
+    records[index] = updated;
+    reserveFixedAssetLocationCode(st, previous.code);
+    reserveFixedAssetLocationCode(st, updated.code);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer les modifications de l’emplacement.'] };
+    }
+    return { ok: true, errors: [], location: clone(updated) };
+  }
+
+  function deleteFixedAssetLocation(id) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Suppression bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var records = fixedAssetLocationRecordsForState(st);
+    var index = records.findIndex(function (record) { return record.id === id; });
+    if (index < 0) return { ok: false, errors: ['Emplacement d’immobilisation introuvable dans le dossier actif.'] };
+    var record = records[index];
+    var childCount = records.filter(function (candidate) { return String(candidate.parentId || '') === String(record.id); }).length;
+    if (childCount) return { ok: false, errors: ['Suppression refusée : cet emplacement possède ' + childCount + ' sous-emplacement(s). Déplacez-les ou supprimez-les d’abord.'] };
+    var referenceCount = fixedAssetLocationReferenceCount(record, st);
+    if (referenceCount) return { ok: false, errors: ['Suppression refusée : ' + referenceCount + ' immobilisation(s) utilisent cet emplacement. La fiche doit être conservée pour préserver la traçabilité.'] };
+    var previousState = clone(st);
+    records.splice(index, 1);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Suppression impossible : stockage local indisponible ou plein. L’emplacement est conservé.'] };
+    }
+    return { ok: true, errors: [], location: clone(record) };
+  }
+
   function entries() { return load().entries; }
 
   function entry(id) {
@@ -2148,7 +2381,7 @@
       data.exercise = dossier.exerciseYear;
       data.cycleStart = dossier.cycleStart;
       data.cycleEnd = dossier.cycleEnd;
-      data = upgradeAuxiliaryRegistries(upgradeAccountingChart(data).data).data;
+      data = upgradeFixedAssetLocations(upgradeAuxiliaryRegistries(upgradeAccountingChart(data).data).data).data;
       state = data;
       ensurePeriodsForEntries();
       if (!save()) {
@@ -2445,6 +2678,11 @@
     var previousState = clone(state);
     var plan = engine.repair(state, currentDossier());
     if (!plan.ok) return { ok: false, errors: plan.errors || ['Aucune réparation sûre n’est disponible.'], report: plan.report };
+    var locationUpgrade = upgradeFixedAssetLocations(plan.data);
+    if (locationUpgrade.changed) {
+      plan.data = locationUpgrade.data;
+      plan.changed = true;
+    }
     if (!plan.changed && !recoveryIssue) return { ok: true, changed: false, errors: [], report: plan.report };
 
     if (recoveryIssue) {
@@ -2494,7 +2732,7 @@
       if (!preserveCorruptRaw()) return { ok: false, errors: ['Restauration bloquée : la copie brute endommagée n’a pas pu être conservée. Téléchargez-la ou libérez de l’espace.'] };
       var previousState = state;
       var previousIssue = recoveryIssue;
-      var recoveredState = upgradeAuxiliaryRegistries(upgradeAccountingChart(clone(snapshot.data)).data).data;
+      var recoveredState = upgradeFixedAssetLocations(upgradeAuxiliaryRegistries(upgradeAccountingChart(clone(snapshot.data)).data).data).data;
       state = recoveredState;
       try {
         ensurePeriodsForEntries();
@@ -2509,7 +2747,7 @@
     }
 
     var previousState = state ? clone(state) : null;
-    state = upgradeAuxiliaryRegistries(upgradeAccountingChart(clone(snapshot.data)).data).data;
+    state = upgradeFixedAssetLocations(upgradeAuxiliaryRegistries(upgradeAccountingChart(clone(snapshot.data)).data).data).data;
     ensurePeriodsForEntries();
     if (!save()) {
       state = previousState;
@@ -2593,6 +2831,12 @@
     updatePersonnel: updatePersonnel,
     deletePersonnel: deletePersonnel,
     personnelIdentityChangeCheck: personnelIdentityChangeCheck,
+    fixedAssetLocations: fixedAssetLocations,
+    fixedAssetLocation: fixedAssetLocation,
+    nextFixedAssetLocationCode: nextFixedAssetLocationCode,
+    createFixedAssetLocation: createFixedAssetLocation,
+    updateFixedAssetLocation: updateFixedAssetLocation,
+    deleteFixedAssetLocation: deleteFixedAssetLocation,
     nextIdentificationCode: nextIdentificationCode,
     registerIdentificationCode: registerIdentificationCode,
     entries: entries,

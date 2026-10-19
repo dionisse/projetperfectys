@@ -43,6 +43,7 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 | Clients | Répertoire des tiers clients de l’entreprise suivie, distinct des dossiers clients du cabinet : code `CLI` automatique/modifiable, création, modification et suppression protégée dès qu’une pièce ou un mouvement comptable référence la fiche ; aucune facture, règlement ni écriture n’est généré |
 | Débiteurs et créditeurs divers | Répertoire mixte avec type débiteur/créditeur, code `DEB`/`CRE` automatique, compte auxiliaire 47 et modification/suppression protégées |
 | Personnel | Répertoire local des membres du personnel, code `PER` automatique, fonction, service, contacts et compte auxiliaire 42 ; sans salaires ni contrats |
+| Localisation des immobilisations corporelles | Arborescence locale de niveaux et d’emplacements modifiables (code `LOC`, parent/enfant, adresse, responsable) ; le registre des immobilisations et les amortissements restent à construire |
 | Journaux | Six journaux (AC, VE, BQ, CA, OD, PA) avec totaux et brouillons |
 | Saisie d'écriture | Saisie multiligne, contrôle d'équilibre en direct, référence auto, brouillon ou validation |
 | Pièces comptables | Liste filtrable, détail en modale, validation, modification et suppression des brouillons |
@@ -75,6 +76,12 @@ La suppression et le changement de type, de code ou de compte collectif sont ref
 Le sous-menu **Définitions → Personnel** gère un annuaire professionnel isolé par dossier. Une fiche reçoit un code `PER` automatique/modifiable et peut contenir nom, fonction, service, coordonnées, notes professionnelles et compte auxiliaire de la famille 42. Les fiches peuvent être recherchées, modifiées et supprimées si aucune pièce ne les référence ; les codes attribués ne sont pas réutilisés.
 
 Cet annuaire ne stocke ni rémunération, ni pièce d’identité, ni contrat, ne calcule pas la paie et ne remplace pas le module **Paie & RH**. Les centralisations de salaires continuent à dépendre exclusivement des lots internes approuvés de ce module.
+
+### Localisation des immobilisations corporelles — référentiel partiel
+
+Le sous-menu **Définitions → Localisation des immobilisations corporelles** permet de créer une arborescence propre au dossier : site, bâtiment, étage, local, zone, service ou tout niveau défini par l’organisation. Chaque fiche comporte un code `LOC` proposé automatiquement (modifiable et non réutilisé), un niveau librement modifiable, une désignation, un parent éventuel, une adresse/précision, un responsable/service et des notes. L’affichage en arbre et le choix du parent rendent la hiérarchie visible et éditable ; une boucle est refusée, et un emplacement parent ne peut être supprimé tant qu’il possède des enfants.
+
+Les fiches sont conservées dans la base locale et la sauvegarde du dossier, sans écriture comptable. Les suppressions ou changements de code et de parent sont protégés lorsqu’une immobilisation y est référencée. Ce référentiel ne crée pas encore de fiche d’immobilisation, d’affectation, de valeur d’acquisition ou d’amortissement : ces fonctions restent liées à la construction ultérieure du registre des immobilisations.
 
 ### Interopérabilité comptable — incrément v1
 

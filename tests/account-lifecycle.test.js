@@ -79,6 +79,9 @@ assert.equal(store.nextIdentificationCode('inconnu'), '');
 assert.equal(store.getState().clientRegistryVersion, 1);
 assert.equal(store.getState().otherPartyRegistryVersion, 1);
 assert.equal(store.getState().personnelRegistryVersion, 1);
+assert.equal(store.getState().fixedAssetLocationRegistryVersion, 1);
+assert.deepEqual(JSON.parse(JSON.stringify(store.fixedAssetLocations())), []);
+assert.equal(store.nextFixedAssetLocationCode(), 'LOC-0001');
 assert.deepEqual(JSON.parse(JSON.stringify(store.clients())), []);
 
 const firstClient = store.createClient({ name: 'Client généré', accountCode: '411', paymentTermDays: '30' });
@@ -196,6 +199,47 @@ assert.equal(safePersonnelUpdate.ok, true, safePersonnelUpdate.errors.join(' '))
 assert.equal(store.deletePersonnel(referencedPersonnel.personnel.id).ok, false);
 assert.equal(store.accountCodeChangeCheck('421').references.personnelCount, 1, 'le compte collectif conserve le lien personnel');
 
+const assetLocationRoot = store.createFixedAssetLocation({
+  name: 'Siège de Cotonou', level: 'Site', address: 'Cotonou, Littoral', responsible: 'Administration'
+});
+assert.equal(assetLocationRoot.ok, true, assetLocationRoot.errors.join(' '));
+assert.equal(assetLocationRoot.location.code, 'LOC-0001');
+const assetLocationBuilding = store.createFixedAssetLocation({
+  name: 'Bâtiment A', level: 'Bâtiment', parentId: assetLocationRoot.location.id, notes: 'Aile principale'
+});
+assert.equal(assetLocationBuilding.ok, true, assetLocationBuilding.errors.join(' '));
+assert.equal(assetLocationBuilding.location.code, 'LOC-0002');
+assert.equal(store.fixedAssetLocation('loc-0002').id, assetLocationBuilding.location.id, 'la recherche accepte le code sans sensibilité à la casse');
+assert.equal(store.deleteFixedAssetLocation(assetLocationRoot.location.id).ok, false, 'un emplacement parent qui possède des enfants ne peut pas être supprimé');
+assert.equal(store.updateFixedAssetLocation(assetLocationRoot.location.id, {
+  ...assetLocationRoot.location, parentId: assetLocationBuilding.location.id
+}).ok, false, 'un emplacement ne peut pas devenir descendant de son propre enfant');
+const updatedAssetLocation = store.updateFixedAssetLocation(assetLocationBuilding.location.id, {
+  ...assetLocationBuilding.location, code: 'BAT-A', name: 'Bâtiment administratif', level: 'Bâtiment principal',
+  address: 'Avenue des finances', responsible: 'Services généraux', notes: 'Libellés modifiables'
+});
+assert.equal(updatedAssetLocation.ok, true, updatedAssetLocation.errors.join(' '));
+assert.equal(updatedAssetLocation.location.code, 'BAT-A');
+assert.equal(updatedAssetLocation.location.level, 'Bâtiment principal');
+assert.equal(updatedAssetLocation.location.parentId, assetLocationRoot.location.id, 'le lien parent/enfant reste enregistré');
+assert.equal(store.createFixedAssetLocation({ code: 'bat-a', name: 'Code en doublon', level: 'Local' }).ok, false);
+assert.equal(store.createFixedAssetLocation({ name: 'Sans niveau' }).ok, false, 'le champ hiérarchique est obligatoire');
+assert.equal(store.deleteFixedAssetLocation(assetLocationBuilding.location.id).ok, true);
+assert.ok(store.getState().fixedAssetLocationCodeHistory.includes('LOC-0002'));
+assert.ok(store.getState().fixedAssetLocationCodeHistory.includes('BAT-A'));
+const nextAssetLocation = store.createFixedAssetLocation({ name: 'Entrepôt', level: 'Zone' });
+assert.equal(nextAssetLocation.location.code, 'LOC-0003', 'les codes supprimés ou remplacés ne sont pas réattribués');
+assert.equal(store.deleteFixedAssetLocation(assetLocationRoot.location.id).ok, true);
+store.getState().fixedAssets = [{ id: 'asset-location-reference-test', locationId: nextAssetLocation.location.id }];
+assert.equal(store.save(), true);
+assert.equal(store.updateFixedAssetLocation(nextAssetLocation.location.id, {
+  ...nextAssetLocation.location, code: 'LOC-0004'
+}).ok, false, 'le code et la hiérarchie sont protégés lorsque des immobilisations utilisent le lieu');
+assert.equal(store.deleteFixedAssetLocation(nextAssetLocation.location.id).ok, false, 'un lieu affecté à une immobilisation ne peut pas être supprimé');
+assert.equal(store.updateFixedAssetLocation(nextAssetLocation.location.id, {
+  ...nextAssetLocation.location, name: 'Entrepôt de stockage'
+}).ok, true, 'les champs descriptifs restent modifiables sans rompre l’affectation');
+
 const firstSupplier = store.createSupplier({ name: 'Fournisseur généré', accountCode: '401', paymentTermDays: '30' });
 assert.equal(firstSupplier.ok, true, firstSupplier.errors.join(' '));
 assert.equal(firstSupplier.supplier.code, 'FOU-0001', 'un code fournisseur est proposé automatiquement');
@@ -236,6 +280,10 @@ legacyState.otherParties = [
   { id: 'legacy-creditor', type: 'creditor', code: 'CRE-0088', name: 'Créditeur migré', accountCode: '471' }
 ];
 legacyState.personnel = [{ id: 'legacy-personnel', code: 'PER-0099', name: 'Personnel migré', accountCode: '421' }];
+legacyState.fixedAssetLocationRegistryVersion = 0;
+legacyState.fixedAssetLocations = [{ id: 'legacy-location', code: 'LOC-0099', name: 'Dépôt migré', level: 'Site', parentId: '' }];
+delete legacyState.fixedAssetLocationCodeHistory;
+delete legacyState.fixedAssetLocationSequence;
 delete legacyState.clientRegistryVersion;
 delete legacyState.otherPartyRegistryVersion;
 delete legacyState.personnelRegistryVersion;
@@ -261,5 +309,17 @@ assert.equal(store.nextIdentificationCode('personnel'), 'PER-0100');
 assert.ok(store.getState().personnelCodeHistory.includes('PER-0099'));
 assert.equal(store.getState().otherPartyRegistryVersion, 1);
 assert.equal(store.getState().personnelRegistryVersion, 1);
+assert.equal(store.getState().fixedAssetLocationRegistryVersion, 1);
+assert.equal(store.fixedAssetLocation('legacy-location').name, 'Dépôt migré', 'la migration conserve les anciennes localisations');
+assert.ok(store.getState().fixedAssetLocationCodeHistory.includes('LOC-0099'));
+assert.equal(store.nextFixedAssetLocationCode(), 'LOC-0100', 'la migration reprend la séquence des codes existants');
+const legacyImport = JSON.parse(store.exportJson());
+legacyImport.data.fixedAssetLocationRegistryVersion = 0;
+legacyImport.data.fixedAssetLocations = [{ id: 'imported-legacy-location', code: 'LOC-0200', name: 'Site importé', level: 'Site' }];
+delete legacyImport.data.fixedAssetLocationCodeHistory;
+delete legacyImport.data.fixedAssetLocationSequence;
+assert.equal(store.importJson(JSON.stringify(legacyImport)).ok, true, 'la restauration JSON migre aussi le référentiel des localisations');
+assert.equal(store.fixedAssetLocation('imported-legacy-location').name, 'Site importé');
+assert.equal(store.nextFixedAssetLocationCode(), 'LOC-0201');
 
-console.log('Comptes, fournisseurs, clients, tiers divers et personnel : CRUD protégé et codes FOU/CLI/DEB/CRE/PER — OK');
+console.log('Comptes, tiers et registres hiérarchiques locaux : CRUD protégé et migrations — OK');

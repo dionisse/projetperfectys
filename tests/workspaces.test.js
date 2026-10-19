@@ -71,6 +71,10 @@ delete preSupplierState.otherParties;
 delete preSupplierState.otherPartyRegistryVersion;
 delete preSupplierState.personnel;
 delete preSupplierState.personnelRegistryVersion;
+delete preSupplierState.fixedAssetLocations;
+delete preSupplierState.fixedAssetLocationRegistryVersion;
+delete preSupplierState.fixedAssetLocationCodeHistory;
+delete preSupplierState.fixedAssetLocationSequence;
 delete preSupplierState.debtorCodeHistory;
 delete preSupplierState.creditorCodeHistory;
 delete preSupplierState.personnelCodeHistory;
@@ -87,6 +91,9 @@ assert.equal(migratedState.otherPartyRegistryVersion, 1);
 assert.equal(migratedState.otherParties.length, 0);
 assert.equal(migratedState.personnelRegistryVersion, 1);
 assert.equal(migratedState.personnel.length, 0);
+assert.equal(migratedState.fixedAssetLocationRegistryVersion, 1);
+assert.deepEqual(migratedState.fixedAssetLocations, []);
+assert.equal(migratedState.fixedAssetLocationSequence, 1);
 assert.equal(store.backupInfo().available, true, 'la migration conserve un point local de restauration');
 
 const created = store.createDossier({
@@ -176,7 +183,11 @@ assert.equal(otherPartyRecord.otherParty.auxiliaryAccountCode, '471-CRE-0001');
 const personnelRecord = store.createPersonnel({ name: 'Personne du dossier', department: 'Finance', accountCode: '421' });
 assert.equal(personnelRecord.ok, true, personnelRecord.errors.join(' '));
 assert.equal(personnelRecord.personnel.code, 'PER-0001');
-assert.equal(store.entries().length, entriesBeforeClient, 'les répertoires tiers et personnel ne créent pas d’écriture');
+const assetLocation = store.createFixedAssetLocation({ name: 'Siège', level: 'Site', address: 'Cotonou' });
+assert.equal(assetLocation.ok, true, assetLocation.errors.join(' '));
+const assetRoom = store.createFixedAssetLocation({ name: 'Bureau de gestion', level: 'Local', parentId: assetLocation.location.id });
+assert.equal(assetRoom.ok, true, assetRoom.errors.join(' '));
+assert.equal(store.entries().length, entriesBeforeClient, 'les référentiels tiers, personnel et localisations ne créent pas d’écriture');
 const supplierEdit = store.updateSupplier(supplier.supplier.id, {
   ...supplier.supplier, name: 'Fournitures du Littoral', paymentTermDays: 45, accountCode: '401'
 });
@@ -188,9 +199,12 @@ assert.equal(store.suppliers().length, 1);
 assert.equal(store.setSupplierActive(supplier.supplier.id, true).supplier.active, true, 'une fiche archivée peut être réactivée');
 storageWritesBlocked = true;
 const failedSupplierSave = store.createSupplier({ code: 'FOUR-FAIL', name: 'Ne doit pas être sauvegardé', accountCode: '401' });
+const failedLocationSave = store.createFixedAssetLocation({ name: 'Local non persisté', level: 'Local' });
 storageWritesBlocked = false;
 assert.equal(failedSupplierSave.ok, false, 'une panne de stockage annule la création');
 assert.equal(store.suppliers().length, 1, 'une création non persistée est retirée de l’état en mémoire');
+assert.equal(failedLocationSave.ok, false, 'une panne de stockage annule la localisation');
+assert.equal(store.fixedAssetLocations().length, 2, 'un emplacement non persisté est retiré de l’état en mémoire');
 const outsideCycle = store.validateEntry({
   reference: 'OD-2026-OUT', journal: 'OD', date: '2026-06-30', description: 'Hors cycle',
   lines: [{ account: '601', debit: 1000, credit: 0 }, { account: '401', debit: 0, credit: 1000 }]
@@ -225,17 +239,21 @@ assert.equal(store.clients().length, 1, 'le point de restauration contient aussi
 assert.equal(store.clients()[0].name, 'Client de démonstration');
 assert.equal(store.otherParties().length, 1, 'le point de restauration contient le registre des tiers divers');
 assert.equal(store.personnel().length, 1, 'le point de restauration contient le registre du personnel');
+assert.equal(store.fixedAssetLocations().length, 2, 'le point de restauration contient l’arborescence des localisations');
+assert.equal(store.fixedAssetLocation(assetRoom.location.id).parentId, assetLocation.location.id);
 
 assert.equal(store.switchDossier(main.id).ok, true);
 assert.equal(store.suppliers().length, 0, 'le référentiel du nouveau dossier ne fuit pas vers le dossier principal');
 assert.equal(store.clients().length, 0, 'le répertoire clients du nouveau dossier ne fuit pas vers le dossier principal');
 assert.equal(store.otherParties().length, 0, 'les débiteurs/créditeurs du nouveau dossier restent isolés');
 assert.equal(store.personnel().length, 0, 'le personnel du nouveau dossier reste isolé');
+assert.equal(store.fixedAssetLocations().length, 0, 'les localisations du nouveau dossier restent isolées');
 assert.equal(store.switchDossier(created.dossier.id).ok, true);
 assert.equal(store.suppliers().length, 1, 'le fournisseur revient en sélectionnant son dossier');
 assert.equal(store.clients().length, 1, 'le client revient en sélectionnant son dossier');
 assert.equal(store.otherParties().length, 1, 'le tiers divers revient avec son dossier');
 assert.equal(store.personnel().length, 1, 'le personnel revient avec son dossier');
+assert.equal(store.fixedAssetLocations().length, 2, 'l’arborescence revient avec son dossier');
 
 store = loadStore();
 assert.equal(store.currentDossier().id, created.dossier.id, 'la sélection de dossier est conservée localement');
@@ -257,5 +275,7 @@ assert.equal(store.otherParties().length, 1, 'les tiers divers survivent au rech
 assert.equal(store.otherParties()[0].code, 'CRE-0001');
 assert.equal(store.personnel().length, 1, 'le répertoire personnel survit au rechargement');
 assert.equal(store.personnel()[0].code, 'PER-0001');
+assert.equal(store.fixedAssetLocations().length, 2, 'les localisations survivent au rechargement');
+assert.equal(store.fixedAssetLocation(assetRoom.location.id).parentId, assetLocation.location.id, 'la relation hiérarchique survit au rechargement');
 assert.deepEqual(store.dossiers().map(dossier => dossier.name), ['Entreprise de démonstration', 'Cabinet Godwin', 'Dossier, autre']);
-console.log('Dossiers, clients, tiers divers et personnel : migration, cycle, persistance et isolation — OK');
+console.log('Dossiers, tiers, personnel et localisations : migration, cycle, persistance et isolation — OK');
