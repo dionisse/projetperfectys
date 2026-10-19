@@ -37,13 +37,18 @@ values.delete('perfecto.dossiers.v1');
 values.delete('perfecto.activeDossier.v1');
 values.set('perfecto.folders.v1', JSON.stringify([
   { id: 'folder-main', name: 'Dossier principal', seeded: true },
-  { id: 'folder-legacy', name: 'Agence Nord', seeded: false }
+  { id: 'folder-legacy', name: 'Agence Nord', seeded: false, address: 'Cotonou, Bénin', ifu: 'IFU-123', rccm: 'RCCM-456', email: 'contact@agence.bj', phone: '+229 21 00 00 00' }
 ]));
 values.set('perfecto.activeFolder.v1', 'folder-legacy');
 store = loadStore();
 assert.equal(store.currentDossier().name, 'Agence Nord');
 assert.equal(store.currentDossier().clientName, 'Agence Nord');
 assert.equal(store.currentDossier().reference, 'COR-NOR2026');
+assert.equal(store.currentDossier().address, 'Cotonou, Bénin');
+assert.equal(store.currentDossier().ifu, 'IFU-123');
+assert.equal(store.currentDossier().rccm, 'RCCM-456');
+assert.equal(store.currentDossier().email, 'contact@agence.bj');
+assert.equal(store.currentDossier().phone, '+229 21 00 00 00');
 assert.equal(store.switchDossier('folder-main').ok, true);
 
 values.clear();
@@ -58,12 +63,22 @@ const created = store.createDossier({
   accountingTypeLabel: 'Comptabilité révisée SYSCOHADA',
   accountingTypeCode: 'COR',
   cycleStart: '2026-07-01',
-  cycleEnd: '2027-06-30'
+  cycleEnd: '2027-06-30',
+  address: 'Rue des finances, Cotonou',
+  ifu: 'IFU-GOD-2026',
+  rccm: 'RB/COT/26 A 12345',
+  email: 'contact@godwin.bj',
+  phone: '+229 01 02 03 04'
 });
 assert.equal(created.ok, true);
 assert.equal(created.dossier.clientCode, 'GOD', 'le code saisi est conservé après normalisation');
 assert.equal(created.dossier.reference, 'COR-GOD2026', 'la référence suit le type, le code client et l’année du cycle');
 assert.equal(created.dossier.exerciseYear, 2026);
+assert.equal(created.dossier.address, 'Rue des finances, Cotonou');
+assert.equal(created.dossier.ifu, 'IFU-GOD-2026');
+assert.equal(created.dossier.rccm, 'RB/COT/26 A 12345');
+assert.equal(created.dossier.email, 'contact@godwin.bj');
+assert.equal(created.dossier.phone, '+229 01 02 03 04');
 assert.equal(store.createDossier({
   clientName: 'Client sans code', accountingTypeLabel: 'Comptabilité révisée SYSCOHADA',
   accountingTypeCode: 'COR', cycleStart: '2026-01-01', cycleEnd: '2026-12-31'
@@ -81,6 +96,11 @@ const second = store.createDossier({
   accountingTypeCode: 'COR', cycleStart: '2026-01-01', cycleEnd: '2026-12-31'
 });
 assert.equal(second.ok, true, 'une virgule dans le nom reste acceptée');
+assert.equal(second.dossier.address, '', 'l’adresse est facultative');
+assert.equal(second.dossier.ifu, '', 'le N° IFU est facultatif');
+assert.equal(second.dossier.rccm, '', 'le N° RCCM est facultatif');
+assert.equal(second.dossier.email, '', 'l’email est facultatif');
+assert.equal(second.dossier.phone, '', 'le téléphone est facultatif');
 
 const switched = store.switchDossier(created.dossier.id);
 assert.equal(switched.ok, true);
@@ -120,6 +140,11 @@ assert.equal(store.entries().length, 1);
 
 store = loadStore();
 assert.equal(store.currentDossier().id, created.dossier.id, 'la sélection de dossier est conservée localement');
+assert.equal(store.currentDossier().address, 'Rue des finances, Cotonou', 'les informations client survivent au rechargement');
+assert.equal(store.currentDossier().ifu, 'IFU-GOD-2026');
+assert.equal(store.currentDossier().rccm, 'RB/COT/26 A 12345');
+assert.equal(store.currentDossier().email, 'contact@godwin.bj');
+assert.equal(store.currentDossier().phone, '+229 01 02 03 04');
 assert.equal(store.entries().length, 1, 'les données du dossier survivent au rechargement');
 assert.equal(store.accounts().length, 18);
 assert.deepEqual(store.dossiers().map(dossier => dossier.name), ['Entreprise de démonstration', 'Cabinet Godwin', 'Dossier, autre']);

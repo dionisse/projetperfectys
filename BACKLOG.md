@@ -7,7 +7,7 @@ Ce document suit les décisions et les prochaines étapes du prototype natif. Le
 - Interface web en HTML, CSS et JavaScript natifs, sans build ; le parcours Windows reste une étape séparée.
 - Lot 1 de comptabilité générale fonctionnel en stockage local navigateur.
 - Référence dossier `COR-GOD2026` prise en charge ; un cycle non calendaire juillet 2026–juin 2027 est géré en 12 périodes mensuelles.
-- Page multi-dossiers clients en place : la Comptabilité ouvre la liste avant le tableau de bord ; création avec nom, code, type comptable, référence et cycle.
+- Page multi-dossiers clients en place : la Comptabilité ouvre la liste avant le tableau de bord ; création avec nom, code, type comptable, référence et cycle, ainsi que coordonnées client facultatives (adresse, IFU, RCCM, email, téléphone).
 - Connexion, profils, grants et dossiers ne sont pas encore reliés à une identité réelle ou à Google Drive.
 
 ## Décisions confirmées

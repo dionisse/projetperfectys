@@ -643,11 +643,28 @@
       '</div>';
   }
 
+  function dossierComplementaryDetails(dossier) {
+    var details = [
+      { label: 'Adresse', value: dossier.address },
+      { label: 'N° IFU', value: dossier.ifu },
+      { label: 'N° RCCM', value: dossier.rccm },
+      { label: 'Email', value: dossier.email },
+      { label: 'N° Tel', value: dossier.phone }
+    ].filter(function (item) { return String(item.value || '').trim(); });
+    if (!details.length) return '';
+    return '<div class="dossier-card-details"><p>INFORMATIONS COMPLÉMENTAIRES</p><dl>' +
+      details.map(function (item) {
+        return '<div class="dossier-card-detail"><dt>' + esc(item.label) + '</dt><dd>' + esc(item.value) + '</dd></div>';
+      }).join('') +
+      '</dl></div>';
+  }
+
   function dossierCard(dossier) {
     return '<article class="client-dossier-card">' +
       '<div class="dossier-card-top"><span class="dossier-type-label">' + esc(dossier.accountingTypeLabel) + '</span><span class="dossier-local-tag"><i></i>LOCAL · DÉMO</span></div>' +
       '<div class="dossier-card-identity"><div class="dossier-client-mark" aria-hidden="true">' + esc((dossier.clientCode || 'D').slice(0, 1)) + '</div><div><h3>' + esc(dossier.clientName || dossier.name) + '</h3><span class="dossier-reference">' + esc(dossier.reference) + '</span></div></div>' +
       '<div class="dossier-card-cycle"><span>EXERCICE ' + esc(dossier.exerciseYear) + '</span><strong>' + dateLabel(dossier.cycleStart) + ' <i>→</i> ' + dateLabel(dossier.cycleEnd) + '</strong></div>' +
+      dossierComplementaryDetails(dossier) +
       '<div class="dossier-card-foot"><span>Code dossier <strong>' + esc(dossier.clientCode) + '</strong></span><button type="button" class="btn btn-primary btn-sm" data-action="open-dossier" data-id="' + esc(dossier.id) + '">Ouvrir le dossier <span aria-hidden="true">→</span></button></div>' +
       '</article>';
   }
@@ -679,6 +696,12 @@
             '<div class="field"><label for="dossier-type-code">Code du type</label><input id="dossier-type-code" name="accountingTypeCode" type="text" minlength="2" maxlength="6" value="COR" required><span class="hint">Ex. COR pour comptabilité révisée.</span></div>' +
             '<div class="field"><label for="dossier-cycle-start">Début du cycle <span aria-hidden="true">*</span></label><input id="dossier-cycle-start" name="cycleStart" type="date" value="' + currentYear + '-01-01" required></div>' +
             '<div class="field"><label for="dossier-cycle-end">Fin du cycle <span aria-hidden="true">*</span></label><input id="dossier-cycle-end" name="cycleEnd" type="date" value="' + currentYear + '-12-31" required></div>' +
+            '<div class="dossier-form-subheading dossier-field-wide"><h4>Informations complémentaires</h4><span>FACULTATIVES</span></div>' +
+            '<div class="field dossier-field-wide"><label for="dossier-address">Adresse</label><textarea id="dossier-address" name="address" rows="2" autocomplete="street-address" placeholder="Adresse de l’entreprise cliente"></textarea></div>' +
+            '<div class="field"><label for="dossier-ifu">N° IFU</label><input id="dossier-ifu" name="ifu" type="text" maxlength="40" placeholder="Identifiant fiscal unique" autocomplete="off"></div>' +
+            '<div class="field"><label for="dossier-rccm">N° RCCM</label><input id="dossier-rccm" name="rccm" type="text" maxlength="60" placeholder="Registre du commerce" autocomplete="off"></div>' +
+            '<div class="field"><label for="dossier-email">Email</label><input id="dossier-email" name="email" type="email" maxlength="254" placeholder="contact@entreprise.bj" autocomplete="email"></div>' +
+            '<div class="field"><label for="dossier-phone">N° Tel</label><input id="dossier-phone" name="phone" type="tel" maxlength="40" placeholder="+229 …" autocomplete="tel"></div>' +
           '</div>' +
           '<div class="dossier-reference-preview" id="dossier-reference-preview" aria-live="polite"></div>' +
           '<div class="dossier-create-footer"><p>La création n’effectue aucune copie. Le cycle est géré par périodes mensuelles dans ce prototype.</p><button type="submit" class="btn btn-primary" data-action="create-demo-dossier">＋ Créer le dossier</button></div>' +
@@ -724,7 +747,12 @@
         accountingTypeLabel: $('#dossier-type-label', form).value,
         accountingTypeCode: typeCodeInput.value,
         cycleStart: startInput.value,
-        cycleEnd: $('#dossier-cycle-end', form).value
+        cycleEnd: $('#dossier-cycle-end', form).value,
+        address: $('#dossier-address', form).value,
+        ifu: $('#dossier-ifu', form).value,
+        rccm: $('#dossier-rccm', form).value,
+        email: $('#dossier-email', form).value,
+        phone: $('#dossier-phone', form).value
       });
       if (!result.ok) { toast(result.errors[0] || 'Création du dossier impossible.', 'warning'); return; }
       toast('Dossier « ' + result.dossier.clientName + ' » créé sous la référence ' + result.dossier.reference + '.', 'success');
