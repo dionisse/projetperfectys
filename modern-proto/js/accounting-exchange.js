@@ -1,5 +1,5 @@
 /* =========================================================================
-   PERFECTO · Format commun d’échange comptable (v1)
+   PERFECTO · Formats communs d’échange comptable (v1)
    CSV UTF-8 à séparateur point-virgule et classeur OOXML .xlsx.
    Aucun envoi réseau : le fichier est lu et généré dans le navigateur.
    ========================================================================= */
@@ -18,6 +18,19 @@
   var BALANCE_TEXT_HEADERS = [
     'SYSTEME_SOURCE', 'REFERENCE_DOSSIER', 'DATE_BALANCE', 'REFERENCE_BALANCE',
     'CODE_COMPTE', 'LIBELLE_COMPTE', 'ID_SOURCE'
+  ];
+  var AUXILIARY_FORMAT = 'PERFECTO-AUXILIAIRE';
+  var AUXILIARY_VERSION = '1';
+  var AUXILIARY_HEADERS = [
+    'FORMAT', 'VERSION', 'SYSTEME_SOURCE', 'REFERENCE_DOSSIER', 'EXERCICE', 'REFERENCE_LOT',
+    'CODE_JOURNAL_SOURCE', 'DATE_SOURCE', 'REFERENCE_PIECE_SOURCE', 'LIBELLE_PIECE_SOURCE',
+    'CODE_COMPTE_GENERAL', 'LIBELLE_COMPTE_GENERAL', 'CODE_AUXILIAIRE', 'LIBELLE_AUXILIAIRE',
+    'LIBELLE_MOUVEMENT', 'DEBIT_XOF', 'CREDIT_XOF', 'ID_SOURCE'
+  ];
+  var AUXILIARY_TEXT_HEADERS = [
+    'SYSTEME_SOURCE', 'REFERENCE_DOSSIER', 'REFERENCE_LOT', 'CODE_JOURNAL_SOURCE',
+    'DATE_SOURCE', 'REFERENCE_PIECE_SOURCE', 'LIBELLE_PIECE_SOURCE', 'CODE_COMPTE_GENERAL',
+    'LIBELLE_COMPTE_GENERAL', 'CODE_AUXILIAIRE', 'LIBELLE_AUXILIAIRE', 'LIBELLE_MOUVEMENT', 'ID_SOURCE'
   ];
   var HEADERS = [
     'FORMAT', 'VERSION', 'SYSTEME_SOURCE', 'REFERENCE_DOSSIER', 'EXERCICE',
@@ -413,6 +426,166 @@
     return toCsv([], BALANCE_HEADERS);
   }
 
+  function parseAuxiliary(text) {
+    var parsedRows = parseRows(text);
+    if (!parsedRows.ok) return { ok: false, errors: parsedRows.errors, rows: [], metadata: null, documentCount: 0, totalDebit: 0, totalCredit: 0 };
+    var rows = parsedRows.rows;
+    if (!rows.length) return { ok: false, errors: ['Le fichier auxiliaire est vide.'], rows: [], metadata: null, documentCount: 0, totalDebit: 0, totalCredit: 0 };
+
+    var headers = rows[0].map(function (header) { return String(header || '').trim().toUpperCase(); });
+    var duplicateHeaders = headers.filter(function (header, index) { return headers.indexOf(header) !== index; });
+    if (duplicateHeaders.length) {
+      return { ok: false, errors: ['Le fichier auxiliaire contient des colonnes répétées : ' + duplicateHeaders.join(', ') + '.'], rows: [], metadata: null, documentCount: 0, totalDebit: 0, totalCredit: 0 };
+    }
+    var missingHeaders = AUXILIARY_HEADERS.filter(function (header) { return headers.indexOf(header) === -1; });
+    var extraHeaders = headers.filter(function (header) { return AUXILIARY_HEADERS.indexOf(header) === -1; });
+    if (missingHeaders.length || extraHeaders.length) {
+      var schemaMessage = 'Colonnes attendues pour les mouvements auxiliaires : ' + AUXILIARY_HEADERS.join(' ; ') + '.';
+      if (missingHeaders.length) schemaMessage += ' Manquantes : ' + missingHeaders.join(', ') + '.';
+      if (extraHeaders.length) schemaMessage += ' Non reconnues : ' + extraHeaders.join(', ') + '.';
+      return { ok: false, errors: [schemaMessage], rows: [], metadata: null, documentCount: 0, totalDebit: 0, totalCredit: 0 };
+    }
+
+    var columnIndex = Object.create(null);
+    headers.forEach(function (header, index) { columnIndex[header] = index; });
+    var errors = [];
+    var parsedMovements = [];
+    var metadata = null;
+    var documents = Object.create(null);
+    var documentKeys = [];
+    var seenSourceIds = Object.create(null);
+    var totalDebit = 0;
+    var totalCredit = 0;
+    var auxiliaryMovementCount = 0;
+
+    rows.slice(1).forEach(function (cells, index) {
+      var rowNumber = index + 2;
+      if (cells.length > headers.length && cells.slice(headers.length).some(function (value) { return String(value).trim() !== ''; })) {
+        errors.push('Ligne ' + rowNumber + ' : nombre de colonnes supérieur à l’en-tête auxiliaire.');
+        return;
+      }
+      while (cells.length < headers.length) cells.push('');
+      var record = Object.create(null);
+      AUXILIARY_HEADERS.forEach(function (header) {
+        var value = String(cells[columnIndex[header]] == null ? '' : cells[columnIndex[header]]).trim();
+        record[header] = AUXILIARY_TEXT_HEADERS.indexOf(header) !== -1 ? unprotectSpreadsheetText(value).trim() : value;
+      });
+      if (AUXILIARY_HEADERS.every(function (header) { return record[header] === ''; })) return;
+
+      if (record.FORMAT !== AUXILIARY_FORMAT) errors.push('Ligne ' + rowNumber + ' : format attendu « ' + AUXILIARY_FORMAT + ' ».');
+      if (record.VERSION !== AUXILIARY_VERSION) errors.push('Ligne ' + rowNumber + ' : version auxiliaire non prise en charge (attendu : ' + AUXILIARY_VERSION + ').');
+      if (!record.SYSTEME_SOURCE || record.SYSTEME_SOURCE.length > 40) errors.push('Ligne ' + rowNumber + ' : système source obligatoire (40 caractères maximum).');
+      if (!record.REFERENCE_DOSSIER || record.REFERENCE_DOSSIER.length > 100) errors.push('Ligne ' + rowNumber + ' : référence du dossier source obligatoire (100 caractères maximum).');
+      if (!/^\d{4}$/.test(record.EXERCICE)) errors.push('Ligne ' + rowNumber + ' : exercice source attendu sur quatre chiffres.');
+      if (!record.REFERENCE_LOT || record.REFERENCE_LOT.length > 100) errors.push('Ligne ' + rowNumber + ' : référence de lot obligatoire (100 caractères maximum).');
+      if (!record.CODE_JOURNAL_SOURCE || record.CODE_JOURNAL_SOURCE.length > 30) errors.push('Ligne ' + rowNumber + ' : code du journal source obligatoire (30 caractères maximum).');
+      if (!validIsoDate(record.DATE_SOURCE)) errors.push('Ligne ' + rowNumber + ' : date source invalide ; format attendu AAAA-MM-JJ.');
+      if (!record.REFERENCE_PIECE_SOURCE || record.REFERENCE_PIECE_SOURCE.length > 100) errors.push('Ligne ' + rowNumber + ' : référence de pièce source obligatoire (100 caractères maximum).');
+      if (record.LIBELLE_PIECE_SOURCE.length > MAX_TEXT_LENGTH) errors.push('Ligne ' + rowNumber + ' : libellé de pièce source trop long.');
+      if (!record.CODE_COMPTE_GENERAL || record.CODE_COMPTE_GENERAL.length > 30) errors.push('Ligne ' + rowNumber + ' : code de compte général obligatoire (30 caractères maximum).');
+      if (!record.LIBELLE_COMPTE_GENERAL) errors.push('Ligne ' + rowNumber + ' : libellé de compte général obligatoire.');
+      if (record.LIBELLE_COMPTE_GENERAL.length > MAX_TEXT_LENGTH) errors.push('Ligne ' + rowNumber + ' : libellé de compte général trop long.');
+      if (record.CODE_AUXILIAIRE.length > 100 || record.LIBELLE_AUXILIAIRE.length > MAX_TEXT_LENGTH) errors.push('Ligne ' + rowNumber + ' : code ou libellé auxiliaire trop long.');
+      if (!!record.CODE_AUXILIAIRE !== !!record.LIBELLE_AUXILIAIRE) errors.push('Ligne ' + rowNumber + ' : renseignez ensemble le code et le libellé auxiliaires, ou laissez les deux vides.');
+      if (record.LIBELLE_MOUVEMENT.length > MAX_TEXT_LENGTH) errors.push('Ligne ' + rowNumber + ' : libellé de mouvement trop long.');
+      if (!record.ID_SOURCE || record.ID_SOURCE.length > 100) errors.push('Ligne ' + rowNumber + ' : ID_SOURCE obligatoire (100 caractères maximum).');
+
+      var debit = parseAmount(record.DEBIT_XOF, rowNumber, 'DEBIT_XOF', errors);
+      var credit = parseAmount(record.CREDIT_XOF, rowNumber, 'CREDIT_XOF', errors);
+      if (debit === 0 && credit === 0 && record.CODE_COMPTE_GENERAL) errors.push('Ligne ' + rowNumber + ' : un mouvement doit avoir un débit ou un crédit positif.');
+      if (debit > 0 && credit > 0) errors.push('Ligne ' + rowNumber + ' : débit et crédit ne peuvent pas être renseignés simultanément.');
+
+      var metadataRow = {
+        format: record.FORMAT,
+        version: record.VERSION,
+        sourceSystem: record.SYSTEME_SOURCE,
+        dossierReference: record.REFERENCE_DOSSIER,
+        exercise: Number(record.EXERCICE),
+        batchReference: record.REFERENCE_LOT
+      };
+      if (!metadata) metadata = metadataRow;
+      else if (metadata.format !== metadataRow.format || metadata.version !== metadataRow.version ||
+          metadata.sourceSystem !== metadataRow.sourceSystem || metadata.dossierReference !== metadataRow.dossierReference ||
+          metadata.exercise !== metadataRow.exercise || metadata.batchReference !== metadataRow.batchReference) {
+        errors.push('Ligne ' + rowNumber + ' : les métadonnées du lot doivent être identiques dans tout le fichier.');
+      }
+
+      if (record.ID_SOURCE && seenSourceIds[record.ID_SOURCE]) errors.push('Ligne ' + rowNumber + ' : ID_SOURCE « ' + record.ID_SOURCE + ' » est répété dans le lot.');
+      else if (record.ID_SOURCE) seenSourceIds[record.ID_SOURCE] = true;
+      if (record.CODE_AUXILIAIRE) auxiliaryMovementCount += 1;
+
+      var documentKey = JSON.stringify([record.CODE_JOURNAL_SOURCE, record.DATE_SOURCE, record.REFERENCE_PIECE_SOURCE]);
+      var document = documents[documentKey];
+      if (!document) {
+        document = {
+          sourceJournal: record.CODE_JOURNAL_SOURCE,
+          sourceDate: record.DATE_SOURCE,
+          sourceReference: record.REFERENCE_PIECE_SOURCE,
+          description: record.LIBELLE_PIECE_SOURCE,
+          debit: 0,
+          credit: 0,
+          lineCount: 0
+        };
+        documents[documentKey] = document;
+        documentKeys.push(documentKey);
+      } else if (document.description !== record.LIBELLE_PIECE_SOURCE) {
+        errors.push('Ligne ' + rowNumber + ' : le libellé diffère des autres lignes de la même pièce source.');
+      }
+      document.debit += debit;
+      document.credit += credit;
+      document.lineCount += 1;
+      totalDebit += debit;
+      totalCredit += credit;
+      if (!Number.isSafeInteger(document.debit) || !Number.isSafeInteger(document.credit) ||
+          !Number.isSafeInteger(totalDebit) || !Number.isSafeInteger(totalCredit)) {
+        errors.push('Ligne ' + rowNumber + ' : les totaux du lot dépassent la capacité numérique sûre.');
+      }
+      parsedMovements.push({
+        sourceJournal: record.CODE_JOURNAL_SOURCE,
+        sourceDate: record.DATE_SOURCE,
+        sourceReference: record.REFERENCE_PIECE_SOURCE,
+        sourceDescription: record.LIBELLE_PIECE_SOURCE,
+        account: record.CODE_COMPTE_GENERAL,
+        accountLabel: record.LIBELLE_COMPTE_GENERAL,
+        auxiliaryCode: record.CODE_AUXILIAIRE,
+        auxiliaryLabel: record.LIBELLE_AUXILIAIRE,
+        description: record.LIBELLE_MOUVEMENT,
+        debit: debit,
+        credit: credit,
+        sourceId: record.ID_SOURCE,
+        sourceRow: rowNumber,
+        documentKey: documentKey
+      });
+    });
+
+    if (!parsedMovements.length) errors.push('Le fichier ne contient aucun mouvement auxiliaire à centraliser.');
+    if (parsedMovements.length && auxiliaryMovementCount === 0) errors.push('Aucun mouvement ne comporte de code auxiliaire ; vérifiez qu’il s’agit bien d’un lot de comptabilité auxiliaire.');
+    documentKeys.forEach(function (key) {
+      var document = documents[key];
+      if (document.lineCount < 2) errors.push('Pièce source « ' + document.sourceReference + ' » : au moins deux lignes mouvementées sont requises.');
+      if (document.lineCount && document.debit !== document.credit) {
+        errors.push('Pièce source « ' + document.sourceReference + ' » non équilibrée : débit ' + document.debit + ' XOF, crédit ' + document.credit + ' XOF.');
+      }
+    });
+    if (parsedMovements.length && totalDebit !== totalCredit) errors.push('Le lot auxiliaire n’est pas équilibré : débit ' + totalDebit + ' XOF, crédit ' + totalCredit + ' XOF.');
+    return {
+      ok: errors.length === 0,
+      errors: errors,
+      rows: parsedMovements,
+      metadata: metadata,
+      documentCount: documentKeys.length,
+      auxiliaryMovementCount: auxiliaryMovementCount,
+      totalDebit: totalDebit,
+      totalCredit: totalCredit,
+      documents: documentKeys.map(function (key) { return documents[key]; }),
+      delimiter: parsedRows.delimiter
+    };
+  }
+
+  function templateAuxiliary() {
+    return toCsv([], AUXILIARY_HEADERS);
+  }
+
   function buildEntryRows(data, entries) {
     var dossier = data.dossier || {};
     var accountMap = {};
@@ -699,6 +872,48 @@
     return compressWorkbook(balanceWorkbookSheetDefinitions(data || {}));
   }
 
+  function auxiliaryWorkbookSheetDefinitions(data) {
+    var dossier = data && data.dossier || {};
+    var accounts = data && data.accounts || [];
+    var journals = data && data.journals || [];
+    var instructions = [
+      ['PERFECTO-AUXILIAIRE', 'Version ' + AUXILIARY_VERSION],
+      ['Feuille à importer', 'Auxiliaire'],
+      ['Objet', 'Lot de pièces auxiliaires complet à centraliser en une écriture générale agrégée.'],
+      ['Pièces sources', 'Chaque couple CODE_JOURNAL_SOURCE + DATE_SOURCE + REFERENCE_PIECE_SOURCE forme une pièce ; chaque pièce doit être équilibrée.'],
+      ['Comptes', 'CODE_COMPTE_GENERAL désigne le compte général source. Associer les codes au plan cible ; aucun compte ne sera créé automatiquement.'],
+      ['Codes et références', 'Saisir les codes, références et ID_SOURCE au format texte ; préserver les zéros initiaux.'],
+      ['Auxiliaires', 'Pour chaque ligne de tiers, renseigner ensemble CODE_AUXILIAIRE et LIBELLE_AUXILIAIRE. Le compte cible correspondant doit être marqué auxiliaire.'],
+      ['Contreparties', 'Les autres lignes générales de la pièce source sont à inclure dans le lot pour conserver son équilibre.'],
+      ['Montants', 'XOF entiers sans séparateur ni décimale ; un seul côté par ligne.'],
+      ['ID_SOURCE', 'Identifiant unique et obligatoire pour chaque mouvement source.'],
+      ['Import', 'PERFECTO regroupera les lignes par compte cible dans une pièce de centralisation ; le lot source n’est pas remplacé.'],
+      ['Sécurité', 'Classeur sans macros ; les formules sont refusées dans la feuille Auxiliaire.']
+    ];
+    var dossierRows = [
+      ['REFERENCE_DOSSIER', 'NOM_DOSSIER', 'EXERCICE', 'DEBUT_CYCLE', 'FIN_CYCLE', 'DEVISE'],
+      [dossier.reference || '', dossier.name || dossier.clientName || '', dossier.exerciseYear || '', dossier.cycleStart || '', dossier.cycleEnd || '', 'XOF']
+    ];
+    var accountHeaders = ['CODE_COMPTE', 'LIBELLE_COMPTE', 'CLASSE_COMPTE', 'NATURE_COMPTE', 'AUXILIAIRE', 'ACTIF'];
+    var accountRows = [accountHeaders].concat(accounts.slice().sort(function (a, b) { return String(a.code).localeCompare(String(b.code)); }).map(function (account) {
+      return [account.code, account.label, account.cls, account.nature, account.aux ? 'OUI' : 'NON', account.active === false ? 'NON' : 'OUI'];
+    }));
+    var journalRows = [['CODE_JOURNAL', 'LIBELLE_JOURNAL', 'TYPE']].concat(journals.map(function (journal) {
+      return [journal.code, journal.label, journal.type || ''];
+    }));
+    return [
+      { name: 'Instructions', rows: instructions, autoFilter: false },
+      { name: 'Dossier', rows: dossierRows, autoFilter: true },
+      { name: 'Comptes', rows: accountRows, autoFilter: true },
+      { name: 'Journaux', rows: journalRows, autoFilter: true },
+      { name: 'Auxiliaire', rows: [AUXILIARY_HEADERS], autoFilter: true }
+    ];
+  }
+
+  function templateAuxiliaryWorkbook(data) {
+    return compressWorkbook(auxiliaryWorkbookSheetDefinitions(data || {}));
+  }
+
   function readZipDirectory(bytes) {
     function u16(offset) { return bytes[offset] | (bytes[offset + 1] << 8); }
     function u32(offset) { return (bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) | (bytes[offset + 3] << 24)) >>> 0; }
@@ -921,6 +1136,14 @@
     }
   }
 
+  function parseAuxiliaryWorkbook(input) {
+    try {
+      return parseAuxiliary(matrixCsv(readWorkbookRows(input, 'Auxiliaire', AUXILIARY_HEADERS)));
+    } catch (err) {
+      return { ok: false, errors: [err.message || 'Classeur auxiliaire illisible.'], rows: [], metadata: null, documentCount: 0, totalDebit: 0, totalCredit: 0 };
+    }
+  }
+
   var api = {
     FORMAT: FORMAT,
     VERSION: VERSION,
@@ -928,6 +1151,9 @@
     BALANCE_FORMAT: BALANCE_FORMAT,
     BALANCE_VERSION: BALANCE_VERSION,
     BALANCE_HEADERS: BALANCE_HEADERS.slice(),
+    AUXILIARY_FORMAT: AUXILIARY_FORMAT,
+    AUXILIARY_VERSION: AUXILIARY_VERSION,
+    AUXILIARY_HEADERS: AUXILIARY_HEADERS.slice(),
     parse: parse,
     template: template,
     exportEntries: exportEntries,
@@ -939,7 +1165,11 @@
     parseBalance: parseBalance,
     templateBalance: templateBalance,
     templateBalanceWorkbook: templateBalanceWorkbook,
-    parseBalanceWorkbook: parseBalanceWorkbook
+    parseBalanceWorkbook: parseBalanceWorkbook,
+    parseAuxiliary: parseAuxiliary,
+    templateAuxiliary: templateAuxiliary,
+    templateAuxiliaryWorkbook: templateAuxiliaryWorkbook,
+    parseAuxiliaryWorkbook: parseAuxiliaryWorkbook
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PerfectoAccountingExchange = api;

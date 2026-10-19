@@ -47,6 +47,8 @@ assert.equal(findTab('fichier', 'export-other').status, 'partial');
 assert.equal(findTab('fichier', 'import-other').status, 'partial');
 assert.equal(findTab('fichier', 'import-balance').status, 'partial');
 assert.ok(findTab('fichier', 'import-balance').reason.includes('PERFECTO-BALANCE v1'));
+assert.equal(findTab('fichier', 'centralize-auxiliary').status, 'partial');
+assert.ok(findTab('fichier', 'centralize-auxiliary').reason.includes('PERFECTO-AUXILIAIRE v1'));
 assert.equal(findTab('editions', 'journals').status, 'active');
 assert.equal(findTab('editions', 'general-accounts').status, 'active');
 assert.equal(findTab('editions', 'analytic-statements').status, 'inactive');

@@ -24,7 +24,7 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 | Écran | Contenu |
 |---|---|
 | Navigation comptable | Huit menus latéraux (Fichier, Définitions, Saisie, Éditions, Déclarations, Fin d’exercice, Paramètres, Outils), sous-menus en onglets verticaux et éléments imbriqués en listes ; les fonctions analytiques et non réalisées restent inactives |
-| Fichier & interopérabilité | PERFECTO-ÉCHANGE v1 pour les écritures et PERFECTO-BALANCE v1 pour les soldes nets : modèles CSV/Excel, aperçu, correspondance explicite des comptes, contrôles, point de restauration et ajout sans remplacement. Adaptateurs natifs Sage, PERFECTO historique, HYPERSOFT et ODOO à construire |
+| Fichier & interopérabilité | PERFECTO-ÉCHANGE v1 pour les écritures, PERFECTO-BALANCE v1 pour les soldes nets et PERFECTO-AUXILIAIRE v1 pour centraliser un lot auxiliaire équilibré ; modèles CSV/Excel, aperçu, correspondances, contrôles et point de restauration. Adaptateurs natifs Sage, PERFECTO historique, HYPERSOFT et ODOO à construire |
 | Téléphone | Consultation limitée aux Éditions (balance, journal, grand livre) ; aucune saisie comptable ni création de dossier sur téléphone |
 | Connexion (démo) | Aucun identifiant collecté ; e-mail/mot de passe et Google sont prévus, mais non actifs en démo |
 | Launcher | Catalogue modulaire, recherche et filtres ; ouverture selon les droits du profil simulé, autres modules à venir |
@@ -51,14 +51,26 @@ Le menu **Fichier** propose le format neutre `PERFECTO-ECHANGE` version 1 en cla
 - Le lot est ajouté au dossier actif ; il ne remplace pas les données présentes. Les comptes/journaux inconnus ne sont jamais créés automatiquement.
 - L’import de balance générale utilise un format distinct `PERFECTO-BALANCE` v1 (CSV ou `.xlsx`). Il accepte les soldes nets par compte — un solde débiteur ou créditeur par ligne — et exige l’égalité des totaux. Après aperçu et correspondances, il crée une seule pièce de reprise dans le journal et à la date choisis ; la balance source n’est pas enregistrée comme un état séparé et les écritures existantes ne sont pas remplacées.
 - La date de balance et le dossier/exercice source sont conservés comme contexte ; la date de comptabilisation est choisie pour le dossier cible. L’ajout se fait en brouillon par défaut, avec validation facultative selon les permissions et les contrôles de période.
-- Les balances de mouvements, auxiliaires ou états financiers ne sont pas acceptés par ce modèle. L’import des soldes n’active pas encore la fonction distincte de report à nouveau de fin d’exercice.
+- Les balances de mouvements, balances auxiliaires ou états financiers ne sont pas acceptées par le modèle `PERFECTO-BALANCE`. L’import des soldes n’active pas encore la fonction distincte de report à nouveau de fin d’exercice.
 - Le format commun est la première passerelle Excel/CSV, **pas encore un import direct des formats propriétaires** de Sage Comptabilité, PERFECTO historique, HYPERSOFT ou ODOO. Ces profils seront développés par version après réception et validation de fichiers d’exemple anonymisés.
 - Le JSON de **Données & application** reste une sauvegarde/restauration native PERFECTO et ne doit pas être confondu avec un fichier d’échange.
 - Les tiers, les données analytiques et le multidevise restent hors de ce premier incrément. Les données sont lues et produites dans le navigateur ; aucun fichier n’est envoyé à un serveur.
 
+### Centralisation de la comptabilité auxiliaire — v1
+
+Le sous-menu **Centralisation de la comptabilité auxiliaire** accepte un lot CSV ou `.xlsx` au format pivot `PERFECTO-AUXILIAIRE` version 1. Une ligne représente un mouvement source ; une pièce est identifiée par le journal source, sa date et sa référence.
+
+- Chaque pièce source doit contenir ses contreparties et être équilibrée. Le lot entier est contrôlé avant modification ; les 20 premières lignes sont affichées dans l’aperçu, avec toutes les correspondances de comptes.
+- Les comptes généraux inconnus doivent être associés explicitement ; aucun compte n’est créé. Toute ligne portant un code auxiliaire doit être associée à un compte cible marqué auxiliaire.
+- Les pièces sources du lot sont agrégées par compte général cible en une seule pièce de centralisation, au journal et à la date de destination choisis. Le brouillon est le mode par défaut ; la date, le journal, le contexte source/cible, les droits et les périodes sont contrôlés.
+- L’ajout est confirmé, précédé d’un point de restauration local et n’écrase aucune écriture. La référence de lot source empêche une seconde centralisation du même lot ; les métadonnées de provenance sont conservées. Garder le fichier source pour consulter le détail par tiers.
+- Ce pivot ne constitue pas encore un grand livre auxiliaire intégré ni un adaptateur natif Sage, PERFECTO historique, HYPERSOFT ou ODOO ; ces formats nécessitent des exemples anonymisés et une validation par version.
+
 En-tête stable de la feuille `Ecritures` et du CSV : `FORMAT;VERSION;SYSTEME_SOURCE;REFERENCE_DOSSIER;EXERCICE;CODE_JOURNAL;LIBELLE_JOURNAL;DATE;REFERENCE_PIECE;LIBELLE_PIECE;CODE_COMPTE;LIBELLE_COMPTE;CLASSE_COMPTE;NATURE_COMPTE;DEBIT_XOF;CREDIT_XOF;STATUT_SOURCE;ID_SOURCE`. Les colonnes peuvent être réordonnées, mais pas supprimées ni renommées dans cette version. Les montants sont des entiers sans séparateurs ; `ID_SOURCE` est répété sur chaque ligne de la même pièce.
 
 En-tête stable de la feuille `Balance` et du modèle CSV : `FORMAT;VERSION;SYSTEME_SOURCE;REFERENCE_DOSSIER;EXERCICE;DATE_BALANCE;REFERENCE_BALANCE;CODE_COMPTE;LIBELLE_COMPTE;SOLDE_DEBITEUR_XOF;SOLDE_CREDITEUR_XOF;ID_SOURCE`. Une ligne par compte, sans solde nul ni doublon de compte source. Les métadonnées doivent être identiques sur toutes les lignes ; `ID_SOURCE` peut être laissé vide partout ou rempli avec la même valeur.
+
+En-tête stable de la feuille `Auxiliaire` et du modèle CSV : `FORMAT;VERSION;SYSTEME_SOURCE;REFERENCE_DOSSIER;EXERCICE;REFERENCE_LOT;CODE_JOURNAL_SOURCE;DATE_SOURCE;REFERENCE_PIECE_SOURCE;LIBELLE_PIECE_SOURCE;CODE_COMPTE_GENERAL;LIBELLE_COMPTE_GENERAL;CODE_AUXILIAIRE;LIBELLE_AUXILIAIRE;LIBELLE_MOUVEMENT;DEBIT_XOF;CREDIT_XOF;ID_SOURCE`. `REFERENCE_LOT` est identique sur tout le fichier ; `ID_SOURCE` est obligatoire et unique par ligne. Les informations auxiliaires sont fournies ensemble ou laissées vides. Saisir les codes et références comme texte pour préserver les zéros initiaux.
 
 ### Règles métier appliquées
 

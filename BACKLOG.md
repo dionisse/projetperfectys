@@ -10,7 +10,7 @@ Ce document suit les décisions et les prochaines étapes du prototype natif. Le
 - Page multi-dossiers clients en place : la Comptabilité ouvre la liste avant le tableau de bord ; création avec nom, code, type comptable, référence et cycle, ainsi que coordonnées client facultatives (adresse, IFU, RCCM, email, téléphone).
 - Navigation Comptabilité générale organisée en huit menus latéraux, sous-menus en onglets verticaux et éléments imbriqués en listes ; fonctionnalités hors périmètre visibles mais inactives.
 - Sur téléphone, consultation limitée au menu Éditions (balance, journal, grand livre) ; opérations de saisie et création de dossier réservées à l’ordinateur ou à la tablette.
-- Menu Fichier : PERFECTO-ÉCHANGE v1 (écritures) et PERFECTO-BALANCE v1 (soldes nets) en CSV/Excel. L’import de balance contrôle l’équilibre, prévisualise les correspondances, crée une pièce de reprise dans le journal et à la date choisis, sauvegarde localement et ajoute sans remplacement ; brouillon par défaut.
+- Menu Fichier : PERFECTO-ÉCHANGE v1 (écritures), PERFECTO-BALANCE v1 (soldes nets) et PERFECTO-AUXILIAIRE v1 (centralisation d’un lot de pièces équilibrées) en CSV/Excel. Les imports contrôlent les correspondances et périodes, prévisualisent, sauvegardent localement, ajoutent sans remplacement et créent un brouillon par défaut.
 - Les profils natifs Sage Comptabilité, PERFECTO historique, HYPERSOFT et ODOO ne sont pas encore implémentés ; ils nécessitent des exemples anonymisés et une validation par version.
 - Connexion, profils, grants et dossiers ne sont pas encore reliés à une identité réelle ou à Google Drive.
 
@@ -25,6 +25,7 @@ Ce document suit les décisions et les prochaines étapes du prototype natif. Le
 - L’interopérabilité repose sur un format comptable commun, utilisé dans les deux sens, avec Excel/CSV comme passerelle et des adaptateurs séparés par logiciel ; les logiciels prioritaires cités sont Sage Comptabilité, PERFECTO historique, HYPERSOFT et ODOO.
 - Les formats d’échange ne remplacent pas la sauvegarde native PERFECTO. Les importations ajoutent au dossier actif après aperçu, contrôles et point de restauration ; elles ne remplacent rien par défaut.
 - L’import de balance v1 concerne les soldes nets uniquement et les transforme en une pièce de reprise (journal/date choisis, brouillon par défaut) ; les balances de mouvements et le report à nouveau restent distincts.
+- La centralisation auxiliaire v1 accepte un lot pivot de pièces complètes et équilibrées, les agrège par compte général cible en une seule pièce et exige un code auxiliaire pour les lignes de tiers ; elle ne remplace pas encore les adaptateurs natifs ni un grand livre auxiliaire intégré.
 - Comptabilité générale et comptabilité analytique sont deux modules séparés et interopérables ; l’analytique exploite les données issues de la comptabilité générale sans y intégrer ses propres définitions analytiques.
 - Sur téléphone, seul le parcours de consultation des Éditions est prévu ; l’application de saisie est destinée à l’ordinateur ou à la tablette.
 - Les fonctions analytiques, dépendantes de modules futurs ou à confirmer restent inactives jusqu’à une décision explicite ; les fonctions générales non encore réalisées sont étiquetées « À construire ».
@@ -58,7 +59,7 @@ Les identifiants ci-dessous sont reliés aux parcours actuels, mais leurs libell
 
 ## Incréments fonctionnels ultérieurs
 
-- Interopérabilité : faire valider avec un spécialiste Excel les modèles `PERFECTO-ÉCHANGE` et `PERFECTO-BALANCE` et leurs règles métier ; développer les adaptateurs directs Sage Comptabilité, PERFECTO historique, HYPERSOFT et ODOO, un par version, avec des fichiers réels anonymisés et des tests de rapprochement. L’import des balances de mouvements, auxiliaires et autres états demeure à cadrer séparément.
+- Interopérabilité : faire valider avec un spécialiste Excel les modèles `PERFECTO-ÉCHANGE`, `PERFECTO-BALANCE` et `PERFECTO-AUXILIAIRE` et leurs règles métier ; développer les adaptateurs directs Sage Comptabilité, PERFECTO historique, HYPERSOFT et ODOO, un par version, avec des fichiers réels anonymisés et des tests de rapprochement. Les balances de mouvements et autres états restent à cadrer séparément.
 - Comptabilité générale : tiers et auxiliaires détaillés, numérotation, extourne, lettrage, rapprochement bancaire, pièces jointes et états financiers SYSCOHADA complets.
 - Comptabilité analytique, Paie & RH, Gestion de courriers, Vente/Stock/Facturation, puis autres modules selon les besoins de l’organisation.
 - Exécutable Windows : cadrage séparé après stabilisation des parcours web et des règles de stockage.
