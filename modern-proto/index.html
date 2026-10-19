@@ -19,9 +19,7 @@
   <script>
     (function () {
       var route = location.hash.replace(/^#\/?/, '').split('?')[0];
-      if (['dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings'].indexOf(route) !== -1) {
-        document.body.classList.add('client-dossier-mode');
-      }
+      if (route === 'dossiers') document.body.classList.add('dossiers-list-mode');
     }());
   </script>
   <a class="skip-link" href="#main-content">Aller au contenu principal</a>

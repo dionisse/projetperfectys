@@ -355,9 +355,10 @@
 
     closeModal(true);
     var launcherMode = route === 'login' || route === 'launcher' || route === 'organization';
-    var clientDossierMode = ACCOUNTING_ROUTES.indexOf(route) !== -1 && route !== 'dossiers';
+    var selectedDossierMode = ACCOUNTING_ROUTES.indexOf(route) !== -1 && route !== 'dossiers';
+    var dossiersListMode = route === 'dossiers';
     document.body.classList.toggle('launcher-mode', launcherMode);
-    document.body.classList.toggle('client-dossier-mode', clientDossierMode);
+    document.body.classList.toggle('dossiers-list-mode', dossiersListMode);
 
     var html = '';
     switch (route) {
@@ -394,7 +395,7 @@
         : (inAccounting ? 'Dossier client isolé localement · ' + (activeDossier && activeDossier.name || '') : '');
     }
     var dossiersReturn = $('#dossier-list-return');
-    if (dossiersReturn) dossiersReturn.hidden = !clientDossierMode;
+    if (dossiersReturn) dossiersReturn.hidden = !selectedDossierMode;
     var topbarEntry = $('a[href="#/entry"].btn.btn-primary');
     if (topbarEntry && route === 'dossiers') topbarEntry.hidden = true;
 
@@ -2000,7 +2001,7 @@
     var scrim = $('#sidebar-scrim');
     if (sidebar) {
       sidebar.classList.remove('open');
-      sidebar.hidden = document.body.classList.contains('client-dossier-mode');
+      sidebar.hidden = document.body.classList.contains('dossiers-list-mode');
     }
     if (scrim) scrim.remove();
     var toggle = $('[data-action="toggle-sidebar"]');
@@ -2015,7 +2016,7 @@
     if (!sidebar) return;
     if (!sidebar.classList.contains('open')) sidebar.hidden = false;
     var isOpen = sidebar.classList.toggle('open');
-    if (!isOpen && document.body.classList.contains('client-dossier-mode')) sidebar.hidden = true;
+    if (!isOpen && document.body.classList.contains('dossiers-list-mode')) sidebar.hidden = true;
     var toggle = $('[data-action="toggle-sidebar"]');
     if (toggle) {
       toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
