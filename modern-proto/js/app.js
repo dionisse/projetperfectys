@@ -11,6 +11,7 @@
   var AccountingNavigation = window.PerfectoAccountingNavigation;
   var AccountingExchange = window.PerfectoAccountingExchange;
   var AccountingConsolidation = window.PerfectoAccountingConsolidation;
+  var BalanceRecalculation = window.PerfectoBalanceRecalculation;
   var PayrollHR = window.PerfectoPayrollHR;
   var PayrollCentralization = window.PerfectoPayrollCentralization;
   var SalesOperations = window.PerfectoSalesOperations;
@@ -82,6 +83,7 @@
   var centralizationCancellationSession = null;
   var consolidationBeforeResultSession = null;
   var consolidationAfterResultSession = null;
+  var balanceRecalculationSession = null;
   var launcherUi = { filter: 'all', query: '' };
   var DEMO_ORGANIZATION_ID = 'demo-org';
   var ACCOUNTING_ROUTES = ['dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings', 'menu'];
@@ -212,7 +214,10 @@
         return { moduleId: 'accounting', actionId: 'centralization.cancel' };
       case 'export-accounting-consolidation-before-result':
       case 'export-accounting-consolidation-after-result':
+      case 'export-recalculated-account-balances':
         return { moduleId: 'accounting', actionId: 'data.export' };
+      case 'recalculate-account-balances':
+        return { moduleId: 'accounting', actionId: 'module.view' };
       case 'open-entry':
         return { moduleId: 'accounting', actionId: 'module.view' };
       case 'edit-draft':
@@ -447,6 +452,7 @@
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'cancel-centralization')) centralizationCancellationSession = null;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'consolidate-before-result')) consolidationBeforeResultSession = null;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'consolidate-after-result')) consolidationAfterResultSession = null;
+    if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'recalculate-balances')) balanceRecalculationSession = null;
 
     var activeMember = getActiveDemoMember();
     var orgContext = demoAccessContext('organization');
@@ -4096,6 +4102,153 @@
   function exportAccountingConsolidationBeforeResult() { exportAccountingConsolidation('before'); }
   function exportAccountingConsolidationAfterResult() { exportAccountingConsolidation('after'); }
 
+  function viewAccountingBalanceRecalculation() {
+    var dossier = S.currentDossier();
+    return '<div class="exchange-workspace balance-recalculation-workspace">' +
+      '<section class="exchange-card balance-recalculation-card" aria-labelledby="balance-recalculation-heading">' +
+        '<p class="page-kicker">CONTRÔLE DES SOLDES · DOSSIER ACTIF</p>' +
+        '<h4 id="balance-recalculation-heading">Recalcul du solde des comptes</h4>' +
+        '<p>Reconstituer les débits, crédits et soldes nets à partir des écritures validées du cycle comptable, puis comparer le résultat au calcul actuel de la balance générale.</p>' +
+        '<div class="alert info"><div><strong>Opération sans écriture.</strong> PERFECTO ne conserve pas de cache de soldes séparé : le recalcul relit les mouvements validés et n’enregistre aucune modification. Les brouillons sont exclus ; les pièces hors cycle sont signalées.</div></div>' +
+        '<div class="exchange-preview-footer"><button type="button" class="btn btn-primary" data-action="recalculate-account-balances">↻ Recalculer les soldes</button></div>' +
+      '</section>' +
+      '<div id="balance-recalculation-output" aria-live="polite">' + renderBalanceRecalculationPreview() + '</div>' +
+      '<p class="exchange-footnote">Dossier : ' + esc(dossier.reference) + ' · cycle : ' + esc(dateLabel(dossier.cycleStart)) + ' au ' + esc(dateLabel(dossier.cycleEnd)) + '. Une correction comptable doit passer par le parcours normal de saisie ou de validation.</p>' +
+    '</div>';
+  }
+
+  function renderBalanceRecalculationPreview() {
+    var dossier = S.currentDossier();
+    var session = balanceRecalculationSession;
+    if (!session || session.dossierId !== dossier.id) {
+      return '<div class="empty-state"><span class="empty-state-icon">↻</span><h3>Recalcul non lancé</h3><p>Le recalcul analysera toutes les pièces validées du cycle actif et exclura les brouillons.</p></div>';
+    }
+    var result = session.result;
+    if (!result.ok) {
+      return '<div class="alert error"><div><strong>Recalcul interrompu : des mouvements validés sont invalides.</strong><ul>' +
+        result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') +
+        '</ul><p>Aucun solde n’a été modifié. Corrigez les pièces par les parcours comptables prévus, puis relancez le contrôle.</p></div></div>';
+    }
+    if (!result.movementCount) {
+      return '<div class="empty-state"><span class="empty-state-icon">⌕</span><h3>Aucun mouvement validé dans le cycle</h3><p>Les soldes sont nuls ; aucun tableau de comptes mouvementés n’est à afficher.</p></div>';
+    }
+
+    var comparison = session.comparison || { ok: false, differences: [] };
+    var checkMessage = comparison.ok
+      ? '<div class="alert success"><div><strong>Concordance vérifiée.</strong> Les soldes recalculés correspondent à la balance générale calculée actuellement par PERFECTO.</div></div>'
+      : '<div class="alert warning"><div><strong>Écart détecté par compte.</strong> Le recalcul indépendant ne correspond pas à la balance générale courante pour ' + comparison.differences.length + ' compte(s).</div></div>';
+    var totalsMessage = result.balanced
+      ? '<div class="alert success"><div><strong>Balance équilibrée.</strong> Total débit = total crédit = ' + esc(money(result.totalDebit)) + '.</div></div>'
+      : '<div class="alert warning"><div><strong>Totaux déséquilibrés.</strong> Débit : ' + esc(money(result.totalDebit)) + ' · Crédit : ' + esc(money(result.totalCredit)) + '.</div></div>';
+    var summary = '<div class="exchange-summary-grid balance-recalculation-summary-grid">' +
+      '<div><small>Pièces validées</small><strong>' + result.entriesCount + '</strong></div>' +
+      '<div><small>Lignes recalculées</small><strong>' + result.movementCount + '</strong></div>' +
+      '<div><small>Comptes mouvementés</small><strong>' + result.rows.length + '</strong></div>' +
+      '<div><small>Total débit</small><strong>' + esc(money(result.totalDebit)) + '</strong></div>' +
+      '<div><small>Total crédit</small><strong>' + esc(money(result.totalCredit)) + '</strong></div>' +
+      '</div>' +
+      (result.excludedDraftCount ? '<p class="exchange-footnote">' + result.excludedDraftCount + ' brouillon(s) exclu(s) du calcul.</p>' : '');
+    var warnings = result.warnings.length
+      ? '<div class="alert warning"><div><strong>Points à contrôler.</strong><ul>' + result.warnings.map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('') + '</ul></div></div>'
+      : '';
+    var rows = result.rows.map(function (row) {
+      return '<tr>' +
+        '<td><strong>' + esc(row.code) + '</strong></td>' +
+        '<td>' + esc(row.label) + '</td>' +
+        '<td class="text-right">' + esc(amount(row.debit)) + '</td>' +
+        '<td class="text-right">' + esc(amount(row.credit)) + '</td>' +
+        '<td class="text-right">' + esc(amount(row.debitBalance)) + '</td>' +
+        '<td class="text-right">' + esc(amount(row.creditBalance)) + '</td>' +
+        '<td class="text-right">' + row.movementCount + '</td>' +
+        '</tr>';
+    }).join('');
+    var table = '<section class="exchange-card balance-recalculation-table-card"><h4>Soldes recalculés par compte</h4>' +
+      '<div class="exchange-table-wrap"><table class="exchange-mapping-table balance-recalculation-table"><thead><tr><th>Compte</th><th>Intitulé</th><th>Débit XOF</th><th>Crédit XOF</th><th>Solde débiteur XOF</th><th>Solde créditeur XOF</th><th>Mouvements</th></tr></thead><tbody>' + rows + '</tbody>' +
+      '<tfoot><tr><th colspan="2">Totaux du cycle</th><th class="text-right">' + esc(amount(result.totalDebit)) + '</th><th class="text-right">' + esc(amount(result.totalCredit)) + '</th><th colspan="3">' + (result.balanced ? 'Équilibrés' : 'À contrôler') + '</th></tr></tfoot></table></div></section>';
+    var differences = comparison.differences.length
+      ? '<section class="exchange-card balance-recalculation-differences"><h4>Comptes en écart avec le calcul courant</h4><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Compte</th><th>Débit recalculé</th><th>Débit courant</th><th>Crédit recalculé</th><th>Crédit courant</th></tr></thead><tbody>' +
+        comparison.differences.map(function (difference) {
+          return '<tr><td><strong>' + esc(difference.code) + '</strong>' + (difference.label ? '<br><span class="small muted">' + esc(difference.label) + '</span>' : '') + '</td>' +
+            '<td class="text-right">' + esc(amount(difference.recalculatedDebit)) + '</td><td class="text-right">' + esc(amount(difference.currentDebit)) + '</td>' +
+            '<td class="text-right">' + esc(amount(difference.recalculatedCredit)) + '</td><td class="text-right">' + esc(amount(difference.currentCredit)) + '</td></tr>';
+        }).join('') + '</tbody></table></div></section>'
+      : '';
+    var actions = '<div class="exchange-preview-footer balance-recalculation-actions">' +
+      '<button type="button" class="btn btn-ghost" data-action="print">⎙ Imprimer</button>' +
+      '<button type="button" class="btn btn-primary" data-action="export-recalculated-account-balances">↓ Exporter le recalcul CSV</button></div>';
+    return '<div class="exchange-preview balance-recalculation-result">' + checkMessage + totalsMessage + warnings + summary + table + differences + actions + '</div>';
+  }
+
+  function recalculateAccountBalances() {
+    var dossier = S.currentDossier();
+    var result = BalanceRecalculation.recalculate(S.entries(), S.accounts(), {
+      cycleStart: dossier.cycleStart,
+      cycleEnd: dossier.cycleEnd
+    });
+    var currentRows = result.ok ? S.balance() : [];
+    var comparison = result.ok
+      ? BalanceRecalculation.compareBalances(result.rows, currentRows)
+      : { ok: false, differences: [] };
+    balanceRecalculationSession = { dossierId: dossier.id, result: result, comparison: comparison, currentRows: currentRows };
+    if (!result.ok) toast('Recalcul interrompu : vérifiez les pièces validées signalées.', 'warning');
+    else if (!comparison.ok) toast('Des écarts de calcul ont été détectés. Consultez le détail avant toute correction.', 'warning');
+    else toast('Recalcul terminé. Les données comptables n’ont pas été modifiées.', 'success');
+    render();
+  }
+
+  function exportRecalculatedAccountBalances() {
+    var dossier = S.currentDossier();
+    var session = balanceRecalculationSession;
+    if (!session || session.dossierId !== dossier.id || !session.result || !session.result.ok || !session.result.movementCount) {
+      toast('Lancez un recalcul réussi comportant des mouvements avant l’export.', 'warning');
+      return;
+    }
+    var result = session.result;
+    var calculatedByCode = Object.create(null);
+    var currentByCode = Object.create(null);
+    result.rows.forEach(function (row) { calculatedByCode[row.code] = row; });
+    (session.currentRows || []).forEach(function (row) { currentByCode[row.code] = row; });
+    var codes = Object.keys(calculatedByCode);
+    Object.keys(currentByCode).forEach(function (code) { if (codes.indexOf(code) === -1) codes.push(code); });
+    codes.sort(function (a, b) { return a.localeCompare(b); });
+    var rows = [
+      ['PERFECTO-RECALCUL-SOLDES-COMPTES', '1'],
+      ['DOSSIER', dossier.reference],
+      ['EXERCICE', S.exercise()],
+      ['CYCLE_DEBUT', result.cycleStart],
+      ['CYCLE_FIN', result.cycleEnd],
+      ['ETAT_COMPARAISON', session.comparison && session.comparison.ok ? 'CONCORDANT' : 'ECART'],
+      ['BROUILLONS_EXCLUS', result.excludedDraftCount],
+      ['PIECES_VALIDEES_HORS_CYCLE', result.outsideCyclePostedCount],
+      [],
+      ['CODE_COMPTE', 'INTITULE_COMPTE', 'DEBIT_RECALCULE_XOF', 'CREDIT_RECALCULE_XOF', 'SOLDE_DEBITEUR_RECALCULE_XOF', 'SOLDE_CREDITEUR_RECALCULE_XOF', 'DEBIT_BALANCE_COURANTE_XOF', 'CREDIT_BALANCE_COURANTE_XOF', 'ECART_DEBIT_XOF', 'ECART_CREDIT_XOF', 'NOMBRE_MOUVEMENTS', 'ETAT_COMPTE']
+    ];
+    codes.forEach(function (code) {
+      var calculated = calculatedByCode[code] || { code: code, label: '', debit: 0, credit: 0, debitBalance: 0, creditBalance: 0, movementCount: 0 };
+      var current = currentByCode[code] || { label: '', debit: 0, credit: 0 };
+      var same = Number(calculated.debit) === Number(current.debit) && Number(calculated.credit) === Number(current.credit);
+      rows.push([
+        code,
+        calculated.label || current.label,
+        calculated.debit,
+        calculated.credit,
+        calculated.debitBalance,
+        calculated.creditBalance,
+        current.debit,
+        current.credit,
+        Number(calculated.debit) - Number(current.debit),
+        Number(calculated.credit) - Number(current.credit),
+        calculated.movementCount,
+        same ? 'CONCORDANT' : 'ECART'
+      ]);
+    });
+    rows.push([], ['ALERTES'], ['TYPE', 'DETAIL']);
+    result.warnings.forEach(function (warning) { rows.push(['AVERTISSEMENT', warning]); });
+    rows.push([], ['TOTAL_RECALCULE', '', result.totalDebit, result.totalCredit]);
+    downloadFile('perfecto-' + safeFilePart(dossier.reference) + '-recalcul-soldes-' + result.cycleStart + '-' + result.cycleEnd + '.csv', toCsv(rows), 'text/csv;charset=utf-8');
+    toast('Recalcul des soldes exporté. Aucune écriture n’a été ajoutée au grand livre.', 'success');
+  }
+
   function viewAccountingMenu(params) {
     params = params || {};
     var phone = isPhoneViewport();
@@ -4146,6 +4299,7 @@
         case 'cancel-centralization': exchangeFeature = viewAccountingCentralizationCancellation(); break;
         case 'consolidate-before-result': exchangeFeature = viewAccountingConsolidationBeforeResult(); break;
         case 'consolidate-after-result': exchangeFeature = viewAccountingConsolidationAfterResult(); break;
+        case 'recalculate-balances': exchangeFeature = viewAccountingBalanceRecalculation(); break;
         default: break;
       }
     }
@@ -4641,6 +4795,12 @@
         break;
       case 'export-accounting-consolidation-after-result':
         exportAccountingConsolidationAfterResult();
+        break;
+      case 'recalculate-account-balances':
+        recalculateAccountBalances();
+        break;
+      case 'export-recalculated-account-balances':
+        exportRecalculatedAccountBalances();
         break;
       case 'export-accounting-workbook': {
         var workbookDossier = S.currentDossier();

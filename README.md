@@ -33,6 +33,7 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 | Annulation d’une centralisation | Brouillon interne supprimable sans effet comptable ; pièce validée annulée par écriture inverse traçable, sans toucher à l’originale. Paie & RH et Ventes/Stock/Facturation uniquement ; imports et logiciels tiers exclus |
 | Consolidation avant résultat | Journal groupé consultable et exportable par période et journal, agrégé par compte général ; chaque ligne source conserve sa pièce, son journal, sa date, son numéro de ligne et son origine. Lecture seule : aucune écriture n’est ajoutée au grand livre |
 | Consolidation après résultat | Journal groupé consultable et exportable des écritures validées, avec la même traçabilité par ligne. Lecture seule ; la détection de la pièce/date de résultat, son affectation et les écritures de clôture restent à définir |
+| Recalcul du solde des comptes | Reconstitution indépendante à partir des écritures validées du cycle, comparaison à la balance calculée, contrôle des pièces et export CSV ; lecture seule, sans solde cache ni écriture modifiée |
 | Organisation & accès (démo) | Profils temporaires et droits explicites par personne, module, entreprise cliente, dossier et action ; refus par défaut |
 | Dossiers clients | Liste multi-dossiers ouverte depuis le module Comptabilité ; création d’entreprise, code, type comptable, référence et cycle paramétrable |
 | Tableau de bord | Indicateurs (débit, crédit, résultat, pièces), dernières pièces, activité par journal, état des périodes |
@@ -77,6 +78,12 @@ Le prototype ne suppose pas encore de consolidation multi-sociétés, d’élimi
 Le sous-menu **Fichier → Consolidation après résultat** réutilise le journal groupé par compte général et le détail de provenance de la consolidation avant résultat. Il filtre les écritures validées par dates et journal, contrôle l’équilibre et propose un export CSV détaillé, sans toucher au grand livre.
 
 Cette première version ne détecte pas automatiquement la date ou la pièce d’arrêté du résultat, ne calcule pas ni n’affecte le résultat et ne génère aucune écriture de clôture. Elle regroupe les écritures validées présentes pour la période sélectionnée ; ces règles d’étape restent à préciser avant d’automatiser un traitement post-résultat.
+
+### Recalcul du solde des comptes — première étape
+
+Le sous-menu **Fichier → Recalcul du solde des comptes** recalcule, à la demande, les débits, crédits et soldes par compte à partir des seules écritures validées du cycle actif. Il contrôle l’équilibre des pièces, exclut les brouillons, signale les pièces validées hors cycle ou les comptes absents du plan, puis compare les résultats au calcul actuel de la balance générale. Un export CSV et une impression sont disponibles.
+
+Dans le prototype, les soldes ne sont pas conservés dans un cache séparé : la balance est déjà calculée à partir des écritures à chaque consultation. Le recalcul est donc un contrôle indépendant et **ne modifie ni les soldes persistés, ni les pièces, ni le grand livre**. En cas d’anomalie, la correction doit passer par le parcours comptable prévu ; ce sous-menu ne répare pas la base.
 
 ### Centralisation auxiliaire depuis les modules maison — à construire
 

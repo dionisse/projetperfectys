@@ -2440,6 +2440,36 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
   .consolidation-journal-table { min-width: 0; font-size: 7pt; }
 }
 
+
+.balance-recalculation-card > h4 { margin-top: 2px; }
+.balance-recalculation-card > .alert { margin: 0 0 14px; line-height: 1.55; }
+.balance-recalculation-card > p:not(.page-kicker) { max-width: 92ch; }
+.balance-recalculation-summary-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.balance-recalculation-summary-grid strong { font-variant-numeric: tabular-nums; }
+.balance-recalculation-table-card > h4,
+.balance-recalculation-differences > h4 { margin: 0 0 11px; color: #314a41; font-size: .88rem; font-weight: 800; }
+.balance-recalculation-table { min-width: 840px; }
+.balance-recalculation-table tfoot th { padding: 10px; border-top: 1px solid #dfe7e0; color: #314a41; background: #f5f8f5; font-size: .66rem; }
+.balance-recalculation-actions { justify-content: flex-end; gap: 9px; }
+.balance-recalculation-result > .alert { margin: 0; line-height: 1.55; }
+.balance-recalculation-result > .alert ul { margin: 5px 0 0; line-height: 1.55; }
+.balance-recalculation-result .small { display: inline-block; max-width: 300px; overflow-wrap: anywhere; line-height: 1.4; }
+
+@media (max-width: 900px) {
+  .balance-recalculation-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .balance-recalculation-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .balance-recalculation-actions { align-items: stretch; flex-direction: column; }
+  .balance-recalculation-actions .btn { justify-content: center; }
+  .balance-recalculation-card .exchange-preview-footer .btn { width: 100%; justify-content: center; }
+}
+@media print {
+  .balance-recalculation-card .exchange-preview-footer,
+  .balance-recalculation-actions { display: none !important; }
+  .balance-recalculation-table { min-width: 0; font-size: 7pt; }
+}
+
 @media (max-width: 700px) {
   .payroll-demo-create,
   .sales-demo-create,
