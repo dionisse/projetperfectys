@@ -12,6 +12,7 @@
   var LEGACY_FOLDERS_STORAGE_KEY = 'perfecto.folders.v1';
   var ACTIVE_DOSSIER_STORAGE_KEY = 'perfecto.activeDossier.v1';
   var LEGACY_ACTIVE_FOLDER_STORAGE_KEY = 'perfecto.activeFolder.v1';
+  var CORRUPT_RECOVERY_SUFFIX = '.recovery.raw.v1';
   var DEFAULT_FOLDER_ID = 'folder-main';
   var DEFAULT_FOLDER_NAME = 'Entreprise de démonstration';
   var DEFAULT_ACCOUNTING_TYPE = 'Comptabilité révisée SYSCOHADA';
@@ -124,6 +125,7 @@
   var state = null;
   var folderCatalog = null;
   var activeFolderId = null;
+  var recoveryIssue = null;
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -349,44 +351,94 @@
     return activeFolderId === DEFAULT_FOLDER_ID ? BACKUP_STORAGE_KEY : BACKUP_STORAGE_KEY + '.folder.' + activeFolderId;
   }
 
+  function currentRecoveryRawStorageKey() {
+    return currentFolderStorageKey() + CORRUPT_RECOVERY_SUFFIX;
+  }
+
   function switchFolder(folderId) {
     ensureFolderCatalog();
     if (!folderById(folderId)) return { ok: false, errors: ['Dossier client introuvable.'] };
     if (folderId === activeFolderId) return { ok: true, errors: [], dossier: currentDossier(), folder: currentDossier() };
-    if (state && !save()) return { ok: false, errors: ['Impossible d’enregistrer le dossier actif avant le changement.'] };
+    if (state && !recoveryIssue && !save()) return { ok: false, errors: ['Impossible d’enregistrer le dossier actif avant le changement.'] };
     activeFolderId = folderId;
     state = null;
+    recoveryIssue = null;
     try { global.localStorage.setItem(ACTIVE_DOSSIER_STORAGE_KEY, activeFolderId); } catch (err) { /* la sélection restera en mémoire */ }
     return { ok: true, errors: [], dossier: currentDossier(), folder: currentDossier(), state: load() };
+  }
+
+  function hasReadableAccountingRecords(data) {
+    return !!data && Array.isArray(data.accounts) && Array.isArray(data.journals) && Array.isArray(data.entries) &&
+      data.accounts.every(function (account) { return !!account && typeof account === 'object' && !Array.isArray(account); }) &&
+      data.journals.every(function (journal) { return !!journal && typeof journal === 'object' && !Array.isArray(journal); }) &&
+      data.entries.every(function (entry) {
+        return !!entry && typeof entry === 'object' && !Array.isArray(entry) && Array.isArray(entry.lines) &&
+          entry.lines.every(function (line) { return !!line && typeof line === 'object' && !Array.isArray(line); });
+      });
+  }
+
+  function periodRegistryNeedsRepair(periods) {
+    if (!Array.isArray(periods)) return true;
+    return periods.some(function (period) {
+      if (!period || typeof period !== 'object' || Array.isArray(period)) return true;
+      var year = Number(period.year);
+      var month = Number(period.month);
+      return !Number.isInteger(year) || year < 1900 || year > 9999 || !Number.isInteger(month) || month < 1 || month > 12 ||
+        (period.status !== 'open' && period.status !== 'closed');
+    });
   }
 
   function load() {
     if (state) return state;
     ensureFolderCatalog();
+    var raw = null;
     try {
-      var raw = global.localStorage.getItem(currentFolderStorageKey());
-      if (raw) {
+      raw = global.localStorage.getItem(currentFolderStorageKey());
+      if (raw !== null) {
         var parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.accounts) && Array.isArray(parsed.journals) && Array.isArray(parsed.entries)) {
+        if (hasReadableAccountingRecords(parsed)) {
           state = parsed;
           var dossier = folderById(activeFolderId);
           var fallbackStart = (dossier && dossier.cycleStart) || EXERCICE + '-01-01';
           var fallbackEnd = (dossier && dossier.cycleEnd) || EXERCICE + '-12-31';
+          var metadataRepairNeeded = false;
           if (!parseIsoDate(state.cycleStart) || !parseIsoDate(state.cycleEnd) || state.cycleEnd < state.cycleStart) {
             state.cycleStart = fallbackStart;
             state.cycleEnd = fallbackEnd;
+            metadataRepairNeeded = true;
           }
-          state.exercise = Number(state.cycleStart.slice(0, 4)) || Number(dossier && dossier.exerciseYear) || EXERCICE;
-          ensurePeriodsForEntries();
+          if (!Array.isArray(state.periods)) {
+            state.periods = [];
+            metadataRepairNeeded = true;
+          } else if (periodRegistryNeedsRepair(state.periods)) {
+            metadataRepairNeeded = true;
+          }
+          var inferredExercise = Number(state.cycleStart.slice(0, 4)) || Number(dossier && dossier.exerciseYear) || EXERCICE;
+          if (state.exercise !== inferredExercise) metadataRepairNeeded = true;
+          state.exercise = inferredExercise;
+          if (metadataRepairNeeded) {
+            recoveryIssue = { kind: 'metadata', raw: raw, message: 'Des métadonnées de cycle ou de périodes nécessitent une réparation contrôlée.' };
+          } else {
+            var periodsBefore = JSON.stringify(state.periods);
+            try {
+              ensurePeriodsForEntries();
+            } catch (periodError) {
+              recoveryIssue = { kind: 'metadata', raw: raw, message: 'Le registre des périodes ne peut pas être chargé sans réparation.' };
+            }
+            if (!recoveryIssue && JSON.stringify(state.periods) !== periodsBefore) {
+              recoveryIssue = { kind: 'metadata', raw: raw, message: 'Des périodes manquantes ont été reconstruites en mémoire et doivent être enregistrées après contrôle.' };
+            }
+          }
           return state;
         }
+        recoveryIssue = { kind: 'corrupt', raw: raw, message: 'Le fichier comptable stocké est illisible ou sa structure est incomplète. PERFECTO l’a conservé sans le remplacer.' };
       }
     } catch (err) {
-      /* Stockage indisponible ou corrompu : le dossier repart sur son état initial. */
+      if (raw !== null) recoveryIssue = { kind: 'corrupt', raw: raw, message: 'Le fichier comptable stocké ne peut pas être lu. PERFECTO l’a conservé sans le remplacer.' };
     }
     var dossier = folderById(activeFolderId);
     state = initialState(!dossier || dossier.seeded !== false, dossier);
-    save();
+    if (!recoveryIssue) save();
     return state;
   }
 
@@ -421,7 +473,7 @@
   }
 
   function save() {
-    if (!state) return false;
+    if (!state || recoveryIssue) return false;
     try {
       ensureFolderCatalog();
       var storageKey = currentFolderStorageKey();
@@ -437,6 +489,7 @@
 
   function reset() {
     ensureFolderCatalog();
+    if (recoveryIssue) return state;
     var dossier = folderById(activeFolderId);
     state = initialState(!dossier || dossier.seeded !== false, dossier);
     save();
@@ -849,16 +902,22 @@
     try {
       var parsed = JSON.parse(text);
       var data = parsed && parsed.data ? parsed.data : parsed;
-      if (!data || !Array.isArray(data.accounts) || !Array.isArray(data.journals) || !Array.isArray(data.entries) || !Array.isArray(data.periods)) {
+      if (!data || !Array.isArray(data.accounts) || !Array.isArray(data.journals) || !Array.isArray(data.entries) || !Array.isArray(data.periods) || !hasReadableAccountingRecords(data)) {
         return { ok: false, errors: ['Fichier invalide : structure PERFECTO attendue.'] };
       }
+      var previousState = clone(load());
+      if (recoveryIssue) return { ok: false, errors: ['Restauration bloquée : analysez la base endommagée et préservez d’abord son contenu.'] };
       var dossier = currentDossier();
+      data = clone(data);
       data.exercise = dossier.exerciseYear;
       data.cycleStart = dossier.cycleStart;
       data.cycleEnd = dossier.cycleEnd;
       state = data;
       ensurePeriodsForEntries();
-      save();
+      if (!save()) {
+        state = previousState;
+        return { ok: false, errors: ['Restauration impossible : le stockage local est indisponible ou plein. Les données du dossier sont conservées.'] };
+      }
       return { ok: true, errors: [] };
     } catch (err) {
       return { ok: false, errors: ['Fichier JSON illisible.'] };
@@ -1068,9 +1127,149 @@
     };
   }
 
+  function readCorruptRecoveryCopy() {
+    try {
+      var raw = global.localStorage.getItem(currentRecoveryRawStorageKey());
+      if (!raw) return null;
+      var copy = JSON.parse(raw);
+      if (!copy || copy.application !== 'PERFECTO' || copy.version !== 1 || typeof copy.raw !== 'string') return null;
+      return copy;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function preserveCorruptRaw() {
+    if (!recoveryIssue || typeof recoveryIssue.raw !== 'string') return false;
+    try {
+      var copy = {
+        application: 'PERFECTO',
+        version: 1,
+        createdAt: new Date().toISOString(),
+        dossierId: activeFolderId,
+        sourceKey: currentFolderStorageKey(),
+        raw: recoveryIssue.raw
+      };
+      global.localStorage.setItem(currentRecoveryRawStorageKey(), JSON.stringify(copy));
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function databaseStorageStatus() {
+    load();
+    var recoveryCopy = readCorruptRecoveryCopy();
+    return {
+      recoveryRequired: !!recoveryIssue,
+      kind: recoveryIssue && recoveryIssue.kind || '',
+      message: recoveryIssue && recoveryIssue.message || '',
+      rawLength: recoveryIssue && typeof recoveryIssue.raw === 'string' ? recoveryIssue.raw.length : 0,
+      recoveryCopyAvailable: !!recoveryCopy,
+      recoveryCopyCreatedAt: recoveryCopy && recoveryCopy.createdAt || null,
+      backupAvailable: !!readBackupSnapshot()
+    };
+  }
+
+  function corruptDatabaseContents() {
+    load();
+    if (recoveryIssue && typeof recoveryIssue.raw === 'string') return recoveryIssue.raw;
+    var recoveryCopy = readCorruptRecoveryCopy();
+    return recoveryCopy ? recoveryCopy.raw : null;
+  }
+
+  function databaseRepairAnalysis() {
+    load();
+    if (recoveryIssue && recoveryIssue.kind === 'corrupt') {
+      return {
+        ok: false,
+        structureValid: false,
+        cycleValid: false,
+        canApplySafeRepair: false,
+        safeRepairNeeded: false,
+        issues: [{ code: 'database-corrupt', severity: 'error', repairable: false, count: 1, examples: [], message: recoveryIssue.message }],
+        summary: { accounts: 0, journals: 0, entries: 0, postedEntries: 0, draftEntries: 0, validPostedEntries: 0, periods: 0 },
+        criticalCount: 1,
+        warningCount: 0
+      };
+    }
+    var engine = global.PerfectoAccountingDatabaseRepair;
+    if (!engine) return { ok: false, canApplySafeRepair: false, issues: [{ severity: 'error', message: 'Le moteur de diagnostic n’est pas chargé.' }] };
+    return engine.inspect(state, currentDossier());
+  }
+
+  function repairDatabase() {
+    load();
+    if (recoveryIssue && recoveryIssue.kind === 'corrupt') {
+      return { ok: false, errors: ['La structure comptable est illisible. Restaurez un point local ou exportez les données brutes avant une réinitialisation explicite.'] };
+    }
+    var engine = global.PerfectoAccountingDatabaseRepair;
+    if (!engine) return { ok: false, errors: ['Le moteur de réparation n’est pas chargé.'] };
+    var previousState = clone(state);
+    var plan = engine.repair(state, currentDossier());
+    if (!plan.ok) return { ok: false, errors: plan.errors || ['Aucune réparation sûre n’est disponible.'], report: plan.report };
+    if (!plan.changed && !recoveryIssue) return { ok: true, changed: false, errors: [], report: plan.report };
+
+    if (recoveryIssue) {
+      if (!preserveCorruptRaw()) return { ok: false, errors: ['Copie de récupération impossible. Libérez de l’espace de stockage ou téléchargez le fichier brut avant de réparer.'] };
+      try {
+        global.localStorage.setItem(currentFolderStorageKey(), JSON.stringify(plan.data));
+      } catch (writeError) {
+        state = previousState;
+        return { ok: false, errors: ['Enregistrement de la réparation impossible. La copie brute a été conservée dans le navigateur.'] };
+      }
+      state = plan.data;
+      recoveryIssue = null;
+      return { ok: true, changed: true, errors: [], report: plan.report, recoveryCopySaved: true };
+    }
+
+    if (!writeBackupSnapshot(previousState)) return { ok: false, errors: ['Réparation annulée : le point de restauration préalable n’a pas pu être créé.'] };
+    state = plan.data;
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Réparation impossible : stockage local indisponible ou plein. Le dossier reste inchangé.'] };
+    }
+    return { ok: true, changed: true, errors: [], report: plan.report, recoveryCopySaved: false };
+  }
+
+  function reinitializeCorruptDatabase() {
+    load();
+    if (!recoveryIssue) return { ok: false, errors: ['Aucune base nécessitant une récupération ne doit être réinitialisée.'] };
+    if (!preserveCorruptRaw()) return { ok: false, errors: ['Réinitialisation bloquée : la copie brute de récupération n’a pas pu être enregistrée. Téléchargez-la ou libérez de l’espace.'] };
+    var dossier = folderById(activeFolderId);
+    var replacement = initialState(!dossier || dossier.seeded !== false, dossier);
+    try {
+      global.localStorage.setItem(currentFolderStorageKey(), JSON.stringify(replacement));
+    } catch (err) {
+      return { ok: false, errors: ['Réinitialisation impossible : le stockage local est indisponible ou plein. La copie brute a été conservée.'] };
+    }
+    state = replacement;
+    recoveryIssue = null;
+    return { ok: true, errors: [], recoveryCopySaved: true };
+  }
+
   function restoreBackup() {
+    load();
     var snapshot = readBackupSnapshot();
     if (!snapshot) return { ok: false, errors: ['Aucun point de restauration local valide n’est disponible.'] };
+
+    if (recoveryIssue) {
+      if (!preserveCorruptRaw()) return { ok: false, errors: ['Restauration bloquée : la copie brute endommagée n’a pas pu être conservée. Téléchargez-la ou libérez de l’espace.'] };
+      var previousState = state;
+      var previousIssue = recoveryIssue;
+      var recoveredState = clone(snapshot.data);
+      state = recoveredState;
+      try {
+        ensurePeriodsForEntries();
+        global.localStorage.setItem(currentFolderStorageKey(), JSON.stringify(state));
+      } catch (recoveryWriteError) {
+        state = previousState;
+        recoveryIssue = previousIssue;
+        return { ok: false, errors: ['Restauration impossible : stockage local indisponible ou plein. La copie brute est conservée.'] };
+      }
+      recoveryIssue = null;
+      return { ok: true, errors: [], restoredAt: snapshot.createdAt, preservedCorruptRaw: true };
+    }
 
     var previousState = state ? clone(state) : null;
     state = clone(snapshot.data);
@@ -1079,7 +1278,7 @@
       state = previousState;
       return { ok: false, errors: ['Restauration impossible : le stockage local est indisponible ou plein.'] };
     }
-    return { ok: true, errors: [], restoredAt: snapshot.createdAt };
+    return { ok: true, errors: [], restoredAt: snapshot.createdAt, preservedCorruptRaw: false };
   }
 
   /* ---------------- Utilitaires de format ---------------- */
@@ -1160,6 +1359,11 @@
     previewExchangeImport: previewExchangeImport,
     importExchange: importExchange,
     backupInfo: backupInfo,
+    databaseStorageStatus: databaseStorageStatus,
+    databaseRepairAnalysis: databaseRepairAnalysis,
+    repairDatabase: repairDatabase,
+    corruptDatabaseContents: corruptDatabaseContents,
+    reinitializeCorruptDatabase: reinitializeCorruptDatabase,
     restoreBackup: restoreBackup,
     monthLabel: monthLabel,
     money: money,

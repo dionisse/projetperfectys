@@ -2470,6 +2470,44 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
   .balance-recalculation-table { min-width: 0; font-size: 7pt; }
 }
 
+.database-repair-card > h4,
+.database-repair-report > h4,
+.database-repair-findings > h4 { margin: 0 0 11px; color: #314a41; font-size: .9rem; font-weight: 800; }
+.database-repair-card > .alert { margin: 0 0 14px; line-height: 1.55; }
+.database-repair-context { display: flex; flex-wrap: wrap; gap: 7px 15px; padding: 10px 12px; border: 1px solid #e2e9e3; border-radius: 6px; color: #63736b; background: #f8faf8; font-size: .66rem; }
+.database-repair-context strong { color: #236d61; }
+.database-repair-summary-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); margin: 13px 0; }
+.database-repair-summary-grid strong { font-variant-numeric: tabular-nums; }
+.database-repair-report > .alert { margin: 0 0 12px; line-height: 1.5; }
+.database-repair-findings { margin-top: 12px; }
+.database-repair-issue-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.database-repair-issue { padding: 10px 12px; border: 1px solid #dfe7e0; border-left-width: 3px; border-radius: 5px; background: #fbfcfa; }
+.database-repair-issue-error { border-left-color: #b74b3b; }
+.database-repair-issue-warning { border-left-color: #b48832; }
+.database-repair-issue-info { border-left-color: #338477; }
+.database-repair-issue strong { color: #42564d; font-size: .68rem; line-height: 1.5; }
+.database-repair-issue-count { display: inline-block; margin-left: 8px; color: #7d6a3d; font-size: .61rem; font-weight: 750; }
+.database-repair-issue ul { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 6px 0 0; padding-left: 17px; color: #68766f; font-size: .63rem; }
+.database-repair-backup { margin: 12px 0 0; color: #66766e; font-size: .65rem; line-height: 1.5; }
+.database-repair-backup strong { color: #375147; }
+.database-repair-actions { justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.database-repair-recovery > .alert { margin: 0 0 12px; line-height: 1.55; }
+.database-repair-recovery .small { margin-top: 11px; line-height: 1.5; }
+.database-repair-clean { margin: 0; line-height: 1.5; }
+
+@media (max-width: 900px) {
+  .database-repair-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .database-repair-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .database-repair-actions { align-items: stretch; flex-direction: column; }
+  .database-repair-actions .btn { justify-content: center; }
+  .database-repair-context { flex-direction: column; gap: 4px; }
+}
+@media print {
+  .database-repair-actions { display: none !important; }
+}
+
 @media (max-width: 700px) {
   .payroll-demo-create,
   .sales-demo-create,

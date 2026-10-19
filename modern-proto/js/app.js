@@ -217,7 +217,15 @@
       case 'export-recalculated-account-balances':
         return { moduleId: 'accounting', actionId: 'data.export' };
       case 'recalculate-account-balances':
+      case 'analyze-accounting-database':
         return { moduleId: 'accounting', actionId: 'module.view' };
+      case 'repair-accounting-database':
+      case 'restore-database-backup':
+        return { moduleId: 'accounting', actionId: 'data.restore' };
+      case 'export-corrupt-database':
+        return { moduleId: 'accounting', actionId: 'data.export' };
+      case 'reinitialize-corrupt-database':
+        return { moduleId: 'accounting', actionId: 'data.reset' };
       case 'open-entry':
         return { moduleId: 'accounting', actionId: 'module.view' };
       case 'edit-draft':
@@ -443,6 +451,20 @@
     if (phoneViewport && ACCOUNTING_ROUTES.indexOf(route) !== -1 && !phoneRouteAllowed) {
       navigate(accountingMenuHash('editions', 'general-accounts'));
       return;
+    }
+    var isDatabaseRepairRoute = route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'repair-database';
+    var databaseStorage = ACCOUNTING_ROUTES.indexOf(route) !== -1 && S.databaseStorageStatus
+      ? S.databaseStorageStatus()
+      : { recoveryRequired: false };
+    if (databaseStorage.recoveryRequired && !isDatabaseRepairRoute && route !== 'dossiers') {
+      if (!phoneViewport) {
+        navigate(accountingMenuHash('fichier', 'repair-database'));
+        return;
+      }
+      if (PHONE_REPORT_ROUTES.indexOf(route) !== -1) {
+        navigate(accountingMenuHash('editions', 'general-accounts'));
+        return;
+      }
     }
     var view = $('#view');
     if (!view) return;
@@ -4249,6 +4271,84 @@
     toast('Recalcul des soldes exporté. Aucune écriture n’a été ajoutée au grand livre.', 'success');
   }
 
+  function viewAccountingDatabaseRepair() {
+    var dossier = S.currentDossier();
+    var storage = S.databaseStorageStatus();
+    var backup = S.backupInfo();
+    var intro = '<section class="exchange-card database-repair-card" aria-labelledby="database-repair-heading">' +
+      '<p class="page-kicker">INTÉGRITÉ DES DONNÉES · DOSSIER ACTIF</p>' +
+      '<h4 id="database-repair-heading">Réparation complète de la base</h4>' +
+      '<p>Analyse le plan comptable, les journaux, les pièces validées et les brouillons, le cycle et le registre des périodes du dossier actif.</p>' +
+      '<div class="alert info"><div><strong>Protection comptable.</strong> Les écritures, les montants, les comptes et les journaux ne sont jamais modifiés automatiquement. Les réparations proposées portent uniquement sur des métadonnées techniques et sont précédées d’un point de restauration local.</div></div>' +
+      '<div class="database-repair-context"><strong>' + esc(dossier.reference) + '</strong><span>' + esc(dossier.name) + '</span><span>Cycle ' + esc(dateLabel(dossier.cycleStart)) + ' au ' + esc(dateLabel(dossier.cycleEnd)) + '</span></div>' +
+      '</section>';
+
+    if (storage.recoveryRequired && storage.kind === 'corrupt') {
+      var recoveryActions = '<div class="exchange-preview-footer database-repair-actions">' +
+        '<button type="button" class="btn btn-ghost" data-action="export-corrupt-database">↓ Télécharger la base brute conservée</button>' +
+        (backup.available ? '<button type="button" class="btn btn-primary" data-action="restore-database-backup">↺ Restaurer le point local valide</button>' : '') +
+        '<button type="button" class="btn btn-danger" data-action="reinitialize-corrupt-database">Réinitialiser le dossier</button></div>';
+      var recoveryCopyNote = storage.recoveryCopyAvailable
+        ? '<p class="exchange-footnote">Une copie brute de récupération existe aussi dans le stockage local (' + esc(storage.recoveryCopyCreatedAt || '') + ').</p>'
+        : '<p class="exchange-footnote">La base brute n’a pas été remplacée. Avant une réinitialisation, téléchargez le fichier ou vérifiez qu’un point de restauration valide existe.</p>';
+      return '<div class="exchange-workspace database-repair-workspace">' + intro +
+        '<section class="exchange-card database-repair-recovery"><div class="alert error"><div><strong>La base comptable n’est pas lisible.</strong> ' + esc(storage.message) + '<br>Contenu conservé : ' + storage.rawLength + ' caractères. Les saisies sont bloquées pour éviter tout écrasement silencieux.</div></div>' +
+        (backup.available ? '<p class="database-repair-backup"><strong>Point de restauration disponible</strong> · ' + backup.entryCount + ' pièce(s) · ' + esc(backup.createdAt || '') + '</p>' : '<p class="database-repair-backup">Aucun point de restauration local valide n’a été trouvé.</p>') +
+        recoveryActions + recoveryCopyNote +
+        '<p class="small muted">La réinitialisation crée une nouvelle base de démonstration uniquement après avoir conservé une copie brute dans l’espace de récupération local. Elle ne répare pas les données illisibles.</p></section>' +
+        '</div>';
+    }
+
+    var report = S.databaseRepairAnalysis();
+    var summary = report.summary || {};
+    var issueList = (report.issues || []).map(function (issue) {
+      var severity = issue.severity === 'error' ? 'error' : (issue.severity === 'warning' ? 'warning' : 'info');
+      var examples = Array.isArray(issue.examples) && issue.examples.length
+        ? '<ul>' + issue.examples.map(function (example) { return '<li>' + esc(example) + '</li>'; }).join('') + '</ul>'
+        : '';
+      return '<li class="database-repair-issue database-repair-issue-' + severity + '"><div><strong>' + esc(issue.message) + '</strong>' +
+        (issue.count > 1 ? '<span class="database-repair-issue-count">' + issue.count + ' occurrence(s)</span>' : '') + examples + '</div></li>';
+    }).join('');
+    var issueSection = issueList
+      ? '<section class="exchange-card database-repair-findings"><h4>Résultats du diagnostic</h4><ul class="database-repair-issue-list">' + issueList + '</ul></section>'
+      : '<div class="alert success database-repair-clean"><div><strong>Aucune incohérence détectée.</strong> La structure et les équilibres des pièces validées sont cohérents avec les référentiels du dossier.</div></div>';
+    var repairAvailable = !!(report.canApplySafeRepair && (report.safeRepairNeeded || storage.recoveryRequired));
+    var actions = '<div class="exchange-preview-footer database-repair-actions">' +
+      '<button type="button" class="btn btn-ghost" data-action="analyze-accounting-database">⌕ Relancer l’analyse</button>' +
+      '<button type="button" class="btn btn-ghost" data-action="export-json">↓ Télécharger une sauvegarde JSON</button>' +
+      (storage.recoveryRequired || storage.recoveryCopyAvailable ? '<button type="button" class="btn btn-ghost" data-action="export-corrupt-database">↓ Télécharger ' + (storage.recoveryRequired ? 'le JSON brut d’origine' : 'la copie brute archivée') + '</button>' : '') +
+      (repairAvailable ? '<button type="button" class="btn btn-primary" data-action="repair-accounting-database">✓ Créer un point local et réparer les périodes</button>' : '') +
+      (backup.available ? '<button type="button" class="btn btn-ghost" data-action="restore-database-backup">↺ Restaurer le point local précédent</button>' : '') +
+      (storage.recoveryRequired && !repairAvailable ? '<button type="button" class="btn btn-danger" data-action="reinitialize-corrupt-database">Réinitialiser après copie brute</button>' : '') +
+      '</div>';
+    var recoveryNote = storage.recoveryRequired
+      ? '<div class="alert warning"><div><strong>Métadonnées à enregistrer.</strong> Le contenu brut reste conservé. Téléchargez-le ou utilisez un point de restauration avant toute récupération.</div></div>'
+      : '';
+    var recoveryCopyNote = storage.recoveryCopyAvailable
+      ? '<div class="alert info"><div><strong>Copie brute archivée disponible.</strong> Une version antérieure du stockage est conservée dans l’espace local de récupération (' + esc(storage.recoveryCopyCreatedAt || '') + ').</div></div>'
+      : '';
+    var manualNote = (report.criticalCount || report.warningCount) && !repairAvailable
+      ? '<div class="alert warning"><div><strong>Intervention automatique limitée.</strong> Les anomalies comptables signalées doivent être corrigées par les parcours normaux ou par restauration d’une sauvegarde vérifiée. Aucun montant validé ne sera réécrit ici.</div></div>'
+      : '';
+    var backupNote = backup.available
+      ? '<p class="database-repair-backup"><strong>Point local antérieur disponible</strong> · ' + backup.entryCount + ' pièce(s) · ' + esc(backup.createdAt || '') + '</p>'
+      : '<p class="database-repair-backup">Aucun point local antérieur n’est disponible. L’export JSON permet de conserver une copie indépendante.</p>';
+    var summaryMarkup = '<div class="exchange-summary-grid database-repair-summary-grid">' +
+      '<div><small>Comptes</small><strong>' + Number(summary.accounts || 0) + '</strong></div>' +
+      '<div><small>Journaux</small><strong>' + Number(summary.journals || 0) + '</strong></div>' +
+      '<div><small>Pièces validées</small><strong>' + Number(summary.postedEntries || 0) + '</strong></div>' +
+      '<div><small>Brouillons</small><strong>' + Number(summary.draftEntries || 0) + '</strong></div>' +
+      '<div><small>Validées équilibrées</small><strong>' + Number(summary.validPostedEntries || 0) + '</strong></div>' +
+      '<div><small>Périodes enregistrées</small><strong>' + Number(summary.periods || 0) + '</strong></div>' +
+      '</div>';
+    return '<div class="exchange-workspace database-repair-workspace">' + intro +
+      '<section class="exchange-card database-repair-report"><h4>État de la base</h4>' +
+      '<div class="alert ' + (report.ok ? 'success' : 'warning') + '"><div><strong>' + (report.ok ? 'Contrôle terminé.' : 'Anomalies à examiner.') + '</strong> ' +
+        Number(report.criticalCount || 0) + ' anomalie(s) bloquante(s), ' + Number(report.warningCount || 0) + ' avertissement(s).</div></div>' +
+      summaryMarkup + recoveryNote + recoveryCopyNote + issueSection + manualNote + backupNote + actions + '</section>' +
+      '</div>';
+  }
+
   function viewAccountingMenu(params) {
     params = params || {};
     var phone = isPhoneViewport();
@@ -4258,7 +4358,8 @@
     var context = S.currentDossier();
     var reportNote = group.id === 'editions'
       ? (phone
-        ? '<div class="alert info menu-readonly-note">Consultation seule. Cette démonstration affiche uniquement les données enregistrées dans ce navigateur ; aucune synchronisation entre appareils n’est encore disponible.</div>'
+        ? '<div class="alert info menu-readonly-note">Consultation seule. Cette démonstration affiche uniquement les données enregistrées dans ce navigateur ; aucune synchronisation entre appareils n’est encore disponible.</div>' +
+          (S.databaseStorageStatus().recoveryRequired ? '<div class="alert warning menu-readonly-note"><strong>Base comptable à contrôler.</strong> Aucun état comptable n’est affiché à partir des données de secours. Ouvrez le dossier sur ordinateur ou tablette, puis Fichier → Réparation complète de la base.</div>' : '')
         : '<div class="alert info menu-readonly-note">Ce menu sert à consulter les données comptables traitées. La saisie et les modifications restent dans leurs menus dédiés.</div>')
       : '';
     var tabs = group.tabs.map(function (item) {
@@ -4300,6 +4401,7 @@
         case 'consolidate-before-result': exchangeFeature = viewAccountingConsolidationBeforeResult(); break;
         case 'consolidate-after-result': exchangeFeature = viewAccountingConsolidationAfterResult(); break;
         case 'recalculate-balances': exchangeFeature = viewAccountingBalanceRecalculation(); break;
+        case 'repair-database': exchangeFeature = viewAccountingDatabaseRepair(); break;
         default: break;
       }
     }
@@ -4799,6 +4901,40 @@
       case 'recalculate-account-balances':
         recalculateAccountBalances();
         break;
+      case 'analyze-accounting-database':
+        render();
+        break;
+      case 'repair-accounting-database': {
+        if (!window.confirm('Créer un point de restauration local puis réparer uniquement les périodes et métadonnées techniques ? Les comptes, journaux, montants et écritures ne seront pas modifiés.')) break;
+        var repairResult = S.repairDatabase();
+        if (!repairResult.ok) { toast(repairResult.errors[0] || 'Réparation impossible.', 'error'); break; }
+        toast(repairResult.changed ? 'Réparation technique terminée. Le point de restauration a été conservé.' : 'Aucune réparation technique nécessaire.', 'success');
+        render();
+        break;
+      }
+      case 'restore-database-backup': {
+        if (!window.confirm('Restaurer le dernier point de restauration valide du dossier actif ? Les données actuelles seront remplacées ; une copie brute sera conservée si la base est illisible.')) break;
+        var databaseBackup = S.restoreBackup();
+        if (!databaseBackup.ok) { toast(databaseBackup.errors[0] || 'Restauration impossible.', 'error'); break; }
+        toast('Point de restauration restauré. Les écritures validées du point choisi sont intactes.', 'success');
+        render();
+        break;
+      }
+      case 'export-corrupt-database': {
+        var rawDatabase = S.corruptDatabaseContents();
+        if (rawDatabase == null) { toast('Aucune donnée brute de récupération n’est disponible.', 'warning'); break; }
+        downloadFile('perfecto-' + safeFilePart(S.currentDossier().reference) + '-base-brute-recovery.json', rawDatabase, 'application/json;charset=utf-8');
+        toast('Copie brute de récupération téléchargée sans modification.', 'success');
+        break;
+      }
+      case 'reinitialize-corrupt-database': {
+        if (!window.confirm('Créer une nouvelle base de démonstration pour ce dossier ? Le contenu ou les métadonnées d’origine seront d’abord copiés dans l’espace de récupération local. Cette action ne tente pas de réparer les écritures.')) break;
+        var initializedDatabase = S.reinitializeCorruptDatabase();
+        if (!initializedDatabase.ok) { toast(initializedDatabase.errors[0] || 'Réinitialisation impossible.', 'error'); break; }
+        toast('Nouvelle base créée. La copie brute précédente est conservée dans l’espace de récupération local.', 'success');
+        render();
+        break;
+      }
       case 'export-recalculated-account-balances':
         exportRecalculatedAccountBalances();
         break;

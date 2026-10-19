@@ -34,6 +34,7 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 | Consolidation avant résultat | Journal groupé consultable et exportable par période et journal, agrégé par compte général ; chaque ligne source conserve sa pièce, son journal, sa date, son numéro de ligne et son origine. Lecture seule : aucune écriture n’est ajoutée au grand livre |
 | Consolidation après résultat | Journal groupé consultable et exportable des écritures validées, avec la même traçabilité par ligne. Lecture seule ; la détection de la pièce/date de résultat, son affectation et les écritures de clôture restent à définir |
 | Recalcul du solde des comptes | Reconstitution indépendante à partir des écritures validées du cycle, comparaison à la balance calculée, contrôle des pièces et export CSV ; lecture seule, sans solde cache ni écriture modifiée |
+| Réparation complète de la base | Diagnostic du dossier actif, réparation protégée du registre des périodes et des métadonnées dérivées, sauvegarde préalable ; aucune modification automatique des écritures validées |
 | Organisation & accès (démo) | Profils temporaires et droits explicites par personne, module, entreprise cliente, dossier et action ; refus par défaut |
 | Dossiers clients | Liste multi-dossiers ouverte depuis le module Comptabilité ; création d’entreprise, code, type comptable, référence et cycle paramétrable |
 | Tableau de bord | Indicateurs (débit, crédit, résultat, pièces), dernières pièces, activité par journal, état des périodes |
@@ -84,6 +85,14 @@ Cette première version ne détecte pas automatiquement la date ou la pièce d�
 Le sous-menu **Fichier → Recalcul du solde des comptes** recalcule, à la demande, les débits, crédits et soldes par compte à partir des seules écritures validées du cycle actif. Il contrôle l’équilibre des pièces, exclut les brouillons, signale les pièces validées hors cycle ou les comptes absents du plan, puis compare les résultats au calcul actuel de la balance générale. Un export CSV et une impression sont disponibles.
 
 Dans le prototype, les soldes ne sont pas conservés dans un cache séparé : la balance est déjà calculée à partir des écritures à chaque consultation. Le recalcul est donc un contrôle indépendant et **ne modifie ni les soldes persistés, ni les pièces, ni le grand livre**. En cas d’anomalie, la correction doit passer par le parcours comptable prévu ; ce sous-menu ne répare pas la base.
+
+### Réparation complète de la base — première version contrôlée
+
+Le sous-menu **Fichier → Réparation complète de la base** analyse le dossier actif : structure des comptes et journaux, références et identifiants des pièces, dates et cycles, présence des comptes/journaux référencés, montants et équilibre des écritures validées, brouillons et registre des périodes. Les pièces hors cycle, doublons et anomalies sont listés pour examen.
+
+Les seules réparations automatiques proposées portent sur les **métadonnées techniques** : reconstituer les mois manquants (ouverts, conformément au statut implicite actuel), fusionner les doublons de périodes sans rouvrir une période déjà clôturée et recalculer l’exercice dérivé du cycle. Un point de restauration local est créé avant toute écriture. Les comptes, journaux, pièces et montants validés restent intacts ; les anomalies comptables doivent être corrigées par le parcours normal ou par restauration d’une sauvegarde vérifiée.
+
+Si le JSON local est illisible, PERFECTO le conserve sans l’écraser et bloque les saisies. Le sous-menu permet de télécharger la donnée brute, de restaurer un point local valide ou de réinitialiser explicitement le dossier après copie de récupération. Les données et copies de récupération restent dans le navigateur de l’utilisateur.
 
 ### Centralisation auxiliaire depuis les modules maison — à construire
 
