@@ -70,6 +70,8 @@ assert.ok(findTab('definitions', 'fixed-assets').reason.includes('non comptabili
 assert.ok(findTab('definitions', 'fixed-assets').reason.includes('choisie explicitement'));
 assert.ok(findTab('definitions', 'fixed-assets').reason.includes('restent à construire'));
 assert.equal(findTab('definitions', 'journals').status, 'active');
+assert.ok(findTab('definitions', 'journals').reason.includes('journaux libres'));
+assert.ok(findTab('definitions', 'journals').reason.includes('réservés au système'));
 assert.equal(findTab('saisie', 'journal-entry').status, 'active');
 assert.equal(findTab('fichier', 'export-other').status, 'partial');
 assert.equal(findTab('fichier', 'import-other').status, 'partial');

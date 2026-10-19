@@ -251,6 +251,17 @@
           moduleId: 'accounting',
           actionId: trigger && trigger.getAttribute('data-account-mode') === 'edit' ? 'accounts.edit' : 'accounts.create'
         };
+      case 'new-journal':
+        return { moduleId: 'accounting', actionId: 'journals.create' };
+      case 'edit-journal':
+        return { moduleId: 'accounting', actionId: 'journals.edit' };
+      case 'delete-journal':
+        return { moduleId: 'accounting', actionId: 'journals.delete' };
+      case 'save-journal':
+        return {
+          moduleId: 'accounting',
+          actionId: trigger && trigger.getAttribute('data-journal-mode') === 'edit' ? 'journals.edit' : 'journals.create'
+        };
       case 'new-supplier':
         return { moduleId: 'accounting', actionId: 'suppliers.create' };
       case 'edit-supplier':
@@ -1364,11 +1375,17 @@
     return html;
   }
 
-  function journalOptions(selected, includeAll) {
-    var html = includeAll ? '<option value="">Tous les journaux</option>' : '';
-    html += S.journals().map(function (j) {
-      return '<option value="' + esc(j.code) + '"' + (j.code === selected ? ' selected' : '') + '>' +
-        esc(j.code) + ' — ' + esc(j.label) + '</option>';
+  function journalOptions(selected, includeAll, includeSystem, includeInactive) {
+    var html = includeAll ? '<option value="">Tous les journaux</option>' : '<option value="">— Choisir un journal —</option>';
+    html += S.journals().filter(function (record) {
+      if (!includeSystem && record.systemManaged) return false;
+      if (!includeInactive && record.active === false && record.code !== selected) return false;
+      return true;
+    }).map(function (record) {
+      var stateLabel = record.active === false ? ' · inactif' : '';
+      var systemLabel = record.systemManaged ? ' · système' : '';
+      return '<option value="' + esc(record.code) + '"' + (record.code === selected ? ' selected' : '') + '>' +
+        esc(record.code) + ' — ' + esc(record.label + stateLabel + systemLabel) + '</option>';
     }).join('');
     return html;
   }
@@ -1604,20 +1621,52 @@
   /* -------------------------------- Journaux ------------------------------- */
   function viewJournals() {
     var stats = S.journalStats();
-    var html = pageHeader('Journaux comptables', 'Six journaux couvrent les opérations courantes du Lot 1.',
-      '<a class="btn btn-primary" href="#/entry">＋ Nouvelle écriture</a>');
+    var managementAllowed = !isPhoneViewport();
+    var standardCount = stats.filter(function (item) { return item.journal.isStandard; }).length;
+    var systemCount = stats.filter(function (item) { return item.journal.systemManaged; }).length;
+    var userCount = stats.filter(function (item) { return !item.journal.isStandard && !item.journal.systemManaged; }).length;
+    var headerActions = managementAllowed
+      ? '<button type="button" class="btn btn-primary" data-action="new-journal">＋ Créer un journal</button><a class="btn btn-ghost" href="#/entry">＋ Nouvelle écriture</a>'
+      : '<a class="btn btn-ghost" href="#/menu?g=editions&amp;t=journals">Consulter les écritures</a>';
+    var html = pageHeader('Journaux comptables', managementAllowed
+      ? 'Créez et paramétrez autant de journaux que nécessaire pour ce dossier.'
+      : 'Consultation seule sur téléphone ; la gestion des journaux se fait sur ordinateur ou tablette.', headerActions);
 
-    html += '<div class="journal-grid">' + stats.map(function (s) {
-      return '<article class="journal-card">' +
-        '<div class="journal-head"><span class="journal-code">' + esc(s.journal.code) + '</span>' +
-          '<div><h3>' + esc(s.journal.label) + '</h3><span class="journal-meta">Type : ' + esc(s.journal.type) + '</span></div></div>' +
+    html += '<div class="journal-summary" aria-label="Répartition des journaux">' +
+      '<div><strong>' + standardCount + '</strong><span>journaux standards</span></div>' +
+      '<div><strong>' + userCount + '</strong><span>journaux créés dans ce dossier</span></div>' +
+      '<div><strong>' + systemCount + '</strong><span>journaux réservés au système</span></div>' +
+      '<div><strong>' + stats.length + '</strong><span>journaux au total</span></div>' +
+    '</div>' +
+    (managementAllowed ? '' : '<div class="alert info">La création, la modification et la saisie sont masquées sur téléphone. Utilisez le menu Éditions pour consulter les écritures.</div>') +
+    '<div class="alert info journal-system-note"><strong>Journaux automatiques protégés.</strong> Les journaux Amortissements, Abonnements et Report à Nouveau sont alimentés uniquement par PERFECTO : leur saisie manuelle et leur import sont bloqués. Les traitements qui généreront leurs écritures restent à construire ; la simulation d’amortissement disponible demeure indicative et ne comptabilise rien.</div>' +
+    '<div class="journal-grid">' + stats.map(function (item) {
+      var record = item.journal;
+      var systemManaged = !!record.systemManaged;
+      var kind = systemManaged ? 'Automatique · système' : (record.isStandard ? 'Standard modifiable' : 'Créé par l’utilisateur');
+      var activeLabel = record.active === false ? 'Inactif' : 'Actif';
+      var references = record.referencePrefix || record.code;
+      var count = S.journalEntryCount(record.id);
+      var actions = '<a class="btn btn-ghost btn-sm" href="#/journal?journal=' + encodeURIComponent(record.code) + '">Voir le journal</a>';
+      if (managementAllowed && !systemManaged) {
+        actions += '<button type="button" class="btn btn-ghost btn-sm" data-action="edit-journal" data-id="' + esc(record.code) + '">Paramètres</button>';
+      }
+      if (managementAllowed && !systemManaged && !record.isStandard) {
+        actions += '<button type="button" class="btn btn-ghost btn-sm btn-danger" data-action="delete-journal" data-id="' + esc(record.code) + '"' + (count ? ' disabled title="Ce journal contient des écritures : il peut être désactivé, mais pas supprimé."' : '') + '>Supprimer</button>';
+      }
+      return '<article class="journal-card' + (systemManaged ? ' system-managed' : '') + (record.active === false ? ' journal-inactive' : '') + '">' +
+        '<div class="journal-head"><span class="journal-code">' + esc(record.code) + '</span>' +
+          '<div><h3>' + esc(record.label) + '</h3><span class="journal-meta">Type : ' + esc(record.type) + '</span></div></div>' +
+        '<div class="journal-tags"><span class="badge plain">' + esc(kind) + '</span><span class="badge ' + (record.active === false ? 'draft' : 'posted') + '">' + activeLabel + '</span></div>' +
         '<dl>' +
-          '<dt>Pièces validées</dt><dd>' + s.posted + '</dd>' +
-          '<dt>Brouillons</dt><dd>' + s.drafts + '</dd>' +
-          '<dt>Total débit</dt><dd>' + amount(s.debit) + ' XOF</dd>' +
-          '<dt>Total crédit</dt><dd>' + amount(s.credit) + ' XOF</dd>' +
+          '<dt>Préfixe des références</dt><dd>' + esc(references) + '-AAAA-001</dd>' +
+          '<dt>Pièces sur le cycle</dt><dd>' + item.count + '</dd>' +
+          '<dt>Validées / brouillons</dt><dd>' + item.posted + ' / ' + item.drafts + '</dd>' +
+          '<dt>Total débit</dt><dd>' + amount(item.debit) + ' XOF</dd>' +
+          '<dt>Total crédit</dt><dd>' + amount(item.credit) + ' XOF</dd>' +
         '</dl>' +
-        '<a class="btn btn-ghost btn-sm mt-8" href="#/journal?journal=' + encodeURIComponent(s.journal.code) + '">Voir le journal</a>' +
+        (record.description ? '<p class="journal-description">' + esc(record.description) + '</p>' : '') +
+        '<div class="journal-actions">' + actions + '</div>' +
       '</article>';
     }).join('') + '</div>';
 
@@ -1642,10 +1691,14 @@
     var dossier = S.currentDossier();
     var today = S.todayIso();
     var date = today >= dossier.cycleStart && today <= dossier.cycleEnd ? today : dossier.cycleStart;
-    var journal = 'OD';
+    var defaultJournal = S.journal('OD');
+    if (!defaultJournal || defaultJournal.active === false || defaultJournal.systemManaged) {
+      defaultJournal = S.journals().find(function (record) { return record.active !== false && !record.systemManaged; }) || null;
+    }
+    var journal = defaultJournal ? defaultJournal.code : '';
     return {
       id: null,
-      reference: S.nextReference(journal, date),
+      reference: journal ? S.nextReference(journal, date) : '',
       journal: journal,
       date: date,
       description: '',
@@ -1789,7 +1842,7 @@
     var date = $('#e-date');
     if (!ref || !journal || !date) return;
     if (ref.getAttribute('data-auto') === 'true') {
-      ref.value = S.nextReference(journal.value, date.value);
+      ref.value = journal.value ? S.nextReference(journal.value, date.value) : '';
     }
   }
 
@@ -1817,7 +1870,7 @@
           '<option value="draft"' + (filter.status === 'draft' ? ' selected' : '') + '>Brouillons</option>' +
         '</select></div>' +
         '<div class="field"><label for="f-entries-journal">Journal</label><select id="f-entries-journal" data-filter="entries:journal">' +
-          journalOptions(filter.journal, true) + '</select></div>' +
+          journalOptions(filter.journal, true, true, true) + '</select></div>' +
       '</div>' +
       '<div class="table-wrap"><table class="data-table">' +
         '<caption>' + list.length + ' pièce(s) — montants exprimés en XOF</caption>' +
@@ -1864,6 +1917,10 @@
       '<div class="alert ' + (t.balanced ? 'success' : 'warning') + '" style="margin-top:16px">' +
         (t.balanced ? '✅ Pièce équilibrée.' : '⚠️ Pièce déséquilibrée (brouillon).') + '</div>';
     var isCancellationEntry = CentralizationCancellation.isCancellationEntry(e);
+    var isSystemManagedJournal = !!(journal && journal.systemManaged);
+    if (isSystemManagedJournal) {
+      body += '<div class="alert info" style="margin-top:16px"><strong>Journal alimenté par le système.</strong> La modification et la suppression manuelles sont désactivées.</div>';
+    }
     if (isCancellationEntry) {
       var cancellationMetadata = e.sourceMetadata || {};
       body += '<div class="alert info" style="margin-top:16px"><div><strong>Écriture inverse liée à ' + esc(cancellationMetadata.originalReference || 'la pièce d’origine') + '.</strong>' +
@@ -1874,9 +1931,13 @@
 
     var footer = '';
     if (e.status === 'draft') {
-      footer += '<button type="button" class="btn btn-danger" data-action="delete-draft" data-id="' + esc(e.id) + '">× Supprimer</button>';
-      if (!isCancellationEntry) footer += '<button type="button" class="btn btn-ghost" data-action="edit-draft" data-id="' + esc(e.id) + '">✎ Modifier</button>';
-      footer += '<button type="button" class="btn btn-primary" data-action="validate-entry" data-id="' + esc(e.id) + '">✓ Valider la pièce</button>';
+      if (!isSystemManagedJournal) {
+        footer += '<button type="button" class="btn btn-danger" data-action="delete-draft" data-id="' + esc(e.id) + '">× Supprimer</button>';
+        if (!isCancellationEntry) footer += '<button type="button" class="btn btn-ghost" data-action="edit-draft" data-id="' + esc(e.id) + '">✎ Modifier</button>';
+      }
+      if (!isCancellationEntry && (!isSystemManagedJournal || e.sourceSystem === journal.systemSource)) {
+        footer += '<button type="button" class="btn btn-primary" data-action="validate-entry" data-id="' + esc(e.id) + '">✓ Valider la pièce</button>';
+      }
     }
     footer += '<button type="button" class="btn btn-ghost" data-action="close-modal">Fermer</button>';
 
@@ -1958,7 +2019,7 @@
     html += '<div class="card"><div class="panel">' +
       '<div class="filter-row">' +
         '<div class="field"><label for="f-journal-journal">Journal</label><select id="f-journal-journal" data-filter="journal:journal">' +
-          journalOptions(filter.journal, true) + '</select></div>' +
+          journalOptions(filter.journal, true, true, true) + '</select></div>' +
         '<div class="field"><label for="f-journal-year">Exercice</label><select id="f-journal-year" data-filter="journal:year">' +
           years.map(function (y) { return '<option value="' + y + '"' + (y === year ? ' selected' : '') + '>' + y + '</option>'; }).join('') +
         '</select></div>' +
@@ -5750,7 +5811,9 @@
       ? '<p class="menu-item-reason">' + esc(tab.reason) + '</p>'
       : '';
     var exchangeFeature = '';
-    if (group.id === 'definitions' && tab.id === 'suppliers') {
+    if (group.id === 'definitions' && tab.id === 'journals') {
+      exchangeFeature = viewJournals();
+    } else if (group.id === 'definitions' && tab.id === 'suppliers') {
       exchangeFeature = viewSuppliers();
     } else if (group.id === 'definitions' && tab.id === 'clients') {
       exchangeFeature = viewClients();
@@ -6218,6 +6281,26 @@
         var deletedAccount = S.deleteAccount(id);
         if (!deletedAccount.ok) { toast(deletedAccount.errors.join(' ') || 'Suppression impossible.', 'error'); break; }
         toast('Compte ' + id + ' supprimé du dossier.', 'success');
+        render();
+        break;
+      }
+      case 'new-journal':
+        openJournalModal();
+        break;
+      case 'edit-journal':
+        if (id) openJournalModal(id);
+        break;
+      case 'delete-journal': {
+        if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'journals.delete', accountingAccessContext())) {
+          toast('Suppression refusée par défaut : le droit « journals.delete » n’est pas accordé.', 'warning');
+          break;
+        }
+        var journalToDelete = S.journal(id);
+        if (!journalToDelete) { toast('Journal introuvable dans le dossier actif.', 'error'); break; }
+        if (!window.confirm('Supprimer le journal « ' + journalToDelete.code + ' — ' + journalToDelete.label + ' » ? Son code restera réservé et ne pourra pas être réattribué.')) break;
+        var journalDeletion = S.deleteJournal(journalToDelete.id);
+        if (!journalDeletion.ok) { toast(journalDeletion.errors.join(' ') || 'Suppression impossible.', 'warning'); break; }
+        toast('Journal supprimé. Son code ne sera pas réattribué.', 'success');
         render();
         break;
       }
@@ -6760,6 +6843,69 @@
         return;
       }
       toast(existing ? 'Compte ' + result.account.code + ' mis à jour.' : 'Compte ' + result.account.code + ' créé.', 'success');
+      closeModal(true);
+      render();
+    });
+  }
+
+  function openJournalModal(code) {
+    var existing = code ? S.journal(code) : null;
+    if (code && !existing) { toast('Journal introuvable dans le dossier actif.', 'error'); return; }
+    if (existing && existing.systemManaged) { toast('Ce journal est réservé au système.', 'warning'); return; }
+    var mode = existing ? 'edit' : 'create';
+    var lockedCode = !!(existing && (existing.isStandard || S.journalEntryCount(existing.id) > 0));
+    var codeValue = existing ? existing.code : S.nextJournalCode();
+    var prefixValue = existing ? (existing.referencePrefix || existing.code) : codeValue;
+    var codeHint = existing && existing.isStandard
+      ? 'Code standard conservé pour préserver les parcours existants.'
+      : (lockedCode ? 'Code verrouillé car ce journal possède déjà des écritures.' : 'Code libre, unique dans le dossier (8 caractères maximum).');
+    var body = '<form id="journal-form" novalidate>' +
+      '<div id="journal-errors" aria-live="assertive"></div>' +
+      '<div class="form-grid journal-form-grid">' +
+        '<div class="field"><label for="j-code">Code du journal</label><input id="j-code" name="code" type="text" maxlength="8" pattern="[A-Za-z0-9_-]{1,8}" value="' + esc(codeValue) + '" required' + (lockedCode ? ' readonly' : '') + '><span class="hint">' + esc(codeHint) + '</span></div>' +
+        '<div class="field"><label for="j-label">Libellé</label><input id="j-label" name="label" type="text" maxlength="80" placeholder="Ex. Journal des prestations" value="' + esc(existing ? existing.label : '') + '" required></div>' +
+        '<div class="field"><label for="j-type">Type de journal</label><input id="j-type" name="type" type="text" list="journal-type-suggestions" maxlength="40" placeholder="Ex. Vente, Trésorerie, Divers" value="' + esc(existing ? existing.type : '') + '" required><datalist id="journal-type-suggestions"><option value="Achat"><option value="Vente"><option value="Trésorerie"><option value="Divers"><option value="Paie"><option value="Automatique"></datalist><span class="hint">Choisissez une suggestion ou saisissez votre propre type.</span></div>' +
+        '<div class="field"><label for="j-reference-prefix">Préfixe de référence</label><input id="j-reference-prefix" name="referencePrefix" type="text" maxlength="8" pattern="[A-Za-z0-9_-]{1,8}" value="' + esc(prefixValue) + '" required><span class="hint">Les références seront proposées sous la forme « PRÉFIXE-ANNÉE-001 ».</span></div>' +
+        '<div class="field" style="grid-column:1 / -1"><label for="j-description">Description / utilisation</label><textarea id="j-description" name="description" rows="3" maxlength="240" placeholder="Précisez les opérations à enregistrer dans ce journal">' + esc(existing ? existing.description : '') + '</textarea></div>' +
+        '<label class="journal-active-toggle"><input id="j-active" name="active" type="checkbox"' + (!existing || existing.active !== false ? ' checked' : '') + '> <span><strong>Journal actif</strong><small>Un journal inactif reste consultable, mais ne reçoit plus de nouvelles écritures.</small></span></label>' +
+      '</div>' +
+    '</form>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button>' +
+      '<button type="submit" class="btn btn-primary" form="journal-form" data-action="save-journal" data-journal-mode="' + mode + '">' +
+        (existing ? 'Enregistrer les paramètres' : 'Créer le journal') + '</button>';
+    openModal(existing ? 'Paramètres du journal ' + esc(existing.code) : 'Créer un journal',
+      existing ? 'Les écritures historiques sont conservées.' : 'Le nouveau journal sera propre à ce dossier client.', body, footer, true);
+
+    var form = $('#journal-form');
+    var codeInput = $('#j-code');
+    var prefixInput = $('#j-reference-prefix');
+    var prefixFollowsCode = !existing || existing.referencePrefix === existing.code;
+    if (prefixInput) prefixInput.addEventListener('input', function () { prefixFollowsCode = false; });
+    if (codeInput) codeInput.addEventListener('input', function () {
+      if (prefixFollowsCode && prefixInput) prefixInput.value = codeInput.value.trim().toLocaleUpperCase();
+    });
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var permissionAction = mode === 'edit' ? 'journals.edit' : 'journals.create';
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', permissionAction, accountingAccessContext())) {
+        toast('Action refusée par défaut : le droit « ' + permissionAction + ' » n’est pas accordé.', 'warning');
+        return;
+      }
+      var journalInput = {
+        code: $('#j-code').value,
+        label: $('#j-label').value,
+        type: $('#j-type').value,
+        referencePrefix: $('#j-reference-prefix').value,
+        description: $('#j-description').value,
+        active: $('#j-active').checked
+      };
+      var result = existing ? S.updateJournal(existing.id, journalInput) : S.createJournal(journalInput);
+      if (!result.ok) {
+        $('#journal-errors').innerHTML = '<div class="alert error" role="alert"><ul style="margin:0 0 0 18px">' +
+          result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
+        return;
+      }
+      toast(existing ? 'Paramètres du journal ' + result.journal.code + ' mis à jour.' : 'Journal ' + result.journal.code + ' créé.', 'success');
       closeModal(true);
       render();
     });

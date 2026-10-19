@@ -20,6 +20,19 @@ test('sans profil ou sans grant, aucun accès n’est accordé', () => {
   assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'module.view', context), false);
 });
 
+test('la gestion des journaux est une série de droits distincts, explicitement délégués', () => {
+  const employee = {
+    role: 'employee', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'organization' }, actions: ['module.view', 'journals.create'] }] }
+  };
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'journals.create', context), true);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'journals.edit', context), false);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'journals.delete', context), false);
+  assert.deepEqual(Permissions.actionsForModule('accounting').filter(action => action.id.startsWith('journals.')).map(action => action.id), [
+    'journals.create', 'journals.edit', 'journals.delete'
+  ]);
+});
+
 test('la gestion d’organisation peut être déléguée explicitement dans le bon périmètre', () => {
   const manager = {
     role: 'manager', organizationId: 'org-1',

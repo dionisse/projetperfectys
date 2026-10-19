@@ -667,6 +667,23 @@ input[readonly] { background: var(--bg-subtle); color: var(--muted); }
 }
 .journal-card dt { color: var(--muted); }
 .journal-card dd { margin: 0; font-weight: 650; font-variant-numeric: tabular-nums; text-align: right; }
+.journal-card.system-managed { background: #fbfcfa; border-style: dashed; }
+.journal-card.journal-inactive { opacity: .78; }
+.journal-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.journal-description { margin: 12px 0 0; color: var(--muted); font-size: .78rem; line-height: 1.5; }
+.journal-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; }
+.journal-actions .btn { min-height: 33px; }
+.journal-actions .btn:disabled { opacity: .5; cursor: not-allowed; }
+.journal-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 14px; }
+.journal-summary > div { display: flex; flex-direction: column; gap: 4px; min-height: 66px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--card); }
+.journal-summary strong { color: var(--primary-dark); font-size: 1.25rem; line-height: 1; }
+.journal-summary span { color: var(--muted); font-size: .75rem; }
+.journal-system-note { margin: 0 0 16px; line-height: 1.55; }
+.journal-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.journal-active-toggle { display: flex; align-items: flex-start; gap: 10px; grid-column: 1 / -1; padding: 13px; border: 1px solid var(--line); border-radius: var(--radius-md); background: #fbfbf8; cursor: pointer; }
+.journal-active-toggle input { margin-top: 3px; accent-color: var(--primary); }
+.journal-active-toggle span { display: flex; flex-direction: column; gap: 3px; }
+.journal-active-toggle small { color: var(--muted); }
 
 /* ---------- Periods ---------- */
 .period-grid {
@@ -865,6 +882,7 @@ input[readonly] { background: var(--bg-subtle); color: var(--muted); }
   .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grid-2 { grid-template-columns: minmax(0, 1fr); }
   .journal-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .journal-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .period-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .field.span-2 { grid-column: span 2; }
@@ -898,6 +916,7 @@ input[readonly] { background: var(--bg-subtle); color: var(--muted); }
 @media (max-width: 640px) {
   .kpi-grid { grid-template-columns: minmax(0, 1fr); }
   .journal-grid, .period-grid { grid-template-columns: minmax(0, 1fr); }
+  .journal-summary { grid-template-columns: minmax(0, 1fr); }
   .form-grid { grid-template-columns: minmax(0, 1fr); }
   .field.span-2 { grid-column: span 1; }
   .line-row, .lines-head { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) 34px; gap: 6px; }

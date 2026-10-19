@@ -27,9 +27,15 @@
     { code: 'OD', label: 'Opérations diverses', type: 'Divers' },
     { code: 'PA', label: 'Journal de paie', type: 'Paie' }
   ];
+  var SYSTEM_JOURNAUX = [
+    { code: 'AMO', label: 'Journal des amortissements automatiques', type: 'Automatique', referencePrefix: 'AMO', systemKey: 'fixed-asset-depreciation', systemSource: 'PERFECTO-IMMOBILISATIONS-AMORTISSEMENT', description: 'Réservé aux opérations générées par le système d’immobilisations ; aucune saisie manuelle.' },
+    { code: 'ABO', label: 'Journal abonnements', type: 'Automatique', referencePrefix: 'ABO', systemKey: 'recurring-subscriptions', systemSource: 'PERFECTO-ABONNEMENTS', description: 'Réservé aux abonnements générés par le système ; la génération reste à construire.' },
+    { code: 'RAN', label: 'Journal Report à Nouveau', type: 'Automatique', referencePrefix: 'RAN', systemKey: 'opening-balance', systemSource: 'PERFECTO-REPORT-A-NOUVEAU', description: 'Réservé au report à nouveau généré par le système ; le transfert d’exercice reste à construire.' }
+  ];
 
   var ACCOUNTING_CHART = global.PerfectoAccountingChart || null;
   var ACCOUNTING_CHART_VERSION = ACCOUNTING_CHART ? ACCOUNTING_CHART.VERSION : 0;
+  var JOURNAL_REGISTRY_VERSION = 1;
   var SUPPLIER_REGISTRY_VERSION = 2;
   var CLIENT_REGISTRY_VERSION = 1;
   var OTHER_PARTY_REGISTRY_VERSION = 1;
@@ -391,6 +397,136 @@
     return out;
   }
 
+  function normalizeJournalCode(value) {
+    return String(value == null ? '' : value).trim().toLocaleUpperCase();
+  }
+
+  function normalizeJournalPrefix(value) {
+    return String(value == null ? '' : value).trim().toLocaleUpperCase();
+  }
+
+  function standardJournalRecord(definition, existing) {
+    existing = existing || {};
+    var code = String(existing.code == null ? definition.code : existing.code).trim();
+    return {
+      code: code,
+      label: String(existing.label == null || existing.label === '' ? definition.label : existing.label).trim(),
+      type: String(existing.type == null || existing.type === '' ? definition.type : existing.type).trim(),
+      id: String(existing.id || 'journal-standard-' + definition.code),
+      referencePrefix: normalizeJournalPrefix(existing.referencePrefix || code),
+      description: String(existing.description || ''),
+      active: existing.active !== false,
+      origin: 'standard',
+      isStandard: true,
+      systemManaged: false,
+      systemKey: '',
+      systemSource: ''
+    };
+  }
+
+  function systemJournalRecord(definition) {
+    return {
+      code: definition.code,
+      label: definition.label,
+      type: definition.type,
+      id: 'journal-system-' + definition.systemKey,
+      referencePrefix: definition.referencePrefix,
+      description: definition.description,
+      active: true,
+      origin: 'system',
+      isStandard: false,
+      systemManaged: true,
+      systemKey: definition.systemKey,
+      systemSource: definition.systemSource
+    };
+  }
+
+  function userJournalRecord(record) {
+    var code = String(record.code == null ? '' : record.code).trim();
+    var normalized = normalizeJournalCode(code).replace(/[^A-Z0-9_-]/g, '-') || 'LEGACY';
+    var migratedId = 'journal-legacy-' + normalized;
+    var result = {
+      code: code,
+      label: String(record.label == null || record.label === '' ? code : record.label).trim(),
+      type: String(record.type == null || record.type === '' ? 'Divers' : record.type).trim(),
+      id: String(record.id || migratedId),
+      referencePrefix: normalizeJournalPrefix(record.referencePrefix || code),
+      description: String(record.description || ''),
+      active: record.active !== false,
+      origin: 'user',
+      isStandard: false,
+      systemManaged: false,
+      systemKey: '',
+      systemSource: ''
+    };
+    if (record.createdAt) result.createdAt = record.createdAt;
+    if (record.updatedAt) result.updatedAt = record.updatedAt;
+    return result;
+  }
+
+  function defaultJournalRecords() {
+    return JOURNAUX.map(function (definition) { return standardJournalRecord(definition); })
+      .concat(SYSTEM_JOURNAUX.map(systemJournalRecord));
+  }
+
+  function upgradeJournals(data) {
+    var result = { data: data, changed: false };
+    if (!data) return result;
+    var source = Array.isArray(data.journals) ? data.journals : [];
+    var standardByCode = Object.create(null);
+    var systemByCode = Object.create(null);
+    JOURNAUX.forEach(function (definition) { standardByCode[normalizeJournalCode(definition.code)] = definition; });
+    SYSTEM_JOURNAUX.forEach(function (definition) { systemByCode[normalizeJournalCode(definition.code)] = definition; });
+
+    var records = [];
+    var seen = Object.create(null);
+    source.forEach(function (record) {
+      if (!record || typeof record !== 'object' || Array.isArray(record)) {
+        records.push(record);
+        return;
+      }
+      var code = String(record.code == null ? '' : record.code).trim();
+      var normalized = normalizeJournalCode(code);
+      if (!normalized) {
+        records.push(record);
+        return;
+      }
+      seen[normalized] = true;
+      if (systemByCode[normalized]) records.push(systemJournalRecord(systemByCode[normalized]));
+      else if (standardByCode[normalized]) records.push(standardJournalRecord(standardByCode[normalized], record));
+      else records.push(userJournalRecord(record));
+    });
+
+    defaultJournalRecords().forEach(function (record) {
+      var normalized = normalizeJournalCode(record.code);
+      if (seen[normalized]) return;
+      seen[normalized] = true;
+      records.push(record);
+    });
+
+    var history = [];
+    (Array.isArray(data.journalCodeHistory) ? data.journalCodeHistory : [])
+      .concat(source.map(function (record) { return record && record.code; }))
+      .concat(records.map(function (record) { return record.code; }))
+      .forEach(function (value) {
+        var code = normalizeJournalCode(value);
+        if (code && history.indexOf(code) === -1) history.push(code);
+      });
+    var currentVersion = Number(data.journalRegistryVersion);
+    var changed = !Array.isArray(data.journals) || !Number.isFinite(currentVersion) || currentVersion < JOURNAL_REGISTRY_VERSION ||
+      JSON.stringify(data.journals || []) !== JSON.stringify(records) ||
+      JSON.stringify(data.journalCodeHistory || []) !== JSON.stringify(history);
+    if (changed) {
+      result.data = Object.assign({}, data, {
+        journalRegistryVersion: Math.max(Number.isFinite(currentVersion) ? currentVersion : 0, JOURNAL_REGISTRY_VERSION),
+        journals: records,
+        journalCodeHistory: history
+      });
+      result.changed = true;
+    }
+    return result;
+  }
+
   function initialState(withSeedEntries, dossier) {
     dossier = dossier || {};
     var exerciseYear = Number(dossier.exerciseYear) || EXERCICE;
@@ -403,7 +539,9 @@
       cycleStart: cycleStart,
       cycleEnd: cycleEnd,
       accounts: initialAccounts(withSeedEntries),
-      journals: JOURNAUX.slice(),
+      journalRegistryVersion: JOURNAL_REGISTRY_VERSION,
+      journals: defaultJournalRecords(),
+      journalCodeHistory: defaultJournalRecords().map(function (journal) { return normalizeJournalCode(journal.code); }),
       entries: withSeedEntries === false ? [] : seedEntries(),
       periods: cyclePeriods(cycleStart, cycleEnd),
       deletedStandardAccountCodes: [],
@@ -757,8 +895,9 @@
             var registryUpgrade = upgradeAuxiliaryRegistries(chartUpgrade.data);
             var locationUpgrade = upgradeFixedAssetLocations(registryUpgrade.data);
             var fixedAssetUpgrade = upgradeFixedAssets(locationUpgrade.data);
-            if (chartUpgrade.changed || registryUpgrade.changed || locationUpgrade.changed || fixedAssetUpgrade.changed) {
-              state = fixedAssetUpgrade.data;
+            var journalUpgrade = upgradeJournals(fixedAssetUpgrade.data);
+            if (chartUpgrade.changed || registryUpgrade.changed || locationUpgrade.changed || fixedAssetUpgrade.changed || journalUpgrade.changed) {
+              state = journalUpgrade.data;
               // Conserver une copie restaurable avant d’enregistrer les référentiels enrichis.
               if (snapshotPreviousState(raw)) save();
             }
@@ -843,7 +982,164 @@
   function journals() { return load().journals; }
 
   function journal(code) {
-    return load().journals.find(function (j) { return j.code === code; }) || null;
+    var normalized = normalizeJournalCode(code);
+    return load().journals.find(function (record) { return normalizeJournalCode(record.code) === normalized; }) || null;
+  }
+
+  function journalByIdentifier(identifier) {
+    var byCode = journal(identifier);
+    if (byCode) return byCode;
+    return load().journals.find(function (record) { return record.id === identifier; }) || null;
+  }
+
+  function nextJournalCode() {
+    var st = load();
+    var reserved = Object.create(null);
+    (Array.isArray(st.journalCodeHistory) ? st.journalCodeHistory : []).forEach(function (code) {
+      reserved[normalizeJournalCode(code)] = true;
+    });
+    st.journals.forEach(function (record) { reserved[normalizeJournalCode(record.code)] = true; });
+    var sequence = 1;
+    var candidate;
+    do {
+      candidate = 'J' + String(sequence).padStart(2, '0');
+      sequence += 1;
+    } while (reserved[candidate]);
+    return candidate;
+  }
+
+  function journalEntryCount(codeOrIdentifier) {
+    var record = journalByIdentifier(codeOrIdentifier);
+    if (!record) return 0;
+    var normalized = normalizeJournalCode(record.code);
+    return entries().filter(function (entryRecord) {
+      return normalizeJournalCode(entryRecord.journal) === normalized;
+    }).length;
+  }
+
+  function validateJournalInput(input, existing) {
+    input = input || {};
+    var errors = [];
+    var st = load();
+    var code = normalizeJournalCode(input.code);
+    var label = String(input.label == null ? '' : input.label).trim();
+    var type = String(input.type == null ? '' : input.type).trim();
+    var referencePrefix = normalizeJournalPrefix(input.referencePrefix || code);
+    var description = String(input.description == null ? '' : input.description).trim();
+    var reservedCodes = Array.isArray(st.journalCodeHistory) ? st.journalCodeHistory.map(normalizeJournalCode) : [];
+
+    if (!/^[A-Z0-9][A-Z0-9_-]{0,7}$/.test(code)) errors.push('Le code du journal est obligatoire (8 caractères maximum : lettres, chiffres, tiret ou souligné).');
+    if (!label) errors.push('Le libellé du journal est obligatoire.');
+    else if (label.length > 80) errors.push('Le libellé du journal ne peut pas dépasser 80 caractères.');
+    if (!type) errors.push('Le type du journal est obligatoire.');
+    else if (type.length > 40) errors.push('Le type du journal ne peut pas dépasser 40 caractères.');
+    if (!/^[A-Z0-9][A-Z0-9_-]{0,7}$/.test(referencePrefix)) errors.push('Le préfixe de référence est obligatoire (8 caractères maximum : lettres, chiffres, tiret ou souligné).');
+    if (description.length > 240) errors.push('La description ne peut pas dépasser 240 caractères.');
+
+    if (existing && existing.isStandard && code !== normalizeJournalCode(existing.code)) {
+      errors.push('Le code d’un journal standard ne peut pas être modifié.');
+    }
+    if (existing && existing.systemManaged) errors.push('Un journal automatique géré par le système ne peut pas être modifié.');
+
+    var sameCode = journal(code);
+    if (code && sameCode && (!existing || sameCode.id !== existing.id)) {
+      errors.push('Ce code de journal est déjà utilisé.');
+    }
+    if (code && existing && code !== normalizeJournalCode(existing.code)) {
+      if (existing.isStandard) {
+        // Le code standard est fixe ; l’erreur correspondante est déjà signalée.
+      } else if (journalEntryCount(existing.id) > 0) {
+        errors.push('Le code ne peut plus changer après la première écriture du journal.');
+      } else if (reservedCodes.indexOf(code) !== -1) {
+        errors.push('Ce code a déjà été utilisé dans ce dossier et ne peut pas être réattribué.');
+      }
+    } else if (code && !existing && reservedCodes.indexOf(code) !== -1) {
+      errors.push('Ce code a déjà été utilisé dans ce dossier et ne peut pas être réattribué.');
+    }
+
+    var samePrefix = st.journals.find(function (record) {
+      return normalizeJournalPrefix(record.referencePrefix || record.code) === referencePrefix && (!existing || record.id !== existing.id);
+    });
+    if (referencePrefix && samePrefix) errors.push('Ce préfixe de référence est déjà utilisé par « ' + samePrefix.label + ' ».');
+
+    return {
+      ok: errors.length === 0,
+      errors: errors,
+      journal: {
+        code: code,
+        label: label,
+        type: type,
+        referencePrefix: referencePrefix,
+        description: description,
+        active: input.active !== false
+      }
+    };
+  }
+
+  function createJournal(input) {
+    var validation = validateJournalInput(input, null);
+    if (!validation.ok) return validation;
+    var st = load();
+    var previousState = clone(st);
+    var now = new Date().toISOString();
+    var record = Object.assign({}, validation.journal, {
+      id: 'journal-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+      origin: 'user',
+      isStandard: false,
+      systemManaged: false,
+      systemKey: '',
+      systemSource: '',
+      createdAt: now,
+      updatedAt: now
+    });
+    st.journals.push(record);
+    if (!Array.isArray(st.journalCodeHistory)) st.journalCodeHistory = [];
+    if (st.journalCodeHistory.indexOf(record.code) === -1) st.journalCodeHistory.push(record.code);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Création impossible : stockage local indisponible ou plein.'] };
+    }
+    return { ok: true, errors: [], journal: record };
+  }
+
+  function updateJournal(identifier, input) {
+    var existing = journalByIdentifier(identifier);
+    if (!existing) return { ok: false, errors: ['Journal introuvable.'] };
+    if (existing.systemManaged) return { ok: false, errors: ['Ce journal est réservé au système et ne peut pas être modifié.'] };
+    var validation = validateJournalInput(input, existing);
+    if (!validation.ok) return validation;
+    var st = load();
+    var previousState = clone(st);
+    var index = st.journals.findIndex(function (record) { return record.id === existing.id; });
+    var now = new Date().toISOString();
+    var updated = Object.assign({}, existing, validation.journal, { updatedAt: now });
+    st.journals[index] = updated;
+    if (!Array.isArray(st.journalCodeHistory)) st.journalCodeHistory = [];
+    if (st.journalCodeHistory.indexOf(updated.code) === -1) st.journalCodeHistory.push(updated.code);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Modification impossible : stockage local indisponible ou plein.'] };
+    }
+    return { ok: true, errors: [], journal: updated };
+  }
+
+  function deleteJournal(identifier) {
+    var existing = journalByIdentifier(identifier);
+    if (!existing) return { ok: false, errors: ['Journal introuvable.'] };
+    if (existing.systemManaged || existing.isStandard) return { ok: false, errors: ['Un journal standard ou géré par le système ne peut pas être supprimé.'] };
+    var count = journalEntryCount(existing.id);
+    if (count > 0) return { ok: false, errors: ['Ce journal possède ' + count + ' écriture(s) ; archivez-le plutôt que de le supprimer.'] };
+    var st = load();
+    var previousState = clone(st);
+    if (!writeBackupSnapshot(previousState)) {
+      return { ok: false, errors: ['Suppression impossible : le point de restauration local n’a pas pu être créé. Le journal est conservé.'] };
+    }
+    st.journals = st.journals.filter(function (record) { return record.id !== existing.id; });
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Suppression impossible : stockage local indisponible ou plein. Le journal est conservé.'] };
+    }
+    return { ok: true, errors: [] };
   }
 
   function ensureIdentificationState(st) {
@@ -2198,7 +2494,9 @@
   /* ---------------- Écritures ---------------- */
   function nextReference(journalCode, date) {
     var year = Number(String(date || '').slice(0, 4)) || EXERCICE;
-    var prefix = journalCode + '-' + year + '-';
+    var journalRecord = journal(journalCode);
+    var referencePrefix = journalRecord ? journalRecord.referencePrefix || journalRecord.code : normalizeJournalCode(journalCode);
+    var prefix = referencePrefix + '-' + year + '-';
     var max = 0;
     entries().forEach(function (e) {
       if (e.reference && e.reference.indexOf(prefix) === 0) {
@@ -2230,6 +2528,7 @@
     var st = load();
     var reference = String(payload.reference || '').trim();
     var journalCode = payload.journal;
+    var journalRecord = journal(journalCode);
     var date = payload.date;
     var lines = payload.lines || [];
 
@@ -2237,7 +2536,20 @@
     if (!opts.ignoreUnique && st.entries.some(function (e) { return e.reference === reference && e.id !== payload.id; })) {
       errors.push('La référence « ' + reference + ' » existe déjà.');
     }
-    if (!journal(journalCode)) errors.push('Le journal sélectionné est inconnu.');
+    if (!journalRecord) {
+      errors.push('Le journal sélectionné est inconnu.');
+    } else {
+      journalCode = journalRecord.code;
+      if (journalRecord.systemManaged && opts.systemSource !== journalRecord.systemSource) {
+        errors.push('Ce journal est réservé aux écritures générées par le système ; la saisie manuelle et l’import sont interdits.');
+      }
+      if (!journalRecord.systemManaged && opts.systemSource) {
+        errors.push('La source automatique ne correspond pas à un journal système.');
+      }
+      if (journalRecord.active === false && !opts.allowInactiveJournal) {
+        errors.push('Ce journal est inactif et ne peut recevoir de nouvelle écriture.');
+      }
+    }
     if (!parseIsoDate(date)) {
       errors.push('La date de la pièce est obligatoire et doit être une date valide.');
     } else {
@@ -2290,25 +2602,27 @@
       errors.push('La pièce n’est pas équilibrée : débit ' + t.debit + ' ≠ crédit ' + t.credit + '.');
     }
 
-    return {
-      ok: errors.length === 0,
-      errors: errors,
-      entry: {
-        id: payload.id || null,
-        reference: reference,
-        journal: journalCode,
-        date: date,
-        description: String(payload.description || '').trim(),
-        status: opts.status || 'draft',
-        lines: cleanLines
-      }
+    var normalizedEntry = {
+      id: payload.id || null,
+      reference: reference,
+      journal: journalCode,
+      date: date,
+      description: String(payload.description || '').trim(),
+      status: opts.status || 'draft',
+      lines: cleanLines
     };
+    if (journalRecord && journalRecord.systemManaged && opts.systemSource === journalRecord.systemSource) {
+      normalizedEntry.sourceSystem = opts.systemSource;
+    }
+    return { ok: errors.length === 0, errors: errors, entry: normalizedEntry };
   }
 
-  function createEntry(payload, status) {
+  function createEntry(payload, status, options) {
+    var createOptions = options || {};
     var result = validateEntry(payload, {
       requireBalanced: status === 'posted',
-      status: status
+      status: status,
+      systemSource: createOptions.systemSource
     });
     if (!result.ok) return result;
 
@@ -2326,11 +2640,17 @@
     var existing = entry(id);
     if (!existing) return { ok: false, errors: ['Pièce introuvable.'] };
     if (existing.status !== 'draft') return { ok: false, errors: ['Une pièce validée ne peut plus être modifiée.'] };
+    if (journal(existing.journal) && journal(existing.journal).systemManaged) {
+      return { ok: false, errors: ['Une écriture d’un journal automatique est gérée par le système et ne peut pas être modifiée manuellement.'] };
+    }
     if (existing.sourceSystem === 'PERFECTO-ANNULATION-CENTRALISATION' && existing.sourceMetadata && existing.sourceMetadata.operation === 'centralization-reversal') {
       return { ok: false, errors: ['Une écriture inverse est immuable après sa préparation. Supprimez ce brouillon et recommencez l’annulation si une correction est nécessaire.'] };
     }
     payload.id = id;
-    var result = validateEntry(payload, { requireBalanced: false, status: 'draft' });
+    var currentJournal = journal(existing.journal);
+    var submittedJournal = journal(payload.journal);
+    var allowInactiveJournal = !!(currentJournal && submittedJournal && currentJournal.active === false && currentJournal.code === submittedJournal.code);
+    var result = validateEntry(payload, { requireBalanced: false, status: 'draft', allowInactiveJournal: allowInactiveJournal });
     if (!result.ok) return result;
     var st = load();
     var idx = st.entries.findIndex(function (e) { return e.id === id; });
@@ -2343,6 +2663,10 @@
     var existing = entry(id);
     if (!existing) return { ok: false, errors: ['Pièce introuvable.'] };
     if (existing.status === 'posted') return { ok: false, errors: ['Cette pièce est déjà validée.'] };
+    var existingJournal = journal(existing.journal);
+    if (existingJournal && existingJournal.systemManaged && existing.sourceSystem !== existingJournal.systemSource) {
+      return { ok: false, errors: ['Validation refusée : l’écriture du journal automatique ne porte pas une provenance système conforme.'] };
+    }
 
     var st = load();
     if (existing.date < st.cycleStart || existing.date > st.cycleEnd) {
@@ -2367,6 +2691,9 @@
     var existing = entry(id);
     if (!existing) return { ok: false, errors: ['Pièce introuvable.'] };
     if (existing.status !== 'draft') return { ok: false, errors: ['Seuls les brouillons peuvent être supprimés.'] };
+    if (journal(existing.journal) && journal(existing.journal).systemManaged) {
+      return { ok: false, errors: ['Ce brouillon est rattaché à un journal automatique ; sa suppression manuelle est interdite.'] };
+    }
     var st = load();
     var previousState = clone(st);
     if (!writeBackupSnapshot(previousState)) {
@@ -2656,7 +2983,7 @@
     var st = load();
     return journals().map(function (j) {
       var list = st.entries.filter(function (e) {
-        return e.journal === j.code && e.date >= st.cycleStart && e.date <= st.cycleEnd;
+        return normalizeJournalCode(e.journal) === normalizeJournalCode(j.code) && e.date >= st.cycleStart && e.date <= st.cycleEnd;
       });
       var posted = list.filter(function (e) { return e.status === 'posted'; });
       var t = { debit: 0, credit: 0 };
@@ -2719,7 +3046,11 @@
       data.exercise = dossier.exerciseYear;
       data.cycleStart = dossier.cycleStart;
       data.cycleEnd = dossier.cycleEnd;
-      data = upgradeFixedAssets(upgradeFixedAssetLocations(upgradeAuxiliaryRegistries(upgradeAccountingChart(data).data).data).data).data;
+      var chartUpgrade = upgradeAccountingChart(data);
+      var auxiliaryUpgrade = upgradeAuxiliaryRegistries(chartUpgrade.data);
+      var locationUpgrade = upgradeFixedAssetLocations(auxiliaryUpgrade.data);
+      var assetUpgrade = upgradeFixedAssets(locationUpgrade.data);
+      data = upgradeJournals(assetUpgrade.data).data;
       state = data;
       ensurePeriodsForEntries();
       if (!save()) {
@@ -3018,8 +3349,9 @@
     if (!plan.ok) return { ok: false, errors: plan.errors || ['Aucune réparation sûre n’est disponible.'], report: plan.report };
     var locationUpgrade = upgradeFixedAssetLocations(plan.data);
     var fixedAssetUpgrade = upgradeFixedAssets(locationUpgrade.data);
-    if (locationUpgrade.changed || fixedAssetUpgrade.changed) {
-      plan.data = fixedAssetUpgrade.data;
+    var journalUpgrade = upgradeJournals(fixedAssetUpgrade.data);
+    if (locationUpgrade.changed || fixedAssetUpgrade.changed || journalUpgrade.changed) {
+      plan.data = journalUpgrade.data;
       plan.changed = true;
     }
     if (!plan.changed && !recoveryIssue) return { ok: true, changed: false, errors: [], report: plan.report };
@@ -3071,8 +3403,11 @@
       if (!preserveCorruptRaw()) return { ok: false, errors: ['Restauration bloquée : la copie brute endommagée n’a pas pu être conservée. Téléchargez-la ou libérez de l’espace.'] };
       var previousState = state;
       var previousIssue = recoveryIssue;
-      var recoveredState = upgradeFixedAssets(upgradeFixedAssetLocations(upgradeAuxiliaryRegistries(upgradeAccountingChart(clone(snapshot.data)).data).data).data).data;
-      state = recoveredState;
+      var recoveredChart = upgradeAccountingChart(clone(snapshot.data));
+      var recoveredAuxiliary = upgradeAuxiliaryRegistries(recoveredChart.data);
+      var recoveredLocations = upgradeFixedAssetLocations(recoveredAuxiliary.data);
+      var recoveredAssets = upgradeFixedAssets(recoveredLocations.data);
+      state = upgradeJournals(recoveredAssets.data).data;
       try {
         ensurePeriodsForEntries();
         global.localStorage.setItem(currentFolderStorageKey(), JSON.stringify(state));
@@ -3086,7 +3421,11 @@
     }
 
     var previousState = state ? clone(state) : null;
-    state = upgradeFixedAssets(upgradeFixedAssetLocations(upgradeAuxiliaryRegistries(upgradeAccountingChart(clone(snapshot.data)).data).data).data).data;
+    var restoredChart = upgradeAccountingChart(clone(snapshot.data));
+    var restoredAuxiliary = upgradeAuxiliaryRegistries(restoredChart.data);
+    var restoredLocations = upgradeFixedAssetLocations(restoredAuxiliary.data);
+    var restoredAssets = upgradeFixedAssets(restoredLocations.data);
+    state = upgradeJournals(restoredAssets.data).data;
     ensurePeriodsForEntries();
     if (!save()) {
       state = previousState;
@@ -3146,6 +3485,11 @@
     account: account,
     journals: journals,
     journal: journal,
+    nextJournalCode: nextJournalCode,
+    journalEntryCount: journalEntryCount,
+    createJournal: createJournal,
+    updateJournal: updateJournal,
+    deleteJournal: deleteJournal,
     suppliers: suppliers,
     supplier: supplier,
     createSupplier: createSupplier,
