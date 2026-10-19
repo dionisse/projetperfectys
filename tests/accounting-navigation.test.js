@@ -39,6 +39,7 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Natures des flux de trésorerie',
   'Saisie dans les journaux',
   'Opérations de caisse en temps réel',
+  'Comptes généraux et auxiliaires',
   'Reports à nouveau',
   'Journaux',
   'Comptes en devises',
@@ -83,6 +84,14 @@ assert.equal(findTab('saisie', 'journal-entry').actions, undefined, 'le tableau 
 assert.equal(findTab('saisie', 'live-cash').status, 'partial');
 assert.ok(findTab('saisie', 'live-cash').reason.includes('journal Caisse (CA)'));
 assert.ok(findTab('saisie', 'live-cash').reason.includes('synchronisation multi-utilisateur'));
+const accountMovementsTab = findTab('saisie', 'account-movements');
+assert.equal(accountMovementsTab.status, 'mixed');
+assert.ok(accountMovementsTab.reason.includes('identifiant'));
+assert.equal(accountMovementsTab.children[0].label, 'Comptes généraux et auxiliaires');
+assert.equal(accountMovementsTab.children[0].status, 'partial');
+assert.ok(accountMovementsTab.children[0].reason.includes('mouvements individuels'));
+assert.equal(accountMovementsTab.children[1].status, 'planned');
+assert.equal(accountMovementsTab.children[2].status, 'inactive');
 assert.equal(findTab('fichier', 'export-other').status, 'partial');
 assert.equal(findTab('fichier', 'import-other').status, 'partial');
 assert.equal(findTab('fichier', 'import-balance').status, 'partial');

@@ -53,6 +53,7 @@ Le dépôt fournit un serveur statique sans dépendance ni compilation. Dans Bol
 | Journaux | Huit journaux standards (dont Abonnements et Centralisations spécialisés), deux journaux système protégés et création illimitée de journaux par dossier ; paramètres, statuts et références automatiques |
 | Saisie dans les journaux | Liste par journal avec code, intitulé, nombre de pièces, débits/crédits validés, brouillons et état de clôture de la période ; double-clic sur un journal actif pour ouvrir sa saisie |
 | Opérations de caisse en temps réel | Encaissements et décaissements rapides au journal `CA`, écritures équilibrées, aperçu du solde avant/après et recalcul à partir des seules pièces validées sur les comptes de caisse `57`; brouillons exclus. Stockage local de démonstration, sans synchronisation multi-utilisateur ; transferts entre caisses et calculs de TVA exclus |
+| Comptes généraux et auxiliaires | Arborescence du plan, synthèse mensuelle (lignes, débits, crédits), totaux, soldes de clôture et détails par mois/exercice issus des écritures validées du cycle du dossier ; la clôture ouvre la gestion des périodes. Fiches auxiliaires visibles sans mouvements/soldes individuels, faute d’identifiant auxiliaire dans les pièces |
 | Saisie d'écriture | Saisie multiligne dans le journal choisi, contrôle d'équilibre en direct, référence proposée automatiquement, brouillon ou validation |
 | Pièces comptables | Liste filtrable, détail en modale, validation, modification et suppression des brouillons |
 | Balance générale | Débit, crédit et solde par compte, contrôle d'équilibre, export CSV, impression |
@@ -76,6 +77,14 @@ Le sous-menu **Saisie → Opérations de caisse en temps réel** propose une sai
 Les soldes des caisses sont recalculés depuis toutes les écritures validées du cycle, jusqu’à la date choisie, et les brouillons sont exclus. L’aperçu avant/après signale un solde négatif sans bloquer arbitrairement l’opération. L’enregistrement en brouillon ne modifie pas les soldes ; seule la validation explicite ajoute la pièce au grand livre, avec les droits `draft.create` et `entry.validate` contrôlés séparément. Les opérations récentes du journal `CA` peuvent être consultées depuis la liste.
 
 Cette étape est une actualisation immédiate **dans le stockage local du navigateur** ; elle ne constitue pas une synchronisation multi-utilisateur ou serveur. Les transferts entre deux caisses doivent passer par la saisie générale afin de traiter les deux comptes. Aucun calcul automatique de TVA, facture, paiement tiers ou rapprochement n’est effectué. L’interface de saisie reste réservée à l’ordinateur ou à la tablette ; sur téléphone, seul le menu Éditions est accessible.
+
+### Comptes généraux et auxiliaires — synthèse mensuelle
+
+Le sous-menu **Saisie → Mouvements des comptes généraux, tiers et analytiques → Comptes généraux et auxiliaires** présente à gauche l’arborescence des classes, sous-classes et comptes, avec les fiches fournisseurs, clients, débiteurs/créditeurs divers et personnel rattachées à leur compte collectif lorsqu’elles sont disponibles. La recherche et le filtre permettent de consulter les comptes généraux ou les fiches auxiliaires séparément.
+
+Le panneau mensuel agrège les lignes, débits et crédits des seules écritures **validées** comprises dans le cycle comptable du dossier sélectionné. Les brouillons sont exclus ; les boutons de détail affichent les lignes source sans réécrire ni modifier les pièces. Les soldes sont calculés à partir des mouvements du cycle et présentés en débit/crédit. L’état de chaque mois et le bouton **Clôture** renvoient à la gestion des périodes du dossier : aucune clôture n’est stockée par compte ou par journal.
+
+Les fiches auxiliaires sont des données de référentiel uniquement dans ce parcours. Les lignes comptables actuelles portent un compte général mais aucun identifiant individuel de fournisseur, client, tiers divers ou membre du personnel ; par conséquent, les mouvements mensuels et soldes auxiliaires sont explicitement affichés comme non disponibles et ne sont jamais déduits artificiellement du compte collectif. Les mouvements tiers dédiés ainsi que la comptabilité analytique restent à construire/séparés.
 
 ### Spécification métier à implémenter — abonnements (`ABO`)
 
@@ -313,6 +322,7 @@ modern-proto/js/store.js       dossiers clients, cycles, migration du plan compt
 modern-proto/js/modules.js     catalogue déclaratif des modules du launcher
 modern-proto/js/permissions.js politique d’accès démo (refus par défaut)
 modern-proto/js/accounting-navigation.js  menus, sous-menus et états d’activation du Lot 1
+modern-proto/js/account-movements.js    arborescence, filtres et agrégats des comptes généraux et auxiliaires
 modern-proto/js/centralization-cancellation.js  contrôle des sources internes et construction d’écritures inverses
 modern-proto/js/app.js         routeur, vues multi-dossiers, formulaires et interactions comptables
 BACKLOG.md                     décisions confirmées et étapes prévues
@@ -321,6 +331,7 @@ modern-proto/service-worker.js cache hors ligne (réseau d'abord, cache en secou
 modern-proto/icon-192.png      icônes de l'application
 modern-proto/icon-512.png
 tests/store.test.js            tests des règles métier (Node, sans dépendance)
+tests/account-movements.test.js tests de synthèse mensuelle et de cohérence avec le grand livre
 tests/workspaces.test.js       tests de migration, références, cycles et isolation des dossiers clients
 tests/account-lifecycle.test.js cycle de vie des comptes, clients, fournisseurs, tiers divers et personnel
 ```

@@ -10,6 +10,7 @@
   var Permissions = window.PerfectoPermissions;
   var AccountingNavigation = window.PerfectoAccountingNavigation;
   var CashOperations = window.PerfectoCashOperations;
+  var AccountMovements = window.PerfectoAccountMovements;
   var AccountingExchange = window.PerfectoAccountingExchange;
   var AccountingConsolidation = window.PerfectoAccountingConsolidation;
   var BalanceRecalculation = window.PerfectoBalanceRecalculation;
@@ -74,6 +75,7 @@
     balance: { cls: '', q: '' },
     journal: { journal: '', year: String(S.exercise()) },
     ledger: { account: '521' },
+    accountMovements: { q: '', kind: 'all', nodeId: '', month: '' },
     periods: { year: S.exercise() },
     suppliers: { q: '', status: 'active' },
     clients: { q: '' },
@@ -234,6 +236,11 @@
         return { moduleId: 'accounting', actionId: 'data.export' };
       case 'reinitialize-corrupt-database':
         return { moduleId: 'accounting', actionId: 'data.reset' };
+      case 'select-account-movement-node':
+      case 'select-account-movement-month':
+      case 'open-account-movement-month-detail':
+      case 'open-account-movement-cycle-detail':
+        return { moduleId: 'accounting', actionId: 'module.view' };
       case 'open-entry':
       case 'select-entry-journal':
       case 'open-entry-journal-consultation':
@@ -6285,6 +6292,241 @@
     refreshCashOperationPreview();
   }
 
+  function accountMovementAuxiliaryRecords() {
+    var records = [];
+    function append(items, type, labelFor) {
+      (items || []).forEach(function (record) {
+        if (!record || !record.accountCode) return;
+        var code = String(record.code || record.id || '');
+        records.push({
+          id: String(type) + ':' + String(record.id || code),
+          type: type,
+          code: code,
+          auxiliaryAccountCode: record.auxiliaryAccountCode || '',
+          accountCode: String(record.accountCode),
+          label: labelFor ? labelFor(record) : String(record.name || code),
+          active: record.active !== false
+        });
+      });
+    }
+    append(S.suppliers(), 'Fournisseur');
+    append(S.clients(), 'Client');
+    append(S.otherParties(), 'Tiers divers', function (record) {
+      return String(record.name || record.code || '') + ' · ' + auxiliaryPartyTypeLabel(record.type);
+    });
+    append(S.personnel(), 'Personnel');
+    return records;
+  }
+
+  function accountMovementSourceAccounts() {
+    var accounts = S.accounts().slice();
+    var known = Object.create(null);
+    accounts.forEach(function (account) { known[String(account.code)] = true; });
+    S.balance().forEach(function (row) {
+      var code = String(row.code);
+      if (known[code]) return;
+      known[code] = true;
+      accounts.push(Object.assign({}, row, {
+        label: code + ' · absent du référentiel',
+        subclassLabel: 'Comptes hors référentiel',
+        missingFromChart: true,
+        postable: false
+      }));
+    });
+    return accounts;
+  }
+
+  function accountMovementMonthLabel(period) {
+    if (!period) return '—';
+    var name = S.monthLabel(period.month);
+    return name.charAt(0).toLocaleUpperCase() + name.slice(1) + ' ' + period.year;
+  }
+
+  function accountMovementPeriodStatus(status) {
+    return '<span class="account-movement-period-status account-movement-period-' + esc(status === 'closed' ? 'closed' : 'open') + '">' +
+      (status === 'closed' ? 'Clôturée' : 'Ouverte') + '</span>';
+  }
+
+  function accountMovementBalanceText(value) {
+    value = Number(value) || 0;
+    if (!value) return '—';
+    return amount(Math.abs(value)) + ' ' + (value > 0 ? 'D' : 'C');
+  }
+
+  function getAccountMovementsContext() {
+    var dossier = S.currentDossier();
+    var accounts = accountMovementSourceAccounts();
+    var auxiliaries = accountMovementAuxiliaryRecords();
+    var tree = AccountMovements.buildTree(accounts, auxiliaries);
+    var visibleTree = AccountMovements.filterTree(tree, ui.accountMovements.q, ui.accountMovements.kind);
+    var visibleNodes = AccountMovements.flattenTree(visibleTree);
+    var balanceRows = S.balance();
+    var balanceByCode = Object.create(null);
+    var movingCodes = Object.create(null);
+    balanceRows.forEach(function (row) {
+      balanceByCode[String(row.code)] = (Number(row.debit) || 0) - (Number(row.credit) || 0);
+      movingCodes[String(row.code)] = true;
+    });
+    var selected = visibleNodes.find(function (node) { return node.id === ui.accountMovements.nodeId; }) || null;
+    if (!selected) {
+      selected = visibleNodes.find(function (node) {
+        return node.kind === 'account' && movingCodes[node.code] && (ui.accountMovements.kind !== 'auxiliary' || node.hasAuxiliaries);
+      }) || visibleNodes.find(function (node) { return node.kind === 'auxiliary'; }) ||
+        visibleNodes.find(function (node) { return node.kind === 'account'; }) || visibleNodes[0] || null;
+    }
+    ui.accountMovements.nodeId = selected ? selected.id : '';
+
+    var periods = S.periodStats(S.exercise()).map(function (period) {
+      return Object.assign({}, period, { key: Number(period.year) + '-' + String(period.month).padStart(2, '0') });
+    });
+    var todayKey = S.todayIso().slice(0, 7);
+    var selectedMonth = periods.find(function (period) { return period.key === ui.accountMovements.month; }) ||
+      periods.find(function (period) { return period.key === todayKey; }) ||
+      periods.find(function (period) { return period.posted > 0; }) || periods[0] || null;
+    ui.accountMovements.month = selectedMonth ? selectedMonth.key : '';
+
+    var cycleEntries = S.entries();
+    var postedEntries = S.postedEntries();
+    var summary = AccountMovements.monthlySummary(selected, cycleEntries, periods, dossier.cycleStart, dossier.cycleEnd);
+    return {
+      dossier: dossier,
+      accounts: accounts,
+      auxiliaries: auxiliaries,
+      tree: tree,
+      visibleTree: visibleTree,
+      visibleNodes: visibleNodes,
+      selected: selected,
+      periods: periods,
+      selectedMonth: selectedMonth,
+      summary: summary,
+      balanceByCode: balanceByCode,
+      postedEntries: postedEntries
+    };
+  }
+
+  function accountMovementTreeBalance(node, balanceByCode) {
+    if (!node || node.kind === 'auxiliary') return null;
+    return (node.accountCodes || []).reduce(function (sum, code) { return sum + (Number(balanceByCode[String(code)]) || 0); }, 0);
+  }
+
+  function renderAccountMovementTreeRow(node, context) {
+    var selected = context.selected && context.selected.id === node.id;
+    var classes = 'account-movement-row account-movement-row-' + node.kind + (selected ? ' is-selected' : '');
+    if (node.account && node.account.missingFromChart) classes += ' is-unmapped';
+    var closing = node.kind === 'auxiliary'
+      ? '<span class="muted" title="Aucun mouvement auxiliaire n’est lié aux écritures actuelles.">Non calculé</span>'
+      : accountMovementBalanceText(accountMovementTreeBalance(node, context.balanceByCode));
+    var code = node.kind === 'auxiliary' ? '<span class="account-movement-code account-movement-code-aux">' + esc(node.code) + '</span>' : '<strong class="account-movement-code">' + esc(node.code) + '</strong>';
+    var label = '<span class="account-movement-label">' + esc(node.label) + '</span>';
+    var tags = '';
+    if (node.kind === 'auxiliary') tags += '<span class="account-movement-tag">' + esc(node.auxiliaryType || 'Auxiliaire') + '</span>';
+    if (node.kind === 'auxiliary' && !node.active) tags += '<span class="account-movement-tag is-inactive">Archivé</span>';
+    if (node.account && node.account.missingFromChart) tags += '<span class="account-movement-tag is-warning">Hors référentiel</span>';
+    return '<tr class="' + classes + '" data-action="select-account-movement-node" data-node-id="' + esc(node.id) + '" tabindex="' + (selected ? '0' : '-1') + '" aria-selected="' + (selected ? 'true' : 'false') + '" aria-label="Sélectionner ' + esc(node.kind === 'auxiliary' ? 'l’auxiliaire ' : '') + esc(node.code + ' ' + node.label) + '">' +
+      '<td class="account-movement-tree-cell" style="--tree-depth:' + Number(node.depth || 0) + '">' + code + '</td>' +
+      '<td>' + label + tags + '</td>' +
+      '<td class="num nowrap">' + closing + '</td>' +
+    '</tr>';
+  }
+
+  function renderAccountMovementMonthRow(period, summary, selectedMonth) {
+    var row = summary.months.find(function (month) { return month.key === period.key; });
+    var selected = selectedMonth && selectedMonth.key === period.key;
+    var unavailable = !summary.available;
+    return '<tr class="account-movement-month-row' + (selected ? ' is-selected' : '') + '" data-action="select-account-movement-month" data-month-key="' + esc(period.key) + '" tabindex="' + (selected ? '0' : '-1') + '" aria-selected="' + (selected ? 'true' : 'false') + '">' +
+      '<td><span class="account-movement-month-name">' + esc(accountMovementMonthLabel(period)) + '</span>' + accountMovementPeriodStatus(period.status) + '</td>' +
+      '<td class="num">' + (unavailable ? '—' : esc(amount(row ? row.lines : 0))) + '</td>' +
+      '<td class="num">' + (unavailable ? '—' : esc(amount(row ? row.debit : 0))) + '</td>' +
+      '<td class="num">' + (unavailable ? '—' : esc(amount(row ? row.credit : 0))) + '</td>' +
+    '</tr>';
+  }
+
+  function viewGeneralAccountMovements() {
+    var context = getAccountMovementsContext();
+    var selected = context.selected;
+    var summary = context.summary;
+    var selectedName = selected ? selected.code + ' · ' + selected.label : 'Aucun compte sélectionné';
+    var rows = context.visibleNodes.map(function (node) { return renderAccountMovementTreeRow(node, context); }).join('');
+    if (!rows) {
+      var emptyText = ui.accountMovements.kind === 'auxiliary'
+        ? 'Aucune fiche auxiliaire rattachée à un compte affiché dans ce dossier.'
+        : (ui.accountMovements.q ? 'Aucun compte ne correspond à cette recherche.' : 'Aucun compte n’est disponible dans ce dossier.');
+      rows = '<tr><td colspan="3"><div class="empty-state account-movement-empty"><div class="empty-icon">⌕</div><strong>' + esc(emptyText) + '</strong>Les comptes et fiches proviennent du dossier comptable actif.</div></td></tr>';
+    }
+    var monthRows = context.periods.map(function (period) { return renderAccountMovementMonthRow(period, summary, context.selectedMonth); }).join('');
+    var totals = !selected
+      ? '<tr class="account-movement-total-row"><th colspan="4">Sélectionnez un compte pour afficher les totaux.</th></tr>'
+      : (summary.available
+        ? '<tr class="account-movement-total-row"><th colspan="2">Total de l’exercice · ' + esc(amount(summary.totalLines)) + ' ligne(s)</th><td class="num">' + esc(amount(summary.debit)) + '</td><td class="num">' + esc(amount(summary.credit)) + '</td></tr>'
+        : '<tr class="account-movement-total-row"><th colspan="4">Totaux auxiliaires non disponibles</th></tr>');
+    var status = context.selectedMonth ? accountMovementPeriodStatus(context.selectedMonth.status) : '';
+    var auxiliaryCount = AccountMovements.flattenTree(context.tree).filter(function (node) { return node.kind === 'auxiliary'; }).length;
+    var auxiliaryNote = '<div class="alert info account-movement-auxiliary-note"><strong>Limite des mouvements auxiliaires.</strong> ' +
+      (auxiliaryCount
+        ? esc(auxiliaryCount + ' fiche(s) auxiliaire(s) des répertoires fournisseurs, clients, tiers divers et personnel sont rattachées à leur compte collectif dans l’arborescence.') + ' '
+        : 'Les répertoires fournisseurs, clients, tiers divers et personnel sont consultés pour alimenter l’arborescence. ') +
+      'Les pièces validées ne portent pas encore d’identifiant auxiliaire : aucun mouvement ni solde individuel n’est inventé. Les totaux disponibles sont ceux des comptes généraux.' +
+      '</div>';
+    var detailDisabled = !selected || !summary.available;
+    var draftNote = summary.available && summary.totalDrafts
+      ? '<p class="small muted account-movement-draft-note">' + esc(amount(summary.totalDrafts)) + ' pièce(s) en brouillon exclue(s) des mouvements et soldes.</p>'
+      : '<p class="small muted account-movement-draft-note">Seules les écritures validées de la période du dossier sont prises en compte.</p>';
+    var closeBalance = !selected ? '—' : (summary.available ? accountMovementBalanceText(summary.closingBalance) : 'Non disponible');
+    return '<div class="account-movements-feature">' +
+      '<div class="account-movements-title"><p class="page-kicker">SAISIE · ÉCRITURES DU DOSSIER</p><h4>Mouvements des comptes généraux et auxiliaires</h4></div>' +
+      auxiliaryNote +
+      '<div class="account-movements-toolbar">' +
+        '<div class="field account-movements-search"><label for="account-movement-search">Rechercher un compte ou un auxiliaire</label><input id="account-movement-search" type="search" data-filter="accountMovements:q" value="' + esc(ui.accountMovements.q) + '" placeholder="Code ou intitulé"></div>' +
+        '<div class="field account-movements-kind"><label for="account-movement-kind">Afficher</label><select id="account-movement-kind" data-filter="accountMovements:kind"><option value="all"' + (ui.accountMovements.kind === 'all' ? ' selected' : '') + '>Généraux et auxiliaires</option><option value="general"' + (ui.accountMovements.kind === 'general' ? ' selected' : '') + '>Comptes généraux</option><option value="auxiliary"' + (ui.accountMovements.kind === 'auxiliary' ? ' selected' : '') + '>Auxiliaires</option></select></div>' +
+      '</div>' +
+      '<div class="account-movements-workspace">' +
+        '<section class="account-movements-pane account-movements-tree-pane" aria-labelledby="account-movement-tree-title">' +
+          '<div class="account-movements-pane-head"><div><p class="page-kicker">DOSSIER · ' + esc(context.dossier.reference || context.dossier.name || '') + '</p><h4 id="account-movement-tree-title">Comptes généraux et auxiliaires</h4></div><span class="account-movement-count">' + esc(String(context.visibleNodes.length)) + ' ligne(s)</span></div>' +
+          '<div class="table-wrap account-movement-tree-wrap"><table class="account-movement-table account-movement-tree-table"><thead><tr><th>Code</th><th>Intitulé</th><th class="num">Clôture</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+        '</section>' +
+        '<section class="account-movements-pane account-movements-month-pane" aria-labelledby="account-movement-month-title">' +
+          '<div class="account-movements-pane-head"><div><p class="page-kicker">SYNTHÈSE MENSUELLE · EXERCICE ' + esc(String(S.exercise())) + '</p><small class="account-movement-cycle-range">Cycle du dossier · ' + esc(dateLabel(context.dossier.cycleStart)) + ' — ' + esc(dateLabel(context.dossier.cycleEnd)) + '</small><h4 id="account-movement-month-title">' + esc(selectedName) + '</h4></div>' + status + '</div>' +
+          '<div class="table-wrap account-movement-month-wrap"><table class="account-movement-table account-movement-month-table"><thead><tr><th>Mois</th><th class="num">Lignes</th><th class="num">Débit</th><th class="num">Crédit</th></tr></thead><tbody>' + monthRows + '</tbody><tfoot>' + totals + '</tfoot></table></div>' +
+          '<div class="account-movement-closing-summary"><span>Solde de clôture de l’exercice</span><strong>' + esc(closeBalance) + (summary.available ? ' <small>XOF</small>' : '') + '</strong></div>' +
+          draftNote +
+        '</section>' +
+      '</div>' +
+      '<div class="account-movement-actions"><button type="button" class="btn btn-ghost" data-action="open-account-movement-month-detail"' + (detailDisabled ? ' disabled' : '') + '>Détail du mois…</button><button type="button" class="btn btn-ghost" data-action="open-account-movement-cycle-detail"' + (detailDisabled ? ' disabled' : '') + '>Détail de l’exercice…</button><a class="btn btn-primary" href="#/periods" title="Ouvrir la gestion des périodes comptables">Clôture</a></div>' +
+      '<p class="small muted account-movement-period-note">La clôture est gérée par période comptable, jamais par compte ni par journal. Le bouton ouvre la gestion des périodes du dossier.</p>' +
+    '</div>';
+  }
+
+  function openAccountMovementDetail(scope) {
+    var context = getAccountMovementsContext();
+    var selected = context.selected;
+    if (!selected) {
+      toast('Sélectionnez un compte général pour afficher son détail.', 'warning');
+      return;
+    }
+    if (selected.kind === 'auxiliary') {
+      openModal('Détail auxiliaire non disponible', '', '<div class="alert warning">Les écritures ne sont pas encore liées à une fiche auxiliaire. Aucun mouvement ni solde individuel ne peut être présenté.</div>', '<button type="button" class="btn btn-primary" data-action="close-modal">Fermer</button>');
+      return;
+    }
+    var month = context.selectedMonth;
+    var monthKey = scope === 'month' && month ? month.key : '';
+    var detail = AccountMovements.detailRows(selected, context.postedEntries, context.accounts, context.dossier.cycleStart, context.dossier.cycleEnd, monthKey);
+    var title = scope === 'month' ? 'Détail du mois — ' + accountMovementMonthLabel(month) : 'Détail de l’exercice — ' + String(S.exercise());
+    var subtitle = esc(selected.code + ' · ' + selected.label);
+    var body;
+    if (!detail.available) {
+      body = '<div class="alert info">' + esc(detail.reason) + '</div>';
+    } else if (!detail.rows.length) {
+      body = '<div class="empty-state"><div class="empty-icon">⌕</div><strong>Aucune ligne validée</strong>Aucun mouvement ne correspond à cette période pour le compte sélectionné.</div>';
+    } else {
+      var detailRowsHtml = detail.rows.map(function (row) {
+        return '<tr><td class="nowrap">' + esc(dateLabel(row.date)) + '</td><td><strong>' + esc(row.reference || '—') + '</strong></td><td>' + esc(row.journal || '—') + '</td><td>' + esc(row.account + ' · ' + row.accountLabel) + '</td><td>' + esc(row.description || '—') + '</td><td class="num">' + esc(amount(row.debit)) + '</td><td class="num">' + esc(amount(row.credit)) + '</td></tr>';
+      }).join('');
+      body = '<p class="small muted">Pièces validées uniquement · ' + esc(String(detail.rows.length)) + ' ligne(s).</p>' +
+        '<div class="table-wrap account-movement-detail-wrap"><table class="account-movement-table account-movement-detail-table"><thead><tr><th>Date</th><th>Référence</th><th>Journal</th><th>Compte</th><th>Libellé</th><th class="num">Débit</th><th class="num">Crédit</th></tr></thead><tbody>' + detailRowsHtml + '</tbody><tfoot><tr><th colspan="5">Totaux</th><td class="num">' + esc(amount(detail.debit)) + '</td><td class="num">' + esc(amount(detail.credit)) + '</td></tr></tfoot></table></div>';
+    }
+    openModal(title, subtitle, body, '<button type="button" class="btn btn-primary" data-action="close-modal">Fermer</button>', true);
+  }
+
   function viewAccountingMenu(params) {
     params = params || {};
     var phone = isPhoneViewport();
@@ -6315,6 +6557,7 @@
       '</div>';
     var isJournalEntrySubmenu = group.id === 'saisie' && tab.id === 'journal-entry';
     var isCashOperationsSubmenu = group.id === 'saisie' && tab.id === 'live-cash';
+    var isAccountMovementsSubmenu = group.id === 'saisie' && tab.id === 'account-movements';
     var actions = isJournalEntrySubmenu ? '' : (tab.actions || []).map(function (action) { return menuActionLink(action, tab.status); }).join('');
     var childList = menuChildList(tab.children, tab.reason);
     var phoneContext = phone
@@ -6323,7 +6566,7 @@
     var irreversible = tab.irreversible
       ? '<div class="alert warning menu-irreversible-note"><strong>Attention : opération irréversible.</strong> Une copie complète du dossier devra être exportée et confirmée avant toute activation de cette fonction.</div>'
       : '';
-    var details = !isJournalEntrySubmenu && !isCashOperationsSubmenu && tab.reason
+    var details = !isJournalEntrySubmenu && !isCashOperationsSubmenu && !isAccountMovementsSubmenu && tab.reason
       ? '<p class="menu-item-reason">' + esc(tab.reason) + '</p>'
       : '';
     var exchangeFeature = '';
@@ -6331,6 +6574,8 @@
       exchangeFeature = viewEntryJournalSelector();
     } else if (group.id === 'saisie' && tab.id === 'live-cash') {
       exchangeFeature = viewAccountingCashOperations();
+    } else if (group.id === 'saisie' && tab.id === 'account-movements') {
+      exchangeFeature = viewGeneralAccountMovements();
     } else if (group.id === 'definitions' && tab.id === 'journals') {
       exchangeFeature = viewJournals();
     } else if (group.id === 'definitions' && tab.id === 'suppliers') {
@@ -6684,6 +6929,11 @@
         selectEntryJournal(target.getAttribute('data-id'));
         return;
       }
+      if (target && target.matches('[data-action="select-account-movement-node"], [data-action="select-account-movement-month"]')) {
+        event.preventDefault();
+        target.click();
+        return;
+      }
       if (target && target.matches('[data-action="open-entry"]') && target.tagName !== 'BUTTON' && target.tagName !== 'A') {
         event.preventDefault();
         openEntryModal(target.getAttribute('data-id'));
@@ -6788,6 +7038,28 @@
         break;
       case 'close-modal':
         closeModal();
+        break;
+      case 'select-account-movement-node': {
+        ui.accountMovements.nodeId = trigger.getAttribute('data-node-id') || '';
+        var movementNodeId = ui.accountMovements.nodeId;
+        render();
+        var movementNodeRow = $$('[data-action="select-account-movement-node"]').find(function (row) { return row.getAttribute('data-node-id') === movementNodeId; });
+        if (movementNodeRow) movementNodeRow.focus();
+        break;
+      }
+      case 'select-account-movement-month': {
+        ui.accountMovements.month = trigger.getAttribute('data-month-key') || '';
+        var movementMonthKey = ui.accountMovements.month;
+        render();
+        var movementMonthRow = $$('[data-action="select-account-movement-month"]').find(function (row) { return row.getAttribute('data-month-key') === movementMonthKey; });
+        if (movementMonthRow) movementMonthRow.focus();
+        break;
+      }
+      case 'open-account-movement-month-detail':
+        openAccountMovementDetail('month');
+        break;
+      case 'open-account-movement-cycle-detail':
+        openAccountMovementDetail('cycle');
         break;
       case 'open-entry':
         if (id) openEntryModal(id);

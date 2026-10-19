@@ -2795,3 +2795,83 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
   .fixed-asset-simulation-form > button { justify-self: stretch; }
   .fixed-asset-simulation-summary { grid-template-columns: 1fr; }
 }
+
+/* Vue Comptes généraux et auxiliaires — synthèse mensuelle du dossier */
+.account-movements-feature { display: grid; gap: 12px; min-width: 0; margin-top: 16px; }
+.account-movements-title .page-kicker { margin: 0 0 4px; color: #7c8c81; font-size: .59rem; letter-spacing: .075em; }
+.account-movements-title h4 { margin: 0; color: #344d43; font-size: .97rem; }
+.account-movement-auxiliary-note { margin: 0; font-size: .73rem; line-height: 1.55; }
+.account-movements-toolbar { display: grid; grid-template-columns: minmax(230px, 1fr) minmax(210px, .42fr); align-items: end; gap: 12px; }
+.account-movements-toolbar .field { min-width: 0; margin: 0; }
+.account-movements-workspace { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr); align-items: start; gap: 12px; min-width: 0; }
+.account-movements-pane { display: grid; gap: 9px; min-width: 0; padding: 12px; border: 1px solid #e3e9e3; border-radius: 9px; background: #fff; box-shadow: 0 2px 7px rgba(31, 57, 42, .035); }
+.account-movements-pane-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; min-width: 0; }
+.account-movements-pane-head > div { min-width: 0; }
+.account-movements-pane-head .page-kicker { margin: 0 0 3px; color: #7c8c81; font-size: .57rem; letter-spacing: .075em; }
+.account-movements-pane-head h4 { overflow-wrap: anywhere; margin: 0; color: #344d43; font-size: .82rem; line-height: 1.4; }
+.account-movement-cycle-range { display: block; margin-bottom: 4px; color: #77847b; font-size: .59rem; }
+.account-movement-count { flex: 0 0 auto; padding: 4px 7px; border: 1px solid #e4ebe5; border-radius: 999px; color: #5f7166; background: #f6f8f5; font-size: .59rem; font-weight: 750; white-space: nowrap; }
+.account-movement-tree-wrap,
+.account-movement-month-wrap { max-height: 420px; overflow: auto; border: 1px solid #e7ece8; border-radius: 7px; }
+.account-movement-tree-table,
+.account-movement-month-table { width: 100%; min-width: 430px; font-size: .68rem; }
+.account-movement-table th,
+.account-movement-table td { padding: 7px 8px; vertical-align: middle; }
+.account-movement-table thead th { position: sticky; z-index: 1; top: 0; color: #6c7b70; background: #f5f8f5; font-size: .59rem; letter-spacing: .035em; }
+.account-movement-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.account-movement-tree-table th:first-child { width: 95px; }
+.account-movement-tree-table th:last-child { width: 105px; }
+.account-movement-tree-cell { padding-left: calc(8px + var(--tree-depth, 0) * 12px) !important; white-space: nowrap; }
+.account-movement-code { color: #52695b; font-size: .66rem; font-variant-numeric: tabular-nums; }
+.account-movement-code-aux { color: #68796e; }
+.account-movement-label { color: #3e5147; }
+.account-movement-row-class > td,
+.account-movement-row-subclass > td { background: #fafbf9; }
+.account-movement-row-class .account-movement-code,
+.account-movement-row-class .account-movement-label,
+.account-movement-row-subclass .account-movement-code,
+.account-movement-row-subclass .account-movement-label { color: #316c5b; font-weight: 800; }
+.account-movement-row-account .account-movement-label { font-weight: 600; }
+.account-movement-row-auxiliary .account-movement-label { color: #5d6f63; }
+.account-movement-row.is-unmapped .account-movement-label { color: #7a5b28; }
+.account-movement-row.is-selected > td,
+.account-movement-month-row.is-selected > td { background: #eaf4ef; }
+.account-movement-row:focus,
+.account-movement-month-row:focus { outline: 2px solid #87bda9; outline-offset: -2px; }
+.account-movement-row:hover > td,
+.account-movement-month-row:hover > td { background: #f2f7f3; }
+.account-movement-tag { display: inline-flex; margin: 2px 0 0 6px; padding: 2px 6px; border: 1px solid #e0e9e2; border-radius: 999px; color: #5a7464; background: #f6f9f6; font-size: .53rem; font-weight: 750; white-space: nowrap; }
+.account-movement-tag.is-inactive { color: #7b6651; border-color: #eadfce; background: #fbf7f0; }
+.account-movement-tag.is-warning { color: #815f28; border-color: #ecdcb7; background: #fff9e9; }
+.account-movement-month-table { min-width: 440px; }
+.account-movement-month-table th:first-child { min-width: 145px; }
+.account-movement-month-name { display: block; color: #40564a; font-weight: 700; }
+.account-movement-period-status { display: inline-flex; align-items: center; margin-top: 3px; padding: 2px 6px; border-radius: 999px; font-size: .52rem; font-weight: 800; white-space: nowrap; }
+.account-movement-period-open { color: #486f57; background: #edf5ed; }
+.account-movement-period-closed { color: #765b27; background: #f8f1df; }
+.account-movement-total-row th,
+.account-movement-total-row td { border-top: 1px solid #dfe8e1; color: #345544; background: #f5f8f4; font-weight: 800; }
+.account-movement-closing-summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; border: 1px solid #e3eae4; border-radius: 7px; background: #f7faf7; }
+.account-movement-closing-summary > span { color: #68776d; font-size: .68rem; }
+.account-movement-closing-summary > strong { color: #315b46; font-size: .8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.account-movement-closing-summary small { color: #758278; font-size: .57rem; font-weight: 600; }
+.account-movement-draft-note,
+.account-movement-period-note { margin: 0; color: #728077; font-size: .62rem; line-height: 1.5; }
+.account-movement-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.account-movement-actions .btn { font-size: .71rem; }
+.account-movement-empty { min-height: 130px; padding: 18px; font-size: .69rem; }
+.account-movement-detail-wrap { max-height: min(58vh, 520px); overflow: auto; border: 1px solid #e4eae4; border-radius: 7px; }
+.account-movement-detail-table { min-width: 820px; font-size: .69rem; }
+.account-movement-detail-table td:nth-child(5) { min-width: 180px; }
+.account-movement-detail-table tfoot th,
+.account-movement-detail-table tfoot td { position: sticky; bottom: 0; background: #f5f8f5; font-weight: 800; }
+@media (max-width: 1200px) {
+  .account-movements-workspace { grid-template-columns: minmax(0, 1fr); }
+  .account-movement-tree-wrap { max-height: 360px; }
+}
+@media (max-width: 700px) {
+  .account-movements-toolbar { grid-template-columns: minmax(0, 1fr); }
+  .account-movements-pane { padding: 9px; }
+  .account-movements-workspace { gap: 9px; }
+  .account-movement-actions .btn { flex: 1 1 auto; }
+}

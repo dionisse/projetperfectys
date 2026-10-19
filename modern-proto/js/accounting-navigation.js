@@ -53,11 +53,11 @@
         { id: 'journal-entry', label: 'Saisie dans les journaux', status: 'active', reason: 'Choisissez un journal actif dans la liste ; un double-clic ouvre la saisie d’une nouvelle pièce. Les journaux système, retirés ou inactifs restent consultables mais ne sont pas saisissables.' },
         { id: 'live-cash', label: 'Opérations de caisse en temps réel', status: 'partial', reason: 'Saisie rapide équilibrée au journal Caisse (CA), calcul immédiat des soldes des comptes de caisse 57 et liste des mouvements validés ou en brouillon. Les données restent locales à ce navigateur : aucune synchronisation multi-utilisateur ou serveur ; les transferts entre caisses passent par la saisie générale.' },
         {
-          id: 'account-movements', label: 'Mouvements des comptes généraux, tiers et analytiques', status: 'mixed', reason: 'Les saisies dédiées aux mouvements généraux et tiers restent à construire ; le volet analytique est inactif.',
+          id: 'account-movements', label: 'Mouvements des comptes généraux, tiers et analytiques', status: 'mixed', reason: 'La synthèse mensuelle des comptes généraux est disponible. Les auxiliaires sont visibles dans l’arborescence, sans mouvements individuels tant que les pièces ne portent pas leur identifiant ; les comptes tiers dédiés restent à construire et l’analytique demeure inactive.',
           children: [
-            { id: 'general-movements', label: 'Comptes généraux', status: 'planned', reason: 'Le formulaire de saisie des mouvements généraux reste à construire.' },
-            { id: 'third-party-movements', label: 'Comptes tiers', status: 'planned' },
-            { id: 'analytic-movements', label: 'Comptes analytiques', status: 'inactive' }
+            { id: 'general-movements', label: 'Comptes généraux et auxiliaires', status: 'partial', reason: 'Arborescence du plan et synthèse mensuelle des écritures validées du dossier. Les mouvements individuels auxiliaires ne sont pas encore enregistrés dans les pièces.' },
+            { id: 'third-party-movements', label: 'Comptes tiers', status: 'planned', reason: 'Les fonctions dédiées aux mouvements tiers restent à construire.' },
+            { id: 'analytic-movements', label: 'Comptes analytiques', status: 'inactive', reason: 'La comptabilité analytique reste un module séparé et inactif dans ce parcours.' }
           ]
         },
         { id: 'scheduled-payments', label: 'Programmation des règlements à effectuer (analytique)', status: 'inactive', reason: 'Fonction explicitement analytique.' },
