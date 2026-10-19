@@ -76,6 +76,8 @@
     journal: { journal: '', year: String(S.exercise()) },
     ledger: { account: '521' },
     accountMovements: { q: '', kind: 'all', nodeId: '', month: '' },
+    thirdPartyMovements: { q: '', kind: 'all', recordId: '', month: '' },
+    analyticalCenters: { q: '', status: 'active' },
     periods: { year: S.exercise() },
     suppliers: { q: '', status: 'active' },
     clients: { q: '' },
@@ -109,10 +111,11 @@
     return !!(window.matchMedia && window.matchMedia('(max-width: ' + PHONE_BREAKPOINT + 'px)').matches);
   }
 
-  function accountingMenuHash(groupId, tabId) {
+  function accountingMenuHash(groupId, tabId, childId) {
     var group = AccountingNavigation.getGroup(groupId);
     var tab = AccountingNavigation.getTab(group.id, tabId || group.defaultTab);
-    return '#/menu?g=' + encodeURIComponent(group.id) + '&t=' + encodeURIComponent(tab.id);
+    var hash = '#/menu?g=' + encodeURIComponent(group.id) + '&t=' + encodeURIComponent(tab.id);
+    return childId ? hash + '&c=' + encodeURIComponent(childId) : hash;
   }
 
   function accountingGroupForRoute(route) {
@@ -238,8 +241,12 @@
         return { moduleId: 'accounting', actionId: 'data.reset' };
       case 'select-account-movement-node':
       case 'select-account-movement-month':
+      case 'select-third-party-movement-month':
       case 'open-account-movement-month-detail':
       case 'open-account-movement-cycle-detail':
+      case 'select-third-party-movement-record':
+      case 'open-third-party-collective-month-detail':
+      case 'open-third-party-collective-cycle-detail':
         return { moduleId: 'accounting', actionId: 'module.view' };
       case 'open-entry':
       case 'select-entry-journal':
@@ -345,6 +352,19 @@
         return {
           moduleId: 'accounting',
           actionId: trigger && trigger.getAttribute('data-fixed-asset-location-mode') === 'edit' ? 'fixedAssetLocations.edit' : 'fixedAssetLocations.create'
+        };
+      case 'new-analytical-center':
+        return { moduleId: 'accounting', actionId: 'analyticalCenters.create' };
+      case 'edit-analytical-center':
+        return { moduleId: 'accounting', actionId: 'analyticalCenters.edit' };
+      case 'archive-analytical-center':
+        return { moduleId: 'accounting', actionId: 'analyticalCenters.archive' };
+      case 'delete-analytical-center':
+        return { moduleId: 'accounting', actionId: 'analyticalCenters.delete' };
+      case 'save-analytical-center':
+        return {
+          moduleId: 'accounting',
+          actionId: trigger && trigger.getAttribute('data-analytical-center-mode') === 'edit' ? 'analyticalCenters.edit' : 'analyticalCenters.create'
         };
       case 'preview-fixed-asset-depreciation':
         return { moduleId: 'accounting', actionId: 'module.view' };
@@ -2429,14 +2449,16 @@
     return '<a class="btn btn-primary btn-sm menu-action-link" href="' + esc(href) + '">' + esc(action.label) + ' <span aria-hidden="true">→</span></a>';
   }
 
-  function menuChildList(children, parentReason) {
+  function menuChildList(children, parentReason, groupId, tabId, selectedChildId) {
     if (!children || !children.length) return '';
     return '<ul class="menu-child-list">' + children.map(function (child) {
-      var hasRoute = child.route && child.status === 'active';
-      var body = hasRoute
-        ? '<a href="#/' + esc(child.route) + '">' + esc(child.label) + '<span aria-hidden="true">→</span></a>'
-        : '<span class="menu-child-label">' + esc(child.label) + '</span>';
-      return '<li class="menu-child menu-child-' + esc(child.status) + '">' + body + menuStatusBadge(child.status) +
+      var canOpenChild = groupId && tabId && (child.status === 'active' || child.status === 'partial' || child.status === 'mixed');
+      var selected = child.id === selectedChildId;
+      var href = canOpenChild ? accountingMenuHash(groupId, tabId, child.id) : '';
+      var body = canOpenChild
+        ? '<a class="menu-child-link' + (selected ? ' is-selected' : '') + '"' + (selected ? ' aria-current="page"' : '') + ' href="' + esc(href) + '">' + esc(child.label) + '<span aria-hidden="true">→</span></a>'
+        : '<span class="menu-child-label" aria-disabled="true">' + esc(child.label) + '</span>';
+      return '<li class="menu-child menu-child-' + esc(child.status) + (selected ? ' is-selected' : '') + '">' + body + menuStatusBadge(child.status) +
         (child.reason || (child.status !== 'active' ? parentReason : '') ? '<small>' + esc(child.reason || parentReason || '') + '</small>' : '') +
         '</li>';
     }).join('') + '</ul>';
@@ -6527,11 +6549,255 @@
     openModal(title, subtitle, body, '<button type="button" class="btn btn-primary" data-action="close-modal">Fermer</button>', true);
   }
 
+  function thirdPartyMovementRecords() {
+    var records = [];
+    function append(items, key, typeLabel, definitionTab, editAction, subtype) {
+      (items || []).forEach(function (record) {
+        if (!record || !record.accountCode) return;
+        var code = String(record.code || record.id || '');
+        var specificType = subtype ? subtype(record) : key;
+        records.push({
+          id: key + ':' + String(record.id || code),
+          recordId: String(record.id || code),
+          kind: specificType,
+          typeLabel: typeLabel(record),
+          code: code,
+          auxiliaryCode: String(record.auxiliaryAccountCode || (record.accountCode + '-' + code)),
+          generalAccountCode: String(record.accountCode),
+          name: String(record.name || record.label || code),
+          active: record.active !== false,
+          definitionTab: definitionTab,
+          editAction: editAction
+        });
+      });
+    }
+    append(S.suppliers(), 'supplier', function () { return 'Fournisseur'; }, 'suppliers', 'edit-supplier');
+    append(S.clients(), 'client', function () { return 'Client'; }, 'clients', 'edit-client');
+    append(S.personnel(), 'personnel', function () { return 'Personnel'; }, 'personnel', 'edit-personnel');
+    append(S.otherParties(), 'otherParty', function (record) { return auxiliaryPartyTypeLabel(record.type); }, 'other-debtors-creditors', 'edit-other-party', function (record) { return record.type; });
+    var order = { supplier: 0, client: 1, personnel: 2, debtor: 3, creditor: 4 };
+    return records.sort(function (a, b) {
+      return (order[a.kind] || 0) - (order[b.kind] || 0) || a.name.localeCompare(b.name, 'fr') || a.code.localeCompare(b.code);
+    });
+  }
+
+  function filteredThirdPartyMovementRecords(records) {
+    var needle = String(ui.thirdPartyMovements.q || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+    return (records || []).filter(function (record) {
+      if (ui.thirdPartyMovements.kind !== 'all' && record.kind !== ui.thirdPartyMovements.kind) return false;
+      if (!needle) return true;
+      var text = [record.typeLabel, record.code, record.auxiliaryCode, record.name, record.generalAccountCode, S.account(record.generalAccountCode) && S.account(record.generalAccountCode).label]
+        .join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+      return text.indexOf(needle) !== -1;
+    });
+  }
+
+  function getThirdPartyMovementsContext() {
+    var dossier = S.currentDossier();
+    var records = thirdPartyMovementRecords();
+    var visibleRecords = filteredThirdPartyMovementRecords(records);
+    var selected = visibleRecords.find(function (record) { return record.id === ui.thirdPartyMovements.recordId; }) || visibleRecords[0] || null;
+    ui.thirdPartyMovements.recordId = selected ? selected.id : '';
+    var periods = S.periodStats(S.exercise()).map(function (period) {
+      return Object.assign({}, period, { key: Number(period.year) + '-' + String(period.month).padStart(2, '0') });
+    });
+    var todayKey = S.todayIso().slice(0, 7);
+    var selectedMonth = periods.find(function (period) { return period.key === ui.thirdPartyMovements.month; }) ||
+      periods.find(function (period) { return period.key === todayKey; }) ||
+      periods.find(function (period) { return period.posted > 0; }) || periods[0] || null;
+    ui.thirdPartyMovements.month = selectedMonth ? selectedMonth.key : '';
+    var collectiveNode = selected && selected.generalAccountCode ? {
+      id: 'account:' + selected.generalAccountCode,
+      kind: 'account',
+      code: selected.generalAccountCode,
+      label: (S.account(selected.generalAccountCode) || {}).label || 'Compte collectif',
+      accountCodes: [selected.generalAccountCode]
+    } : null;
+    var cycleEntries = S.entries();
+    var postedEntries = S.postedEntries();
+    var summary = AccountMovements.monthlySummary(collectiveNode, cycleEntries, periods, dossier.cycleStart, dossier.cycleEnd);
+    return {
+      dossier: dossier,
+      visibleRecords: visibleRecords,
+      selected: selected,
+      periods: periods,
+      selectedMonth: selectedMonth,
+      collectiveNode: collectiveNode,
+      summary: summary,
+      accounts: S.accounts(),
+      postedEntries: postedEntries
+    };
+  }
+
+  function renderThirdPartyMovementRow(record, context) {
+    var selected = context.selected && context.selected.id === record.id;
+    var account = S.account(record.generalAccountCode);
+    var editButton = record.editAction
+      ? '<button type="button" class="btn btn-ghost btn-sm" data-action="' + esc(record.editAction) + '" data-id="' + esc(record.recordId) + '" aria-label="Modifier la fiche de ' + esc(record.name) + '">Fiche</button>'
+      : '';
+    return '<tr class="account-movement-row account-movement-row-third-party' + (selected ? ' is-selected' : '') + '" data-action="select-third-party-movement-record" data-record-id="' + esc(record.id) + '" tabindex="' + (selected ? '0' : '-1') + '" aria-selected="' + (selected ? 'true' : 'false') + '">' +
+      '<td><span class="third-party-type-tag">' + esc(record.typeLabel) + '</span><br><small>' + esc(record.auxiliaryCode) + '</small></td>' +
+      '<td><strong class="account-movement-label">' + esc(record.name) + '</strong><br><small>' + esc(record.code) + (record.active ? '' : ' · Archivé') + '</small></td>' +
+      '<td><strong>' + esc(record.generalAccountCode) + '</strong><br><small>' + esc(account ? account.label : 'Compte absent du référentiel') + '</small></td>' +
+      '<td>' + editButton + '</td>' +
+    '</tr>';
+  }
+
+  function renderThirdPartyMovementMonthRow(period, summary, selectedMonth) {
+    var row = summary.months.find(function (month) { return month.key === period.key; });
+    var selected = selectedMonth && selectedMonth.key === period.key;
+    var unavailable = !summary.available;
+    return '<tr class="account-movement-month-row' + (selected ? ' is-selected' : '') + '" data-action="select-third-party-movement-month" data-month-key="' + esc(period.key) + '" tabindex="' + (selected ? '0' : '-1') + '" aria-selected="' + (selected ? 'true' : 'false') + '">' +
+      '<td><span class="account-movement-month-name">' + esc(accountMovementMonthLabel(period)) + '</span>' + accountMovementPeriodStatus(period.status) + '</td>' +
+      '<td class="num">' + (unavailable ? '—' : esc(amount(row ? row.lines : 0))) + '</td>' +
+      '<td class="num">' + (unavailable ? '—' : esc(amount(row ? row.debit : 0))) + '</td>' +
+      '<td class="num">' + (unavailable ? '—' : esc(amount(row ? row.credit : 0))) + '</td>' +
+    '</tr>';
+  }
+
+  function viewThirdPartyMovements() {
+    var context = getThirdPartyMovementsContext();
+    var selected = context.selected;
+    var summary = context.summary;
+    var rows = context.visibleRecords.map(function (record) { return renderThirdPartyMovementRow(record, context); }).join('');
+    if (!rows) rows = '<tr><td colspan="4"><div class="empty-state account-movement-empty"><div class="empty-icon">⌕</div><strong>' +
+      esc(ui.thirdPartyMovements.q ? 'Aucun tiers ne correspond à cette recherche.' : 'Aucune fiche de cette catégorie n’est encore enregistrée.') +
+      '</strong>Créez ou gérez les fiches depuis les boutons ci-dessus.</div></td></tr>';
+    var monthRows = context.periods.map(function (period) { return renderThirdPartyMovementMonthRow(period, summary, context.selectedMonth); }).join('');
+    var totalRow = !selected
+      ? '<tr class="account-movement-total-row"><th colspan="4">Sélectionnez une fiche pour afficher le compte collectif.</th></tr>'
+      : (summary.available
+        ? '<tr class="account-movement-total-row"><th colspan="2">Compte collectif · ' + esc(amount(summary.totalLines)) + ' ligne(s)</th><td class="num">' + esc(amount(summary.debit)) + '</td><td class="num">' + esc(amount(summary.credit)) + '</td></tr>'
+        : '<tr class="account-movement-total-row"><th colspan="4">Synthèse du compte collectif indisponible</th></tr>');
+    var title = selected ? selected.typeLabel + ' · ' + selected.name : 'Aucune fiche sélectionnée';
+    var collectiveLabel = selected ? 'Compte collectif ' + selected.generalAccountCode : 'Compte collectif non sélectionné';
+    var detailDisabled = !selected || !summary.available;
+    var directoryTab = selected ? selected.definitionTab : 'suppliers';
+    var individualNote = '<div class="alert warning third-party-individual-note"><strong>Mouvements individuels non disponibles.</strong> Les pièces comptables ne contiennent pas encore l’identifiant de la fiche sélectionnée. Le tableau mensuel ci-contre présente uniquement les mouvements agrégés du compte général collectif ' +
+      (selected ? '<strong>' + esc(selected.generalAccountCode) + '</strong>, toutes fiches confondues' : 'du dossier') +
+      ' ; il ne constitue pas le solde de ce fournisseur, client, membre du personnel ou tiers divers.</div>';
+    return '<div class="account-movements-feature third-party-movements-feature">' +
+      '<div class="account-movements-title"><p class="page-kicker">SAISIE · TIERS DU DOSSIER</p><h4>Mouvements des comptes tiers</h4></div>' +
+      individualNote +
+      '<div class="third-party-create-actions"><button type="button" class="btn btn-ghost btn-sm" data-action="new-supplier">＋ Fournisseur</button><button type="button" class="btn btn-ghost btn-sm" data-action="new-client">＋ Client</button><button type="button" class="btn btn-ghost btn-sm" data-action="new-personnel">＋ Personnel</button><button type="button" class="btn btn-ghost btn-sm" data-action="new-other-party">＋ Débiteur / créditeur divers</button></div>' +
+      '<div class="account-movements-toolbar">' +
+        '<div class="field account-movements-search"><label for="third-party-movement-search">Rechercher un tiers</label><input id="third-party-movement-search" type="search" data-filter="thirdPartyMovements:q" value="' + esc(ui.thirdPartyMovements.q) + '" placeholder="Code, nom, compte collectif"></div>' +
+        '<div class="field account-movements-kind"><label for="third-party-movement-kind">Catégorie</label><select id="third-party-movement-kind" data-filter="thirdPartyMovements:kind"><option value="all"' + (ui.thirdPartyMovements.kind === 'all' ? ' selected' : '') + '>Tous les tiers</option><option value="supplier"' + (ui.thirdPartyMovements.kind === 'supplier' ? ' selected' : '') + '>Fournisseurs</option><option value="client"' + (ui.thirdPartyMovements.kind === 'client' ? ' selected' : '') + '>Clients</option><option value="personnel"' + (ui.thirdPartyMovements.kind === 'personnel' ? ' selected' : '') + '>Personnel</option><option value="debtor"' + (ui.thirdPartyMovements.kind === 'debtor' ? ' selected' : '') + '>Débiteurs divers</option><option value="creditor"' + (ui.thirdPartyMovements.kind === 'creditor' ? ' selected' : '') + '>Créditeurs divers</option></select></div>' +
+      '</div>' +
+      '<div class="account-movements-workspace third-party-movements-workspace">' +
+        '<section class="account-movements-pane" aria-labelledby="third-party-tree-title"><div class="account-movements-pane-head"><div><p class="page-kicker">FICHES AUXILIAIRES · ' + esc(context.dossier.reference || '') + '</p><h4 id="third-party-tree-title">Fournisseurs, clients, personnel et autres tiers</h4></div><span class="account-movement-count">' + esc(String(context.visibleRecords.length)) + ' fiche(s)</span></div>' +
+          '<div class="table-wrap account-movement-tree-wrap third-party-movement-tree-wrap"><table class="account-movement-table third-party-movement-table"><thead><tr><th>Type / code auxiliaire</th><th>Intitulé</th><th>Compte collectif</th><th>Fiche</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+        '</section>' +
+        '<section class="account-movements-pane" aria-labelledby="third-party-month-title"><div class="account-movements-pane-head"><div><p class="page-kicker">SYNTHÈSE MENSUELLE · EXERCICE ' + esc(String(S.exercise())) + '</p><small class="account-movement-cycle-range">Cycle du dossier · ' + esc(dateLabel(context.dossier.cycleStart)) + ' — ' + esc(dateLabel(context.dossier.cycleEnd)) + '</small><h4 id="third-party-month-title">' + esc(collectiveLabel) + '</h4><small class="account-movement-cycle-range">' + esc(title) + ' · données du collectif uniquement</small></div>' + (context.selectedMonth ? accountMovementPeriodStatus(context.selectedMonth.status) : '') + '</div>' +
+          '<div class="table-wrap account-movement-month-wrap"><table class="account-movement-table account-movement-month-table"><thead><tr><th>Mois</th><th class="num">Lignes</th><th class="num">Débit</th><th class="num">Crédit</th></tr></thead><tbody>' + monthRows + '</tbody><tfoot>' + totalRow + '</tfoot></table></div>' +
+          '<div class="account-movement-closing-summary"><span>Solde net du compte collectif</span><strong>' + esc(selected && summary.available ? accountMovementBalanceText(summary.closingBalance) : '—') + (selected && summary.available ? ' <small>XOF</small>' : '') + '</strong></div>' +
+          '<p class="small muted account-movement-draft-note">' + (summary.available && summary.totalDrafts ? esc(amount(summary.totalDrafts)) + ' pièce(s) en brouillon exclue(s). ' : '') + 'Les lignes restent agrégées au compte général ; aucun solde individuel n’est calculé.</p>' +
+        '</section>' +
+      '</div>' +
+      '<div class="account-movement-actions"><button type="button" class="btn btn-ghost" data-action="open-third-party-collective-month-detail"' + (detailDisabled ? ' disabled' : '') + '>Détail du mois · collectif…</button><button type="button" class="btn btn-ghost" data-action="open-third-party-collective-cycle-detail"' + (detailDisabled ? ' disabled' : '') + '>Détail de l’exercice · collectif…</button><a class="btn btn-ghost" href="' + esc(accountingMenuHash('definitions', directoryTab)) + '">Gérer le répertoire</a><a class="btn btn-primary" href="#/periods" title="La clôture reste rattachée aux périodes comptables">Clôture</a></div>' +
+      '<p class="small muted account-movement-period-note">La clôture s’effectue par période comptable. Les fiches tiers n’ont pas de statut de clôture individuel.</p>' +
+    '</div>';
+  }
+
+  function openThirdPartyCollectiveDetail(scope) {
+    var context = getThirdPartyMovementsContext();
+    var selected = context.selected;
+    if (!selected || !context.collectiveNode) {
+      toast('Sélectionnez une fiche tierce rattachée à un compte collectif.', 'warning');
+      return;
+    }
+    var month = context.selectedMonth;
+    var monthKey = scope === 'month' && month ? month.key : '';
+    var detail = AccountMovements.detailRows(context.collectiveNode, context.postedEntries, context.accounts, context.dossier.cycleStart, context.dossier.cycleEnd, monthKey);
+    var title = scope === 'month' ? 'Détail du mois — ' + accountMovementMonthLabel(month) : 'Détail de l’exercice — ' + String(S.exercise());
+    var subtitle = esc('Compte collectif ' + selected.generalAccountCode + ' · ' + selected.typeLabel + ' : ' + selected.name);
+    var warning = '<div class="alert warning"><strong>Détail agrégé du compte collectif.</strong> Ces lignes peuvent concerner plusieurs fiches. Elles ne sont pas attribuées individuellement à « ' + esc(selected.name) + ' ».</div>';
+    var body;
+    if (!detail.rows.length) {
+      body = warning + '<div class="empty-state"><div class="empty-icon">⌕</div><strong>Aucune ligne validée</strong>Aucun mouvement du compte collectif ne correspond à cette période.</div>';
+    } else {
+      var detailRowsHtml = detail.rows.map(function (row) {
+        return '<tr><td class="nowrap">' + esc(dateLabel(row.date)) + '</td><td><strong>' + esc(row.reference || '—') + '</strong></td><td>' + esc(row.journal || '—') + '</td><td>' + esc(row.account + ' · ' + row.accountLabel) + '</td><td>' + esc(row.description || '—') + '</td><td class="num">' + esc(amount(row.debit)) + '</td><td class="num">' + esc(amount(row.credit)) + '</td></tr>';
+      }).join('');
+      body = warning + '<p class="small muted">Pièces validées uniquement · ' + esc(String(detail.rows.length)) + ' ligne(s).</p>' +
+        '<div class="table-wrap account-movement-detail-wrap"><table class="account-movement-table account-movement-detail-table"><thead><tr><th>Date</th><th>Référence</th><th>Journal</th><th>Compte</th><th>Libellé</th><th class="num">Débit</th><th class="num">Crédit</th></tr></thead><tbody>' + detailRowsHtml + '</tbody><tfoot><tr><th colspan="5">Totaux du compte collectif</th><td class="num">' + esc(amount(detail.debit)) + '</td><td class="num">' + esc(amount(detail.credit)) + '</td></tr></tfoot></table></div>';
+    }
+    openModal(title, subtitle, body, '<button type="button" class="btn btn-primary" data-action="close-modal">Fermer</button>', true);
+  }
+
+  function analyticalCenterMatches(record, query) {
+    var needle = String(query || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+    if (!needle) return true;
+    return [record.code, record.name, record.description].join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase().indexOf(needle) !== -1;
+  }
+
+  function viewAnalyticalCenters() {
+    var records = S.analyticalCenters().slice().sort(function (a, b) { return String(a.code).localeCompare(String(b.code), 'fr'); });
+    var filter = ui.analyticalCenters;
+    var visible = records.filter(function (record) {
+      if (filter.status === 'active' && record.active === false) return false;
+      if (filter.status === 'archived' && record.active !== false) return false;
+      return analyticalCenterMatches(record, filter.q);
+    });
+    var rows = visible.map(function (record) {
+      var active = record.active !== false;
+      return '<tr><td><strong>' + esc(record.code) + '</strong></td><td><strong>' + esc(record.name) + '</strong>' + (record.description ? '<br><small>' + esc(record.description) + '</small>' : '') + '</td>' +
+        '<td><span class="analytic-center-status ' + (active ? 'is-active' : 'is-archived') + '">' + (active ? 'Actif' : 'Archivé') + '</span></td>' +
+        '<td><div class="supplier-row-actions"><button type="button" class="btn btn-ghost btn-sm" data-action="edit-analytical-center" data-id="' + esc(record.id) + '">Modifier</button><button type="button" class="btn btn-ghost btn-sm" data-action="archive-analytical-center" data-id="' + esc(record.id) + '">' + (active ? 'Archiver' : 'Réactiver') + '</button><button type="button" class="btn btn-ghost btn-sm btn-danger-quiet" data-action="delete-analytical-center" data-id="' + esc(record.id) + '">Supprimer</button></div></td></tr>';
+    }).join('');
+    var emptyMessage = records.length ? 'Aucun centre ne correspond à cette recherche et à ce filtre.' : 'Aucun centre analytique n’est encore créé pour ce dossier.';
+    var activeCount = records.filter(function (record) { return record.active !== false; }).length;
+    return '<div class="exchange-workspace analytical-center-workspace">' +
+      '<div class="alert info"><div><strong>Référentiel analytique seulement.</strong> Créez ici vos propres centres, réservés à l’analytique. Ils ne sont pas des comptes généraux et ne produisent aucune écriture. Les mouvements et états analytiques restent grisés/inactifs dans la comptabilité générale.</div></div>' +
+      '<div class="exchange-summary-grid supplier-summary-grid"><div><small>Centres actifs</small><strong>' + activeCount + '</strong></div><div><small>Centres archivés</small><strong>' + (records.length - activeCount) + '</strong></div><div><small>Résultats affichés</small><strong>' + visible.length + '</strong></div></div>' +
+      '<section class="exchange-card analytical-center-card"><div class="supplier-directory-head"><div><h4>Centres d’analyse</h4><p>Codes et libellés propres au dossier, sans lien avec les journaux ou le plan général.</p></div><button type="button" class="btn btn-primary" data-action="new-analytical-center">＋ Nouveau centre</button></div>' +
+        '<div class="supplier-filter-controls analytical-center-filter-controls"><label class="field"><span>Rechercher</span><input type="search" data-filter="analyticalCenters:q" value="' + esc(filter.q) + '" placeholder="Code, nom, description"></label><label class="field"><span>État</span><select data-filter="analyticalCenters:status"><option value="active"' + (filter.status === 'active' ? ' selected' : '') + '>Centres actifs</option><option value="archived"' + (filter.status === 'archived' ? ' selected' : '') + '>Centres archivés</option><option value="all"' + (filter.status === 'all' ? ' selected' : '') + '>Tous les centres</option></select></label></div>' +
+        (visible.length
+          ? '<div class="table-wrap exchange-table-wrap analytical-center-table-wrap"><table class="exchange-mapping-table analytical-center-table"><thead><tr><th>Code</th><th>Centre / description</th><th>État</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+          : '<div class="empty-state registry-empty"><span class="empty-state-icon">⌕</span><h3>Aucun résultat</h3><p>' + esc(emptyMessage) + '</p></div>') +
+      '</section><p class="exchange-footnote">Chaque centre est isolé dans le dossier actif et inclus dans sa sauvegarde locale. Aucune affectation analytique n’est encore comptabilisée.</p>' +
+    '</div>';
+  }
+
+  function openAnalyticalCenterModal(id) {
+    var existing = id ? S.analyticalCenter(id) : null;
+    if (id && !existing) { toast('Centre analytique introuvable dans le dossier actif.', 'error'); return; }
+    var mode = existing ? 'edit' : 'create';
+    var code = existing ? existing.code : S.nextAnalyticalCenterCode();
+    var value = function (key) { return esc(existing && existing[key] != null ? existing[key] : (key === 'code' ? code : '')); };
+    var body = '<form id="analytical-center-form" novalidate><div id="analytical-center-errors" aria-live="assertive"></div>' +
+      '<div class="form-grid analytical-center-form-grid"><div class="field"><label for="analytical-center-code">Code du centre <span aria-hidden="true">*</span></label><input id="analytical-center-code" name="code" type="text" maxlength="32" value="' + value('code') + '" required autocomplete="off"><span class="hint">Proposition ANA automatique ou code libre. Les codes déjà attribués ne seront pas réutilisés.</span></div>' +
+      '<div class="field"><label for="analytical-center-name">Nom du centre <span aria-hidden="true">*</span></label><input id="analytical-center-name" name="name" type="text" maxlength="150" value="' + value('name') + '" required></div>' +
+      '<div class="field analytical-center-description-field"><label for="analytical-center-description">Description / périmètre analytique</label><textarea id="analytical-center-description" name="description" rows="4" maxlength="500">' + value('description') + '</textarea></div></div>' +
+      '<p class="small muted">Ce centre est réservé à la comptabilité analytique. Il n’est jamais un compte général et ne peut pas produire d’écriture générale.</p></form>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="submit" class="btn btn-primary" form="analytical-center-form" data-action="save-analytical-center" data-analytical-center-mode="' + mode + '">' + (existing ? 'Enregistrer les modifications' : 'Créer le centre') + '</button>';
+    openModal(existing ? 'Modifier le centre analytique' : 'Nouveau centre analytique', 'Référentiel réservé à l’analytique · dossier ' + esc(S.currentDossier().reference), body, footer, true);
+    var form = $('#analytical-center-form');
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var permissionAction = mode === 'edit' ? 'analyticalCenters.edit' : 'analyticalCenters.create';
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', permissionAction, accountingAccessContext())) {
+        toast('Action refusée par défaut : le droit « ' + permissionAction + ' » n’est pas accordé.', 'warning');
+        return;
+      }
+      var input = { code: $('#analytical-center-code').value, name: $('#analytical-center-name').value, description: $('#analytical-center-description').value };
+      var result = existing ? S.updateAnalyticalCenter(existing.id, input) : S.createAnalyticalCenter(input);
+      if (!result.ok) {
+        $('#analytical-center-errors').innerHTML = '<div class="alert error" role="alert"><ul style="margin:0 0 0 18px">' + result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
+        return;
+      }
+      toast(existing ? 'Centre analytique mis à jour.' : 'Centre analytique ' + result.analyticalCenter.code + ' créé.', 'success');
+      closeModal(true);
+      render();
+    });
+  }
+
   function viewAccountingMenu(params) {
     params = params || {};
     var phone = isPhoneViewport();
     var group = AccountingNavigation.getGroup(phone ? 'editions' : params.g);
     var tab = AccountingNavigation.getTab(group.id, params.t || group.defaultTab);
+    var selectedChild = (tab.children || []).find(function (child) { return child.id === params.c; }) || null;
     var isSelected = function (item) { return item.id === tab.id; };
     var context = S.currentDossier();
     var reportNote = group.id === 'editions'
@@ -6559,23 +6825,31 @@
     var isCashOperationsSubmenu = group.id === 'saisie' && tab.id === 'live-cash';
     var isAccountMovementsSubmenu = group.id === 'saisie' && tab.id === 'account-movements';
     var actions = isJournalEntrySubmenu ? '' : (tab.actions || []).map(function (action) { return menuActionLink(action, tab.status); }).join('');
-    var childList = menuChildList(tab.children, tab.reason);
+    var childList = menuChildList(tab.children, tab.reason, group.id, tab.id, selectedChild && selectedChild.id);
     var phoneContext = phone
       ? '<span class="menu-phone-label">CONSULTATION TÉLÉPHONE · LECTURE SEULE</span>'
       : '';
     var irreversible = tab.irreversible
       ? '<div class="alert warning menu-irreversible-note"><strong>Attention : opération irréversible.</strong> Une copie complète du dossier devra être exportée et confirmée avant toute activation de cette fonction.</div>'
       : '';
-    var details = !isJournalEntrySubmenu && !isCashOperationsSubmenu && !isAccountMovementsSubmenu && tab.reason
-      ? '<p class="menu-item-reason">' + esc(tab.reason) + '</p>'
-      : '';
+    var details = selectedChild && selectedChild.reason
+      ? '<p class="menu-item-reason">' + esc(selectedChild.reason) + '</p>'
+      : (!isJournalEntrySubmenu && !isCashOperationsSubmenu && !isAccountMovementsSubmenu && tab.reason
+        ? '<p class="menu-item-reason">' + esc(tab.reason) + '</p>'
+        : '');
     var exchangeFeature = '';
     if (isJournalEntrySubmenu) {
       exchangeFeature = viewEntryJournalSelector();
     } else if (group.id === 'saisie' && tab.id === 'live-cash') {
       exchangeFeature = viewAccountingCashOperations();
-    } else if (group.id === 'saisie' && tab.id === 'account-movements') {
+    } else if (isAccountMovementsSubmenu && selectedChild && selectedChild.id === 'general-movements') {
       exchangeFeature = viewGeneralAccountMovements();
+    } else if (isAccountMovementsSubmenu && selectedChild && selectedChild.id === 'third-party-movements') {
+      exchangeFeature = viewThirdPartyMovements();
+    } else if (isAccountMovementsSubmenu && selectedChild && selectedChild.id === 'analytic-movements') {
+      exchangeFeature = '<div class="alert info analytic-disabled-note"><strong>Comptabilité analytique — inactive.</strong> Cet élément reste grisé dans le menu : il ne crée ni mouvement, ni imputation, ni écriture générale. Les centres analytiques sont gérés séparément dans Définitions.</div>';
+    } else if (group.id === 'definitions' && tab.id === 'responsibility-centers') {
+      exchangeFeature = viewAnalyticalCenters();
     } else if (group.id === 'definitions' && tab.id === 'journals') {
       exchangeFeature = viewJournals();
     } else if (group.id === 'definitions' && tab.id === 'suppliers') {
@@ -6621,7 +6895,7 @@
         '<div class="accounting-menu-detail">' +
           statusLegend +
           '<section class="accounting-menu-panel" id="accounting-menu-tabpanel" role="tabpanel" aria-labelledby="accounting-tab-' + esc(tab.id) + '">' +
-            '<div class="accounting-menu-panel-head"><div><p class="page-kicker">SOUS-MENU</p><h3>' + esc(tab.label) + '</h3></div>' + menuStatusBadge(tab.status) + '</div>' +
+            '<div class="accounting-menu-panel-head"><div><p class="page-kicker">' + (selectedChild ? 'ÉLÉMENT DU SOUS-MENU' : 'SOUS-MENU') + '</p><h3>' + esc(selectedChild ? selectedChild.label : tab.label) + '</h3></div>' + menuStatusBadge(selectedChild ? selectedChild.status : tab.status) + '</div>' +
             details + irreversible +
             (childList ? '<div class="menu-children-wrap"><h4>Éléments de ce sous-menu</h4>' + childList + '</div>' : '') +
             exchangeFeature +
@@ -6929,7 +7203,7 @@
         selectEntryJournal(target.getAttribute('data-id'));
         return;
       }
-      if (target && target.matches('[data-action="select-account-movement-node"], [data-action="select-account-movement-month"]')) {
+      if (target && target.matches('[data-action="select-account-movement-node"], [data-action="select-account-movement-month"], [data-action="select-third-party-movement-record"], [data-action="select-third-party-movement-month"]')) {
         event.preventDefault();
         target.click();
         return;
@@ -7055,6 +7329,25 @@
         if (movementMonthRow) movementMonthRow.focus();
         break;
       }
+      case 'select-third-party-movement-record': {
+        ui.thirdPartyMovements.recordId = trigger.getAttribute('data-record-id') || '';
+        var selectedThirdPartyId = ui.thirdPartyMovements.recordId;
+        render();
+        var selectedThirdPartyRow = $$('[data-action="select-third-party-movement-record"]').find(function (row) { return row.getAttribute('data-record-id') === selectedThirdPartyId; });
+        if (selectedThirdPartyRow) selectedThirdPartyRow.focus();
+        break;
+      }
+      case 'select-third-party-movement-month': {
+        ui.thirdPartyMovements.month = trigger.getAttribute('data-month-key') || '';
+        render();
+        break;
+      }
+      case 'open-third-party-collective-month-detail':
+        openThirdPartyCollectiveDetail('month');
+        break;
+      case 'open-third-party-collective-cycle-detail':
+        openThirdPartyCollectiveDetail('cycle');
+        break;
       case 'open-account-movement-month-detail':
         openAccountMovementDetail('month');
         break;
@@ -7275,6 +7568,44 @@
         var personnelDeletion = S.deletePersonnel(id);
         if (!personnelDeletion.ok) { toast(personnelDeletion.errors.join(' ') || 'Suppression impossible.', 'warning'); break; }
         toast('Fiche du personnel supprimée. Son code ne sera pas réattribué.', 'success');
+        render();
+        break;
+      }
+      case 'new-analytical-center':
+        openAnalyticalCenterModal();
+        break;
+      case 'edit-analytical-center':
+        if (id) openAnalyticalCenterModal(id);
+        break;
+      case 'archive-analytical-center': {
+        if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalCenters.archive', accountingAccessContext())) {
+          toast('Archivage refusé par défaut : le droit « analyticalCenters.archive » n’est pas accordé.', 'warning');
+          break;
+        }
+        var centerToArchive = S.analyticalCenter(id);
+        if (!centerToArchive) { toast('Centre analytique introuvable.', 'error'); break; }
+        var reactivateCenter = centerToArchive.active === false;
+        var centerConfirmation = reactivateCenter
+          ? 'Réactiver le centre analytique « ' + centerToArchive.name + ' » ?'
+          : 'Archiver le centre analytique « ' + centerToArchive.name + ' » ? Il restera réservé au référentiel analytique.';
+        if (!window.confirm(centerConfirmation)) break;
+        var centerState = S.setAnalyticalCenterActive(id, reactivateCenter);
+        if (!centerState.ok) { toast(centerState.errors.join(' ') || 'Changement d’état impossible.', 'error'); break; }
+        toast(reactivateCenter ? 'Centre analytique réactivé.' : 'Centre analytique archivé.', 'success');
+        render();
+        break;
+      }
+      case 'delete-analytical-center': {
+        if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalCenters.delete', accountingAccessContext())) {
+          toast('Suppression refusée par défaut : le droit « analyticalCenters.delete » n’est pas accordé.', 'warning');
+          break;
+        }
+        var centerToDelete = S.analyticalCenter(id);
+        if (!centerToDelete) { toast('Centre analytique introuvable.', 'error'); break; }
+        if (!window.confirm('Supprimer définitivement le centre analytique « ' + centerToDelete.name + ' » ? Aucun mouvement comptable général ne sera modifié.')) break;
+        var centerDeletion = S.deleteAnalyticalCenter(id);
+        if (!centerDeletion.ok) { toast(centerDeletion.errors.join(' ') || 'Suppression impossible.', 'warning'); break; }
+        toast('Centre analytique supprimé. Son code ne sera pas réattribué.', 'success');
         render();
         break;
       }

@@ -168,6 +168,10 @@ test('les actions disponibles sont décrites par module', () => {
   assert(actions.includes('personnel.create'));
   assert(actions.includes('personnel.edit'));
   assert(actions.includes('personnel.delete'));
+  assert(actions.includes('analyticalCenters.create'));
+  assert(actions.includes('analyticalCenters.edit'));
+  assert(actions.includes('analyticalCenters.archive'));
+  assert(actions.includes('analyticalCenters.delete'));
   assert(actions.includes('fixedAssets.create'));
   assert(actions.includes('fixedAssets.edit'));
   assert(actions.includes('fixedAssets.delete'));
@@ -332,6 +336,23 @@ test('les droits des immobilisations sont distincts et limités au dossier', () 
   assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'fixedAssets.edit', context), true);
   assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'fixedAssets.delete', context), false);
   assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'fixedAssets.delete', { ...context, dossierId: 'dossier-2' }), false);
+});
+
+test('les droits des centres analytiques sont distincts et limités au dossier', () => {
+  const member = {
+    role: 'manager', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view', 'analyticalCenters.create', 'analyticalCenters.edit'] }] }
+  };
+  const context = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'analyticalCenters.create', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'analyticalCenters.edit', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'analyticalCenters.archive', context), false);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'analyticalCenters.delete', context), false);
+  member.grants.accounting[0].actions.push('analyticalCenters.archive', 'analyticalCenters.delete');
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'analyticalCenters.archive', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'analyticalCenters.delete', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'analyticalCenters.create', { ...context, dossierId: 'dossier-2' }), false);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'analyticalCenters.delete', { ...context, dossierId: 'dossier-2' }), false);
 });
 
 console.log('Politique d’accès : scénarios réussis.');

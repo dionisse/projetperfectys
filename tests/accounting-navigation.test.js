@@ -2,7 +2,13 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const nav = require('../modern-proto/js/accounting-navigation.js');
+const appSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'app.js'), 'utf8');
+const menuRendererStart = appSource.indexOf('function viewAccountingMenu(params) {');
+const menuRendererEnd = appSource.indexOf('function bindEntryJournalSelector()', menuRendererStart);
+const menuRenderer = appSource.slice(menuRendererStart, menuRendererEnd);
 
 const groups = nav.all();
 assert.deepEqual(groups.map(group => group.id), [
@@ -39,7 +45,10 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Natures des flux de trésorerie',
   'Saisie dans les journaux',
   'Opérations de caisse en temps réel',
+  'Mouvements des comptes généraux, tiers et analytiques',
   'Comptes généraux et auxiliaires',
+  'Comptes tiers',
+  'Centres d’analyse (analytique)',
   'Reports à nouveau',
   'Journaux',
   'Comptes en devises',
@@ -90,8 +99,17 @@ assert.ok(accountMovementsTab.reason.includes('identifiant'));
 assert.equal(accountMovementsTab.children[0].label, 'Comptes généraux et auxiliaires');
 assert.equal(accountMovementsTab.children[0].status, 'partial');
 assert.ok(accountMovementsTab.children[0].reason.includes('mouvements individuels'));
-assert.equal(accountMovementsTab.children[1].status, 'planned');
+assert.equal(accountMovementsTab.children[1].id, 'third-party-movements');
+assert.equal(accountMovementsTab.children[1].label, 'Comptes tiers');
+assert.equal(accountMovementsTab.children[1].status, 'partial');
+assert.ok(accountMovementsTab.children[1].reason.includes('agrégé'));
+assert.equal(accountMovementsTab.children[2].id, 'analytic-movements');
 assert.equal(accountMovementsTab.children[2].status, 'inactive');
+assert.ok(accountMovementsTab.reason.includes('grisée'));
+const analyticalCenters = findTab('definitions', 'responsibility-centers');
+assert.equal(analyticalCenters.status, 'partial');
+assert.ok(analyticalCenters.reason.includes('réservés à la comptabilité analytique'));
+assert.ok(analyticalCenters.reason.includes('inactifs'));
 assert.equal(findTab('fichier', 'export-other').status, 'partial');
 assert.equal(findTab('fichier', 'import-other').status, 'partial');
 assert.equal(findTab('fichier', 'import-balance').status, 'partial');
@@ -121,7 +139,7 @@ assert.ok(findTab('fichier', 'consolidate-after-result').reason.includes('ne son
 assert.equal(findTab('editions', 'journals').status, 'active');
 assert.equal(findTab('editions', 'general-accounts').status, 'active');
 assert.equal(findTab('editions', 'analytic-statements').status, 'inactive');
-assert.equal(findTab('definitions', 'responsibility-centers').status, 'inactive');
+assert.equal(findTab('definitions', 'responsibility-centers').status, 'partial');
 assert.equal(findTab('outils', 'calculator').status, 'inactive');
 assert.equal(findTab('outils', 'screenshot').status, 'inactive');
 assert.equal(findTab('fin-exercice', 'period-close').status, 'partial');
@@ -130,4 +148,19 @@ assert.equal(findTab('fin-exercice', 'definitive-close').irreversible, true);
 assert.equal(findTab('fin-exercice', 'definitive-close').status, 'planned');
 assert.deepEqual(findTab('editions', 'general-accounts').actions.map(action => action.route), ['balance', 'ledger']);
 
-console.log('Navigation comptable : 8 menus, hiérarchie, périmètre et états inactifs — OK');
+assert.match(appSource, /function accountingMenuHash\(groupId, tabId, childId\)[\s\S]*return childId \? hash \+ '&c='/,
+  'le lien d’un enfant conserve son identifiant dans la route');
+assert.match(appSource, /var selectedChild = \(tab\.children \|\| \[\]\)\.find\(function \(child\) \{ return child\.id === params\.c; \}\) \|\| null;/,
+  'la plateforme attend la sélection explicite d’un enfant');
+assert.match(appSource, /isAccountMovementsSubmenu && selectedChild && selectedChild\.id === 'general-movements'[\s\S]*viewGeneralAccountMovements\(\)/,
+  'la plateforme générale ne s’affiche que pour son enfant');
+assert.match(appSource, /isAccountMovementsSubmenu && selectedChild && selectedChild\.id === 'third-party-movements'[\s\S]*viewThirdPartyMovements\(\)/,
+  'la plateforme des tiers ne s’affiche que pour son enfant');
+assert.match(appSource, /isAccountMovementsSubmenu && selectedChild && selectedChild\.id === 'analytic-movements'[\s\S]*analytic-disabled-note/,
+  'l’enfant analytique ne produit qu’un avis inactif');
+assert.equal((menuRenderer.match(/viewGeneralAccountMovements\(\)/g) || []).length, 1,
+  'une seule référence à la plateforme générale existe et elle est gardée par la sélection de l’enfant');
+assert.equal((menuRenderer.match(/viewThirdPartyMovements\(\)/g) || []).length, 1,
+  'une seule référence à la plateforme des tiers existe et elle est gardée par la sélection de l’enfant');
+
+console.log('Navigation comptable : 8 menus, hiérarchie, sélection des enfants, périmètre et états inactifs — OK');

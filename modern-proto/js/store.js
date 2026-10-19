@@ -49,6 +49,7 @@
   var PERSONNEL_REGISTRY_VERSION = 1;
   var FIXED_ASSET_LOCATION_REGISTRY_VERSION = 1;
   var FIXED_ASSET_REGISTRY_VERSION = 1;
+  var ANALYTICAL_CENTER_REGISTRY_VERSION = 1;
   var LEGACY_COMPTES = [
     { code: '101200', label: 'Capital social', cls: 1, nature: 'Passif', aux: false },
     { code: '162100', label: 'Emprunt bancaire', cls: 1, nature: 'Passif', aux: false },
@@ -221,6 +222,20 @@
     return history;
   }
 
+  function normalizeAnalyticalCenterCode(value) {
+    return String(value == null ? '' : value).trim().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').toLocaleUpperCase();
+  }
+
+  function normalizeAnalyticalCenterCodeHistory(values) {
+    var history = [];
+    (Array.isArray(values) ? values : []).forEach(function (value) {
+      var code = normalizeAnalyticalCenterCode(value);
+      if (code && history.indexOf(code) === -1) history.push(code);
+    });
+    return history;
+  }
+
   function upgradeAuxiliaryRegistries(data) {
     var result = { data: data, changed: false };
     if (!data) return result;
@@ -229,6 +244,18 @@
     var otherParties = Array.isArray(data.otherParties) ? data.otherParties : [];
     var personnel = Array.isArray(data.personnel) ? data.personnel : [];
     var serviceSource = Array.isArray(data.services) ? data.services : [];
+    var analyticalCenterSource = Array.isArray(data.analyticalCenters) ? data.analyticalCenters : [];
+    var analyticalCenters = analyticalCenterSource.filter(function (record) { return record && typeof record === 'object' && !Array.isArray(record); })
+      .map(function (record) {
+        var code = normalizeAnalyticalCenterCode(record.code);
+        return Object.assign({}, record, {
+          id: String(record.id || 'analytical-center-legacy-' + code),
+          code: code,
+          name: String(record.name == null ? record.label || '' : record.name).trim(),
+          description: String(record.description || '').trim(),
+          active: record.active !== false
+        });
+      }).filter(function (record) { return !!record.code && !!record.name; });
     var services = serviceSource.filter(function (record) { return record && typeof record === 'object' && !Array.isArray(record); })
       .map(function (record) {
         var code = normalizeServiceCode(record.code);
@@ -249,6 +276,16 @@
       var match = /^PRE-(\d+)$/.exec(code);
       if (match) serviceSequence = Math.max(serviceSequence, Number(match[1]) + 1);
     });
+    var analyticalCenterCodeHistory = normalizeAnalyticalCenterCodeHistory(
+      (Array.isArray(data.analyticalCenterCodeHistory) ? data.analyticalCenterCodeHistory : []).concat(analyticalCenters.map(function (record) { return record.code; }))
+    );
+    var analyticalCenterSequence = Number(data.analyticalCenterSequence);
+    if (!Number.isInteger(analyticalCenterSequence) || analyticalCenterSequence < 1) analyticalCenterSequence = 1;
+    analyticalCenterCodeHistory.forEach(function (code) {
+      var centerMatch = /^ANA-(\d+)$/.exec(code);
+      if (centerMatch) analyticalCenterSequence = Math.max(analyticalCenterSequence, Number(centerMatch[1]) + 1);
+    });
+    var currentAnalyticalCenterVersion = Number(data.analyticalCenterRegistryVersion);
     var currentServiceVersion = Number(data.serviceRegistryVersion);
     var histories = {
       supplier: normalizeIdentificationHistory('supplier',
@@ -281,6 +318,10 @@
     var currentOtherPartyVersion = Number(data.otherPartyRegistryVersion);
     var currentPersonnelVersion = Number(data.personnelRegistryVersion);
     var changed = !Array.isArray(data.suppliers) || !Number.isFinite(currentVersion) || currentVersion < SUPPLIER_REGISTRY_VERSION ||
+      !Array.isArray(data.analyticalCenters) || !Number.isFinite(currentAnalyticalCenterVersion) || currentAnalyticalCenterVersion < ANALYTICAL_CENTER_REGISTRY_VERSION ||
+      JSON.stringify(data.analyticalCenters || []) !== JSON.stringify(analyticalCenters) ||
+      JSON.stringify(data.analyticalCenterCodeHistory || []) !== JSON.stringify(analyticalCenterCodeHistory) ||
+      Number(data.analyticalCenterSequence) !== analyticalCenterSequence ||
       !Array.isArray(data.clients) || !Number.isFinite(currentClientVersion) || currentClientVersion < CLIENT_REGISTRY_VERSION ||
       !Array.isArray(data.otherParties) || !Number.isFinite(currentOtherPartyVersion) || currentOtherPartyVersion < OTHER_PARTY_REGISTRY_VERSION ||
       !Array.isArray(data.personnel) || !Number.isFinite(currentPersonnelVersion) || currentPersonnelVersion < PERSONNEL_REGISTRY_VERSION ||
@@ -298,6 +339,10 @@
       result.data = Object.assign({}, data, {
         supplierRegistryVersion: SUPPLIER_REGISTRY_VERSION,
         clientRegistryVersion: Math.max(Number.isFinite(currentClientVersion) ? currentClientVersion : 0, CLIENT_REGISTRY_VERSION),
+        analyticalCenterRegistryVersion: ANALYTICAL_CENTER_REGISTRY_VERSION,
+        analyticalCenters: analyticalCenters,
+        analyticalCenterCodeHistory: analyticalCenterCodeHistory,
+        analyticalCenterSequence: analyticalCenterSequence,
         serviceRegistryVersion: SERVICE_REGISTRY_VERSION,
         services: services,
         serviceCodeHistory: serviceCodeHistory,
@@ -735,6 +780,10 @@
       fixedAssets: [],
       fixedAssetCodeHistory: [],
       fixedAssetSequence: 1,
+      analyticalCenterRegistryVersion: ANALYTICAL_CENTER_REGISTRY_VERSION,
+      analyticalCenters: [],
+      analyticalCenterCodeHistory: [],
+      analyticalCenterSequence: 1,
       suppliers: [],
       clients: [],
       otherParties: [],
@@ -1623,6 +1672,156 @@
       return { ok: false, errors: ['Suppression impossible : stockage local indisponible ou plein. La prestation est conservée.'] };
     }
     return { ok: true, errors: [], service: clone(record) };
+  }
+
+  function analyticalCenters() {
+    var st = load();
+    return Array.isArray(st.analyticalCenters) ? st.analyticalCenters : [];
+  }
+
+  function analyticalCenter(idOrCode) {
+    var key = String(idOrCode == null ? '' : idOrCode);
+    var code = normalizeAnalyticalCenterCode(key);
+    return analyticalCenters().find(function (record) { return record.id === key || record.code === code; }) || null;
+  }
+
+  function nextAnalyticalCenterCode() {
+    var st = load();
+    if (recoveryIssue) return '';
+    var reserved = Object.create(null);
+    (Array.isArray(st.analyticalCenterCodeHistory) ? st.analyticalCenterCodeHistory : []).forEach(function (code) {
+      reserved[normalizeAnalyticalCenterCode(code)] = true;
+    });
+    analyticalCenters().forEach(function (record) { reserved[normalizeAnalyticalCenterCode(record.code)] = true; });
+    var sequence = Number(st.analyticalCenterSequence) || 1;
+    var candidate;
+    do {
+      candidate = 'ANA-' + String(sequence).padStart(4, '0');
+      sequence += 1;
+    } while (reserved[candidate]);
+    return candidate;
+  }
+
+  function reserveAnalyticalCenterCode(st, code) {
+    if (!Array.isArray(st.analyticalCenterCodeHistory)) st.analyticalCenterCodeHistory = [];
+    if (!Number.isInteger(Number(st.analyticalCenterSequence)) || Number(st.analyticalCenterSequence) < 1) st.analyticalCenterSequence = 1;
+    var normalized = normalizeAnalyticalCenterCode(code);
+    if (normalized && st.analyticalCenterCodeHistory.indexOf(normalized) === -1) st.analyticalCenterCodeHistory.push(normalized);
+    var match = /^ANA-(\d+)$/.exec(normalized);
+    if (match) st.analyticalCenterSequence = Math.max(Number(st.analyticalCenterSequence) || 1, Number(match[1]) + 1);
+  }
+
+  function validateAnalyticalCenterInput(input, excludeId) {
+    input = input || {};
+    var code = normalizeAnalyticalCenterCode(input.code);
+    var name = String(input.name == null ? '' : input.name).trim();
+    var description = String(input.description == null ? '' : input.description).trim();
+    var current = excludeId ? analyticalCenter(excludeId) : null;
+    var errors = [];
+    if (!code) errors.push('Le code du centre analytique est obligatoire.');
+    else if (!/^[A-Z0-9][A-Z0-9._/-]{0,31}$/.test(code)) errors.push('Le code doit contenir au plus 32 caractères : lettres, chiffres, point, tiret, barre oblique ou souligné.');
+    if (!name) errors.push('Le nom du centre analytique est obligatoire.');
+    else if (name.length > 150) errors.push('Le nom ne peut pas dépasser 150 caractères.');
+    if (description.length > 500) errors.push('La description ne peut pas dépasser 500 caractères.');
+    if (analyticalCenters().some(function (record) { return record.id !== excludeId && normalizeAnalyticalCenterCode(record.code) === code; })) {
+      errors.push('Ce code de centre analytique existe déjà dans le dossier.');
+    }
+    var st = load();
+    if (Array.isArray(st.analyticalCenterCodeHistory) && st.analyticalCenterCodeHistory.indexOf(code) !== -1 && code !== normalizeAnalyticalCenterCode(current && current.code)) {
+      errors.push('Ce code de centre analytique a déjà été attribué dans ce dossier et ne peut pas être réutilisé.');
+    }
+    return { ok: errors.length === 0, errors: errors, value: { code: code, name: name, description: description } };
+  }
+
+  function createAnalyticalCenter(input) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Création bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    input = Object.assign({}, input || {});
+    if (!String(input.code || '').trim()) input.code = nextAnalyticalCenterCode();
+    var validation = validateAnalyticalCenterInput(input);
+    if (!validation.ok) return validation;
+    var previousState = clone(st);
+    var id;
+    do { id = 'analytic-center-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7); }
+    while (analyticalCenters().some(function (record) { return record.id === id; }));
+    var timestamp = new Date().toISOString();
+    var record = Object.assign({ id: id, active: true, createdAt: timestamp, updatedAt: timestamp }, validation.value);
+    st.analyticalCenters.push(record);
+    reserveAnalyticalCenterCode(st, record.code);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer le centre analytique dans le dossier actif.'] };
+    }
+    return { ok: true, errors: [], analyticalCenter: clone(record) };
+  }
+
+  function analyticalCenterReferenceCount(idOrRecord, st) {
+    st = st || load();
+    var record = idOrRecord && typeof idOrRecord === 'object' ? idOrRecord : analyticalCenter(idOrRecord);
+    if (!record) return 0;
+    return registryRecordReferenceCount(st, record, 'analyticalCenter|analytical_center|analyticCenter|analytic_center|analysisCenter|analysis_center');
+  }
+
+  function updateAnalyticalCenter(id, input) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Modification bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var index = st.analyticalCenters.findIndex(function (record) { return record.id === id; });
+    if (index < 0) return { ok: false, errors: ['Centre analytique introuvable dans le dossier actif.'] };
+    var previous = st.analyticalCenters[index];
+    var validation = validateAnalyticalCenterInput(input, id);
+    if (!validation.ok) return validation;
+    var references = analyticalCenterReferenceCount(previous, st);
+    if (references && validation.value.code !== normalizeAnalyticalCenterCode(previous.code)) {
+      return { ok: false, errors: ['Le code ne peut pas être modifié : ' + references + ' mouvement(s) analytique(s) y font référence.'] };
+    }
+    var previousState = clone(st);
+    var updated = Object.assign({}, previous, validation.value, {
+      id: previous.id,
+      active: previous.active !== false,
+      createdAt: previous.createdAt,
+      updatedAt: new Date().toISOString()
+    });
+    st.analyticalCenters[index] = updated;
+    reserveAnalyticalCenterCode(st, previous.code);
+    reserveAnalyticalCenterCode(st, updated.code);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer les modifications du centre analytique.'] };
+    }
+    return { ok: true, errors: [], analyticalCenter: clone(updated) };
+  }
+
+  function setAnalyticalCenterActive(id, active) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Modification bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var record = analyticalCenters().find(function (item) { return item.id === id; });
+    if (!record) return { ok: false, errors: ['Centre analytique introuvable dans le dossier actif.'] };
+    var previousState = clone(st);
+    record.active = active === true;
+    record.updatedAt = new Date().toISOString();
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer le changement d’état du centre analytique.'] };
+    }
+    return { ok: true, errors: [], analyticalCenter: clone(record) };
+  }
+
+  function deleteAnalyticalCenter(id) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Suppression bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var records = st.analyticalCenters || [];
+    var index = records.findIndex(function (record) { return record.id === id; });
+    if (index < 0) return { ok: false, errors: ['Centre analytique introuvable dans le dossier actif.'] };
+    var record = records[index];
+    var references = analyticalCenterReferenceCount(record, st);
+    if (references) return { ok: false, errors: ['Suppression refusée : ' + references + ' mouvement(s) analytique(s) référencent ce centre. Archivez-le pour conserver le référentiel.'] };
+    var previousState = clone(st);
+    records.splice(index, 1);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Suppression impossible : stockage local indisponible ou plein. Le centre analytique est conservé.'] };
+    }
+    return { ok: true, errors: [], analyticalCenter: clone(record) };
   }
 
   function suppliers() {
@@ -3921,6 +4120,13 @@
     personnelRecord: personnelRecord,
     services: services,
     service: service,
+    analyticalCenters: analyticalCenters,
+    analyticalCenter: analyticalCenter,
+    nextAnalyticalCenterCode: nextAnalyticalCenterCode,
+    createAnalyticalCenter: createAnalyticalCenter,
+    updateAnalyticalCenter: updateAnalyticalCenter,
+    setAnalyticalCenterActive: setAnalyticalCenterActive,
+    deleteAnalyticalCenter: deleteAnalyticalCenter,
     nextServiceCode: nextServiceCode,
     createService: createService,
     updateService: updateService,
