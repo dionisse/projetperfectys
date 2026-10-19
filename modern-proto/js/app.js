@@ -17,6 +17,7 @@
   var SalesOperations = window.PerfectoSalesOperations;
   var SalesCentralization = window.PerfectoSalesCentralization;
   var CentralizationCancellation = window.PerfectoCentralizationCancellation;
+  var FixedAssetDepreciation = window.PerfectoFixedAssetDepreciation;
 
   /* ------------------------------ Utilitaires ------------------------------ */
   function esc(value) {
@@ -307,6 +308,8 @@
           moduleId: 'accounting',
           actionId: trigger && trigger.getAttribute('data-fixed-asset-location-mode') === 'edit' ? 'fixedAssetLocations.edit' : 'fixedAssetLocations.create'
         };
+      case 'preview-fixed-asset-depreciation':
+        return { moduleId: 'accounting', actionId: 'module.view' };
       case 'new-fixed-asset':
         return { moduleId: 'accounting', actionId: 'fixedAssets.create' };
       case 'edit-fixed-asset':
@@ -5446,17 +5449,76 @@
     ].map(function (option) { return '<option value="' + option[0] + '"' + (filter.assetType === option[0] ? ' selected' : '') + '>' + option[1] + '</option>'; }).join('');
     var emptyMessage = records.length ? 'Aucun élément ne correspond aux filtres.' : 'Aucun élément immobilisé n’est enregistré dans ce dossier. Utilisez « Nouvel élément » pour créer une fiche.';
     return '<div class="exchange-workspace fixed-asset-workspace" id="fixed-asset-workspace">' +
-      '<div class="alert info"><div><strong>Registre local des immobilisations du dossier actif.</strong> Les fiches distinguent l’identification opérationnelle, les comptes, les dates et les paramètres d’amortissement. Les montants sont enregistrés en XOF ; aucune dotation, valeur nette comptable, cession ou écriture n’est calculée ou comptabilisée dans ce sous-menu.</div></div>' +
+      '<div class="alert info"><div><strong>Registre local des immobilisations du dossier actif.</strong> Les fiches distinguent l’identification opérationnelle, les comptes, les dates et les paramètres d’amortissement. Le bouton « Prévisualiser le linéaire » fournit un aperçu explicitement hypothétique, non arrondi et non comptabilisant ; il ne crée ni valeur nette comptable officielle ni écriture.</div></div>' +
       '<div class="exchange-summary-grid fixed-asset-summary-grid" aria-label="Résumé des immobilisations"><div><small>En service</small><strong>' + activeCount + '</strong></div><div><small>En cours</small><strong>' + constructionCount + '</strong></div><div><small>Coût d’acquisition renseigné</small><strong>' + esc(S.money(grossTotal)) + '</strong></div></div>' +
       '<section class="exchange-card fixed-asset-directory-card">' +
-        '<div class="supplier-directory-head"><div><h4>Éléments immobilisés</h4><p>Suivi des biens, localisation, comptes de classe 2/28/68 et paramètres d’amortissement modifiables.</p></div><button type="button" class="btn btn-primary" data-action="new-fixed-asset">＋ Nouvel élément</button></div>' +
+        '<div class="supplier-directory-head"><div><h4>Éléments immobilisés</h4><p>Suivi des biens, localisation, comptes de classe 2/28/68 et paramètres d’amortissement modifiables.</p></div><div class="fixed-asset-directory-actions"><button type="button" class="btn btn-ghost" data-action="preview-fixed-asset-depreciation">Prévisualiser le linéaire</button><button type="button" class="btn btn-primary" data-action="new-fixed-asset">＋ Nouvel élément</button></div></div>' +
         '<form id="fixed-asset-filter-form" class="supplier-filter-controls fixed-asset-filter-controls" role="search"><label class="field"><span>Rechercher</span><input id="fixed-asset-search" type="search" value="' + esc(filter.q) + '" placeholder="Code, désignation, série, fournisseur, lieu…" autocomplete="off"></label><label class="field"><span>État</span><select id="fixed-asset-status-filter">' + statusOptions + '</select></label><label class="field"><span>Nature</span><select id="fixed-asset-type-filter">' + typeOptions + '</select></label></form>' +
         '<p class="supplier-result-note" id="fixed-asset-result-note">' + visible.length + (visible.length === 1 ? ' élément affiché.' : ' éléments affichés.') + '</p>' +
         '<div class="table-wrap exchange-table-wrap fixed-asset-table-wrap" id="fixed-asset-table-wrap"' + (visible.length ? '' : ' hidden') + '><table class="exchange-mapping-table fixed-asset-table"><caption class="sr-only">Éléments immobilisés du dossier actif</caption><thead><tr><th>Code / désignation</th><th>État / nature</th><th>Localisation / série</th><th>Acquisition / coût</th><th>Comptes associés</th><th>Paramètres d’amortissement</th><th>Actions</th></tr></thead><tbody id="fixed-asset-rows">' + fixedAssetRowsHtml(records, filter) + '</tbody></table></div>' +
         '<div id="fixed-asset-list-empty" class="empty-state registry-empty"' + (visible.length ? ' hidden' : '') + '><span class="empty-state-icon">⌕</span><h3>Aucun résultat</h3><p>' + esc(emptyMessage) + '</p></div>' +
       '</section>' +
-      '<p class="exchange-footnote">La fiche inclut la référence de facture, le fournisseur, le détenteur, la garantie et le dernier inventaire physique. Les cessions, plans calculés, écritures de dotation, rapprochements avec les pièces et exports réglementaires restent à construire après validation des règles métier et fiscales.</p>' +
+      '<p class="exchange-footnote">La simulation ne traite que le linéaire et impose le choix explicite d’une convention ; le dégressif, les unités d’œuvre, les cessions, les arrondis comptables, les écritures et les états réglementaires restent à cadrer après validation métier et fiscale.</p>' +
     '</div>';
+  }
+
+  function fixedAssetSimulationMoney(value) {
+    var formatter = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 4 });
+    return formatter.format(Number(value) || 0) + '\u00A0XOF';
+  }
+
+  function fixedAssetDepreciationSimulationHtml(result) {
+    var rows = result.rows.map(function (row) {
+      return '<tr><td><strong>' + esc(row.code) + '</strong><br><small>' + esc(row.name) + '</small></td><td>' + esc(row.period) + '</td><td class="number-cell"><strong>' + esc(fixedAssetSimulationMoney(row.amount)) + '</strong></td></tr>';
+    }).join('');
+    var excluded = result.excluded.length
+      ? '<details class="fixed-asset-simulation-exclusions"><summary>Fiches non simulées : ' + result.excluded.length + '</summary><div class="table-wrap"><table class="exchange-mapping-table fixed-asset-simulation-table"><thead><tr><th>Code / désignation</th><th>Motif de non-simulation</th></tr></thead><tbody>' + result.excluded.map(function (item) {
+          return '<tr><td><strong>' + esc(item.code || 'Code absent') + '</strong><br><small>' + esc(item.name || 'Désignation absente') + '</small></td><td>' + esc(item.reason) + '</td></tr>';
+        }).join('') + '</tbody></table></div></details>'
+      : '<p class="fixed-asset-simulation-all-included">Toutes les fiches du registre sont simulables selon les paramètres renseignés.</p>';
+    return '<div class="fixed-asset-simulation-results">' +
+      '<div class="alert warning"><div><strong>Simulation indicative uniquement.</strong> Convention « ' + esc(result.conventionLabel) + ' ». Les montants sont non arrondis (4 décimales au plus à l’affichage) ; les règles comptables et fiscales, les arrondis définitifs et la comptabilisation restent à valider. Aucune donnée n’est enregistrée et aucune écriture n’est créée.</div></div>' +
+      '<div class="exchange-summary-grid fixed-asset-simulation-summary"><div><small>Fiches simulées</small><strong>' + result.plans.length + '</strong></div><div><small>Fiches écartées</small><strong>' + result.excluded.length + '</strong></div><div><small>Total indicatif du cycle</small><strong>' + esc(fixedAssetSimulationMoney(result.total)) + '</strong></div></div>' +
+      '<p class="supplier-result-note">Cycle du dossier : ' + esc(S.dateLabel(result.cycleStart)) + ' au ' + esc(S.dateLabel(result.cycleEnd)) + ' · simulation par périodes mensuelles.</p>' +
+      (rows
+        ? '<div class="table-wrap exchange-table-wrap fixed-asset-simulation-table-wrap"><table class="exchange-mapping-table fixed-asset-simulation-table"><caption class="sr-only">Simulation linéaire indicative par immobilisation et période</caption><thead><tr><th>Immobilisation</th><th>Période</th><th>Montant non arrondi</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+        : '<div class="empty-state registry-empty"><h3>Aucune ligne à afficher</h3><p>Aucun bien linéaire en service et complet ne couvre ce cycle avec la convention choisie.</p></div>') +
+      excluded +
+    '</div>';
+  }
+
+  function openFixedAssetDepreciationModal() {
+    var dossier = S.currentDossier();
+    var conventions = FixedAssetDepreciation.conventions;
+    var conventionOptions = Object.keys(conventions).map(function (key) {
+      return '<option value="' + esc(key) + '">' + esc(conventions[key]) + '</option>';
+    }).join('');
+    var body = '<div class="alert info"><div><strong>Aperçu sans comptabilisation.</strong> Cette première simulation ne calcule que les fiches linéaires en service, déjà renseignées. Les méthodes dégressive et unités d’œuvre restent à cadrer. Les fiches « À définir », non amortissables, financières, en cours ou retirées sont signalées et écartées.</div></div>' +
+      '<p class="fixed-asset-simulation-cycle">Cycle actif : <strong>' + esc(S.dateLabel(dossier.cycleStart)) + ' au ' + esc(S.dateLabel(dossier.cycleEnd)) + '</strong> · dossier ' + esc(dossier.reference || dossier.name) + '</p>' +
+      '<form id="fixed-asset-simulation-form" class="fixed-asset-simulation-form" novalidate>' +
+        '<label class="field"><span>Convention de simulation <span aria-hidden="true">*</span></span><select id="fixed-asset-simulation-convention" required><option value="">Choisir explicitement une hypothèse</option>' + conventionOptions + '</select><span class="hint">Aucune convention n’est présélectionnée. « Mois entier » démarre au mois civil de la date saisie ; le prorata exact compte les jours du début inclus à la fin exclue.</span></label>' +
+        '<button type="submit" class="btn btn-primary">Calculer l’aperçu non comptabilisant</button>' +
+      '</form>' +
+      '<div id="fixed-asset-simulation-output" class="fixed-asset-simulation-output" aria-live="polite"><div class="empty-state registry-empty"><h3>Simulation non lancée</h3><p>Choisissez une convention explicite pour afficher les montants prévisionnels du cycle.</p></div></div>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Fermer</button>';
+    openModal('Simulation indicative des amortissements', 'Aperçu linéaire · aucune écriture ne sera générée', body, footer, true);
+    var form = $('#fixed-asset-simulation-form');
+    var convention = $('#fixed-asset-simulation-convention');
+    var output = $('#fixed-asset-simulation-output');
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!convention.value) {
+        output.innerHTML = '<div class="alert error" role="alert">Choisissez explicitement une convention avant de lancer la simulation.</div>';
+        convention.focus();
+        return;
+      }
+      var result = FixedAssetDepreciation.simulate(S.fixedAssets(), dossier.cycleStart, dossier.cycleEnd, convention.value);
+      if (!result.ok) {
+        output.innerHTML = '<div class="alert error" role="alert">' + esc((result.errors || ['La simulation ne peut pas être calculée.']).join(' ')) + '</div>';
+        return;
+      }
+      output.innerHTML = fixedAssetDepreciationSimulationHtml(result);
+    });
   }
 
   function refreshFixedAssetRows() {
@@ -6273,6 +6335,9 @@
         render();
         break;
       }
+      case 'preview-fixed-asset-depreciation':
+        openFixedAssetDepreciationModal();
+        break;
       case 'new-fixed-asset':
         openFixedAssetModal();
         break;

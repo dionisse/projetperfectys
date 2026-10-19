@@ -2651,3 +2651,25 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
   .fixed-asset-description-field,
   .fixed-asset-notes-field { grid-column: auto; }
 }
+.fixed-asset-directory-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fixed-asset-simulation-cycle { margin: 10px 0; color: #66756c; font-size: .76rem; }
+.fixed-asset-simulation-form { display: grid; grid-template-columns: minmax(260px, 1fr) auto; align-items: end; gap: 12px; padding: 12px; border: 1px solid #e4eae4; border-radius: 8px; background: #fbfcfa; }
+.fixed-asset-simulation-form .field { margin: 0; }
+.fixed-asset-simulation-output { display: grid; gap: 12px; margin-top: 14px; }
+.fixed-asset-simulation-results { display: grid; gap: 12px; }
+.fixed-asset-simulation-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.fixed-asset-simulation-table-wrap { max-height: 340px; overflow: auto; }
+.fixed-asset-simulation-table { min-width: 560px; }
+.fixed-asset-simulation-table .number-cell { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fixed-asset-simulation-table td small { color: #77847d; font-size: .65rem; }
+.fixed-asset-simulation-exclusions { padding: 10px 12px; border: 1px solid #eadfbd; border-radius: 8px; color: #66552e; background: #fffaf0; }
+.fixed-asset-simulation-exclusions summary { cursor: pointer; font-size: .75rem; font-weight: 800; }
+.fixed-asset-simulation-exclusions .table-wrap { max-height: 220px; margin-top: 10px; overflow: auto; }
+.fixed-asset-simulation-all-included { margin: 0; color: #4d6e5d; font-size: .75rem; }
+@media (max-width: 700px) {
+  .fixed-asset-directory-actions { width: 100%; }
+  .fixed-asset-directory-actions .btn { flex: 1 1 auto; }
+  .fixed-asset-simulation-form { grid-template-columns: minmax(0, 1fr); }
+  .fixed-asset-simulation-form > button { justify-self: stretch; }
+  .fixed-asset-simulation-summary { grid-template-columns: 1fr; }
+}

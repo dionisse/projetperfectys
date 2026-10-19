@@ -66,7 +66,9 @@ assert.ok(findTab('definitions', 'fixed-asset-locations').reason.includes('paren
 assert.ok(findTab('definitions', 'fixed-asset-locations').reason.includes('affectés aux fiches'));
 assert.equal(findTab('definitions', 'fixed-assets').status, 'partial');
 assert.ok(findTab('definitions', 'fixed-assets').reason.includes('classe 2/28/68'));
-assert.ok(findTab('definitions', 'fixed-assets').reason.includes('ne sont pas générés'));
+assert.ok(findTab('definitions', 'fixed-assets').reason.includes('non comptabilisant'));
+assert.ok(findTab('definitions', 'fixed-assets').reason.includes('choisie explicitement'));
+assert.ok(findTab('definitions', 'fixed-assets').reason.includes('restent à construire'));
 assert.equal(findTab('definitions', 'journals').status, 'active');
 assert.equal(findTab('saisie', 'journal-entry').status, 'active');
 assert.equal(findTab('fichier', 'export-other').status, 'partial');

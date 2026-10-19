@@ -44,7 +44,7 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 | Débiteurs et créditeurs divers | Répertoire mixte avec type débiteur/créditeur, code `DEB`/`CRE` automatique, compte auxiliaire 47 et modification/suppression protégées |
 | Personnel | Répertoire local des membres du personnel, code `PER` automatique, fonction, service, contacts et compte auxiliaire 42 ; sans salaires ni contrats |
 | Localisation des immobilisations corporelles | Arborescence locale de niveaux et d’emplacements modifiables (code `LOC`, parent/enfant, adresse, responsable), réutilisable depuis les fiches immobilisées |
-| Éléments immobilisés | Registre local par dossier : immobilisations corporelles, incorporelles et financières ; identifiants, état, suivi physique, coût XOF, dates, localisation, comptes et paramètres d’amortissement ; aucun calcul ni aucune écriture automatique |
+| Éléments immobilisés | Registre local par dossier pour les trois natures, paramètres et comptes associés ; simulation linéaire indicative, convention explicitement choisie, lecture seule sans écriture |
 | Journaux | Six journaux (AC, VE, BQ, CA, OD, PA) avec totaux et brouillons |
 | Saisie d'écriture | Saisie multiligne, contrôle d'équilibre en direct, référence auto, brouillon ou validation |
 | Pièces comptables | Liste filtrable, détail en modale, validation, modification et suppression des brouillons |
@@ -90,7 +90,11 @@ Le sous-menu **Définitions → Éléments immobilisés** gère un registre isol
 
 Les comptes associés sont proposés uniquement depuis le plan réellement chargé dans le dossier : classe 2 et familles correspondant à la nature du bien, comptes 283 ou 281 pour les amortissements cumulés et comptes de dotation de famille 68 pour les actifs amortissables. La fiche peut conserver une méthode « À définir / à valider », qui est la valeur proposée par défaut afin de ne présumer aucune règle fiscale. Les méthodes linéaire, dégressive, unités d’œuvre ou non amortissable sont disponibles avec leurs paramètres de durée, date de départ, taux ou unité lorsque pertinent. Une immobilisation financière ne peut pas recevoir une méthode amortissable dans ce référentiel.
 
-Les fiches et l’historique des codes sont isolés par dossier et inclus dans les migrations, la sauvegarde et la restauration JSON. Les références aux mouvements ou écritures empêchent la suppression et protègent les principaux paramètres comptables et d’amortissement. Cette étape n’effectue **aucun calcul d’amortissement ou de valeur nette comptable**, ne crée aucun mouvement, plan ou écriture et ne comptabilise aucune dotation. La cession, le rapprochement avec les pièces d’acquisition, les règles de calcul et les états réglementaires restent à construire après validation métier et fiscale. Comme les autres fonctions de saisie, ce sous-menu est réservé à l’ordinateur ou à la tablette, et non au parcours téléphone en lecture seule.
+Les fiches et l’historique des codes sont isolés par dossier et inclus dans les migrations, la sauvegarde et la restauration JSON. Les références aux mouvements ou écritures empêchent la suppression et protègent les principaux paramètres comptables et d’amortissement.
+
+Le bouton **Prévisualiser le linéaire** fournit une simulation indicative, en lecture seule, limitée aux biens linéaires en service dont les paramètres sont complets et qui couvrent le cycle actif. Avant chaque simulation, l’utilisateur choisit explicitement entre le mois civil entier dès le mois de début et le prorata journalier exact (début inclus, fin exclue) ; aucune convention n’est présélectionnée. Les montants ne sont pas arrondis aux XOF entiers et restent affichés à titre indicatif. Les fiches non simulées sont accompagnées d’un motif.
+
+Cette simulation n’enregistre aucun résultat, ne crée aucun mouvement ou plan comptable et ne génère ni ne valide d’écriture. Les méthodes dégressives et unités d’œuvre, les arrondis à appliquer, les cessions, le rapprochement avec les pièces d’acquisition et les règles comptables/fiscales doivent encore être cadrés et validés. Elle ne constitue pas un calcul réglementaire ni une valeur nette comptable officielle. Comme les autres fonctions de saisie, ce sous-menu est réservé à l’ordinateur ou à la tablette, et non au parcours téléphone en lecture seule.
 
 ### Interopérabilité comptable — incrément v1
 
