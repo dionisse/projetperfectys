@@ -1998,7 +1998,10 @@
   function closeSidebar() {
     var sidebar = $('#sidebar');
     var scrim = $('#sidebar-scrim');
-    if (sidebar) sidebar.classList.remove('open');
+    if (sidebar) {
+      sidebar.classList.remove('open');
+      sidebar.hidden = document.body.classList.contains('client-dossier-mode');
+    }
     if (scrim) scrim.remove();
     var toggle = $('[data-action="toggle-sidebar"]');
     if (toggle) {
@@ -2010,7 +2013,9 @@
   function toggleSidebar() {
     var sidebar = $('#sidebar');
     if (!sidebar) return;
+    if (!sidebar.classList.contains('open')) sidebar.hidden = false;
     var isOpen = sidebar.classList.toggle('open');
+    if (!isOpen && document.body.classList.contains('client-dossier-mode')) sidebar.hidden = true;
     var toggle = $('[data-action="toggle-sidebar"]');
     if (toggle) {
       toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');

@@ -1989,3 +1989,4 @@ body.client-dossier-mode .sidebar-scrim {
   background: rgba(15, 23, 42, .45);
 }
 body.client-dossier-mode .menu-toggle { display: inline-flex; }
+body.client-dossier-mode #sidebar[hidden] { display: none !important; }
