@@ -6,8 +6,8 @@
   var groups = [
     {
       id: 'fichier', label: 'Fichier', icon: '▤', defaultTab: 'export-other', tabs: [
-        { id: 'export-other', label: 'Exportation vers d’autres logiciels', status: 'inactive', reason: 'Échange avec un logiciel tiers, hors du périmètre actuel.' },
-        { id: 'import-other', label: 'Importation depuis d’autres logiciels', status: 'inactive', reason: 'Formats et règles de reprise à définir avant activation.' },
+        { id: 'export-other', label: 'Exportation vers d’autres logiciels', status: 'partial', reason: 'Le format commun PERFECTO-ÉCHANGE v1 en classeur Excel et CSV est disponible. Les adaptateurs directs Sage, PERFECTO historique, HYPERSOFT et ODOO restent à construire.' },
+        { id: 'import-other', label: 'Importation depuis d’autres logiciels', status: 'partial', reason: 'L’import du format commun PERFECTO-ÉCHANGE v1 en classeur Excel ou CSV est disponible avec aperçu, correspondance des comptes et journaux, sauvegarde et contrôle du lot. Les profils natifs Sage, PERFECTO historique, HYPERSOFT et ODOO restent à construire.' },
         { id: 'import-balance', label: 'Importation d’une balance générale', status: 'planned', reason: 'Fonction de reprise comptable à construire après définition du format et des contrôles.' },
         { id: 'centralize-auxiliary', label: 'Centralisation de la comptabilité auxiliaire', status: 'planned', reason: 'Fonction de comptabilité générale à construire avec les journaux et comptes tiers.' },
         { id: 'centralize-payroll', label: 'Centralisation des salaires depuis Paie et RH', status: 'inactive', reason: 'Dépend du module Paie et RH, qui reste séparé.' },

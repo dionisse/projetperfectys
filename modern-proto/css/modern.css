@@ -2293,3 +2293,83 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
   body.phone-editions-mode.dossiers-list-mode .nav-accounting-groups a:not([data-menu-group="editions"]) { display: none; }
   body.phone-editions-mode.dossiers-list-mode .nav-context-links .nav-section-heading { display: none; }
 }
+
+/* ---------- Échanges comptables avec Excel et fichiers tiers ---------- */
+.exchange-workspace { display: grid; gap: 14px; margin-top: 17px; }
+.exchange-workspace .alert { margin: 0; line-height: 1.55; }
+.exchange-context-grid,
+.exchange-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+.exchange-context-grid > div,
+.exchange-summary-grid > div {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid #e6ece7;
+  border-radius: 8px;
+  background: #fbfcfa;
+}
+.exchange-context-grid small,
+.exchange-summary-grid small { display: block; margin-bottom: 5px; color: #78867f; font-size: .62rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+.exchange-context-grid strong,
+.exchange-summary-grid strong { display: block; color: #2f4840; font-size: .78rem; line-height: 1.45; overflow-wrap: anywhere; }
+.exchange-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.exchange-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #e5ebe6;
+  border-radius: 9px;
+  background: #fff;
+}
+.exchange-card .page-kicker { margin: 0 0 5px; color: #8a9a91; font-size: .58rem; }
+.exchange-card h4 { margin: 0 0 8px; color: #314a41; font-size: .88rem; font-weight: 800; }
+.exchange-card > p:not(.page-kicker) { margin: 0 0 13px; color: #6d7c74; font-size: .72rem; line-height: 1.55; }
+.exchange-button-row { display: flex; flex-wrap: wrap; gap: 7px; }
+.exchange-button-row .btn { font-size: .68rem; }
+.exchange-systems ul { display: grid; gap: 6px; margin: 0 0 11px; padding: 0; list-style: none; }
+.exchange-systems li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid #edf0ed; border-radius: 6px; background: #fcfdfa; font-size: .72rem; }
+.exchange-systems li strong { flex: 0 0 auto; font-size: .65rem; }
+.exchange-systems .is-ready { color: #18705f; }
+.exchange-systems .is-planned { color: #89928d; }
+.exchange-workspace .exchange-systems > p.small { margin-bottom: 0; font-size: .67rem; }
+.exchange-footnote { margin: 0; color: #89958e; font-size: .66rem; line-height: 1.55; }
+.exchange-import-controls { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(230px, .7fr); align-items: end; gap: 15px; }
+.exchange-import-controls .field { min-width: 0; margin: 0; }
+.exchange-file-picker { display: inline-flex; align-items: center; justify-content: center; margin-top: 2px; cursor: pointer; }
+.exchange-import-controls .hint { display: block; margin-top: 7px; }
+.exchange-preview { display: grid; gap: 11px; min-width: 0; }
+.exchange-preview .empty-state { padding: 19px 13px; border: 1px dashed #dce5de; border-radius: 8px; background: #fbfcfa; }
+.exchange-preview .alert { align-items: flex-start; font-size: .72rem; }
+.exchange-preview .alert ul { margin: 5px 0 0; line-height: 1.55; }
+.exchange-summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.exchange-mode-note { padding: 10px 12px; border-left: 3px solid #75a99a; border-radius: 4px; color: #61746b; background: #f4f8f5; font-size: .71rem; line-height: 1.5; }
+.exchange-mapping { min-width: 0; border: 1px solid #e3eae4; border-radius: 8px; background: #fff; }
+.exchange-mapping > summary { padding: 11px 13px; color: #42594f; font-size: .74rem; font-weight: 800; cursor: pointer; }
+.exchange-mapping > p { margin: 0 13px 9px; font-size: .67rem; }
+.exchange-table-wrap { max-width: 100%; overflow-x: auto; border-top: 1px solid #edf0ed; }
+.exchange-mapping-table { width: 100%; border-collapse: collapse; font-size: .68rem; }
+.exchange-mapping-table th,
+.exchange-mapping-table td { padding: 8px 10px; border-bottom: 1px solid #eef1ee; text-align: left; vertical-align: middle; }
+.exchange-mapping-table th { color: #718078; background: #f8faf8; font-size: .58rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.exchange-mapping-table td { color: #52645b; }
+.exchange-mapping-table td strong { color: #314940; white-space: nowrap; }
+.exchange-mapping-table select { width: 100%; min-width: 210px; min-height: 35px; padding: 6px 8px; border: 1px solid #dfe7e0; border-radius: 5px; color: #33483f; background: #fff; font: inherit; }
+.exchange-context-confirm { display: flex; align-items: flex-start; gap: 9px; padding: 11px 12px; border: 1px solid #ead8b0; border-radius: 7px; color: #65552f; background: #fbf6e9; font-size: .69rem; line-height: 1.5; }
+.exchange-context-confirm input { flex: 0 0 auto; margin-top: 2px; accent-color: #8d671e; }
+.exchange-preview-footer { display: flex; justify-content: flex-end; padding-top: 2px; }
+
+@media (max-width: 700px) {
+  .exchange-context-grid,
+  .exchange-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .exchange-grid,
+  .exchange-import-controls { grid-template-columns: minmax(0, 1fr); }
+  .exchange-card { padding: 13px; }
+  .exchange-button-row { align-items: stretch; flex-direction: column; }
+  .exchange-button-row .btn { justify-content: center; }
+  .exchange-systems li { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .exchange-summary-grid > div { padding: 10px; }
+  .exchange-mapping-table { min-width: 570px; }
+  .exchange-preview-footer .btn { width: 100%; justify-content: center; }
+}

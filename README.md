@@ -24,6 +24,7 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 | Écran | Contenu |
 |---|---|
 | Navigation comptable | Huit menus latéraux (Fichier, Définitions, Saisie, Éditions, Déclarations, Fin d’exercice, Paramètres, Outils), sous-menus en onglets verticaux et éléments imbriqués en listes ; les fonctions analytiques et non réalisées restent inactives |
+| Fichier & interopérabilité | Format commun PERFECTO-ÉCHANGE v1 : classeur Excel `.xlsx` multi-feuilles et CSV compatible Excel ; export du plan, des journaux et des écritures validées ; import avec aperçu, correspondance des comptes/journaux, point de restauration et ajout sans remplacement. Adaptateurs natifs Sage, PERFECTO historique, HYPERSOFT et ODOO à construire |
 | Téléphone | Consultation limitée aux Éditions (balance, journal, grand livre) ; aucune saisie comptable ni création de dossier sur téléphone |
 | Connexion (démo) | Aucun identifiant collecté ; e-mail/mot de passe et Google sont prévus, mais non actifs en démo |
 | Launcher | Catalogue modulaire, recherche et filtres ; ouverture selon les droits du profil simulé, autres modules à venir |
@@ -38,7 +39,21 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 | Journal des écritures | Écritures validées chronologiques, filtre journal/exercice, impression |
 | Grand livre | Mouvements par compte et solde progressif |
 | Périodes | Périodes mensuelles couvrant le cycle défini pour le dossier (calendaire ou non), ouverture et clôture persistées |
-| Données & application | Export/import JSON, point de restauration local avant modification, restauration, installation PWA |
+| Données & application | Sauvegarde/restauration native JSON, point de restauration local avant modification, installation PWA |
+
+### Interopérabilité comptable — incrément v1
+
+Le menu **Fichier** propose le format neutre `PERFECTO-ECHANGE` version 1 en classeur Excel `.xlsx` et en CSV UTF-8 compatible avec Excel. Le classeur réunit les feuilles Instructions, Dossier, Comptes, Journaux et Écritures. Une ligne de la feuille Écritures/du CSV représente une ligne de mouvement ; plusieurs lignes portant le même journal, date et référence sont regroupées en une pièce.
+
+- L’export d’échange porte sur les écritures validées du cycle actif ; les brouillons en sont exclus. Le plan comptable et les journaux peuvent être exportés séparément.
+- L’import CSV ou `.xlsx` présente un aperçu avant toute modification, permet d’associer les comptes et journaux sources aux référentiels du dossier, refuse les références en doublon et crée un point de restauration local avant d’ajouter le lot. Les macros et les formules ne sont pas exécutées ; les cellules de formules dans Écritures sont refusées.
+- Le mode recommandé crée des brouillons. Le mode « écritures validées » contrôle l’équilibre et les périodes ouvertes et requiert le droit de validation.
+- Le lot est ajouté au dossier actif ; il ne remplace pas les données présentes. Les comptes/journaux inconnus ne sont jamais créés automatiquement.
+- Le format commun est la première passerelle Excel/CSV, **pas encore un import direct des formats propriétaires** de Sage Comptabilité, PERFECTO historique, HYPERSOFT ou ODOO. Ces profils seront développés par version après réception et validation de fichiers d’exemple anonymisés.
+- Le JSON de **Données & application** reste une sauvegarde/restauration native PERFECTO et ne doit pas être confondu avec un fichier d’échange.
+- Les tiers, les données analytiques, le multidevise, les formats propriétaires de logiciels tiers et l’import de balance restent hors de ce premier incrément. Les données sont lues et produites dans le navigateur ; aucun fichier n’est envoyé à un serveur.
+
+En-tête stable de la feuille `Ecritures` et du CSV : `FORMAT;VERSION;SYSTEME_SOURCE;REFERENCE_DOSSIER;EXERCICE;CODE_JOURNAL;LIBELLE_JOURNAL;DATE;REFERENCE_PIECE;LIBELLE_PIECE;CODE_COMPTE;LIBELLE_COMPTE;CLASSE_COMPTE;NATURE_COMPTE;DEBIT_XOF;CREDIT_XOF;STATUT_SOURCE;ID_SOURCE`. Les colonnes peuvent être réordonnées, mais pas supprimées ni renommées dans cette version. Les montants sont des entiers sans séparateurs ; `ID_SOURCE` est répété sur chaque ligne de la même pièce.
 
 ### Règles métier appliquées
 

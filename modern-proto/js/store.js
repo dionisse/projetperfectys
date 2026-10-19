@@ -395,19 +395,26 @@
       Array.isArray(data.entries) && Array.isArray(data.periods);
   }
 
-  function snapshotPreviousState(raw) {
+  function writeBackupSnapshot(data) {
     try {
-      var previous = JSON.parse(raw);
-      if (!isBackupData(previous)) return false;
+      if (!isBackupData(data)) return false;
       var snapshot = {
         application: 'PERFECTO',
         module: 'Comptabilité générale SYSCOHADA',
         version: 1,
         createdAt: new Date().toISOString(),
-        data: previous
+        data: clone(data)
       };
       global.localStorage.setItem(currentBackupStorageKey(), JSON.stringify(snapshot));
       return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function snapshotPreviousState(raw) {
+    try {
+      return writeBackupSnapshot(JSON.parse(raw));
     } catch (err) {
       return false;
     }
@@ -848,6 +855,184 @@
     }
   }
 
+  function previewExchangeImport(incomingEntries, mode, options) {
+    var opts = options || {};
+    var status = mode === 'posted' ? 'posted' : 'draft';
+    var sourceSystem = String(opts.sourceSystem || '').trim().toUpperCase();
+    var accountMap = opts.accountMap || {};
+    var journalMap = opts.journalMap || {};
+    var st = load();
+    var errors = [];
+    var warnings = [];
+    var unmappedAccounts = [];
+    var unmappedJournals = [];
+    var normalizedEntries = [];
+    var seenReferences = Object.create(null);
+    var seenSourceIds = Object.create(null);
+    var warningKeys = Object.create(null);
+    var lineCount = incomingEntries && Array.isArray(incomingEntries)
+      ? incomingEntries.reduce(function (total, entry) { return total + ((entry && Array.isArray(entry.lines)) ? entry.lines.length : 0); }, 0)
+      : 0;
+    var balancedCount = 0;
+
+    if (!Array.isArray(incomingEntries) || !incomingEntries.length) {
+      return { ok: false, errors: ['Le fichier ne contient aucune pièce à importer.'], warnings: [], entries: [], lineCount: 0, balancedCount: 0, unbalancedCount: 0, unmappedAccounts: [], unmappedJournals: [] };
+    }
+    if (incomingEntries.length > 10000) {
+      return { ok: false, errors: ['Le lot dépasse la limite de 10 000 pièces. Importez un lot plus petit.'], warnings: [], entries: [], lineCount: 0, balancedCount: 0, unbalancedCount: 0, unmappedAccounts: [], unmappedJournals: [] };
+    }
+
+    function addUnmapped(list, code, label) {
+      if (!list.some(function (item) { return item.code === code; })) list.push({ code: code, label: label || '' });
+    }
+
+    incomingEntries.forEach(function (sourceEntry, index) {
+      sourceEntry = sourceEntry || {};
+      var prefix = 'Pièce « ' + String(sourceEntry.reference || (index + 1)) + ' » : ';
+      var reference = String(sourceEntry.reference || '').trim();
+      var originalJournal = String(sourceEntry.journal || '').trim();
+      var mappedJournal = Object.prototype.hasOwnProperty.call(journalMap, originalJournal)
+        ? String(journalMap[originalJournal] || '').trim()
+        : originalJournal;
+      var sourceId = String(sourceEntry.sourceId || '').trim();
+      var entrySourceSystem = String(sourceEntry.sourceSystem || sourceSystem || 'EXCEL').trim().toUpperCase();
+      var sourceKey = entrySourceSystem + '\u0000' + sourceId;
+      var mappedLines = [];
+      var hasUnknownReference = false;
+
+      if (!reference) errors.push(prefix + 'la référence est obligatoire.');
+      if (reference) {
+        if (seenReferences[reference]) errors.push(prefix + 'référence répétée dans le fichier.');
+        else seenReferences[reference] = true;
+        if (st.entries.some(function (entry) { return entry.reference === reference; })) errors.push(prefix + 'cette référence existe déjà dans le dossier actif.');
+      }
+      if (sourceId) {
+        if (seenSourceIds[sourceKey]) errors.push(prefix + 'ID_SOURCE déjà utilisé par une autre pièce du fichier.');
+        else seenSourceIds[sourceKey] = true;
+        if (st.entries.some(function (entry) { return entry.sourceSystem === entrySourceSystem && entry.sourceId === sourceId; })) {
+          errors.push(prefix + 'cet ID_SOURCE a déjà été importé depuis ' + entrySourceSystem + '.');
+        }
+      }
+
+      if (!mappedJournal || !journal(mappedJournal)) {
+        addUnmapped(unmappedJournals, originalJournal, sourceEntry.journalLabel);
+        hasUnknownReference = true;
+      } else if (sourceEntry.journalLabel && journal(mappedJournal).label !== sourceEntry.journalLabel) {
+        var journalWarningKey = 'journal:' + originalJournal + ':' + mappedJournal;
+        if (!warningKeys[journalWarningKey]) {
+          warnings.push('Le journal source « ' + originalJournal + ' — ' + sourceEntry.journalLabel + ' » sera associé à « ' + mappedJournal + ' — ' + journal(mappedJournal).label + ' ».');
+          warningKeys[journalWarningKey] = true;
+        }
+      }
+
+      (sourceEntry.lines || []).forEach(function (line) {
+        var sourceAccount = String(line.account || '').trim();
+        var mappedAccount = Object.prototype.hasOwnProperty.call(accountMap, sourceAccount)
+          ? String(accountMap[sourceAccount] || '').trim()
+          : sourceAccount;
+        var targetAccount = account(mappedAccount);
+        if (!mappedAccount || !targetAccount) {
+          addUnmapped(unmappedAccounts, sourceAccount, line.accountLabel);
+          hasUnknownReference = true;
+          mappedLines.push(Object.assign({}, line, { account: mappedAccount || sourceAccount }));
+          return;
+        }
+        if (line.accountLabel && targetAccount.label !== line.accountLabel) {
+          var accountWarningKey = 'account:' + sourceAccount + ':' + mappedAccount;
+          if (!warningKeys[accountWarningKey]) {
+            warnings.push('Le compte source « ' + sourceAccount + ' — ' + line.accountLabel + ' » sera associé à « ' + mappedAccount + ' — ' + targetAccount.label + ' ».');
+            warningKeys[accountWarningKey] = true;
+          }
+        }
+        mappedLines.push(Object.assign({}, line, { account: mappedAccount }));
+      });
+
+      if (hasUnknownReference) return;
+      var result = validateEntry({
+        reference: reference,
+        journal: mappedJournal,
+        date: sourceEntry.date,
+        description: sourceEntry.description,
+        lines: mappedLines
+      }, { ignoreUnique: true, requireBalanced: status === 'posted', status: status });
+      if (!result.ok) {
+        result.errors.forEach(function (message) { errors.push(prefix + message); });
+        return;
+      }
+      var totalsForEntry = totals(result.entry.lines);
+      if (totalsForEntry.balanced) balancedCount += 1;
+      if (sourceEntry.sourceStatus && sourceEntry.sourceStatus !== status) {
+        var statusWarningKey = 'status:' + sourceEntry.sourceStatus + ':' + status;
+        if (!warningKeys[statusWarningKey]) {
+          warnings.push('Le statut de source « ' + sourceEntry.sourceStatus + ' » sera importé comme ' + (status === 'posted' ? 'écriture validée' : 'brouillon') + ', selon le mode choisi.');
+          warningKeys[statusWarningKey] = true;
+        }
+      }
+      normalizedEntries.push({ entry: result.entry, original: sourceEntry, sourceSystem: entrySourceSystem, sourceId: sourceId });
+    });
+
+    unmappedAccounts.forEach(function (item) {
+      errors.push('Compte source « ' + item.code + ' » sans correspondance PERFECTO.');
+    });
+    unmappedJournals.forEach(function (item) {
+      errors.push('Journal source « ' + item.code + ' » sans correspondance PERFECTO.');
+    });
+
+    return {
+      ok: errors.length === 0 && unmappedAccounts.length === 0 && unmappedJournals.length === 0 && normalizedEntries.length === incomingEntries.length,
+      errors: errors,
+      warnings: warnings,
+      entries: normalizedEntries,
+      lineCount: lineCount,
+      balancedCount: balancedCount,
+      unbalancedCount: Math.max(0, normalizedEntries.length - balancedCount),
+      unmappedAccounts: unmappedAccounts,
+      unmappedJournals: unmappedJournals
+    };
+  }
+
+  function importExchange(incomingEntries, mode, options) {
+    var preview = previewExchangeImport(incomingEntries, mode, options);
+    if (!preview.ok) return { ok: false, errors: preview.errors, warnings: preview.warnings };
+
+    var previousState = clone(load());
+    if (!writeBackupSnapshot(previousState)) {
+      return { ok: false, errors: ['Import annulé : le point de restauration local n’a pas pu être créé. Exportez d’abord une sauvegarde du dossier ou libérez de l’espace.'], warnings: preview.warnings };
+    }
+    var st = load();
+    var now = new Date().toISOString();
+    var batchId = 'exchange-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+    var status = mode === 'posted' ? 'posted' : 'draft';
+    var imported = preview.entries.map(function (item) {
+      var record = clone(item.entry);
+      var original = item.original;
+      record.id = 'e-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+      record.createdAt = now;
+      record.status = status;
+      record.sourceSystem = item.sourceSystem;
+      record.sourceId = item.sourceId;
+      record.sourceReference = String(original.reference || '');
+      record.sourceJournal = String(original.journal || '');
+      record.sourceStatus = String(original.sourceStatus || '');
+      record.importBatchId = batchId;
+      record.importedAt = now;
+      if (status === 'posted') record.postedAt = now;
+      record.lines = record.lines.map(function (line, index) {
+        var originalLine = original.lines[index] || {};
+        line.sourceAccountCode = String(originalLine.account || '');
+        line.sourceAccountLabel = String(originalLine.accountLabel || '');
+        return line;
+      });
+      return record;
+    });
+    st.entries = st.entries.concat(imported);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Import impossible : stockage local indisponible ou plein. Aucune écriture n’a été conservée.'], warnings: preview.warnings };
+    }
+    return { ok: true, errors: [], warnings: preview.warnings, importedCount: imported.length, lineCount: preview.lineCount, batchId: batchId };
+  }
+
   function readBackupSnapshot() {
     try {
       var raw = global.localStorage.getItem(currentBackupStorageKey());
@@ -961,6 +1146,8 @@
     periodStats: periodStats,
     exportJson: exportJson,
     importJson: importJson,
+    previewExchangeImport: previewExchangeImport,
+    importExchange: importExchange,
     backupInfo: backupInfo,
     restoreBackup: restoreBackup,
     monthLabel: monthLabel,

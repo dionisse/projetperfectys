@@ -23,7 +23,7 @@ jobs:
       - name: Check required files
         run: |
           missing=0
-          for file in index.html modern-proto/index.html modern-proto/css/modern.css modern-proto/js/app.js modern-proto/js/store.js modern-proto/js/modules.js modern-proto/js/permissions.js modern-proto/js/accounting-navigation.js modern-proto/manifest.webmanifest modern-proto/service-worker.js modern-proto/icon-192.png modern-proto/icon-512.png; do
+          for file in index.html modern-proto/index.html modern-proto/css/modern.css modern-proto/js/app.js modern-proto/js/store.js modern-proto/js/modules.js modern-proto/js/permissions.js modern-proto/js/accounting-navigation.js modern-proto/js/accounting-exchange.js modern-proto/vendor/fflate-0.8.2.js modern-proto/vendor/FFLATE-LICENSE.txt modern-proto/manifest.webmanifest modern-proto/service-worker.js modern-proto/icon-192.png modern-proto/icon-512.png; do
             if [ ! -f "$file" ]; then
               echo "::error::Fichier obligatoire manquant : $file"
               missing=1
@@ -44,7 +44,7 @@ jobs:
 
       - name: Check JavaScript syntax
         run: |
-          for file in modern-proto/js/*.js modern-proto/service-worker.js; do
+          for file in modern-proto/js/*.js modern-proto/vendor/*.js modern-proto/service-worker.js; do
             node --check "$file"
             echo "Syntaxe OK : $file"
           done
@@ -56,12 +56,13 @@ jobs:
           node tests/modules.test.js
           node tests/permissions.test.js
           node tests/accounting-navigation.test.js
+          node tests/accounting-exchange.test.js
 
       - name: Smoke test static server
         run: |
           python3 -m http.server 8080 >/tmp/perfecto-http.log 2>&1 &
           sleep 1
-          for path in / /modern-proto/ /modern-proto/index.html /modern-proto/css/modern.css /modern-proto/js/app.js /modern-proto/js/store.js /modern-proto/js/modules.js /modern-proto/js/permissions.js /modern-proto/js/accounting-navigation.js /modern-proto/manifest.webmanifest /modern-proto/service-worker.js /modern-proto/icon-192.png; do
+          for path in / /modern-proto/ /modern-proto/index.html /modern-proto/css/modern.css /modern-proto/js/app.js /modern-proto/js/store.js /modern-proto/js/modules.js /modern-proto/js/permissions.js /modern-proto/js/accounting-navigation.js /modern-proto/js/accounting-exchange.js /modern-proto/vendor/fflate-0.8.2.js /modern-proto/manifest.webmanifest /modern-proto/service-worker.js /modern-proto/icon-192.png; do
             code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:8080$path")
             if [ "$code" != "200" ]; then
               echo "::error::$path a renvoyé HTTP $code"

@@ -9,6 +9,7 @@
   var ModuleRegistry = window.PerfectoModules;
   var Permissions = window.PerfectoPermissions;
   var AccountingNavigation = window.PerfectoAccountingNavigation;
+  var AccountingExchange = window.PerfectoAccountingExchange;
 
   /* ------------------------------ Utilitaires ------------------------------ */
   function esc(value) {
@@ -66,6 +67,7 @@
   };
 
   var deferredInstallPrompt = null;
+  var exchangeImportSession = null;
   var launcherUi = { filter: 'all', query: '' };
   var DEMO_ORGANIZATION_ID = 'demo-org';
   var ACCOUNTING_ROUTES = ['dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings', 'menu'];
@@ -182,9 +184,17 @@
         return { moduleId: 'accounting', actionId: 'data.reset' };
       case 'restore-local-backup':
         return { moduleId: 'accounting', actionId: 'data.restore' };
+      case 'commit-accounting-exchange-import':
+        return { moduleId: 'accounting', actionId: 'data.import' };
       case 'export-json':
       case 'export-accounts-csv':
       case 'export-balance-csv':
+      case 'export-accounting-exchange':
+      case 'export-accounting-workbook':
+      case 'download-accounting-exchange-template':
+      case 'download-accounting-workbook-template':
+      case 'export-accounting-chart':
+      case 'export-accounting-journals':
       case 'print':
         return { moduleId: 'accounting', actionId: 'data.export' };
       case 'add-line':
@@ -264,6 +274,13 @@
       importInput.hidden = !canImportData;
       var importLabel = $('label[for="import-file"]', root);
       if (importLabel) importLabel.hidden = !canImportData;
+    }
+    var exchangeImportInput = $('#exchange-import-file', root);
+    if (exchangeImportInput) {
+      var canImportExchange = hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext());
+      exchangeImportInput.hidden = !canImportExchange;
+      var exchangeImportLabel = $('#exchange-import-label', root);
+      if (exchangeImportLabel) exchangeImportLabel.hidden = !canImportExchange;
     }
   }
 
@@ -1849,18 +1866,18 @@
         '<div class="total-item"><span>Espace utilisé</span><strong>' + sizeKb + ' Ko</strong></div>' +
       '</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-        '<button type="button" class="btn btn-primary" data-action="export-json">↓ Exporter (JSON)</button>' +
-        '<label class="btn btn-ghost" for="import-file" style="cursor:pointer">↑ Importer</label>' +
+        '<button type="button" class="btn btn-primary" data-action="export-json">↓ Sauvegarder le dossier (JSON)</button>' +
+        '<label class="btn btn-ghost" for="import-file" style="cursor:pointer">↑ Restaurer une sauvegarde JSON</label>' +
         '<input id="import-file" type="file" accept="application/json,.json" class="sr-only">' +
         '<button type="button" class="btn btn-danger" data-action="reset-data">↺ Réinitialiser la démo</button>' +
       '</div>' +
-      '<p class="small muted mt-8">L’export identifie le dossier actif. L’import remplace uniquement les données du dossier actif.</p>' +
+      '<p class="small muted mt-8">La sauvegarde JSON PERFECTO est distincte des fichiers d’échange Excel/CSV. Sa restauration remplace les données comptables du dossier actif.</p>' +
       '<div class="local-backup-box"><div class="local-backup-heading"><span>RESTAURATION LOCALE</span><b>1 point</b></div>' + backupMarkup +
       '<p class="small muted">Ce point reste dans ce navigateur et conserve uniquement l’état précédent. Il ne remplace pas une copie exportée sur un support indépendant.</p></div>' +
     '</section>';
 
     html += '<section class="card panel">' +
-      '<div class="panel-header"><div><h2>Application installable</h2><p class="sub">PWA sans dépendance</p></div></div>' +
+      '<div class="panel-header"><div><h2>Application installable</h2><p class="sub">PWA statique, sans service serveur</p></div></div>' +
       '<div class="alert ' + (swReady ? 'success' : 'info') + '">' +
         (swReady ? '✅ Service worker actif : l’application peut fonctionner hors ligne.' : 'ℹ️ Le service worker s’active après le premier chargement complet.') +
       '</div>' +
@@ -1925,6 +1942,337 @@
     }).join('') + '</ul>';
   }
 
+  function safeFilePart(value) {
+    return String(value || 'dossier').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'dossier';
+  }
+
+  function viewExchangeFormatGuide() {
+    var columns = [
+      ['FORMAT / VERSION', 'Valeurs fixes : PERFECTO-ECHANGE / 1.'],
+      ['SYSTEME_SOURCE', 'Origine déclarée : EXCEL, SAGE, PERFECTO, HYPERSOFT, ODOO ou autre libellé.'],
+      ['REFERENCE_DOSSIER / EXERCICE', 'Dossier et exercice source ; identiques sur toutes les lignes du fichier.'],
+      ['CODE_JOURNAL / LIBELLE_JOURNAL', 'Code du journal source et libellé ; le code est associé à un journal du dossier actif.'],
+      ['DATE / REFERENCE_PIECE / LIBELLE_PIECE', 'Date AAAA-MM-JJ, référence unique de la pièce et libellé. Les lignes d’une pièce partagent ces valeurs.'],
+      ['CODE_COMPTE / LIBELLE_COMPTE', 'Code et libellé du compte source ; le code est associé à un compte existant du plan PERFECTO.'],
+      ['CLASSE_COMPTE / NATURE_COMPTE', 'Informations de contexte sur le compte source ; elles ne créent ni ne modifient le plan.'],
+      ['DEBIT_XOF / CREDIT_XOF', 'Montants XOF entiers, sans séparateurs de milliers ni décimales ; renseigner un seul côté par ligne.'],
+      ['STATUT_SOURCE', 'VALIDEE ou BROUILLON ; le statut appliqué à l’import est toujours celui choisi dans l’écran.'],
+      ['ID_SOURCE', 'Identifiant de la pièce d’origine, identique sur toutes ses lignes ; utilisé pour la traçabilité et le contrôle des doublons.']
+    ];
+    return '<details class="exchange-mapping exchange-format-guide"><summary>Voir les colonnes et règles du modèle PERFECTO-ÉCHANGE v1</summary>' +
+      '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Colonne(s)</th><th>Règle</th></tr></thead><tbody>' +
+      columns.map(function (row) { return '<tr><td><strong>' + esc(row[0]) + '</strong></td><td>' + esc(row[1]) + '</td></tr>'; }).join('') +
+      '</tbody></table></div><p class="small muted">Une ligne du CSV ou de la feuille Écritures correspond à une ligne comptable. Les lignes ayant le même code journal, la même date et la même référence sont regroupées en une pièce. Le classeur `.xlsx` n’exécute pas les macros ni les formules lors de l’import ; les formats logiciels propriétaires feront l’objet d’adaptateurs ultérieurs.</p></details>';
+  }
+
+  function viewAccountingExchangeExport() {
+    var dossier = S.currentDossier();
+    var entries = S.entries().filter(function (entry) {
+      return entry.status === 'posted' && entry.date >= dossier.cycleStart && entry.date <= dossier.cycleEnd;
+    });
+    var lineCount = entries.reduce(function (count, entry) { return count + entry.lines.length; }, 0);
+    var drafts = S.entries().filter(function (entry) { return entry.status === 'draft'; }).length;
+    var systems = [
+      { label: 'Classeur Excel + CSV PERFECTO v1', state: 'Disponible', ready: true },
+      { label: 'Sage Comptabilité', state: 'Adaptateur à construire', ready: false },
+      { label: 'PERFECTO historique', state: 'Adaptateur à construire', ready: false },
+      { label: 'HYPERSOFT', state: 'Adaptateur à construire', ready: false },
+      { label: 'ODOO', state: 'Adaptateur à construire', ready: false }
+    ];
+    return '<div class="exchange-workspace">' +
+      '<div class="alert info"><div><strong>Format commun PERFECTO-ÉCHANGE v1</strong><br>Classeur Excel `.xlsx` avec feuilles Instructions, Dossier, Comptes, Journaux et Écritures, et format CSV UTF-8 ouvrable dans Excel. Ce format commun sert de passerelle ; les fichiers natifs de Sage, PERFECTO historique, HYPERSOFT et ODOO nécessiteront ensuite leurs propres adaptateurs.</div></div>' +
+      '<div class="exchange-context-grid">' +
+        '<div><small>Dossier actif</small><strong>' + esc(dossier.reference) + '</strong></div>' +
+        '<div><small>Écritures validées exportables</small><strong>' + entries.length + ' pièce(s) · ' + lineCount + ' ligne(s)</strong></div>' +
+        '<div><small>Brouillons non exportés</small><strong>' + drafts + '</strong></div>' +
+      '</div>' +
+      '<div class="exchange-grid">' +
+        '<section class="exchange-card"><p class="page-kicker">ÉCRITURES</p><h4>Exporter le dossier vers Excel</h4>' +
+          '<p>Le classeur regroupe les instructions, le dossier, le plan comptable, les journaux et les écritures validées. Les brouillons sont exclus.</p>' +
+          '<div class="exchange-button-row"><button type="button" class="btn btn-primary" data-action="export-accounting-workbook">↓ Classeur Excel (.xlsx)</button>' +
+          '<button type="button" class="btn btn-ghost" data-action="export-accounting-exchange">↓ Écritures CSV</button></div>' +
+        '</section>' +
+        '<section class="exchange-card"><p class="page-kicker">MODÈLES</p><h4>Préparer un fichier d’échange</h4>' +
+          '<p>Le modèle Excel peut être complété puis réimporté. Les comptes et journaux sources peuvent être associés aux référentiels du dossier lors de l’aperçu.</p>' +
+          '<div class="exchange-button-row"><button type="button" class="btn btn-primary" data-action="download-accounting-workbook-template">↓ Modèle Excel (.xlsx)</button>' +
+          '<button type="button" class="btn btn-ghost" data-action="download-accounting-exchange-template">↓ Modèle CSV</button>' +
+          '<button type="button" class="btn btn-ghost" data-action="export-accounting-chart">↓ Plan comptable</button>' +
+          '<button type="button" class="btn btn-ghost" data-action="export-accounting-journals">↓ Journaux</button></div>' +
+        '</section>' +
+      '</div>' +
+      viewExchangeFormatGuide() +
+      '<section class="exchange-card exchange-systems"><p class="page-kicker">PROFILS LOGICIELS</p><h4>Prise en charge</h4>' +
+        '<ul>' + systems.map(function (system) {
+          return '<li><span>' + esc(system.label) + '</span><strong class="' + (system.ready ? 'is-ready' : 'is-planned') + '">' + esc(system.state) + '</strong></li>';
+        }).join('') + '</ul>' +
+        '<p class="small muted">Un adaptateur direct sera validé par version de logiciel et à partir d’un fichier réel anonymisé. Excel/CSV est disponible comme format commun, pas comme connexion directe au logiciel cible.</p>' +
+      '</section>' +
+      '<p class="exchange-footnote">Montants en XOF entiers ; dates au format AAAA-MM-JJ. Les données sont générées dans le navigateur et ne sont pas envoyées à un serveur.</p>' +
+    '</div>';
+  }
+
+  function viewAccountingExchangeImport() {
+    return '<div class="exchange-workspace">' +
+      '<div class="alert info"><div><strong>Import sécurisé par aperçu</strong><br>Chargez le format commun PERFECTO-ÉCHANGE v1. Le fichier reste dans ce navigateur ; aucun compte ou journal n’est créé automatiquement. L’import ajoute des pièces au dossier actif, sans remplacer ses données.</div></div>' +
+      '<div class="exchange-import-controls">' +
+        '<div class="field"><label for="exchange-import-file">Fichier d’échange CSV ou Excel</label>' +
+          '<input id="exchange-import-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>' +
+          '<label id="exchange-import-label" class="btn btn-primary exchange-file-picker" for="exchange-import-file">↑ Choisir un CSV ou un classeur Excel</label>' +
+          '<span class="hint">Jusqu’à 5 Mo · format PERFECTO-ÉCHANGE v1 · CSV ou classeur `.xlsx` sans macros.</span></div>' +
+        '<div class="field"><label for="exchange-import-mode">Statut des écritures importées</label>' +
+          '<select id="exchange-import-mode"><option value="draft" selected>Créer des brouillons (recommandé)</option><option value="posted">Importer comme écritures validées</option></select>' +
+          '<span class="hint">La validation exige l’équilibre de chaque pièce et une période ouverte. Elle requiert aussi le droit « Valider une écriture ».</span></div>' +
+      '</div>' +
+      '<div id="exchange-import-preview" class="exchange-preview" aria-live="polite"><div class="empty-state"><strong>Aucun fichier analysé</strong><span>Choisissez un CSV ou un classeur .xlsx pour voir les écritures, les correspondances et les contrôles avant import.</span></div></div>' +
+      viewExchangeFormatGuide() +
+      '<p class="exchange-footnote">Importation initiale : écritures générales uniquement depuis le format commun Excel/CSV. Les tiers, données analytiques, devises et fichiers natifs Sage/PERFECTO/HYPERSOFT/ODOO ne sont pas encore importés directement.</p>' +
+    '</div>';
+  }
+
+  function exchangeMappingsHtml(session, kind) {
+    var isAccount = kind === 'account';
+    var sourceMap = isAccount ? session.accountMap : session.journalMap;
+    var catalog = Object.create(null);
+    session.parseResult.entries.forEach(function (entry) {
+      if (!isAccount) {
+        var journalCode = String(entry.journal || '');
+        if (!catalog[journalCode]) catalog[journalCode] = entry.journalLabel || '';
+      } else {
+        entry.lines.forEach(function (line) {
+          var accountCode = String(line.account || '');
+          if (!catalog[accountCode]) catalog[accountCode] = line.accountLabel || '';
+        });
+      }
+    });
+    var codes = Object.keys(catalog).sort(function (a, b) { return a.localeCompare(b); });
+    if (!codes.length) return '';
+    var targetOptions = isAccount ? S.accounts() : S.journals();
+    var label = isAccount ? 'comptes' : 'journaux';
+    var hasUnmapped = codes.some(function (code) { return !sourceMap[code]; });
+    return '<details class="exchange-mapping"' + (hasUnmapped ? ' open' : '') + '><summary>Correspondance des ' + label + ' (' + codes.length + ' codes source)</summary>' +
+      '<p class="small muted">' + (isAccount
+        ? 'Associez chaque code source à un compte du plan PERFECTO. Aucun compte n’est créé automatiquement.'
+        : 'Associez chaque journal source à un journal du dossier.') + '</p>' +
+      '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Code source</th><th>Libellé source</th><th>Correspondance PERFECTO</th></tr></thead><tbody>' +
+      codes.map(function (code) {
+        var mappedCode = sourceMap[code] || '';
+        var sourceLabel = catalog[code] || '';
+        var options = '<option value="">— Choisir une correspondance —</option>' + targetOptions.map(function (target) {
+          var selected = target.code === mappedCode ? ' selected' : '';
+          var targetLabel = target.label || target.type || '';
+          var inactive = isAccount && target.active === false ? ' · inactif' : '';
+          return '<option value="' + esc(target.code) + '"' + selected + '>' + esc(target.code + ' — ' + targetLabel + inactive) + '</option>';
+        }).join('');
+        return '<tr><td><strong>' + esc(code) + '</strong></td><td>' + esc(sourceLabel || '—') + '</td><td><select aria-label="Associer ' + esc(code) + '" data-exchange-' + (isAccount ? 'account' : 'journal') + '-map="' + esc(code) + '">' + options + '</select></td></tr>';
+      }).join('') +
+      '</tbody></table></div></details>';
+  }
+
+  function renderExchangeImportPreview() {
+    var host = $('#exchange-import-preview');
+    if (!host || !exchangeImportSession) return;
+    var session = exchangeImportSession;
+    var parsed = session.parseResult;
+    if (!parsed.ok) {
+      host.innerHTML = '<div class="alert error"><div><strong>Fichier non reconnu ou invalide</strong><ul>' +
+        parsed.errors.slice(0, 20).map(function (message) { return '<li>' + esc(message) + '</li>'; }).join('') +
+        (parsed.errors.length > 20 ? '<li>… et ' + (parsed.errors.length - 20) + ' autre(s) erreur(s).</li>' : '') +
+        '</ul></div></div>';
+      session.analysis = null;
+      return;
+    }
+
+    var modeSelect = $('#exchange-import-mode');
+    session.mode = modeSelect && modeSelect.value === 'posted' ? 'posted' : 'draft';
+    var metadata = parsed.metadata || {};
+    var target = S.currentDossier();
+    var contextMismatch = metadata.dossierReference !== target.reference || Number(metadata.exercise) !== Number(target.exerciseYear);
+    var options = {
+      sourceSystem: metadata.sourceSystem,
+      accountMap: session.accountMap,
+      journalMap: session.journalMap
+    };
+    var analysis = S.previewExchangeImport(parsed.entries, session.mode, options);
+    session.analysis = analysis;
+    var canPost = hasDemoPermission(getActiveDemoMember(), 'accounting', 'entry.validate', accountingAccessContext());
+    var permissionBlocked = session.mode === 'posted' && !canPost;
+    var contextBlocked = contextMismatch && !session.contextConfirmed;
+    var canCommit = analysis.ok && !permissionBlocked && !contextBlocked;
+    var sourceStatus = parsed.entries.filter(function (entry) { return entry.sourceStatus === 'posted'; }).length;
+    var summaries = '<div class="exchange-summary-grid">' +
+      '<div><small>Fichier</small><strong>' + esc(session.fileName) + '</strong></div>' +
+      '<div><small>Origine déclarée</small><strong>' + esc(metadata.sourceSystem || '—') + '</strong></div>' +
+      '<div><small>Contenu</small><strong>' + parsed.entries.length + ' pièce(s) · ' + parsed.lineCount + ' ligne(s)</strong></div>' +
+      '<div><small>Dossier source / actif</small><strong>' + esc(metadata.dossierReference || '—') + ' → ' + esc(target.reference) + '</strong></div>' +
+      '</div>';
+    var warningMarkup = analysis.warnings.length
+      ? '<div class="alert warning"><div><strong>À vérifier</strong><ul>' + analysis.warnings.map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('') + '</ul></div></div>'
+      : '';
+    var errorsMarkup = analysis.errors.length
+      ? '<div class="alert error"><div><strong>' + analysis.errors.length + ' contrôle(s) bloquant(s)</strong><ul>' +
+        analysis.errors.slice(0, 20).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') +
+        (analysis.errors.length > 20 ? '<li>… et ' + (analysis.errors.length - 20) + ' autre(s) erreur(s).</li>' : '') +
+        '</ul></div></div>'
+      : '<div class="alert success"><div><strong>Aucun contrôle bloquant</strong><br>' + analysis.balancedCount + ' pièce(s) équilibrée(s)' +
+        (session.mode === 'draft' && analysis.unbalancedCount ? ' · ' + analysis.unbalancedCount + ' brouillon(s) à équilibrer avant validation' : '') +
+        '.</div></div>';
+    var contextMarkup = contextMismatch
+      ? '<label class="exchange-context-confirm"><input id="exchange-confirm-target" type="checkbox"' + (session.contextConfirmed ? ' checked' : '') + '> Je confirme que le fichier source (' + esc(metadata.dossierReference || 'sans référence') + ', exercice ' + esc(metadata.exercise) + ') concerne le dossier actif ' + esc(target.reference) + ' (exercice ' + esc(target.exerciseYear) + ').</label>'
+      : '';
+    var permissionMarkup = permissionBlocked
+      ? '<div class="alert warning">Ce profil peut importer, mais ne possède pas le droit « Valider une écriture ». Choisissez le mode brouillon ou demandez ce droit.</div>'
+      : '';
+    var modeLabel = session.mode === 'posted' ? 'Importer et valider le lot' : 'Importer comme brouillons';
+    var buttonLabel = modeLabel + ' (' + parsed.entries.length + ' pièce' + (parsed.entries.length === 1 ? '' : 's') + ')';
+    var button = '<button type="button" class="btn btn-primary" data-action="commit-accounting-exchange-import"' + (canCommit ? '' : ' disabled') + '>' + esc(buttonLabel) + '</button>';
+    var importedSourceStatus = sourceStatus
+      ? '<p class="small muted">Le fichier marque ' + sourceStatus + ' pièce(s) comme validée(s). Le statut appliqué sera celui choisi ci-dessus.</p>'
+      : '';
+
+    host.innerHTML = summaries +
+      '<div class="exchange-mode-note">Mode sélectionné : <strong>' + (session.mode === 'posted' ? 'écritures validées' : 'brouillons') + '</strong>. Un point de restauration local sera créé avant l’ajout.</div>' +
+      importedSourceStatus +
+      exchangeMappingsHtml(session, 'account') + exchangeMappingsHtml(session, 'journal') +
+      warningMarkup + errorsMarkup + contextMarkup + permissionMarkup +
+      '<div class="exchange-preview-footer">' + button + '</div>';
+    applyDemoActionGates(host);
+
+    $$('[data-exchange-account-map]', host).forEach(function (select) {
+      select.addEventListener('change', function () {
+        session.accountMap[select.getAttribute('data-exchange-account-map')] = select.value;
+        session.contextConfirmed = !!(host.querySelector('#exchange-confirm-target') && host.querySelector('#exchange-confirm-target').checked);
+        renderExchangeImportPreview();
+      });
+    });
+    $$('[data-exchange-journal-map]', host).forEach(function (select) {
+      select.addEventListener('change', function () {
+        session.journalMap[select.getAttribute('data-exchange-journal-map')] = select.value;
+        session.contextConfirmed = !!(host.querySelector('#exchange-confirm-target') && host.querySelector('#exchange-confirm-target').checked);
+        renderExchangeImportPreview();
+      });
+    });
+    var confirmContext = $('#exchange-confirm-target', host);
+    if (confirmContext) {
+      confirmContext.addEventListener('change', function () {
+        session.contextConfirmed = confirmContext.checked;
+        renderExchangeImportPreview();
+      });
+    }
+  }
+
+  function bindAccountingExchangeImport() {
+    exchangeImportSession = null;
+    var fileInput = $('#exchange-import-file');
+    var modeSelect = $('#exchange-import-mode');
+    var previewHost = $('#exchange-import-preview');
+    if (!fileInput || !modeSelect || !previewHost) return;
+
+    modeSelect.addEventListener('change', function () {
+      if (!exchangeImportSession) return;
+      exchangeImportSession.contextConfirmed = !!($('#exchange-confirm-target') && $('#exchange-confirm-target').checked);
+      renderExchangeImportPreview();
+    });
+    fileInput.addEventListener('change', function () {
+      var file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) {
+        exchangeImportSession = { fileName: file.name, parseResult: { ok: false, errors: ['Le fichier dépasse la limite de 5 Mo. Divisez-le en lots plus petits.'], entries: [], metadata: null } };
+        renderExchangeImportPreview();
+        return;
+      }
+      var reader = new FileReader();
+      var isWorkbook = /\.xlsx$/i.test(file.name || '') || file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      reader.onload = function () {
+        var parseResult = isWorkbook
+          ? AccountingExchange.parseWorkbook(new Uint8Array(reader.result || new ArrayBuffer(0)))
+          : AccountingExchange.parse(String(reader.result || ''));
+        var accountMap = Object.create(null);
+        var journalMap = Object.create(null);
+        if (parseResult.ok) {
+          parseResult.entries.forEach(function (entry) {
+            if (!Object.prototype.hasOwnProperty.call(journalMap, entry.journal)) journalMap[entry.journal] = S.journal(entry.journal) ? entry.journal : '';
+            entry.lines.forEach(function (line) {
+              if (!Object.prototype.hasOwnProperty.call(accountMap, line.account)) accountMap[line.account] = S.account(line.account) ? line.account : '';
+            });
+          });
+        }
+        exchangeImportSession = {
+          fileName: file.name,
+          targetDossierId: S.currentDossier().id,
+          parseResult: parseResult,
+          accountMap: accountMap,
+          journalMap: journalMap,
+          mode: modeSelect.value === 'posted' ? 'posted' : 'draft',
+          contextConfirmed: false,
+          analysis: null
+        };
+        renderExchangeImportPreview();
+      };
+      reader.onerror = function () {
+        exchangeImportSession = { fileName: file.name, parseResult: { ok: false, errors: ['Lecture du fichier impossible.'], entries: [], metadata: null } };
+        renderExchangeImportPreview();
+      };
+      if (isWorkbook) reader.readAsArrayBuffer(file);
+      else reader.readAsText(file, 'UTF-8');
+    });
+  }
+
+  function commitAccountingExchangeImport() {
+    var session = exchangeImportSession;
+    if (!session || !session.parseResult || !session.parseResult.ok) {
+      toast('Aucun fichier d’échange valide n’est prêt à être importé.', 'error');
+      return;
+    }
+    if (session.targetDossierId !== S.currentDossier().id) {
+      toast('Le dossier actif a changé depuis l’analyse. Rechargez le fichier pour éviter un import dans le mauvais dossier.', 'error');
+      exchangeImportSession = null;
+      render();
+      return;
+    }
+    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext())) {
+      toast('Import refusé par défaut : ce profil ne possède pas le droit data.import.', 'warning');
+      return;
+    }
+    var modeSelect = $('#exchange-import-mode');
+    var mode = modeSelect && modeSelect.value === 'posted' ? 'posted' : 'draft';
+    if (mode === 'posted' && !hasDemoPermission(getActiveDemoMember(), 'accounting', 'entry.validate', accountingAccessContext())) {
+      toast('Validation refusée : le droit « Valider une écriture » est requis pour importer des pièces validées.', 'warning');
+      return;
+    }
+    var metadata = session.parseResult.metadata || {};
+    var options = {
+      sourceSystem: metadata.sourceSystem,
+      accountMap: session.accountMap,
+      journalMap: session.journalMap
+    };
+    var analysis = S.previewExchangeImport(session.parseResult.entries, mode, options);
+    var target = S.currentDossier();
+    var contextMismatch = metadata.dossierReference !== target.reference || Number(metadata.exercise) !== Number(target.exerciseYear);
+    if (!analysis.ok || (contextMismatch && !session.contextConfirmed)) {
+      session.mode = mode;
+      session.analysis = analysis;
+      session.contextConfirmed = session.contextConfirmed && contextMismatch;
+      renderExchangeImportPreview();
+      toast(contextMismatch && !session.contextConfirmed
+        ? 'Confirmez d’abord le dossier et l’exercice de destination.'
+        : 'L’import est bloqué par les contrôles affichés dans l’aperçu.', 'warning');
+      return;
+    }
+    var statusLabel = mode === 'posted' ? 'écritures validées' : 'brouillons';
+    if (!window.confirm('Ajouter ' + session.parseResult.entries.length + ' pièce(s) comme ' + statusLabel + ' au dossier « ' + target.reference + ' » ? Les données existantes ne seront pas remplacées. Un point de restauration local sera créé avant l’ajout.')) return;
+
+    var result = S.importExchange(session.parseResult.entries, mode, options);
+    if (!result.ok) {
+      toast(result.errors[0] || 'Import impossible.', 'error');
+      renderExchangeImportPreview();
+      return;
+    }
+    exchangeImportSession = null;
+    toast(result.importedCount + ' pièce(s) importée(s) comme ' + statusLabel + ' ; sauvegarde locale créée.', 'success');
+    render();
+  }
+
   function viewAccountingMenu(params) {
     params = params || {};
     var phone = isPhoneViewport();
@@ -1962,7 +2310,10 @@
     var details = tab.reason
       ? '<p class="menu-item-reason">' + esc(tab.reason) + '</p>'
       : '';
-    var emptyActionNote = !actions && !childList
+    var exchangeFeature = group.id === 'fichier' && tab.id === 'export-other'
+      ? viewAccountingExchangeExport()
+      : (group.id === 'fichier' && tab.id === 'import-other' ? viewAccountingExchangeImport() : '');
+    var emptyActionNote = !actions && !childList && !exchangeFeature
       ? '<p class="menu-disabled-note">Aucune action n’est disponible pour cet élément.</p>'
       : '';
 
@@ -1977,6 +2328,7 @@
             '<div class="accounting-menu-panel-head"><div><p class="page-kicker">SOUS-MENU</p><h3>' + esc(tab.label) + '</h3></div>' + menuStatusBadge(tab.status) + '</div>' +
             details + irreversible +
             (childList ? '<div class="menu-children-wrap"><h4>Éléments de ce sous-menu</h4>' + childList + '</div>' : '') +
+            exchangeFeature +
             (actions ? '<div class="menu-actions">' + actions + '</div>' : '') +
             emptyActionNote +
           '</section>' +
@@ -1998,6 +2350,11 @@
     }
     if (route === 'organization') {
       bindOrganizationView();
+      return;
+    }
+    if (route === 'menu') {
+      var menuParams = parseHash().params;
+      if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-other') bindAccountingExchangeImport();
       return;
     }
 
@@ -2396,6 +2753,74 @@
         if (!restoredBackup.ok) { toast(restoredBackup.errors[0] || 'Restauration impossible.', 'error'); break; }
         toast('Point de restauration local restauré.', 'success');
         render();
+        break;
+      }
+      case 'commit-accounting-exchange-import':
+        commitAccountingExchangeImport();
+        break;
+      case 'export-accounting-workbook': {
+        var workbookDossier = S.currentDossier();
+        var workbookStem = 'perfecto-' + safeFilePart(workbookDossier.reference) + '-' + S.exercise();
+        try {
+          var workbookBytes = AccountingExchange.exportWorkbook({
+            dossier: workbookDossier,
+            accounts: S.accounts(),
+            journals: S.journals()
+          }, S.entries());
+          downloadFile(workbookStem + '-echange-v1.xlsx', workbookBytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+          toast('Classeur Excel PERFECTO-ÉCHANGE v1 téléchargé.', 'success');
+        } catch (workbookError) {
+          toast(workbookError.message || 'Classeur Excel impossible à générer.', 'error');
+        }
+        break;
+      }
+      case 'export-accounting-exchange': {
+        var exchangeDossier = S.currentDossier();
+        var exchangeStem = 'perfecto-' + safeFilePart(exchangeDossier.reference) + '-' + S.exercise();
+        try {
+          var exchangeCsv = AccountingExchange.exportEntries({
+            dossier: exchangeDossier,
+            accounts: S.accounts(),
+            journals: S.journals()
+          }, S.entries());
+          downloadFile(exchangeStem + '-ecritures-v1.csv', exchangeCsv, 'text/csv;charset=utf-8');
+          toast('Écritures validées exportées au format PERFECTO-ÉCHANGE v1.', 'success');
+        } catch (exchangeError) {
+          toast(exchangeError.message || 'Export impossible : les écritures doivent être contrôlées.', 'error');
+        }
+        break;
+      }
+      case 'download-accounting-workbook-template': {
+        var workbookTemplateDossier = S.currentDossier();
+        try {
+          var workbookTemplate = AccountingExchange.templateWorkbook({
+            dossier: workbookTemplateDossier,
+            accounts: S.accounts(),
+            journals: S.journals()
+          });
+          downloadFile('perfecto-echange-v1-modele-' + safeFilePart(workbookTemplateDossier.reference) + '.xlsx', workbookTemplate, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+          toast('Modèle Excel PERFECTO-ÉCHANGE v1 téléchargé.', 'success');
+        } catch (templateError) {
+          toast(templateError.message || 'Modèle Excel impossible à générer.', 'error');
+        }
+        break;
+      }
+      case 'download-accounting-exchange-template': {
+        var templateDossier = S.currentDossier();
+        downloadFile('perfecto-echange-v1-modele-' + safeFilePart(templateDossier.reference) + '.csv', AccountingExchange.template({ dossier: templateDossier }), 'text/csv;charset=utf-8');
+        toast('Modèle CSV Excel téléchargé.', 'success');
+        break;
+      }
+      case 'export-accounting-chart': {
+        var chartDossier = S.currentDossier();
+        downloadFile('perfecto-' + safeFilePart(chartDossier.reference) + '-plan-comptable.csv', AccountingExchange.exportAccounts(S.accounts()), 'text/csv;charset=utf-8');
+        toast('Plan comptable exporté au format CSV Excel.', 'success');
+        break;
+      }
+      case 'export-accounting-journals': {
+        var journalsDossier = S.currentDossier();
+        downloadFile('perfecto-' + safeFilePart(journalsDossier.reference) + '-journaux.csv', AccountingExchange.exportJournals(S.journals()), 'text/csv;charset=utf-8');
+        toast('Journaux exportés au format CSV Excel.', 'success');
         break;
       }
       case 'export-json':

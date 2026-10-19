@@ -10,11 +10,15 @@ const vm = require('vm');
 const assert = require('assert');
 
 const stored = {};
+let storageWritesBlocked = false;
 const sandbox = {
   window: {},
   localStorage: {
     getItem: (key) => (key in stored ? stored[key] : null),
-    setItem: (key, value) => { stored[key] = String(value); },
+    setItem: (key, value) => {
+      if (storageWritesBlocked) throw new Error('quota simulé');
+      stored[key] = String(value);
+    },
     removeItem: (key) => { delete stored[key]; }
   },
   Intl,
@@ -210,6 +214,100 @@ test('export puis import JSON', () => {
 test('import d’un fichier invalide refusé', () => {
   const result = S.importJson('{"foo":42}');
   assert.strictEqual(result.ok, false);
+});
+
+console.log('Échanges comptables PERFECTO-ÉCHANGE v1');
+test('aperçu d’import sans modification du dossier, avec correspondance de comptes et journaux', () => {
+  const before = S.entries().length;
+  const source = [{
+    reference: 'OD-2026-EXCHANGE-001', journal: 'DIVERS', journalLabel: 'Opérations diverses',
+    date: '2026-08-12', description: 'Import de test', sourceSystem: 'EXCEL', sourceId: 'excel-001', sourceStatus: 'posted',
+    lines: [
+      { account: 'ACHATS', accountLabel: 'Achats', debit: 1500, credit: 0 },
+      { account: 'FOUR', accountLabel: 'Fournisseurs', debit: 0, credit: 1500 }
+    ]
+  }];
+  const missingMappings = S.previewExchangeImport(source, 'draft', { sourceSystem: 'EXCEL' });
+  assert.strictEqual(missingMappings.ok, false);
+  assert.deepStrictEqual(Array.from(missingMappings.unmappedAccounts, item => item.code).sort(), ['ACHATS', 'FOUR']);
+  assert.deepStrictEqual(Array.from(missingMappings.unmappedJournals, item => item.code), ['DIVERS']);
+  const mapped = S.previewExchangeImport(source, 'draft', {
+    sourceSystem: 'EXCEL',
+    accountMap: { ACHATS: '601100', FOUR: '401100' },
+    journalMap: { DIVERS: 'OD' }
+  });
+  assert.strictEqual(mapped.ok, true, mapped.errors.join(' '));
+  assert.strictEqual(S.entries().length, before, 'L’aperçu ne doit jamais écrire dans le dossier.');
+});
+
+test('écritures importées comme brouillons, traçabilité et doublons refusés', () => {
+  const source = [{
+    reference: 'OD-2026-EXCHANGE-002', journal: 'OD', date: '2026-08-13', description: 'Reprise Excel',
+    sourceSystem: 'EXCEL', sourceId: 'excel-002', sourceStatus: 'posted',
+    lines: [
+      { account: '601100', accountLabel: 'Achats', debit: 2500, credit: 0 },
+      { account: '401100', accountLabel: 'Fournisseurs', debit: 0, credit: 2500 }
+    ]
+  }];
+  const before = S.entries().length;
+  const result = S.importExchange(source, 'draft', { sourceSystem: 'EXCEL' });
+  assert.strictEqual(result.ok, true, result.errors.join(' '));
+  assert.strictEqual(result.importedCount, 1);
+  assert.strictEqual(S.entries().length, before + 1);
+  const imported = S.entries().find(entry => entry.reference === source[0].reference);
+  assert.strictEqual(imported.status, 'draft');
+  assert.strictEqual(imported.sourceSystem, 'EXCEL');
+  assert.strictEqual(imported.sourceId, 'excel-002');
+  assert.strictEqual(imported.sourceStatus, 'posted');
+  assert.strictEqual(imported.lines[0].sourceAccountCode, '601100');
+  const duplicate = S.previewExchangeImport(source, 'draft', { sourceSystem: 'EXCEL' });
+  assert.strictEqual(duplicate.ok, false);
+  assert.ok(duplicate.errors.some(error => error.includes('existe déjà')));
+});
+
+test('écriture déséquilibrée acceptée en brouillon mais refusée comme validée', () => {
+  const source = [{
+    reference: 'OD-2026-EXCHANGE-003', journal: 'OD', date: '2026-08-14', description: 'Lot incomplet',
+    sourceSystem: 'EXCEL', sourceId: 'excel-003',
+    lines: [{ account: '601100', debit: 1000, credit: 0 }, { account: '401100', debit: 0, credit: 900 }]
+  }];
+  assert.strictEqual(S.previewExchangeImport(source, 'draft', { sourceSystem: 'EXCEL' }).ok, true);
+  const postedPreview = S.previewExchangeImport(source, 'posted', { sourceSystem: 'EXCEL' });
+  assert.strictEqual(postedPreview.ok, false);
+  assert.ok(postedPreview.errors.some(error => error.includes('pas équilibrée')));
+  const before = S.entries().length;
+  const failedBatch = S.importExchange(source, 'posted', { sourceSystem: 'EXCEL' });
+  assert.strictEqual(failedBatch.ok, false);
+  assert.strictEqual(S.entries().length, before, 'Un lot bloqué ne doit laisser aucune écriture partielle.');
+});
+
+test('import validé augmente les états et crée le point local de restauration', () => {
+  const source = [{
+    reference: 'OD-2026-EXCHANGE-004', journal: 'OD', date: '2026-08-15', description: 'Reprise validée',
+    sourceSystem: 'SAGE', sourceId: 'sage-004',
+    lines: [{ account: '601100', debit: 4200, credit: 0 }, { account: '401100', debit: 0, credit: 4200 }]
+  }];
+  const before = S.kpis().debit;
+  const result = S.importExchange(source, 'posted', { sourceSystem: 'SAGE' });
+  assert.strictEqual(result.ok, true, result.errors.join(' '));
+  assert.strictEqual(S.entry(S.entries().find(entry => entry.reference === source[0].reference).id).status, 'posted');
+  assert.strictEqual(S.kpis().debit, before + 4200);
+  assert.strictEqual(S.backupInfo().available, true);
+});
+
+test('import annulé si le point de restauration ne peut pas être écrit', () => {
+  const source = [{
+    reference: 'OD-2026-EXCHANGE-BACKUP-FAIL', journal: 'OD', date: '2026-08-16', description: 'Doit rester absent',
+    sourceSystem: 'EXCEL', sourceId: 'excel-backup-fail',
+    lines: [{ account: '601100', debit: 500, credit: 0 }, { account: '401100', debit: 0, credit: 500 }]
+  }];
+  const before = S.entries().length;
+  storageWritesBlocked = true;
+  const result = S.importExchange(source, 'draft', { sourceSystem: 'EXCEL' });
+  storageWritesBlocked = false;
+  assert.strictEqual(result.ok, false);
+  assert.ok(result.errors[0].includes('point de restauration'));
+  assert.strictEqual(S.entries().length, before);
 });
 
 test('point de restauration local avant remplacement et restauration', () => {
