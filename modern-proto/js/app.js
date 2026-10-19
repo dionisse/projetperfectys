@@ -237,12 +237,23 @@
         return { moduleId: 'accounting', actionId: 'entry.validate' };
       case 'new-account':
         return { moduleId: 'accounting', actionId: 'accounts.create' };
+      case 'edit-account':
+        return { moduleId: 'accounting', actionId: 'accounts.edit' };
+      case 'delete-account':
+        return { moduleId: 'accounting', actionId: 'accounts.delete' };
+      case 'save-account':
+        return {
+          moduleId: 'accounting',
+          actionId: trigger && trigger.getAttribute('data-account-mode') === 'edit' ? 'accounts.edit' : 'accounts.create'
+        };
       case 'new-supplier':
         return { moduleId: 'accounting', actionId: 'suppliers.create' };
       case 'edit-supplier':
         return { moduleId: 'accounting', actionId: 'suppliers.edit' };
       case 'archive-supplier':
         return { moduleId: 'accounting', actionId: 'suppliers.archive' };
+      case 'delete-supplier':
+        return { moduleId: 'accounting', actionId: 'suppliers.delete' };
       case 'save-supplier':
         return {
           moduleId: 'accounting',
@@ -1467,7 +1478,7 @@
       return true;
     });
 
-    var html = pageHeader('Plan comptable', 'Référentiel complet de 147 comptes fourni, classé par classe et sous-classe. Les comptes historiques restent conservés sans réécriture des pièces.',
+    var html = pageHeader('Plan comptable', 'Référentiel source de 147 comptes, personnalisable dans le dossier. Un numéro utilisé dans des écritures ou comme rattachement fournisseur est protégé contre le changement et la suppression.',
       '<button type="button" class="btn btn-ghost" data-action="export-accounts-csv">↓ Export CSV</button>' +
       '<button type="button" class="btn btn-primary" data-action="new-account">＋ Nouveau compte</button>');
 
@@ -1497,7 +1508,7 @@
       '<div class="table-wrap"><table class="data-table account-chart-table">' +
         '<caption>Plan comptable — codes, libellés, classe, sous-classe, utilisation et soldes des écritures validées</caption>' +
         '<thead><tr><th scope="col">Numéro</th><th scope="col">Libellé</th><th scope="col">Classe</th><th scope="col">Sous-classe</th><th scope="col">Nature / utilisation</th><th scope="col">Type comptable</th><th scope="col">Imputation</th>' +
-        '<th scope="col">Auxiliaire</th><th scope="col" class="num">Débit</th><th scope="col" class="num">Crédit</th><th scope="col" class="num">Solde</th></tr></thead><tbody>' +
+        '<th scope="col">Auxiliaire</th><th scope="col" class="num">Débit</th><th scope="col" class="num">Crédit</th><th scope="col" class="num">Solde</th><th scope="col">Actions</th></tr></thead><tbody>' +
         (list.length ? list.map(function (a) {
           var row = bal[a.code] || { debit: 0, credit: 0 };
           var solde = row.debit - row.credit;
@@ -1516,8 +1527,12 @@
             '<td class="num">' + (row.debit ? amount(row.debit) : '—') + '</td>' +
             '<td class="num">' + (row.credit ? amount(row.credit) : '—') + '</td>' +
             '<td class="num strong">' + (solde === 0 ? '—' : amount(Math.abs(solde)) + (solde > 0 ? ' D' : ' C')) + '</td>' +
+            '<td><div class="account-row-actions">' +
+              '<button type="button" class="btn btn-ghost btn-sm" data-action="edit-account" data-id="' + esc(a.code) + '" aria-label="Modifier le compte ' + esc(a.code) + '">Modifier</button>' +
+              '<button type="button" class="btn btn-ghost btn-sm" data-action="delete-account" data-id="' + esc(a.code) + '" aria-label="Supprimer le compte ' + esc(a.code) + '" title="La suppression est refusée si le compte a des écritures, des fournisseurs rattachés ou des sous-comptes.">Supprimer</button>' +
+            '</div></td>' +
           '</tr>';
-        }).join('') : '<tr><td colspan="11"><div class="empty-state"><strong>Aucun compte ne correspond</strong>Modifiez la recherche ou les filtres.</div></td></tr>') +
+        }).join('') : '<tr><td colspan="12"><div class="empty-state"><strong>Aucun compte ne correspond</strong>Modifiez la recherche ou les filtres.</div></td></tr>') +
         '</tbody></table></div>' +
       '</div></div>';
 
@@ -4422,6 +4437,7 @@
         '<td><div class="supplier-row-actions">' +
           '<button type="button" class="btn btn-ghost btn-sm" data-action="edit-supplier" data-id="' + esc(record.id) + '" aria-label="Modifier la fiche de ' + esc(record.name) + '">Modifier</button>' +
           '<button type="button" class="btn btn-ghost btn-sm" data-action="archive-supplier" data-id="' + esc(record.id) + '" aria-label="' + (active ? 'Archiver ' : 'Réactiver ') + esc(record.name) + '">' + (active ? 'Archiver' : 'Réactiver') + '</button>' +
+          '<button type="button" class="btn btn-ghost btn-sm btn-danger-quiet" data-action="delete-supplier" data-id="' + esc(record.id) + '" aria-label="Supprimer définitivement ' + esc(record.name) + '" title="Suppression définitive ; archivez pour conserver la fiche.">Supprimer</button>' +
         '</div></td>' +
       '</tr>';
     }).join('');
@@ -4981,6 +4997,29 @@
       case 'new-account':
         openAccountModal();
         break;
+      case 'edit-account':
+        if (id) openAccountModal(id);
+        break;
+      case 'delete-account': {
+        if (!id) break;
+        if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'accounts.delete', accountingAccessContext())) {
+          toast('Suppression refusée par défaut : le droit « accounts.delete » n’est pas accordé.', 'warning');
+          break;
+        }
+        var accountToDelete = S.account(id);
+        if (!accountToDelete) { toast('Compte introuvable dans le dossier actif.', 'error'); break; }
+        var accountDeleteCheck = S.accountDeleteCheck(id);
+        if (!accountDeleteCheck.ok) {
+          toast('Suppression refusée : ' + accountDeleteCheck.errors.join(' '), 'warning');
+          break;
+        }
+        if (!window.confirm('Supprimer définitivement le compte ' + accountToDelete.code + ' — ' + accountToDelete.label + ' de ce dossier ? Les pièces historiques ne seront pas modifiées.')) break;
+        var deletedAccount = S.deleteAccount(id);
+        if (!deletedAccount.ok) { toast(deletedAccount.errors.join(' ') || 'Suppression impossible.', 'error'); break; }
+        toast('Compte ' + id + ' supprimé du dossier.', 'success');
+        render();
+        break;
+      }
       case 'new-supplier':
         openSupplierModal();
         break;
@@ -4998,6 +5037,20 @@
         var supplierState = S.setSupplierActive(id, activateSupplier);
         if (!supplierState.ok) { toast(supplierState.errors[0] || 'Changement d’état impossible.', 'error'); break; }
         toast(activateSupplier ? 'Fournisseur réactivé.' : 'Fournisseur archivé.', 'success');
+        render();
+        break;
+      }
+      case 'delete-supplier': {
+        if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'suppliers.delete', accountingAccessContext())) {
+          toast('Suppression refusée par défaut : le droit « suppliers.delete » n’est pas accordé.', 'warning');
+          break;
+        }
+        var supplierToDelete = S.supplier(id);
+        if (!supplierToDelete) { toast('Fournisseur introuvable dans le dossier actif.', 'error'); break; }
+        if (!window.confirm('Supprimer définitivement la fiche « ' + supplierToDelete.name + ' » ? Si vous souhaitez seulement la retirer des listes actives, choisissez « Archiver ».')) break;
+        var supplierDeletion = S.deleteSupplier(id);
+        if (!supplierDeletion.ok) { toast(supplierDeletion.errors.join(' ') || 'Suppression impossible.', 'warning'); break; }
+        toast('Fournisseur supprimé. Son code ne sera pas réattribué.', 'success');
         render();
         break;
       }
@@ -5282,12 +5335,16 @@
       return '<option value="' + esc(account.code) + '"' + (account.code === selectedAccount ? ' selected' : '') + '>' +
         esc(account.code + ' · ' + account.label) + '</option>';
     }).join('');
-    var value = function (key) { return esc(existing && existing[key] != null ? existing[key] : ''); };
+    var suggestedSupplierCode = existing ? existing.code : S.nextIdentificationCode('supplier');
+    var value = function (key) {
+      var raw = existing && existing[key] != null ? existing[key] : (key === 'code' ? suggestedSupplierCode : '');
+      return esc(raw);
+    };
     var body = '<form id="supplier-form" novalidate data-supplier-id="' + esc(existing && existing.id || '') + '">' +
       '<div id="supplier-errors" aria-live="assertive"></div>' +
       '<div class="form-grid supplier-form-grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">' +
         '<div class="field"><label for="supplier-code">Code fournisseur <span aria-hidden="true">*</span></label>' +
-          '<input id="supplier-code" name="code" type="text" maxlength="32" placeholder="Ex. FOUR-001" value="' + value('code') + '" required autocomplete="off"><span class="hint">Code unique dans ce dossier : lettres, chiffres, point, tiret, barre ou souligné.</span></div>' +
+          '<input id="supplier-code" name="code" type="text" maxlength="32" placeholder="Ex. FOU-0001" value="' + value('code') + '" required autocomplete="off"><span class="hint">Proposition automatique ' + (existing ? 'conservée' : 'modifiable') + ' ; code unique dans ce dossier.</span></div>' +
         '<div class="field"><label for="supplier-name">Raison sociale <span aria-hidden="true">*</span></label>' +
           '<input id="supplier-name" name="name" type="text" maxlength="150" placeholder="Ex. Société béninoise de fournitures" value="' + value('name') + '" required></div>' +
         '<div class="field"><label for="supplier-ifu">Numéro IFU</label><input id="supplier-ifu" name="ifu" type="text" maxlength="50" value="' + value('ifu') + '"></div>' +
@@ -5341,51 +5398,64 @@
     });
   }
 
-  function openAccountModal() {
+  function openAccountModal(code) {
+    var existing = code ? S.account(code) : null;
+    if (code && !existing) { toast('Compte introuvable dans le dossier actif.', 'error'); return; }
+    var mode = existing ? 'edit' : 'create';
+    var codeCheck = existing ? S.accountCodeChangeCheck(existing.code) : { ok: true, errors: [] };
+    var natureOptions = ['Actif', 'Passif', 'Charge', 'Produit', 'SIG', 'Hors bilan'].map(function (nature) {
+      var selected = existing ? existing.nature === nature : nature === 'Actif';
+      return '<option value="' + esc(nature) + '"' + (selected ? ' selected' : '') + '>' + esc(nature) + '</option>';
+    }).join('');
+    var codeHint = existing && !codeCheck.ok
+      ? '<span class="hint">Numéro verrouillé pour préserver les références : ' + esc(codeCheck.errors.join(' ')) + '</span>'
+      : '<span class="hint">2 à 8 chiffres, classe SYSCOHADA de 1 à 8 en premier.</span>';
+    var codeValue = existing ? esc(existing.code) : '';
+    var labelValue = existing ? esc(existing.label || '') : '';
+    var usageValue = existing ? esc(existing.usage || '') : '';
     var body = '<form id="account-form" novalidate>' +
       '<div id="account-errors" aria-live="assertive"></div>' +
-      '<div class="form-grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">' +
-        '<div class="field"><label for="a-code">Code du compte</label>' +
-          '<input id="a-code" name="code" type="text" inputmode="numeric" pattern="[0-9]{4,8}" placeholder="Ex. 601200" required>' +
-          '<span class="hint">4 à 8 chiffres, classe SYSCOHADA en premier.</span></div>' +
+      '<div class="form-grid account-form-grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">' +
+        '<div class="field"><label for="a-code">Numéro de compte</label>' +
+          '<input id="a-code" name="code" type="text" inputmode="numeric" pattern="[1-8][0-9]{1,7}" maxlength="8" placeholder="Ex. 6012" value="' + codeValue + '"' + (existing && !codeCheck.ok ? ' readonly' : '') + ' required>' +
+          codeHint + '</div>' +
         '<div class="field"><label for="a-label">Intitulé</label>' +
-          '<input id="a-label" name="label" type="text" placeholder="Ex. Achats de matières premières" required></div>' +
-        '<div class="field"><label for="a-nature">Nature</label>' +
-          '<select id="a-nature" name="nature">' +
-            ['Actif', 'Passif', 'Charge', 'Produit'].map(function (n) { return '<option value="' + n + '">' + n + '</option>'; }).join('') +
-          '</select></div>' +
+          '<input id="a-label" name="label" type="text" maxlength="150" placeholder="Ex. Achats de matières premières" value="' + labelValue + '" required></div>' +
+        '<div class="field"><label for="a-nature">Nature comptable</label><select id="a-nature" name="nature">' + natureOptions + '</select></div>' +
         '<div class="field"><label for="a-aux">Compte auxiliaire requis</label>' +
-          '<select id="a-aux" name="aux"><option value="no">Non</option><option value="yes">Oui</option></select></div>' +
+          '<select id="a-aux" name="aux"><option value="no"' + (!existing || !existing.aux ? ' selected' : '') + '>Non</option><option value="yes"' + (existing && existing.aux ? ' selected' : '') + '>Oui</option></select></div>' +
         '<div class="field" style="grid-column:1 / -1"><label for="a-usage">Nature / utilisation</label>' +
-          '<textarea id="a-usage" name="usage" rows="2" placeholder="Rôle ou utilisation du compte dans le dossier"></textarea></div>' +
+          '<textarea id="a-usage" name="usage" rows="3" maxlength="1000" placeholder="Rôle ou utilisation du compte dans le dossier">' + usageValue + '</textarea></div>' +
       '</div>' +
     '</form>';
-
     var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button>' +
-      '<button type="submit" class="btn btn-primary" form="account-form">Créer le compte</button>';
-
-    openModal('Nouveau compte comptable', 'Ajout au plan comptable local', body, footer);
+      '<button type="submit" class="btn btn-primary" form="account-form" data-action="save-account" data-account-mode="' + mode + '">' +
+        (existing ? 'Enregistrer les modifications' : 'Créer le compte') + '</button>';
+    openModal(existing ? 'Modifier le compte comptable' : 'Nouveau compte comptable',
+      existing ? 'Modification du compte local ' + esc(existing.code) : 'Ajout au plan comptable local', body, footer, true);
 
     var form = $('#account-form');
     form.addEventListener('submit', function (event) {
       event.preventDefault();
-      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'accounts.create', accountingAccessContext())) {
-        toast('Création refusée par défaut : le droit « accounts.create » n’est pas accordé.', 'warning');
+      var actionId = mode === 'edit' ? 'accounts.edit' : 'accounts.create';
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', actionId, accountingAccessContext())) {
+        toast('Action refusée par défaut : le droit « ' + actionId + ' » n’est pas accordé.', 'warning');
         return;
       }
-      var result = S.addAccount({
+      var accountInput = {
         code: $('#a-code').value,
         label: $('#a-label').value,
         nature: $('#a-nature').value,
         usage: $('#a-usage').value,
         aux: $('#a-aux').value === 'yes'
-      });
+      };
+      var result = existing ? S.updateAccount(existing.code, accountInput) : S.addAccount(accountInput);
       if (!result.ok) {
         $('#account-errors').innerHTML = '<div class="alert error" role="alert"><ul style="margin:0 0 0 18px">' +
-          result.errors.map(function (e) { return '<li>' + esc(e) + '</li>'; }).join('') + '</ul></div>';
+          result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
         return;
       }
-      toast('Compte ' + result.account.code + ' créé.', 'success');
+      toast(existing ? 'Compte ' + result.account.code + ' mis à jour.' : 'Compte ' + result.account.code + ' créé.', 'success');
       closeModal(true);
       render();
     });

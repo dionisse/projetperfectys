@@ -136,7 +136,10 @@ test('les actions disponibles sont décrites par module', () => {
   assert(actions.includes('centralization.cancel'));
   assert(actions.includes('draft.delete'));
   assert(actions.includes('accounts.create'));
+  assert(actions.includes('accounts.edit'));
+  assert(actions.includes('accounts.delete'));
   assert(actions.includes('suppliers.create'));
+  assert(actions.includes('suppliers.delete'));
   assert(actions.includes('suppliers.edit'));
   assert(actions.includes('suppliers.archive'));
   assert(actions.includes('period.close'));
@@ -208,7 +211,23 @@ test('les actions du référentiel fournisseurs sont explicites et limitées au 
   assert.strictEqual(Permissions.hasPermission(supplierManager, 'accounting', 'suppliers.create', supplierContext), true);
   assert.strictEqual(Permissions.hasPermission(supplierManager, 'accounting', 'suppliers.edit', supplierContext), true);
   assert.strictEqual(Permissions.hasPermission(supplierManager, 'accounting', 'suppliers.archive', supplierContext), false, 'archiver reste un droit distinct');
+  assert.strictEqual(Permissions.hasPermission(supplierManager, 'accounting', 'suppliers.delete', supplierContext), false, 'supprimer reste un droit distinct');
   assert.strictEqual(Permissions.hasPermission(supplierManager, 'accounting', 'suppliers.create', { ...supplierContext, dossierId: 'dossier-2' }), false);
+  supplierManager.grants.accounting[0].actions.push('suppliers.delete');
+  assert.strictEqual(Permissions.hasPermission(supplierManager, 'accounting', 'suppliers.delete', supplierContext), true);
 });
 
-console.log('Politique d’accès : 10 scénarios réussis.');
+test('la modification et la suppression des comptes exigent chacune leur grant explicite', () => {
+  const accountManager = {
+    role: 'manager', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view', 'accounts.edit'] }] }
+  };
+  const accountContext = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  assert.strictEqual(Permissions.hasPermission(accountManager, 'accounting', 'accounts.edit', accountContext), true);
+  assert.strictEqual(Permissions.hasPermission(accountManager, 'accounting', 'accounts.delete', accountContext), false);
+  accountManager.grants.accounting[0].actions.push('accounts.delete');
+  assert.strictEqual(Permissions.hasPermission(accountManager, 'accounting', 'accounts.delete', accountContext), true);
+  assert.strictEqual(Permissions.hasPermission(accountManager, 'accounting', 'accounts.delete', { ...accountContext, dossierId: 'dossier-2' }), false);
+});
+
+console.log('Politique d’accès : 11 scénarios réussis.');

@@ -69,7 +69,7 @@ values.set('perfecto.lot1.v1', JSON.stringify(preSupplierState));
 store = loadStore();
 assert.equal(store.suppliers().length, 0, 'la migration ajoute un référentiel vide aux anciennes bases valides');
 const migratedState = JSON.parse(values.get('perfecto.lot1.v1'));
-assert.equal(migratedState.supplierRegistryVersion, 1);
+assert.equal(migratedState.supplierRegistryVersion, 2);
 assert.equal(migratedState.suppliers.length, 0);
 assert.equal(store.backupInfo().available, true, 'la migration conserve un point local de restauration');
 

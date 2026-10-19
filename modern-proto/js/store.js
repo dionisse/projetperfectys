@@ -30,7 +30,7 @@
 
   var ACCOUNTING_CHART = global.PerfectoAccountingChart || null;
   var ACCOUNTING_CHART_VERSION = ACCOUNTING_CHART ? ACCOUNTING_CHART.VERSION : 0;
-  var SUPPLIER_REGISTRY_VERSION = 1;
+  var SUPPLIER_REGISTRY_VERSION = 2;
   var LEGACY_COMPTES = [
     { code: '101200', label: 'Capital social', cls: 1, nature: 'Passif', aux: false },
     { code: '162100', label: 'Emprunt bancaire', cls: 1, nature: 'Passif', aux: false },
@@ -73,7 +73,9 @@
   }
 
   function initialAccounts(withSeedEntries) {
-    var accounts = chartAccounts();
+    var accounts = chartAccounts().map(function (account) {
+      return Object.assign({}, account, { chartOriginCode: account.code });
+    });
     if (withSeedEntries !== false) {
       accounts = accounts.concat(LEGACY_COMPTES.map(legacyAccountRecord));
     }
@@ -88,12 +90,19 @@
     var currentByCode = Object.create(null);
     var chartByCode = Object.create(null);
     var legacyByCode = Object.create(null);
+    var deletedStandardAccountCodes = Array.isArray(data.deletedStandardAccountCodes)
+      ? data.deletedStandardAccountCodes.filter(function (code) { return typeof code === 'string'; })
+      : [];
+    var deletedStandardAccountMap = Object.create(null);
+    deletedStandardAccountCodes.forEach(function (code) { deletedStandardAccountMap[code] = true; });
     current.forEach(function (account) {
       if (account && account.code != null) currentByCode[String(account.code)] = account;
     });
     LEGACY_COMPTES.forEach(function (account) { legacyByCode[account.code] = account; });
 
-    var standard = chartAccounts().map(function (account) {
+    var standard = chartAccounts().filter(function (account) {
+      return !deletedStandardAccountMap[account.code];
+    }).map(function (account) {
       var existing = currentByCode[account.code];
       chartByCode[account.code] = true;
       if (!existing) return account;
@@ -103,7 +112,8 @@
       merged.classLabel = account.classLabel;
       merged.subclass = account.subclass;
       merged.subclassLabel = account.subclassLabel;
-      merged.usage = account.usage;
+      merged.chartOriginCode = account.code;
+      merged.usage = typeof existing.usage === 'string' && existing.usage ? existing.usage : account.usage;
       merged.postable = account.postable;
       merged.legacy = false;
       merged.standard = true;
@@ -151,22 +161,74 @@
 
     data = Object.assign({}, data, {
       accounts: standard.concat(carried).sort(function (a, b) { return String(a.code).localeCompare(String(b.code)); }),
-      accountChartVersion: ACCOUNTING_CHART_VERSION
+      accountChartVersion: ACCOUNTING_CHART_VERSION,
+      deletedStandardAccountCodes: deletedStandardAccountCodes
     });
     result.data = data;
     result.changed = true;
     return result;
   }
 
+  function identificationPrefix(kind) {
+    return { supplier: 'FOU', client: 'CLI', personnel: 'PER' }[String(kind || '').toLowerCase()] || '';
+  }
+
+  function identificationHistoryField(kind) {
+    return String(kind) + 'CodeHistory';
+  }
+
+  function normalizeIdentificationHistory(kind, values) {
+    var history = [];
+    (Array.isArray(values) ? values : []).forEach(function (value) {
+      var normalized = kind === 'supplier' ? normalizeSupplierCode(value) : String(value || '').trim().toLocaleUpperCase();
+      if (normalized && history.indexOf(normalized) === -1) history.push(normalized);
+    });
+    return history;
+  }
+
   function upgradeSupplierRegistry(data) {
     var result = { data: data, changed: false };
     if (!data) return result;
     var suppliers = Array.isArray(data.suppliers) ? data.suppliers : [];
+    var sourceHistory = Array.isArray(data.supplierCodeHistory) ? data.supplierCodeHistory : [];
+    var supplierHistory = [];
+    sourceHistory.concat(suppliers.map(function (record) { return record && record.code; })).forEach(function (code) {
+      var normalized = normalizeSupplierCode(code);
+      if (normalized && supplierHistory.indexOf(normalized) === -1) supplierHistory.push(normalized);
+    });
+    var rawSequences = data.identificationSequences && typeof data.identificationSequences === 'object' && !Array.isArray(data.identificationSequences)
+      ? data.identificationSequences : {};
+    var sequences = { supplier: 1, client: 1, personnel: 1 };
+    ['supplier', 'client', 'personnel'].forEach(function (kind) {
+      var current = Number(rawSequences[kind]);
+      if (Number.isInteger(current) && current > 0) sequences[kind] = current;
+      var prefix = identificationPrefix(kind) + '-';
+      var history = kind === 'supplier'
+        ? supplierHistory
+        : (Array.isArray(data[identificationHistoryField(kind)]) ? data[identificationHistoryField(kind)] : []);
+      history.forEach(function (value) {
+        var code = String(value || '').toLocaleUpperCase();
+        if (code.indexOf(prefix) !== 0) return;
+        var suffix = code.slice(prefix.length);
+        if (/^\d+$/.test(suffix)) sequences[kind] = Math.max(sequences[kind], Number(suffix) + 1);
+      });
+    });
+    var clientHistory = normalizeIdentificationHistory('client', data.clientCodeHistory);
+    var personnelHistory = normalizeIdentificationHistory('personnel', data.personnelCodeHistory);
     var currentVersion = Number(data.supplierRegistryVersion);
-    if (!Array.isArray(data.suppliers) || !Number.isFinite(currentVersion) || currentVersion < SUPPLIER_REGISTRY_VERSION) {
+    var changed = !Array.isArray(data.suppliers) || !Number.isFinite(currentVersion) || currentVersion < SUPPLIER_REGISTRY_VERSION ||
+      JSON.stringify(data.supplierCodeHistory || []) !== JSON.stringify(supplierHistory) ||
+      JSON.stringify(data.clientCodeHistory || []) !== JSON.stringify(clientHistory) ||
+      JSON.stringify(data.personnelCodeHistory || []) !== JSON.stringify(personnelHistory) ||
+      JSON.stringify(data.identificationSequences || {}) !== JSON.stringify(sequences);
+    if (changed) {
       result.data = Object.assign({}, data, {
         supplierRegistryVersion: SUPPLIER_REGISTRY_VERSION,
-        suppliers: suppliers
+        suppliers: suppliers,
+        supplierCodeHistory: supplierHistory,
+        clientCodeHistory: clientHistory,
+        personnelCodeHistory: personnelHistory,
+        identificationSequences: sequences
       });
       result.changed = true;
     }
@@ -242,8 +304,13 @@
       journals: JOURNAUX.slice(),
       entries: withSeedEntries === false ? [] : seedEntries(),
       periods: cyclePeriods(cycleStart, cycleEnd),
+      deletedStandardAccountCodes: [],
       supplierRegistryVersion: SUPPLIER_REGISTRY_VERSION,
-      suppliers: []
+      suppliers: [],
+      supplierCodeHistory: [],
+      clientCodeHistory: [],
+      personnelCodeHistory: [],
+      identificationSequences: { supplier: 1, client: 1, personnel: 1 }
     };
   }
 
@@ -497,6 +564,7 @@
       (data.suppliers === undefined || (Array.isArray(data.suppliers) && data.suppliers.every(function (supplier) {
         return !!supplier && typeof supplier === 'object' && !Array.isArray(supplier);
       }))) &&
+      (data.deletedStandardAccountCodes === undefined || (Array.isArray(data.deletedStandardAccountCodes) && data.deletedStandardAccountCodes.every(function (code) { return typeof code === 'string'; }))) &&
       data.accounts.every(function (account) { return !!account && typeof account === 'object' && !Array.isArray(account); }) &&
       data.journals.every(function (journal) { return !!journal && typeof journal === 'object' && !Array.isArray(journal); }) &&
       data.entries.every(function (entry) {
@@ -649,12 +717,85 @@
     return load().journals.find(function (j) { return j.code === code; }) || null;
   }
 
+  function ensureIdentificationState(st) {
+    if (!Array.isArray(st.suppliers)) st.suppliers = [];
+    ['supplier', 'client', 'personnel'].forEach(function (kind) {
+      var historyField = identificationHistoryField(kind);
+      if (!Array.isArray(st[historyField])) st[historyField] = [];
+      var sequences = st.identificationSequences;
+      if (!sequences || typeof sequences !== 'object' || Array.isArray(sequences)) sequences = st.identificationSequences = {};
+      var sequence = Number(sequences[kind]);
+      if (!Number.isInteger(sequence) || sequence < 1) sequences[kind] = 1;
+      var prefix = identificationPrefix(kind) + '-';
+      var codes = kind === 'supplier' ? st.suppliers.map(function (record) { return record && record.code; }) : [];
+      st[historyField].concat(codes).forEach(function (value) {
+        var normalized = kind === 'supplier' ? normalizeSupplierCode(value) : String(value || '').trim().toLocaleUpperCase();
+        if (normalized && st[historyField].indexOf(normalized) === -1) st[historyField].push(normalized);
+        if (normalized.indexOf(prefix) !== 0) return;
+        var suffix = normalized.slice(prefix.length);
+        if (/^\d+$/.test(suffix)) sequences[kind] = Math.max(Number(sequences[kind]) || 1, Number(suffix) + 1);
+      });
+    });
+    st.supplierRegistryVersion = SUPPLIER_REGISTRY_VERSION;
+    return st;
+  }
+
   function supplierRecordsForState(st) {
-    if (!Array.isArray(st.suppliers)) {
-      st.suppliers = [];
-      st.supplierRegistryVersion = SUPPLIER_REGISTRY_VERSION;
-    }
+    ensureIdentificationState(st);
     return st.suppliers;
+  }
+
+  function nextIdentificationCode(kind) {
+    kind = String(kind || '').toLowerCase();
+    var prefix = identificationPrefix(kind);
+    if (!prefix) return '';
+    var st = load();
+    if (recoveryIssue) return '';
+    ensureIdentificationState(st);
+    var sequence = Number(st.identificationSequences[kind]) || 1;
+    var history = st[identificationHistoryField(kind)];
+    var candidate;
+    do {
+      candidate = prefix + '-' + String(sequence).padStart(4, '0');
+      sequence += 1;
+    } while (history.indexOf(candidate) !== -1);
+    return candidate;
+  }
+
+  function reserveIdentificationCode(st, kind, code) {
+    kind = String(kind || '').toLowerCase();
+    var prefix = identificationPrefix(kind);
+    if (!prefix) return false;
+    ensureIdentificationState(st);
+    var normalized = kind === 'supplier' ? normalizeSupplierCode(code) : String(code || '').trim().toLocaleUpperCase();
+    var history = st[identificationHistoryField(kind)];
+    if (normalized && history.indexOf(normalized) === -1) history.push(normalized);
+    var prefixWithDash = prefix + '-';
+    if (normalized.indexOf(prefixWithDash) === 0) {
+      var suffix = normalized.slice(prefixWithDash.length);
+      if (/^\d+$/.test(suffix)) st.identificationSequences[kind] = Math.max(Number(st.identificationSequences[kind]) || 1, Number(suffix) + 1);
+    }
+    return true;
+  }
+
+  function registerIdentificationCode(kind, code) {
+    kind = String(kind || '').toLowerCase();
+    if (!identificationPrefix(kind)) return { ok: false, errors: ['Type d’identifiant inconnu.'] };
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Attribution bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    ensureIdentificationState(st);
+    var normalized = kind === 'supplier' ? normalizeSupplierCode(code) : String(code || '').trim().toLocaleUpperCase();
+    if (!normalized) return { ok: false, errors: ['Le code à attribuer est vide.'] };
+    if (st[identificationHistoryField(kind)].indexOf(normalized) !== -1) {
+      return { ok: false, errors: ['Ce code a déjà été attribué dans ce dossier.'] };
+    }
+    var previousState = clone(st);
+    reserveIdentificationCode(st, kind, normalized);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Attribution impossible : stockage local indisponible ou plein.'] };
+    }
+    return { ok: true, errors: [], code: normalized };
   }
 
   function suppliers() {
@@ -698,9 +839,15 @@
     else if (!/^[A-Z0-9][A-Z0-9._/-]{0,31}$/.test(code)) errors.push('Le code fournisseur doit contenir au plus 32 caractères : lettres, chiffres, point, tiret, barre oblique ou souligné.');
     if (!name) errors.push('La raison sociale est obligatoire.');
     else if (name.length > 150) errors.push('La raison sociale ne peut pas dépasser 150 caractères.');
+    var st = load();
+    var currentRecord = excludeId ? st.suppliers.find(function (record) { return record.id === excludeId; }) : null;
     if (suppliers().some(function (record) {
-      return record.id !== excludeId && String(record.code || '').toLocaleUpperCase() === code;
+      return record.id !== excludeId && normalizeSupplierCode(record.code) === code;
     })) errors.push('Ce code fournisseur existe déjà dans le dossier.');
+    var currentCode = currentRecord ? normalizeSupplierCode(currentRecord.code) : '';
+    if (Array.isArray(st.supplierCodeHistory) && st.supplierCodeHistory.indexOf(code) !== -1 && code !== currentCode) {
+      errors.push('Ce code fournisseur a déjà été attribué dans ce dossier et ne peut pas être réutilisé.');
+    }
     if (!supplierAccount(accountCode)) errors.push('Choisissez un compte collectif fournisseur actif de classe 4 (401, 402, 404, 408 ou 409).');
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.push('L’adresse e-mail du fournisseur n’est pas valide.');
     if (!Number.isInteger(paymentTermDays) || paymentTermDays < 0 || paymentTermDays > 3650) errors.push('Le délai de règlement doit être un nombre entier compris entre 0 et 3 650 jours.');
@@ -741,8 +888,11 @@
     var st = load();
     if (recoveryIssue) return { ok: false, errors: ['Création bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
     var records = supplierRecordsForState(st);
+    input = Object.assign({}, input || {});
+    if (!String(input.code || '').trim()) input.code = nextIdentificationCode('supplier');
     var validation = validateSupplierInput(input);
     if (!validation.ok) return validation;
+    var previousState = clone(st);
     var id;
     do {
       id = 'supplier-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
@@ -750,8 +900,9 @@
     var timestamp = new Date().toISOString();
     var record = Object.assign({ id: id, active: true, createdAt: timestamp, updatedAt: timestamp }, validation.value);
     records.push(record);
+    reserveIdentificationCode(st, 'supplier', record.code);
     if (!save()) {
-      records.pop();
+      state = previousState;
       return { ok: false, errors: ['Impossible d’enregistrer le fournisseur dans le stockage local de ce dossier.'] };
     }
     return { ok: true, errors: [], supplier: clone(record) };
@@ -765,11 +916,14 @@
     if (index < 0) return { ok: false, errors: ['Fournisseur introuvable dans le dossier actif.'] };
     var validation = validateSupplierInput(input, id);
     if (!validation.ok) return validation;
+    var previousState = clone(st);
     var previous = records[index];
     var updated = Object.assign({}, previous, validation.value, { id: previous.id, createdAt: previous.createdAt, updatedAt: new Date().toISOString() });
     records[index] = updated;
+    reserveIdentificationCode(st, 'supplier', previous.code);
+    reserveIdentificationCode(st, 'supplier', updated.code);
     if (!save()) {
-      records[index] = previous;
+      state = previousState;
       return { ok: false, errors: ['Impossible d’enregistrer les modifications du fournisseur dans le stockage local.'] };
     }
     return { ok: true, errors: [], supplier: clone(updated) };
@@ -780,14 +934,42 @@
     if (recoveryIssue) return { ok: false, errors: ['Modification bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
     var record = supplierRecordsForState(st).find(function (item) { return item.id === id; });
     if (!record) return { ok: false, errors: ['Fournisseur introuvable dans le dossier actif.'] };
-    var previousActive = record.active !== false;
-    var previousUpdatedAt = record.updatedAt;
+    var previousState = clone(st);
     record.active = active === true;
     record.updatedAt = new Date().toISOString();
     if (!save()) {
-      record.active = previousActive;
-      record.updatedAt = previousUpdatedAt;
+      state = previousState;
       return { ok: false, errors: ['Impossible d’enregistrer le changement d’état du fournisseur.'] };
+    }
+    return { ok: true, errors: [], supplier: clone(record) };
+  }
+
+  function objectReferencesSupplier(value, supplier) {
+    if (!value || typeof value !== 'object') return false;
+    var referenceKeys = /^(supplier|vendor|fournisseur|thirdParty|third_party|counterparty|auxiliary|aux)(?:\w*(?:id|code|account))?$/i;
+    var identifiers = [supplier.id, supplier.code, supplier.auxiliaryAccountCode].filter(Boolean).map(function (item) { return String(item).toLocaleUpperCase(); });
+    return Object.keys(value).some(function (key) {
+      var child = value[key];
+      if (referenceKeys.test(key) && identifiers.indexOf(String(child == null ? '' : child).toLocaleUpperCase()) !== -1) return true;
+      return child && typeof child === 'object' && objectReferencesSupplier(child, supplier);
+    });
+  }
+
+  function deleteSupplier(id) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Suppression bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var records = supplierRecordsForState(st);
+    var index = records.findIndex(function (record) { return record.id === id; });
+    if (index < 0) return { ok: false, errors: ['Fournisseur introuvable dans le dossier actif.'] };
+    var record = records[index];
+    if (st.entries.some(function (entry) { return objectReferencesSupplier(entry, record); })) {
+      return { ok: false, errors: ['Suppression refusée : une écriture ou un mouvement historique référence cette fiche. Archivez le fournisseur pour conserver la traçabilité.'] };
+    }
+    var previousState = clone(st);
+    records.splice(index, 1);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Suppression impossible : stockage local indisponible ou plein. La fiche est conservée.'] };
     }
     return { ok: true, errors: [], supplier: clone(record) };
   }
@@ -1026,16 +1208,72 @@
     return { ok: true, errors: [] };
   }
 
-  function addAccount(data) {
+  function accountReferenceCounts(code, st) {
+    st = st || load();
+    code = String(code);
+    var linkedEntries = st.entries.filter(function (entry) {
+      return Array.isArray(entry.lines) && entry.lines.some(function (line) { return String(line.account) === code; });
+    });
+    var linkedSuppliers = (Array.isArray(st.suppliers) ? st.suppliers : []).filter(function (supplier) {
+      return String(supplier.accountCode || '') === code;
+    });
+    var childCodes = st.accounts.map(function (account) { return String(account.code); }).filter(function (candidate) {
+      return candidate.length > code.length && candidate.indexOf(code) === 0;
+    });
+    return {
+      entryCount: linkedEntries.length,
+      draftEntryCount: linkedEntries.filter(function (entry) { return entry.status === 'draft'; }).length,
+      postedEntryCount: linkedEntries.filter(function (entry) { return entry.status === 'posted'; }).length,
+      supplierCount: linkedSuppliers.length,
+      childCodes: childCodes
+    };
+  }
+
+  function accountCodeChangeCheck(code) {
     var st = load();
+    var account = st.accounts.find(function (item) { return String(item.code) === String(code); });
+    if (!account) return { ok: false, errors: ['Compte introuvable dans le dossier actif.'], references: null };
+    var references = accountReferenceCounts(code, st);
+    var errors = [];
+    if (references.entryCount) errors.push('Le numéro ne peut pas être modifié : ' + references.entryCount + ' pièce(s) comptable(s) y font référence. Les écritures historiques et brouillons ne seront pas réécrits.');
+    if (references.supplierCount) errors.push('Le numéro ne peut pas être modifié : ' + references.supplierCount + ' fournisseur(s) utilisent ce compte de rattachement.');
+    if (references.childCodes.length) errors.push('Le numéro ne peut pas être modifié avant ses sous-comptes : ' + references.childCodes.slice(0, 5).join(', ') + (references.childCodes.length > 5 ? '…' : '') + '.');
+    return { ok: errors.length === 0, errors: errors, references: references };
+  }
+
+  function accountDeleteCheck(code) {
+    var st = load();
+    var account = st.accounts.find(function (item) { return String(item.code) === String(code); });
+    if (!account) return { ok: false, errors: ['Compte introuvable dans le dossier actif.'], references: null };
+    var references = accountReferenceCounts(code, st);
+    var errors = [];
+    if (references.entryCount) errors.push('Suppression refusée : ' + references.entryCount + ' pièce(s) comptable(s) — brouillons ou validées — utilisent ce compte. Conservez-le dans le plan pour préserver l’historique.');
+    if (references.supplierCount) errors.push('Suppression refusée : ' + references.supplierCount + ' fournisseur(s) sont rattachés à ce compte. Réaffectez-les avant la suppression.');
+    if (references.childCodes.length) errors.push('Suppression refusée : ce compte possède des sous-comptes (' + references.childCodes.slice(0, 5).join(', ') + (references.childCodes.length > 5 ? '…' : '') + ').');
+    return { ok: errors.length === 0, errors: errors, references: references };
+  }
+
+  function validAccountCode(code) {
+    return /^[1-8]\d{1,7}$/.test(String(code || ''));
+  }
+
+  function accountNatureList() { return ['Actif', 'Passif', 'Charge', 'Produit', 'SIG', 'Hors bilan']; }
+
+  function addAccount(data) {
+    data = data || {};
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Création bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
     var code = String(data.code || '').trim();
     var label = String(data.label || '').trim();
+    var usage = String(data.usage == null ? '' : data.usage).trim();
     var errors = [];
-    if (!/^\d{4,8}$/.test(code)) errors.push('Le code doit comporter de 4 à 8 chiffres.');
+    if (!validAccountCode(code)) errors.push('Le numéro doit comporter de 2 à 8 chiffres et commencer par une classe SYSCOHADA de 1 à 8.');
     if (!label) errors.push('Le libellé est obligatoire.');
-    if (st.accounts.some(function (a) { return a.code === code; })) errors.push('Ce code de compte existe déjà.');
+    else if (label.length > 150) errors.push('Le libellé ne peut pas dépasser 150 caractères.');
+    if (usage.length > 1000) errors.push('La nature / utilisation ne peut pas dépasser 1 000 caractères.');
+    if (st.accounts.some(function (account) { return String(account.code) === code; })) errors.push('Ce numéro de compte existe déjà dans le dossier.');
     var nature = data.nature || 'Actif';
-    if (['Actif', 'Passif', 'Charge', 'Produit'].indexOf(nature) === -1) errors.push('La nature du compte est invalide.');
+    if (accountNatureList().indexOf(nature) === -1) errors.push('La nature du compte est invalide.');
     if (errors.length) return { ok: false, errors: errors };
 
     var cls = Number(code.charAt(0));
@@ -1048,17 +1286,99 @@
       subclass: subclass,
       subclassLabel: ACCOUNTING_CHART && ACCOUNTING_CHART.SUBCLASS_LABELS[subclass] || 'Comptes personnalisés',
       nature: nature,
-      usage: String(data.usage || 'Compte personnalisé du dossier.').trim(),
-      aux: !!data.aux,
+      usage: usage || 'Compte personnalisé du dossier.',
+      aux: data.aux === true,
       active: true,
       postable: true,
       legacy: false,
       standard: false
     };
+    var previousState = clone(st);
     st.accounts.push(acc);
-    st.accounts.sort(function (a, b) { return a.code.localeCompare(b.code); });
-    save();
-    return { ok: true, errors: [], account: acc };
+    st.accounts.sort(function (a, b) { return String(a.code).localeCompare(String(b.code)); });
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Création impossible : stockage local indisponible ou plein.'] };
+    }
+    return { ok: true, errors: [], account: clone(acc) };
+  }
+
+  function updateAccount(currentCode, data) {
+    data = data || {};
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Modification bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var existing = st.accounts.find(function (account) { return String(account.code) === String(currentCode); });
+    if (!existing) return { ok: false, errors: ['Compte introuvable dans le dossier actif.'] };
+    var code = String(data.code == null ? currentCode : data.code).trim();
+    var label = String(data.label == null ? '' : data.label).trim();
+    var usage = String(data.usage == null ? '' : data.usage).trim();
+    var nature = data.nature || existing.nature || 'Actif';
+    var errors = [];
+    if (!validAccountCode(code)) errors.push('Le numéro doit comporter de 2 à 8 chiffres et commencer par une classe SYSCOHADA de 1 à 8.');
+    if (!label) errors.push('Le libellé est obligatoire.');
+    else if (label.length > 150) errors.push('Le libellé ne peut pas dépasser 150 caractères.');
+    if (usage.length > 1000) errors.push('La nature / utilisation ne peut pas dépasser 1 000 caractères.');
+    if (accountNatureList().indexOf(nature) === -1) errors.push('La nature du compte est invalide.');
+    if (st.accounts.some(function (account) { return account !== existing && String(account.code) === code; })) errors.push('Ce numéro de compte existe déjà dans le dossier.');
+
+    if (code !== String(currentCode)) {
+      var changeCheck = accountCodeChangeCheck(currentCode);
+      if (!changeCheck.ok) errors = errors.concat(changeCheck.errors);
+      var deletedCodes = Array.isArray(st.deletedStandardAccountCodes) ? st.deletedStandardAccountCodes : [];
+      var reservedStandardCode = chartAccounts().some(function (account) { return account.code === code; }) && deletedCodes.indexOf(code) === -1;
+      if (reservedStandardCode) errors.push('Ce numéro appartient déjà au plan de référence. Supprimez d’abord le compte d’origine s’il n’est pas utilisé, ou choisissez un numéro libre.');
+    }
+    if (errors.length) return { ok: false, errors: errors };
+
+    var previousState = clone(st);
+    if (code !== String(currentCode)) {
+      if (existing.standard && !existing.legacy) {
+        var originCode = String(existing.chartOriginCode || existing.code);
+        if (!Array.isArray(st.deletedStandardAccountCodes)) st.deletedStandardAccountCodes = [];
+        if (st.deletedStandardAccountCodes.indexOf(originCode) === -1) st.deletedStandardAccountCodes.push(originCode);
+      }
+      existing.code = code;
+      existing.standard = false;
+      existing.legacy = false;
+      delete existing.chartOriginCode;
+    }
+    var cls = Number(code.charAt(0));
+    var subclass = code.slice(0, 2);
+    existing.cls = cls;
+    existing.classLabel = ACCOUNTING_CHART ? ACCOUNTING_CHART.classLabel(cls) : ('Classe ' + cls);
+    existing.subclass = subclass;
+    existing.subclassLabel = ACCOUNTING_CHART && ACCOUNTING_CHART.SUBCLASS_LABELS[subclass] || 'Comptes personnalisés';
+    existing.label = label;
+    existing.nature = nature;
+    existing.usage = usage;
+    existing.aux = data.aux === true;
+    st.accounts.sort(function (a, b) { return String(a.code).localeCompare(String(b.code)); });
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Modification impossible : stockage local indisponible ou plein.'] };
+    }
+    return { ok: true, errors: [], account: clone(existing) };
+  }
+
+  function deleteAccount(code) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Suppression bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var existing = st.accounts.find(function (account) { return String(account.code) === String(code); });
+    if (!existing) return { ok: false, errors: ['Compte introuvable dans le dossier actif.'] };
+    var check = accountDeleteCheck(code);
+    if (!check.ok) return check;
+    var previousState = clone(st);
+    if (existing.standard && !existing.legacy) {
+      var originCode = String(existing.chartOriginCode || existing.code);
+      if (!Array.isArray(st.deletedStandardAccountCodes)) st.deletedStandardAccountCodes = [];
+      if (st.deletedStandardAccountCodes.indexOf(originCode) === -1) st.deletedStandardAccountCodes.push(originCode);
+    }
+    st.accounts = st.accounts.filter(function (account) { return String(account.code) !== String(code); });
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Suppression impossible : stockage local indisponible ou plein. Le compte est conservé.'] };
+    }
+    return { ok: true, errors: [], account: clone(existing) };
   }
 
   /* ---------------- Calculs comptables ---------------- */
@@ -1635,6 +1955,9 @@
     createSupplier: createSupplier,
     updateSupplier: updateSupplier,
     setSupplierActive: setSupplierActive,
+    deleteSupplier: deleteSupplier,
+    nextIdentificationCode: nextIdentificationCode,
+    registerIdentificationCode: registerIdentificationCode,
     entries: entries,
     entry: entry,
     periods: periods,
@@ -1651,6 +1974,10 @@
     postEntry: postEntry,
     deleteDraft: deleteDraft,
     addAccount: addAccount,
+    updateAccount: updateAccount,
+    deleteAccount: deleteAccount,
+    accountCodeChangeCheck: accountCodeChangeCheck,
+    accountDeleteCheck: accountDeleteCheck,
     postedEntries: postedEntries,
     balance: balance,
     ledger: ledger,

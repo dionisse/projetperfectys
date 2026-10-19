@@ -62,7 +62,8 @@ Les identifiants ci-dessous sont reliés aux parcours actuels, mais leurs libell
 | `draft.edit` / `draft.delete` | Modifier ou supprimer un brouillon uniquement |
 | `entry.validate` | Valider définitivement une pièce équilibrée |
 | `centralization.cancel` | Préparer l’écriture inverse d’une centralisation interne ; validation immédiate toujours séparée |
-| `accounts.create` | Ajouter un compte au plan comptable du dossier actif |
+| `accounts.create` / `accounts.edit` / `accounts.delete` | Créer, modifier ou supprimer un compte ; la suppression et la renumérotation sont refusées si des écritures, fournisseurs ou sous-comptes le référencent |
+| `suppliers.create` / `suppliers.edit` / `suppliers.archive` / `suppliers.delete` | Gérer une fiche fournisseur ; la suppression définitive est réservée aux fiches non référencées et ne libère pas son code |
 | `period.close` / `period.reopen` | Clôturer ou rouvrir une période du dossier actif |
 | `data.import` / `data.export` | Importer ou exporter les données du dossier actif ; l’export couvre aussi certains états et impressions |
 | `data.reset` / `data.restore` | Réinitialiser ou restaurer les données du dossier actif |

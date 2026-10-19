@@ -2395,13 +2395,13 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
 .supplier-filter-controls { display: grid; grid-template-columns: minmax(220px, 1.4fr) minmax(180px, .6fr); align-items: end; gap: 11px; margin: 12px 0 4px; }
 .supplier-filter-controls .field { margin: 0; }
 .supplier-result-note { margin: 8px 0 !important; color: #75847b; font-size: .65rem !important; }
-.supplier-table { min-width: 950px; }
+.supplier-table { min-width: 1100px; }
 .supplier-table th,
 .supplier-table td { vertical-align: top; }
 .supplier-table td { line-height: 1.5; }
 .supplier-table td strong { color: #344d43; }
 .supplier-table td small { color: #77847d; font-size: .64rem; }
-.supplier-row-actions { display: flex; flex-wrap: wrap; gap: 5px; min-width: 142px; }
+.supplier-row-actions { display: flex; flex-wrap: wrap; gap: 5px; min-width: 236px; }
 .supplier-row-actions .btn { white-space: nowrap; }
 .supplier-empty { margin-top: 9px; padding: 16px 12px; border: 1px dashed #dce5de; border-radius: 8px; background: #fbfcfa; }
 .supplier-form-grid .supplier-address-field,
@@ -2567,7 +2567,7 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
   background: var(--card-soft);
   line-height: 1.5;
 }
-.account-chart-table { min-width: 1500px; }
+.account-chart-table { min-width: 1660px; }
 .account-chart-table .account-usage {
   min-width: 280px;
   max-width: 390px;
@@ -2576,3 +2576,8 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
   color: var(--muted);
   font-size: .8rem;
 }
+.account-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-width: 150px; }
+.account-row-actions .btn,
+.supplier-row-actions .btn { white-space: nowrap; }
+.btn-danger-quiet { color: #9a4d45; border-color: #e9d7d2; }
+.btn-danger-quiet:hover { color: #79372f; background: #fbf1ee; }

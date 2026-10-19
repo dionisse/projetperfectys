@@ -57,6 +57,7 @@ jobs:
           node tests/permissions.test.js
           node tests/accounting-navigation.test.js
           node tests/accounting-chart.test.js
+          node tests/account-lifecycle.test.js
           node tests/payroll-centralization.test.js
           node tests/payroll-hr.test.js
           node tests/sales-centralization.test.js
