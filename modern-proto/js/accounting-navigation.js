@@ -50,7 +50,7 @@
     },
     {
       id: 'saisie', label: 'Saisie', icon: '＋', defaultTab: 'journal-entry', tabs: [
-        { id: 'journal-entry', label: 'Saisie dans les journaux', status: 'active', reason: 'Saisie générale avec contrôle d’équilibre actuellement disponible.', actions: [{ label: 'Saisir une écriture', route: 'entry' }, { label: 'Consulter les pièces comptables', route: 'entries' }] },
+        { id: 'journal-entry', label: 'Saisie dans les journaux', status: 'active', reason: 'Choisissez un journal actif dans la liste ; un double-clic ouvre la saisie d’une nouvelle pièce. Les journaux système, retirés ou inactifs restent consultables mais ne sont pas saisissables.' },
         { id: 'live-cash', label: 'Opérations de caisse en temps réel', status: 'planned', reason: 'Fonction générale à construire et à relier aux journaux de trésorerie.' },
         {
           id: 'account-movements', label: 'Mouvements des comptes généraux, tiers et analytiques', status: 'mixed', reason: 'Les saisies dédiées aux mouvements généraux et tiers restent à construire ; le volet analytique est inactif.',

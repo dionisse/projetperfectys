@@ -81,6 +81,7 @@
     fixedAssets: { q: '', status: 'all', assetType: 'all' }
   };
 
+  var selectedEntryJournalCode = '';
   var deferredInstallPrompt = null;
   var exchangeImportSession = null;
   var balanceImportSession = null;
@@ -233,7 +234,12 @@
       case 'reinitialize-corrupt-database':
         return { moduleId: 'accounting', actionId: 'data.reset' };
       case 'open-entry':
+      case 'select-entry-journal':
+      case 'open-entry-journal-consultation':
+      case 'open-entry-journal-close':
         return { moduleId: 'accounting', actionId: 'module.view' };
+      case 'open-entry-journal':
+        return { moduleId: 'accounting', actionId: 'draft.create' };
       case 'edit-draft':
         return { moduleId: 'accounting', actionId: 'draft.edit' };
       case 'delete-draft':
@@ -1410,6 +1416,10 @@
     return label + suffix;
   }
 
+  function isFillableJournal(record) {
+    return !!record && record.active !== false && !record.systemManaged && !record.retired;
+  }
+
   function journalOptions(selected, includeAll, includeSystem, includeInactive) {
     var html = includeAll ? '<option value="">Tous les journaux</option>' : '<option value="">— Choisir un journal —</option>';
     html += S.journals().filter(function (record) {
@@ -1710,6 +1720,134 @@
   }
 
   /* --------------------------- Saisie d'écriture --------------------------- */
+  function viewEntryJournalSelector() {
+    var dossier = S.currentDossier();
+    var referenceDate = S.todayIso();
+    if (referenceDate < dossier.cycleStart || referenceDate > dossier.cycleEnd) referenceDate = dossier.cycleStart;
+    var dateParts = referenceDate.split('-');
+    var periodStatus = S.periodStatus(Number(dateParts[0]), Number(dateParts[1]));
+    var periodClosed = periodStatus === 'closed';
+    var periodLabel = dateParts[1] + '/' + dateParts[0];
+    var stats = S.journalStats();
+    var draftsByJournal = Object.create(null);
+    var canCreateEntries = hasDemoPermission(getActiveDemoMember(), 'accounting', 'draft.create', accountingAccessContext(dossier));
+
+    S.entries().forEach(function (entry) {
+      if (entry.status !== 'draft' || entry.date < dossier.cycleStart || entry.date > dossier.cycleEnd) return;
+      var journal = S.journal(entry.journal);
+      var code = journal ? journal.code : String(entry.journal || '');
+      if (!draftsByJournal[code]) draftsByJournal[code] = [];
+      draftsByJournal[code].push(entry);
+    });
+    Object.keys(draftsByJournal).forEach(function (code) {
+      draftsByJournal[code].sort(function (a, b) {
+        return String(b.date || '').localeCompare(String(a.date || '')) || String(b.reference || '').localeCompare(String(a.reference || ''));
+      });
+    });
+
+    var selectedItem = stats.find(function (item) { return item.journal.code === selectedEntryJournalCode; });
+    if (!selectedItem) selectedItem = stats.find(function (item) { return isFillableJournal(item.journal); }) || stats[0] || null;
+    selectedEntryJournalCode = selectedItem ? selectedItem.journal.code : '';
+    var selectedRecord = selectedItem && selectedItem.journal;
+    var selectedIsFillable = isFillableJournal(selectedRecord);
+    var selectedCanOpen = selectedIsFillable && canCreateEntries;
+
+    var rows = stats.map(function (item) {
+      var record = item.journal;
+      var drafts = draftsByJournal[record.code] || [];
+      var fillable = isFillableJournal(record);
+      var statusText = record.retired
+        ? 'Historique retiré · consultation uniquement'
+        : (record.systemManaged
+          ? 'Automatique · réservé au système'
+          : (record.active === false
+            ? 'Inactif · consultation uniquement'
+            : (canCreateEntries ? 'Saisie disponible' : 'Consultation · droit de saisie absent')));
+      var draftCell = drafts.length
+        ? '<div class="entry-journal-draft"><span class="badge draft">' + drafts.length + ' brouillon' + (drafts.length > 1 ? 's' : '') + '</span><small>' + esc(drafts[0].reference || 'Référence non disponible') + (drafts.length > 1 ? ' · et ' + (drafts.length - 1) + ' autre(s)' : '') + '</small></div>'
+        : '<span class="muted">Aucune</span>';
+      var rowClasses = 'clickable entry-journal-row' + (record.code === selectedEntryJournalCode ? ' is-selected' : '') + (!fillable || !canCreateEntries ? ' is-readonly' : '');
+      var rowLabel = journalDisplayName(record) + ' · ' + item.count + ' pièce(s) · ' + (fillable && canCreateEntries ? 'saisie disponible' : 'consultation uniquement');
+      return '<tr class="' + rowClasses + '" data-action="select-entry-journal" data-entry-journal-row data-id="' + esc(record.code) + '" data-fillable="' + (fillable ? 'true' : 'false') + '" data-search="' + esc((record.code + ' ' + record.label).toLocaleLowerCase()) + '" tabindex="0" aria-selected="' + (record.code === selectedEntryJournalCode ? 'true' : 'false') + '" aria-label="' + esc(rowLabel) + '">' +
+        '<td><span class="code-chip">' + esc(record.code) + '</span></td>' +
+        '<td><strong>' + esc(record.label) + '</strong><br><small class="entry-journal-state">' + esc(statusText) + '</small></td>' +
+        '<td class="num">' + item.count + '</td>' +
+        '<td class="num">' + amount(item.debit) + '</td>' +
+        '<td class="num">' + amount(item.credit) + '</td>' +
+        '<td>' + draftCell + '</td>' +
+        '<td><span class="badge ' + (periodClosed ? 'closed' : 'open') + '">' + (periodClosed ? 'Clôturée' : 'Ouverte') + '</span></td>' +
+      '</tr>';
+    }).join('');
+
+    var html = '<div class="entry-journal-selector"><div class="alert info entry-journal-instructions"><div><strong>Double-cliquez sur un journal saisissable.</strong> Les journaux système, retirés et inactifs restent visibles pour consultation, mais ne peuvent pas recevoir de nouvelle pièce. Les débits et crédits ci-dessous portent sur les pièces validées.</div></div>' +
+      '<section class="card entry-journal-card"><div class="table-wrap"><table id="entry-journal-table" class="data-table entry-journal-table"><caption>Dossier ' + esc(dossier.reference) + ' · cycle du ' + esc(dateLabel(dossier.cycleStart)) + ' au ' + esc(dateLabel(dossier.cycleEnd)) + ' · clôture de la période ' + esc(periodLabel) + '</caption>' +
+        '<thead><tr><th scope="col">Journal</th><th scope="col">Intitulé</th><th scope="col" class="num">Pièces</th><th scope="col" class="num">Débits (XOF)</th><th scope="col" class="num">Crédits (XOF)</th><th scope="col">Pièce en cours</th><th scope="col">Clôture</th></tr></thead><tbody>' +
+        (rows || '<tr><td colspan="7"><div class="empty-state"><strong>Aucun journal disponible</strong>Créez ou restaurez un journal avant de saisir une pièce.</div></td></tr>') +
+        '</tbody></table></div>' +
+      '<div class="entry-journal-toolbar">' +
+        '<div class="entry-journal-position"><label for="entry-journal-position">Positionner</label><input id="entry-journal-position" type="text" maxlength="80" placeholder="Code ou intitulé" aria-label="Positionner sur un journal par code ou intitulé"><span class="sr-only">Saisissez un code ou un intitulé, puis appuyez sur Entrée.</span></div>' +
+        '<div id="entry-journal-selection-status" class="entry-journal-selection" role="status" aria-live="polite">Journal sélectionné : <strong id="entry-journal-selected-name">' + esc(selectedRecord ? journalDisplayName(selectedRecord) : 'Aucun journal') + '</strong></div>' +
+        '<div class="entry-journal-actions">' +
+          '<button type="button" class="btn btn-ghost" data-action="open-entry-journal-close">Clôture</button>' +
+          '<button type="button" class="btn btn-primary" id="entry-journal-open" data-action="open-entry-journal"' + (selectedCanOpen ? '' : ' disabled') + '>Saisies des écritures</button>' +
+          '<button type="button" class="btn btn-ghost" id="entry-journal-consult" data-action="open-entry-journal-consultation"' + (selectedRecord ? '' : ' disabled') + '>Consultation</button>' +
+          '<a class="btn btn-ghost" href="#/dashboard">Fermer</a>' +
+        '</div>' +
+      '</div>' +
+      (!canCreateEntries ? '<p class="entry-journal-permission-note small muted">Ce profil peut consulter les journaux, mais le droit de création de brouillon n’est pas accordé.</p>' : '') +
+      '</section></div>';
+    return html;
+  }
+
+  function selectEntryJournal(code) {
+    var record = S.journal(code);
+    if (!record) return;
+    selectedEntryJournalCode = record.code;
+    $$('[data-entry-journal-row]').forEach(function (row) {
+      var selected = row.getAttribute('data-id') === selectedEntryJournalCode;
+      row.classList.toggle('is-selected', selected);
+      row.setAttribute('aria-selected', selected ? 'true' : 'false');
+    });
+    var selectedName = $('#entry-journal-selected-name');
+    if (selectedName) selectedName.textContent = journalDisplayName(record);
+    var canCreate = isFillableJournal(record) && hasDemoPermission(getActiveDemoMember(), 'accounting', 'draft.create', accountingAccessContext());
+    var entryButton = $('#entry-journal-open');
+    if (entryButton) {
+      entryButton.disabled = !canCreate;
+      entryButton.title = canCreate ? 'Ouvrir la saisie dans ' + journalDisplayName(record) : 'Ce journal ne peut pas recevoir de nouvelle pièce.';
+    }
+    var consultationButton = $('#entry-journal-consult');
+    if (consultationButton) consultationButton.disabled = false;
+  }
+
+  function openEntryForJournal(code) {
+    var record = S.journal(code);
+    if (!isFillableJournal(record)) {
+      toast(record ? journalDisplayName(record) + ' est réservé à la consultation.' : 'Journal introuvable dans ce dossier.', 'warning');
+      return;
+    }
+    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'draft.create', accountingAccessContext())) {
+      toast('Ce profil ne possède pas le droit de créer un brouillon comptable.', 'warning');
+      return;
+    }
+    navigate('#/entry?journal=' + encodeURIComponent(record.code) + '&from=journal-list');
+  }
+
+  function positionEntryJournal(query) {
+    var needle = String(query || '').trim().toLocaleLowerCase();
+    if (!needle) return;
+    var rows = $$('[data-entry-journal-row]');
+    var match = rows.find(function (row) { return String(row.getAttribute('data-search') || '') === needle; }) ||
+      rows.find(function (row) { return String(row.getAttribute('data-search') || '').indexOf(needle) !== -1; });
+    if (!match) {
+      toast('Aucun journal ne correspond à « ' + String(query).trim() + ' ».', 'warning');
+      return;
+    }
+    selectEntryJournal(match.getAttribute('data-id'));
+    if (typeof match.scrollIntoView === 'function') match.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    match.focus();
+  }
+
   function defaultEntryModel(params) {
     if (params && params.id) {
       var existing = S.entry(params.id);
@@ -1727,9 +1865,10 @@
     var dossier = S.currentDossier();
     var today = S.todayIso();
     var date = today >= dossier.cycleStart && today <= dossier.cycleEnd ? today : dossier.cycleStart;
-    var defaultJournal = S.journal('OD');
-    if (!defaultJournal || defaultJournal.active === false || defaultJournal.systemManaged) {
-      defaultJournal = S.journals().find(function (record) { return record.active !== false && !record.systemManaged; }) || null;
+    var requestedJournal = params && params.journal ? S.journal(params.journal) : null;
+    var defaultJournal = isFillableJournal(requestedJournal) ? requestedJournal : S.journal('OD');
+    if (!isFillableJournal(defaultJournal)) {
+      defaultJournal = S.journals().find(isFillableJournal) || null;
     }
     var journal = defaultJournal ? defaultJournal.code : '';
     return {
@@ -1757,11 +1896,16 @@
   function viewEntryForm(params) {
     var model = defaultEntryModel(params || {});
     var editing = !!model.id;
+    var returnToJournalList = params && params.from === 'journal-list';
+    var selectedJournal = S.journal(model.journal);
     var closed = S.periodStatus(Number(model.date.slice(0, 4)), Number(model.date.slice(5, 7))) === 'closed';
+    var returnLink = returnToJournalList
+      ? '<a class="btn btn-ghost" href="' + accountingMenuHash('saisie', 'journal-entry') + '">← Retour aux journaux</a>'
+      : '<a class="btn btn-ghost" href="#/entries">← Retour aux pièces</a>';
 
     var html = pageHeader(editing ? 'Modifier le brouillon' : 'Saisie d’écriture',
-      editing ? 'La pièce reste modifiable tant qu’elle n’est pas validée.' : 'Saisie multiligne avec contrôle d’équilibre en temps réel.',
-      '<a class="btn btn-ghost" href="#/entries">← Retour aux pièces</a>');
+      editing ? 'La pièce reste modifiable tant qu’elle n’est pas validée.' : 'Journal sélectionné : ' + journalDisplayName(selectedJournal) + ' · saisie multiligne avec contrôle d’équilibre en temps réel.',
+      returnLink);
 
     if (editing) {
       html += '<div class="alert info">Brouillon <strong>' + esc(model.reference) + '</strong> en cours de modification.</div>';
@@ -2036,6 +2180,9 @@
 
   /* ---------------------------- Journal des écritures ---------------------- */
   function viewJournal() {
+    var routeJournalCode = parseHash().params.journal;
+    var routeJournal = routeJournalCode ? S.journal(routeJournalCode) : null;
+    if (routeJournal) ui.journal.journal = routeJournal.code;
     var filter = ui.journal;
     var dossier = S.currentDossier();
     var year = S.exercise();
@@ -5947,7 +6094,8 @@
       '<span><i class="legend-dot legend-dot-planned"></i>À construire</span>' +
       '<span><i class="legend-dot legend-dot-inactive"></i>Inactif ou à confirmer</span>' +
       '</div>';
-    var actions = (tab.actions || []).map(function (action) { return menuActionLink(action, tab.status); }).join('');
+    var isJournalEntrySubmenu = group.id === 'saisie' && tab.id === 'journal-entry';
+    var actions = isJournalEntrySubmenu ? '' : (tab.actions || []).map(function (action) { return menuActionLink(action, tab.status); }).join('');
     var childList = menuChildList(tab.children, tab.reason);
     var phoneContext = phone
       ? '<span class="menu-phone-label">CONSULTATION TÉLÉPHONE · LECTURE SEULE</span>'
@@ -5955,11 +6103,13 @@
     var irreversible = tab.irreversible
       ? '<div class="alert warning menu-irreversible-note"><strong>Attention : opération irréversible.</strong> Une copie complète du dossier devra être exportée et confirmée avant toute activation de cette fonction.</div>'
       : '';
-    var details = tab.reason
+    var details = !isJournalEntrySubmenu && tab.reason
       ? '<p class="menu-item-reason">' + esc(tab.reason) + '</p>'
       : '';
     var exchangeFeature = '';
-    if (group.id === 'definitions' && tab.id === 'journals') {
+    if (isJournalEntrySubmenu) {
+      exchangeFeature = viewEntryJournalSelector();
+    } else if (group.id === 'definitions' && tab.id === 'journals') {
       exchangeFeature = viewJournals();
     } else if (group.id === 'definitions' && tab.id === 'suppliers') {
       exchangeFeature = viewSuppliers();
@@ -6017,6 +6167,19 @@
     '</section>';
   }
 
+  function bindEntryJournalSelector() {
+    var positionInput = $('#entry-journal-position');
+    if (positionInput) {
+      positionInput.addEventListener('change', function () { positionEntryJournal(positionInput.value); });
+      positionInput.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        positionEntryJournal(positionInput.value);
+      });
+    }
+    if (selectedEntryJournalCode) selectEntryJournal(selectedEntryJournalCode);
+  }
+
   /* ------------------------------ Liaisons vue ----------------------------- */
   function bindView(route) {
     if (route === 'launcher') {
@@ -6047,6 +6210,7 @@
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'cancel-centralization') bindCentralizationCancellation();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'consolidate-before-result') bindAccountingConsolidationBeforeResult();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'consolidate-after-result') bindAccountingConsolidationAfterResult();
+      if (!isPhoneViewport() && menuParams.g === 'saisie' && (!menuParams.t || menuParams.t === 'journal-entry')) bindEntryJournalSelector();
       return;
     }
 
@@ -6292,11 +6456,23 @@
     if (event.key === 'Escape') closeModal();
     if (event.key === 'Enter' || event.key === ' ') {
       var target = event.target;
+      if (target && target.matches('[data-entry-journal-row]')) {
+        event.preventDefault();
+        selectEntryJournal(target.getAttribute('data-id'));
+        return;
+      }
       if (target && target.matches('[data-action="open-entry"]') && target.tagName !== 'BUTTON' && target.tagName !== 'A') {
         event.preventDefault();
         openEntryModal(target.getAttribute('data-id'));
       }
     }
+  });
+
+  document.addEventListener('dblclick', function (event) {
+    var row = event.target.closest('[data-entry-journal-row]');
+    if (!row) return;
+    event.preventDefault();
+    openEntryForJournal(row.getAttribute('data-id'));
   });
 
   document.addEventListener('click', function (event) {
@@ -6392,6 +6568,20 @@
         break;
       case 'open-entry':
         if (id) openEntryModal(id);
+        break;
+      case 'select-entry-journal':
+        if (id) selectEntryJournal(id);
+        break;
+      case 'open-entry-journal':
+        if (selectedEntryJournalCode) openEntryForJournal(selectedEntryJournalCode);
+        break;
+      case 'open-entry-journal-consultation': {
+        var selectedJournalForConsultation = S.journal(selectedEntryJournalCode);
+        if (selectedJournalForConsultation) navigate('#/journal?journal=' + encodeURIComponent(selectedJournalForConsultation.code));
+        break;
+      }
+      case 'open-entry-journal-close':
+        navigate('#/periods');
         break;
       case 'edit-draft':
         if (id) { closeModal(true); navigate('#/entry?id=' + encodeURIComponent(id)); }

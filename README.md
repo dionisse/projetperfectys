@@ -51,7 +51,8 @@ Le dépôt fournit un serveur statique sans dépendance ni compilation. Dans Bol
 | Localisation des immobilisations corporelles | Arborescence locale de niveaux et d’emplacements modifiables (code `LOC`, parent/enfant, adresse, responsable), réutilisable depuis les fiches immobilisées |
 | Éléments immobilisés | Registre local par dossier pour les trois natures, paramètres et comptes associés ; simulation linéaire indicative, convention explicitement choisie, lecture seule sans écriture |
 | Journaux | Huit journaux standards (dont Abonnements et Centralisations spécialisés), deux journaux système protégés et création illimitée de journaux par dossier ; paramètres, statuts et références automatiques |
-| Saisie d'écriture | Saisie multiligne, contrôle d'équilibre en direct, référence auto, brouillon ou validation |
+| Saisie dans les journaux | Liste par journal avec code, intitulé, nombre de pièces, débits/crédits validés, brouillons et état de clôture de la période ; double-clic sur un journal actif pour ouvrir sa saisie |
+| Saisie d'écriture | Saisie multiligne dans le journal choisi, contrôle d'équilibre en direct, référence proposée automatiquement, brouillon ou validation |
 | Pièces comptables | Liste filtrable, détail en modale, validation, modification et suppression des brouillons |
 | Balance générale | Débit, crédit et solde par compte, contrôle d'équilibre, export CSV, impression |
 | Journal des écritures | Écritures validées chronologiques, filtre journal/exercice, impression |

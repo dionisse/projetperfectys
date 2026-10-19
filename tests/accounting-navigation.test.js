@@ -77,6 +77,8 @@ assert.equal(findTab('definitions', 'journals').status, 'active');
 assert.ok(findTab('definitions', 'journals').reason.includes('journaux libres'));
 assert.ok(findTab('definitions', 'journals').reason.includes('réservés au système'));
 assert.equal(findTab('saisie', 'journal-entry').status, 'active');
+assert.ok(findTab('saisie', 'journal-entry').reason.includes('double-clic'));
+assert.equal(findTab('saisie', 'journal-entry').actions, undefined, 'le tableau de sélection des journaux est directement intégré au sous-menu');
 assert.equal(findTab('fichier', 'export-other').status, 'partial');
 assert.equal(findTab('fichier', 'import-other').status, 'partial');
 assert.equal(findTab('fichier', 'import-balance').status, 'partial');
