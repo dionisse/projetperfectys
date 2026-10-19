@@ -56,7 +56,7 @@
     dossiers: ['Dossiers clients', 'Entreprises clientes et cycles comptables'],
     dashboard: ['Tableau de bord', 'Vue d’ensemble de la comptabilité générale'],
     accounts: ['Plan comptable', 'Comptes SYSCOHADA révisé'],
-    journals: ['Journaux comptables', 'Les six journaux du module'],
+    journals: ['Journaux comptables', 'Référentiel et paramètres du dossier'],
     entry: ['Saisie d’écriture', 'Pièce multiligne — brouillon ou validation'],
     entries: ['Pièces comptables', 'Brouillons et pièces validées'],
     balance: ['Balance générale', 'Mouvements et soldes par compte'],
@@ -1664,7 +1664,7 @@
       '<div><strong>' + stats.length + '</strong><span>journaux au total</span></div>' +
     '</div>' +
     (managementAllowed ? '' : '<div class="alert info">La création, la modification et la saisie sont masquées sur téléphone. Utilisez le menu Éditions pour consulter les écritures.</div>') +
-    '<div class="alert info journal-system-note"><strong>Journaux automatiques protégés.</strong> Les journaux Amortissements, Abonnements, Centralisations et Résultat de la période (`AMO`, `ABO`, `CEN`, `RPE`) sont réservés aux traitements internes de PERFECTO ; la saisie manuelle et les imports y sont bloqués. Le routage vers ces journaux automatiques reste à construire : les flux de centralisation déjà livrés vers `PA` et `VE` ne sont pas modifiés par cette correction. La simulation d’amortissement demeure indicative et ne comptabilise rien.</div>' +
+    '<div class="alert info journal-system-note"><strong>Journaux système protégés.</strong> <code>AMO</code> (amortissements automatiques) et <code>RPE</code> (résultat de la période) restent réservés aux traitements système. <code>ABO</code> (abonnements) et <code>CEN</code> (centralisations) sont des journaux standards dédiés : leurs traitements spécifiques sont à construire. La centralisation de lots internes Paie &amp; RH et Ventes vers <code>PA</code> et <code>VE</code> reste distincte du futur transfert entre dossiers. La simulation d’amortissement demeure indicative et ne comptabilise rien.</div>' +
     '<div class="journal-grid">' + stats.map(function (item) {
       var record = item.journal;
       var systemManaged = !!record.systemManaged;

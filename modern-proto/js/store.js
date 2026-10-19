@@ -25,7 +25,9 @@
     { code: 'BQ', label: 'Journal de banque', type: 'Trésorerie' },
     { code: 'CA', label: 'Journal de caisse', type: 'Trésorerie' },
     { code: 'OD', label: 'Opérations diverses', type: 'Divers' },
-    { code: 'PA', label: 'Journal de paie', type: 'Paie' }
+    { code: 'PA', label: 'Journal de paie', type: 'Paie' },
+    { code: 'ABO', label: 'Journal abonnements', type: 'Abonnement', operationNature: 'Abonnements', referencePrefix: 'ABO', description: 'Journal spécialisé des abonnements de charges ou de produits. Les schémas de répartition et d’anticipation restent à construire ; aucune écriture n’est générée automatiquement.' },
+    { code: 'CEN', label: 'Journal des Centralisations', type: 'Centralisation', operationNature: 'Centralisation', referencePrefix: 'CEN', description: 'Journal spécialisé des centralisations comptables entre dossiers PERFECTO. Le transfert, les tableaux de passage et les contrôles de cohérence restent à construire.' }
   ];
   var RETIRED_JOURNAL_CODES = ['RAN'];
   var JOURNAL_OPERATION_NATURES = [
@@ -34,14 +36,12 @@
   ];
   var SYSTEM_JOURNAUX = [
     { code: 'AMO', label: 'Journal des amortissements automatiques', type: 'Automatique', operationNature: 'Amortissements automatiques', referencePrefix: 'AMO', systemKey: 'fixed-asset-depreciation', systemSource: 'PERFECTO-IMMOBILISATIONS-AMORTISSEMENT', description: 'Réservé aux opérations générées par le système d’immobilisations ; aucune saisie manuelle.' },
-    { code: 'ABO', label: 'Journal abonnements', type: 'Automatique', operationNature: 'Abonnements', referencePrefix: 'ABO', systemKey: 'recurring-subscriptions', systemSource: 'PERFECTO-ABONNEMENTS', description: 'Réservé aux abonnements générés par le système ; la génération reste à construire.' },
-    { code: 'CEN', label: 'Journal des Centralisations', type: 'Automatique', operationNature: 'Centralisation', referencePrefix: 'CEN', systemKey: 'internal-centralizations', systemSource: 'PERFECTO-CENTRALISATIONS-INTERNES', description: 'Réservé aux centralisations produites par les modules PERFECTO internes ; saisie et import tiers interdits.' },
     { code: 'RPE', label: 'Journal Résultat de la période', type: 'Automatique', operationNature: 'Résultat de l’exercice', referencePrefix: 'RPE', systemKey: 'period-result', systemSource: 'PERFECTO-RESULTAT-PERIODE', description: 'Réservé au traitement interne du résultat de la période ; règles et génération à construire.' }
   ];
 
   var ACCOUNTING_CHART = global.PerfectoAccountingChart || null;
   var ACCOUNTING_CHART_VERSION = ACCOUNTING_CHART ? ACCOUNTING_CHART.VERSION : 0;
-  var JOURNAL_REGISTRY_VERSION = 3;
+  var JOURNAL_REGISTRY_VERSION = 4;
   var SUPPLIER_REGISTRY_VERSION = 2;
   var CLIENT_REGISTRY_VERSION = 1;
   var SERVICE_REGISTRY_VERSION = 1;
@@ -478,15 +478,19 @@
   function standardJournalRecord(definition, existing) {
     existing = existing || {};
     var code = String(existing.code == null ? definition.code : existing.code).trim();
+    var migratedFromSystem = existing.systemManaged === true || existing.origin === 'system';
+    var definitionNature = JOURNAL_OPERATION_NATURES.indexOf(definition.operationNature) !== -1
+      ? definition.operationNature
+      : JOURNAL_OPERATION_NATURES[0];
     return {
       code: code,
       label: String(existing.label == null || existing.label === '' ? definition.label : existing.label).trim(),
-      type: String(existing.type == null || existing.type === '' ? definition.type : existing.type).trim(),
-      operationNature: JOURNAL_OPERATION_NATURES.indexOf(existing.operationNature) !== -1 ? existing.operationNature : JOURNAL_OPERATION_NATURES[0],
+      type: String(migratedFromSystem || existing.type == null || existing.type === '' ? definition.type : existing.type).trim(),
+      operationNature: JOURNAL_OPERATION_NATURES.indexOf(existing.operationNature) !== -1 ? existing.operationNature : definitionNature,
       id: String(existing.id || 'journal-standard-' + definition.code),
-      referencePrefix: normalizeJournalPrefix(existing.referencePrefix || code),
+      referencePrefix: normalizeJournalPrefix(existing.referencePrefix || definition.referencePrefix || code),
       authorizedAccounts: normalizeStoredAuthorizedAccounts(existing.authorizedAccounts),
-      description: String(existing.description || ''),
+      description: String(migratedFromSystem ? (definition.description || '') : (existing.description || definition.description || '')).trim(),
       active: existing.active !== false,
       origin: 'standard',
       isStandard: true,
@@ -3465,6 +3469,9 @@
       if (!mappedJournal || !journal(mappedJournal)) {
         addUnmapped(unmappedJournals, originalJournal, sourceEntry.journalLabel);
         hasUnknownReference = true;
+      } else if (normalizeJournalCode(mappedJournal) === 'CEN' && opts.internalDossierTransfer !== true) {
+        errors.push(prefix + 'Le journal CEN ne peut être alimenté que par le futur transfert interne entre dossiers PERFECTO, pas par un fichier ou un logiciel tiers.');
+        return;
       } else if (sourceEntry.journalLabel && journal(mappedJournal).label !== sourceEntry.journalLabel) {
         var journalWarningKey = 'journal:' + originalJournal + ':' + mappedJournal;
         if (!warningKeys[journalWarningKey]) {
