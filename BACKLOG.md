@@ -10,7 +10,10 @@ Ce document suit les décisions et les prochaines étapes du prototype natif. Le
 - Page multi-dossiers clients en place : la Comptabilité ouvre la liste avant le tableau de bord ; création avec nom, code, type comptable, référence et cycle, ainsi que coordonnées client facultatives (adresse, IFU, RCCM, email, téléphone).
 - Navigation Comptabilité générale organisée en huit menus latéraux, sous-menus en onglets verticaux et éléments imbriqués en listes ; fonctionnalités hors périmètre visibles mais inactives.
 - Sur téléphone, consultation limitée au menu Éditions (balance, journal, grand livre) ; opérations de saisie et création de dossier réservées à l’ordinateur ou à la tablette.
-- Menu Fichier : PERFECTO-ÉCHANGE v1 (écritures), PERFECTO-BALANCE v1 (soldes nets) et PERFECTO-AUXILIAIRE v1 (centralisation d’un lot de pièces équilibrées) en CSV/Excel. Les imports contrôlent les correspondances et périodes, prévisualisent, sauvegardent localement, ajoutent sans remplacement et créent un brouillon par défaut.
+- Menu Fichier : PERFECTO-ÉCHANGE v1 (écritures) et PERFECTO-BALANCE v1 (soldes nets) proposent des imports/exports contrôlés. Le format pivot PERFECTO-AUXILIAIRE v1 est documenté/testé, mais n’est pas exposé comme import ni comme source d’une centralisation.
+- Paie & RH : registre local partiel de lots internes, approbation et lien de centralisation vers la Comptabilité. Les calculs de paie et fonctions RH complètes restent à construire ; les données fictives de démonstration ne sont pas calculées légalement.
+- La centralisation des salaires lit exclusivement un lot approuvé du module maison Paie & RH ; elle n’accepte aucun fichier ni logiciel tiers.
+- La centralisation auxiliaire est à construire depuis les futurs modules PERFECTO de gestion des tiers et mouvements ; le parcours utilisateur reste désactivé jusqu’à leur intégration.
 - Les profils natifs Sage Comptabilité, PERFECTO historique, HYPERSOFT et ODOO ne sont pas encore implémentés ; ils nécessitent des exemples anonymisés et une validation par version.
 - Connexion, profils, grants et dossiers ne sont pas encore reliés à une identité réelle ou à Google Drive.
 
@@ -25,7 +28,9 @@ Ce document suit les décisions et les prochaines étapes du prototype natif. Le
 - L’interopérabilité repose sur un format comptable commun, utilisé dans les deux sens, avec Excel/CSV comme passerelle et des adaptateurs séparés par logiciel ; les logiciels prioritaires cités sont Sage Comptabilité, PERFECTO historique, HYPERSOFT et ODOO.
 - Les formats d’échange ne remplacent pas la sauvegarde native PERFECTO. Les importations ajoutent au dossier actif après aperçu, contrôles et point de restauration ; elles ne remplacent rien par défaut.
 - L’import de balance v1 concerne les soldes nets uniquement et les transforme en une pièce de reprise (journal/date choisis, brouillon par défaut) ; les balances de mouvements et le report à nouveau restent distincts.
-- La centralisation auxiliaire v1 accepte un lot pivot de pièces complètes et équilibrées, les agrège par compte général cible en une seule pièce et exige un code auxiliaire pour les lignes de tiers ; elle ne remplace pas encore les adaptateurs natifs ni un grand livre auxiliaire intégré.
+- Les centralisations entre modules PERFECTO lisent exclusivement les données des modules maison. Les formats de fichier et adaptateurs tiers relèvent de l’interopérabilité, pas de ces transferts internes.
+- La centralisation auxiliaire depuis les modules maison n’est pas encore active : elle dépend des futurs registres internes de tiers et mouvements. Le pivot `PERFECTO-AUXILIAIRE` v1 est un modèle d’interopérabilité et ne peut pas alimenter une centralisation.
+- La centralisation des salaires part de lots approuvés dans Paie & RH, les transforme en une pièce générale au journal `PA` par défaut, ajoute en brouillon, conserve la provenance et bloque les doublons. Le jeu de paie démo n’effectue aucun calcul légal.
 - Comptabilité générale et comptabilité analytique sont deux modules séparés et interopérables ; l’analytique exploite les données issues de la comptabilité générale sans y intégrer ses propres définitions analytiques.
 - Sur téléphone, seul le parcours de consultation des Éditions est prévu ; l’application de saisie est destinée à l’ordinateur ou à la tablette.
 - Les fonctions analytiques, dépendantes de modules futurs ou à confirmer restent inactives jusqu’à une décision explicite ; les fonctions générales non encore réalisées sont étiquetées « À construire ».
@@ -61,7 +66,7 @@ Les identifiants ci-dessous sont reliés aux parcours actuels, mais leurs libell
 
 - Interopérabilité : faire valider avec un spécialiste Excel les modèles `PERFECTO-ÉCHANGE`, `PERFECTO-BALANCE` et `PERFECTO-AUXILIAIRE` et leurs règles métier ; développer les adaptateurs directs Sage Comptabilité, PERFECTO historique, HYPERSOFT et ODOO, un par version, avec des fichiers réels anonymisés et des tests de rapprochement. Les balances de mouvements et autres états restent à cadrer séparément.
 - Comptabilité générale : tiers et auxiliaires détaillés, numérotation, extourne, lettrage, rapprochement bancaire, pièces jointes et états financiers SYSCOHADA complets.
-- Comptabilité analytique, Paie & RH, Gestion de courriers, Vente/Stock/Facturation, puis autres modules selon les besoins de l’organisation.
+- Compléter Paie & RH : dossier du personnel, contrats, règles de calcul de paie, cotisations/retenues et validations métier. Construire ensuite Gestion de courriers et Vente/Stock/Facturation ; leurs centralisations comptables devront lire les données des modules maison correspondants.
 - Exécutable Windows : cadrage séparé après stabilisation des parcours web et des règles de stockage.
 
 ## Hors périmètre de la démo actuelle

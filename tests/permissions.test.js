@@ -145,6 +145,17 @@ test('les actions disponibles sont décrites par module', () => {
   assert(Permissions.actionsForModule('organization').some((action) => action.id === 'organization.manageMembers'));
   assert(Permissions.actionsForModule('organization').some((action) => action.id === 'organization.manageDossiers'));
   assert(Permissions.actionsForModule('analytics').some((action) => action.id === 'module.view'));
+  const payrollActions = Permissions.actionsForModule('payroll-hr').map((action) => action.id);
+  assert(payrollActions.includes('module.view'));
+  assert(payrollActions.includes('record.create'));
+  assert(payrollActions.includes('record.validate'));
+  const payrollManager = {
+    role: 'manager', organizationId: 'org-1',
+    grants: { 'payroll-hr': [{ scope: { type: 'dossier', dossiers: ['client-1'] }, actions: ['module.view', 'record.create', 'record.validate'] }] }
+  };
+  const payrollContext = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'client-1' };
+  assert.strictEqual(Permissions.hasPermission(payrollManager, 'payroll-hr', 'record.validate', payrollContext), true);
+  assert.strictEqual(Permissions.hasPermission(payrollManager, 'payroll-hr', 'record.validate', { ...payrollContext, dossierId: 'client-2' }), false, 'un lot de paie reste limité au dossier accordé');
   assert.deepStrictEqual(Permissions.actionsForModule('unknown-module'), [], 'un module inconnu est refusé');
   const unknownGrant = { role: 'manager', organizationId: 'org-1', grants: { 'unknown-module': [{ scope: { type: 'organization' }, actions: ['module.view'] }] } };
   assert.strictEqual(Permissions.hasPermission(unknownGrant, 'unknown-module', 'module.view', context), false);

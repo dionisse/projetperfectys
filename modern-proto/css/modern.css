@@ -1469,6 +1469,7 @@ body.launcher-mode #view { min-height: 100vh; }
 .module-status { display: inline-flex; align-items: center; gap: 6px; font-size: .55rem; letter-spacing: .08em; }
 .module-status i { width: 6px; height: 6px; display: inline-block; border-radius: 50%; background: currentColor; }
 .module-status.available { color: #68ceb2; }
+.module-status.partial { color: #edc878; }
 .module-status.planned { color: #d8b563; }
 .module-status.flexible { color: #aab7b0; }
 .module-icon { width: 43px; height: 43px; display: grid; place-items: center; margin: 21px 0 14px; border: 1px solid color-mix(in srgb, var(--module-accent), transparent 72%); border-radius: 10px; color: var(--module-accent); background: color-mix(in srgb, var(--module-accent), transparent 91%); font-size: 1.25rem; }
@@ -1581,6 +1582,7 @@ body.launcher-mode .content { background: #f7f6f0; }
 }
 .module-card-top { color: #687873; }
 .module-status.available { color: #08776e; }
+.module-status.partial { color: #8d671e; }
 .module-status.planned { color: #8d671e; }
 .module-status.flexible { color: #62736d; }
 .module-icon { background: color-mix(in srgb, var(--module-accent), white 91%); }
@@ -2109,6 +2111,7 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
 .menu-status-legend { display: flex; flex-wrap: wrap; gap: 9px 16px; margin: 1px 2px 11px; }
 .menu-status-legend > span { display: inline-flex; align-items: center; gap: 6px; color: #65756d; font-size: .61rem; font-weight: 700; }
 .legend-dot { width: 7px; height: 7px; border-radius: 50%; background: #138b78; }
+.legend-dot-partial { background: #c29434; }
 .legend-dot-planned { background: #7d98ab; }
 .legend-dot-inactive { background: #b3bcb6; }
 .accounting-menu-panel {
@@ -2294,6 +2297,18 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
   body.phone-editions-mode.dossiers-list-mode .nav-context-links .nav-section-heading { display: none; }
 }
 
+/* ---------- Paie & RH interne et centralisation ---------- */
+.payroll-module-workspace { display: grid; gap: 15px; margin-top: 17px; }
+.payroll-demo-create { display: grid; grid-template-columns: minmax(220px, 300px) auto; align-items: end; gap: 13px; }
+.payroll-demo-create .field { margin: 0; }
+.payroll-demo-create .btn { justify-self: start; }
+.payroll-run-selector { max-width: 670px; margin: 15px 0; }
+.payroll-run-selector label { display: block; margin-bottom: 6px; }
+.payroll-centralization-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 13px 0; }
+.payroll-centralization-workspace .empty-state .btn { display: inline-flex; width: fit-content; margin-top: 12px; }
+.payroll-module-workspace .exchange-card h3 { margin: 0 0 8px; color: #314a41; font-size: .98rem; font-weight: 800; }
+.payroll-module-workspace .exchange-card small { display: block; margin-top: 4px; }
+
 /* ---------- Échanges comptables avec Excel et fichiers tiers ---------- */
 .exchange-workspace { display: grid; gap: 14px; margin-top: 17px; }
 .exchange-workspace .alert { margin: 0; line-height: 1.55; }
@@ -2361,6 +2376,11 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
 .exchange-preview-footer { display: flex; justify-content: flex-end; padding-top: 2px; }
 
 @media (max-width: 700px) {
+  .payroll-demo-create,
+  .payroll-centralization-controls { grid-template-columns: minmax(0, 1fr); }
+  .payroll-demo-create .btn,
+  .payroll-centralization-workspace .empty-state .btn { width: 100%; justify-content: center; }
+  .payroll-run-selector { max-width: none; }
   .exchange-context-grid,
   .exchange-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .exchange-grid,

@@ -19,7 +19,8 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
 ]));
 [
   'Importation d’une balance générale',
-  'Centralisation de la comptabilité auxiliaire',
+  'Centralisation auxiliaire interne',
+  'Centralisation des salaires depuis Paie et RH',
   'Comptes généraux',
   'Fournisseurs',
   'Clients',
@@ -47,8 +48,12 @@ assert.equal(findTab('fichier', 'export-other').status, 'partial');
 assert.equal(findTab('fichier', 'import-other').status, 'partial');
 assert.equal(findTab('fichier', 'import-balance').status, 'partial');
 assert.ok(findTab('fichier', 'import-balance').reason.includes('PERFECTO-BALANCE v1'));
-assert.equal(findTab('fichier', 'centralize-auxiliary').status, 'partial');
-assert.ok(findTab('fichier', 'centralize-auxiliary').reason.includes('PERFECTO-AUXILIAIRE v1'));
+assert.equal(findTab('fichier', 'centralize-auxiliary').status, 'planned');
+assert.ok(findTab('fichier', 'centralize-auxiliary').reason.includes('modules internes'));
+assert.ok(findTab('fichier', 'centralize-auxiliary').reason.includes('n’alimente pas une centralisation interne'));
+assert.equal(findTab('fichier', 'centralize-payroll').status, 'partial');
+assert.ok(findTab('fichier', 'centralize-payroll').reason.includes('module interne Paie & RH'));
+assert.ok(findTab('fichier', 'centralize-payroll').reason.includes('sans import de fichier externe'));
 assert.equal(findTab('editions', 'journals').status, 'active');
 assert.equal(findTab('editions', 'general-accounts').status, 'active');
 assert.equal(findTab('editions', 'analytic-statements').status, 'inactive');

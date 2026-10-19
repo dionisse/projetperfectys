@@ -24,10 +24,11 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 | Écran | Contenu |
 |---|---|
 | Navigation comptable | Huit menus latéraux (Fichier, Définitions, Saisie, Éditions, Déclarations, Fin d’exercice, Paramètres, Outils), sous-menus en onglets verticaux et éléments imbriqués en listes ; les fonctions analytiques et non réalisées restent inactives |
-| Fichier & interopérabilité | PERFECTO-ÉCHANGE v1 pour les écritures, PERFECTO-BALANCE v1 pour les soldes nets et PERFECTO-AUXILIAIRE v1 pour centraliser un lot auxiliaire équilibré ; modèles CSV/Excel, aperçu, correspondances, contrôles et point de restauration. Adaptateurs natifs Sage, PERFECTO historique, HYPERSOFT et ODOO à construire |
+| Fichier & interopérabilité | PERFECTO-ÉCHANGE v1 pour les écritures et PERFECTO-BALANCE v1 pour les soldes nets, avec modèles CSV/Excel, aperçu, correspondances, contrôles et point de restauration. Le pivot PERFECTO-AUXILIAIRE v1 est documenté/testé mais n’alimente aucune centralisation. Adaptateurs natifs Sage, PERFECTO historique, HYPERSOFT et ODOO à construire |
 | Téléphone | Consultation limitée aux Éditions (balance, journal, grand livre) ; aucune saisie comptable ni création de dossier sur téléphone |
 | Connexion (démo) | Aucun identifiant collecté ; e-mail/mot de passe et Google sont prévus, mais non actifs en démo |
 | Launcher | Catalogue modulaire, recherche et filtres ; ouverture selon les droits du profil simulé, autres modules à venir |
+| Paie & RH (étape partielle) | Registre local de lots internes, approbation et lien vers la centralisation ; les calculs de paie et fonctions RH complètes restent à construire |
 | Organisation & accès (démo) | Profils temporaires et droits explicites par personne, module, entreprise cliente, dossier et action ; refus par défaut |
 | Dossiers clients | Liste multi-dossiers ouverte depuis le module Comptabilité ; création d’entreprise, code, type comptable, référence et cycle paramétrable |
 | Tableau de bord | Indicateurs (débit, crédit, résultat, pièces), dernières pièces, activité par journal, état des périodes |
@@ -56,21 +57,28 @@ Le menu **Fichier** propose le format neutre `PERFECTO-ECHANGE` version 1 en cla
 - Le JSON de **Données & application** reste une sauvegarde/restauration native PERFECTO et ne doit pas être confondu avec un fichier d’échange.
 - Les tiers, les données analytiques et le multidevise restent hors de ce premier incrément. Les données sont lues et produites dans le navigateur ; aucun fichier n’est envoyé à un serveur.
 
-### Centralisation de la comptabilité auxiliaire — v1
+### Centralisation auxiliaire depuis les modules maison — à construire
 
-Le sous-menu **Centralisation de la comptabilité auxiliaire** accepte un lot CSV ou `.xlsx` au format pivot `PERFECTO-AUXILIAIRE` version 1. Une ligne représente un mouvement source ; une pièce est identifiée par le journal source, sa date et sa référence.
+Le sous-menu de centralisation auxiliaire reste **désactivé** jusqu’à l’intégration des modules PERFECTO internes qui produiront les mouvements de tiers (clients, fournisseurs et autres auxiliaires). Lorsqu’elle sera construite, la centralisation lira ces données internes ; aucun fichier CSV/Excel ou logiciel tiers ne pourra l’alimenter.
 
-- Chaque pièce source doit contenir ses contreparties et être équilibrée. Le lot entier est contrôlé avant modification ; les 20 premières lignes sont affichées dans l’aperçu, avec toutes les correspondances de comptes.
-- Les comptes généraux inconnus doivent être associés explicitement ; aucun compte n’est créé. Toute ligne portant un code auxiliaire doit être associée à un compte cible marqué auxiliaire.
-- Les pièces sources du lot sont agrégées par compte général cible en une seule pièce de centralisation, au journal et à la date de destination choisis. Le brouillon est le mode par défaut ; la date, le journal, le contexte source/cible, les droits et les périodes sont contrôlés.
-- L’ajout est confirmé, précédé d’un point de restauration local et n’écrase aucune écriture. La référence de lot source empêche une seconde centralisation du même lot ; les métadonnées de provenance sont conservées. Garder le fichier source pour consulter le détail par tiers.
-- Ce pivot ne constitue pas encore un grand livre auxiliaire intégré ni un adaptateur natif Sage, PERFECTO historique, HYPERSOFT ou ODOO ; ces formats nécessitent des exemples anonymisés et une validation par version.
+Le format pivot `PERFECTO-AUXILIAIRE` v1 décrit un échange de mouvements auxiliaires, mais il n’est pas accepté comme source de centralisation dans l’application. Son analyse et son agrégateur sont conservés comme travaux de modèle/tests pour cadrer l’interopérabilité future, sans parcours utilisateur actif. Les adaptateurs natifs et le grand livre auxiliaire intégré restent également à construire.
+
+### Paie & RH et centralisation des salaires — étape partielle
+
+Les centralisations **entre modules PERFECTO** utilisent exclusivement les données des modules maison. Les formats CSV/Excel et adaptateurs tiers restent des parcours d’interopérabilité distincts.
+
+Le module **Paie & RH** expose un registre interne de lots de paie isolé par dossier client. En démo, un lot fictif peut être créé pour une période du cycle, contrôlé puis approuvé ; il contient un journal comptable équilibré sans noms ni données personnelles.
+
+- La centralisation consomme exclusivement un lot approuvé produit dans le module maison Paie & RH. Aucun fichier CSV/Excel ni logiciel tiers n’est accepté dans ce parcours.
+- Les comptes source sont associés à des comptes existants du plan actif, les débits et crédits sont agrégés séparément par compte cible et le lot crée une seule pièce dans le journal de paie `PA` par défaut.
+- L’écriture est un brouillon par défaut, précédée d’un point de restauration local ; la provenance interne est conservée et un même lot ne peut pas être centralisé deux fois.
+- Le registre démo n’effectue **aucun calcul de salaire, cotisation, impôt ou retenue légale**. La gestion des employés, contrats, règles de paie, validations RH et synchronisation multi-utilisateur restent à construire. Les montants présentés sont fictifs.
 
 En-tête stable de la feuille `Ecritures` et du CSV : `FORMAT;VERSION;SYSTEME_SOURCE;REFERENCE_DOSSIER;EXERCICE;CODE_JOURNAL;LIBELLE_JOURNAL;DATE;REFERENCE_PIECE;LIBELLE_PIECE;CODE_COMPTE;LIBELLE_COMPTE;CLASSE_COMPTE;NATURE_COMPTE;DEBIT_XOF;CREDIT_XOF;STATUT_SOURCE;ID_SOURCE`. Les colonnes peuvent être réordonnées, mais pas supprimées ni renommées dans cette version. Les montants sont des entiers sans séparateurs ; `ID_SOURCE` est répété sur chaque ligne de la même pièce.
 
 En-tête stable de la feuille `Balance` et du modèle CSV : `FORMAT;VERSION;SYSTEME_SOURCE;REFERENCE_DOSSIER;EXERCICE;DATE_BALANCE;REFERENCE_BALANCE;CODE_COMPTE;LIBELLE_COMPTE;SOLDE_DEBITEUR_XOF;SOLDE_CREDITEUR_XOF;ID_SOURCE`. Une ligne par compte, sans solde nul ni doublon de compte source. Les métadonnées doivent être identiques sur toutes les lignes ; `ID_SOURCE` peut être laissé vide partout ou rempli avec la même valeur.
 
-En-tête stable de la feuille `Auxiliaire` et du modèle CSV : `FORMAT;VERSION;SYSTEME_SOURCE;REFERENCE_DOSSIER;EXERCICE;REFERENCE_LOT;CODE_JOURNAL_SOURCE;DATE_SOURCE;REFERENCE_PIECE_SOURCE;LIBELLE_PIECE_SOURCE;CODE_COMPTE_GENERAL;LIBELLE_COMPTE_GENERAL;CODE_AUXILIAIRE;LIBELLE_AUXILIAIRE;LIBELLE_MOUVEMENT;DEBIT_XOF;CREDIT_XOF;ID_SOURCE`. `REFERENCE_LOT` est identique sur tout le fichier ; `ID_SOURCE` est obligatoire et unique par ligne. Les informations auxiliaires sont fournies ensemble ou laissées vides. Saisir les codes et références comme texte pour préserver les zéros initiaux.
+En-tête proposé pour la feuille `Auxiliaire` et le modèle CSV d’interopérabilité (non utilisé par une centralisation active) : `FORMAT;VERSION;SYSTEME_SOURCE;REFERENCE_DOSSIER;EXERCICE;REFERENCE_LOT;CODE_JOURNAL_SOURCE;DATE_SOURCE;REFERENCE_PIECE_SOURCE;LIBELLE_PIECE_SOURCE;CODE_COMPTE_GENERAL;LIBELLE_COMPTE_GENERAL;CODE_AUXILIAIRE;LIBELLE_AUXILIAIRE;LIBELLE_MOUVEMENT;DEBIT_XOF;CREDIT_XOF;ID_SOURCE`. `REFERENCE_LOT` est identique sur tout le fichier ; `ID_SOURCE` est obligatoire et unique par ligne. Les informations auxiliaires sont fournies ensemble ou laissées vides. Saisir les codes et références comme texte pour préserver les zéros initiaux.
 
 ### Règles métier appliquées
 

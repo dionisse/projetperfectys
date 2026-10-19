@@ -10,6 +10,8 @@
   var Permissions = window.PerfectoPermissions;
   var AccountingNavigation = window.PerfectoAccountingNavigation;
   var AccountingExchange = window.PerfectoAccountingExchange;
+  var PayrollHR = window.PerfectoPayrollHR;
+  var PayrollCentralization = window.PerfectoPayrollCentralization;
 
   /* ------------------------------ Utilitaires ------------------------------ */
   function esc(value) {
@@ -37,12 +39,13 @@
     balance: '⚖︎', journal: '≡', ledger: '⌕', periods: '◷', settings: '⚙︎'
   };
 
-  var ROUTES = ['login', 'launcher', 'organization', 'dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings', 'menu'];
+  var ROUTES = ['login', 'launcher', 'organization', 'payroll', 'dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings', 'menu'];
 
   var TITLES = {
     login: ['Connexion', 'Accès à votre espace PERFECTO'],
     launcher: ['Launcher', 'Modules de votre organisation'],
     organization: ['Organisation & accès', 'Organisation, membres et droits d’accès'],
+    payroll: ['Paie & RH', 'Lots de paie internes · prototype de centralisation'],
     dossiers: ['Dossiers clients', 'Entreprises clientes et cycles comptables'],
     dashboard: ['Tableau de bord', 'Vue d’ensemble de la comptabilité générale'],
     accounts: ['Plan comptable', 'Comptes SYSCOHADA révisé'],
@@ -69,7 +72,7 @@
   var deferredInstallPrompt = null;
   var exchangeImportSession = null;
   var balanceImportSession = null;
-  var auxiliaryCentralizationSession = null;
+  var payrollCentralizationSession = null;
   var launcherUi = { filter: 'all', query: '' };
   var DEMO_ORGANIZATION_ID = 'demo-org';
   var ACCOUNTING_ROUTES = ['dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings', 'menu'];
@@ -131,6 +134,10 @@
     return demoAccessContext('dossier', selected);
   }
 
+  function payrollAccessContext(dossier) {
+    return accountingAccessContext(dossier || S.currentDossier());
+  }
+
   function permittedDemoDossiers(member) {
     return S.dossiers().filter(function (dossier) {
       return hasDemoPermission(member, 'accounting', 'module.view', accountingAccessContext(dossier));
@@ -168,6 +175,14 @@
         return { moduleId: 'accounting', actionId: 'module.view' };
       case 'open-module':
         return { moduleId: trigger && trigger.getAttribute('data-module-id'), actionId: 'module.view' };
+      case 'create-demo-payroll-run':
+        return { moduleId: 'payroll-hr', actionId: 'record.create' };
+      case 'approve-internal-payroll-run':
+        return { moduleId: 'payroll-hr', actionId: 'record.validate' };
+      case 'open-accounting-payroll-centralization':
+        return { moduleId: 'accounting', actionId: 'module.view' };
+      case 'commit-accounting-payroll-centralization':
+        return { moduleId: 'accounting', actionId: 'data.import' };
       case 'open-entry':
         return { moduleId: 'accounting', actionId: 'module.view' };
       case 'edit-draft':
@@ -188,7 +203,6 @@
         return { moduleId: 'accounting', actionId: 'data.restore' };
       case 'commit-accounting-exchange-import':
       case 'commit-accounting-balance-import':
-      case 'commit-accounting-auxiliary-centralization':
         return { moduleId: 'accounting', actionId: 'data.import' };
       case 'export-json':
       case 'export-accounts-csv':
@@ -199,8 +213,6 @@
       case 'download-accounting-workbook-template':
       case 'download-accounting-balance-template':
       case 'download-accounting-balance-workbook-template':
-      case 'download-accounting-auxiliary-template':
-      case 'download-accounting-auxiliary-workbook-template':
       case 'export-accounting-chart':
       case 'export-accounting-journals':
       case 'print':
@@ -220,7 +232,7 @@
     var selectedDossier = action === 'open-dossier' && trigger ? demoDossierById(trigger.getAttribute('data-id')) : null;
     var context = rule.moduleId === 'accounting'
       ? accountingAccessContext(selectedDossier || undefined)
-      : demoAccessContext('organization');
+      : (rule.moduleId === 'payroll-hr' ? payrollAccessContext(selectedDossier || undefined) : demoAccessContext('organization'));
     var allowed;
     if (action === 'open-module' && rule.moduleId === 'accounting') {
       allowed = permittedDemoDossiers(member).length > 0 || hasDemoPermission(member, 'organization', 'organization.manageDossiers', demoAccessContext('organization'));
@@ -244,6 +256,7 @@
       var routePart = hash.replace(/^#\/?/, '').split('?')[0];
       var requirement = null;
       if (routePart === 'organization') requirement = { moduleId: 'organization', actionId: 'module.view' };
+      else if (routePart === 'payroll') requirement = { moduleId: 'payroll-hr', actionId: 'module.view' };
       else if (routePart === 'dossiers') {
         link.hidden = permittedDemoDossiers(getActiveDemoMember()).length === 0 &&
           !hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageDossiers', demoAccessContext('organization'));
@@ -254,7 +267,9 @@
         requirement = { moduleId: 'accounting', actionId: hasId ? 'draft.edit' : 'draft.create' };
       }
       if (requirement) {
-        var context = requirement.moduleId === 'accounting' ? accountingAccessContext() : demoAccessContext('organization');
+        var context = requirement.moduleId === 'accounting'
+          ? accountingAccessContext()
+          : (requirement.moduleId === 'payroll-hr' ? payrollAccessContext() : demoAccessContext('organization'));
         link.hidden = !hasDemoPermission(getActiveDemoMember(), requirement.moduleId, requirement.actionId, context);
       }
     });
@@ -296,13 +311,6 @@
       balanceImportInput.hidden = !canImportBalance;
       var balanceImportLabel = $('#balance-import-label', root);
       if (balanceImportLabel) balanceImportLabel.hidden = !canImportBalance;
-    }
-    var auxiliaryImportInput = $('#auxiliary-centralization-file', root);
-    if (auxiliaryImportInput) {
-      var canImportAuxiliary = hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext());
-      auxiliaryImportInput.hidden = !canImportAuxiliary;
-      var auxiliaryImportLabel = $('#auxiliary-centralization-label', root);
-      if (auxiliaryImportLabel) auxiliaryImportLabel.hidden = !canImportAuxiliary;
     }
   }
 
@@ -388,6 +396,10 @@
     var phoneRouteAllowed = route === 'dossiers' ||
       (route === 'menu' && parsed.params.g === 'editions') ||
       PHONE_REPORT_ROUTES.indexOf(route) !== -1;
+    if (phoneViewport && route === 'payroll') {
+      navigate(accountingMenuHash('editions', 'general-accounts'));
+      return;
+    }
     if (phoneViewport && ACCOUNTING_ROUTES.indexOf(route) !== -1 && !phoneRouteAllowed) {
       navigate(accountingMenuHash('editions', 'general-accounts'));
       return;
@@ -395,12 +407,17 @@
     var view = $('#view');
     if (!view) return;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'import-balance')) balanceImportSession = null;
-    if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'centralize-auxiliary')) auxiliaryCentralizationSession = null;
+    if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'centralize-payroll')) payrollCentralizationSession = null;
 
     var activeMember = getActiveDemoMember();
     var orgContext = demoAccessContext('organization');
     if (route === 'organization' && !hasDemoPermission(activeMember, 'organization', 'module.view', orgContext)) {
       toast('Accès refusé : aucun droit de consultation de l’organisation n’est accordé à ce profil.', 'warning');
+      navigate('#/launcher');
+      return;
+    }
+    if (route === 'payroll' && !hasDemoPermission(activeMember, 'payroll-hr', 'module.view', payrollAccessContext())) {
+      toast('Accès refusé : aucun droit de consultation de Paie & RH n’est accordé à ce profil.', 'warning');
       navigate('#/launcher');
       return;
     }
@@ -439,6 +456,7 @@
       case 'login': html = viewLogin(); break;
       case 'launcher': html = viewLauncher(); break;
       case 'organization': html = viewOrganization(); break;
+      case 'payroll': html = viewPayrollModule(); break;
       case 'dossiers': html = viewDossiers(); break;
       case 'dashboard': html = viewDashboard(); break;
       case 'accounts': html = viewAccounts(); break;
@@ -458,7 +476,7 @@
 
     var folderIndicator = $('#active-folder-indicator');
     if (folderIndicator) {
-      var inAccounting = ACCOUNTING_ROUTES.indexOf(route) !== -1;
+      var inAccounting = ACCOUNTING_ROUTES.indexOf(route) !== -1 || route === 'payroll';
       var activeDossier = S.currentDossier();
       var visibleDossierCount = route === 'dossiers' ? permittedDemoDossiers(activeMember).length : 0;
       folderIndicator.hidden = !inAccounting;
@@ -472,7 +490,7 @@
     var dossiersReturn = $('#dossier-list-return');
     if (dossiersReturn) dossiersReturn.hidden = !selectedDossierMode;
     var topbarEntry = $('a[href="#/entry"].btn.btn-primary');
-    if (topbarEntry && route === 'dossiers') topbarEntry.hidden = true;
+    if (topbarEntry && (route === 'dossiers' || route === 'payroll')) topbarEntry.hidden = true;
 
     var title = TITLES[route] || TITLES.login;
     if (route === 'menu') {
@@ -482,6 +500,8 @@
     }
     var pageTitle = $('#page-title');
     if (pageTitle) pageTitle.textContent = title[0];
+    var topbarEyebrow = $('.topbar-titles .eyebrow');
+    if (topbarEyebrow) topbarEyebrow.textContent = route === 'payroll' ? 'CABINET GOBEX · Paie & RH' : 'CABINET GOBEX · Comptabilité générale';
     document.title = 'PERFECTO · ' + title[0];
 
     $$('[data-route]').forEach(function (link) {
@@ -608,8 +628,10 @@
   }
 
   function launcherModuleCard(module, index) {
-    var available = module.status === 'available' && module.route;
-    var moduleContext = module.id === 'accounting' ? accountingAccessContext() : demoAccessContext('organization');
+    var available = (module.status === 'available' || module.status === 'partial') && module.route;
+    var moduleContext = module.id === 'accounting'
+      ? accountingAccessContext()
+      : (module.id === 'payroll-hr' ? payrollAccessContext() : demoAccessContext('organization'));
     var activeMember = getActiveDemoMember();
     var permitted = available && (module.id === 'accounting'
       ? (permittedDemoDossiers(activeMember).length > 0 || hasDemoPermission(activeMember, 'organization', 'organization.manageDossiers', demoAccessContext('organization')))
@@ -1033,7 +1055,7 @@
       var status = grants.length ? grants.length + ' portée(s) · ' + totalActions + ' droit(s)' : 'À définir';
       var addDisabled = module.scopeable === false && grants.length ? ' disabled' : '';
       return '<details class="demo-module-permission"' + (moduleIndex === 0 ? ' open' : '') + '>' +
-        '<summary><span><strong>' + esc(module.name) + '</strong><small>' + (module.id === 'organization' ? 'Gestion de l’organisation de démonstration' : esc(module.status === 'available' ? 'Disponible en démo' : 'Module à venir')) + '</small></span><span class="permission-pending" data-demo-module-count="' + esc(module.id) + '">' + status + '</span></summary>' +
+        '<summary><span><strong>' + esc(module.name) + '</strong><small>' + (module.id === 'organization' ? 'Gestion de l’organisation de démonstration' : esc(module.status === 'available' ? 'Disponible en démo' : (module.status === 'partial' ? 'Partiellement disponible en démo' : 'Module à venir'))) + '</small></span><span class="permission-pending" data-demo-module-count="' + esc(module.id) + '">' + status + '</span></summary>' +
         '<div class="demo-module-permission-body">' +
           '<p class="demo-no-grants" data-demo-no-grants="' + esc(module.id) + '"' + (grants.length ? ' hidden' : '') + '>Aucun droit explicite dans ce module.</p>' +
           '<div class="demo-grants-list" data-demo-grant-list="' + esc(module.id) + '" data-demo-next-grant-index="' + grants.length + '">' + grantRows + '</div>' +
@@ -2092,60 +2114,6 @@
     '</div>';
   }
 
-  function viewAccountingAuxiliaryCentralization() {
-    var dossier = S.currentDossier();
-    var journals = S.journals();
-    var defaultJournal = journals.find(function (journal) { return journal.code === 'OD'; }) || journals[0] || null;
-    var session = auxiliaryCentralizationSession;
-    var targetDate = session ? session.targetDate : dossier.cycleEnd;
-    var targetJournal = session ? session.targetJournal : (defaultJournal && defaultJournal.code || '');
-    var targetReference = session ? session.targetReference : 'AUX-' + dossier.exerciseYear + '-001';
-    var targetMode = session ? session.mode : 'draft';
-    return '<div class="exchange-workspace auxiliary-centralization-workspace">' +
-      '<div class="alert info"><div><strong>Centralisation contrôlée des journaux auxiliaires</strong><br>Importez un lot source complet : chaque pièce auxiliaire doit contenir ses contreparties et être équilibrée. PERFECTO regroupera les mouvements par compte général cible, sans créer de comptes ni modifier le lot source.</div></div>' +
-      '<div class="alert warning"><div><strong>Ce premier incrément utilise un format pivot.</strong><br>Les fichiers natifs Sage, PERFECTO historique, HYPERSOFT et ODOO ne sont pas lus directement ; préparez un CSV ou un classeur `.xlsx` au format PERFECTO-AUXILIAIRE v1.</div></div>' +
-      '<section class="exchange-card"><p class="page-kicker">MODÈLES DE CENTRALISATION</p><h4>Préparer le lot auxiliaire</h4>' +
-        '<p>Le classeur comporte une feuille « Auxiliaire », un plan cible et des instructions. Renseignez les lignes générales de chaque pièce source ; indiquez le code et le libellé auxiliaires sur les lignes de tiers.</p>' +
-        '<div class="exchange-button-row"><button type="button" class="btn btn-primary" data-action="download-accounting-auxiliary-workbook-template">↓ Modèle Excel (.xlsx)</button>' +
-        '<button type="button" class="btn btn-ghost" data-action="download-accounting-auxiliary-template">↓ Modèle CSV</button></div>' +
-      '</section>' +
-      '<div class="exchange-import-controls auxiliary-centralization-controls">' +
-        '<div class="field"><label for="auxiliary-centralization-file">Lot auxiliaire CSV ou Excel</label>' +
-          '<input id="auxiliary-centralization-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>' +
-          '<label id="auxiliary-centralization-label" class="btn btn-primary exchange-file-picker" for="auxiliary-centralization-file">↑ Choisir un CSV ou un classeur Excel</label>' +
-          '<span class="hint">Jusqu’à 5 Mo · format PERFECTO-AUXILIAIRE v1 · formules et macros refusées.</span></div>' +
-        '<div class="field"><label for="auxiliary-centralization-date">Date de centralisation dans le dossier cible</label><input id="auxiliary-centralization-date" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(targetDate) + '" required>' +
-          '<span class="hint">Les dates et références des pièces sources restent dans les métadonnées ; cette date situe la pièce générale consolidée.</span></div>' +
-        '<div class="field"><label for="auxiliary-centralization-journal">Journal général de centralisation</label><select id="auxiliary-centralization-journal" required>' + journals.map(function (journal) {
-          return '<option value="' + esc(journal.code) + '"' + (journal.code === targetJournal ? ' selected' : '') + '>' + esc(journal.code + ' — ' + journal.label) + '</option>';
-        }).join('') + '</select><span class="hint">Aucun journal n’est créé automatiquement.</span></div>' +
-        '<div class="field"><label for="auxiliary-centralization-reference">Référence de la pièce centralisée</label><input id="auxiliary-centralization-reference" type="text" maxlength="100" value="' + esc(targetReference) + '" required>' +
-          '<span class="hint">La référence est unique dans le dossier et peut être modifiée.</span></div>' +
-        '<div class="field"><label for="auxiliary-centralization-mode">Statut de la pièce créée</label><select id="auxiliary-centralization-mode"><option value="draft"' + (targetMode === 'draft' ? ' selected' : '') + '>Créer un brouillon (recommandé)</option><option value="posted"' + (targetMode === 'posted' ? ' selected' : '') + '>Importer comme écriture validée</option></select>' +
-          '<span class="hint">La validation exige une période ouverte, une pièce équilibrée et le droit « Valider une écriture ».</span></div>' +
-      '</div>' +
-      '<div id="auxiliary-centralization-preview" class="exchange-preview" aria-live="polite"><div class="empty-state"><strong>Aucun lot analysé</strong><span>Choisissez un fichier pour vérifier les pièces, les comptes généraux et les correspondances avant centralisation.</span></div></div>' +
-      viewAuxiliaryCentralizationFormatGuide() +
-      '<p class="exchange-footnote">Une centralisation rassemble un lot complet en une pièce générale additive. Conservez le fichier source pour le détail auxiliaire ; les reports à nouveau et les fonctions de lettrage restent distincts.</p>' +
-    '</div>';
-  }
-
-  function viewAuxiliaryCentralizationFormatGuide() {
-    var rules = [
-      ['FORMAT / VERSION', 'Valeurs fixes : PERFECTO-AUXILIAIRE / 1.'],
-      ['SYSTEME_SOURCE / REFERENCE_DOSSIER / EXERCICE / REFERENCE_LOT', 'Contexte du lot, identique sur toutes les lignes ; la référence de lot sert à bloquer un doublon de centralisation.'],
-      ['CODE_JOURNAL_SOURCE / DATE_SOURCE / REFERENCE_PIECE_SOURCE', 'Identifient chaque pièce source avec son libellé ; toutes les lignes de cette pièce partagent le même libellé.'],
-      ['CODE_COMPTE_GENERAL / LIBELLE_COMPTE_GENERAL', 'Compte source de chaque ligne générale ; chaque compte doit être associé à un compte cible existant. Conserver les codes au format texte et les zéros initiaux.'],
-      ['CODE_AUXILIAIRE / LIBELLE_AUXILIAIRE', 'À renseigner ensemble pour les lignes de tiers ; le compte cible correspondant doit être marqué auxiliaire.'],
-      ['DEBIT_XOF / CREDIT_XOF', 'XOF entiers ; un seul côté par mouvement. Chaque pièce source et le lot entier doivent être équilibrés.'],
-      ['ID_SOURCE', 'Identifiant obligatoire et unique pour chaque mouvement source.']
-    ];
-    return '<details class="exchange-mapping exchange-format-guide"><summary>Voir les colonnes et contrôles du format PERFECTO-AUXILIAIRE v1</summary>' +
-      '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Colonne(s)</th><th>Règle</th></tr></thead><tbody>' +
-      rules.map(function (row) { return '<tr><td><strong>' + esc(row[0]) + '</strong></td><td>' + esc(row[1]) + '</td></tr>'; }).join('') +
-      '</tbody></table></div><p class="small muted">Le lot source doit contenir toutes les lignes de contrepartie de chaque pièce avant d’être centralisé.</p></details>';
-  }
-
   function viewBalanceImportFormatGuide() {
     var rules = [
       ['FORMAT / VERSION', 'Valeurs fixes : PERFECTO-BALANCE / 1.'],
@@ -2674,380 +2642,403 @@
     render();
   }
 
-  function auxiliaryCentralizationEntry(session) {
-    var parsed = session.parseResult;
-    var metadata = parsed.metadata || {};
-    var aggregate = session.aggregateResult;
-    var sourceJournals = Object.create(null);
-    var sourceStartDate = '';
-    var sourceEndDate = '';
-    parsed.rows.forEach(function (row) {
-      sourceJournals[row.sourceJournal] = true;
-      if (!sourceStartDate || row.sourceDate < sourceStartDate) sourceStartDate = row.sourceDate;
-      if (!sourceEndDate || row.sourceDate > sourceEndDate) sourceEndDate = row.sourceDate;
+  function payrollEntryForRun(run, dossierId) {
+    if (!run || !PayrollHR) return null;
+    var sourceId = PayrollHR.sourceId(dossierId, run.id);
+    return S.entries().find(function (entry) {
+      return entry.sourceSystem === 'PERFECTO-PAIE-RH' && entry.sourceId === sourceId;
+    }) || null;
+  }
+
+  function viewPayrollModule() {
+    var dossier = S.currentDossier();
+    var runs = PayrollHR.runs(dossier.id);
+    var firstPeriod = PayrollHR.periodForDate(dossier.cycleStart);
+    var lastPeriod = PayrollHR.periodForDate(dossier.cycleEnd);
+    var rows = runs.map(function (run) {
+      var linkedEntry = payrollEntryForRun(run, dossier.id);
+      var status = linkedEntry
+        ? '<span class="badge posted">Transféré en comptabilité</span><small>' + esc(linkedEntry.reference) + ' · ' + esc(linkedEntry.status === 'posted' ? 'validée' : 'brouillon') + '</small>'
+        : (run.status === 'approved'
+          ? '<span class="badge posted">Approuvé · prêt</span>'
+          : '<span class="badge draft">Brouillon Paie & RH</span>');
+      var action = linkedEntry
+        ? '<span class="small muted">Lot déjà centralisé</span>'
+        : (run.status === 'approved'
+          ? '<button type="button" class="btn btn-primary btn-sm" data-action="open-accounting-payroll-centralization">Centraliser dans la Comptabilité</button>'
+          : '<button type="button" class="btn btn-ghost btn-sm" data-action="approve-internal-payroll-run" data-id="' + esc(run.id) + '">Contrôler et approuver</button>');
+      return '<tr><td><strong>' + esc(run.reference) + '</strong><br><span class="small muted">' + esc(run.origin === 'demo' ? 'Jeu d’exemple interne' : 'Lot Paie & RH') + '</span></td>' +
+        '<td>' + esc(run.period) + '<br><span class="small muted">Comptabilisation source au ' + esc(dateLabel(run.date)) + '</span></td>' +
+        '<td class="numeric">' + Number(run.employeeCount || 0) + '</td>' +
+        '<td class="numeric">' + esc(amount(run.totals && run.totals.grossPay || 0)) + '</td>' +
+        '<td class="numeric">' + esc(amount(run.totals && run.totals.netPay || 0)) + '</td>' +
+        '<td>' + status + '</td><td>' + action + '</td></tr>';
+    }).join('');
+    var empty = runs.length
+      ? ''
+      : '<div class="empty-state"><strong>Aucun lot Paie & RH dans ce dossier</strong><span>Créez un jeu d’exemple interne pour vérifier le flux vers la Comptabilité. Aucun fichier externe n’est accepté.</span></div>';
+    return '<div class="payroll-module-workspace">' +
+      pageHeader('Paie & RH', 'Dossier client : <strong>' + esc(dossier.clientName) + '</strong> · ' + esc(dossier.reference) + ' · source interne pour la centralisation comptable.', '<a class="btn btn-ghost" href="#/launcher">← Modules</a>') +
+      '<div class="alert warning"><div><strong>Étape de raccordement interne · démonstration</strong><br>Cette version conserve des lots locaux et contrôle leur journal comptable. Elle ne calcule pas les salaires, les cotisations ni les retenues légales. Les montants d’exemple sont fictifs ; aucun export/import tiers n’intervient.</div></div>' +
+      '<section class="exchange-card"><p class="page-kicker">SOURCE INTERNE DE PAIE</p><h3>Lots de paie du dossier</h3>' +
+        '<p>Un lot doit être approuvé dans Paie & RH avant d’être transmis. Après centralisation, son identifiant interne empêche un second transfert.</p>' +
+        '<div class="payroll-demo-create"><div class="field"><label for="payroll-demo-period">Période de l’exemple interne</label><input id="payroll-demo-period" type="month" min="' + esc(firstPeriod) + '" max="' + esc(lastPeriod) + '" value="' + esc(firstPeriod) + '"><span class="hint">La période doit se situer dans le cycle du dossier actif.</span></div>' +
+        '<button type="button" class="btn btn-primary" data-action="create-demo-payroll-run">＋ Créer un lot fictif de démonstration</button></div>' +
+      '</section>' +
+      '<section class="exchange-card"><p class="page-kicker">SUIVI DES LOTS</p><h3>' + runs.length + ' lot(s) enregistré(s)</h3>' + empty +
+        (runs.length ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Référence interne</th><th>Période</th><th class="numeric">Effectif</th><th class="numeric">Brut illustratif (XOF)</th><th class="numeric">Net illustratif (XOF)</th><th>État</th><th>Action</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '') +
+      '</section>' +
+      '<div class="alert info"><div>Les données Paie & RH sont isolées par dossier client dans ce navigateur. Les calculs de paie, les dossiers du personnel, la validation métier complète et la synchronisation multi-utilisateur restent à construire.</div></div>' +
+    '</div>';
+  }
+
+  function createPayrollCentralizationSession(run, dossier) {
+    var accountMap = Object.create(null);
+    run.accountingLines.forEach(function (line) {
+      var code = String(line.accountCode || '').trim();
+      if (!Object.prototype.hasOwnProperty.call(accountMap, code)) accountMap[code] = S.account(code) ? code : '';
     });
+    var defaultJournal = S.journals().find(function (journal) { return journal.code === 'PA'; }) || S.journals().find(function (journal) { return journal.code === 'OD'; }) || S.journals()[0];
+    var parts = run.period.split('-');
+    return {
+      runId: run.id,
+      targetDossierId: dossier.id,
+      targetDate: run.date,
+      targetJournal: defaultJournal && defaultJournal.code || '',
+      targetReference: 'PA-' + parts[0] + '-' + parts[1] + '-001',
+      mode: 'draft',
+      accountMap: accountMap,
+      additiveConfirmed: false,
+      aggregateResult: null,
+      analysis: null
+    };
+  }
+
+  function payrollCentralizationEntry(session, run) {
+    var aggregate = session.aggregateResult;
+    var totals = run.totals || {};
     return {
       reference: String(session.targetReference || '').trim(),
       journal: String(session.targetJournal || '').trim(),
       date: String(session.targetDate || '').trim(),
-      description: 'Centralisation auxiliaire ' + String(metadata.batchReference || '') + ' (' + parsed.documentCount + ' pièce(s) source)',
-      sourceSystem: String(metadata.sourceSystem || 'EXCEL').trim().toUpperCase(),
-      sourceId: ['PERFECTO-AUXILIAIRE', String(metadata.sourceSystem || '').trim().toUpperCase(), String(metadata.dossierReference || '').trim().toUpperCase(), metadata.exercise, String(metadata.batchReference || '').trim().toUpperCase()].join(':'),
+      description: 'Centralisation salaires ' + String(run.period || '') + ' · ' + String(run.reference || ''),
+      sourceSystem: 'PERFECTO-PAIE-RH',
+      sourceId: PayrollHR.sourceId(run.dossierId, run.id),
+      sourceStatus: run.status,
       sourceMetadata: {
-        format: metadata.format,
-        version: metadata.version,
-        sourceSystem: metadata.sourceSystem,
-        dossierReference: metadata.dossierReference,
-        exercise: metadata.exercise,
-        batchReference: metadata.batchReference,
-        sourceJournalCodes: Object.keys(sourceJournals).sort(),
-        sourceStartDate: sourceStartDate,
-        sourceEndDate: sourceEndDate,
-        sourceDocumentCount: parsed.documentCount,
-        sourceMovementCount: parsed.rows.length,
-        auxiliaryAccountCount: aggregate.auxiliaryAccountCount,
+        sourceModule: 'payroll-hr',
+        sourceModuleVersion: PayrollHR.VERSION,
+        feed: 'internal',
+        runId: run.id,
+        runReference: run.reference,
+        period: run.period,
+        sourcePayrollDate: run.date,
+        employeeCount: run.employeeCount,
+        grossPay: Number(totals.grossPay) || 0,
+        deductions: Number(totals.deductions) || 0,
+        netPay: Number(totals.netPay) || 0,
+        sourceLineCount: run.accountingLines.length,
         totalDebit: aggregate.totalDebit,
         totalCredit: aggregate.totalCredit,
-        accountMappings: aggregate.accountMappings
+        accountMappings: aggregate.accountMappings,
+        demonstrationData: run.origin === 'demo'
       },
       lines: aggregate.lines
     };
   }
 
-  function auxiliaryCentralizationMappingsHtml(session) {
+  function payrollCentralizationMappingsHtml(session, run) {
     var catalog = Object.create(null);
-    session.parseResult.rows.forEach(function (row) {
-      if (!catalog[row.account]) catalog[row.account] = { label: row.accountLabel || '', auxiliaryCodes: Object.create(null) };
-      if (row.auxiliaryCode) catalog[row.account].auxiliaryCodes[row.auxiliaryCode] = true;
+    run.accountingLines.forEach(function (line) {
+      var code = String(line.accountCode || '').trim();
+      if (!catalog[code]) catalog[code] = { label: line.accountLabel || '' };
     });
     var codes = Object.keys(catalog).sort(function (a, b) { return a.localeCompare(b); });
-    if (!codes.length) return '';
     var accounts = S.accounts();
-    var hasUnmapped = codes.some(function (code) { return !session.accountMap[code]; });
-    return '<details class="exchange-mapping"' + (hasUnmapped ? ' open' : '') + '><summary>Correspondance des comptes généraux (' + codes.length + ' codes source)</summary>' +
-      '<p class="small muted">Associez chaque compte source à un compte général existant. Une ligne portant un code auxiliaire doit être associée à un compte cible marqué auxiliaire.</p>' +
-      '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Code général source</th><th>Libellé source</th><th>Tiers distincts</th><th>Compte cible</th></tr></thead><tbody>' +
+    return '<details class="exchange-mapping"' + (codes.some(function (code) { return !session.accountMap[code]; }) ? ' open' : '') + '><summary>Correspondance des comptes du journal interne (' + codes.length + ' codes)</summary>' +
+      '<p class="small muted">Les comptes sont proposés par Paie & RH. Associez chaque compte source à un compte existant du plan du dossier ; aucun compte ne sera créé.</p>' +
+      '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Compte source Paie & RH</th><th>Libellé source</th><th>Compte cible</th></tr></thead><tbody>' +
       codes.map(function (code) {
         var mappedCode = session.accountMap[code] || '';
         var options = '<option value="">— Choisir une correspondance —</option>' + accounts.map(function (account) {
           var inactive = account.active === false ? ' · inactif' : '';
-          var auxiliary = account.aux ? ' · auxiliaire' : '';
-          return '<option value="' + esc(account.code) + '"' + (account.code === mappedCode ? ' selected' : '') + '>' + esc(account.code + ' — ' + account.label + auxiliary + inactive) + '</option>';
+          return '<option value="' + esc(account.code) + '"' + (account.code === mappedCode ? ' selected' : '') + '>' + esc(account.code + ' — ' + account.label + inactive) + '</option>';
         }).join('');
-        return '<tr><td><strong>' + esc(code) + '</strong></td><td>' + esc(catalog[code].label || '—') + '</td><td>' + Object.keys(catalog[code].auxiliaryCodes).length + '</td><td><select aria-label="Associer le compte auxiliaire source ' + esc(code) + '" data-aux-centralization-account-map="' + esc(code) + '">' + options + '</select></td></tr>';
-      }).join('') +
-      '</tbody></table></div></details>';
+        return '<tr><td><strong>' + esc(code) + '</strong></td><td>' + esc(catalog[code].label || '—') + '</td><td><select aria-label="Associer le compte Paie & RH ' + esc(code) + '" data-payroll-account-map="' + esc(code) + '">' + options + '</select></td></tr>';
+      }).join('') + '</tbody></table></div></details>';
   }
 
-  function auxiliaryCentralizationMovementPreviewHtml(session) {
-    var rows = session.parseResult.rows || [];
-    var visibleRows = rows.slice(0, 20);
-    var body = visibleRows.map(function (row) {
-      var mappedCode = session.accountMap[row.account] || '';
-      var mappedAccount = mappedCode ? S.account(mappedCode) : null;
-      return '<tr><td>' + esc(row.sourceDate) + '</td><td>' + esc(row.sourceJournal + ' · ' + row.sourceReference) + '</td><td><strong>' + esc(row.account) + '</strong><br><span class="small muted">' + esc(row.accountLabel || '') + '</span></td><td>' + esc(row.auxiliaryCode ? row.auxiliaryCode + ' — ' + row.auxiliaryLabel : '—') + '</td><td class="numeric">' + esc(amount(row.debit)) + '</td><td class="numeric">' + esc(amount(row.credit)) + '</td><td>' + esc(mappedAccount ? mappedAccount.code + ' — ' + mappedAccount.label : 'À associer') + '</td></tr>';
-    }).join('');
-    var limitNote = rows.length > visibleRows.length
-      ? '<p class="small muted">Affichage des ' + visibleRows.length + ' premières lignes sur ' + rows.length + ' ; les correspondances complètes sont disponibles ci-dessous.</p>'
-      : '';
-    return '<section class="exchange-card"><p class="page-kicker">APERÇU DES MOUVEMENTS</p><h4>' + rows.length + ' ligne(s) · ' + session.parseResult.documentCount + ' pièce(s) source</h4>' +
-      '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Date source</th><th>Journal · pièce</th><th>Compte général source</th><th>Compte auxiliaire</th><th class="numeric">Débit (XOF)</th><th class="numeric">Crédit (XOF)</th><th>Compte cible</th></tr></thead><tbody>' + body + '</tbody></table></div>' + limitNote + '</section>';
+  function payrollCentralizationOutputHtml(lines) {
+    return '<section class="exchange-card"><p class="page-kicker">PIÈCE GÉNÉRALE PRÉVISIONNELLE</p><h4>' + lines.length + ' ligne(s) après agrégation par compte cible</h4>' +
+      '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Compte cible</th><th class="numeric">Débit (XOF)</th><th class="numeric">Crédit (XOF)</th></tr></thead><tbody>' +
+      lines.map(function (line) { return '<tr><td><strong>' + esc(line.account) + ' — ' + esc(line.accountLabel) + '</strong></td><td class="numeric">' + esc(amount(line.debit)) + '</td><td class="numeric">' + esc(amount(line.credit)) + '</td></tr>'; }).join('') +
+      '</tbody></table></div></section>';
   }
 
-  function renderAuxiliaryCentralizationPreview() {
-    var host = $('#auxiliary-centralization-preview');
-    var session = auxiliaryCentralizationSession;
+  function createDemoPayrollRun() {
+    var dossier = S.currentDossier();
+    if (!hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'record.create', payrollAccessContext(dossier))) {
+      toast('Création refusée : le droit de saisie dans Paie & RH n’est pas accordé.', 'warning');
+      return;
+    }
+    var period = ($('#payroll-demo-period') || {}).value || '';
+    var result = PayrollHR.createDemoRun(dossier, period);
+    if (!result.ok) {
+      toast(result.errors[0] || 'Création du lot de démonstration impossible.', 'error');
+      return;
+    }
+    toast('Lot fictif créé dans le registre interne Paie & RH. Contrôlez-le avant approbation.', 'success');
+    render();
+  }
+
+  function approveInternalPayrollRun(runId) {
+    var dossier = S.currentDossier();
+    if (!hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'record.validate', payrollAccessContext(dossier))) {
+      toast('Approbation refusée : le droit de validation dans Paie & RH n’est pas accordé.', 'warning');
+      return;
+    }
+    var result = PayrollHR.approveRun(dossier, runId);
+    if (!result.ok) {
+      toast(result.errors[0] || 'Approbation du lot impossible.', 'error');
+      return;
+    }
+    toast('Lot de paie approuvé dans Paie & RH ; il est prêt pour la centralisation interne.', 'success');
+    render();
+  }
+
+  function renderPayrollCentralizationPreview() {
+    var host = $('#payroll-centralization-preview');
+    var session = payrollCentralizationSession;
     if (!host || !session) return;
-    var parsed = session.parseResult;
-    if (!parsed || !parsed.ok) {
-      var parseErrors = parsed && parsed.errors || ['Le lot auxiliaire n’a pas pu être analysé.'];
-      host.innerHTML = '<div class="alert error"><div><strong>Lot auxiliaire non reconnu ou invalide</strong><ul>' +
-        parseErrors.slice(0, 20).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') +
-        (parseErrors.length > 20 ? '<li>… et ' + (parseErrors.length - 20) + ' autre(s) erreur(s).</li>' : '') +
-        '</ul></div></div>';
+    var dossier = S.currentDossier();
+    var run = PayrollHR.getRun(dossier.id, session.runId);
+    if (!run || run.status !== 'approved' || session.targetDossierId !== dossier.id) {
+      host.innerHTML = '<div class="alert error"><strong>Lot interne indisponible.</strong> Rechargez la liste Paie & RH avant de poursuivre.</div>';
       session.aggregateResult = null;
       session.analysis = null;
       return;
     }
-
-    var dateInput = $('#auxiliary-centralization-date');
-    var journalInput = $('#auxiliary-centralization-journal');
-    var referenceInput = $('#auxiliary-centralization-reference');
-    var modeSelect = $('#auxiliary-centralization-mode');
+    var dateInput = $('#payroll-centralization-date');
+    var journalInput = $('#payroll-centralization-journal');
+    var referenceInput = $('#payroll-centralization-reference');
+    var modeSelect = $('#payroll-centralization-mode');
     if (dateInput) session.targetDate = dateInput.value;
     if (journalInput) session.targetJournal = journalInput.value;
     if (referenceInput) session.targetReference = referenceInput.value;
     if (modeSelect) session.mode = modeSelect.value === 'posted' ? 'posted' : 'draft';
 
-    var metadata = parsed.metadata || {};
-    var target = S.currentDossier();
-    var contextMismatch = metadata.dossierReference !== target.reference || Number(metadata.exercise) !== Number(target.exerciseYear);
-    var sourceDateRange = parsed.rows.reduce(function (range, row) {
-      if (!range.start || row.sourceDate < range.start) range.start = row.sourceDate;
-      if (!range.end || row.sourceDate > range.end) range.end = row.sourceDate;
-      return range;
-    }, { start: '', end: '' });
-    var aggregate = PerfectoAccountingCentralization.aggregate(parsed, session.accountMap, S.accounts());
+    var aggregate = PayrollCentralization.aggregate(run, session.accountMap, S.accounts());
     session.aggregateResult = aggregate;
-    var sourceEntry = aggregate.ok ? auxiliaryCentralizationEntry(session) : null;
+    var sourceEntry = aggregate.ok ? payrollCentralizationEntry(session, run) : null;
     var analysis = aggregate.ok
-      ? S.previewExchangeImport([sourceEntry], session.mode, { sourceSystem: metadata.sourceSystem, accountMap: Object.create(null), journalMap: Object.create(null) })
+      ? S.previewExchangeImport([sourceEntry], session.mode, { sourceSystem: 'PERFECTO-PAIE-RH', accountMap: Object.create(null), journalMap: Object.create(null) })
       : { ok: false, errors: aggregate.errors, warnings: [], balancedCount: 0 };
-    session.previewEntry = sourceEntry;
     session.analysis = analysis;
+    session.previewEntry = sourceEntry;
+    var canImport = hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext());
+    var canViewPayroll = hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'module.view', payrollAccessContext());
     var canPost = hasDemoPermission(getActiveDemoMember(), 'accounting', 'entry.validate', accountingAccessContext());
-    var permissionBlocked = session.mode === 'posted' && !canPost;
+    var permissionBlocked = !canImport || !canViewPayroll || (session.mode === 'posted' && !canPost);
     var existingPostedCount = S.entries().filter(function (entry) {
-      return entry.status === 'posted' && entry.date >= target.cycleStart && entry.date <= target.cycleEnd;
+      return entry.status === 'posted' && entry.date >= dossier.cycleStart && entry.date <= dossier.cycleEnd;
     }).length;
-    var contextBlocked = contextMismatch && !session.contextConfirmed;
     var additiveBlocked = existingPostedCount > 0 && !session.additiveConfirmed;
-    var canCommit = aggregate.ok && analysis.ok && !permissionBlocked && !contextBlocked && !additiveBlocked;
+    var canCommit = aggregate.ok && analysis.ok && !permissionBlocked && !additiveBlocked;
+    var totals = run.totals || {};
     var summary = '<div class="exchange-summary-grid">' +
-      '<div><small>Fichier</small><strong>' + esc(session.fileName || '—') + '</strong></div>' +
-      '<div><small>Lot source</small><strong>' + esc(metadata.sourceSystem || '—') + ' · ' + esc(metadata.batchReference || '—') + '</strong></div>' +
-      '<div><small>Pièces / mouvements</small><strong>' + parsed.documentCount + ' pièce(s) · ' + parsed.rows.length + ' ligne(s)</strong></div>' +
-      '<div><small>Débit / crédit source</small><strong>' + amount(parsed.totalDebit) + ' / ' + amount(parsed.totalCredit) + ' XOF</strong></div>' +
-      '<div><small>Dossier / exercice source → actif</small><strong>' + esc(metadata.dossierReference || '—') + ' · ' + esc(metadata.exercise) + ' → ' + esc(target.reference) + '</strong></div>' +
-      '<div><small>Dates source / centralisation</small><strong>' + esc(sourceDateRange.start || '—') + (sourceDateRange.end && sourceDateRange.end !== sourceDateRange.start ? ' … ' + esc(sourceDateRange.end) : '') + ' → ' + esc(session.targetDate || '—') + '</strong></div>' +
+      '<div><small>Module source</small><strong>Paie & RH · interne</strong></div>' +
+      '<div><small>Lot approuvé</small><strong>' + esc(run.reference) + '</strong></div>' +
+      '<div><small>Période / effectif</small><strong>' + esc(run.period) + ' · ' + Number(run.employeeCount || 0) + ' salarié(s)</strong></div>' +
+      '<div><small>Brut illustratif</small><strong>' + amount(totals.grossPay || 0) + ' XOF</strong></div>' +
+      '<div><small>Net illustratif</small><strong>' + amount(totals.netPay || 0) + ' XOF</strong></div>' +
+      '<div><small>Date source → comptabilisation</small><strong>' + esc(dateLabel(run.date)) + ' → ' + esc(session.targetDate || '—') + '</strong></div>' +
       '</div>';
+    var sourceRows = run.accountingLines.map(function (line) {
+      return '<tr><td><strong>' + esc(line.accountCode) + '</strong></td><td>' + esc(line.accountLabel || '') + '</td><td>' + esc(line.description || '') + '</td><td class="numeric">' + esc(amount(line.debit)) + '</td><td class="numeric">' + esc(amount(line.credit)) + '</td></tr>';
+    }).join('');
+    var sourceTable = '<section class="exchange-card"><p class="page-kicker">JOURNAL COMPTABLE PRODUIT PAR PAIE & RH</p><h4>' + run.accountingLines.length + ' ligne(s) source</h4><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Compte source</th><th>Libellé</th><th>Nature</th><th class="numeric">Débit (XOF)</th><th class="numeric">Crédit (XOF)</th></tr></thead><tbody>' + sourceRows + '</tbody></table></div></section>';
     var warningsList = (aggregate.warnings || []).concat(analysis.warnings || []);
     var warnings = warningsList.length
-      ? '<div class="alert warning"><div><strong>À vérifier</strong><ul>' + warningsList.slice(0, 20).map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('') + (warningsList.length > 20 ? '<li>… et d’autres avertissements.</li>' : '') + '</ul></div></div>'
+      ? '<div class="alert warning"><div><strong>À vérifier</strong><ul>' + warningsList.slice(0, 20).map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('') + '</ul></div></div>'
       : '';
     var errorsList = aggregate.ok ? analysis.errors : aggregate.errors;
     var errors = errorsList.length
-      ? '<div class="alert error"><div><strong>' + errorsList.length + ' contrôle(s) bloquant(s)</strong><ul>' +
-        errorsList.slice(0, 20).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') +
-        (errorsList.length > 20 ? '<li>… et ' + (errorsList.length - 20) + ' autre(s) erreur(s).</li>' : '') +
-        '</ul></div></div>'
-      : '<div class="alert success"><div><strong>Contrôles réussis</strong><br>' + parsed.documentCount + ' pièce(s) source équilibrée(s) · ' + parsed.auxiliaryMovementCount + ' ligne(s) auxiliaire(s) · ' + amount(aggregate.totalDebit) + ' XOF centralisés.</div></div>';
-    var context = contextMismatch
-      ? '<label class="exchange-context-confirm"><input id="auxiliary-centralization-confirm-target" type="checkbox"' + (session.contextConfirmed ? ' checked' : '') + '> Je confirme le lot source (' + esc(metadata.dossierReference || 'sans référence') + ', exercice ' + esc(metadata.exercise) + ') dans le dossier actif ' + esc(target.reference) + ' (exercice ' + esc(target.exerciseYear) + ').</label>'
-      : '';
+      ? '<div class="alert error"><div><strong>' + errorsList.length + ' contrôle(s) bloquant(s)</strong><ul>' + errorsList.slice(0, 20).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div></div>'
+      : '<div class="alert success"><div><strong>Journal de paie équilibré et comptes associés.</strong><br>' + amount(aggregate.totalDebit) + ' XOF au débit comme au crédit · ' + aggregate.lines.length + ' ligne(s) générales prévues.</div></div>';
     var additiveWarning = existingPostedCount
-      ? '<div class="alert warning"><div><strong>Le dossier contient déjà ' + existingPostedCount + ' écriture(s) validée(s) sur le cycle.</strong><br>À sa validation, la centralisation s’ajoutera à ces écritures. Vérifiez que les mouvements du lot ne sont pas déjà comptabilisés.<label class="exchange-context-confirm"><input id="auxiliary-centralization-confirm-additive" type="checkbox"' + (session.additiveConfirmed ? ' checked' : '') + '> Je confirme l’ajout de ce lot au grand livre sans remplacement des écritures existantes.</label></div></div>'
+      ? '<div class="alert warning"><div><strong>Le dossier contient déjà ' + existingPostedCount + ' écriture(s) validée(s) sur le cycle.</strong><br>La centralisation s’ajoutera au grand livre ; vérifiez que ce lot de paie n’est pas déjà comptabilisé.<label class="exchange-context-confirm"><input id="payroll-centralization-confirm-additive" type="checkbox"' + (session.additiveConfirmed ? ' checked' : '') + '> Je confirme l’ajout sans remplacement des écritures existantes.</label></div></div>'
       : '';
-    var permission = permissionBlocked
-      ? '<div class="alert warning">Ce profil peut importer, mais ne possède pas le droit « Valider une écriture ». Choisissez le mode brouillon ou demandez ce droit.</div>'
+    var permissionNote = permissionBlocked
+      ? '<div class="alert warning">Droits requis : consulter Paie & RH, importer dans la Comptabilité et, pour une écriture validée, disposer aussi du droit de validation comptable.</div>'
       : '';
-    var statusLabel = session.mode === 'posted' ? 'écriture validée' : 'brouillon';
-    var button = '<button type="button" class="btn btn-primary" data-action="commit-accounting-auxiliary-centralization"' + (canCommit ? '' : ' disabled') + '>Centraliser le lot comme ' + statusLabel + '</button>';
-    host.innerHTML = summary +
-      '<div class="exchange-mode-note">Les pièces source équilibrées seront regroupées en une seule pièce générale, avec une ligne de débit et/ou de crédit par compte cible. Les libellés, dates et références source restent distincts de la date de centralisation.</div>' +
-      auxiliaryCentralizationMovementPreviewHtml(session) + auxiliaryCentralizationMappingsHtml(session) + warnings + errors + context + additiveWarning + permission +
+    var button = '<button type="button" class="btn btn-primary" data-action="commit-accounting-payroll-centralization"' + (canCommit ? '' : ' disabled') + '>Centraliser comme ' + (session.mode === 'posted' ? 'écriture validée' : 'brouillon') + '</button>';
+    host.innerHTML = summary + sourceTable + payrollCentralizationMappingsHtml(session, run) +
+      (aggregate.ok ? payrollCentralizationOutputHtml(aggregate.lines) : '') + warnings + errors + additiveWarning + permissionNote +
       '<div class="exchange-preview-footer">' + button + '</div>';
     applyDemoActionGates(host);
-
-    $$('[data-aux-centralization-account-map]', host).forEach(function (select) {
+    $$('[data-payroll-account-map]', host).forEach(function (select) {
       select.addEventListener('change', function () {
-        session.accountMap[select.getAttribute('data-aux-centralization-account-map')] = select.value;
-        session.contextConfirmed = !!(host.querySelector('#auxiliary-centralization-confirm-target') && host.querySelector('#auxiliary-centralization-confirm-target').checked);
-        session.additiveConfirmed = !!(host.querySelector('#auxiliary-centralization-confirm-additive') && host.querySelector('#auxiliary-centralization-confirm-additive').checked);
-        renderAuxiliaryCentralizationPreview();
+        session.accountMap[select.getAttribute('data-payroll-account-map')] = select.value;
+        session.additiveConfirmed = !!(host.querySelector('#payroll-centralization-confirm-additive') && host.querySelector('#payroll-centralization-confirm-additive').checked);
+        renderPayrollCentralizationPreview();
       });
     });
-    var confirmTarget = $('#auxiliary-centralization-confirm-target', host);
-    if (confirmTarget) confirmTarget.addEventListener('change', function () {
-      session.contextConfirmed = confirmTarget.checked;
-      renderAuxiliaryCentralizationPreview();
-    });
-    var confirmAdditive = $('#auxiliary-centralization-confirm-additive', host);
+    var confirmAdditive = $('#payroll-centralization-confirm-additive', host);
     if (confirmAdditive) confirmAdditive.addEventListener('change', function () {
       session.additiveConfirmed = confirmAdditive.checked;
-      renderAuxiliaryCentralizationPreview();
+      renderPayrollCentralizationPreview();
     });
   }
 
-  function bindAuxiliaryCentralization() {
-    var fileInput = $('#auxiliary-centralization-file');
-    var previewHost = $('#auxiliary-centralization-preview');
-    var modeSelect = $('#auxiliary-centralization-mode');
-    if (!fileInput || !previewHost || !modeSelect) return;
-
-    function syncControls() {
-      if (!auxiliaryCentralizationSession) return;
-      auxiliaryCentralizationSession.targetDate = ($('#auxiliary-centralization-date') || {}).value || '';
-      auxiliaryCentralizationSession.targetJournal = ($('#auxiliary-centralization-journal') || {}).value || '';
-      auxiliaryCentralizationSession.targetReference = ($('#auxiliary-centralization-reference') || {}).value || '';
-      auxiliaryCentralizationSession.mode = modeSelect.value === 'posted' ? 'posted' : 'draft';
-      auxiliaryCentralizationSession.contextConfirmed = !!($('#auxiliary-centralization-confirm-target') && $('#auxiliary-centralization-confirm-target').checked);
-      auxiliaryCentralizationSession.additiveConfirmed = !!($('#auxiliary-centralization-confirm-additive') && $('#auxiliary-centralization-confirm-additive').checked);
-      renderAuxiliaryCentralizationPreview();
+  function bindPayrollCentralization() {
+    var runSelect = $('#payroll-centralization-run');
+    var previewHost = $('#payroll-centralization-preview');
+    if (!runSelect) return;
+    var dossier = S.currentDossier();
+    function selectRun(runId) {
+      var run = PayrollHR.getRun(dossier.id, runId);
+      if (!run || run.status !== 'approved') {
+        payrollCentralizationSession = null;
+        return;
+      }
+      payrollCentralizationSession = createPayrollCentralizationSession(run, dossier);
+      render();
     }
-
-    modeSelect.addEventListener('change', syncControls);
-    ['auxiliary-centralization-date', 'auxiliary-centralization-journal', 'auxiliary-centralization-reference'].forEach(function (id) {
+    runSelect.addEventListener('change', function () { selectRun(runSelect.value); });
+    if (!previewHost) return;
+    if (!payrollCentralizationSession || payrollCentralizationSession.targetDossierId !== dossier.id || payrollCentralizationSession.runId !== runSelect.value) {
+      var selectedRun = PayrollHR.getRun(dossier.id, runSelect.value);
+      if (!selectedRun) return;
+      payrollCentralizationSession = createPayrollCentralizationSession(selectedRun, dossier);
+      payrollCentralizationSession.targetDate = ($('#payroll-centralization-date') || {}).value || selectedRun.date;
+      payrollCentralizationSession.targetJournal = ($('#payroll-centralization-journal') || {}).value || payrollCentralizationSession.targetJournal;
+      payrollCentralizationSession.targetReference = ($('#payroll-centralization-reference') || {}).value || payrollCentralizationSession.targetReference;
+      payrollCentralizationSession.mode = ($('#payroll-centralization-mode') || {}).value === 'posted' ? 'posted' : 'draft';
+    }
+    function syncControls() {
+      if (!payrollCentralizationSession) return;
+      payrollCentralizationSession.targetDate = ($('#payroll-centralization-date') || {}).value || '';
+      payrollCentralizationSession.targetJournal = ($('#payroll-centralization-journal') || {}).value || '';
+      payrollCentralizationSession.targetReference = ($('#payroll-centralization-reference') || {}).value || '';
+      payrollCentralizationSession.mode = ($('#payroll-centralization-mode') || {}).value === 'posted' ? 'posted' : 'draft';
+      payrollCentralizationSession.additiveConfirmed = !!($('#payroll-centralization-confirm-additive') && $('#payroll-centralization-confirm-additive').checked);
+      renderPayrollCentralizationPreview();
+    }
+    ['payroll-centralization-date', 'payroll-centralization-journal', 'payroll-centralization-reference', 'payroll-centralization-mode'].forEach(function (id) {
       var control = $('#' + id);
       if (control) control.addEventListener('change', syncControls);
     });
-    fileInput.addEventListener('change', function () {
-      var file = fileInput.files && fileInput.files[0];
-      if (!file) return;
-      var isWorkbook = /\.xlsx$/i.test(file.name || '') || file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      var dossier = S.currentDossier();
-      var initialDate = ($('#auxiliary-centralization-date') || {}).value || dossier.cycleEnd;
-      var initialJournal = ($('#auxiliary-centralization-journal') || {}).value || '';
-      var initialReference = ($('#auxiliary-centralization-reference') || {}).value || '';
-      var initialMode = modeSelect.value === 'posted' ? 'posted' : 'draft';
-      if (file.size > 5 * 1024 * 1024) {
-        auxiliaryCentralizationSession = {
-          fileName: file.name, targetDossierId: dossier.id, targetDate: initialDate, targetJournal: initialJournal,
-          targetReference: initialReference, mode: initialMode, accountMap: Object.create(null),
-          contextConfirmed: false, additiveConfirmed: false,
-          parseResult: { ok: false, errors: ['Le fichier dépasse la limite de 5 Mo. Divisez-le en lots plus petits.'] }
-        };
-        renderAuxiliaryCentralizationPreview();
-        return;
-      }
-      var reader = new FileReader();
-      reader.onload = function () {
-        var result = isWorkbook
-          ? AccountingExchange.parseAuxiliaryWorkbook(new Uint8Array(reader.result || new ArrayBuffer(0)))
-          : AccountingExchange.parseAuxiliary(String(reader.result || ''));
-        var accountMap = Object.create(null);
-        if (result.ok) result.rows.forEach(function (row) {
-          if (!Object.prototype.hasOwnProperty.call(accountMap, row.account)) accountMap[row.account] = S.account(row.account) ? row.account : '';
-        });
-        auxiliaryCentralizationSession = {
-          fileName: file.name, targetDossierId: dossier.id, targetDate: initialDate, targetJournal: initialJournal,
-          targetReference: initialReference, mode: initialMode, accountMap: accountMap,
-          contextConfirmed: false, additiveConfirmed: false, parseResult: result, aggregateResult: null, analysis: null
-        };
-        renderAuxiliaryCentralizationPreview();
-      };
-      reader.onerror = function () {
-        auxiliaryCentralizationSession = {
-          fileName: file.name, targetDossierId: dossier.id, targetDate: initialDate, targetJournal: initialJournal,
-          targetReference: initialReference, mode: initialMode, accountMap: Object.create(null),
-          contextConfirmed: false, additiveConfirmed: false,
-          parseResult: { ok: false, errors: ['Lecture du fichier impossible.'] }
-        };
-        renderAuxiliaryCentralizationPreview();
-      };
-      if (isWorkbook) reader.readAsArrayBuffer(file);
-      else reader.readAsText(file, 'UTF-8');
-    });
+    renderPayrollCentralizationPreview();
   }
 
-  function commitAccountingAuxiliaryCentralization() {
-    var session = auxiliaryCentralizationSession;
-    if (!session || !session.parseResult || !session.parseResult.ok) {
-      toast('Aucun lot auxiliaire valide n’est prêt à être centralisé.', 'error');
+  function commitAccountingPayrollCentralization() {
+    var session = payrollCentralizationSession;
+    var dossier = S.currentDossier();
+    if (!session || session.targetDossierId !== dossier.id) {
+      toast('Aucun lot Paie & RH prêt dans le dossier actif.', 'error');
       return;
     }
-    if (session.targetDossierId !== S.currentDossier().id) {
-      toast('Le dossier actif a changé depuis l’analyse. Rechargez le lot auxiliaire.', 'error');
-      auxiliaryCentralizationSession = null;
-      render();
+    var run = PayrollHR.getRun(dossier.id, session.runId);
+    if (!run || run.status !== 'approved') {
+      toast('Centralisation refusée : seul un lot interne approuvé dans Paie & RH peut être transmis.', 'warning');
       return;
     }
-    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext())) {
-      toast('Centralisation refusée par défaut : ce profil ne possède pas le droit data.import.', 'warning');
+    if (!hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'module.view', payrollAccessContext(dossier)) ||
+        !hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext(dossier))) {
+      toast('Centralisation refusée : les droits de consultation Paie & RH et d’import comptable sont requis.', 'warning');
       return;
     }
-    var mode = ($('#auxiliary-centralization-mode') || {}).value === 'posted' ? 'posted' : 'draft';
-    if (mode === 'posted' && !hasDemoPermission(getActiveDemoMember(), 'accounting', 'entry.validate', accountingAccessContext())) {
-      toast('Validation refusée : le droit « Valider une écriture » est requis pour centraliser comme écriture validée.', 'warning');
+    var mode = ($('#payroll-centralization-mode') || {}).value === 'posted' ? 'posted' : 'draft';
+    if (mode === 'posted' && !hasDemoPermission(getActiveDemoMember(), 'accounting', 'entry.validate', accountingAccessContext(dossier))) {
+      toast('Validation refusée : le droit « Valider une écriture » est requis.', 'warning');
       return;
     }
-    session.targetDate = ($('#auxiliary-centralization-date') || {}).value || '';
-    session.targetJournal = ($('#auxiliary-centralization-journal') || {}).value || '';
-    session.targetReference = ($('#auxiliary-centralization-reference') || {}).value || '';
+    session.targetDate = ($('#payroll-centralization-date') || {}).value || '';
+    session.targetJournal = ($('#payroll-centralization-journal') || {}).value || '';
+    session.targetReference = ($('#payroll-centralization-reference') || {}).value || '';
     session.mode = mode;
-    var metadata = session.parseResult.metadata || {};
-    var aggregate = PerfectoAccountingCentralization.aggregate(session.parseResult, session.accountMap, S.accounts());
+    var aggregate = PayrollCentralization.aggregate(run, session.accountMap, S.accounts());
     session.aggregateResult = aggregate;
     if (!aggregate.ok) {
-      renderAuxiliaryCentralizationPreview();
-      toast('La centralisation est bloquée par les contrôles affichés dans l’aperçu.', 'warning');
+      renderPayrollCentralizationPreview();
+      toast('Le journal interne de paie est bloqué par les contrôles affichés.', 'warning');
       return;
     }
-    var sourceEntry = auxiliaryCentralizationEntry(session);
-    var options = { sourceSystem: metadata.sourceSystem, accountMap: Object.create(null), journalMap: Object.create(null) };
+    var sourceEntry = payrollCentralizationEntry(session, run);
+    var options = { sourceSystem: 'PERFECTO-PAIE-RH', accountMap: Object.create(null), journalMap: Object.create(null) };
     var analysis = S.previewExchangeImport([sourceEntry], mode, options);
     session.analysis = analysis;
     session.previewEntry = sourceEntry;
-    var target = S.currentDossier();
-    var contextMismatch = metadata.dossierReference !== target.reference || Number(metadata.exercise) !== Number(target.exerciseYear);
-    var existingPostedCount = S.entries().filter(function (entry) {
-      return entry.status === 'posted' && entry.date >= target.cycleStart && entry.date <= target.cycleEnd;
-    }).length;
+    var linkedEntry = payrollEntryForRun(run, dossier.id);
+    var existingPostedCount = S.entries().filter(function (entry) { return entry.status === 'posted' && entry.date >= dossier.cycleStart && entry.date <= dossier.cycleEnd; }).length;
     var additiveBlocked = existingPostedCount > 0 && !session.additiveConfirmed;
-    if (!analysis.ok || (contextMismatch && !session.contextConfirmed) || additiveBlocked) {
-      renderAuxiliaryCentralizationPreview();
-      toast(contextMismatch && !session.contextConfirmed
-        ? 'Confirmez le dossier source et l’exercice de destination avant la centralisation.'
-        : (additiveBlocked ? 'Confirmez que le lot auxiliaire doit être ajouté au grand livre existant.' : 'La centralisation est bloquée par les contrôles affichés dans l’aperçu.'), 'warning');
+    if (linkedEntry || !analysis.ok || additiveBlocked) {
+      renderPayrollCentralizationPreview();
+      toast(linkedEntry
+        ? 'Ce lot Paie & RH a déjà été centralisé ; un transfert en doublon est refusé.'
+        : (additiveBlocked ? 'Confirmez l’ajout au grand livre existant.' : 'La centralisation est bloquée par les contrôles affichés.'), 'warning');
       return;
     }
     var statusLabel = mode === 'posted' ? 'écriture validée' : 'brouillon';
-    var existingNote = existingPostedCount ? ' Les ' + existingPostedCount + ' écritures validées seront conservées ; le lot ne doit pas déjà être comptabilisé.' : '';
-    if (!window.confirm('Centraliser ' + session.parseResult.documentCount + ' pièce(s) source et ' + session.parseResult.rows.length + ' mouvement(s) en une pièce ' + statusLabel + ' dans le journal ' + session.targetJournal + ' au ' + session.targetDate + ' ?' + existingNote + ' Un point de restauration local sera créé ; aucune donnée ne sera remplacée.')) return;
+    var additiveNote = existingPostedCount ? ' Les écritures validées présentes seront conservées ; aucun mouvement existant ne sera remplacé.' : '';
+    if (!window.confirm('Transférer le lot interne « ' + run.reference + ' » (' + run.period + ') vers la Comptabilité comme ' + statusLabel + ', dans le journal ' + session.targetJournal + ' au ' + session.targetDate + ' ?' + additiveNote + ' Un point de restauration local sera créé.')) return;
     var result = S.importExchange([sourceEntry], mode, options);
     if (!result.ok) {
       toast(result.errors[0] || 'Centralisation impossible.', 'error');
-      renderAuxiliaryCentralizationPreview();
+      renderPayrollCentralizationPreview();
       return;
     }
-    auxiliaryCentralizationSession = null;
-    toast('Lot auxiliaire centralisé dans une pièce ' + statusLabel + ' ; point de restauration local créé.', 'success');
+    payrollCentralizationSession = null;
+    toast('Lot Paie & RH centralisé dans la Comptabilité ; point de restauration local créé.', 'success');
     render();
   }
 
-  function commitAccountingExchangeImport() {
-    var session = exchangeImportSession;
-    if (!session || !session.parseResult || !session.parseResult.ok) {
-      toast('Aucun fichier d’échange valide n’est prêt à être importé.', 'error');
-      return;
+  function viewAccountingPayrollCentralization() {
+    var dossier = S.currentDossier();
+    if (!hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'module.view', payrollAccessContext(dossier))) {
+      return '<div class="alert error"><div><strong>Accès Paie & RH requis.</strong><br>Ce profil ne peut pas consulter les lots de salaires du dossier actif.</div></div>';
     }
-    if (session.targetDossierId !== S.currentDossier().id) {
-      toast('Le dossier actif a changé depuis l’analyse. Rechargez le fichier pour éviter un import dans le mauvais dossier.', 'error');
-      exchangeImportSession = null;
-      render();
-      return;
-    }
-    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext())) {
-      toast('Import refusé par défaut : ce profil ne possède pas le droit data.import.', 'warning');
-      return;
-    }
-    var modeSelect = $('#exchange-import-mode');
-    var mode = modeSelect && modeSelect.value === 'posted' ? 'posted' : 'draft';
-    if (mode === 'posted' && !hasDemoPermission(getActiveDemoMember(), 'accounting', 'entry.validate', accountingAccessContext())) {
-      toast('Validation refusée : le droit « Valider une écriture » est requis pour importer des pièces validées.', 'warning');
-      return;
-    }
-    var metadata = session.parseResult.metadata || {};
-    var options = {
-      sourceSystem: metadata.sourceSystem,
-      accountMap: session.accountMap,
-      journalMap: session.journalMap
-    };
-    var analysis = S.previewExchangeImport(session.parseResult.entries, mode, options);
-    var target = S.currentDossier();
-    var contextMismatch = metadata.dossierReference !== target.reference || Number(metadata.exercise) !== Number(target.exerciseYear);
-    if (!analysis.ok || (contextMismatch && !session.contextConfirmed)) {
-      session.mode = mode;
-      session.analysis = analysis;
-      session.contextConfirmed = session.contextConfirmed && contextMismatch;
-      renderExchangeImportPreview();
-      toast(contextMismatch && !session.contextConfirmed
-        ? 'Confirmez d’abord le dossier et l’exercice de destination.'
-        : 'L’import est bloqué par les contrôles affichés dans l’aperçu.', 'warning');
-      return;
-    }
-    var statusLabel = mode === 'posted' ? 'écritures validées' : 'brouillons';
-    if (!window.confirm('Ajouter ' + session.parseResult.entries.length + ' pièce(s) comme ' + statusLabel + ' au dossier « ' + target.reference + ' » ? Les données existantes ne seront pas remplacées. Un point de restauration local sera créé avant l’ajout.')) return;
+    var runs = PayrollHR.runs(dossier.id);
+    var approvedRuns = runs.filter(function (run) { return run.status === 'approved'; });
+    var existingSession = payrollCentralizationSession && payrollCentralizationSession.targetDossierId === dossier.id
+      ? payrollCentralizationSession
+      : null;
+    var selectedRun = existingSession && approvedRuns.find(function (run) { return run.id === existingSession.runId; }) || approvedRuns[0] || null;
+    var linkedEntry = selectedRun && payrollEntryForRun(selectedRun, dossier.id);
+    var targetDate = existingSession && selectedRun && existingSession.runId === selectedRun.id ? existingSession.targetDate : (selectedRun && selectedRun.date || '');
+    var targetJournal = existingSession && selectedRun && existingSession.runId === selectedRun.id ? existingSession.targetJournal : (S.journals().find(function (journal) { return journal.code === 'PA'; }) || S.journals()[0] || {}).code || '';
+    var targetReference = existingSession && selectedRun && existingSession.runId === selectedRun.id ? existingSession.targetReference : (selectedRun ? 'PA-' + selectedRun.period.replace('-', '-') + '-001' : '');
+    var targetMode = existingSession && selectedRun && existingSession.runId === selectedRun.id ? existingSession.mode : 'draft';
+    var options = approvedRuns.map(function (run) {
+      var linked = payrollEntryForRun(run, dossier.id);
+      var label = run.reference + ' · ' + run.period + ' · ' + run.employeeCount + ' salarié(s)' + (linked ? ' · déjà transféré' : '');
+      return '<option value="' + esc(run.id) + '"' + (selectedRun && run.id === selectedRun.id ? ' selected' : '') + '>' + esc(label) + '</option>';
+    }).join('');
+    var noRun = !approvedRuns.length
+      ? '<div class="empty-state"><strong>Aucun lot approuvé à centraliser</strong><span>' + (runs.length ? runs.length + ' lot(s) restent en brouillon. Approuvez-les dans le module Paie & RH avant transfert.' : 'Créez et approuvez un lot interne dans Paie & RH. Aucun fichier externe ne peut alimenter cette centralisation.') + '</span><a class="btn btn-primary" href="#/payroll">Ouvrir Paie & RH</a></div>'
+      : '';
+    var linkedNotice = linkedEntry
+      ? '<div class="alert success"><div><strong>Ce lot a déjà été transféré vers la Comptabilité.</strong><br>Pièce ' + esc(linkedEntry.reference) + ' · statut ' + esc(linkedEntry.status === 'posted' ? 'validé' : 'brouillon') + '. Une seconde centralisation est bloquée par l’identifiant source interne.</div></div>'
+      : '';
+    var controls = selectedRun && !linkedEntry
+      ? '<div class="exchange-import-controls payroll-centralization-controls">' +
+        '<div class="field"><label for="payroll-centralization-date">Date de la pièce générale</label><input id="payroll-centralization-date" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(targetDate) + '" required><span class="hint">La date proposée vient du lot approuvé ; elle doit rester dans le cycle du dossier.</span></div>' +
+        '<div class="field"><label for="payroll-centralization-journal">Journal général</label><select id="payroll-centralization-journal" required>' + S.journals().map(function (journal) { return '<option value="' + esc(journal.code) + '"' + (journal.code === targetJournal ? ' selected' : '') + '>' + esc(journal.code + ' — ' + journal.label) + '</option>'; }).join('') + '</select><span class="hint">Le journal « PA » est proposé par défaut ; aucun journal n’est créé.</span></div>' +
+        '<div class="field"><label for="payroll-centralization-reference">Référence comptable</label><input id="payroll-centralization-reference" type="text" maxlength="100" value="' + esc(targetReference) + '" required></div>' +
+        '<div class="field"><label for="payroll-centralization-mode">Statut de la pièce</label><select id="payroll-centralization-mode"><option value="draft"' + (targetMode === 'draft' ? ' selected' : '') + '>Créer un brouillon (recommandé)</option><option value="posted"' + (targetMode === 'posted' ? ' selected' : '') + '>Importer comme écriture validée</option></select><span class="hint">La validation exige une période ouverte et les droits comptables nécessaires.</span></div>' +
+      '</div>'
+      : '';
+    return '<div class="exchange-workspace payroll-centralization-workspace">' +
+      '<div class="alert info"><div><strong>Flux interne Paie & RH → Comptabilité</strong><br>La source est exclusivement un lot interne approuvé dans Paie & RH. Aucun CSV, Excel ou logiciel tiers n’est lu par ce parcours ; les calculs de paie restent dans leur module source.</div></div>' +
+      (approvedRuns.length ? '<div class="field payroll-run-selector"><label for="payroll-centralization-run">Lot interne approuvé</label><select id="payroll-centralization-run">' + options + '</select></div>' : '') +
+      noRun + linkedNotice + controls +
+      (selectedRun && !linkedEntry ? '<div id="payroll-centralization-preview" class="exchange-preview" aria-live="polite"><div class="empty-state"><strong>Analyse du lot de paie</strong><span>Contrôlez le journal interne et les correspondances avant l’ajout au grand livre.</span></div></div>' : '') +
+      '<p class="exchange-footnote">L’ajout crée une seule pièce générale, conserve le lot de paie source, crée un point de restauration local et n’écrase aucune écriture. Chaque lot interne ne peut être centralisé qu’une fois.</p>' +
+    '</div>';
+  }
 
-    var result = S.importExchange(session.parseResult.entries, mode, options);
-    if (!result.ok) {
-      toast(result.errors[0] || 'Import impossible.', 'error');
-      renderExchangeImportPreview();
-      return;
-    }
-    exchangeImportSession = null;
-    toast(result.importedCount + ' pièce(s) importée(s) comme ' + statusLabel + ' ; sauvegarde locale créée.', 'success');
-    render();
+  function viewInternalAuxiliaryCentralization() {
+    return '<div class="alert info"><div><strong>Centralisation auxiliaire depuis les modules maison uniquement.</strong><br>Ce parcours sera activé lorsque les modules PERFECTO de gestion des tiers et de leurs mouvements fourniront leurs données internes. Le format pivot CSV/Excel PERFECTO-AUXILIAIRE v1 est réservé à l’interopérabilité ; aucun fichier ni logiciel tiers ne peut alimenter cette centralisation.</div></div>';
   }
 
   function viewAccountingMenu(params) {
@@ -3073,6 +3064,7 @@
     }).join('');
     var statusLegend = '<div class="menu-status-legend" aria-label="Légende des statuts">' +
       '<span><i class="legend-dot legend-dot-active"></i>Disponible</span>' +
+      '<span><i class="legend-dot legend-dot-partial"></i>Partiel</span>' +
       '<span><i class="legend-dot legend-dot-planned"></i>À construire</span>' +
       '<span><i class="legend-dot legend-dot-inactive"></i>Inactif ou à confirmer</span>' +
       '</div>';
@@ -3093,7 +3085,9 @@
         ? viewAccountingExchangeImport()
         : (group.id === 'fichier' && tab.id === 'import-balance'
           ? viewAccountingBalanceImport()
-          : (group.id === 'fichier' && tab.id === 'centralize-auxiliary' ? viewAccountingAuxiliaryCentralization() : '')));
+          : (group.id === 'fichier' && tab.id === 'centralize-auxiliary'
+            ? viewInternalAuxiliaryCentralization()
+            : (group.id === 'fichier' && tab.id === 'centralize-payroll' ? viewAccountingPayrollCentralization() : ''))));
     var emptyActionNote = !actions && !childList && !exchangeFeature
       ? '<p class="menu-disabled-note">Aucune action n’est disponible pour cet élément.</p>'
       : '';
@@ -3137,7 +3131,7 @@
       var menuParams = parseHash().params;
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-other') bindAccountingExchangeImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-balance') bindAccountingBalanceImport();
-      if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-auxiliary') bindAuxiliaryCentralization();
+      if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-payroll') bindPayrollCentralization();
       return;
     }
 
@@ -3296,7 +3290,7 @@
       var text = String(card.getAttribute('data-module-search') || '').toLowerCase();
       var matchesFilter = launcherUi.filter === 'all'
         ? true
-        : status === launcherUi.filter;
+        : (launcherUi.filter === 'available' ? status === 'available' || status === 'partial' : status === launcherUi.filter);
       var matchesQuery = !query || text.indexOf(query) !== -1;
       var visible = matchesFilter && matchesQuery;
       card.hidden = !visible;
@@ -3421,13 +3415,22 @@
       }
       case 'open-module': {
         var selectedModule = ModuleRegistry.get(trigger.getAttribute('data-module-id'));
-        if (selectedModule && selectedModule.status === 'available' && selectedModule.route) {
+        if (selectedModule && (selectedModule.status === 'available' || selectedModule.status === 'partial') && selectedModule.route) {
           navigate('#/' + selectedModule.route);
         } else if (selectedModule) {
           toast(selectedModule.name + ' n’est pas encore disponible.', 'warning');
         }
         break;
       }
+      case 'create-demo-payroll-run':
+        createDemoPayrollRun();
+        break;
+      case 'approve-internal-payroll-run':
+        approveInternalPayrollRun(id);
+        break;
+      case 'open-accounting-payroll-centralization':
+        navigate(accountingMenuHash('fichier', 'centralize-payroll'));
+        break;
       case 'open-dossier': {
         var dossier = permittedDemoDossiers(getActiveDemoMember()).find(function (item) { return item.id === id; });
         if (!dossier || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'module.view', accountingAccessContext(dossier))) {
@@ -3544,8 +3547,8 @@
       case 'commit-accounting-balance-import':
         commitAccountingBalanceImport();
         break;
-      case 'commit-accounting-auxiliary-centralization':
-        commitAccountingAuxiliaryCentralization();
+      case 'commit-accounting-payroll-centralization':
+        commitAccountingPayrollCentralization();
         break;
       case 'export-accounting-workbook': {
         var workbookDossier = S.currentDossier();
@@ -3598,23 +3601,6 @@
         var balanceCsvDossier = S.currentDossier();
         downloadFile('perfecto-balance-v1-modele-' + safeFilePart(balanceCsvDossier.reference) + '.csv', AccountingExchange.templateBalance(), 'text/csv;charset=utf-8');
         toast('Modèle CSV de balance PERFECTO-BALANCE v1 téléchargé.', 'success');
-        break;
-      }
-      case 'download-accounting-auxiliary-workbook-template': {
-        var auxiliaryTemplateDossier = S.currentDossier();
-        try {
-          var auxiliaryWorkbookTemplate = AccountingExchange.templateAuxiliaryWorkbook({ dossier: auxiliaryTemplateDossier, accounts: S.accounts(), journals: S.journals() });
-          downloadFile('perfecto-auxiliaire-v1-modele-' + safeFilePart(auxiliaryTemplateDossier.reference) + '.xlsx', auxiliaryWorkbookTemplate, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-          toast('Modèle Excel PERFECTO-AUXILIAIRE v1 téléchargé.', 'success');
-        } catch (auxiliaryTemplateError) {
-          toast(auxiliaryTemplateError.message || 'Modèle Excel de centralisation impossible à générer.', 'error');
-        }
-        break;
-      }
-      case 'download-accounting-auxiliary-template': {
-        var auxiliaryCsvDossier = S.currentDossier();
-        downloadFile('perfecto-auxiliaire-v1-modele-' + safeFilePart(auxiliaryCsvDossier.reference) + '.csv', AccountingExchange.templateAuxiliary(), 'text/csv;charset=utf-8');
-        toast('Modèle CSV PERFECTO-AUXILIAIRE v1 téléchargé.', 'success');
         break;
       }
       case 'download-accounting-workbook-template': {

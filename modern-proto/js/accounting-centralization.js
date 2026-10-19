@@ -1,6 +1,6 @@
 /*
- * PERFECTO · Centralisation de la comptabilité auxiliaire.
- * Agrège un lot source contrôlé en lignes de comptes généraux cibles.
+ * PERFECTO · Agrégateur auxiliaire réutilisable par les modules maison.
+ * Ne lit aucun fichier : la future centralisation devra lui fournir un lot interne contrôlé.
  */
 (function (root) {
   'use strict';

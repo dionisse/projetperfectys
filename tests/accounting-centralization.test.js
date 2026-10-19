@@ -1,4 +1,4 @@
-/* Tests de la centralisation auxiliaire PERFECTO-AUXILIAIRE v1. */
+/* Tests du format pivot et de l’agrégateur auxiliaire (aucun parcours utilisateur actif). */
 'use strict';
 
 const assert = require('node:assert/strict');
@@ -90,4 +90,4 @@ const auxiliarySheet = new TextDecoder().decode(workbookTemplate['xl/worksheets/
 assert.ok(auxiliarySheet.includes('CODE_AUXILIAIRE'));
 assert.ok(auxiliarySheet.includes('ID_SOURCE'));
 
-console.log('Centralisation auxiliaire PERFECTO-AUXILIAIRE v1 : validation, agrégation, correspondances et modèle — OK');
+console.log('Modèle PERFECTO-AUXILIAIRE v1 : validation du pivot et agrégateur (sans parcours utilisateur actif) — OK');

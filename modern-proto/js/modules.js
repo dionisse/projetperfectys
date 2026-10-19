@@ -36,13 +36,14 @@
       id: 'payroll-hr',
       name: 'Paie & RH',
       category: 'RESSOURCES HUMAINES',
-      description: 'Gestion du personnel, suivi RH et préparation de la paie.',
+      description: 'Lots de paie internes et transfert contrôlé vers la comptabilité ; calculs complets de paie et dossiers RH à construire.',
       icon: '◷',
       accent: 'hr',
-      status: 'planned',
-      statusLabel: 'À VENIR',
-      version: 'En préparation',
-      route: null
+      status: 'partial',
+      statusLabel: 'PARTIEL · DÉMO',
+      version: 'Étape intégration paie',
+      route: 'payroll',
+      scopeable: true
     },
     {
       id: 'correspondence',
@@ -81,7 +82,7 @@
   }
 
   function stats() {
-    var available = modules.filter(function (module) { return module.status === 'available'; }).length;
+    var available = modules.filter(function (module) { return module.status === 'available' || (module.status === 'partial' && module.route); }).length;
     return {
       total: modules.length,
       available: available,
