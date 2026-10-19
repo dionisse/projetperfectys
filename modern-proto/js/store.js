@@ -35,6 +35,7 @@
   var OTHER_PARTY_REGISTRY_VERSION = 1;
   var PERSONNEL_REGISTRY_VERSION = 1;
   var FIXED_ASSET_LOCATION_REGISTRY_VERSION = 1;
+  var FIXED_ASSET_REGISTRY_VERSION = 1;
   var LEGACY_COMPTES = [
     { code: '101200', label: 'Capital social', cls: 1, nature: 'Passif', aux: false },
     { code: '162100', label: 'Emprunt bancaire', cls: 1, nature: 'Passif', aux: false },
@@ -300,6 +301,42 @@
     return result;
   }
 
+  function normalizeFixedAssetCode(value) {
+    return String(value == null ? '' : value).trim().toLocaleUpperCase();
+  }
+
+  function upgradeFixedAssets(data) {
+    var result = { data: data, changed: false };
+    if (!data) return result;
+    var assets = Array.isArray(data.fixedAssets) ? data.fixedAssets : [];
+    var history = [];
+    (Array.isArray(data.fixedAssetCodeHistory) ? data.fixedAssetCodeHistory : [])
+      .concat(assets.map(function (record) { return record && record.code; }))
+      .forEach(function (value) {
+        var code = normalizeFixedAssetCode(value);
+        if (code && history.indexOf(code) === -1) history.push(code);
+      });
+    var sequence = Number(data.fixedAssetSequence);
+    if (!Number.isInteger(sequence) || sequence < 1) sequence = 1;
+    history.forEach(function (code) {
+      var match = /^IMMO-(\d+)$/.exec(code);
+      if (match) sequence = Math.max(sequence, Number(match[1]) + 1);
+    });
+    var currentVersion = Number(data.fixedAssetRegistryVersion);
+    var changed = !Array.isArray(data.fixedAssets) || !Number.isFinite(currentVersion) || currentVersion < FIXED_ASSET_REGISTRY_VERSION ||
+      JSON.stringify(data.fixedAssetCodeHistory || []) !== JSON.stringify(history) || Number(data.fixedAssetSequence) !== sequence;
+    if (changed) {
+      result.data = Object.assign({}, data, {
+        fixedAssetRegistryVersion: Math.max(Number.isFinite(currentVersion) ? currentVersion : 0, FIXED_ASSET_REGISTRY_VERSION),
+        fixedAssets: assets,
+        fixedAssetCodeHistory: history,
+        fixedAssetSequence: sequence
+      });
+      result.changed = true;
+    }
+    return result;
+  }
+
   function seedEntries() {
     return [
       {
@@ -378,6 +415,10 @@
       fixedAssetLocations: [],
       fixedAssetLocationCodeHistory: [],
       fixedAssetLocationSequence: 1,
+      fixedAssetRegistryVersion: FIXED_ASSET_REGISTRY_VERSION,
+      fixedAssets: [],
+      fixedAssetCodeHistory: [],
+      fixedAssetSequence: 1,
       suppliers: [],
       clients: [],
       otherParties: [],
@@ -715,8 +756,9 @@
             var chartUpgrade = upgradeAccountingChart(state);
             var registryUpgrade = upgradeAuxiliaryRegistries(chartUpgrade.data);
             var locationUpgrade = upgradeFixedAssetLocations(registryUpgrade.data);
-            if (chartUpgrade.changed || registryUpgrade.changed || locationUpgrade.changed) {
-              state = locationUpgrade.data;
+            var fixedAssetUpgrade = upgradeFixedAssets(locationUpgrade.data);
+            if (chartUpgrade.changed || registryUpgrade.changed || locationUpgrade.changed || fixedAssetUpgrade.changed) {
+              state = fixedAssetUpgrade.data;
               // Conserver une copie restaurable avant d’enregistrer les référentiels enrichis.
               if (snapshotPreviousState(raw)) save();
             }
@@ -1808,6 +1850,302 @@
     return { ok: true, errors: [], location: clone(record) };
   }
 
+  /* ---------------- Registre des éléments immobilisés -------------------- */
+  function fixedAssetRecordsForState(st) {
+    if (!Array.isArray(st.fixedAssets)) st.fixedAssets = [];
+    if (!Array.isArray(st.fixedAssetCodeHistory)) st.fixedAssetCodeHistory = [];
+    if (!Number.isInteger(Number(st.fixedAssetSequence)) || Number(st.fixedAssetSequence) < 1) st.fixedAssetSequence = 1;
+    return st.fixedAssets;
+  }
+
+  function fixedAssets() {
+    var st = load();
+    return Array.isArray(st.fixedAssets) ? st.fixedAssets : [];
+  }
+
+  function fixedAsset(idOrCode) {
+    var key = String(idOrCode == null ? '' : idOrCode);
+    var normalizedCode = normalizeFixedAssetCode(key);
+    return fixedAssets().find(function (record) {
+      return record.id === key || normalizeFixedAssetCode(record.code) === normalizedCode;
+    }) || null;
+  }
+
+  function nextFixedAssetCode() {
+    var st = load();
+    if (recoveryIssue) return '';
+    var records = fixedAssetRecordsForState(st);
+    var history = st.fixedAssetCodeHistory;
+    records.forEach(function (record) {
+      var code = normalizeFixedAssetCode(record && record.code);
+      if (code && history.indexOf(code) === -1) history.push(code);
+    });
+    var sequence = Number(st.fixedAssetSequence) || 1;
+    var candidate;
+    do {
+      candidate = 'IMMO-' + String(sequence).padStart(4, '0');
+      sequence += 1;
+    } while (history.indexOf(candidate) !== -1);
+    return candidate;
+  }
+
+  function reserveFixedAssetCode(st, code) {
+    fixedAssetRecordsForState(st);
+    var normalized = normalizeFixedAssetCode(code);
+    if (normalized && st.fixedAssetCodeHistory.indexOf(normalized) === -1) st.fixedAssetCodeHistory.push(normalized);
+    var match = /^IMMO-(\d+)$/.exec(normalized);
+    if (match) st.fixedAssetSequence = Math.max(Number(st.fixedAssetSequence) || 1, Number(match[1]) + 1);
+  }
+
+  function fixedAssetTypePrefixes(type) {
+    return {
+      corporelle: ['22', '23', '24'],
+      incorporelle: ['20', '21'],
+      financiere: ['26', '27']
+    }[String(type || '')] || [];
+  }
+
+  function fixedAssetAccount(code, type) {
+    var value = String(code || '');
+    var prefixes = fixedAssetTypePrefixes(type);
+    return load().accounts.find(function (account) {
+      var accountCode = String(account.code);
+      var classCode = Number(account.cls || accountCode.charAt(0));
+      return accountCode === value && classCode === 2 && prefixes.some(function (prefix) { return accountCode.indexOf(prefix) === 0; }) &&
+        accountCode.indexOf('25') !== 0 && accountCode.indexOf('28') !== 0 && account.active !== false && account.postable !== false;
+    }) || null;
+  }
+
+  function fixedAssetAccumulatedDepreciationAccount(code, type) {
+    var prefix = type === 'corporelle' ? '283' : (type === 'incorporelle' ? '281' : '');
+    if (!prefix) return null;
+    return load().accounts.find(function (account) {
+      var accountCode = String(account.code);
+      return accountCode === String(code || '') && accountCode.indexOf(prefix) === 0 &&
+        Number(account.cls || accountCode.charAt(0)) === 2 && account.active !== false && account.postable !== false;
+    }) || null;
+  }
+
+  function fixedAssetDepreciationExpenseAccount(code) {
+    return load().accounts.find(function (account) {
+      var accountCode = String(account.code);
+      return accountCode === String(code || '') && accountCode.indexOf('68') === 0 &&
+        Number(account.cls || accountCode.charAt(0)) === 6 && account.active !== false && account.postable !== false;
+    }) || null;
+  }
+
+  function fixedAssetRecordsReferenceCount(record, st) {
+    var fields = ['fixedAssetMovements', 'assetMovements', 'fixedAssetDepreciationRuns', 'depreciationRuns', 'fixedAssetDisposals', 'assetDisposals', 'fixedAssetEntries'];
+    var seen = Object.create(null);
+    var count = 0;
+    function isReference(item) {
+      if (!item || typeof item !== 'object') return false;
+      var referenceId = item.fixedAssetId || item.assetId || item.immobilisationId;
+      var referenceCode = item.fixedAssetCode || item.assetCode || item.immobilisationCode;
+      return String(referenceId || '') === String(record.id) || normalizeFixedAssetCode(referenceCode) === normalizeFixedAssetCode(record.code);
+    }
+    fields.forEach(function (field) {
+      (Array.isArray(st[field]) ? st[field] : []).forEach(function (item, index) {
+        if (!isReference(item)) return;
+        var key = item.id ? String(item.id) : field + ':' + index;
+        if (seen[key]) return;
+        seen[key] = true;
+        count += 1;
+      });
+    });
+    (Array.isArray(st.entries) ? st.entries : []).forEach(function (entryRecord) {
+      (entryRecord && Array.isArray(entryRecord.lines) ? entryRecord.lines : []).forEach(function (line, index) {
+        if (!isReference(line)) return;
+        var key = entryRecord.id ? String(entryRecord.id) + ':' + index : 'entry:' + count;
+        if (seen[key]) return;
+        seen[key] = true;
+        count += 1;
+      });
+    });
+    return count;
+  }
+
+  function fixedAssetProtectedFieldsChanged(previous, next) {
+    var fields = [
+      'code', 'assetType', 'assetAccountCode', 'accumulatedDepreciationAccountCode', 'depreciationExpenseAccountCode',
+      'acquisitionDate', 'commissioningDate', 'grossCost', 'residualValue', 'depreciationStartDate',
+      'depreciationMethod', 'usefulLifeMonths', 'annualRatePercent', 'unitOfProductionTotal', 'unitOfProductionUnit'
+    ];
+    return fields.some(function (field) { return String(previous[field] == null ? '' : previous[field]) !== String(next[field] == null ? '' : next[field]); });
+  }
+
+  function validateFixedAssetInput(input, excludeId) {
+    input = input || {};
+    var st = load();
+    var records = fixedAssetRecordsForState(st);
+    var errors = [];
+    var code = normalizeFixedAssetCode(input.code);
+    var name = String(input.name == null ? '' : input.name).trim();
+    var description = String(input.description == null ? '' : input.description).trim();
+    var assetType = String(input.assetType == null ? '' : input.assetType).trim();
+    var status = String(input.status == null ? '' : input.status).trim();
+    var acquisitionDate = String(input.acquisitionDate == null ? '' : input.acquisitionDate).trim();
+    var commissioningDate = String(input.commissioningDate == null ? '' : input.commissioningDate).trim();
+    var depreciationStartDate = String(input.depreciationStartDate == null ? '' : input.depreciationStartDate).trim();
+    var warrantyEndDate = String(input.warrantyEndDate == null ? '' : input.warrantyEndDate).trim();
+    var lastInventoryDate = String(input.lastInventoryDate == null ? '' : input.lastInventoryDate).trim();
+    var depreciationMethod = String(input.depreciationMethod == null ? 'a-definir' : input.depreciationMethod).trim();
+    var assetAccountCode = String(input.assetAccountCode == null ? '' : input.assetAccountCode).trim();
+    var accumulatedDepreciationAccountCode = String(input.accumulatedDepreciationAccountCode == null ? '' : input.accumulatedDepreciationAccountCode).trim();
+    var depreciationExpenseAccountCode = String(input.depreciationExpenseAccountCode == null ? '' : input.depreciationExpenseAccountCode).trim();
+    var locationId = String(input.locationId == null ? '' : input.locationId).trim();
+    var currentRecord = excludeId ? records.find(function (record) { return record.id === excludeId; }) : null;
+    var currentCode = currentRecord ? normalizeFixedAssetCode(currentRecord.code) : '';
+    var typeOptions = ['corporelle', 'incorporelle', 'financiere'];
+    var statusOptions = ['en-service', 'en-cours', 'retiree'];
+    var depreciationOptions = ['a-definir', 'lineaire', 'degressif', 'unites-oeuvre', 'aucun'];
+
+    if (!code) errors.push('Le code de l’immobilisation est obligatoire.');
+    else if (!/^[A-Z0-9][A-Z0-9._/-]{0,31}$/.test(code)) errors.push('Le code doit contenir au plus 32 caractères : lettres, chiffres, point, tiret, barre oblique ou souligné.');
+    if (!name) errors.push('La désignation de l’immobilisation est obligatoire.');
+    else if (name.length > 150) errors.push('La désignation ne peut pas dépasser 150 caractères.');
+    if (description.length > 500) errors.push('La description ne peut pas dépasser 500 caractères.');
+    if (typeOptions.indexOf(assetType) === -1) errors.push('Sélectionnez une nature d’immobilisation valide.');
+    if (statusOptions.indexOf(status) === -1) errors.push('Sélectionnez un état d’immobilisation valide.');
+    if (depreciationOptions.indexOf(depreciationMethod) === -1) errors.push('Sélectionnez une méthode d’amortissement valide.');
+    if (records.some(function (record) { return record.id !== excludeId && normalizeFixedAssetCode(record.code) === code; })) errors.push('Ce code d’immobilisation existe déjà dans le dossier.');
+    if (Array.isArray(st.fixedAssetCodeHistory) && st.fixedAssetCodeHistory.indexOf(code) !== -1 && code !== currentCode) errors.push('Ce code d’immobilisation a déjà été attribué dans ce dossier et ne peut pas être réutilisé.');
+
+    if (!parseIsoDate(acquisitionDate)) errors.push('La date d’acquisition ou de début des travaux est obligatoire et doit être une date valide.');
+    if (commissioningDate && !parseIsoDate(commissioningDate)) errors.push('La date de mise en service est invalide.');
+    if (warrantyEndDate && !parseIsoDate(warrantyEndDate)) errors.push('La date de fin de garantie est invalide.');
+    if (lastInventoryDate && !parseIsoDate(lastInventoryDate)) errors.push('La date du dernier inventaire physique est invalide.');
+    if (depreciationStartDate && !parseIsoDate(depreciationStartDate)) errors.push('La date de début d’amortissement est invalide.');
+    if ((status === 'en-service' || status === 'retiree') && !commissioningDate) errors.push('Une date de mise en service est requise pour un bien en service ou retiré.');
+    if (parseIsoDate(acquisitionDate) && parseIsoDate(commissioningDate) && commissioningDate < acquisitionDate) errors.push('La mise en service ne peut pas précéder l’acquisition ou le début des travaux.');
+    if (parseIsoDate(depreciationStartDate) && commissioningDate && parseIsoDate(commissioningDate) && depreciationStartDate < commissioningDate) errors.push('L’amortissement ne peut pas commencer avant la mise en service.');
+
+    var grossCost = input.grossCost === '' || input.grossCost == null ? 0 : Number(input.grossCost);
+    var residualValue = input.residualValue === '' || input.residualValue == null ? 0 : Number(input.residualValue);
+    if (input.grossCost === '' || input.grossCost == null) errors.push('Le coût d’acquisition en XOF est obligatoire.');
+    if (!Number.isSafeInteger(grossCost) || grossCost < 0) errors.push('Le coût d’acquisition doit être un montant positif ou nul en XOF, sans décimales.');
+    if (!Number.isSafeInteger(residualValue) || residualValue < 0) errors.push('La valeur résiduelle doit être un montant positif ou nul en XOF, sans décimales.');
+    if (Number.isSafeInteger(grossCost) && Number.isSafeInteger(residualValue) && residualValue > grossCost) errors.push('La valeur résiduelle ne peut pas dépasser le coût d’acquisition.');
+    if ((status === 'en-service' || status === 'retiree') && grossCost <= 0) errors.push('Un coût d’acquisition supérieur à zéro est requis pour un bien en service ou retiré.');
+
+    var usefulLifeMonths = input.usefulLifeMonths === '' || input.usefulLifeMonths == null ? 0 : Number(input.usefulLifeMonths);
+    var annualRatePercent = input.annualRatePercent === '' || input.annualRatePercent == null ? 0 : Number(input.annualRatePercent);
+    var unitOfProductionTotal = input.unitOfProductionTotal === '' || input.unitOfProductionTotal == null ? 0 : Number(input.unitOfProductionTotal);
+    var amortizable = ['lineaire', 'degressif', 'unites-oeuvre'].indexOf(depreciationMethod) !== -1;
+    if (amortizable) {
+      if (!Number.isInteger(usefulLifeMonths) || usefulLifeMonths < 1 || usefulLifeMonths > 1200) errors.push('La durée d’utilisation doit être comprise entre 1 et 1 200 mois.');
+      if (!parseIsoDate(depreciationStartDate)) errors.push('Une date de début d’amortissement valide est requise pour une méthode amortissable.');
+      if (assetType === 'financiere') errors.push('Une immobilisation financière ne peut pas recevoir un plan d’amortissement dans ce référentiel.');
+      if (!fixedAssetAccumulatedDepreciationAccount(accumulatedDepreciationAccountCode, assetType)) errors.push('Choisissez un compte d’amortissement cumulé actif cohérent avec la nature du bien (281 ou 283).');
+      if (!fixedAssetDepreciationExpenseAccount(depreciationExpenseAccountCode)) errors.push('Choisissez un compte actif de dotation aux amortissements de la famille 68.');
+      if (depreciationMethod === 'degressif' && (!Number.isFinite(annualRatePercent) || annualRatePercent <= 0 || annualRatePercent > 100)) errors.push('Le taux annuel dégressif doit être supérieur à 0 et inférieur ou égal à 100 %.');
+      if (depreciationMethod === 'unites-oeuvre') {
+        if (!Number.isSafeInteger(unitOfProductionTotal) || unitOfProductionTotal <= 0) errors.push('Le nombre total d’unités d’œuvre estimé doit être un entier supérieur à zéro.');
+        if (!String(input.unitOfProductionUnit || '').trim()) errors.push('Précisez l’unité d’œuvre (heures, kilomètres, unités produites…).');
+      }
+    }
+    if (annualRatePercent && (!Number.isFinite(annualRatePercent) || annualRatePercent <= 0 || annualRatePercent > 100)) errors.push('Le taux annuel doit être supérieur à 0 et inférieur ou égal à 100 %.');
+
+    var assetAccount = fixedAssetAccount(assetAccountCode, assetType);
+    if (!assetAccount) errors.push('Choisissez un compte actif et imputable de classe 2 correspondant à la nature du bien.');
+    if (locationId && !fixedAssetLocations().some(function (location) { return String(location.id) === locationId; })) errors.push('La localisation sélectionnée n’existe plus dans le dossier actif.');
+    var textFields = [
+      ['manufacturer', 'Le fabricant', 100], ['model', 'Le modèle', 100], ['serialNumber', 'Le numéro de série', 100],
+      ['vendor', 'Le fournisseur', 150], ['invoiceReference', 'La référence de facture', 100],
+      ['custodian', 'Le responsable ou détenteur', 150], ['unitOfProductionUnit', 'L’unité d’œuvre', 40], ['notes', 'La note', 1000]
+    ];
+    textFields.forEach(function (field) {
+      if (String(input[field[0]] == null ? '' : input[field[0]]).trim().length > field[2]) errors.push(field[1] + ' ne peut pas dépasser ' + field[2] + ' caractères.');
+    });
+    return {
+      ok: errors.length === 0,
+      errors: errors,
+      value: {
+        code: code, name: name, description: description, assetType: assetType, status: status,
+        assetAccountCode: assetAccountCode, accumulatedDepreciationAccountCode: accumulatedDepreciationAccountCode,
+        depreciationExpenseAccountCode: depreciationExpenseAccountCode, locationId: locationId,
+        acquisitionDate: acquisitionDate, commissioningDate: commissioningDate, depreciationStartDate: depreciationStartDate,
+        grossCost: grossCost, residualValue: residualValue, depreciationMethod: depreciationMethod,
+        usefulLifeMonths: usefulLifeMonths, annualRatePercent: annualRatePercent,
+        unitOfProductionTotal: unitOfProductionTotal, unitOfProductionUnit: String(input.unitOfProductionUnit == null ? '' : input.unitOfProductionUnit).trim(),
+        manufacturer: String(input.manufacturer == null ? '' : input.manufacturer).trim(),
+        model: String(input.model == null ? '' : input.model).trim(),
+        serialNumber: String(input.serialNumber == null ? '' : input.serialNumber).trim(),
+        vendor: String(input.vendor == null ? '' : input.vendor).trim(),
+        invoiceReference: String(input.invoiceReference == null ? '' : input.invoiceReference).trim(),
+        custodian: String(input.custodian == null ? '' : input.custodian).trim(),
+        warrantyEndDate: warrantyEndDate, lastInventoryDate: lastInventoryDate,
+        notes: String(input.notes == null ? '' : input.notes).trim()
+      }
+    };
+  }
+
+  function createFixedAsset(input) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Création bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var records = fixedAssetRecordsForState(st);
+    input = Object.assign({}, input || {});
+    if (!String(input.code || '').trim()) input.code = nextFixedAssetCode();
+    var validation = validateFixedAssetInput(input);
+    if (!validation.ok) return validation;
+    var previousState = clone(st);
+    var id;
+    do { id = 'fixed-asset-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7); }
+    while (records.some(function (record) { return record.id === id; }));
+    var timestamp = new Date().toISOString();
+    var record = Object.assign({ id: id, createdAt: timestamp, updatedAt: timestamp }, validation.value);
+    records.push(record);
+    reserveFixedAssetCode(st, record.code);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer l’immobilisation dans le stockage local de ce dossier.'] };
+    }
+    return { ok: true, errors: [], fixedAsset: clone(record) };
+  }
+
+  function updateFixedAsset(id, input) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Modification bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var records = fixedAssetRecordsForState(st);
+    var index = records.findIndex(function (record) { return record.id === id; });
+    if (index < 0) return { ok: false, errors: ['Élément immobilisé introuvable dans le dossier actif.'] };
+    var previous = records[index];
+    var validation = validateFixedAssetInput(input, id);
+    if (!validation.ok) return validation;
+    var refCount = fixedAssetRecordsReferenceCount(previous, st);
+    if (refCount && fixedAssetProtectedFieldsChanged(previous, validation.value)) {
+      return { ok: false, errors: ['Les paramètres comptables et d’amortissement ne peuvent pas être modifiés : ' + refCount + ' mouvement(s) ou écriture(s) font référence à cet élément. Les écritures historiques ne seront pas réécrites.'] };
+    }
+    var previousState = clone(st);
+    var updated = Object.assign({}, previous, validation.value, { id: previous.id, createdAt: previous.createdAt, updatedAt: new Date().toISOString() });
+    records[index] = updated;
+    reserveFixedAssetCode(st, previous.code);
+    reserveFixedAssetCode(st, updated.code);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer les modifications de l’immobilisation.'] };
+    }
+    return { ok: true, errors: [], fixedAsset: clone(updated) };
+  }
+
+  function deleteFixedAsset(id) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Suppression bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var records = fixedAssetRecordsForState(st);
+    var index = records.findIndex(function (record) { return record.id === id; });
+    if (index < 0) return { ok: false, errors: ['Élément immobilisé introuvable dans le dossier actif.'] };
+    var record = records[index];
+    var refCount = fixedAssetRecordsReferenceCount(record, st);
+    if (refCount) return { ok: false, errors: ['Suppression refusée : ' + refCount + ' mouvement(s) ou écriture(s) référence(nt) cet élément. Il doit être conservé pour préserver la traçabilité.'] };
+    var previousState = clone(st);
+    records.splice(index, 1);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Suppression impossible : stockage local indisponible ou plein. L’élément immobilisé est conservé.'] };
+    }
+    return { ok: true, errors: [], fixedAsset: clone(record) };
+  }
+
   function entries() { return load().entries; }
 
   function entry(id) {
@@ -2381,7 +2719,7 @@
       data.exercise = dossier.exerciseYear;
       data.cycleStart = dossier.cycleStart;
       data.cycleEnd = dossier.cycleEnd;
-      data = upgradeFixedAssetLocations(upgradeAuxiliaryRegistries(upgradeAccountingChart(data).data).data).data;
+      data = upgradeFixedAssets(upgradeFixedAssetLocations(upgradeAuxiliaryRegistries(upgradeAccountingChart(data).data).data).data).data;
       state = data;
       ensurePeriodsForEntries();
       if (!save()) {
@@ -2679,8 +3017,9 @@
     var plan = engine.repair(state, currentDossier());
     if (!plan.ok) return { ok: false, errors: plan.errors || ['Aucune réparation sûre n’est disponible.'], report: plan.report };
     var locationUpgrade = upgradeFixedAssetLocations(plan.data);
-    if (locationUpgrade.changed) {
-      plan.data = locationUpgrade.data;
+    var fixedAssetUpgrade = upgradeFixedAssets(locationUpgrade.data);
+    if (locationUpgrade.changed || fixedAssetUpgrade.changed) {
+      plan.data = fixedAssetUpgrade.data;
       plan.changed = true;
     }
     if (!plan.changed && !recoveryIssue) return { ok: true, changed: false, errors: [], report: plan.report };
@@ -2732,7 +3071,7 @@
       if (!preserveCorruptRaw()) return { ok: false, errors: ['Restauration bloquée : la copie brute endommagée n’a pas pu être conservée. Téléchargez-la ou libérez de l’espace.'] };
       var previousState = state;
       var previousIssue = recoveryIssue;
-      var recoveredState = upgradeFixedAssetLocations(upgradeAuxiliaryRegistries(upgradeAccountingChart(clone(snapshot.data)).data).data).data;
+      var recoveredState = upgradeFixedAssets(upgradeFixedAssetLocations(upgradeAuxiliaryRegistries(upgradeAccountingChart(clone(snapshot.data)).data).data).data).data;
       state = recoveredState;
       try {
         ensurePeriodsForEntries();
@@ -2747,7 +3086,7 @@
     }
 
     var previousState = state ? clone(state) : null;
-    state = upgradeFixedAssetLocations(upgradeAuxiliaryRegistries(upgradeAccountingChart(clone(snapshot.data)).data).data).data;
+    state = upgradeFixedAssets(upgradeFixedAssetLocations(upgradeAuxiliaryRegistries(upgradeAccountingChart(clone(snapshot.data)).data).data).data).data;
     ensurePeriodsForEntries();
     if (!save()) {
       state = previousState;
@@ -2834,6 +3173,12 @@
     fixedAssetLocations: fixedAssetLocations,
     fixedAssetLocation: fixedAssetLocation,
     nextFixedAssetLocationCode: nextFixedAssetLocationCode,
+    fixedAssets: fixedAssets,
+    fixedAsset: fixedAsset,
+    nextFixedAssetCode: nextFixedAssetCode,
+    createFixedAsset: createFixedAsset,
+    updateFixedAsset: updateFixedAsset,
+    deleteFixedAsset: deleteFixedAsset,
     createFixedAssetLocation: createFixedAssetLocation,
     updateFixedAssetLocation: updateFixedAssetLocation,
     deleteFixedAssetLocation: deleteFixedAssetLocation,

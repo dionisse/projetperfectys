@@ -82,6 +82,9 @@ assert.equal(store.getState().personnelRegistryVersion, 1);
 assert.equal(store.getState().fixedAssetLocationRegistryVersion, 1);
 assert.deepEqual(JSON.parse(JSON.stringify(store.fixedAssetLocations())), []);
 assert.equal(store.nextFixedAssetLocationCode(), 'LOC-0001');
+assert.equal(store.getState().fixedAssetRegistryVersion, 1);
+assert.deepEqual(JSON.parse(JSON.stringify(store.fixedAssets())), []);
+assert.equal(store.nextFixedAssetCode(), 'IMMO-0001');
 assert.deepEqual(JSON.parse(JSON.stringify(store.clients())), []);
 
 const firstClient = store.createClient({ name: 'Client généré', accountCode: '411', paymentTermDays: '30' });
@@ -230,8 +233,63 @@ assert.ok(store.getState().fixedAssetLocationCodeHistory.includes('BAT-A'));
 const nextAssetLocation = store.createFixedAssetLocation({ name: 'Entrepôt', level: 'Zone' });
 assert.equal(nextAssetLocation.location.code, 'LOC-0003', 'les codes supprimés ou remplacés ne sont pas réattribués');
 assert.equal(store.deleteFixedAssetLocation(assetLocationRoot.location.id).ok, true);
-store.getState().fixedAssets = [{ id: 'asset-location-reference-test', locationId: nextAssetLocation.location.id }];
+const entriesBeforeFixedAssets = store.entries().length;
+const firstFixedAsset = store.createFixedAsset({
+  name: 'Véhicule de service', assetType: 'corporelle', status: 'en-service',
+  acquisitionDate: '2026-02-01', commissioningDate: '2026-02-15', grossCost: '12500000', residualValue: '500000',
+  assetAccountCode: '242', locationId: nextAssetLocation.location.id,
+  depreciationMethod: 'lineaire', usefulLifeMonths: '60', depreciationStartDate: '2026-03-01',
+  accumulatedDepreciationAccountCode: '283', depreciationExpenseAccountCode: '681',
+  manufacturer: 'Constructeur', model: 'Utilitaire', serialNumber: 'VIN-TEST-001', physicalCondition: 'Bon'
+});
+assert.equal(firstFixedAsset.ok, true, firstFixedAsset.errors.join(' '));
+assert.equal(firstFixedAsset.fixedAsset.code, 'IMMO-0001');
+assert.equal(firstFixedAsset.fixedAsset.grossCost, 12500000);
+assert.equal(firstFixedAsset.fixedAsset.assetAccountCode, '242');
+assert.equal(firstFixedAsset.fixedAsset.locationId, nextAssetLocation.location.id);
+assert.equal(firstFixedAsset.fixedAsset.depreciationMethod, 'lineaire');
+assert.equal(store.entries().length, entriesBeforeFixedAssets, 'la fiche d’immobilisation ne génère aucune écriture comptable');
+assert.equal(store.fixedAsset('immo-0001').id, firstFixedAsset.fixedAsset.id, 'la recherche accepte le code sans sensibilité à la casse');
+assert.equal(store.updateFixedAsset(firstFixedAsset.fixedAsset.id, {
+  ...firstFixedAsset.fixedAsset, code: 'IMMO-VEH-01', name: 'Véhicule utilitaire'
+}).ok, true, 'le code et les informations descriptives restent modifiables');
+assert.equal(store.createFixedAsset({ name: 'Actif au compte de trésorerie', assetType: 'corporelle', assetAccountCode: '512', grossCost: '1000' }).ok, false, 'un compte hors classe 2 est refusé pour un actif corporel');
+assert.equal(store.createFixedAsset({
+  name: 'Coût absent', assetType: 'corporelle', status: 'en-cours', assetAccountCode: '242', acquisitionDate: '2026-02-01', depreciationMethod: 'a-definir'
+}).ok, false, 'un coût d’acquisition XOF doit être fourni, même si le bien est encore en cours');
+assert.equal(store.createFixedAsset({
+  name: 'Titre financier amortissable', assetType: 'financiere', assetAccountCode: '271', grossCost: '1000', depreciationMethod: 'lineaire'
+}).ok, false, 'une méthode d’amortissement ne peut pas être enregistrée pour une immobilisation financière');
+assert.equal(store.createFixedAsset({
+  name: 'Immobilisation au compte incorporel', assetType: 'incorporelle', assetAccountCode: '242', grossCost: '1000'
+}).ok, false, 'un compte corporel ne peut pas être associé à une immobilisation incorporelle');
+const intangibleAsset = store.createFixedAsset({
+  name: 'Licence logicielle', assetType: 'incorporelle', status: 'en-service',
+  acquisitionDate: '2026-02-01', commissioningDate: '2026-02-01', grossCost: '800000', assetAccountCode: '213'
+});
+assert.equal(intangibleAsset.ok, true, intangibleAsset.errors.join(' '));
+assert.equal(intangibleAsset.fixedAsset.code, 'IMMO-0002');
+assert.equal(intangibleAsset.fixedAsset.depreciationMethod, 'a-definir', 'la méthode non validée est aussi le défaut du registre');
+const financialAsset = store.createFixedAsset({
+  name: 'Prêt à long terme', assetType: 'financiere', status: 'en-service',
+  acquisitionDate: '2026-02-01', commissioningDate: '2026-02-01', grossCost: '2000000', assetAccountCode: '271', depreciationMethod: 'aucun'
+});
+assert.equal(financialAsset.ok, true, financialAsset.errors.join(' '));
+assert.equal(financialAsset.fixedAsset.code, 'IMMO-0003');
+assert.equal(store.deleteFixedAsset(intangibleAsset.fixedAsset.id).ok, true, 'une fiche incorporelle sans mouvement peut être supprimée');
+assert.equal(store.deleteFixedAsset(financialAsset.fixedAsset.id).ok, true, 'une fiche financière sans mouvement peut être supprimée');
+assert.ok(store.getState().fixedAssetCodeHistory.includes('IMMO-0002'));
+assert.ok(store.getState().fixedAssetCodeHistory.includes('IMMO-0003'));
+assert.equal(store.nextFixedAssetCode(), 'IMMO-0004', 'les codes supprimés ne sont jamais réutilisés');
+store.getState().fixedAssetMovements = [{ id: 'fixed-asset-reference-test', fixedAssetId: firstFixedAsset.fixedAsset.id }];
 assert.equal(store.save(), true);
+assert.equal(store.updateFixedAsset(firstFixedAsset.fixedAsset.id, {
+  ...store.fixedAsset(firstFixedAsset.fixedAsset.id), code: 'IMMO-VEH-02'
+}).ok, false, 'le code est protégé lorsque des mouvements utilisent la fiche');
+assert.equal(store.deleteFixedAsset(firstFixedAsset.fixedAsset.id).ok, false, 'une immobilisation référencée par des mouvements ne peut pas être supprimée');
+assert.equal(store.updateFixedAsset(firstFixedAsset.fixedAsset.id, {
+  ...store.fixedAsset(firstFixedAsset.fixedAsset.id), name: 'Véhicule utilitaire du siège'
+}).ok, true, 'les champs descriptifs restent modifiables sans rompre les références');
 assert.equal(store.updateFixedAssetLocation(nextAssetLocation.location.id, {
   ...nextAssetLocation.location, code: 'LOC-0004'
 }).ok, false, 'le code et la hiérarchie sont protégés lorsque des immobilisations utilisent le lieu');
@@ -284,6 +342,14 @@ legacyState.fixedAssetLocationRegistryVersion = 0;
 legacyState.fixedAssetLocations = [{ id: 'legacy-location', code: 'LOC-0099', name: 'Dépôt migré', level: 'Site', parentId: '' }];
 delete legacyState.fixedAssetLocationCodeHistory;
 delete legacyState.fixedAssetLocationSequence;
+legacyState.fixedAssetRegistryVersion = 0;
+legacyState.fixedAssets = [{
+  id: 'legacy-fixed-asset', code: 'IMMO-0099', name: 'Actif migré', assetType: 'corporelle', status: 'en-service',
+  assetAccountCode: '242', locationId: 'legacy-location', grossCost: 1000
+}];
+legacyState.fixedAssetMovements = [];
+delete legacyState.fixedAssetCodeHistory;
+delete legacyState.fixedAssetSequence;
 delete legacyState.clientRegistryVersion;
 delete legacyState.otherPartyRegistryVersion;
 delete legacyState.personnelRegistryVersion;
@@ -313,13 +379,26 @@ assert.equal(store.getState().fixedAssetLocationRegistryVersion, 1);
 assert.equal(store.fixedAssetLocation('legacy-location').name, 'Dépôt migré', 'la migration conserve les anciennes localisations');
 assert.ok(store.getState().fixedAssetLocationCodeHistory.includes('LOC-0099'));
 assert.equal(store.nextFixedAssetLocationCode(), 'LOC-0100', 'la migration reprend la séquence des codes existants');
+assert.equal(store.getState().fixedAssetRegistryVersion, 1);
+assert.equal(store.fixedAsset('legacy-fixed-asset').name, 'Actif migré', 'la migration conserve les anciennes fiches immobilisées');
+assert.ok(store.getState().fixedAssetCodeHistory.includes('IMMO-0099'));
+assert.equal(store.nextFixedAssetCode(), 'IMMO-0100', 'la migration reprend la séquence des codes existants');
 const legacyImport = JSON.parse(store.exportJson());
 legacyImport.data.fixedAssetLocationRegistryVersion = 0;
 legacyImport.data.fixedAssetLocations = [{ id: 'imported-legacy-location', code: 'LOC-0200', name: 'Site importé', level: 'Site' }];
 delete legacyImport.data.fixedAssetLocationCodeHistory;
 delete legacyImport.data.fixedAssetLocationSequence;
-assert.equal(store.importJson(JSON.stringify(legacyImport)).ok, true, 'la restauration JSON migre aussi le référentiel des localisations');
+legacyImport.data.fixedAssetRegistryVersion = 0;
+legacyImport.data.fixedAssets = [{
+  id: 'imported-legacy-asset', code: 'IMMO-0200', name: 'Actif importé', assetType: 'corporelle',
+  status: 'en-service', assetAccountCode: '242', locationId: 'imported-legacy-location', grossCost: 5000
+}];
+delete legacyImport.data.fixedAssetCodeHistory;
+delete legacyImport.data.fixedAssetSequence;
+assert.equal(store.importJson(JSON.stringify(legacyImport)).ok, true, 'la restauration JSON migre les référentiels de localisations et immobilisations');
 assert.equal(store.fixedAssetLocation('imported-legacy-location').name, 'Site importé');
 assert.equal(store.nextFixedAssetLocationCode(), 'LOC-0201');
+assert.equal(store.fixedAsset('imported-legacy-asset').name, 'Actif importé');
+assert.equal(store.nextFixedAssetCode(), 'IMMO-0201');
 
-console.log('Comptes, tiers et registres hiérarchiques locaux : CRUD protégé et migrations — OK');
+console.log('Comptes, tiers et registres d’immobilisations : CRUD protégé et migrations — OK');

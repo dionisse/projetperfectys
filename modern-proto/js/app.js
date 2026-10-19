@@ -76,7 +76,8 @@
     suppliers: { q: '', status: 'active' },
     clients: { q: '' },
     otherParties: { q: '', type: 'all' },
-    personnel: { q: '' }
+    personnel: { q: '' },
+    fixedAssets: { q: '', status: 'all', assetType: 'all' }
   };
 
   var deferredInstallPrompt = null;
@@ -305,6 +306,17 @@
         return {
           moduleId: 'accounting',
           actionId: trigger && trigger.getAttribute('data-fixed-asset-location-mode') === 'edit' ? 'fixedAssetLocations.edit' : 'fixedAssetLocations.create'
+        };
+      case 'new-fixed-asset':
+        return { moduleId: 'accounting', actionId: 'fixedAssets.create' };
+      case 'edit-fixed-asset':
+        return { moduleId: 'accounting', actionId: 'fixedAssets.edit' };
+      case 'delete-fixed-asset':
+        return { moduleId: 'accounting', actionId: 'fixedAssets.delete' };
+      case 'save-fixed-asset':
+        return {
+          moduleId: 'accounting',
+          actionId: trigger && trigger.getAttribute('data-fixed-asset-mode') === 'edit' ? 'fixedAssets.edit' : 'fixedAssets.create'
         };
       case 'close-period':
         return { moduleId: 'accounting', actionId: 'period.close' };
@@ -5320,6 +5332,322 @@
     });
   }
 
+  function fixedAssetTypeLabel(type) {
+    return { corporelle: 'Corporelle', incorporelle: 'Incorporelle', financiere: 'Financière' }[type] || 'Nature non définie';
+  }
+
+  function fixedAssetStatusLabel(status) {
+    return { 'en-service': 'En service', 'en-cours': 'En cours', retiree: 'Retiré' }[status] || 'État non défini';
+  }
+
+  function fixedAssetMethodLabel(method) {
+    return { 'a-definir': 'À définir', lineaire: 'Linéaire', degressif: 'Dégressif', 'unites-oeuvre': 'Unités d’œuvre', aucun: 'Non amortissable' }[method] || 'Méthode non définie';
+  }
+
+  function fixedAssetAccountOptions(type, selectedCode) {
+    var prefixes = { corporelle: ['22', '23', '24'], incorporelle: ['20', '21'], financiere: ['26', '27'] }[type] || [];
+    var accounts = S.accounts().filter(function (account) {
+      var code = String(account.code);
+      return Number(account.cls || code.charAt(0)) === 2 && prefixes.some(function (prefix) { return code.indexOf(prefix) === 0; }) &&
+        code.indexOf('25') !== 0 && code.indexOf('28') !== 0 && account.active !== false && account.postable !== false;
+    });
+    accounts.sort(function (a, b) { return String(a.code).localeCompare(String(b.code)); });
+    return '<option value="">Choisir un compte d’immobilisation</option>' + accounts.map(function (account) {
+      return '<option value="' + esc(account.code) + '"' + (String(account.code) === String(selectedCode || '') ? ' selected' : '') + '>' + esc(account.code + ' · ' + account.label) + '</option>';
+    }).join('');
+  }
+
+  function fixedAssetAccumulatedAccountOptions(type, selectedCode) {
+    var prefix = type === 'corporelle' ? '283' : (type === 'incorporelle' ? '281' : '');
+    var accounts = prefix ? S.accounts().filter(function (account) {
+      var code = String(account.code);
+      return code.indexOf(prefix) === 0 && Number(account.cls || code.charAt(0)) === 2 && account.active !== false && account.postable !== false;
+    }) : [];
+    accounts.sort(function (a, b) { return String(a.code).localeCompare(String(b.code)); });
+    return '<option value="">' + (prefix ? 'Choisir un compte cumulé' : 'Non applicable à cette nature') + '</option>' + accounts.map(function (account) {
+      return '<option value="' + esc(account.code) + '"' + (String(account.code) === String(selectedCode || '') ? ' selected' : '') + '>' + esc(account.code + ' · ' + account.label) + '</option>';
+    }).join('');
+  }
+
+  function fixedAssetExpenseAccountOptions(selectedCode) {
+    var accounts = S.accounts().filter(function (account) {
+      var code = String(account.code);
+      return code.indexOf('68') === 0 && Number(account.cls || code.charAt(0)) === 6 && account.active !== false && account.postable !== false;
+    });
+    accounts.sort(function (a, b) { return String(a.code).localeCompare(String(b.code)); });
+    return '<option value="">Choisir un compte de dotation</option>' + accounts.map(function (account) {
+      return '<option value="' + esc(account.code) + '"' + (String(account.code) === String(selectedCode || '') ? ' selected' : '') + '>' + esc(account.code + ' · ' + account.label) + '</option>';
+    }).join('');
+  }
+
+  function fixedAssetLocationSelectOptions(selectedId) {
+    var records = S.fixedAssetLocations();
+    var tree = fixedAssetLocationTree(records, '');
+    return '<option value="">Aucune localisation définie</option>' + tree.rows.map(function (row) {
+      var indent = new Array(Math.min(row.depth, 8) + 1).join('— ');
+      var label = indent + (row.record.code ? row.record.code + ' · ' : '') + row.record.name + ' (' + row.record.level + ')';
+      return '<option value="' + esc(row.record.id) + '"' + (String(row.record.id) === String(selectedId || '') ? ' selected' : '') + '>' + esc(label) + '</option>';
+    }).join('');
+  }
+
+  function filteredFixedAssets(records, filter) {
+    filter = filter || { q: '', status: 'all', assetType: 'all' };
+    var q = String(filter.q || '').trim().toLocaleLowerCase('fr');
+    return records.filter(function (record) {
+      if (filter.status === 'en-service' && record.status !== 'en-service') return false;
+      if (filter.status === 'en-cours' && record.status !== 'en-cours') return false;
+      if (filter.status === 'retiree' && record.status !== 'retiree') return false;
+      if (filter.assetType !== 'all' && record.assetType !== filter.assetType) return false;
+      if (!q) return true;
+      var location = record.locationId ? S.fixedAssetLocation(record.locationId) : null;
+      var locationPath = location ? fixedAssetLocationPathLabel(location, S.fixedAssetLocations()) : '';
+      var searchable = [record.code, record.name, record.description, fixedAssetTypeLabel(record.assetType), fixedAssetStatusLabel(record.status),
+        record.serialNumber, record.manufacturer, record.model, record.vendor, record.invoiceReference, record.custodian,
+        locationPath, record.assetAccountCode, record.acquisitionDate].join(' ').toLocaleLowerCase('fr');
+      return searchable.indexOf(q) !== -1;
+    });
+  }
+
+  function fixedAssetRowsHtml(records, filter) {
+    var visible = filteredFixedAssets(records, filter);
+    return visible.slice().sort(function (a, b) { return String(a.name).localeCompare(String(b.name), 'fr'); }).map(function (record) {
+      var location = record.locationId ? S.fixedAssetLocation(record.locationId) : null;
+      var assetAccount = S.account(record.assetAccountCode);
+      var accumulatedAccount = S.account(record.accumulatedDepreciationAccountCode);
+      var expenseAccount = S.account(record.depreciationExpenseAccountCode);
+      var assetClass = record.status === 'retiree' ? 'is-retired' : (record.status === 'en-cours' ? 'is-pending' : 'is-active');
+      var depreciation = record.depreciationMethod === 'aucun'
+        ? 'Non amortissable'
+        : fixedAssetMethodLabel(record.depreciationMethod) + (record.usefulLifeMonths ? ' · ' + record.usefulLifeMonths + ' mois' : '');
+      return '<tr>' +
+        '<td><strong>' + esc(record.code) + '</strong><br><span class="fixed-asset-name">' + esc(record.name) + '</span>' + (record.description ? '<br><small>' + esc(record.description) + '</small>' : '') + '</td>' +
+        '<td><span class="fixed-asset-status ' + assetClass + '">' + esc(fixedAssetStatusLabel(record.status)) + '</span><br><small>' + esc(fixedAssetTypeLabel(record.assetType)) + '</small></td>' +
+        '<td>' + (location ? '<strong>' + esc(fixedAssetLocationPathLabel(location, S.fixedAssetLocations())) + '</strong>' : '<span class="muted">Non renseignée</span>') + (record.serialNumber ? '<br><small>N° série · ' + esc(record.serialNumber) + '</small>' : '') + '</td>' +
+        '<td><strong>' + esc(S.money(record.grossCost)) + '</strong><br><small>Acquisition · ' + esc(S.dateLabel(record.acquisitionDate)) + (record.commissioningDate ? ' · Service · ' + esc(S.dateLabel(record.commissioningDate)) : '') + '</small></td>' +
+        '<td><strong>' + esc(assetAccount ? assetAccount.code + ' · ' + assetAccount.label : String(record.assetAccountCode || 'Compte absent')) + '</strong><br><small>Amort. ' + esc(accumulatedAccount ? accumulatedAccount.code : '—') + ' · Dotation ' + esc(expenseAccount ? expenseAccount.code : '—') + '</small></td>' +
+        '<td><strong>' + esc(depreciation) + '</strong>' + (record.depreciationStartDate ? '<br><small>Début · ' + esc(S.dateLabel(record.depreciationStartDate)) + '</small>' : '') + '</td>' +
+        '<td><div class="supplier-row-actions"><button type="button" class="btn btn-ghost btn-sm" data-action="edit-fixed-asset" data-id="' + esc(record.id) + '" aria-label="Modifier l’élément immobilisé ' + esc(record.name) + '">Modifier</button><button type="button" class="btn btn-ghost btn-sm btn-danger-quiet" data-action="delete-fixed-asset" data-id="' + esc(record.id) + '" aria-label="Supprimer l’élément immobilisé ' + esc(record.name) + '" title="La suppression est refusée dès qu’un mouvement ou une écriture le référence.">Supprimer</button></div></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function viewFixedAssets() {
+    var records = S.fixedAssets();
+    var filter = ui.fixedAssets || (ui.fixedAssets = { q: '', status: 'all', assetType: 'all' });
+    var visible = filteredFixedAssets(records, filter);
+    var activeCount = records.filter(function (record) { return record.status === 'en-service'; }).length;
+    var constructionCount = records.filter(function (record) { return record.status === 'en-cours'; }).length;
+    var grossTotal = records.reduce(function (total, record) { return total + (Number(record.grossCost) || 0); }, 0);
+    var statusOptions = [
+      ['all', 'Tous les états'], ['en-service', 'En service'], ['en-cours', 'En cours'], ['retiree', 'Retirés']
+    ].map(function (option) { return '<option value="' + option[0] + '"' + (filter.status === option[0] ? ' selected' : '') + '>' + option[1] + '</option>'; }).join('');
+    var typeOptions = [
+      ['all', 'Toutes les natures'], ['corporelle', 'Corporelles'], ['incorporelle', 'Incorporelles'], ['financiere', 'Financières']
+    ].map(function (option) { return '<option value="' + option[0] + '"' + (filter.assetType === option[0] ? ' selected' : '') + '>' + option[1] + '</option>'; }).join('');
+    var emptyMessage = records.length ? 'Aucun élément ne correspond aux filtres.' : 'Aucun élément immobilisé n’est enregistré dans ce dossier. Utilisez « Nouvel élément » pour créer une fiche.';
+    return '<div class="exchange-workspace fixed-asset-workspace" id="fixed-asset-workspace">' +
+      '<div class="alert info"><div><strong>Registre local des immobilisations du dossier actif.</strong> Les fiches distinguent l’identification opérationnelle, les comptes, les dates et les paramètres d’amortissement. Les montants sont enregistrés en XOF ; aucune dotation, valeur nette comptable, cession ou écriture n’est calculée ou comptabilisée dans ce sous-menu.</div></div>' +
+      '<div class="exchange-summary-grid fixed-asset-summary-grid" aria-label="Résumé des immobilisations"><div><small>En service</small><strong>' + activeCount + '</strong></div><div><small>En cours</small><strong>' + constructionCount + '</strong></div><div><small>Coût d’acquisition renseigné</small><strong>' + esc(S.money(grossTotal)) + '</strong></div></div>' +
+      '<section class="exchange-card fixed-asset-directory-card">' +
+        '<div class="supplier-directory-head"><div><h4>Éléments immobilisés</h4><p>Suivi des biens, localisation, comptes de classe 2/28/68 et paramètres d’amortissement modifiables.</p></div><button type="button" class="btn btn-primary" data-action="new-fixed-asset">＋ Nouvel élément</button></div>' +
+        '<form id="fixed-asset-filter-form" class="supplier-filter-controls fixed-asset-filter-controls" role="search"><label class="field"><span>Rechercher</span><input id="fixed-asset-search" type="search" value="' + esc(filter.q) + '" placeholder="Code, désignation, série, fournisseur, lieu…" autocomplete="off"></label><label class="field"><span>État</span><select id="fixed-asset-status-filter">' + statusOptions + '</select></label><label class="field"><span>Nature</span><select id="fixed-asset-type-filter">' + typeOptions + '</select></label></form>' +
+        '<p class="supplier-result-note" id="fixed-asset-result-note">' + visible.length + (visible.length === 1 ? ' élément affiché.' : ' éléments affichés.') + '</p>' +
+        '<div class="table-wrap exchange-table-wrap fixed-asset-table-wrap" id="fixed-asset-table-wrap"' + (visible.length ? '' : ' hidden') + '><table class="exchange-mapping-table fixed-asset-table"><caption class="sr-only">Éléments immobilisés du dossier actif</caption><thead><tr><th>Code / désignation</th><th>État / nature</th><th>Localisation / série</th><th>Acquisition / coût</th><th>Comptes associés</th><th>Paramètres d’amortissement</th><th>Actions</th></tr></thead><tbody id="fixed-asset-rows">' + fixedAssetRowsHtml(records, filter) + '</tbody></table></div>' +
+        '<div id="fixed-asset-list-empty" class="empty-state registry-empty"' + (visible.length ? ' hidden' : '') + '><span class="empty-state-icon">⌕</span><h3>Aucun résultat</h3><p>' + esc(emptyMessage) + '</p></div>' +
+      '</section>' +
+      '<p class="exchange-footnote">La fiche inclut la référence de facture, le fournisseur, le détenteur, la garantie et le dernier inventaire physique. Les cessions, plans calculés, écritures de dotation, rapprochements avec les pièces et exports réglementaires restent à construire après validation des règles métier et fiscales.</p>' +
+    '</div>';
+  }
+
+  function refreshFixedAssetRows() {
+    var records = S.fixedAssets();
+    var filter = ui.fixedAssets || { q: '', status: 'all', assetType: 'all' };
+    var visible = filteredFixedAssets(records, filter);
+    var rows = $('#fixed-asset-rows');
+    var tableWrap = $('#fixed-asset-table-wrap');
+    var empty = $('#fixed-asset-list-empty');
+    var note = $('#fixed-asset-result-note');
+    if (rows) rows.innerHTML = fixedAssetRowsHtml(records, filter);
+    if (tableWrap) tableWrap.hidden = visible.length === 0;
+    if (empty) {
+      empty.hidden = visible.length !== 0;
+      empty.querySelector('p').textContent = records.length
+        ? 'Aucun élément ne correspond aux filtres.'
+        : 'Aucun élément immobilisé n’est enregistré dans ce dossier. Utilisez « Nouvel élément » pour créer une fiche.';
+    }
+    if (note) note.textContent = visible.length + (visible.length === 1 ? ' élément affiché.' : ' éléments affichés.');
+    applyDemoActionGates(rows);
+  }
+
+  function bindFixedAssetView() {
+    var form = $('#fixed-asset-filter-form');
+    if (!form) return;
+    var search = $('#fixed-asset-search', form);
+    var status = $('#fixed-asset-status-filter', form);
+    var type = $('#fixed-asset-type-filter', form);
+    function update() {
+      ui.fixedAssets = ui.fixedAssets || { q: '', status: 'all', assetType: 'all' };
+      ui.fixedAssets.q = search ? search.value : '';
+      ui.fixedAssets.status = status ? status.value : 'all';
+      ui.fixedAssets.assetType = type ? type.value : 'all';
+      refreshFixedAssetRows();
+    }
+    form.addEventListener('submit', function (event) { event.preventDefault(); });
+    if (search) search.addEventListener('input', update);
+    if (status) status.addEventListener('change', update);
+    if (type) type.addEventListener('change', update);
+  }
+
+  function fixedAssetDepreciationFieldVisibility() {
+    var type = $('#fixed-asset-asset-type');
+    var method = $('#fixed-asset-depreciation-method');
+    if (!type || !method) return;
+    var financial = type.value === 'financiere';
+    if (financial && ['lineaire', 'degressif', 'unites-oeuvre'].indexOf(method.value) !== -1) method.value = 'aucun';
+    Array.prototype.forEach.call(method.options, function (option) {
+      option.disabled = financial && ['lineaire', 'degressif', 'unites-oeuvre'].indexOf(option.value) !== -1;
+    });
+    var methodValue = method.value;
+    var amortizable = ['lineaire', 'degressif', 'unites-oeuvre'].indexOf(methodValue) !== -1 && !financial;
+    ['fixed-asset-useful-life-field', 'fixed-asset-depreciation-start-field', 'fixed-asset-accumulated-account-field', 'fixed-asset-expense-account-field'].forEach(function (id) {
+      var field = $('#' + id);
+      if (field) field.hidden = !amortizable;
+    });
+    var rate = $('#fixed-asset-rate-field');
+    if (rate) rate.hidden = methodValue !== 'degressif';
+    var units = $('#fixed-asset-units-fields');
+    if (units) units.hidden = methodValue !== 'unites-oeuvre';
+  }
+
+  function clearUnusedFixedAssetDepreciationFields() {
+    var method = $('#fixed-asset-depreciation-method');
+    if (!method) return;
+    fixedAssetDepreciationFieldVisibility();
+    var amortizable = ['lineaire', 'degressif', 'unites-oeuvre'].indexOf(method.value) !== -1;
+    if (!amortizable) {
+      ['fixed-asset-useful-life', 'fixed-asset-depreciation-start', 'fixed-asset-rate', 'fixed-asset-production-total', 'fixed-asset-production-unit', 'fixed-asset-accumulated-account', 'fixed-asset-expense-account'].forEach(function (id) {
+        var input = $('#' + id);
+        if (input) input.value = '';
+      });
+    } else {
+      if (method.value !== 'degressif' && $('#fixed-asset-rate')) $('#fixed-asset-rate').value = '';
+      if (method.value !== 'unites-oeuvre') {
+        if ($('#fixed-asset-production-total')) $('#fixed-asset-production-total').value = '';
+        if ($('#fixed-asset-production-unit')) $('#fixed-asset-production-unit').value = '';
+      }
+    }
+    fixedAssetDepreciationFieldVisibility();
+  }
+
+  function openFixedAssetModal(id) {
+    var existing = id ? S.fixedAsset(id) : null;
+    if (id && !existing) { toast('Élément immobilisé introuvable dans le dossier actif.', 'error'); return; }
+    var assetType = existing ? existing.assetType : 'corporelle';
+    var preferredAssetAccountCode = { corporelle: '231', incorporelle: '212', financiere: '271' }[assetType];
+    var assetPrefixes = { corporelle: ['22', '23', '24'], incorporelle: ['20', '21'], financiere: ['26', '27'] }[assetType] || [];
+    var defaultAssetAccount = S.accounts().find(function (account) {
+      return String(account.code) === preferredAssetAccountCode && account.active !== false && account.postable !== false;
+    }) || S.accounts().find(function (account) {
+      var code = String(account.code);
+      return assetPrefixes.some(function (prefix) { return code.indexOf(prefix) === 0; }) && account.active !== false && account.postable !== false;
+    });
+    var today = S.todayIso();
+    var suggestedCode = existing ? existing.code : S.nextFixedAssetCode();
+    var value = function (key, fallback) { return esc(existing && existing[key] != null ? existing[key] : (fallback == null ? '' : fallback)); };
+    var options = function (choices, selected) {
+      return choices.map(function (choice) { return '<option value="' + esc(choice[0]) + '"' + (String(choice[0]) === String(selected || '') ? ' selected' : '') + '>' + esc(choice[1]) + '</option>'; }).join('');
+    };
+    var body = '<form id="fixed-asset-form" novalidate><div id="fixed-asset-errors" aria-live="assertive"></div>' +
+      '<div class="fixed-asset-form-sections">' +
+        '<section class="fixed-asset-form-section"><h4>Identification et état</h4><div class="fixed-asset-form-grid">' +
+          '<div class="field"><label for="fixed-asset-code">Code d’inventaire <span aria-hidden="true">*</span></label><input id="fixed-asset-code" name="code" type="text" maxlength="32" value="' + value('code', suggestedCode) + '" placeholder="Ex. IMMO-0001" required autocomplete="off"><span class="hint">Code proposé automatiquement, modifiable et non réutilisé.</span></div>' +
+          '<div class="field"><label for="fixed-asset-name">Désignation <span aria-hidden="true">*</span></label><input id="fixed-asset-name" name="name" type="text" maxlength="150" value="' + value('name') + '" placeholder="Ex. Véhicule de service" required></div>' +
+          '<div class="field"><label for="fixed-asset-type">Nature <span aria-hidden="true">*</span></label><select id="fixed-asset-asset-type" name="assetType" required>' + options([['corporelle', 'Immobilisation corporelle'], ['incorporelle', 'Immobilisation incorporelle'], ['financiere', 'Immobilisation financière']], assetType) + '</select></div>' +
+          '<div class="field"><label for="fixed-asset-status">État <span aria-hidden="true">*</span></label><select id="fixed-asset-status" name="status" required>' + options([['en-service', 'En service'], ['en-cours', 'En cours / non mise en service'], ['retiree', 'Retiré de l’usage']], existing ? existing.status : 'en-service') + '</select></div>' +
+          '<div class="field fixed-asset-description-field"><label for="fixed-asset-description">Description</label><textarea id="fixed-asset-description" name="description" rows="2" maxlength="500" placeholder="Caractéristiques et usage du bien">' + value('description') + '</textarea></div>' +
+        '</div></section>' +
+        '<section class="fixed-asset-form-section"><h4>Localisation et suivi physique</h4><div class="fixed-asset-form-grid">' +
+          '<div class="field"><label for="fixed-asset-location">Localisation</label><select id="fixed-asset-location" name="locationId">' + fixedAssetLocationSelectOptions(existing && existing.locationId) + '</select><span class="hint">Les emplacements se gèrent dans le sous-menu « Localisation des immobilisations corporelles ».</span></div>' +
+          '<div class="field"><label for="fixed-asset-custodian">Détenteur / responsable</label><input id="fixed-asset-custodian" name="custodian" type="text" maxlength="150" value="' + value('custodian') + '" placeholder="Personne ou service responsable"></div>' +
+          '<div class="field"><label for="fixed-asset-manufacturer">Fabricant</label><input id="fixed-asset-manufacturer" name="manufacturer" type="text" maxlength="100" value="' + value('manufacturer') + '"></div>' +
+          '<div class="field"><label for="fixed-asset-model">Modèle</label><input id="fixed-asset-model" name="model" type="text" maxlength="100" value="' + value('model') + '"></div>' +
+          '<div class="field"><label for="fixed-asset-serial">Numéro de série / châssis</label><input id="fixed-asset-serial" name="serialNumber" type="text" maxlength="100" value="' + value('serialNumber') + '"></div>' +
+          '<div class="field"><label for="fixed-asset-vendor">Fournisseur / provenance</label><input id="fixed-asset-vendor" name="vendor" type="text" maxlength="150" value="' + value('vendor') + '"></div>' +
+          '<div class="field"><label for="fixed-asset-invoice">Référence de facture / pièce source</label><input id="fixed-asset-invoice" name="invoiceReference" type="text" maxlength="100" value="' + value('invoiceReference') + '"></div>' +
+          '<div class="field"><label for="fixed-asset-warranty">Fin de garantie</label><input id="fixed-asset-warranty" name="warrantyEndDate" type="date" value="' + value('warrantyEndDate') + '"></div>' +
+          '<div class="field"><label for="fixed-asset-last-inventory">Dernier inventaire physique</label><input id="fixed-asset-last-inventory" name="lastInventoryDate" type="date" value="' + value('lastInventoryDate') + '"></div>' +
+          '<div class="field fixed-asset-notes-field"><label for="fixed-asset-notes">Notes</label><textarea id="fixed-asset-notes" name="notes" rows="2" maxlength="1000">' + value('notes') + '</textarea></div>' +
+        '</div></section>' +
+        '<section class="fixed-asset-form-section"><h4>Acquisition et comptes</h4><div class="fixed-asset-form-grid">' +
+          '<div class="field"><label for="fixed-asset-asset-account">Compte d’immobilisation <span aria-hidden="true">*</span></label><select id="fixed-asset-asset-account" name="assetAccountCode" required>' + fixedAssetAccountOptions(assetType, value('assetAccountCode', defaultAssetAccount && defaultAssetAccount.code)) + '</select><span class="hint">Compte actif et imputable de classe 2, filtré par nature du bien.</span></div>' +
+          '<div class="field"><label for="fixed-asset-acquisition-date">Date d’acquisition / début des travaux <span aria-hidden="true">*</span></label><input id="fixed-asset-acquisition-date" name="acquisitionDate" type="date" value="' + value('acquisitionDate', today) + '" required></div>' +
+          '<div class="field"><label for="fixed-asset-commissioning-date">Date de mise en service</label><input id="fixed-asset-commissioning-date" name="commissioningDate" type="date" value="' + value('commissioningDate', existing ? '' : today) + '"><span class="hint">Obligatoire lorsque le bien est en service ou retiré.</span></div>' +
+          '<div class="field"><label for="fixed-asset-gross-cost">Coût d’acquisition (XOF) <span aria-hidden="true">*</span></label><input id="fixed-asset-gross-cost" name="grossCost" type="number" min="0" step="1" value="' + value('grossCost') + '" required></div>' +
+          '<div class="field"><label for="fixed-asset-residual-value">Valeur résiduelle estimée (XOF)</label><input id="fixed-asset-residual-value" name="residualValue" type="number" min="0" step="1" value="' + value('residualValue', 0) + '"><span class="hint">Paramètre saisi, sans calcul de valeur nette comptable.</span></div>' +
+        '</div></section>' +
+        '<section class="fixed-asset-form-section"><h4>Paramètres d’amortissement</h4><div class="fixed-asset-form-grid">' +
+          '<div class="field"><label for="fixed-asset-depreciation-method">Méthode <span aria-hidden="true">*</span></label><select id="fixed-asset-depreciation-method" name="depreciationMethod">' + options([['a-definir', 'À définir / à valider'], ['lineaire', 'Linéaire'], ['degressif', 'Dégressif (taux saisi)'], ['unites-oeuvre', 'Unités d’œuvre'], ['aucun', 'Non amortissable']], existing ? existing.depreciationMethod : 'a-definir') + '</select><span class="hint">À définir par défaut : aucune règle ni durée fiscale n’est présumée. La fiche n’exécute aucun calcul ni écriture.</span></div>' +
+          '<div class="field" id="fixed-asset-useful-life-field"><label for="fixed-asset-useful-life">Durée d’utilisation (mois)</label><input id="fixed-asset-useful-life" name="usefulLifeMonths" type="number" min="1" max="1200" step="1" value="' + value('usefulLifeMonths') + '"></div>' +
+          '<div class="field" id="fixed-asset-depreciation-start-field"><label for="fixed-asset-depreciation-start">Début d’amortissement</label><input id="fixed-asset-depreciation-start" name="depreciationStartDate" type="date" value="' + value('depreciationStartDate') + '"></div>'+
+          '<div class="field" id="fixed-asset-rate-field"><label for="fixed-asset-rate">Taux annuel dégressif (%)</label><input id="fixed-asset-rate" name="annualRatePercent" type="number" min="0.01" max="100" step="0.01" value="' + value('annualRatePercent') + '"></div>' +
+          '<div class="fixed-asset-form-grid-inner" id="fixed-asset-units-fields"><div class="field"><label for="fixed-asset-production-total">Unités d’œuvre estimées</label><input id="fixed-asset-production-total" name="unitOfProductionTotal" type="number" min="1" step="1" value="' + value('unitOfProductionTotal') + '"></div><div class="field"><label for="fixed-asset-production-unit">Unité</label><input id="fixed-asset-production-unit" name="unitOfProductionUnit" type="text" maxlength="40" value="' + value('unitOfProductionUnit') + '" placeholder="Heures, kilomètres, unités…"></div></div>' +
+          '<div class="field" id="fixed-asset-accumulated-account-field"><label for="fixed-asset-accumulated-account">Compte d’amortissements cumulés</label><select id="fixed-asset-accumulated-account" name="accumulatedDepreciationAccountCode">' + fixedAssetAccumulatedAccountOptions(assetType, value('accumulatedDepreciationAccountCode')) + '</select></div>' +
+          '<div class="field" id="fixed-asset-expense-account-field"><label for="fixed-asset-expense-account">Compte de dotation</label><select id="fixed-asset-expense-account" name="depreciationExpenseAccountCode">' + fixedAssetExpenseAccountOptions(value('depreciationExpenseAccountCode')) + '</select></div>'+
+        '</div></section>' +
+      '</div></form>';
+    var mode = existing ? 'edit' : 'create';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="submit" class="btn btn-primary" form="fixed-asset-form" data-action="save-fixed-asset" data-fixed-asset-mode="' + mode + '">' + (existing ? 'Enregistrer les modifications' : 'Enregistrer l’élément') + '</button>';
+    openModal(existing ? 'Modifier un élément immobilisé' : 'Nouvel élément immobilisé', 'Registre local du dossier ' + esc(S.currentDossier().reference), body, footer, true);
+    var form = $('#fixed-asset-form');
+    var typeInput = $('#fixed-asset-asset-type');
+    var methodInput = $('#fixed-asset-depreciation-method');
+    function refreshAssetAccounts() {
+      var type = typeInput.value;
+      var assetAccountInput = $('#fixed-asset-asset-account');
+      var accumulatedAccountInput = $('#fixed-asset-accumulated-account');
+      var currentAssetAccount = assetAccountInput.value;
+      var currentAccumulatedAccount = accumulatedAccountInput.value;
+      assetAccountInput.innerHTML = fixedAssetAccountOptions(type, currentAssetAccount);
+      accumulatedAccountInput.innerHTML = fixedAssetAccumulatedAccountOptions(type, currentAccumulatedAccount);
+      if (type === 'financiere') clearUnusedFixedAssetDepreciationFields();
+      else fixedAssetDepreciationFieldVisibility();
+    }
+    typeInput.addEventListener('change', refreshAssetAccounts);
+    methodInput.addEventListener('change', clearUnusedFixedAssetDepreciationFields);
+    clearUnusedFixedAssetDepreciationFields();
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var actionId = mode === 'edit' ? 'fixedAssets.edit' : 'fixedAssets.create';
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', actionId, accountingAccessContext())) {
+        toast('Action refusée par défaut : le droit « ' + actionId + ' » n’est pas accordé.', 'warning');
+        return;
+      }
+      var input = {
+        code: $('#fixed-asset-code').value, name: $('#fixed-asset-name').value, description: $('#fixed-asset-description').value,
+        assetType: typeInput.value, status: $('#fixed-asset-status').value, locationId: $('#fixed-asset-location').value,
+        custodian: $('#fixed-asset-custodian').value, manufacturer: $('#fixed-asset-manufacturer').value, model: $('#fixed-asset-model').value,
+        serialNumber: $('#fixed-asset-serial').value, vendor: $('#fixed-asset-vendor').value, invoiceReference: $('#fixed-asset-invoice').value,
+        warrantyEndDate: $('#fixed-asset-warranty').value, lastInventoryDate: $('#fixed-asset-last-inventory').value, notes: $('#fixed-asset-notes').value,
+        assetAccountCode: $('#fixed-asset-asset-account').value, acquisitionDate: $('#fixed-asset-acquisition-date').value,
+        commissioningDate: $('#fixed-asset-commissioning-date').value, grossCost: $('#fixed-asset-gross-cost').value,
+        residualValue: $('#fixed-asset-residual-value').value, depreciationMethod: methodInput.value,
+        usefulLifeMonths: $('#fixed-asset-useful-life').value, depreciationStartDate: $('#fixed-asset-depreciation-start').value,
+        annualRatePercent: $('#fixed-asset-rate').value, unitOfProductionTotal: $('#fixed-asset-production-total').value,
+        unitOfProductionUnit: $('#fixed-asset-production-unit').value,
+        accumulatedDepreciationAccountCode: $('#fixed-asset-accumulated-account').value,
+        depreciationExpenseAccountCode: $('#fixed-asset-expense-account').value
+      };
+      var result = existing ? S.updateFixedAsset(existing.id, input) : S.createFixedAsset(input);
+      if (!result.ok) {
+        $('#fixed-asset-errors').innerHTML = '<div class="alert error" role="alert"><ul style="margin:0 0 0 18px">' + result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
+        return;
+      }
+      toast(existing ? 'Fiche d’immobilisation mise à jour.' : 'Élément ' + result.fixedAsset.code + ' enregistré.', 'success');
+      closeModal(true);
+      render();
+    });
+  }
+
   function viewAccountingMenu(params) {
     params = params || {};
     var phone = isPhoneViewport();
@@ -5370,6 +5698,8 @@
       exchangeFeature = viewPersonnel();
     } else if (group.id === 'definitions' && tab.id === 'fixed-asset-locations') {
       exchangeFeature = viewFixedAssetLocations();
+    } else if (group.id === 'definitions' && tab.id === 'fixed-assets') {
+      exchangeFeature = viewFixedAssets();
     }
     if (group.id === 'fichier') {
       switch (tab.id) {
@@ -5433,6 +5763,7 @@
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'other-debtors-creditors') bindOtherPartyView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'personnel') bindPersonnelView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'fixed-asset-locations') bindFixedAssetLocationView();
+      if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'fixed-assets') bindFixedAssetView();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-other') bindAccountingExchangeImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-balance') bindAccountingBalanceImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-payroll') bindPayrollCentralization();
@@ -5939,6 +6270,26 @@
         var locationDeletion = S.deleteFixedAssetLocation(id);
         if (!locationDeletion.ok) { toast(locationDeletion.errors.join(' ') || 'Suppression impossible.', 'warning'); break; }
         toast('Emplacement supprimé. Son code ne sera pas réattribué.', 'success');
+        render();
+        break;
+      }
+      case 'new-fixed-asset':
+        openFixedAssetModal();
+        break;
+      case 'edit-fixed-asset':
+        if (id) openFixedAssetModal(id);
+        break;
+      case 'delete-fixed-asset': {
+        if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'fixedAssets.delete', accountingAccessContext())) {
+          toast('Suppression refusée par défaut : le droit « fixedAssets.delete » n’est pas accordé.', 'warning');
+          break;
+        }
+        var assetToDelete = S.fixedAsset(id);
+        if (!assetToDelete) { toast('Élément immobilisé introuvable.', 'error'); break; }
+        if (!window.confirm('Supprimer définitivement l’élément « ' + assetToDelete.name + ' » ? Cette action est refusée s’il existe un mouvement ou une écriture liée.')) break;
+        var assetDeletion = S.deleteFixedAsset(id);
+        if (!assetDeletion.ok) { toast(assetDeletion.errors.join(' ') || 'Suppression impossible.', 'warning'); break; }
+        toast('Élément supprimé. Son code ne sera pas réattribué.', 'success');
         render();
         break;
       }

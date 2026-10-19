@@ -2619,3 +2619,35 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
   .fixed-asset-location-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .fixed-asset-location-summary-grid > div:last-child { grid-column: 1 / -1; }
 }
+.fixed-asset-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.fixed-asset-filter-controls { grid-template-columns: minmax(240px, 1.4fr) minmax(150px, .5fr) minmax(160px, .6fr); }
+.fixed-asset-table { min-width: 1460px; }
+.fixed-asset-table th,
+.fixed-asset-table td { vertical-align: top; }
+.fixed-asset-table td { line-height: 1.5; }
+.fixed-asset-table td strong,
+.fixed-asset-name { color: #344d43; }
+.fixed-asset-table td small { color: #77847d; font-size: .64rem; }
+.fixed-asset-table .supplier-row-actions { min-width: 175px; }
+.fixed-asset-status { display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 999px; font-size: .62rem; font-weight: 800; white-space: nowrap; }
+.fixed-asset-status.is-active { color: #176e5f; background: #e8f4ef; }
+.fixed-asset-status.is-pending { color: #75561c; background: #f7f0dd; }
+.fixed-asset-status.is-retired { color: #6b7470; background: #edf0ee; }
+.fixed-asset-form-sections { display: grid; gap: 13px; }
+.fixed-asset-form-section { padding: 13px; border: 1px solid #e4eae4; border-radius: 8px; background: #fbfcfa; }
+.fixed-asset-form-section h4 { margin: 0 0 10px; color: #3f5a4d; font-size: .78rem; }
+.fixed-asset-form-grid,
+.fixed-asset-form-grid-inner { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+.fixed-asset-form-grid .field,
+.fixed-asset-form-grid-inner .field { min-width: 0; margin: 0; }
+.fixed-asset-description-field,
+.fixed-asset-notes-field { grid-column: 1 / -1; }
+@media (max-width: 700px) {
+  .fixed-asset-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fixed-asset-summary-grid > div:last-child { grid-column: 1 / -1; }
+  .fixed-asset-filter-controls,
+  .fixed-asset-form-grid,
+  .fixed-asset-form-grid-inner { grid-template-columns: minmax(0, 1fr); }
+  .fixed-asset-description-field,
+  .fixed-asset-notes-field { grid-column: auto; }
+}

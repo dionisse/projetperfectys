@@ -75,6 +75,10 @@ delete preSupplierState.fixedAssetLocations;
 delete preSupplierState.fixedAssetLocationRegistryVersion;
 delete preSupplierState.fixedAssetLocationCodeHistory;
 delete preSupplierState.fixedAssetLocationSequence;
+delete preSupplierState.fixedAssets;
+delete preSupplierState.fixedAssetRegistryVersion;
+delete preSupplierState.fixedAssetCodeHistory;
+delete preSupplierState.fixedAssetSequence;
 delete preSupplierState.debtorCodeHistory;
 delete preSupplierState.creditorCodeHistory;
 delete preSupplierState.personnelCodeHistory;
@@ -94,6 +98,10 @@ assert.equal(migratedState.personnel.length, 0);
 assert.equal(migratedState.fixedAssetLocationRegistryVersion, 1);
 assert.deepEqual(migratedState.fixedAssetLocations, []);
 assert.equal(migratedState.fixedAssetLocationSequence, 1);
+assert.equal(migratedState.fixedAssetRegistryVersion, 1);
+assert.deepEqual(migratedState.fixedAssets, []);
+assert.equal(migratedState.fixedAssetSequence, 1);
+assert.equal(store.fixedAssets().length, 0, 'la migration ajoute un registre d’immobilisations vide aux anciennes bases valides');
 assert.equal(store.backupInfo().available, true, 'la migration conserve un point local de restauration');
 
 const created = store.createDossier({
@@ -187,7 +195,16 @@ const assetLocation = store.createFixedAssetLocation({ name: 'Siège', level: 'S
 assert.equal(assetLocation.ok, true, assetLocation.errors.join(' '));
 const assetRoom = store.createFixedAssetLocation({ name: 'Bureau de gestion', level: 'Local', parentId: assetLocation.location.id });
 assert.equal(assetRoom.ok, true, assetRoom.errors.join(' '));
-assert.equal(store.entries().length, entriesBeforeClient, 'les référentiels tiers, personnel et localisations ne créent pas d’écriture');
+const dossierAsset = store.createFixedAsset({
+  name: 'Ordinateur du service comptable', assetType: 'corporelle', status: 'en-service',
+  acquisitionDate: '2026-07-04', commissioningDate: '2026-07-04', grossCost: '450000',
+  assetAccountCode: '242', locationId: assetRoom.location.id, depreciationMethod: 'a-definir',
+  manufacturer: 'Fabricant de démonstration', serialNumber: 'PC-2026-001', custodian: 'Service comptable'
+});
+assert.equal(dossierAsset.ok, true, dossierAsset.errors.join(' '));
+assert.equal(dossierAsset.fixedAsset.code, 'IMMO-0001', 'les codes d’immobilisation commencent dans chaque dossier');
+assert.equal(store.fixedAssets().length, 1);
+assert.equal(store.entries().length, entriesBeforeClient, 'les référentiels tiers, personnel, localisations et immobilisations ne créent pas d’écriture');
 const supplierEdit = store.updateSupplier(supplier.supplier.id, {
   ...supplier.supplier, name: 'Fournitures du Littoral', paymentTermDays: 45, accountCode: '401'
 });
@@ -200,11 +217,18 @@ assert.equal(store.setSupplierActive(supplier.supplier.id, true).supplier.active
 storageWritesBlocked = true;
 const failedSupplierSave = store.createSupplier({ code: 'FOUR-FAIL', name: 'Ne doit pas être sauvegardé', accountCode: '401' });
 const failedLocationSave = store.createFixedAssetLocation({ name: 'Local non persisté', level: 'Local' });
+const failedAssetSave = store.createFixedAsset({
+  name: 'Actif non persisté', assetType: 'corporelle', status: 'en-service',
+  acquisitionDate: '2026-07-05', commissioningDate: '2026-07-05', grossCost: '100000',
+  assetAccountCode: '242', depreciationMethod: 'a-definir'
+});
 storageWritesBlocked = false;
 assert.equal(failedSupplierSave.ok, false, 'une panne de stockage annule la création');
 assert.equal(store.suppliers().length, 1, 'une création non persistée est retirée de l’état en mémoire');
 assert.equal(failedLocationSave.ok, false, 'une panne de stockage annule la localisation');
 assert.equal(store.fixedAssetLocations().length, 2, 'un emplacement non persisté est retiré de l’état en mémoire');
+assert.equal(failedAssetSave.ok, false, 'une panne de stockage annule l’immobilisation');
+assert.equal(store.fixedAssets().length, 1, 'une immobilisation non persistée est retirée de l’état en mémoire');
 const outsideCycle = store.validateEntry({
   reference: 'OD-2026-OUT', journal: 'OD', date: '2026-06-30', description: 'Hors cycle',
   lines: [{ account: '601', debit: 1000, credit: 0 }, { account: '401', debit: 0, credit: 1000 }]
@@ -225,16 +249,21 @@ assert.equal(store.backupInfo().entryCount, 1);
 
 assert.equal(store.switchDossier(main.id).ok, true);
 assert.equal(store.entries().length, 4, 'le changement de dossier restaure les données principales');
+assert.equal(store.fixedAssets().length, 0, 'les immobilisations du dossier client ne sont pas visibles dans le dossier principal');
 assert.equal(store.backupInfo().available, true, 'la migration du dossier principal a créé son propre point de restauration');
 assert.equal(store.backupInfo().entryCount, 4, 'le point local du dossier principal ne reprend pas les données du dossier client');
 assert.equal(store.switchDossier(created.dossier.id).ok, true);
 assert.equal(store.entries().length, 1, 'les écritures restent persistées dans leur propre dossier');
+assert.equal(store.fixedAssets().length, 1, 'les immobilisations restent propres au dossier client actif');
+assert.equal(store.fixedAssets()[0].name, 'Ordinateur du service comptable');
 assert.equal(store.accounts().length, STANDARD_ACCOUNT_COUNT + 1);
 assert.equal(store.restoreBackup().ok, true);
 assert.equal(store.accounts().length, STANDARD_ACCOUNT_COUNT, 'la restauration remplace uniquement les données du dossier actif');
 assert.equal(store.entries().length, 1);
 assert.equal(store.suppliers().length, 1, 'le point de restauration contient le référentiel fournisseur du dossier');
 assert.equal(store.suppliers()[0].active, true);
+assert.equal(store.fixedAssets().length, 1, 'le point de restauration conserve le registre d’immobilisations du dossier');
+assert.equal(store.fixedAssets()[0].code, 'IMMO-0001');
 assert.equal(store.clients().length, 1, 'le point de restauration contient aussi le répertoire clients');
 assert.equal(store.clients()[0].name, 'Client de démonstration');
 assert.equal(store.otherParties().length, 1, 'le point de restauration contient le registre des tiers divers');
@@ -278,4 +307,4 @@ assert.equal(store.personnel()[0].code, 'PER-0001');
 assert.equal(store.fixedAssetLocations().length, 2, 'les localisations survivent au rechargement');
 assert.equal(store.fixedAssetLocation(assetRoom.location.id).parentId, assetLocation.location.id, 'la relation hiérarchique survit au rechargement');
 assert.deepEqual(store.dossiers().map(dossier => dossier.name), ['Entreprise de démonstration', 'Cabinet Godwin', 'Dossier, autre']);
-console.log('Dossiers, tiers, personnel et localisations : migration, cycle, persistance et isolation — OK');
+console.log('Dossiers, tiers, personnel, localisations et immobilisations : migration, cycle, persistance et isolation — OK');

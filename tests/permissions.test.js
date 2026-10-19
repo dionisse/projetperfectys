@@ -151,6 +151,9 @@ test('les actions disponibles sont décrites par module', () => {
   assert(actions.includes('personnel.create'));
   assert(actions.includes('personnel.edit'));
   assert(actions.includes('personnel.delete'));
+  assert(actions.includes('fixedAssets.create'));
+  assert(actions.includes('fixedAssets.edit'));
+  assert(actions.includes('fixedAssets.delete'));
   assert(actions.includes('period.close'));
   assert(actions.includes('period.reopen'));
   assert(actions.includes('data.import'));
@@ -287,6 +290,18 @@ test('les droits des localisations d’immobilisations sont distincts et limité
   assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'fixedAssetLocations.edit', context), true);
   assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'fixedAssetLocations.delete', context), false);
   assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'fixedAssetLocations.delete', { ...context, dossierId: 'dossier-2' }), false);
+});
+
+test('les droits des immobilisations sont distincts et limités au dossier', () => {
+  const member = {
+    role: 'manager', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view', 'fixedAssets.create', 'fixedAssets.edit'] }] }
+  };
+  const context = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'fixedAssets.create', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'fixedAssets.edit', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'fixedAssets.delete', context), false);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'fixedAssets.delete', { ...context, dossierId: 'dossier-2' }), false);
 });
 
 console.log('Politique d’accès : scénarios réussis.');
