@@ -19,6 +19,10 @@ publier, un déploiement immédiat.
 
 Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKLOG.md).
 
+## Démarrer l’aperçu local ou Bolt AI
+
+Le dépôt fournit un serveur statique sans dépendance ni compilation. Dans Bolt AI, lancer `pnpm dev` (ou `npm run dev`) ; le serveur écoute sur `0.0.0.0` et utilise le port injecté par l’environnement (`PORT`), avec le port 3000 comme valeur de secours. L’entrée `/` redirige vers le prototype `modern-proto/`. Pour ouvrir la version web dans un environnement Node classique, la même commande s’applique. Aucun `build` n’est nécessaire.
+
 ## Fonctionnalités
 
 | Écran | Contenu |
