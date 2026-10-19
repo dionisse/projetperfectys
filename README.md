@@ -32,6 +32,7 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 | Ventes, stock & facturation (étape partielle) | Lots locaux de ventes et d’approvisionnement, approbation et centralisation interne ; facturation, fiscalité et valorisation de stock réelles à construire |
 | Annulation d’une centralisation | Brouillon interne supprimable sans effet comptable ; pièce validée annulée par écriture inverse traçable, sans toucher à l’originale. Paie & RH et Ventes/Stock/Facturation uniquement ; imports et logiciels tiers exclus |
 | Consolidation avant résultat | Journal groupé consultable et exportable par période et journal, agrégé par compte général ; chaque ligne source conserve sa pièce, son journal, sa date, son numéro de ligne et son origine. Lecture seule : aucune écriture n’est ajoutée au grand livre |
+| Consolidation après résultat | Journal groupé consultable et exportable des écritures validées, avec la même traçabilité par ligne. Lecture seule ; la détection de la pièce/date de résultat, son affectation et les écritures de clôture restent à définir |
 | Organisation & accès (démo) | Profils temporaires et droits explicites par personne, module, entreprise cliente, dossier et action ; refus par défaut |
 | Dossiers clients | Liste multi-dossiers ouverte depuis le module Comptabilité ; création d’entreprise, code, type comptable, référence et cycle paramétrable |
 | Tableau de bord | Indicateurs (débit, crédit, résultat, pièces), dernières pièces, activité par journal, état des périodes |
@@ -70,6 +71,12 @@ Le sous-menu **Fichier → Consolidation avant résultat** présente un journal 
 - Cette première étape **ne calcule pas le résultat**, ne crée ni ne valide aucune écriture et ne modifie pas le grand livre. Les règles de toute consolidation après résultat ou d’éventuels traitements de clôture restent à définir séparément.
 
 Le prototype ne suppose pas encore de consolidation multi-sociétés, d’élimination intragroupe, de retraitement fiscal ou de conversion de devises : ces opérations nécessiteraient des règles et un périmètre métier explicites.
+
+### Consolidation après résultat — première étape
+
+Le sous-menu **Fichier → Consolidation après résultat** réutilise le journal groupé par compte général et le détail de provenance de la consolidation avant résultat. Il filtre les écritures validées par dates et journal, contrôle l’équilibre et propose un export CSV détaillé, sans toucher au grand livre.
+
+Cette première version ne détecte pas automatiquement la date ou la pièce d’arrêté du résultat, ne calcule pas ni n’affecte le résultat et ne génère aucune écriture de clôture. Elle regroupe les écritures validées présentes pour la période sélectionnée ; ces règles d’étape restent à préciser avant d’automatiser un traitement post-résultat.
 
 ### Centralisation auxiliaire depuis les modules maison — à construire
 

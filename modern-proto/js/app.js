@@ -81,6 +81,7 @@
   var salesCentralizationSession = null;
   var centralizationCancellationSession = null;
   var consolidationBeforeResultSession = null;
+  var consolidationAfterResultSession = null;
   var launcherUi = { filter: 'all', query: '' };
   var DEMO_ORGANIZATION_ID = 'demo-org';
   var ACCOUNTING_ROUTES = ['dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings', 'menu'];
@@ -210,6 +211,7 @@
       case 'commit-centralization-cancellation':
         return { moduleId: 'accounting', actionId: 'centralization.cancel' };
       case 'export-accounting-consolidation-before-result':
+      case 'export-accounting-consolidation-after-result':
         return { moduleId: 'accounting', actionId: 'data.export' };
       case 'open-entry':
         return { moduleId: 'accounting', actionId: 'module.view' };
@@ -444,6 +446,7 @@
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'centralize-sales')) salesCentralizationSession = null;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'cancel-centralization')) centralizationCancellationSession = null;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'consolidate-before-result')) consolidationBeforeResultSession = null;
+    if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'consolidate-after-result')) consolidationAfterResultSession = null;
 
     var activeMember = getActiveDemoMember();
     var orgContext = demoAccessContext('organization');
@@ -3848,8 +3851,45 @@
     return '<div class="alert info"><div><strong>Centralisation auxiliaire depuis les modules maison uniquement.</strong><br>Ce parcours sera activé lorsque les modules PERFECTO de gestion des tiers et de leurs mouvements fourniront leurs données internes. Le format pivot CSV/Excel PERFECTO-AUXILIAIRE v1 est réservé à l’interopérabilité ; aucun fichier ni logiciel tiers ne peut alimenter cette centralisation.</div></div>';
   }
 
-  function ensureConsolidationBeforeResultSession() {
+  function consolidationStageOptions(stage) {
+    return stage === 'after'
+      ? {
+        key: 'after',
+        label: 'après résultat',
+        heading: 'Journal groupé après résultat',
+        statusTag: 'APRÈS RÉSULTAT',
+        description: 'Ce journal est destiné au regroupement consultatif après détermination du résultat. La version actuelle lit les écritures validées choisies par période et journal ; elle ne détecte pas automatiquement la pièce ou la date d’arrêté, ne calcule pas le résultat et ne génère ni affectation ni écriture de clôture.',
+        format: 'PERFECTO-CONSOLIDATION-APRES-RESULTAT',
+        filePart: 'apres-resultat',
+        exportAction: 'export-accounting-consolidation-after-result',
+        successMessage: 'Journal groupé après résultat exporté avec la provenance de chaque mouvement source.'
+      }
+      : {
+        key: 'before',
+        label: 'avant résultat',
+        heading: 'Journal groupé avant résultat',
+        statusTag: 'AVANT RÉSULTAT',
+        description: 'Synthèse de préparation avant détermination du résultat. Les écritures validées sont regroupées par compte ; cette vue ne calcule pas le résultat et ne crée aucune pièce.',
+        format: 'PERFECTO-CONSOLIDATION-AVANT-RESULTAT',
+        filePart: 'avant-resultat',
+        exportAction: 'export-accounting-consolidation-before-result',
+        successMessage: 'Journal groupé avant résultat exporté avec la provenance de chaque mouvement source.'
+      };
+  }
+
+  function ensureAccountingConsolidationSession(stage) {
     var dossier = S.currentDossier();
+    if (stage === 'after') {
+      if (!consolidationAfterResultSession || consolidationAfterResultSession.dossierId !== dossier.id) {
+        consolidationAfterResultSession = {
+          dossierId: dossier.id,
+          dateStart: dossier.cycleStart,
+          dateEnd: dossier.cycleEnd,
+          journalCode: ''
+        };
+      }
+      return consolidationAfterResultSession;
+    }
     if (!consolidationBeforeResultSession || consolidationBeforeResultSession.dossierId !== dossier.id) {
       consolidationBeforeResultSession = {
         dossierId: dossier.id,
@@ -3875,8 +3915,9 @@
     return details.length ? details.join(' · ') : 'Origine PERFECTO · pièce comptable source';
   }
 
-  function renderAccountingConsolidationPreview() {
-    var session = ensureConsolidationBeforeResultSession();
+  function renderAccountingConsolidationPreview(stage) {
+    var stageOptions = consolidationStageOptions(stage);
+    var session = ensureAccountingConsolidationSession(stageOptions.key);
     var dossier = S.currentDossier();
     var result = AccountingConsolidation.consolidate(S.entries(), {
       dateStart: session.dateStart,
@@ -3937,7 +3978,7 @@
       '<tfoot><tr><th colspan="2">Total du journal groupé</th><th class="text-right">' + esc(amount(result.totalDebit)) + '</th><th class="text-right">' + esc(amount(result.totalCredit)) + '</th><th colspan="2">' + (result.balanced ? 'Équilibré' : 'À contrôler') + '</th></tr></tfoot></table></div></div>';
     var actions = '<div class="exchange-preview-footer consolidation-actions">' +
       '<button type="button" class="btn btn-ghost" data-action="print">⎙ Imprimer</button>' +
-      '<button type="button" class="btn btn-primary" data-action="export-accounting-consolidation-before-result">↓ Exporter le détail CSV avec provenance</button>' +
+      '<button type="button" class="btn btn-primary" data-action="' + esc(stageOptions.exportAction) + '">↓ Exporter le détail CSV avec provenance</button>' +
       '</div>';
     return '<div class="exchange-preview consolidation-result">' + balanceAlert + summary + table + actions +
       '<p class="exchange-footnote">Dossier : ' + esc(dossier.reference) + ' · période : ' + esc(dateLabel(result.dateStart)) + ' au ' + esc(dateLabel(result.dateEnd)) +
@@ -3945,53 +3986,58 @@
       '. Aucun brouillon ni nouvelle écriture n’est ajouté au grand livre.</p></div>';
   }
 
-  function viewAccountingConsolidationBeforeResult() {
+  function viewAccountingConsolidation(stage) {
+    var stageOptions = consolidationStageOptions(stage);
+    var session = ensureAccountingConsolidationSession(stageOptions.key);
     var dossier = S.currentDossier();
-    var session = ensureConsolidationBeforeResultSession();
+    var prefix = 'consolidation-' + stageOptions.key + '-result';
     var journalOptions = '<option value="">Tous les journaux</option>' + S.journals().map(function (journal) {
       return '<option value="' + esc(journal.code) + '"' + (journal.code === session.journalCode ? ' selected' : '') + '>' + esc(journal.code + ' · ' + journal.label) + '</option>';
     }).join('');
     return '<div class="exchange-workspace consolidation-workspace">' +
-      '<section class="exchange-card consolidation-filter-card" aria-labelledby="consolidation-filter-heading">' +
-        '<p class="page-kicker">REGROUPEMENT COMPTABLE · LECTURE SEULE</p>' +
-        '<h4 id="consolidation-filter-heading">Journal groupé avant résultat</h4>' +
-        '<p>Synthèse des écritures validées du dossier, regroupées par compte général. La provenance de chaque ligne source reste consultable dans le journal et dans l’export détaillé.</p>' +
-        '<div class="alert info"><div><strong>Traitement non comptabilisant.</strong> Cette consolidation prépare une vue regroupée ; elle ne crée, ne modifie et ne valide aucune écriture dans le grand livre.</div></div>' +
-        '<form class="consolidation-filter-form" id="consolidation-before-result-form">' +
-          '<label class="field"><span>Date de début</span><input id="consolidation-date-start" type="date" value="' + esc(session.dateStart) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required /></label>' +
-          '<label class="field"><span>Date de fin</span><input id="consolidation-date-end" type="date" value="' + esc(session.dateEnd) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required /></label>' +
-          '<label class="field"><span>Journal source</span><select id="consolidation-journal">' + journalOptions + '</select></label>' +
+      '<section class="exchange-card consolidation-filter-card" aria-labelledby="' + prefix + '-heading">' +
+        '<p class="page-kicker">REGROUPEMENT COMPTABLE · ' + esc(stageOptions.statusTag) + ' · LECTURE SEULE</p>' +
+        '<h4 id="' + prefix + '-heading">' + esc(stageOptions.heading) + '</h4>' +
+        '<p>' + esc(stageOptions.description) + ' Chaque ligne source reste traçable dans le détail et dans l’export.</p>' +
+        '<div class="alert info"><div><strong>Traitement non comptabilisant.</strong> Les filtres portent sur les écritures validées de la période choisie. Le sous-menu ne crée, ne modifie et ne valide aucune écriture dans le grand livre.</div></div>' +
+        '<form class="consolidation-filter-form" id="' + prefix + '-form">' +
+          '<label class="field"><span>Date de début</span><input id="' + prefix + '-date-start" type="date" value="' + esc(session.dateStart) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required /></label>' +
+          '<label class="field"><span>Date de fin</span><input id="' + prefix + '-date-end" type="date" value="' + esc(session.dateEnd) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required /></label>' +
+          '<label class="field"><span>Journal source</span><select id="' + prefix + '-journal">' + journalOptions + '</select></label>' +
           '<button type="submit" class="btn btn-primary">Afficher le journal groupé</button>' +
         '</form>' +
       '</section>' +
-      '<div id="consolidation-before-result-output" aria-live="polite">' + renderAccountingConsolidationPreview() + '</div>' +
+      '<div id="' + prefix + '-output" aria-live="polite">' + renderAccountingConsolidationPreview(stageOptions.key) + '</div>' +
     '</div>';
   }
 
-  function bindAccountingConsolidationBeforeResult() {
-    var form = $('#consolidation-before-result-form');
+  function bindAccountingConsolidation(stage) {
+    var stageOptions = consolidationStageOptions(stage);
+    var prefix = 'consolidation-' + stageOptions.key + '-result';
+    var form = document.getElementById(prefix + '-form');
     if (!form) return;
     function updatePreview() {
-      var session = ensureConsolidationBeforeResultSession();
-      session.dateStart = ($('#consolidation-date-start') || {}).value || '';
-      session.dateEnd = ($('#consolidation-date-end') || {}).value || '';
-      session.journalCode = ($('#consolidation-journal') || {}).value || '';
-      var output = $('#consolidation-before-result-output');
-      if (output) output.innerHTML = renderAccountingConsolidationPreview();
+      var session = ensureAccountingConsolidationSession(stageOptions.key);
+      session.dateStart = (document.getElementById(prefix + '-date-start') || {}).value || '';
+      session.dateEnd = (document.getElementById(prefix + '-date-end') || {}).value || '';
+      session.journalCode = (document.getElementById(prefix + '-journal') || {}).value || '';
+      var output = document.getElementById(prefix + '-output');
+      if (output) output.innerHTML = renderAccountingConsolidationPreview(stageOptions.key);
       applyDemoActionGates(output);
     }
     form.addEventListener('submit', function (event) {
       event.preventDefault();
       updatePreview();
     });
-    ['consolidation-date-start', 'consolidation-date-end', 'consolidation-journal'].forEach(function (id) {
+    [prefix + '-date-start', prefix + '-date-end', prefix + '-journal'].forEach(function (id) {
       var input = document.getElementById(id);
       if (input) input.addEventListener('change', updatePreview);
     });
   }
 
-  function exportAccountingConsolidationBeforeResult() {
-    var session = ensureConsolidationBeforeResultSession();
+  function exportAccountingConsolidation(stage) {
+    var stageOptions = consolidationStageOptions(stage);
+    var session = ensureAccountingConsolidationSession(stageOptions.key);
     var dossier = S.currentDossier();
     var result = AccountingConsolidation.consolidate(S.entries(), {
       dateStart: session.dateStart,
@@ -4006,7 +4052,7 @@
       return;
     }
     var rows = [
-      ['PERFECTO-CONSOLIDATION-AVANT-RESULTAT', '1'],
+      [stageOptions.format, '1'],
       ['DOSSIER', dossier.reference],
       ['EXERCICE', S.exercise()],
       ['DATE_DEBUT', result.dateStart],
@@ -4038,10 +4084,17 @@
       });
     });
     rows.push([], ['TOTAL_JOURNAL_GROUPE', '', '', '', '', '', '', '', result.totalDebit, result.totalCredit]);
-    var fileName = 'perfecto-' + safeFilePart(dossier.reference) + '-consolidation-avant-resultat-' + result.dateStart + '-' + result.dateEnd + '.csv';
+    var fileName = 'perfecto-' + safeFilePart(dossier.reference) + '-consolidation-' + stageOptions.filePart + '-' + result.dateStart + '-' + result.dateEnd + '.csv';
     downloadFile(fileName, toCsv(rows), 'text/csv;charset=utf-8');
-    toast('Journal groupé exporté avec la provenance de chaque mouvement source.', 'success');
+    toast(stageOptions.successMessage, 'success');
   }
+
+  function viewAccountingConsolidationBeforeResult() { return viewAccountingConsolidation('before'); }
+  function viewAccountingConsolidationAfterResult() { return viewAccountingConsolidation('after'); }
+  function bindAccountingConsolidationBeforeResult() { bindAccountingConsolidation('before'); }
+  function bindAccountingConsolidationAfterResult() { bindAccountingConsolidation('after'); }
+  function exportAccountingConsolidationBeforeResult() { exportAccountingConsolidation('before'); }
+  function exportAccountingConsolidationAfterResult() { exportAccountingConsolidation('after'); }
 
   function viewAccountingMenu(params) {
     params = params || {};
@@ -4092,6 +4145,7 @@
         case 'centralize-sales': exchangeFeature = viewAccountingSalesCentralization(); break;
         case 'cancel-centralization': exchangeFeature = viewAccountingCentralizationCancellation(); break;
         case 'consolidate-before-result': exchangeFeature = viewAccountingConsolidationBeforeResult(); break;
+        case 'consolidate-after-result': exchangeFeature = viewAccountingConsolidationAfterResult(); break;
         default: break;
       }
     }
@@ -4142,6 +4196,7 @@
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-sales') bindSalesCentralization();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'cancel-centralization') bindCentralizationCancellation();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'consolidate-before-result') bindAccountingConsolidationBeforeResult();
+      if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'consolidate-after-result') bindAccountingConsolidationAfterResult();
       return;
     }
 
@@ -4583,6 +4638,9 @@
         break;
       case 'export-accounting-consolidation-before-result':
         exportAccountingConsolidationBeforeResult();
+        break;
+      case 'export-accounting-consolidation-after-result':
+        exportAccountingConsolidationAfterResult();
         break;
       case 'export-accounting-workbook': {
         var workbookDossier = S.currentDossier();
