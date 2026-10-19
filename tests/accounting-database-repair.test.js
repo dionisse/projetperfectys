@@ -16,6 +16,7 @@ function createStore(values = new Map()) {
   const sandbox = { window: { localStorage }, Intl, JSON, Date, Math, String, Number, Object, Array };
   vm.createContext(sandbox);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'accounting-database-repair.js'), 'utf8'), sandbox, { filename: 'accounting-database-repair.js' });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'accounting-chart.js'), 'utf8'), sandbox, { filename: 'accounting-chart.js' });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'store.js'), 'utf8'), sandbox, { filename: 'store.js' });
   return { store: sandbox.window.PerfectoStore, values };
 }

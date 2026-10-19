@@ -26,8 +26,8 @@ assert.equal(PayrollHR.createDemoRun(dossier, '2026-07').ok, false, 'un exemple 
 assert.equal(PayrollHR.createDemoRun(dossier, '2025-12').ok, false, 'une période hors cycle est refusée');
 
 const unbalanced = PayrollHR.validateAccountingLines([
-  { accountCode: '641000', accountLabel: 'Salaires', debit: 100, credit: 0 },
-  { accountCode: '421000', accountLabel: 'Net à payer', debit: 0, credit: 99 }
+  { accountCode: '641', accountLabel: 'Salaires', debit: 100, credit: 0 },
+  { accountCode: '421', accountLabel: 'Personnel, rémunérations dues', debit: 0, credit: 99 }
 ], true);
 assert.equal(unbalanced.ok, false);
 assert.ok(unbalanced.errors.some(error => error.includes('n’est pas équilibré')));

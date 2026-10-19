@@ -67,11 +67,11 @@
   };
 
   var ui = {
-    accounts: { q: '', cls: '', nature: '' },
+    accounts: { q: '', cls: '', nature: '', status: 'standard' },
     entries: { q: '', status: '', journal: '' },
     balance: { cls: '', q: '' },
     journal: { journal: '', year: String(S.exercise()) },
-    ledger: { account: '521100' },
+    ledger: { account: '521' },
     periods: { year: S.exercise() }
   };
 
@@ -1250,6 +1250,12 @@
     });
   }
 
+  function postingAccounts() {
+    return S.accounts().filter(function (account) {
+      return account.active !== false && account.postable !== false;
+    });
+  }
+
   function accountOptions(selected) {
     var groups = {
       1: 'Classe 1 — Ressources durables',
@@ -1263,9 +1269,10 @@
     };
     var html = '<option value="">— Choisir un compte —</option>';
     Object.keys(groups).forEach(function (cls) {
-      var opts = S.accounts().filter(function (a) { return a.cls === Number(cls); }).map(function (a) {
+      var opts = postingAccounts().filter(function (a) { return a.cls === Number(cls); }).map(function (a) {
+        var historical = a.legacy ? ' · historique' : '';
         return '<option value="' + esc(a.code) + '"' + (a.code === selected ? ' selected' : '') + '>' +
-          esc(a.code) + ' — ' + esc(a.label) + '</option>';
+          esc(a.code + ' — ' + a.label + historical) + '</option>';
       }).join('');
       if (opts) html += '<optgroup label="' + groups[cls] + '">' + opts + '</optgroup>';
     });
@@ -1435,55 +1442,70 @@
   /* ----------------------------- Plan comptable ---------------------------- */
   function viewAccounts() {
     var filter = ui.accounts;
+    var allAccounts = S.accounts();
     var bal = balanceRows();
-    var list = S.accounts().filter(function (a) {
-      var text = (a.code + ' ' + a.label).toLowerCase();
+    var legacyCount = allAccounts.filter(function (account) { return account.legacy; }).length;
+    var standardCount = allAccounts.filter(function (account) { return !account.legacy; }).length;
+    var list = allAccounts.filter(function (a) {
+      if (filter.status !== 'all' && (a.legacy || a.active === false)) return false;
+      var text = [a.code, a.label, a.classLabel, a.subclass, a.subclassLabel, a.usage, a.nature].join(' ').toLowerCase();
       if (filter.q && text.indexOf(filter.q.toLowerCase()) === -1) return false;
       if (filter.cls && String(a.cls) !== filter.cls) return false;
       if (filter.nature && a.nature !== filter.nature) return false;
       return true;
     });
 
-    var html = pageHeader('Plan comptable', 'Comptes du référentiel SYSCOHADA révisé, enrichis au fil des besoins.',
+    var html = pageHeader('Plan comptable', 'Référentiel complet de 147 comptes fourni, classé par classe et sous-classe. Les comptes historiques restent conservés sans réécriture des pièces.',
       '<button type="button" class="btn btn-ghost" data-action="export-accounts-csv">↓ Export CSV</button>' +
       '<button type="button" class="btn btn-primary" data-action="new-account">＋ Nouveau compte</button>');
 
     html += '<div class="card"><div class="panel">' +
       '<div class="filter-row">' +
         '<div class="field grow"><label for="f-accounts-q">Rechercher</label>' +
-          '<input id="f-accounts-q" type="search" data-filter="accounts:q" value="' + esc(filter.q) + '" placeholder="Code ou intitulé…"></div>' +
+          '<input id="f-accounts-q" type="search" data-filter="accounts:q" value="' + esc(filter.q) + '" placeholder="Code, intitulé, sous-classe ou utilisation…"></div>' +
         '<div class="field"><label for="f-accounts-cls">Classe</label><select id="f-accounts-cls" data-filter="accounts:cls">' +
           '<option value="">Toutes</option>' +
           [1, 2, 3, 4, 5, 6, 7, 8].map(function (c) {
-            return '<option value="' + c + '"' + (filter.cls === String(c) ? ' selected' : '') + '>Classe ' + c + '</option>';
+            var label = window.PerfectoAccountingChart ? window.PerfectoAccountingChart.classLabel(c) : ('Classe ' + c);
+            return '<option value="' + c + '"' + (filter.cls === String(c) ? ' selected' : '') + '>Classe ' + c + ' — ' + esc(label) + '</option>';
           }).join('') +
         '</select></div>' +
-        '<div class="field"><label for="f-accounts-nature">Nature</label><select id="f-accounts-nature" data-filter="accounts:nature">' +
+        '<div class="field"><label for="f-accounts-nature">Nature comptable</label><select id="f-accounts-nature" data-filter="accounts:nature">' +
           '<option value="">Toutes</option>' +
-          ['Actif', 'Passif', 'Charge', 'Produit'].map(function (n) {
-            return '<option value="' + n + '"' + (filter.nature === n ? ' selected' : '') + '>' + n + '</option>';
+          ['Actif', 'Passif', 'Charge', 'Produit', 'SIG', 'Hors bilan'].map(function (n) {
+            return '<option value="' + esc(n) + '"' + (filter.nature === n ? ' selected' : '') + '>' + esc(n) + '</option>';
           }).join('') +
+        '</select></div>' +
+        '<div class="field"><label for="f-accounts-status">Référentiel</label><select id="f-accounts-status" data-filter="accounts:status">' +
+          '<option value="standard"' + (filter.status !== 'all' ? ' selected' : '') + '>Plan fourni et comptes personnalisés</option>' +
+          '<option value="all"' + (filter.status === 'all' ? ' selected' : '') + '>Inclure aussi les comptes historiques</option>' +
         '</select></div>' +
       '</div>' +
-      '<p class="small muted" style="margin-bottom:10px">' + list.length + ' compte(s) affiché(s) sur ' + S.accounts().length + '.</p>' +
-      '<div class="table-wrap"><table class="data-table">' +
-        '<caption>Plan comptable — comptes actifs et soldes issus des pièces validées</caption>' +
-        '<thead><tr><th scope="col">Code</th><th scope="col">Intitulé</th><th scope="col">Classe</th><th scope="col">Nature</th>' +
+      '<p class="small muted account-chart-summary" style="margin-bottom:10px">' + list.length + ' compte(s) affiché(s). Plan source : ' + standardCount + ' compte(s) standard et personnalisé(s) ; ' + legacyCount + ' compte(s) de compatibilité conservé(s)' + (filter.status === 'all' ? '.' : ' (masqués par défaut).') + '</p>' +
+      '<div class="table-wrap"><table class="data-table account-chart-table">' +
+        '<caption>Plan comptable — codes, libellés, classe, sous-classe, utilisation et soldes des écritures validées</caption>' +
+        '<thead><tr><th scope="col">Numéro</th><th scope="col">Libellé</th><th scope="col">Classe</th><th scope="col">Sous-classe</th><th scope="col">Nature / utilisation</th><th scope="col">Type comptable</th><th scope="col">Imputation</th>' +
         '<th scope="col">Auxiliaire</th><th scope="col" class="num">Débit</th><th scope="col" class="num">Crédit</th><th scope="col" class="num">Solde</th></tr></thead><tbody>' +
         (list.length ? list.map(function (a) {
           var row = bal[a.code] || { debit: 0, credit: 0 };
           var solde = row.debit - row.credit;
+          var imputation = a.legacy
+            ? '<span class="badge plain">Historique</span>'
+            : (a.postable === false ? '<span class="badge plain">Rubrique / indicateur</span>' : '<span class="badge open">Imputable</span>');
           return '<tr>' +
             '<td><span class="code-chip">' + esc(a.code) + '</span></td>' +
-            '<td class="strong">' + esc(a.label) + '</td>' +
-            '<td>' + a.cls + '</td>' +
+            '<td class="strong">' + esc(a.label || '—') + '</td>' +
+            '<td>' + esc(a.cls + ' — ' + (a.classLabel || ('Classe ' + a.cls))) + '</td>' +
+            '<td>' + esc((a.subclass || String(a.code).slice(0, 2)) + ' — ' + (a.subclassLabel || 'Compte personnalisé')) + '</td>' +
+            '<td class="account-usage">' + esc(a.usage || '—') + '</td>' +
             '<td>' + natureBadge(a.nature) + '</td>' +
+            '<td>' + imputation + '</td>' +
             '<td>' + (a.aux ? '<span class="badge plain">Oui</span>' : '<span class="muted">—</span>') + '</td>' +
             '<td class="num">' + (row.debit ? amount(row.debit) : '—') + '</td>' +
             '<td class="num">' + (row.credit ? amount(row.credit) : '—') + '</td>' +
             '<td class="num strong">' + (solde === 0 ? '—' : amount(Math.abs(solde)) + (solde > 0 ? ' D' : ' C')) + '</td>' +
           '</tr>';
-        }).join('') : '<tr><td colspan="8"><div class="empty-state"><strong>Aucun compte ne correspond</strong>Modifiez la recherche ou les filtres.</div></td></tr>') +
+        }).join('') : '<tr><td colspan="11"><div class="empty-state"><strong>Aucun compte ne correspond</strong>Modifiez la recherche ou les filtres.</div></td></tr>') +
         '</tbody></table></div>' +
       '</div></div>';
 
@@ -2238,7 +2260,7 @@
     });
     var codes = Object.keys(catalog).sort(function (a, b) { return a.localeCompare(b); });
     if (!codes.length) return '';
-    var targetOptions = isAccount ? S.accounts() : S.journals();
+    var targetOptions = isAccount ? postingAccounts() : S.journals();
     var label = isAccount ? 'comptes' : 'journaux';
     var hasUnmapped = codes.some(function (code) { return !sourceMap[code]; });
     return '<details class="exchange-mapping"' + (hasUnmapped ? ' open' : '') + '><summary>Correspondance des ' + label + ' (' + codes.length + ' codes source)</summary>' +
@@ -2451,7 +2473,7 @@
     });
     var codes = Object.keys(catalog).sort(function (a, b) { return a.localeCompare(b); });
     if (!codes.length) return '';
-    var accounts = S.accounts();
+    var accounts = postingAccounts();
     var hasUnmapped = codes.some(function (code) { return !session.accountMap[code]; });
     return '<details class="exchange-mapping"' + (hasUnmapped ? ' open' : '') + '><summary>Correspondance des comptes (' + codes.length + ' codes source)</summary>' +
       '<p class="small muted">Associez chaque compte source au plan comptable PERFECTO. Les comptes inconnus ne seront pas créés et plusieurs comptes ne sont associés qu’après votre choix explicite.</p>' +
@@ -2896,7 +2918,7 @@
       if (!catalog[code]) catalog[code] = { label: line.accountLabel || '' };
     });
     var codes = Object.keys(catalog).sort(function (a, b) { return a.localeCompare(b); });
-    var accounts = S.accounts();
+    var accounts = postingAccounts();
     return '<details class="exchange-mapping"' + (codes.some(function (code) { return !session.accountMap[code]; }) ? ' open' : '') + '><summary>Correspondance des comptes du journal interne (' + codes.length + ' codes)</summary>' +
       '<p class="small muted">Les comptes sont proposés par Paie & RH. Associez chaque compte source à un compte existant du plan du dossier ; aucun compte ne sera créé.</p>' +
       '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Compte source Paie & RH</th><th>Libellé source</th><th>Compte cible</th></tr></thead><tbody>' +
@@ -3243,7 +3265,7 @@
       if (!catalog[code]) catalog[code] = { label: line.accountLabel || '' };
     });
     var codes = Object.keys(catalog).sort(function (a, b) { return a.localeCompare(b); });
-    var accounts = S.accounts();
+    var accounts = postingAccounts();
     return '<details class="exchange-mapping"' + (codes.some(function (code) { return !session.accountMap[code]; }) ? ' open' : '') + '><summary>Correspondance des comptes du journal interne (' + codes.length + ' codes)</summary>' +
       '<p class="small muted">Les comptes sont produits par Ventes, stock & facturation. Associez chaque compte source à un compte existant du plan du dossier ; aucun compte ne sera créé.</p>' +
       '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Compte source</th><th>Libellé source</th><th>Compte cible</th></tr></thead><tbody>' +
@@ -5029,12 +5051,9 @@
         toast('Export JSON généré.', 'success');
         break;
       case 'export-accounts-csv': {
-        var rows = [['Code', 'Intitulé', 'Classe', 'Nature', 'Auxiliaire', 'Actif']];
-        S.accounts().forEach(function (a) {
-          rows.push([a.code, a.label, a.cls, a.nature, a.aux ? 'Oui' : 'Non', a.active ? 'Oui' : 'Non']);
-        });
-        downloadFile('perfecto-plan-comptable.csv', toCsv(rows), 'text/csv;charset=utf-8');
-        toast('Plan comptable exporté.', 'success');
+        var chartDossier = S.currentDossier();
+        downloadFile('perfecto-' + safeFilePart(chartDossier.reference) + '-plan-comptable.csv', AccountingExchange.exportAccounts(S.accounts()), 'text/csv;charset=utf-8');
+        toast('Plan comptable complet exporté avec classes, sous-classes et utilisations.', 'success');
         break;
       }
       case 'export-balance-csv': {
@@ -5095,6 +5114,8 @@
           '</select></div>' +
         '<div class="field"><label for="a-aux">Compte auxiliaire requis</label>' +
           '<select id="a-aux" name="aux"><option value="no">Non</option><option value="yes">Oui</option></select></div>' +
+        '<div class="field" style="grid-column:1 / -1"><label for="a-usage">Nature / utilisation</label>' +
+          '<textarea id="a-usage" name="usage" rows="2" placeholder="Rôle ou utilisation du compte dans le dossier"></textarea></div>' +
       '</div>' +
     '</form>';
 
@@ -5114,6 +5135,7 @@
         code: $('#a-code').value,
         label: $('#a-label').value,
         nature: $('#a-nature').value,
+        usage: $('#a-usage').value,
         aux: $('#a-aux').value === 'yes'
       });
       if (!result.ok) {

@@ -2531,3 +2531,21 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
   .exchange-mapping-table { min-width: 570px; }
   .exchange-preview-footer .btn { width: 100%; justify-content: center; }
 }
+
+/* Référentiel complet des comptes généraux */
+.account-chart-summary {
+  padding: 10px 12px;
+  border-left: 3px solid var(--primary);
+  border-radius: 5px;
+  background: var(--card-soft);
+  line-height: 1.5;
+}
+.account-chart-table { min-width: 1500px; }
+.account-chart-table .account-usage {
+  min-width: 280px;
+  max-width: 390px;
+  white-space: normal;
+  line-height: 1.45;
+  color: var(--muted);
+  font-size: .8rem;
+}

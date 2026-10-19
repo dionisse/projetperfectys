@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
+const STANDARD_ACCOUNT_COUNT = require('../modern-proto/js/accounting-chart.js').accountCount();
 
 const values = new Map();
 const localStorage = {
@@ -17,6 +18,7 @@ function loadStore() {
   const sandbox = { window: {}, localStorage, Intl, JSON, Date, Math, String, Number, Object, Array };
   sandbox.window.localStorage = localStorage;
   vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'accounting-chart.js'), 'utf8'), sandbox, { filename: 'accounting-chart.js' });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'store.js'), 'utf8'), sandbox, { filename: 'store.js' });
   return sandbox.window.PerfectoStore;
 }
@@ -106,19 +108,19 @@ const switched = store.switchDossier(created.dossier.id);
 assert.equal(switched.ok, true);
 assert.equal(store.currentDossier().name, 'Cabinet Godwin');
 assert.equal(store.entries().length, 0, 'un nouveau dossier est vide, sans recopier les écritures du principal');
-assert.equal(store.accounts().length, 18, 'le plan SYSCOHADA de départ reste disponible');
+assert.equal(store.accounts().length, STANDARD_ACCOUNT_COUNT, 'le plan complet est disponible dans un nouveau dossier');
 assert.equal(store.exercise(), 2026);
 assert.equal(store.periodStats(2026).length, 12, 'le cycle juillet 2026 — juin 2027 contient ses 12 périodes civiles');
 assert.equal(store.periodStats(2027).length, 0, 'la liste de périodes est rattachée à l’exercice sélectionné');
 const outsideCycle = store.validateEntry({
   reference: 'OD-2026-OUT', journal: 'OD', date: '2026-06-30', description: 'Hors cycle',
-  lines: [{ account: '601100', debit: 1000, credit: 0 }, { account: '401100', debit: 0, credit: 1000 }]
+  lines: [{ account: '601', debit: 1000, credit: 0 }, { account: '401', debit: 0, credit: 1000 }]
 }, { requireBalanced: true, status: 'posted' });
 assert.equal(outsideCycle.ok, false, 'les écritures avant le début du cycle sont refusées');
 assert(outsideCycle.errors.some(error => error.includes('cycle du dossier')));
 const entry = store.createEntry({
   reference: 'OD-2027-001', journal: 'OD', date: '2027-01-15', description: 'Cabinet Godwin',
-  lines: [{ account: '601100', debit: 1000, credit: 0 }, { account: '401100', debit: 0, credit: 1000 }]
+  lines: [{ account: '601', debit: 1000, credit: 0 }, { account: '401', debit: 0, credit: 1000 }]
 }, 'posted');
 assert.equal(entry.ok, true, 'une période du cycle peut se situer dans l’année civile suivante');
 assert.equal(store.entries().length, 1);
@@ -133,9 +135,9 @@ assert.equal(store.entries().length, 4, 'le changement de dossier restaure les d
 assert.equal(store.backupInfo().available, false, 'les points de restauration sont isolés par dossier');
 assert.equal(store.switchDossier(created.dossier.id).ok, true);
 assert.equal(store.entries().length, 1, 'les écritures restent persistées dans leur propre dossier');
-assert.equal(store.accounts().length, 19);
+assert.equal(store.accounts().length, STANDARD_ACCOUNT_COUNT + 1);
 assert.equal(store.restoreBackup().ok, true);
-assert.equal(store.accounts().length, 18, 'la restauration remplace uniquement les données du dossier actif');
+assert.equal(store.accounts().length, STANDARD_ACCOUNT_COUNT, 'la restauration remplace uniquement les données du dossier actif');
 assert.equal(store.entries().length, 1);
 
 store = loadStore();
@@ -146,6 +148,6 @@ assert.equal(store.currentDossier().rccm, 'RB/COT/26 A 12345');
 assert.equal(store.currentDossier().email, 'contact@godwin.bj');
 assert.equal(store.currentDossier().phone, '+229 01 02 03 04');
 assert.equal(store.entries().length, 1, 'les données du dossier survivent au rechargement');
-assert.equal(store.accounts().length, 18);
+assert.equal(store.accounts().length, STANDARD_ACCOUNT_COUNT);
 assert.deepEqual(store.dossiers().map(dossier => dossier.name), ['Entreprise de démonstration', 'Cabinet Godwin', 'Dossier, autre']);
 console.log('Dossiers clients : migration, référence, cycle et isolation — OK');

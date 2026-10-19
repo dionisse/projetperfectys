@@ -23,7 +23,7 @@
     },
     {
       id: 'definitions', label: 'Définitions', icon: '▧', defaultTab: 'general-accounts', tabs: [
-        { id: 'general-accounts', label: 'Comptes généraux', status: 'active', reason: 'Plan comptable SYSCOHADA actuellement disponible.', actions: [{ label: 'Ouvrir le plan comptable', route: 'accounts' }] },
+        { id: 'general-accounts', label: 'Comptes généraux', status: 'active', reason: 'Plan complet des 147 comptes fournis, classés par classe et sous-classe ; les comptes historiques sont conservés pour compatibilité.', actions: [{ label: 'Ouvrir le plan comptable', route: 'accounts' }] },
         { id: 'suppliers', label: 'Fournisseurs', status: 'planned', reason: 'Comptabilité auxiliaire générale à construire.' },
         { id: 'clients', label: 'Clients', status: 'planned', reason: 'Comptabilité auxiliaire générale à construire.' },
         { id: 'personnel', label: 'Personnel', status: 'planned', reason: 'Comptes et auxiliaires du personnel à construire dans le périmètre général.' },

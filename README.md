@@ -38,7 +38,7 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 | Organisation & accès (démo) | Profils temporaires et droits explicites par personne, module, entreprise cliente, dossier et action ; refus par défaut |
 | Dossiers clients | Liste multi-dossiers ouverte depuis le module Comptabilité ; création d’entreprise, code, type comptable, référence et cycle paramétrable |
 | Tableau de bord | Indicateurs (débit, crédit, résultat, pièces), dernières pièces, activité par journal, état des périodes |
-| Plan comptable | 18 comptes SYSCOHADA initiaux, recherche, filtres, création de compte, export CSV |
+| Plan comptable | Référentiel complet de 147 comptes fourni, classes et sous-classes, descriptions d’usage, recherche/filtres, comptes personnalisés et export CSV enrichi ; comptes historiques conservés sans réécriture des pièces |
 | Journaux | Six journaux (AC, VE, BQ, CA, OD, PA) avec totaux et brouillons |
 | Saisie d'écriture | Saisie multiligne, contrôle d'équilibre en direct, référence auto, brouillon ou validation |
 | Pièces comptables | Liste filtrable, détail en modale, validation, modification et suppression des brouillons |
@@ -157,11 +157,11 @@ Un dossier désigne une entreprise cliente enregistrée pour traitement. Le modu
 
 La navigation comptable présente les huit rubriques demandées à gauche, avec les sous-menus en onglets verticaux et les éléments de niveau inférieur en listes. Une fonction disponible ouvre le parcours existant ; une fonction générale non développée porte l’état « À construire » ; les fonctions analytiques, dépendantes d’autres modules ou à confirmer restent inactives et n’exécutent aucun traitement. La Comptabilité analytique demeure un module séparé. Sur téléphone, l’accès est limité à la consultation des éditions (balance, journal et grand livre) ; la saisie et la création de dossiers se font sur ordinateur ou tablette.
 
-Chaque dossier a des données comptables isolées dans le navigateur. Le jeu historique principal et ses écritures sont conservés ; tout nouveau dossier démarre sans recopier ces écritures, avec le référentiel comptable initial. Le moteur garde les périodes mensuelles dans les bornes du cycle et refuse les nouvelles écritures hors cycle. Les cycles non calendaires sont pris en charge ; cette version limite un cycle à 18 mois. Le registre de dossiers migre les métadonnées héritées tout en conservant les anciennes clés et données comptables. Cette simulation reste côté client : elle n’est ni une sécurité réelle ni une authentification, ne se synchronise pas avec Google Drive et ne prend pas en charge l’écriture simultanée multi-utilisateur.
+Chaque dossier a des données comptables isolées dans le navigateur. Le jeu historique principal et ses écritures sont conservés ; une migration protégée ajoute le référentiel de 147 comptes à chaque dossier existant, en conservant les anciens comptes comme comptes de compatibilité et sans modifier les écritures validées. Tout nouveau dossier démarre sans recopier les écritures historiques, avec le référentiel complet. Le moteur garde les périodes mensuelles dans les bornes du cycle et refuse les nouvelles écritures hors cycle. Les cycles non calendaires sont pris en charge ; cette version limite un cycle à 18 mois. Le registre de dossiers migre les métadonnées héritées tout en conservant les anciennes clés et données comptables. Cette simulation reste côté client : elle n’est ni une sécurité réelle ni une authentification, ne se synchronise pas avec Google Drive et ne prend pas en charge l’écriture simultanée multi-utilisateur.
 
 ### Données de démonstration
 
-Le dossier principal conserve les 18 comptes, 6 journaux, 3 pièces validées et 1 brouillon historiques. Les mouvements validés sont équilibrés à **2 832 000 XOF** au débit comme au crédit ; le résultat de démonstration est de **242 000 XOF**. Le registre des dossiers clients et chaque jeu comptable sont persistés dans `localStorage`. Chaque nouveau dossier reçoit le plan de comptes, les journaux et les périodes de son cycle, sans écritures recopiées. Les profils et leurs grants de démonstration restent temporaires et ne survivent pas au rechargement.
+Le dossier principal conserve ses 18 comptes de démonstration historiques en plus des 147 comptes du référentiel fourni, 6 journaux, 3 pièces validées et 1 brouillon. Les comptes historiques restent identifiables et utilisables pour assurer la continuité ; aucune référence ni aucun montant des pièces validées n’est réécrit. Les mouvements validés restent équilibrés à **2 832 000 XOF** au débit comme au crédit ; le résultat de démonstration reste de **242 000 XOF**. Le registre des dossiers clients et chaque jeu comptable sont persistés dans `localStorage`. Chaque nouveau dossier reçoit le plan de comptes, les journaux et les périodes de son cycle, sans écritures recopiées. Les profils et leurs grants de démonstration restent temporaires et ne survivent pas au rechargement.
 
 ## Lancer en local
 
@@ -214,7 +214,8 @@ lui-même.
 index.html                    redirection vers modern-proto/ (déploiement racine)
 modern-proto/index.html        coquille de l'application (navigation, topbar)
 modern-proto/css/modern.css    identité GOBEX (papier, encre, vert canard et or doux), responsive et imprimable
-modern-proto/js/store.js       dossiers clients, cycles, données isolées, règles métier, calculs, import/export
+modern-proto/js/accounting-chart.js référentiel de 147 comptes et de leurs classes, sous-classes et utilisations
+modern-proto/js/store.js       dossiers clients, cycles, migration du plan comptable, données isolées, règles métier, calculs, import/export
 modern-proto/js/modules.js     catalogue déclaratif des modules du launcher
 modern-proto/js/permissions.js politique d’accès démo (refus par défaut)
 modern-proto/js/accounting-navigation.js  menus, sous-menus et états d’activation du Lot 1

@@ -31,8 +31,8 @@ assert.equal(lineCheck.ok, true);
 assert.equal(lineCheck.debit, 1800000);
 assert.equal(lineCheck.credit, 1800000);
 const unbalanced = Operations.validateAccountingLines([
-  { accountCode: '411100', accountLabel: 'Clients', debit: 100, credit: 0 },
-  { accountCode: '701000', accountLabel: 'Ventes', debit: 0, credit: 99 }
+  { accountCode: '411', accountLabel: 'Clients', debit: 100, credit: 0 },
+  { accountCode: '701', accountLabel: 'Ventes', debit: 0, credit: 99 }
 ], true);
 assert.equal(unbalanced.ok, false);
 assert.ok(unbalanced.errors.some(error => error.includes('n’est pas équilibré')));

@@ -147,9 +147,9 @@
       employeeCount: 3,
       totals: { grossPay: 750000, deductions: 75000, netPay: 675000 },
       accountingLines: [
-        { accountCode: '641000', accountLabel: 'Rémunérations du personnel', description: 'Rémunérations brutes · exemple', debit: 750000, credit: 0 },
-        { accountCode: '421000', accountLabel: 'Personnel — rémunérations dues', description: 'Net à payer · exemple', debit: 0, credit: 675000 },
-        { accountCode: '431100', accountLabel: 'Sécurité sociale', description: 'Retenues sociales · exemple', debit: 0, credit: 75000 }
+        { accountCode: '641', accountLabel: 'Rémunérations du personnel', description: 'Rémunérations brutes · exemple', debit: 750000, credit: 0 },
+        { accountCode: '421', accountLabel: 'Personnel, rémunérations dues', description: 'Net à payer · exemple', debit: 0, credit: 675000 },
+        { accountCode: '431', accountLabel: 'Organismes sociaux', description: 'Retenues sociales · exemple', debit: 0, credit: 75000 }
       ],
       origin: 'demo',
       calculationNote: 'Montants fictifs de démonstration : aucun calcul de paie, de cotisation ou de retenue légale n’est effectué.',

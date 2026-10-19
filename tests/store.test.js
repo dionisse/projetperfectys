@@ -35,12 +35,18 @@ sandbox.window.localStorage = sandbox.localStorage;
 sandbox.global = sandbox;
 vm.createContext(sandbox);
 vm.runInContext(
+  fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'accounting-chart.js'), 'utf8'),
+  sandbox,
+  { filename: 'accounting-chart.js' }
+);
+vm.runInContext(
   fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'store.js'), 'utf8'),
   sandbox,
   { filename: 'store.js' }
 );
 
 const S = sandbox.window.PerfectoStore;
+const STANDARD_ACCOUNT_COUNT = sandbox.window.PerfectoAccountingChart.accountCount();
 let passed = 0;
 
 function test(name, fn) {
@@ -56,11 +62,28 @@ function test(name, fn) {
 }
 
 console.log('Référentiel de démonstration');
-test('18 comptes, 6 journaux, 3 pièces validées et 1 brouillon', () => {
-  assert.strictEqual(S.accounts().length, 18);
+test('147 comptes standards, 18 comptes historiques de compatibilité, 6 journaux et 4 pièces', () => {
+  assert.strictEqual(STANDARD_ACCOUNT_COUNT, 147);
+  assert.strictEqual(S.accounts().length, STANDARD_ACCOUNT_COUNT + 18);
   assert.strictEqual(S.journals().length, 6);
   assert.strictEqual(S.postedEntries().length, 3);
   assert.strictEqual(S.entries().filter((e) => e.status === 'draft').length, 1);
+});
+
+test('les codes du plan fourni sont imputables ou regroupés selon leur nature', () => {
+  assert.equal(S.account('101').subclass, '10');
+  assert.equal(S.account('601').usage.length > 0, true);
+  const group = S.validateEntry({
+    reference: 'OD-2026-GROUPE', journal: 'OD', date: '2026-03-01',
+    lines: [{ account: '10', debit: 100, credit: 0 }, { account: '401', debit: 0, credit: 100 }]
+  }, { requireBalanced: true, status: 'posted' });
+  assert.equal(group.ok, false);
+  assert.ok(group.errors.some((message) => message.includes('non imputable')));
+  const leaf = S.validateEntry({
+    reference: 'OD-2026-PLAN', journal: 'OD', date: '2026-03-01',
+    lines: [{ account: '601', debit: 100, credit: 0 }, { account: '401', debit: 0, credit: 100 }]
+  }, { requireBalanced: true, status: 'posted' });
+  assert.equal(leaf.ok, true, leaf.errors.join(' '));
 });
 
 test('mouvements validés équilibrés à 2 832 000 XOF', () => {
@@ -215,7 +238,7 @@ console.log('Plan comptable et sauvegarde');
 test('ajout de compte avec code unique', () => {
   const added = S.addAccount({ code: '601200', label: 'Achats de matières premières', nature: 'Charge' });
   assert.strictEqual(added.ok, true, added.errors.join(' '));
-  assert.strictEqual(S.accounts().length, 19);
+  assert.strictEqual(S.accounts().length, STANDARD_ACCOUNT_COUNT + 19);
   const duplicate = S.addAccount({ code: '601200', label: 'Doublon', nature: 'Charge' });
   assert.strictEqual(duplicate.ok, false);
 });

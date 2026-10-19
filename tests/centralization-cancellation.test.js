@@ -10,6 +10,7 @@ global.localStorage = {
 };
 
 global.window = global;
+require('../modern-proto/js/accounting-chart.js');
 require('../modern-proto/js/store.js');
 const Store = global.PerfectoStore;
 const Cancellation = require('../modern-proto/js/centralization-cancellation.js');

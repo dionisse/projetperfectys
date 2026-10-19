@@ -656,15 +656,20 @@
   }
 
   function exportAccounts(accounts) {
-    var headers = ['CODE_COMPTE', 'LIBELLE_COMPTE', 'CLASSE_COMPTE', 'NATURE_COMPTE', 'AUXILIAIRE', 'ACTIF'];
+    var headers = ['CODE_COMPTE', 'LIBELLE_COMPTE', 'CLASSE_COMPTE', 'SOUS_CLASSE', 'LIBELLE_SOUS_CLASSE', 'NATURE_COMPTE', 'UTILISATION', 'AUXILIAIRE', 'IMPUTABLE', 'ACTIF', 'COMPTE_HISTORIQUE'];
     var rows = (accounts || []).slice().sort(function (a, b) { return String(a.code).localeCompare(String(b.code)); }).map(function (account) {
       return {
         CODE_COMPTE: account.code,
         LIBELLE_COMPTE: account.label,
         CLASSE_COMPTE: account.cls,
+        SOUS_CLASSE: account.subclass || String(account.code).slice(0, 2),
+        LIBELLE_SOUS_CLASSE: account.subclassLabel || '',
         NATURE_COMPTE: account.nature,
+        UTILISATION: account.usage || '',
         AUXILIAIRE: account.aux ? 'OUI' : 'NON',
-        ACTIF: account.active === false ? 'NON' : 'OUI'
+        IMPUTABLE: account.postable === false ? 'NON' : 'OUI',
+        ACTIF: account.active === false ? 'NON' : 'OUI',
+        COMPTE_HISTORIQUE: account.legacy ? 'OUI' : 'NON'
       };
     });
     return toCsv(rows, headers);

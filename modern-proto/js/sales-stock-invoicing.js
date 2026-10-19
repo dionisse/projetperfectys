@@ -144,10 +144,10 @@
       stockMovementCount: 1,
       totals: { invoicedSales: 1200000, stockPurchases: 600000 },
       accountingLines: [
-        { operationType: 'customer-invoice', operationReference: invoiceReference, accountCode: '411100', accountLabel: 'Clients', description: 'Facture client fictive · créance', debit: 1200000, credit: 0 },
-        { operationType: 'customer-invoice', operationReference: invoiceReference, accountCode: '701000', accountLabel: 'Ventes de marchandises', description: 'Facture client fictive · vente', debit: 0, credit: 1200000 },
-        { operationType: 'stock-receipt', operationReference: stockReference, accountCode: '601100', accountLabel: 'Achats de marchandises', description: 'Réception de stock fictive · achat', debit: 600000, credit: 0 },
-        { operationType: 'stock-receipt', operationReference: stockReference, accountCode: '401100', accountLabel: 'Fournisseurs', description: 'Réception de stock fictive · dette fournisseur', debit: 0, credit: 600000 }
+        { operationType: 'customer-invoice', operationReference: invoiceReference, accountCode: '411', accountLabel: 'Clients', description: 'Facture client fictive · créance', debit: 1200000, credit: 0 },
+        { operationType: 'customer-invoice', operationReference: invoiceReference, accountCode: '701', accountLabel: 'Ventes de marchandises', description: 'Facture client fictive · vente', debit: 0, credit: 1200000 },
+        { operationType: 'stock-receipt', operationReference: stockReference, accountCode: '601', accountLabel: 'Achats de marchandises', description: 'Réception de stock fictive · achat', debit: 600000, credit: 0 },
+        { operationType: 'stock-receipt', operationReference: stockReference, accountCode: '401', accountLabel: 'Fournisseurs, dettes en compte', description: 'Réception de stock fictive · dette fournisseur', debit: 0, credit: 600000 }
       ],
       origin: 'demo',
       calculationNote: 'Montants fictifs : aucun calcul de TVA, de marge, de coût de revient ou de valorisation du stock n’est effectué.',

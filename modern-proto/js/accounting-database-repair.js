@@ -94,7 +94,7 @@
           return;
         }
         var code = String(account.code || '').trim();
-        if (!/^\d{4,8}$/.test(code)) addIssue('account-code-invalid', 'error', false, 'Un compte possède un code vide ou invalide.', code || 'Ligne ' + (index + 1));
+        if (!/^\d{2,8}$/.test(code)) addIssue('account-code-invalid', 'error', false, 'Un compte possède un code vide ou invalide (2 à 8 chiffres attendus).', code || 'Ligne ' + (index + 1));
         if (code && accounts[code]) addIssue('account-code-duplicate', 'error', false, 'Un code de compte est présent plusieurs fois.', code);
         else if (code) accounts[code] = account;
         if (!String(account.label || '').trim()) addIssue('account-label-missing', 'warning', false, 'Un compte ne possède pas d’intitulé.', code || 'Ligne ' + (index + 1));

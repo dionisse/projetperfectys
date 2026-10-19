@@ -28,7 +28,9 @@
     { code: 'PA', label: 'Journal de paie', type: 'Paie' }
   ];
 
-  var COMPTES = [
+  var ACCOUNTING_CHART = global.PerfectoAccountingChart || null;
+  var ACCOUNTING_CHART_VERSION = ACCOUNTING_CHART ? ACCOUNTING_CHART.VERSION : 0;
+  var LEGACY_COMPTES = [
     { code: '101200', label: 'Capital social', cls: 1, nature: 'Passif', aux: false },
     { code: '162100', label: 'Emprunt bancaire', cls: 1, nature: 'Passif', aux: false },
     { code: '231000', label: 'Bâtiments', cls: 2, nature: 'Actif', aux: false },
@@ -48,6 +50,112 @@
     { code: '701000', label: 'Ventes de marchandises', cls: 7, nature: 'Produit', aux: false },
     { code: '706000', label: 'Prestations de services', cls: 7, nature: 'Produit', aux: false }
   ];
+
+  function chartAccounts() {
+    return ACCOUNTING_CHART ? ACCOUNTING_CHART.accounts() : [];
+  }
+
+  function legacyAccountRecord(account) {
+    var cls = Number(account.cls || String(account.code).charAt(0));
+    var subclass = String(account.code).slice(0, 2);
+    return Object.assign({}, account, {
+      cls: cls,
+      classLabel: ACCOUNTING_CHART ? ACCOUNTING_CHART.classLabel(cls) : ('Classe ' + cls),
+      subclass: subclass,
+      subclassLabel: ACCOUNTING_CHART && ACCOUNTING_CHART.SUBCLASS_LABELS[subclass] || 'Compte historique',
+      usage: 'Compte historique conservé pour assurer la continuité des écritures et dossiers existants.',
+      active: true,
+      postable: true,
+      legacy: true,
+      standard: false
+    });
+  }
+
+  function initialAccounts(withSeedEntries) {
+    var accounts = chartAccounts();
+    if (withSeedEntries !== false) {
+      accounts = accounts.concat(LEGACY_COMPTES.map(legacyAccountRecord));
+    }
+    return accounts;
+  }
+
+  function upgradeAccountingChart(data) {
+    var result = { data: data, changed: false };
+    if (!ACCOUNTING_CHART || !data || Number(data.accountChartVersion) >= ACCOUNTING_CHART_VERSION) return result;
+
+    var current = Array.isArray(data.accounts) ? data.accounts : [];
+    var currentByCode = Object.create(null);
+    var chartByCode = Object.create(null);
+    var legacyByCode = Object.create(null);
+    current.forEach(function (account) {
+      if (account && account.code != null) currentByCode[String(account.code)] = account;
+    });
+    LEGACY_COMPTES.forEach(function (account) { legacyByCode[account.code] = account; });
+
+    var standard = chartAccounts().map(function (account) {
+      var existing = currentByCode[account.code];
+      chartByCode[account.code] = true;
+      if (!existing) return account;
+      var merged = Object.assign({}, account, existing);
+      merged.code = account.code;
+      merged.cls = account.cls;
+      merged.classLabel = account.classLabel;
+      merged.subclass = account.subclass;
+      merged.subclassLabel = account.subclassLabel;
+      merged.usage = account.usage;
+      merged.postable = account.postable;
+      merged.legacy = false;
+      merged.standard = true;
+      if (!merged.label) merged.label = account.label;
+      if (!merged.nature) merged.nature = account.nature;
+      if (typeof merged.active !== 'boolean') merged.active = true;
+      return merged;
+    });
+
+    var carried = [];
+    current.forEach(function (existing) {
+      if (!existing || existing.code == null) return;
+      var code = String(existing.code);
+      if (chartByCode[code]) return;
+      var oldDefault = legacyByCode[code];
+      if (oldDefault) {
+        var legacy = Object.assign({}, legacyAccountRecord(oldDefault), existing);
+        legacy.code = code;
+        legacy.cls = Number(existing.cls || oldDefault.cls || code.charAt(0));
+        legacy.label = String(existing.label || oldDefault.label || code);
+        legacy.classLabel = ACCOUNTING_CHART.classLabel(legacy.cls);
+        legacy.subclass = code.slice(0, 2);
+        legacy.subclassLabel = ACCOUNTING_CHART.SUBCLASS_LABELS[legacy.subclass] || 'Compte historique';
+        legacy.usage = 'Compte historique conservé pour assurer la continuité des écritures et dossiers existants.';
+        legacy.active = typeof existing.active === 'boolean' ? existing.active : true;
+        legacy.postable = typeof existing.postable === 'boolean' ? existing.postable : true;
+        legacy.legacy = true;
+        legacy.standard = false;
+        carried.push(legacy);
+        return;
+      }
+      var custom = Object.assign({}, existing);
+      custom.code = code;
+      custom.cls = Number(custom.cls || code.charAt(0));
+      custom.classLabel = custom.classLabel || ACCOUNTING_CHART.classLabel(custom.cls);
+      custom.subclass = custom.subclass || code.slice(0, 2);
+      custom.subclassLabel = custom.subclassLabel || ACCOUNTING_CHART.SUBCLASS_LABELS[custom.subclass] || 'Comptes personnalisés';
+      custom.usage = custom.usage || 'Compte personnalisé du dossier.';
+      if (typeof custom.active !== 'boolean') custom.active = true;
+      if (typeof custom.postable !== 'boolean') custom.postable = true;
+      custom.legacy = !!custom.legacy;
+      custom.standard = false;
+      carried.push(custom);
+    });
+
+    data = Object.assign({}, data, {
+      accounts: standard.concat(carried).sort(function (a, b) { return String(a.code).localeCompare(String(b.code)); }),
+      accountChartVersion: ACCOUNTING_CHART_VERSION
+    });
+    result.data = data;
+    result.changed = true;
+    return result;
+  }
 
   function seedEntries() {
     return [
@@ -110,12 +218,11 @@
     var cycleEnd = dossier.cycleEnd || exerciseYear + '-12-31';
     return {
       version: 1,
+      accountChartVersion: ACCOUNTING_CHART_VERSION,
       exercise: exerciseYear,
       cycleStart: cycleStart,
       cycleEnd: cycleEnd,
-      accounts: COMPTES.map(function (a) {
-        return { code: a.code, label: a.label, cls: a.cls, nature: a.nature, aux: a.aux, active: true };
-      }),
+      accounts: initialAccounts(withSeedEntries),
       journals: JOURNAUX.slice(),
       entries: withSeedEntries === false ? [] : seedEntries(),
       periods: cyclePeriods(cycleStart, cycleEnd)
@@ -429,6 +536,14 @@
               recoveryIssue = { kind: 'metadata', raw: raw, message: 'Des périodes manquantes ont été reconstruites en mémoire et doivent être enregistrées après contrôle.' };
             }
           }
+          if (!recoveryIssue) {
+            var chartUpgrade = upgradeAccountingChart(state);
+            if (chartUpgrade.changed) {
+              state = chartUpgrade.data;
+              // Conserver une copie restaurable avant d’enregistrer le référentiel enrichi.
+              if (snapshotPreviousState(raw)) save();
+            }
+          }
           return state;
         }
         recoveryIssue = { kind: 'corrupt', raw: raw, message: 'Le fichier comptable stocké est illisible ou sa structure est incomplète. PERFECTO l’a conservé sans le remplacer.' };
@@ -624,8 +739,17 @@
       var label = 'Ligne ' + (index + 1) + ' : ';
       // Une ligne sans montant est ignorée, même si un compte y a été choisi.
       if (debit === 0 && credit === 0) return;
-      if (!acc || !account(acc)) {
+      var accountRecord = acc ? account(acc) : null;
+      if (!acc || !accountRecord) {
         errors.push(label + 'le compte est obligatoire.');
+        return;
+      }
+      if (accountRecord.active === false) {
+        errors.push(label + 'le compte sélectionné est inactif.');
+        return;
+      }
+      if (accountRecord.postable === false) {
+        errors.push(label + 'le compte sélectionné est une rubrique de regroupement ou un indicateur non imputable.');
         return;
       }
       if (debit < 0 || credit < 0) {
@@ -750,13 +874,22 @@
     if (['Actif', 'Passif', 'Charge', 'Produit'].indexOf(nature) === -1) errors.push('La nature du compte est invalide.');
     if (errors.length) return { ok: false, errors: errors };
 
+    var cls = Number(code.charAt(0));
+    var subclass = code.slice(0, 2);
     var acc = {
       code: code,
       label: label,
-      cls: Number(code.charAt(0)),
+      cls: cls,
+      classLabel: ACCOUNTING_CHART ? ACCOUNTING_CHART.classLabel(cls) : ('Classe ' + cls),
+      subclass: subclass,
+      subclassLabel: ACCOUNTING_CHART && ACCOUNTING_CHART.SUBCLASS_LABELS[subclass] || 'Comptes personnalisés',
       nature: nature,
+      usage: String(data.usage || 'Compte personnalisé du dossier.').trim(),
       aux: !!data.aux,
-      active: true
+      active: true,
+      postable: true,
+      legacy: false,
+      standard: false
     };
     st.accounts.push(acc);
     st.accounts.sort(function (a, b) { return a.code.localeCompare(b.code); });
@@ -912,6 +1045,7 @@
       data.exercise = dossier.exerciseYear;
       data.cycleStart = dossier.cycleStart;
       data.cycleEnd = dossier.cycleEnd;
+      data = upgradeAccountingChart(data).data;
       state = data;
       ensurePeriodsForEntries();
       if (!save()) {
@@ -1257,7 +1391,7 @@
       if (!preserveCorruptRaw()) return { ok: false, errors: ['Restauration bloquée : la copie brute endommagée n’a pas pu être conservée. Téléchargez-la ou libérez de l’espace.'] };
       var previousState = state;
       var previousIssue = recoveryIssue;
-      var recoveredState = clone(snapshot.data);
+      var recoveredState = upgradeAccountingChart(clone(snapshot.data)).data;
       state = recoveredState;
       try {
         ensurePeriodsForEntries();
@@ -1272,7 +1406,7 @@
     }
 
     var previousState = state ? clone(state) : null;
-    state = clone(snapshot.data);
+    state = upgradeAccountingChart(clone(snapshot.data)).data;
     ensurePeriodsForEntries();
     if (!save()) {
       state = previousState;
