@@ -1964,3 +1964,28 @@ body.launcher-mode .content { background: #f7f6f0; }
   .organization-dossier-footer { align-items: flex-start; flex-direction: column; }
   .dossiers-storage-footnote { text-align: left; }
 }
+
+/* Un dossier ouvert occupe tout l’espace ; la navigation reste disponible à la demande. */
+body.client-dossier-mode .app-shell { grid-template-columns: minmax(0, 1fr); }
+body.client-dossier-mode .sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 150;
+  width: min(300px, 84vw);
+  transform: translateX(-102%);
+  visibility: hidden;
+  transition: transform .2s ease, visibility 0s linear .2s;
+  box-shadow: var(--shadow-lg);
+}
+body.client-dossier-mode .sidebar.open {
+  transform: none;
+  visibility: visible;
+  transition-delay: 0s;
+}
+body.client-dossier-mode .sidebar-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  background: rgba(15, 23, 42, .45);
+}
+body.client-dossier-mode .menu-toggle { display: inline-flex; }

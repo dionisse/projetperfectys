@@ -355,7 +355,9 @@
 
     closeModal(true);
     var launcherMode = route === 'login' || route === 'launcher' || route === 'organization';
+    var clientDossierMode = ACCOUNTING_ROUTES.indexOf(route) !== -1 && route !== 'dossiers';
     document.body.classList.toggle('launcher-mode', launcherMode);
+    document.body.classList.toggle('client-dossier-mode', clientDossierMode);
 
     var html = '';
     switch (route) {
@@ -391,6 +393,8 @@
         ? 'Liste multi-dossiers accessible à ce profil de démonstration'
         : (inAccounting ? 'Dossier client isolé localement · ' + (activeDossier && activeDossier.name || '') : '');
     }
+    var dossiersReturn = $('#dossier-list-return');
+    if (dossiersReturn) dossiersReturn.hidden = !clientDossierMode;
     var topbarEntry = $('a[href="#/entry"].btn.btn-primary');
     if (topbarEntry && route === 'dossiers') topbarEntry.hidden = true;
 
@@ -1997,7 +2001,10 @@
     if (sidebar) sidebar.classList.remove('open');
     if (scrim) scrim.remove();
     var toggle = $('[data-action="toggle-sidebar"]');
-    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+    if (toggle) {
+      toggle.setAttribute('aria-expanded', 'false');
+      toggle.setAttribute('aria-label', 'Ouvrir la navigation');
+    }
   }
 
   function toggleSidebar() {
@@ -2005,7 +2012,10 @@
     if (!sidebar) return;
     var isOpen = sidebar.classList.toggle('open');
     var toggle = $('[data-action="toggle-sidebar"]');
-    if (toggle) toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    if (toggle) {
+      toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      toggle.setAttribute('aria-label', isOpen ? 'Fermer la navigation' : 'Ouvrir la navigation');
+    }
     var scrim = $('#sidebar-scrim');
     if (isOpen && !scrim) {
       scrim = document.createElement('div');
