@@ -145,6 +145,12 @@ test('les actions disponibles sont décrites par module', () => {
   assert(actions.includes('clients.create'));
   assert(actions.includes('clients.edit'));
   assert(actions.includes('clients.delete'));
+  assert(actions.includes('otherParties.create'));
+  assert(actions.includes('otherParties.edit'));
+  assert(actions.includes('otherParties.delete'));
+  assert(actions.includes('personnel.create'));
+  assert(actions.includes('personnel.edit'));
+  assert(actions.includes('personnel.delete'));
   assert(actions.includes('period.close'));
   assert(actions.includes('period.reopen'));
   assert(actions.includes('data.import'));
@@ -247,4 +253,28 @@ test('clients.create, clients.edit et clients.delete sont des droits distincts l
   assert.strictEqual(Permissions.hasPermission(clientManager, 'accounting', 'clients.delete', { ...clientContext, dossierId: 'dossier-2' }), false);
 });
 
-console.log('Politique d’accès : 12 scénarios réussis.');
+test('les droits débiteurs/créditeurs divers sont distincts et limités au dossier', () => {
+  const member = {
+    role: 'manager', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view', 'otherParties.create', 'otherParties.edit'] }] }
+  };
+  const context = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'otherParties.create', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'otherParties.edit', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'otherParties.delete', context), false);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'otherParties.delete', { ...context, dossierId: 'dossier-2' }), false);
+});
+
+test('les droits Personnel sont indépendants et limités au dossier', () => {
+  const member = {
+    role: 'manager', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view', 'personnel.create', 'personnel.edit'] }] }
+  };
+  const context = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'personnel.create', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'personnel.edit', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'personnel.delete', context), false);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'personnel.delete', { ...context, dossierId: 'dossier-2' }), false);
+});
+
+console.log('Politique d’accès : 14 scénarios réussis.');

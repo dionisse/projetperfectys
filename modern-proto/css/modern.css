@@ -2409,9 +2409,17 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
 .client-table td { vertical-align: top; }
 .client-table td { line-height: 1.5; }
 .client-table td strong { color: #344d43; }
-.client-table td small { color: #77847d; font-size: .64rem; }
+.client-table td small,
+.other-party-table td small,
+.personnel-table td small { color: #77847d; font-size: .64rem; }
+.other-party-table { min-width: 1080px; }
+.personnel-table { min-width: 980px; }
+.other-party-type { display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 999px; font-size: .6rem; font-weight: 800; white-space: nowrap; }
+.other-party-type.is-debtor { color: #176e5f; background: #e8f4ef; }
+.other-party-type.is-creditor { color: #75561c; background: #f7f0dd; }
 .client-filter-controls { grid-template-columns: minmax(220px, 1fr); }
-.client-empty { margin-top: 9px; padding: 16px 12px; border: 1px dashed #dce5de; border-radius: 8px; background: #fbfcfa; }
+.client-empty,
+.registry-empty { margin-top: 9px; padding: 16px 12px; border: 1px dashed #dce5de; border-radius: 8px; background: #fbfcfa; }
 .supplier-empty { margin-top: 9px; padding: 16px 12px; border: 1px dashed #dce5de; border-radius: 8px; background: #fbfcfa; }
 .supplier-form-grid .supplier-address-field,
 .supplier-form-grid .supplier-notes-field { grid-column: 1 / -1; }

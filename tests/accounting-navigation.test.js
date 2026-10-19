@@ -54,6 +54,10 @@ assert.ok(findTab('definitions', 'suppliers').reason.includes('centralisation'))
 assert.equal(findTab('definitions', 'clients').status, 'partial');
 assert.ok(findTab('definitions', 'clients').reason.includes('CLI'));
 assert.ok(findTab('definitions', 'clients').reason.includes('dossiers clients du cabinet'));
+assert.equal(findTab('definitions', 'other-debtors-creditors').status, 'partial');
+assert.ok(findTab('definitions', 'other-debtors-creditors').reason.includes('DEB/CRE'));
+assert.equal(findTab('definitions', 'personnel').status, 'partial');
+assert.ok(findTab('definitions', 'personnel').reason.includes('PER'));
 assert.equal(findTab('definitions', 'journals').status, 'active');
 assert.equal(findTab('saisie', 'journal-entry').status, 'active');
 assert.equal(findTab('fichier', 'export-other').status, 'partial');

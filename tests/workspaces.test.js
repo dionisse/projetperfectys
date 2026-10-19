@@ -67,6 +67,13 @@ delete preSupplierState.suppliers;
 delete preSupplierState.supplierRegistryVersion;
 delete preSupplierState.clients;
 delete preSupplierState.clientRegistryVersion;
+delete preSupplierState.otherParties;
+delete preSupplierState.otherPartyRegistryVersion;
+delete preSupplierState.personnel;
+delete preSupplierState.personnelRegistryVersion;
+delete preSupplierState.debtorCodeHistory;
+delete preSupplierState.creditorCodeHistory;
+delete preSupplierState.personnelCodeHistory;
 values.set('perfecto.lot1.v1', JSON.stringify(preSupplierState));
 store = loadStore();
 assert.equal(store.suppliers().length, 0, 'la migration ajoute un référentiel vide aux anciennes bases valides');
@@ -76,6 +83,10 @@ assert.equal(migratedState.suppliers.length, 0);
 assert.equal(migratedState.clientRegistryVersion, 1);
 assert.equal(migratedState.clients.length, 0);
 assert.equal(store.clients().length, 0, 'la migration ajoute un répertoire clients vide aux anciennes bases valides');
+assert.equal(migratedState.otherPartyRegistryVersion, 1);
+assert.equal(migratedState.otherParties.length, 0);
+assert.equal(migratedState.personnelRegistryVersion, 1);
+assert.equal(migratedState.personnel.length, 0);
 assert.equal(store.backupInfo().available, true, 'la migration conserve un point local de restauration');
 
 const created = store.createDossier({
@@ -133,6 +144,8 @@ assert.equal(store.periodStats(2026).length, 12, 'le cycle juillet 2026 — juin
 assert.equal(store.periodStats(2027).length, 0, 'la liste de périodes est rattachée à l’exercice sélectionné');
 assert.equal(store.suppliers().length, 0, 'le nouveau dossier démarre sans fournisseurs hérités d’un autre dossier');
 assert.equal(store.clients().length, 0, 'le nouveau dossier démarre sans clients hérités d’un autre dossier');
+assert.equal(store.otherParties().length, 0, 'le nouveau dossier démarre sans débiteurs/créditeurs hérités');
+assert.equal(store.personnel().length, 0, 'le nouveau dossier démarre sans personnel hérité');
 const entriesBeforeSupplier = store.entries().length;
 const supplier = store.createSupplier({
   code: 'four-001', name: 'Fournitures du Littoral SARL', ifu: 'IFU-FOUR-001', rccm: 'RB/COT/26 B 12345',
@@ -156,6 +169,14 @@ assert.equal(clientRecord.ok, true, clientRecord.errors.join(' '));
 assert.equal(clientRecord.client.code, 'CLI-0001', 'la séquence client est isolée et commence dans ce dossier');
 assert.equal(clientRecord.client.auxiliaryAccountCode, '411-CLI-0001');
 assert.equal(store.entries().length, entriesBeforeClient, 'la fiche client ne crée aucune écriture');
+const otherPartyRecord = store.createOtherParty({ type: 'creditor', name: 'Créditeur du dossier', accountCode: '471' });
+assert.equal(otherPartyRecord.ok, true, otherPartyRecord.errors.join(' '));
+assert.equal(otherPartyRecord.otherParty.code, 'CRE-0001');
+assert.equal(otherPartyRecord.otherParty.auxiliaryAccountCode, '471-CRE-0001');
+const personnelRecord = store.createPersonnel({ name: 'Personne du dossier', department: 'Finance', accountCode: '421' });
+assert.equal(personnelRecord.ok, true, personnelRecord.errors.join(' '));
+assert.equal(personnelRecord.personnel.code, 'PER-0001');
+assert.equal(store.entries().length, entriesBeforeClient, 'les répertoires tiers et personnel ne créent pas d’écriture');
 const supplierEdit = store.updateSupplier(supplier.supplier.id, {
   ...supplier.supplier, name: 'Fournitures du Littoral', paymentTermDays: 45, accountCode: '401'
 });
@@ -202,13 +223,19 @@ assert.equal(store.suppliers().length, 1, 'le point de restauration contient le 
 assert.equal(store.suppliers()[0].active, true);
 assert.equal(store.clients().length, 1, 'le point de restauration contient aussi le répertoire clients');
 assert.equal(store.clients()[0].name, 'Client de démonstration');
+assert.equal(store.otherParties().length, 1, 'le point de restauration contient le registre des tiers divers');
+assert.equal(store.personnel().length, 1, 'le point de restauration contient le registre du personnel');
 
 assert.equal(store.switchDossier(main.id).ok, true);
 assert.equal(store.suppliers().length, 0, 'le référentiel du nouveau dossier ne fuit pas vers le dossier principal');
 assert.equal(store.clients().length, 0, 'le répertoire clients du nouveau dossier ne fuit pas vers le dossier principal');
+assert.equal(store.otherParties().length, 0, 'les débiteurs/créditeurs du nouveau dossier restent isolés');
+assert.equal(store.personnel().length, 0, 'le personnel du nouveau dossier reste isolé');
 assert.equal(store.switchDossier(created.dossier.id).ok, true);
 assert.equal(store.suppliers().length, 1, 'le fournisseur revient en sélectionnant son dossier');
 assert.equal(store.clients().length, 1, 'le client revient en sélectionnant son dossier');
+assert.equal(store.otherParties().length, 1, 'le tiers divers revient avec son dossier');
+assert.equal(store.personnel().length, 1, 'le personnel revient avec son dossier');
 
 store = loadStore();
 assert.equal(store.currentDossier().id, created.dossier.id, 'la sélection de dossier est conservée localement');
@@ -226,5 +253,9 @@ assert.equal(store.suppliers()[0].auxiliaryAccountCode, '401-FOUR-001');
 assert.equal(store.clients().length, 1, 'le répertoire clients survit au rechargement');
 assert.equal(store.clients()[0].name, 'Client de démonstration');
 assert.equal(store.clients()[0].accountCode, '411');
+assert.equal(store.otherParties().length, 1, 'les tiers divers survivent au rechargement');
+assert.equal(store.otherParties()[0].code, 'CRE-0001');
+assert.equal(store.personnel().length, 1, 'le répertoire personnel survit au rechargement');
+assert.equal(store.personnel()[0].code, 'PER-0001');
 assert.deepEqual(store.dossiers().map(dossier => dossier.name), ['Entreprise de démonstration', 'Cabinet Godwin', 'Dossier, autre']);
-console.log('Dossiers, clients et fournisseurs : migration, cycle, persistance et isolation — OK');
+console.log('Dossiers, clients, tiers divers et personnel : migration, cycle, persistance et isolation — OK');

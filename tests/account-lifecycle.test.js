@@ -1,4 +1,4 @@
-/* Cycle de vie du plan comptable, des fournisseurs et des codes d’identification. */
+/* Cycle de vie du plan comptable, des tiers auxiliaires et du personnel local. */
 'use strict';
 
 const assert = require('node:assert/strict');
@@ -73,8 +73,12 @@ assert.equal(store.registerIdentificationCode('client', 'CLI-0001').ok, true);
 assert.equal(store.nextIdentificationCode('client'), 'CLI-0002');
 assert.equal(store.registerIdentificationCode('personnel', 'PER-0001').ok, true);
 assert.equal(store.nextIdentificationCode('personnel'), 'PER-0002');
+assert.equal(store.nextIdentificationCode('debtor'), 'DEB-0001');
+assert.equal(store.nextIdentificationCode('creditor'), 'CRE-0001');
 assert.equal(store.nextIdentificationCode('inconnu'), '');
 assert.equal(store.getState().clientRegistryVersion, 1);
+assert.equal(store.getState().otherPartyRegistryVersion, 1);
+assert.equal(store.getState().personnelRegistryVersion, 1);
 assert.deepEqual(JSON.parse(JSON.stringify(store.clients())), []);
 
 const firstClient = store.createClient({ name: 'Client généré', accountCode: '411', paymentTermDays: '30' });
@@ -124,6 +128,74 @@ assert.equal(safeHistoricalClientUpdate.client.name, 'Client référencé modifi
 assert.equal(store.deleteClient(referencedClient.client.id).ok, false, 'un client référencé par une écriture ne peut pas être supprimé');
 assert.equal(store.accountCodeChangeCheck('412').references.clientCount, 1, 'le compte collectif garde son lien avec le répertoire client');
 
+const firstDebtor = store.createOtherParty({ type: 'debtor', name: 'Débiteur divers généré', accountCode: '471' });
+assert.equal(firstDebtor.ok, true, firstDebtor.errors.join(' '));
+assert.equal(firstDebtor.otherParty.code, 'DEB-0001', 'un code DEB est attribué automatiquement');
+assert.equal(firstDebtor.otherParty.auxiliaryAccountCode, '471-DEB-0001');
+const updatedDebtor = store.updateOtherParty(firstDebtor.otherParty.id, { ...firstDebtor.otherParty, name: 'Débiteur divers modifié' });
+assert.equal(updatedDebtor.ok, true, updatedDebtor.errors.join(' '));
+assert.equal(store.deleteOtherParty(firstDebtor.otherParty.id).ok, true, 'un tiers divers non référencé peut être supprimé');
+assert.ok(store.getState().debtorCodeHistory.includes('DEB-0001'), 'le code DEB supprimé reste réservé');
+const secondDebtor = store.createOtherParty({ type: 'debtor', name: 'Tiers à requalifier', accountCode: '471' });
+assert.equal(secondDebtor.otherParty.code, 'DEB-0002');
+const reclassifiedCreditor = store.updateOtherParty(secondDebtor.otherParty.id, {
+  ...secondDebtor.otherParty, type: 'creditor'
+});
+assert.equal(reclassifiedCreditor.ok, true, reclassifiedCreditor.errors.join(' '));
+assert.equal(reclassifiedCreditor.otherParty.code, 'CRE-0001', 'le code suit automatiquement la nouvelle nature du tiers');
+const firstCreditor = store.createOtherParty({ type: 'creditor', name: 'Créditeur divers', accountCode: '471' });
+assert.equal(firstCreditor.ok, true, firstCreditor.errors.join(' '));
+assert.equal(firstCreditor.otherParty.code, 'CRE-0002');
+assert.equal(store.createOtherParty({ type: 'creditor', code: 'DEB-0001', name: 'Code réutilisé', accountCode: '471' }).ok, false, 'un code de tiers supprimé ne peut pas être réutilisé par l’autre type');
+const referencedOtherParty = store.createOtherParty({ type: 'debtor', name: 'Tiers divers référencé', accountCode: '471' });
+assert.equal(referencedOtherParty.ok, true, referencedOtherParty.errors.join(' '));
+store.getState().entries.push({
+  id: 'other-party-reference-test', reference: 'OD-REF-DIV', journal: 'OD', date: '2026-02-04', status: 'posted',
+  lines: [{ account: referencedOtherParty.otherParty.auxiliaryAccountCode, debit: 40, credit: 0, debtorId: referencedOtherParty.otherParty.id }]
+});
+assert.equal(store.save(), true);
+assert.equal(store.otherPartyIdentityChangeCheck(referencedOtherParty.otherParty.id).ok, false);
+assert.equal(store.updateOtherParty(referencedOtherParty.otherParty.id, {
+  type: 'creditor', code: 'CRE-0003', name: 'Tiers requalifié', accountCode: '471'
+}).ok, false, 'type et identité sont protégés dès qu’une pièce référence le tiers');
+const safeOtherPartyUpdate = store.updateOtherParty(referencedOtherParty.otherParty.id, {
+  ...referencedOtherParty.otherParty, name: 'Tiers divers référencé modifié'
+});
+assert.equal(safeOtherPartyUpdate.ok, true, safeOtherPartyUpdate.errors.join(' '));
+assert.equal(store.deleteOtherParty(referencedOtherParty.otherParty.id).ok, false);
+assert.equal(store.accountCodeChangeCheck('471').references.otherPartyCount, 3, 'le compte collectif reste lié aux tiers divers');
+
+const firstPersonnel = store.createPersonnel({ name: 'Employée de démonstration', jobTitle: 'Comptable', department: 'Finance', accountCode: '421' });
+assert.equal(firstPersonnel.ok, true, firstPersonnel.errors.join(' '));
+assert.equal(firstPersonnel.personnel.code, 'PER-0002', 'un code PER est attribué automatiquement');
+assert.equal(firstPersonnel.personnel.auxiliaryAccountCode, '421-PER-0002');
+const updatedPersonnel = store.updatePersonnel(firstPersonnel.personnel.id, {
+  ...firstPersonnel.personnel, code: 'PER-EMP-001', name: 'Employée modifiée'
+});
+assert.equal(updatedPersonnel.ok, true, updatedPersonnel.errors.join(' '));
+assert.equal(store.deletePersonnel(firstPersonnel.personnel.id).ok, true, 'une fiche du personnel non référencée peut être supprimée');
+assert.ok(store.getState().personnelCodeHistory.includes('PER-0002'));
+assert.ok(store.getState().personnelCodeHistory.includes('PER-EMP-001'));
+assert.equal(store.createPersonnel({ name: 'Mauvais compte', accountCode: '471' }).ok, false);
+const referencedPersonnel = store.createPersonnel({ name: 'Employé référencé', accountCode: '421' });
+assert.equal(referencedPersonnel.ok, true, referencedPersonnel.errors.join(' '));
+assert.equal(referencedPersonnel.personnel.code, 'PER-0003', 'le code PER supprimé n’est pas réattribué');
+store.getState().entries.push({
+  id: 'personnel-reference-test', reference: 'OD-REF-PER', journal: 'OD', date: '2026-02-05', status: 'posted',
+  lines: [{ account: referencedPersonnel.personnel.auxiliaryAccountCode, debit: 75, credit: 0, personnelId: referencedPersonnel.personnel.id }]
+});
+assert.equal(store.save(), true);
+assert.equal(store.personnelIdentityChangeCheck(referencedPersonnel.personnel.id).ok, false);
+assert.equal(store.updatePersonnel(referencedPersonnel.personnel.id, {
+  ...referencedPersonnel.personnel, code: 'PER-0004', accountCode: '422'
+}).ok, false);
+const safePersonnelUpdate = store.updatePersonnel(referencedPersonnel.personnel.id, {
+  ...referencedPersonnel.personnel, name: 'Employé référencé modifié', department: 'Comptabilité'
+});
+assert.equal(safePersonnelUpdate.ok, true, safePersonnelUpdate.errors.join(' '));
+assert.equal(store.deletePersonnel(referencedPersonnel.personnel.id).ok, false);
+assert.equal(store.accountCodeChangeCheck('421').references.personnelCount, 1, 'le compte collectif conserve le lien personnel');
+
 const firstSupplier = store.createSupplier({ name: 'Fournisseur généré', accountCode: '401', paymentTermDays: '30' });
 assert.equal(firstSupplier.ok, true, firstSupplier.errors.join(' '));
 assert.equal(firstSupplier.supplier.code, 'FOU-0001', 'un code fournisseur est proposé automatiquement');
@@ -154,14 +226,23 @@ assert.equal(blockedSupplierDeletion.ok, false);
 assert.match(blockedSupplierDeletion.errors.join(' '), /référence cette fiche/);
 assert.ok(store.supplier(referencedSupplier.supplier.id), 'la fiche reste en place si une écriture la référence');
 
-// Migration de bases antérieures : reprendre les registres et séquences fournisseurs/clients déjà présents.
+// Migration de bases antérieures : reprendre les répertoires et séquences de tous les tiers.
 const legacyState = JSON.parse(JSON.stringify(store.getState()));
 legacyState.supplierRegistryVersion = 1;
 legacyState.suppliers = [{ id: 'legacy-supplier', code: 'FOU-0099', name: 'Fournisseur migré', accountCode: '401' }];
 legacyState.clients = [{ id: 'legacy-client', code: 'CLI-0099', name: 'Client migré', accountCode: '411' }];
+legacyState.otherParties = [
+  { id: 'legacy-debtor', type: 'debtor', code: 'DEB-0099', name: 'Débiteur migré', accountCode: '471' },
+  { id: 'legacy-creditor', type: 'creditor', code: 'CRE-0088', name: 'Créditeur migré', accountCode: '471' }
+];
+legacyState.personnel = [{ id: 'legacy-personnel', code: 'PER-0099', name: 'Personnel migré', accountCode: '421' }];
 delete legacyState.clientRegistryVersion;
+delete legacyState.otherPartyRegistryVersion;
+delete legacyState.personnelRegistryVersion;
 delete legacyState.supplierCodeHistory;
 delete legacyState.clientCodeHistory;
+delete legacyState.debtorCodeHistory;
+delete legacyState.creditorCodeHistory;
 delete legacyState.personnelCodeHistory;
 delete legacyState.identificationSequences;
 values.set(store.currentStorageKey(), JSON.stringify(legacyState));
@@ -172,5 +253,13 @@ assert.equal(store.getState().supplierRegistryVersion, 2);
 assert.equal(store.nextIdentificationCode('client'), 'CLI-0100');
 assert.ok(store.getState().clientCodeHistory.includes('CLI-0099'));
 assert.equal(store.getState().clientRegistryVersion, 1);
+assert.equal(store.nextIdentificationCode('debtor'), 'DEB-0100');
+assert.ok(store.getState().debtorCodeHistory.includes('DEB-0099'));
+assert.equal(store.nextIdentificationCode('creditor'), 'CRE-0089');
+assert.ok(store.getState().creditorCodeHistory.includes('CRE-0088'));
+assert.equal(store.nextIdentificationCode('personnel'), 'PER-0100');
+assert.ok(store.getState().personnelCodeHistory.includes('PER-0099'));
+assert.equal(store.getState().otherPartyRegistryVersion, 1);
+assert.equal(store.getState().personnelRegistryVersion, 1);
 
-console.log('Comptes, fournisseurs et clients : modifications/suppressions protégées et identifiants FOU/CLI/PER — OK');
+console.log('Comptes, fournisseurs, clients, tiers divers et personnel : CRUD protégé et codes FOU/CLI/DEB/CRE/PER — OK');

@@ -74,7 +74,9 @@
     ledger: { account: '521' },
     periods: { year: S.exercise() },
     suppliers: { q: '', status: 'active' },
-    clients: { q: '' }
+    clients: { q: '' },
+    otherParties: { q: '', type: 'all' },
+    personnel: { q: '' }
   };
 
   var deferredInstallPrompt = null;
@@ -270,6 +272,28 @@
         return {
           moduleId: 'accounting',
           actionId: trigger && trigger.getAttribute('data-client-mode') === 'edit' ? 'clients.edit' : 'clients.create'
+        };
+      case 'new-other-party':
+        return { moduleId: 'accounting', actionId: 'otherParties.create' };
+      case 'edit-other-party':
+        return { moduleId: 'accounting', actionId: 'otherParties.edit' };
+      case 'delete-other-party':
+        return { moduleId: 'accounting', actionId: 'otherParties.delete' };
+      case 'save-other-party':
+        return {
+          moduleId: 'accounting',
+          actionId: trigger && trigger.getAttribute('data-other-party-mode') === 'edit' ? 'otherParties.edit' : 'otherParties.create'
+        };
+      case 'new-personnel':
+        return { moduleId: 'accounting', actionId: 'personnel.create' };
+      case 'edit-personnel':
+        return { moduleId: 'accounting', actionId: 'personnel.edit' };
+      case 'delete-personnel':
+        return { moduleId: 'accounting', actionId: 'personnel.delete' };
+      case 'save-personnel':
+        return {
+          moduleId: 'accounting',
+          actionId: trigger && trigger.getAttribute('data-personnel-mode') === 'edit' ? 'personnel.edit' : 'personnel.create'
         };
       case 'close-period':
         return { moduleId: 'accounting', actionId: 'period.close' };
@@ -1490,7 +1514,7 @@
       return true;
     });
 
-    var html = pageHeader('Plan comptable', 'Référentiel source de 147 comptes, personnalisable dans le dossier. Un numéro utilisé dans des écritures ou comme rattachement auxiliaire client/fournisseur est protégé contre le changement et la suppression.',
+    var html = pageHeader('Plan comptable', 'Référentiel source de 147 comptes, personnalisable dans le dossier. Un numéro utilisé dans des pièces ou comme rattachement auxiliaire client, fournisseur, tiers divers ou personnel est protégé contre le changement et la suppression.',
       '<button type="button" class="btn btn-ghost" data-action="export-accounts-csv">↓ Export CSV</button>' +
       '<button type="button" class="btn btn-primary" data-action="new-account">＋ Nouveau compte</button>');
 
@@ -1541,7 +1565,7 @@
             '<td class="num strong">' + (solde === 0 ? '—' : amount(Math.abs(solde)) + (solde > 0 ? ' D' : ' C')) + '</td>' +
             '<td><div class="account-row-actions">' +
               '<button type="button" class="btn btn-ghost btn-sm" data-action="edit-account" data-id="' + esc(a.code) + '" aria-label="Modifier le compte ' + esc(a.code) + '">Modifier</button>' +
-              '<button type="button" class="btn btn-ghost btn-sm" data-action="delete-account" data-id="' + esc(a.code) + '" aria-label="Supprimer le compte ' + esc(a.code) + '" title="La suppression est refusée si le compte a des écritures, des auxiliaires clients/fournisseurs rattachés ou des sous-comptes.">Supprimer</button>' +
+              '<button type="button" class="btn btn-ghost btn-sm" data-action="delete-account" data-id="' + esc(a.code) + '" aria-label="Supprimer le compte ' + esc(a.code) + '" title="La suppression est refusée si le compte a des pièces, des auxiliaires clients/fournisseurs/tiers/personnel rattachés ou des sous-comptes.">Supprimer</button>' +
             '</div></td>' +
           '</tr>';
         }).join('') : '<tr><td colspan="12"><div class="empty-state"><strong>Aucun compte ne correspond</strong>Modifiez la recherche ou les filtres.</div></td></tr>') +
@@ -4733,6 +4757,344 @@
     });
   }
 
+  function auxiliaryPartyKind(type) { return type === 'creditor' ? 'creditor' : 'debtor'; }
+
+  function auxiliaryPartyTypeLabel(type) { return type === 'creditor' ? 'Créditeur divers' : 'Débiteur divers'; }
+
+  function auxiliaryPartyAccountLabel(record) {
+    var account = S.account(record.accountCode);
+    return account ? account.code + ' · ' + account.label : String(record.accountCode || 'Compte non disponible');
+  }
+
+  function filteredOtherParties(records, query, type) {
+    var needle = String(query || '').trim().toLocaleLowerCase();
+    return records.filter(function (record) {
+      if (type && type !== 'all' && record.type !== type) return false;
+      if (!needle) return true;
+      var searchable = [
+        record.code, record.auxiliaryAccountCode, record.name, record.contactName, record.ifu, record.rccm,
+        record.email, record.phone, record.address, record.notes, auxiliaryPartyTypeLabel(record.type), auxiliaryPartyAccountLabel(record)
+      ].join(' ').toLocaleLowerCase();
+      return searchable.indexOf(needle) !== -1;
+    });
+  }
+
+  function otherPartyRowsHtml(records) {
+    var filter = ui.otherParties || { q: '', type: 'all' };
+    return filteredOtherParties(records, filter.q, filter.type).map(function (record) {
+      var coordinates = [record.ifu ? 'IFU : ' + record.ifu : '', record.rccm ? 'RCCM : ' + record.rccm : '', record.email || '', record.phone || '']
+        .filter(Boolean).map(esc).join('<br>') || '<span class="muted">Non renseignées</span>';
+      var contact = [record.contactName, record.address].filter(Boolean).map(esc).join('<br>');
+      return '<tr>' +
+        '<td><span class="other-party-type ' + (record.type === 'creditor' ? 'is-creditor' : 'is-debtor') + '">' + esc(auxiliaryPartyTypeLabel(record.type)) + '</span></td>' +
+        '<td><strong>' + esc(record.code) + '</strong></td>' +
+        '<td><strong>' + esc(record.name) + '</strong>' + (contact ? '<br><small>' + contact + '</small>' : '') + '</td>' +
+        '<td>' + coordinates + '</td>' +
+        '<td><strong>' + esc(record.auxiliaryAccountCode || (record.accountCode + '-' + record.code)) + '</strong><br><small>Compte collectif : ' + esc(auxiliaryPartyAccountLabel(record)) + '</small></td>' +
+        '<td><div class="supplier-row-actions">' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-action="edit-other-party" data-id="' + esc(record.id) + '" aria-label="Modifier la fiche ' + esc(record.name) + '">Modifier</button>' +
+          '<button type="button" class="btn btn-ghost btn-sm btn-danger-quiet" data-action="delete-other-party" data-id="' + esc(record.id) + '" aria-label="Supprimer définitivement ' + esc(record.name) + '" title="Suppression refusée si une pièce comptable ou un mouvement référence ce tiers.">Supprimer</button>' +
+        '</div></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function viewOtherParties() {
+    var records = S.otherParties().slice().sort(function (a, b) { return String(a.name).localeCompare(String(b.name), 'fr'); });
+    var filter = ui.otherParties || (ui.otherParties = { q: '', type: 'all' });
+    var visible = filteredOtherParties(records, filter.q, filter.type);
+    var debtorCount = records.filter(function (record) { return record.type === 'debtor'; }).length;
+    var creditorCount = records.filter(function (record) { return record.type === 'creditor'; }).length;
+    var emptyMessage = records.length
+      ? 'Aucun tiers ne correspond à cette recherche et à ce filtre.'
+      : 'Aucun débiteur ou créditeur divers n’est encore enregistré. Utilisez « Nouveau tiers divers » pour créer une fiche.';
+    return '<div class="exchange-workspace other-party-workspace" id="other-party-workspace">' +
+      '<div class="alert info"><div><strong>Répertoire des débiteurs et créditeurs divers du dossier actif.</strong> Le type sert à distinguer la nature du tiers ; le compte collectif de classe 4/famille 47 est choisi sur la fiche. Aucun mouvement, règlement ou lettrage n’est généré et les centralisations restent réservées aux modules PERFECTO internes.</div></div>' +
+      '<div class="exchange-summary-grid client-summary-grid" aria-label="Résumé des débiteurs et créditeurs divers">' +
+        '<div><small>Tiers enregistrés</small><strong>' + records.length + '</strong></div>' +
+        '<div><small>Débiteurs divers</small><strong>' + debtorCount + '</strong></div>' +
+        '<div><small>Créditeurs divers</small><strong>' + creditorCount + '</strong></div>' +
+      '</div>' +
+      '<section class="exchange-card other-party-directory-card">' +
+        '<div class="supplier-directory-head"><div><h4>Débiteurs et créditeurs divers</h4><p>Codes DEB/CRE proposés automatiquement, modifiables et réservés après attribution.</p></div>' +
+          '<button type="button" class="btn btn-primary" data-action="new-other-party">＋ Nouveau tiers divers</button></div>' +
+        '<form id="other-party-filter-form" class="supplier-filter-controls other-party-filter-controls" role="search">' +
+          '<label class="field"><span>Rechercher</span><input id="other-party-search" type="search" value="' + esc(filter.q) + '" placeholder="Code, type, nom, IFU, contact…" autocomplete="off"></label>' +
+          '<label class="field"><span>Nature du tiers</span><select id="other-party-type-filter"><option value="all"' + (filter.type === 'all' ? ' selected' : '') + '>Tous les tiers</option><option value="debtor"' + (filter.type === 'debtor' ? ' selected' : '') + '>Débiteurs divers</option><option value="creditor"' + (filter.type === 'creditor' ? ' selected' : '') + '>Créditeurs divers</option></select></label>' +
+        '</form>' +
+        '<p class="supplier-result-note" id="other-party-result-note">' + visible.length + (visible.length === 1 ? ' tiers affiché.' : ' tiers affichés.') + '</p>' +
+        '<div class="table-wrap exchange-table-wrap other-party-table-wrap" id="other-party-table-wrap"' + (visible.length ? '' : ' hidden') + '>' +
+          '<table class="exchange-mapping-table other-party-table"><caption class="sr-only">Débiteurs et créditeurs divers du dossier actif</caption><thead><tr>' +
+            '<th>Nature</th><th>Code</th><th>Nom / contact</th><th>Coordonnées</th><th>Compte collectif</th><th>Actions</th>' +
+          '</tr></thead><tbody id="other-party-rows">' + otherPartyRowsHtml(records) + '</tbody></table>' +
+        '</div>' +
+        '<div id="other-party-list-empty" class="empty-state registry-empty"' + (visible.length ? ' hidden' : '') + '><span class="empty-state-icon">⌕</span><h3>Aucun résultat</h3><p>' + esc(emptyMessage) + '</p></div>' +
+      '</section>' +
+      '<p class="exchange-footnote">Les écritures du compte 47 restent à saisir dans les parcours comptables ; ces fiches ne sont pas des pièces ni des soldes auxiliaires.</p>' +
+    '</div>';
+  }
+
+  function refreshOtherPartyRows() {
+    var records = S.otherParties().slice().sort(function (a, b) { return String(a.name).localeCompare(String(b.name), 'fr'); });
+    var filter = ui.otherParties || { q: '', type: 'all' };
+    var visible = filteredOtherParties(records, filter.q, filter.type);
+    var rows = $('#other-party-rows');
+    var tableWrap = $('#other-party-table-wrap');
+    var empty = $('#other-party-list-empty');
+    var note = $('#other-party-result-note');
+    if (rows) rows.innerHTML = otherPartyRowsHtml(records);
+    if (tableWrap) tableWrap.hidden = visible.length === 0;
+    if (empty) {
+      empty.hidden = visible.length !== 0;
+      empty.querySelector('p').textContent = records.length ? 'Aucun tiers ne correspond à cette recherche et à ce filtre.' : 'Aucun débiteur ou créditeur divers n’est encore enregistré. Utilisez « Nouveau tiers divers » pour créer une fiche.';
+    }
+    if (note) note.textContent = visible.length + (visible.length === 1 ? ' tiers affiché.' : ' tiers affichés.');
+    applyDemoActionGates(rows);
+  }
+
+  function bindOtherPartyView() {
+    var form = $('#other-party-filter-form');
+    if (!form) return;
+    var search = $('#other-party-search', form);
+    var type = $('#other-party-type-filter', form);
+    function update() {
+      ui.otherParties = ui.otherParties || { q: '', type: 'all' };
+      ui.otherParties.q = search ? search.value : '';
+      ui.otherParties.type = type ? type.value : 'all';
+      refreshOtherPartyRows();
+    }
+    form.addEventListener('submit', function (event) { event.preventDefault(); });
+    if (search) search.addEventListener('input', update);
+    if (type) type.addEventListener('change', update);
+  }
+
+  function openOtherPartyModal(id) {
+    var existing = id ? S.otherParty(id) : null;
+    if (id && !existing) { toast('Débiteur ou créditeur divers introuvable dans le dossier actif.', 'error'); return; }
+    var roots = ['47'];
+    var accounts = S.accounts().filter(function (account) {
+      var code = String(account.code);
+      return roots.some(function (rootCode) { return code.indexOf(rootCode) === 0; }) &&
+        Number(account.cls || code.charAt(0)) === 4 && account.aux === true && account.active !== false && account.postable !== false;
+    });
+    var existingAccount = existing && S.account(existing.accountCode);
+    if (existingAccount && !accounts.some(function (account) { return account.code === existingAccount.code; })) accounts.push(existingAccount);
+    accounts.sort(function (a, b) { return String(a.code).localeCompare(String(b.code)); });
+    if (!accounts.length) { toast('Aucun compte auxiliaire actif de la famille 47 n’est disponible.', 'warning'); return; }
+    var type = existing ? existing.type : 'debtor';
+    var defaultAccount = accounts.find(function (account) { return account.code === '471'; }) || accounts[0];
+    var selectedAccount = existing && accounts.some(function (account) { return account.code === existing.accountCode; }) ? existing.accountCode : defaultAccount.code;
+    var accountOptions = accounts.map(function (account) {
+      return '<option value="' + esc(account.code) + '"' + (account.code === selectedAccount ? ' selected' : '') + '>' + esc(account.code + ' · ' + account.label) + '</option>';
+    }).join('');
+    var identityCheck = existing ? S.otherPartyIdentityChangeCheck(existing.id) : { ok: true, errors: [] };
+    var suggestedCode = existing ? existing.code : S.nextIdentificationCode(auxiliaryPartyKind(type));
+    var codeInputEdited = false;
+    var lastAutomaticCode = suggestedCode;
+    var value = function (key) { return esc(existing && existing[key] != null ? existing[key] : (key === 'code' ? suggestedCode : '')); };
+    var codeHint = existing && !identityCheck.ok
+      ? '<span class="hint">Type, code et compte collectif verrouillés pour préserver les références : ' + esc(identityCheck.errors.join(' ')) + '</span>'
+      : '<span class="hint">Code DEB/CRE proposé automatiquement ; modifiable avant enregistrement.</span>';
+    var body = '<form id="other-party-form" novalidate>' +
+      '<div id="other-party-errors" aria-live="assertive"></div>' +
+      '<div class="form-grid supplier-form-grid other-party-form-grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">' +
+        '<div class="field"><label for="other-party-type">Nature du tiers <span aria-hidden="true">*</span></label><select id="other-party-type" name="type" required' + (existing && !identityCheck.ok ? ' disabled' : '') + '><option value="debtor"' + (type === 'debtor' ? ' selected' : '') + '>Débiteur divers</option><option value="creditor"' + (type === 'creditor' ? ' selected' : '') + '>Créditeur divers</option></select></div>' +
+        '<div class="field"><label for="other-party-code">Code <span aria-hidden="true">*</span></label><input id="other-party-code" name="code" type="text" maxlength="32" value="' + value('code') + '" placeholder="Ex. DEB-0001"' + (existing && !identityCheck.ok ? ' readonly' : '') + ' required autocomplete="off">' + codeHint + '</div>' +
+        '<div class="field"><label for="other-party-name">Nom ou raison sociale <span aria-hidden="true">*</span></label><input id="other-party-name" name="name" type="text" maxlength="150" value="' + value('name') + '" required></div>' +
+        '<div class="field"><label for="other-party-contact">Nom du contact</label><input id="other-party-contact" name="contactName" type="text" maxlength="120" value="' + value('contactName') + '"></div>' +
+        '<div class="field"><label for="other-party-ifu">Numéro IFU</label><input id="other-party-ifu" name="ifu" type="text" maxlength="50" value="' + value('ifu') + '"></div>' +
+        '<div class="field"><label for="other-party-rccm">Numéro RCCM</label><input id="other-party-rccm" name="rccm" type="text" maxlength="80" value="' + value('rccm') + '"></div>' +
+        '<div class="field"><label for="other-party-email">Adresse e-mail</label><input id="other-party-email" name="email" type="email" maxlength="254" value="' + value('email') + '"></div>' +
+        '<div class="field"><label for="other-party-phone">Téléphone</label><input id="other-party-phone" name="phone" type="tel" maxlength="40" value="' + value('phone') + '"></div>' +
+        '<div class="field"><label for="other-party-account">Compte collectif classe 4 · famille 47 <span aria-hidden="true">*</span></label><select id="other-party-account" name="accountCode" required' + (existing && !identityCheck.ok ? ' disabled' : '') + '>' + accountOptions + '</select><span class="hint">Compte collectif et auxiliaire du tiers ; aucune écriture n’est générée.</span></div>' +
+        '<div class="field other-party-address-field"><label for="other-party-address">Adresse</label><input id="other-party-address" name="address" type="text" maxlength="255" value="' + value('address') + '"></div>' +
+        '<div class="field other-party-notes-field"><label for="other-party-notes">Notes internes</label><textarea id="other-party-notes" name="notes" rows="3" maxlength="1000">' + value('notes') + '</textarea></div>' +
+      '</div>' +
+    '</form>';
+    var mode = existing ? 'edit' : 'create';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button>' +
+      '<button type="submit" class="btn btn-primary" form="other-party-form" data-action="save-other-party" data-other-party-mode="' + mode + '">' + (existing ? 'Enregistrer les modifications' : 'Enregistrer le tiers') + '</button>';
+    openModal(existing ? 'Modifier un tiers divers' : 'Nouveau débiteur ou créditeur divers',
+      'Fiche locale du dossier ' + esc(S.currentDossier().reference), body, footer, true);
+    var form = $('#other-party-form');
+    var typeInput = $('#other-party-type');
+    var codeInput = $('#other-party-code');
+    if (codeInput) codeInput.addEventListener('input', function () { if (codeInput.value !== lastAutomaticCode) codeInputEdited = true; });
+    if (typeInput) typeInput.addEventListener('change', function () {
+      if (!codeInputEdited) {
+        codeInput.value = S.nextIdentificationCode(auxiliaryPartyKind(typeInput.value));
+        lastAutomaticCode = codeInput.value;
+      }
+    });
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var actionId = mode === 'edit' ? 'otherParties.edit' : 'otherParties.create';
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', actionId, accountingAccessContext())) {
+        toast('Action refusée par défaut : le droit « ' + actionId + ' » n’est pas accordé.', 'warning');
+        return;
+      }
+      var input = {
+        type: $('#other-party-type').value, code: $('#other-party-code').value, name: $('#other-party-name').value,
+        contactName: $('#other-party-contact').value, ifu: $('#other-party-ifu').value, rccm: $('#other-party-rccm').value,
+        email: $('#other-party-email').value, phone: $('#other-party-phone').value, address: $('#other-party-address').value,
+        accountCode: $('#other-party-account').value, notes: $('#other-party-notes').value
+      };
+      var result = existing ? S.updateOtherParty(existing.id, input) : S.createOtherParty(input);
+      if (!result.ok) {
+        $('#other-party-errors').innerHTML = '<div class="alert error" role="alert"><ul style="margin:0 0 0 18px">' + result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
+        return;
+      }
+      toast(existing ? 'Fiche de tiers divers mise à jour.' : auxiliaryPartyTypeLabel(result.otherParty.type) + ' ' + result.otherParty.code + ' enregistré.', 'success');
+      closeModal(true);
+      render();
+    });
+  }
+
+  function filteredPersonnel(records, query) {
+    var needle = String(query || '').trim().toLocaleLowerCase();
+    return records.filter(function (record) {
+      if (!needle) return true;
+      var account = S.account(record.accountCode);
+      var searchable = [record.code, record.auxiliaryAccountCode, record.name, record.jobTitle, record.department, record.email, record.phone, record.address, record.notes, account && account.label, record.accountCode].join(' ').toLocaleLowerCase();
+      return searchable.indexOf(needle) !== -1;
+    });
+  }
+
+  function personnelRowsHtml(records) {
+    var filter = ui.personnel || { q: '' };
+    return filteredPersonnel(records, filter.q).map(function (record) {
+      var contacts = [record.email || '', record.phone || '', record.address || ''].filter(Boolean).map(esc).join('<br>') || '<span class="muted">Non renseignés</span>';
+      var role = [record.jobTitle, record.department].filter(Boolean).map(esc).join('<br>');
+      var account = S.account(record.accountCode);
+      return '<tr>' +
+        '<td><strong>' + esc(record.code) + '</strong></td>' +
+        '<td><strong>' + esc(record.name) + '</strong>' + (role ? '<br><small>' + role + '</small>' : '') + '</td>' +
+        '<td>' + contacts + '</td>' +
+        '<td><strong>' + esc(record.auxiliaryAccountCode || (record.accountCode + '-' + record.code)) + '</strong><br><small>Compte collectif : ' + esc(account ? account.code + ' · ' + account.label : String(record.accountCode || 'Compte non disponible')) + '</small></td>' +
+        '<td><div class="supplier-row-actions">' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-action="edit-personnel" data-id="' + esc(record.id) + '" aria-label="Modifier la fiche de ' + esc(record.name) + '">Modifier</button>' +
+          '<button type="button" class="btn btn-ghost btn-sm btn-danger-quiet" data-action="delete-personnel" data-id="' + esc(record.id) + '" aria-label="Supprimer définitivement ' + esc(record.name) + '" title="Suppression refusée si une pièce comptable référence ce membre du personnel.">Supprimer</button>' +
+        '</div></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function viewPersonnel() {
+    var records = S.personnel().slice().sort(function (a, b) { return String(a.name).localeCompare(String(b.name), 'fr'); });
+    var filter = ui.personnel || (ui.personnel = { q: '' });
+    var visible = filteredPersonnel(records, filter.q);
+    var emptyMessage = records.length ? 'Aucun membre ne correspond à cette recherche.' : 'Aucun membre du personnel n’est encore enregistré. Utilisez « Nouveau membre » pour créer une fiche.';
+    return '<div class="exchange-workspace personnel-workspace" id="personnel-workspace">' +
+      '<div class="alert info"><div><strong>Répertoire local du personnel du dossier actif.</strong> Les codes PER identifient les fiches ; les données de rémunération, contrats et calculs de paie restent dans le périmètre du module Paie & RH et ne sont pas gérés ici.</div></div>' +
+      '<div class="exchange-summary-grid client-summary-grid" aria-label="Résumé du personnel"><div><small>Membres enregistrés</small><strong>' + records.length + '</strong></div><div><small>Résultats affichés</small><strong id="personnel-visible-count">' + visible.length + '</strong></div></div>' +
+      '<section class="exchange-card personnel-directory-card">' +
+        '<div class="supplier-directory-head"><div><h4>Personnel</h4><p>Identité professionnelle, contacts et compte collectif ; aucune donnée de salaire n’est stockée.</p></div>' +
+          '<button type="button" class="btn btn-primary" data-action="new-personnel">＋ Nouveau membre</button></div>' +
+        '<form id="personnel-filter-form" class="supplier-filter-controls client-filter-controls" role="search"><label class="field"><span>Rechercher</span><input id="personnel-search" type="search" value="' + esc(filter.q) + '" placeholder="Code, nom, fonction, service…" autocomplete="off"></label></form>' +
+        '<p class="supplier-result-note" id="personnel-result-note">' + visible.length + (visible.length === 1 ? ' membre affiché.' : ' membres affichés.') + '</p>' +
+        '<div class="table-wrap exchange-table-wrap personnel-table-wrap" id="personnel-table-wrap"' + (visible.length ? '' : ' hidden') + '>' +
+          '<table class="exchange-mapping-table personnel-table"><caption class="sr-only">Personnel du dossier actif</caption><thead><tr><th>Code</th><th>Identité / fonction</th><th>Coordonnées</th><th>Compte collectif</th><th>Actions</th></tr></thead><tbody id="personnel-rows">' + personnelRowsHtml(records) + '</tbody></table>' +
+        '</div>' +
+        '<div id="personnel-list-empty" class="empty-state registry-empty"' + (visible.length ? ' hidden' : '') + '><span class="empty-state-icon">⌕</span><h3>Aucun résultat</h3><p>' + esc(emptyMessage) + '</p></div>' +
+      '</section>' +
+      '<p class="exchange-footnote">Le répertoire est isolé par dossier et inclus dans la sauvegarde locale. La synchronisation et les droits réels restent à construire.</p>' +
+    '</div>';
+  }
+
+  function refreshPersonnelRows() {
+    var records = S.personnel().slice().sort(function (a, b) { return String(a.name).localeCompare(String(b.name), 'fr'); });
+    var filter = ui.personnel || { q: '' };
+    var visible = filteredPersonnel(records, filter.q);
+    var rows = $('#personnel-rows');
+    var tableWrap = $('#personnel-table-wrap');
+    var empty = $('#personnel-list-empty');
+    var count = $('#personnel-visible-count');
+    var note = $('#personnel-result-note');
+    if (rows) rows.innerHTML = personnelRowsHtml(records);
+    if (tableWrap) tableWrap.hidden = visible.length === 0;
+    if (empty) {
+      empty.hidden = visible.length !== 0;
+      empty.querySelector('p').textContent = records.length ? 'Aucun membre ne correspond à cette recherche.' : 'Aucun membre du personnel n’est encore enregistré. Utilisez « Nouveau membre » pour créer une fiche.';
+    }
+    if (count) count.textContent = String(visible.length);
+    if (note) note.textContent = visible.length + (visible.length === 1 ? ' membre affiché.' : ' membres affichés.');
+    applyDemoActionGates(rows);
+  }
+
+  function bindPersonnelView() {
+    var form = $('#personnel-filter-form');
+    if (!form) return;
+    var search = $('#personnel-search', form);
+    function update() {
+      ui.personnel = ui.personnel || { q: '' };
+      ui.personnel.q = search ? search.value : '';
+      refreshPersonnelRows();
+    }
+    form.addEventListener('submit', function (event) { event.preventDefault(); });
+    if (search) search.addEventListener('input', update);
+  }
+
+  function openPersonnelModal(id) {
+    var existing = id ? S.personnelRecord(id) : null;
+    if (id && !existing) { toast('Membre du personnel introuvable dans le dossier actif.', 'error'); return; }
+    var accounts = S.accounts().filter(function (account) {
+      var code = String(account.code);
+      return code.indexOf('42') === 0 && Number(account.cls || code.charAt(0)) === 4 && account.aux === true && account.active !== false && account.postable !== false;
+    });
+    var existingAccount = existing && S.account(existing.accountCode);
+    if (existingAccount && !accounts.some(function (account) { return account.code === existingAccount.code; })) accounts.push(existingAccount);
+    accounts.sort(function (a, b) { return String(a.code).localeCompare(String(b.code)); });
+    if (!accounts.length) { toast('Aucun compte auxiliaire actif de la famille Personnel (42) n’est disponible.', 'warning'); return; }
+    var defaultAccount = accounts.find(function (account) { return account.code === '421'; }) || accounts[0];
+    var selectedAccount = existing && accounts.some(function (account) { return account.code === existing.accountCode; }) ? existing.accountCode : defaultAccount.code;
+    var accountOptions = accounts.map(function (account) {
+      return '<option value="' + esc(account.code) + '"' + (account.code === selectedAccount ? ' selected' : '') + '>' + esc(account.code + ' · ' + account.label) + '</option>';
+    }).join('');
+    var identityCheck = existing ? S.personnelIdentityChangeCheck(existing.id) : { ok: true, errors: [] };
+    var suggestedCode = existing ? existing.code : S.nextIdentificationCode('personnel');
+    var value = function (key) { return esc(existing && existing[key] != null ? existing[key] : (key === 'code' ? suggestedCode : '')); };
+    var identityHint = existing && !identityCheck.ok
+      ? '<span class="hint">Code et compte collectif verrouillés pour préserver les références : ' + esc(identityCheck.errors.join(' ')) + '</span>'
+      : '<span class="hint">Code PER proposé automatiquement ; modifiable avant enregistrement.</span>';
+    var body = '<form id="personnel-form" novalidate><div id="personnel-errors" aria-live="assertive"></div>' +
+      '<div class="form-grid supplier-form-grid personnel-form-grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">' +
+        '<div class="field"><label for="personnel-code">Code personnel <span aria-hidden="true">*</span></label><input id="personnel-code" name="code" type="text" maxlength="32" value="' + value('code') + '" placeholder="Ex. PER-0001"' + (existing && !identityCheck.ok ? ' readonly' : '') + ' required autocomplete="off">' + identityHint + '</div>' +
+        '<div class="field"><label for="personnel-name">Nom et prénom <span aria-hidden="true">*</span></label><input id="personnel-name" name="name" type="text" maxlength="150" value="' + value('name') + '" required></div>' +
+        '<div class="field"><label for="personnel-job-title">Fonction</label><input id="personnel-job-title" name="jobTitle" type="text" maxlength="120" value="' + value('jobTitle') + '"></div>' +
+        '<div class="field"><label for="personnel-department">Service</label><input id="personnel-department" name="department" type="text" maxlength="120" value="' + value('department') + '"></div>' +
+        '<div class="field"><label for="personnel-email">Adresse e-mail</label><input id="personnel-email" name="email" type="email" maxlength="254" value="' + value('email') + '"></div>' +
+        '<div class="field"><label for="personnel-phone">Téléphone</label><input id="personnel-phone" name="phone" type="tel" maxlength="40" value="' + value('phone') + '"></div>' +
+        '<div class="field"><label for="personnel-account">Compte collectif du personnel <span aria-hidden="true">*</span></label><select id="personnel-account" name="accountCode" required' + (existing && !identityCheck.ok ? ' disabled' : '') + '>' + accountOptions + '</select><span class="hint">Compte auxiliaire individuel du plan comptable ; aucune écriture de paie n’est générée.</span></div>' +
+        '<div class="field personnel-address-field"><label for="personnel-address">Adresse</label><input id="personnel-address" name="address" type="text" maxlength="255" value="' + value('address') + '"></div>' +
+        '<div class="field personnel-notes-field"><label for="personnel-notes">Notes professionnelles</label><textarea id="personnel-notes" name="notes" rows="3" maxlength="1000">' + value('notes') + '</textarea></div>' +
+      '</div></form>';
+    var mode = existing ? 'edit' : 'create';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="submit" class="btn btn-primary" form="personnel-form" data-action="save-personnel" data-personnel-mode="' + mode + '">' + (existing ? 'Enregistrer les modifications' : 'Enregistrer le membre') + '</button>';
+    openModal(existing ? 'Modifier la fiche du personnel' : 'Nouveau membre du personnel', 'Répertoire local du dossier ' + esc(S.currentDossier().reference), body, footer, true);
+    var form = $('#personnel-form');
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var actionId = mode === 'edit' ? 'personnel.edit' : 'personnel.create';
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', actionId, accountingAccessContext())) {
+        toast('Action refusée par défaut : le droit « ' + actionId + ' » n’est pas accordé.', 'warning');
+        return;
+      }
+      var input = {
+        code: $('#personnel-code').value, name: $('#personnel-name').value, jobTitle: $('#personnel-job-title').value,
+        department: $('#personnel-department').value, email: $('#personnel-email').value, phone: $('#personnel-phone').value,
+        accountCode: $('#personnel-account').value, address: $('#personnel-address').value, notes: $('#personnel-notes').value
+      };
+      var result = existing ? S.updatePersonnel(existing.id, input) : S.createPersonnel(input);
+      if (!result.ok) {
+        $('#personnel-errors').innerHTML = '<div class="alert error" role="alert"><ul style="margin:0 0 0 18px">' + result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
+        return;
+      }
+      toast(existing ? 'Fiche du personnel mise à jour.' : 'Membre ' + result.personnel.code + ' enregistré.', 'success');
+      closeModal(true);
+      render();
+    });
+  }
+
   function viewAccountingMenu(params) {
     params = params || {};
     var phone = isPhoneViewport();
@@ -4777,6 +5139,10 @@
       exchangeFeature = viewSuppliers();
     } else if (group.id === 'definitions' && tab.id === 'clients') {
       exchangeFeature = viewClients();
+    } else if (group.id === 'definitions' && tab.id === 'other-debtors-creditors') {
+      exchangeFeature = viewOtherParties();
+    } else if (group.id === 'definitions' && tab.id === 'personnel') {
+      exchangeFeature = viewPersonnel();
     }
     if (group.id === 'fichier') {
       switch (tab.id) {
@@ -4837,6 +5203,8 @@
       var menuParams = parseHash().params;
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'suppliers') bindSupplierView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'clients') bindClientView();
+      if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'other-debtors-creditors') bindOtherPartyView();
+      if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'personnel') bindPersonnelView();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-other') bindAccountingExchangeImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-balance') bindAccountingBalanceImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-payroll') bindPayrollCentralization();
@@ -5283,6 +5651,46 @@
         var clientDeletion = S.deleteClient(id);
         if (!clientDeletion.ok) { toast(clientDeletion.errors.join(' ') || 'Suppression impossible.', 'warning'); break; }
         toast('Client supprimé. Son code ne sera pas réattribué.', 'success');
+        render();
+        break;
+      }
+      case 'new-other-party':
+        openOtherPartyModal();
+        break;
+      case 'edit-other-party':
+        if (id) openOtherPartyModal(id);
+        break;
+      case 'delete-other-party': {
+        if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'otherParties.delete', accountingAccessContext())) {
+          toast('Suppression refusée par défaut : le droit « otherParties.delete » n’est pas accordé.', 'warning');
+          break;
+        }
+        var otherPartyToDelete = S.otherParty(id);
+        if (!otherPartyToDelete) { toast('Débiteur ou créditeur divers introuvable.', 'error'); break; }
+        if (!window.confirm('Supprimer définitivement la fiche « ' + otherPartyToDelete.name + ' » ? Le code ne sera pas réattribué.')) break;
+        var otherPartyDeletion = S.deleteOtherParty(id);
+        if (!otherPartyDeletion.ok) { toast(otherPartyDeletion.errors.join(' ') || 'Suppression impossible.', 'warning'); break; }
+        toast('Fiche de tiers supprimée. Son code ne sera pas réattribué.', 'success');
+        render();
+        break;
+      }
+      case 'new-personnel':
+        openPersonnelModal();
+        break;
+      case 'edit-personnel':
+        if (id) openPersonnelModal(id);
+        break;
+      case 'delete-personnel': {
+        if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'personnel.delete', accountingAccessContext())) {
+          toast('Suppression refusée par défaut : le droit « personnel.delete » n’est pas accordé.', 'warning');
+          break;
+        }
+        var personnelToDelete = S.personnelRecord(id);
+        if (!personnelToDelete) { toast('Membre du personnel introuvable.', 'error'); break; }
+        if (!window.confirm('Supprimer définitivement la fiche de « ' + personnelToDelete.name + ' » ? Le code ne sera pas réattribué.')) break;
+        var personnelDeletion = S.deletePersonnel(id);
+        if (!personnelDeletion.ok) { toast(personnelDeletion.errors.join(' ') || 'Suppression impossible.', 'warning'); break; }
+        toast('Fiche du personnel supprimée. Son code ne sera pas réattribué.', 'success');
         render();
         break;
       }
