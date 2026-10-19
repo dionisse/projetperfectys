@@ -172,6 +172,10 @@ test('les actions disponibles sont décrites par module', () => {
   assert(actions.includes('analyticalCenters.edit'));
   assert(actions.includes('analyticalCenters.archive'));
   assert(actions.includes('analyticalCenters.delete'));
+  assert(actions.includes('matching.assign'));
+  assert(actions.includes('matching.cancel'));
+  assert(actions.includes('pointage.mark'));
+  assert(actions.includes('pointage.unmark'));
   assert(actions.includes('fixedAssets.create'));
   assert(actions.includes('fixedAssets.edit'));
   assert(actions.includes('fixedAssets.delete'));
@@ -353,6 +357,24 @@ test('les droits des centres analytiques sont distincts et limités au dossier',
   assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'analyticalCenters.delete', context), true);
   assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'analyticalCenters.create', { ...context, dossierId: 'dossier-2' }), false);
   assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'analyticalCenters.delete', { ...context, dossierId: 'dossier-2' }), false);
+});
+
+test('les droits de lettrage et de pointage sont distincts et limités au dossier', () => {
+  const member = {
+    role: 'manager', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view', 'matching.assign', 'pointage.mark'] }] }
+  };
+  const context = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'matching.assign', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'pointage.mark', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'matching.cancel', context), false);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'pointage.unmark', context), false);
+  member.grants.accounting[0].actions.push('matching.cancel', 'pointage.unmark');
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'matching.cancel', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'pointage.unmark', context), true);
+  const otherDossier = { ...context, dossierId: 'dossier-2' };
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'matching.assign', otherDossier), false);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'pointage.mark', otherDossier), false);
 });
 
 console.log('Politique d’accès : scénarios réussis.');

@@ -50,6 +50,7 @@
   var FIXED_ASSET_LOCATION_REGISTRY_VERSION = 1;
   var FIXED_ASSET_REGISTRY_VERSION = 1;
   var ANALYTICAL_CENTER_REGISTRY_VERSION = 1;
+  var RECONCILIATION_REGISTRY_VERSION = 1;
   var LEGACY_COMPTES = [
     { code: '101200', label: 'Capital social', cls: 1, nature: 'Passif', aux: false },
     { code: '162100', label: 'Emprunt bancaire', cls: 1, nature: 'Passif', aux: false },
@@ -236,6 +237,40 @@
     return history;
   }
 
+  function normalizeMatchingGroups(values) {
+    return (Array.isArray(values) ? values : []).filter(function (group) {
+      return group && typeof group === 'object' && !Array.isArray(group);
+    }).map(function (group) {
+      var lineKeys = Array.isArray(group.lineKeys) ? group.lineKeys.map(String).filter(function (key, index, list) { return !!key && list.indexOf(key) === index; }) : [];
+      return Object.assign({}, group, {
+        id: String(group.id || ''),
+        code: String(group.code || '').trim().toLocaleUpperCase(),
+        accountCode: String(group.accountCode || ''),
+        lineKeys: lineKeys,
+        debit: Math.max(0, Number(group.debit) || 0),
+        credit: Math.max(0, Number(group.credit) || 0),
+        status: group.status === 'cancelled' ? 'cancelled' : 'active'
+      });
+    }).filter(function (group) { return !!group.id && !!group.code && !!group.accountCode && group.lineKeys.length >= 2; });
+  }
+
+  function normalizePointageMarks(values) {
+    return (Array.isArray(values) ? values : []).filter(function (mark) {
+      return mark && typeof mark === 'object' && !Array.isArray(mark);
+    }).map(function (mark) {
+      return Object.assign({}, mark, {
+        id: String(mark.id || ''),
+        code: String(mark.code || '').trim().toLocaleUpperCase(),
+        lineKey: String(mark.lineKey || ''),
+        entryId: String(mark.entryId || ''),
+        lineIndex: Number.isInteger(Number(mark.lineIndex)) ? Number(mark.lineIndex) : -1,
+        accountCode: String(mark.accountCode || ''),
+        statementDate: String(mark.statementDate || ''),
+        status: mark.status === 'cancelled' ? 'cancelled' : 'pointed'
+      });
+    }).filter(function (mark) { return !!mark.id && !!mark.lineKey && !!mark.entryId && mark.lineIndex >= 0 && !!mark.accountCode; });
+  }
+
   function upgradeAuxiliaryRegistries(data) {
     var result = { data: data, changed: false };
     if (!data) return result;
@@ -286,6 +321,21 @@
       if (centerMatch) analyticalCenterSequence = Math.max(analyticalCenterSequence, Number(centerMatch[1]) + 1);
     });
     var currentAnalyticalCenterVersion = Number(data.analyticalCenterRegistryVersion);
+    var matchingGroups = normalizeMatchingGroups(data.matchingGroups);
+    var pointageMarks = normalizePointageMarks(data.pointageMarks);
+    var matchingSequence = Number(data.matchingSequence);
+    var pointageSequence = Number(data.pointageSequence);
+    if (!Number.isInteger(matchingSequence) || matchingSequence < 1) matchingSequence = 1;
+    if (!Number.isInteger(pointageSequence) || pointageSequence < 1) pointageSequence = 1;
+    matchingGroups.forEach(function (group) {
+      var match = /^LET-(\d{4})-(\d+)$/.exec(group.code);
+      if (match) matchingSequence = Math.max(matchingSequence, Number(match[2]) + 1);
+    });
+    pointageMarks.forEach(function (mark) {
+      var match = /^PNT-(\d{4})-(\d+)$/.exec(String(mark.code || ''));
+      if (match) pointageSequence = Math.max(pointageSequence, Number(match[2]) + 1);
+    });
+    var currentReconciliationVersion = Number(data.reconciliationRegistryVersion);
     var currentServiceVersion = Number(data.serviceRegistryVersion);
     var histories = {
       supplier: normalizeIdentificationHistory('supplier',
@@ -322,6 +372,11 @@
       JSON.stringify(data.analyticalCenters || []) !== JSON.stringify(analyticalCenters) ||
       JSON.stringify(data.analyticalCenterCodeHistory || []) !== JSON.stringify(analyticalCenterCodeHistory) ||
       Number(data.analyticalCenterSequence) !== analyticalCenterSequence ||
+      !Number.isFinite(currentReconciliationVersion) || currentReconciliationVersion < RECONCILIATION_REGISTRY_VERSION ||
+      JSON.stringify(data.matchingGroups || []) !== JSON.stringify(matchingGroups) ||
+      JSON.stringify(data.pointageMarks || []) !== JSON.stringify(pointageMarks) ||
+      Number(data.matchingSequence) !== matchingSequence ||
+      Number(data.pointageSequence) !== pointageSequence ||
       !Array.isArray(data.clients) || !Number.isFinite(currentClientVersion) || currentClientVersion < CLIENT_REGISTRY_VERSION ||
       !Array.isArray(data.otherParties) || !Number.isFinite(currentOtherPartyVersion) || currentOtherPartyVersion < OTHER_PARTY_REGISTRY_VERSION ||
       !Array.isArray(data.personnel) || !Number.isFinite(currentPersonnelVersion) || currentPersonnelVersion < PERSONNEL_REGISTRY_VERSION ||
@@ -343,6 +398,11 @@
         analyticalCenters: analyticalCenters,
         analyticalCenterCodeHistory: analyticalCenterCodeHistory,
         analyticalCenterSequence: analyticalCenterSequence,
+        reconciliationRegistryVersion: RECONCILIATION_REGISTRY_VERSION,
+        matchingGroups: matchingGroups,
+        matchingSequence: matchingSequence,
+        pointageMarks: pointageMarks,
+        pointageSequence: pointageSequence,
         serviceRegistryVersion: SERVICE_REGISTRY_VERSION,
         services: services,
         serviceCodeHistory: serviceCodeHistory,
@@ -784,6 +844,11 @@
       analyticalCenters: [],
       analyticalCenterCodeHistory: [],
       analyticalCenterSequence: 1,
+      reconciliationRegistryVersion: RECONCILIATION_REGISTRY_VERSION,
+      matchingGroups: [],
+      matchingSequence: 1,
+      pointageMarks: [],
+      pointageSequence: 1,
       suppliers: [],
       clients: [],
       otherParties: [],
@@ -1822,6 +1887,195 @@
       return { ok: false, errors: ['Suppression impossible : stockage local indisponible ou plein. Le centre analytique est conservé.'] };
     }
     return { ok: true, errors: [], analyticalCenter: clone(record) };
+  }
+
+  function postedAccountLine(st, accountCode, lineKey) {
+    st = st || load();
+    accountCode = String(accountCode || '');
+    lineKey = String(lineKey || '');
+    var separator = lineKey.lastIndexOf(':');
+    if (separator <= 0) return null;
+    var entryId = lineKey.slice(0, separator);
+    var lineIndex = Number(lineKey.slice(separator + 1));
+    if (!Number.isInteger(lineIndex) || lineIndex < 0) return null;
+    var record = (st.entries || []).find(function (item) {
+      return item.id === entryId && item.status === 'posted' && item.date >= st.cycleStart && item.date <= st.cycleEnd;
+    });
+    if (!record || !Array.isArray(record.lines) || !record.lines[lineIndex] || String(record.lines[lineIndex].account) !== accountCode) return null;
+    return { entry: record, line: record.lines[lineIndex], entryId: entryId, lineIndex: lineIndex, lineKey: lineKey };
+  }
+
+  function matchingGroups(accountCode) {
+    var st = load();
+    var records = (st.matchingGroups || []).filter(function (group) {
+      return group.status !== 'cancelled' && (!accountCode || String(group.accountCode) === String(accountCode));
+    });
+    return clone(records);
+  }
+
+  function matchingGroup(idOrCode) {
+    var key = String(idOrCode == null ? '' : idOrCode);
+    var record = (load().matchingGroups || []).find(function (group) { return group.id === key || group.code === key; });
+    return record ? clone(record) : null;
+  }
+
+  function matchingForLine(lineKey) {
+    var key = String(lineKey || '');
+    var record = (load().matchingGroups || []).find(function (group) { return group.status !== 'cancelled' && group.lineKeys.indexOf(key) !== -1; });
+    return record ? clone(record) : null;
+  }
+
+  function assignLetter(accountCode, lineKeys) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Lettrage bloqué : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    accountCode = String(accountCode || '');
+    var accountRecord = (st.accounts || []).find(function (item) { return String(item.code) === accountCode; });
+    if (!accountRecord || Number(accountRecord.cls) !== 4 || accountRecord.aux !== true || accountRecord.active === false || accountRecord.postable === false) {
+      return { ok: false, errors: ['Choisissez un compte auxiliaire actif et imputable de classe 4.'] };
+    }
+    var keys = (Array.isArray(lineKeys) ? lineKeys : []).map(function (key) { return String(key || ''); }).filter(function (key, index, list) { return !!key && list.indexOf(key) === index; });
+    if (keys.length < 2) return { ok: false, errors: ['Sélectionnez au moins deux lignes validées à lettrer.'] };
+    var lines = [];
+    for (var index = 0; index < keys.length; index += 1) {
+      var lineRecord = postedAccountLine(st, accountCode, keys[index]);
+      if (!lineRecord) return { ok: false, errors: ['Une ligne sélectionnée n’existe plus dans le compte choisi ou n’est pas validée. Actualisez la liste.'] };
+      if ((st.matchingGroups || []).some(function (group) { return group.status !== 'cancelled' && group.lineKeys.indexOf(keys[index]) !== -1; })) {
+        return { ok: false, errors: ['Une ligne sélectionnée est déjà lettrée. Actualisez la liste avant de recommencer.'] };
+      }
+      lines.push(lineRecord);
+    }
+    var debit = lines.reduce(function (sum, record) { return sum + (Number(record.line.debit) || 0); }, 0);
+    var credit = lines.reduce(function (sum, record) { return sum + (Number(record.line.credit) || 0); }, 0);
+    if (debit <= 0 || debit !== credit) {
+      return { ok: false, errors: ['Le lettrage doit être équilibré : le total débit doit être strictement égal au total crédit.'] };
+    }
+    var previousState = clone(st);
+    var sequence = Number(st.matchingSequence) || 1;
+    var year = Number(st.exercise) || EXERCICE;
+    var code;
+    do {
+      code = 'LET-' + year + '-' + String(sequence).padStart(4, '0');
+      sequence += 1;
+    } while ((st.matchingGroups || []).some(function (group) { return group.code === code; }));
+    var timestamp = new Date().toISOString();
+    var group = {
+      id: 'matching-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7),
+      code: code,
+      accountCode: accountCode,
+      lineKeys: keys,
+      debit: debit,
+      credit: credit,
+      status: 'active',
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+    st.matchingGroups.push(group);
+    st.matchingSequence = sequence;
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer le lettrage dans le dossier actif.'] };
+    }
+    return { ok: true, errors: [], matchingGroup: clone(group) };
+  }
+
+  function cancelLetter(idOrCode) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Annulation du lettrage bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var group = (st.matchingGroups || []).find(function (item) { return item.id === idOrCode || item.code === idOrCode; });
+    if (!group || group.status === 'cancelled') return { ok: false, errors: ['Lettrage actif introuvable dans le dossier.'] };
+    var previousState = clone(st);
+    group.status = 'cancelled';
+    group.cancelledAt = new Date().toISOString();
+    group.updatedAt = group.cancelledAt;
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’annuler ce lettrage dans le dossier actif.'] };
+    }
+    return { ok: true, errors: [], matchingGroup: clone(group) };
+  }
+
+  function pointageMarks(accountCode) {
+    var st = load();
+    var records = (st.pointageMarks || []).filter(function (mark) {
+      return mark.status !== 'cancelled' && (!accountCode || String(mark.accountCode) === String(accountCode));
+    });
+    return clone(records);
+  }
+
+  function pointageForLine(lineKey) {
+    var key = String(lineKey || '');
+    var record = (load().pointageMarks || []).find(function (mark) { return mark.status !== 'cancelled' && mark.lineKey === key; });
+    return record ? clone(record) : null;
+  }
+
+  function pointEntryLine(lineKey, statementDate) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Pointage bloqué : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    lineKey = String(lineKey || '');
+    var separator = lineKey.lastIndexOf(':');
+    var entryId = separator > 0 ? lineKey.slice(0, separator) : '';
+    var lineIndex = separator > 0 ? Number(lineKey.slice(separator + 1)) : -1;
+    var entryCandidate = (st.entries || []).find(function (item) { return item.id === entryId; });
+    var lineCandidate = entryCandidate && Array.isArray(entryCandidate.lines) ? entryCandidate.lines[lineIndex] : null;
+    var lineRecord = lineCandidate ? postedAccountLine(st, lineCandidate.account, lineKey) : null;
+    if (!lineRecord) return { ok: false, errors: ['La ligne à pointer n’existe plus ou n’est pas une écriture validée. Actualisez la liste.'] };
+    var accountRecord = (st.accounts || []).find(function (item) { return String(item.code) === String(lineRecord.line.account); });
+    if (!accountRecord || Number(accountRecord.cls) !== 5 || accountRecord.active === false || accountRecord.postable === false) {
+      return { ok: false, errors: ['Le pointage est réservé aux comptes de trésorerie actifs et imputables de classe 5.'] };
+    }
+    statementDate = String(statementDate || '').trim();
+    if (statementDate && !parseIsoDate(statementDate)) return { ok: false, errors: ['La date de relevé doit être une date valide au format AAAA-MM-JJ.'] };
+    if ((st.pointageMarks || []).some(function (mark) { return mark.status !== 'cancelled' && mark.lineKey === lineKey; })) {
+      return { ok: false, errors: ['Cette ligne est déjà pointée.'] };
+    }
+    var previousState = clone(st);
+    var sequence = Number(st.pointageSequence) || 1;
+    var year = Number(lineRecord.entry.date.slice(0, 4)) || Number(st.exercise) || EXERCICE;
+    var code;
+    do {
+      code = 'PNT-' + year + '-' + String(sequence).padStart(4, '0');
+      sequence += 1;
+    } while ((st.pointageMarks || []).some(function (mark) { return mark.code === code; }));
+    var timestamp = new Date().toISOString();
+    var mark = {
+      id: 'pointage-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7),
+      code: code,
+      lineKey: lineKey,
+      entryId: lineRecord.entryId,
+      lineIndex: lineRecord.lineIndex,
+      accountCode: String(lineRecord.line.account),
+      entryDate: lineRecord.entry.date,
+      reference: String(lineRecord.entry.reference || ''),
+      journal: String(lineRecord.entry.journal || ''),
+      statementDate: statementDate,
+      status: 'pointed',
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+    st.pointageMarks.push(mark);
+    st.pointageSequence = sequence;
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer le pointage dans le dossier actif.'] };
+    }
+    return { ok: true, errors: [], pointageMark: clone(mark) };
+  }
+
+  function unpointEntryLine(lineKey) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Annulation du pointage bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    lineKey = String(lineKey || '');
+    var mark = (st.pointageMarks || []).find(function (item) { return item.status !== 'cancelled' && item.lineKey === lineKey; });
+    if (!mark) return { ok: false, errors: ['Pointage actif introuvable pour cette ligne.'] };
+    var previousState = clone(st);
+    mark.status = 'cancelled';
+    mark.cancelledAt = new Date().toISOString();
+    mark.updatedAt = mark.cancelledAt;
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’annuler ce pointage dans le dossier actif.'] };
+    }
+    return { ok: true, errors: [], pointageMark: clone(mark) };
   }
 
   function suppliers() {
@@ -4127,6 +4381,15 @@
     updateAnalyticalCenter: updateAnalyticalCenter,
     setAnalyticalCenterActive: setAnalyticalCenterActive,
     deleteAnalyticalCenter: deleteAnalyticalCenter,
+    matchingGroups: matchingGroups,
+    matchingGroup: matchingGroup,
+    matchingForLine: matchingForLine,
+    assignLetter: assignLetter,
+    cancelLetter: cancelLetter,
+    pointageMarks: pointageMarks,
+    pointageForLine: pointageForLine,
+    pointEntryLine: pointEntryLine,
+    unpointEntryLine: unpointEntryLine,
     nextServiceCode: nextServiceCode,
     createService: createService,
     updateService: updateService,

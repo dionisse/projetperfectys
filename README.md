@@ -43,7 +43,7 @@ Le dépôt fournit un serveur statique sans dépendance ni compilation. Dans Bol
 | Dossiers clients | Liste multi-dossiers ouverte depuis le module Comptabilité ; création d’entreprise, code, type comptable, référence et cycle paramétrable |
 | Tableau de bord | Indicateurs (débit, crédit, résultat, pièces), dernières pièces, activité par journal, état des périodes |
 | Plan comptable | Référentiel complet de 147 comptes fourni, classes et sous-classes, descriptions d’usage, recherche/filtres, création, modification et suppression contrôlée ; les numéros utilisés dans les pièces, les rattachements clients/fournisseurs/tiers divers/personnel ou les sous-comptes sont protégés, sans réécriture de l’historique |
-| Fournisseurs | Répertoire local isolé par dossier : code automatique modifiable, création, modification, archivage/réactivation et suppression des fiches non référencées ; IFU/RCCM, contacts, compte général et auxiliaire individualisé ; aucune facture, aucun règlement, mouvement auxiliaire, lettrage ni centralisation n’est généré |
+| Fournisseurs | Répertoire local isolé par dossier : code automatique modifiable, création, modification, archivage/réactivation et suppression des fiches non référencées ; IFU/RCCM, contacts, compte général et auxiliaire individualisé ; aucune facture, aucun règlement, mouvement auxiliaire ni lettrage individuel fournisseur n’est généré. Le lettrage disponible porte uniquement sur le compte général faute d’identifiant auxiliaire ; aucune centralisation n’est générée |
 | Clients | Répertoire des tiers clients de l’entreprise suivie, distinct des dossiers clients du cabinet : code `CLI` automatique/modifiable, création, modification et suppression protégée dès qu’une pièce ou un mouvement comptable référence la fiche ; aucune facture, règlement ni écriture n’est généré |
 | Prestations | Catalogue local par dossier, code `PRE` non réutilisé, désignation, description, recherche, archivage et réactivation ; prix, fiscalité et facturation restent à construire |
 | Débiteurs et créditeurs divers | Répertoire mixte avec type débiteur/créditeur, code `DEB`/`CRE` automatique, compte auxiliaire 47 et modification/suppression protégées |
@@ -55,6 +55,8 @@ Le dépôt fournit un serveur statique sans dépendance ni compilation. Dans Bol
 | Opérations de caisse en temps réel | Encaissements et décaissements rapides au journal `CA`, écritures équilibrées, aperçu du solde avant/après et recalcul à partir des seules pièces validées sur les comptes de caisse `57`; brouillons exclus. Stockage local de démonstration, sans synchronisation multi-utilisateur ; transferts entre caisses et calculs de TVA exclus |
 | Comptes généraux et auxiliaires | Cet écran apparaît après sélection de son enfant sous « Mouvements des comptes généraux, tiers et analytiques » ; aucune plateforme n’est affichée au bas du menu parent. Arborescence du plan, synthèse mensuelle (lignes, débits, crédits), totaux, soldes de clôture et détails par mois/exercice issus des écritures validées du cycle du dossier. Les fiches auxiliaires restent sans mouvements/soldes individuels faute d’identifiant auxiliaire dans les pièces |
 | Comptes tiers | Référentiels du dossier pour fournisseurs, clients, personnel et débiteurs/créditeurs divers ; consultation des montants agrégés par compte collectif uniquement. Les mouvements et soldes individuels ne sont pas inventés : les pièces actuelles ne portent pas d’identifiant de tiers |
+| Lettrage | **Saisie → Lettrage** : lettrage manuel de lignes validées et équilibrées sur un compte auxiliaire de classe 4. Les lettres sont persistées séparément, annulables avec historique, sans modifier les écritures ; faute d’identifiant auxiliaire dans les pièces, le lettrage n’est pas attribué à un fournisseur ou client individuel |
+| Pointage | **Saisie → Pointage** : pointage manuel, par ligne validée, des comptes de trésorerie de classe 5, avec date de relevé facultative. Le registre est séparé du grand livre ; aucun relevé bancaire n’est importé, aucun rapprochement automatique et aucune écriture ne sont générés |
 | Centres d’analyse | Création, modification, archivage, réactivation et suppression protégée d’un référentiel de centres défini par l’utilisateur, isolé par dossier et à codes non réutilisables. Réservé à l’analytique : aucune écriture générale n’est générée. Mouvements, imputations et états analytiques restent gris/inactifs |
 | Saisie d'écriture | Saisie multiligne dans le journal choisi, contrôle d'équilibre en direct, référence proposée automatiquement, brouillon ou validation |
 | Pièces comptables | Liste filtrable, détail en modale, validation, modification et suppression des brouillons |
@@ -359,7 +361,9 @@ d'authentification réelle ni de connexion à Google Drive. Un point de restaura
 local conserve le dernier état comptable avant une modification, mais reste dans le
 même navigateur et ne remplace pas une sauvegarde externe indépendante. Il n'y a pas non plus de
 synchronisation multi-utilisateur ; les dossiers et leurs données comptables restent
-locaux dans le navigateur et ne sont pas partagés entre appareils. Les limites comptables du Lot 1 restent applicables (notamment tiers et
-auxiliaires détaillés, extourne, lettrage, rapprochement bancaire, exports PDF/Excel
-et états financiers SYSCOHADA complets). Le prototype valide le parcours avant la
+locaux dans le navigateur et ne sont pas partagés entre appareils. Les limites comptables du Lot 1 restent applicables : lettrage auxiliaire individuel
+(faute d’identifiant de tiers dans les pièces), import de relevés et rapprochement
+bancaire automatisé, extourne générale, exports PDF/Excel et états financiers
+SYSCOHADA complets restent à construire. Le lettrage et le pointage disponibles
+constituent des registres manuels séparés, sans écriture comptable. Le prototype valide le parcours avant la
 conception du stockage partagé et de l'authentification.

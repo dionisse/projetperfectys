@@ -48,6 +48,8 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Mouvements des comptes généraux, tiers et analytiques',
   'Comptes généraux et auxiliaires',
   'Comptes tiers',
+  'Lettrage',
+  'Pointage',
   'Centres d’analyse (analytique)',
   'Reports à nouveau',
   'Journaux',
@@ -106,6 +108,10 @@ assert.ok(accountMovementsTab.children[1].reason.includes('agrégé'));
 assert.equal(accountMovementsTab.children[2].id, 'analytic-movements');
 assert.equal(accountMovementsTab.children[2].status, 'inactive');
 assert.ok(accountMovementsTab.reason.includes('grisée'));
+assert.equal(findTab('saisie', 'matching').status, 'partial');
+assert.ok(findTab('saisie', 'matching').reason.includes('équilibrées'));
+assert.equal(findTab('saisie', 'reconciliation').status, 'partial');
+assert.ok(findTab('saisie', 'reconciliation').reason.includes('Aucun relevé bancaire n’est importé'));
 const analyticalCenters = findTab('definitions', 'responsibility-centers');
 assert.equal(analyticalCenters.status, 'partial');
 assert.ok(analyticalCenters.reason.includes('réservés à la comptabilité analytique'));
@@ -162,5 +168,9 @@ assert.equal((menuRenderer.match(/viewGeneralAccountMovements\(\)/g) || []).leng
   'une seule référence à la plateforme générale existe et elle est gardée par la sélection de l’enfant');
 assert.equal((menuRenderer.match(/viewThirdPartyMovements\(\)/g) || []).length, 1,
   'une seule référence à la plateforme des tiers existe et elle est gardée par la sélection de l’enfant');
+assert.match(menuRenderer, /group\.id === 'saisie' && tab\.id === 'matching'[\s\S]*viewMatching\(\)/,
+  'le sous-menu Lettrage ouvre son écran dédié');
+assert.match(menuRenderer, /group\.id === 'saisie' && tab\.id === 'reconciliation'[\s\S]*viewPointage\(\)/,
+  'le sous-menu Pointage ouvre son écran dédié');
 
 console.log('Navigation comptable : 8 menus, hiérarchie, sélection des enfants, périmètre et états inactifs — OK');

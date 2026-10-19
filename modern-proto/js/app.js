@@ -76,6 +76,8 @@
     journal: { journal: '', year: String(S.exercise()) },
     ledger: { account: '521' },
     accountMovements: { q: '', kind: 'all', nodeId: '', month: '' },
+    matching: { q: '', account: '', status: 'unmatched', selectedLineKeys: [] },
+    pointage: { q: '', account: '', status: 'all', month: 'all', statementDate: '' },
     thirdPartyMovements: { q: '', kind: 'all', recordId: '', month: '' },
     analyticalCenters: { q: '', status: 'active' },
     periods: { year: S.exercise() },
@@ -239,6 +241,16 @@
         return { moduleId: 'accounting', actionId: 'data.export' };
       case 'reinitialize-corrupt-database':
         return { moduleId: 'accounting', actionId: 'data.reset' };
+      case 'toggle-matching-line':
+        return { moduleId: 'accounting', actionId: 'module.view' };
+      case 'assign-letter':
+        return { moduleId: 'accounting', actionId: 'matching.assign' };
+      case 'cancel-letter':
+        return { moduleId: 'accounting', actionId: 'matching.cancel' };
+      case 'point-entry-line':
+        return { moduleId: 'accounting', actionId: 'pointage.mark' };
+      case 'unpoint-entry-line':
+        return { moduleId: 'accounting', actionId: 'pointage.unmark' };
       case 'select-account-movement-node':
       case 'select-account-movement-month':
       case 'select-third-party-movement-month':
@@ -6725,6 +6737,182 @@
     openModal(title, subtitle, body, '<button type="button" class="btn btn-primary" data-action="close-modal">Fermer</button>', true);
   }
 
+  function matchingAccountRecords() {
+    return S.accounts().filter(function (account) {
+      return Number(account.cls) === 4 && account.aux === true && account.active !== false && account.postable !== false;
+    }).sort(function (a, b) { return String(a.code).localeCompare(String(b.code), 'fr'); });
+  }
+
+  function pointageAccountRecords() {
+    return S.accounts().filter(function (account) {
+      return Number(account.cls) === 5 && account.active !== false && account.postable !== false;
+    }).sort(function (a, b) { return String(a.code).localeCompare(String(b.code), 'fr'); });
+  }
+
+  function accountingControlLineRows(accountCode) {
+    var matchingByLine = Object.create(null);
+    var pointageByLine = Object.create(null);
+    S.matchingGroups(accountCode).forEach(function (group) {
+      group.lineKeys.forEach(function (key) { matchingByLine[key] = group; });
+    });
+    S.pointageMarks(accountCode).forEach(function (mark) { pointageByLine[mark.lineKey] = mark; });
+    var rows = [];
+    S.postedEntries().forEach(function (entry) {
+      (entry.lines || []).forEach(function (line, lineIndex) {
+        if (String(line.account) !== String(accountCode)) return;
+        var lineKey = entry.id + ':' + lineIndex;
+        rows.push({
+          lineKey: lineKey,
+          entryId: entry.id,
+          lineIndex: lineIndex,
+          accountCode: String(accountCode),
+          date: entry.date,
+          monthKey: String(entry.date || '').slice(0, 7),
+          reference: String(entry.reference || ''),
+          journal: String(entry.journal || ''),
+          description: String(entry.description || ''),
+          debit: Number(line.debit) || 0,
+          credit: Number(line.credit) || 0,
+          matchingGroup: matchingByLine[lineKey] || null,
+          pointageMark: pointageByLine[lineKey] || null
+        });
+      });
+    });
+    return rows.sort(function (a, b) { return a.date.localeCompare(b.date) || a.reference.localeCompare(b.reference) || a.lineIndex - b.lineIndex; });
+  }
+
+  function accountingControlSearchMatches(row, query) {
+    var needle = String(query || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+    if (!needle) return true;
+    return [row.date, row.reference, row.journal, row.description, row.accountCode].join(' ')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase().indexOf(needle) !== -1;
+  }
+
+  function renderMatchingLineRow(row) {
+    var isMatched = !!row.matchingGroup;
+    var checked = ui.matching.selectedLineKeys.indexOf(row.lineKey) !== -1;
+    var selection = isMatched
+      ? '<span class="matching-line-letter" title="Lettrage actif">' + esc(row.matchingGroup.code) + '</span>'
+      : '<input type="checkbox" data-action="toggle-matching-line" data-line-key="' + esc(row.lineKey) + '"' + (checked ? ' checked' : '') + ' aria-label="Sélectionner la ligne ' + esc(row.reference) + ' du ' + esc(dateLabel(row.date)) + '">';
+    return '<tr class="reconciliation-line-row' + (isMatched ? ' is-matched' : '') + '">' +
+      '<td class="reconciliation-selection-cell">' + selection + '</td>' +
+      '<td class="nowrap">' + esc(dateLabel(row.date)) + '</td>' +
+      '<td><strong>' + esc(row.journal) + '</strong></td>' +
+      '<td><strong>' + esc(row.reference) + '</strong></td>' +
+      '<td class="reconciliation-description-cell">' + esc(row.description || '—') + '</td>' +
+      '<td class="num">' + esc(amount(row.debit)) + '</td>' +
+      '<td class="num">' + esc(amount(row.credit)) + '</td>' +
+      '<td>' + (isMatched ? '<span class="reconciliation-status is-matched">Lettré · ' + esc(row.matchingGroup.code) + '</span>' : '<span class="reconciliation-status is-open">Non lettré</span>') + '</td>' +
+    '</tr>';
+  }
+
+  function viewMatching() {
+    var accounts = matchingAccountRecords();
+    var selectedAccount = accounts.find(function (account) { return String(account.code) === String(ui.matching.account); }) || accounts[0] || null;
+    ui.matching.account = selectedAccount ? String(selectedAccount.code) : '';
+    if (!selectedAccount) ui.matching.selectedLineKeys = [];
+    var allRows = selectedAccount ? accountingControlLineRows(selectedAccount.code) : [];
+    ui.matching.selectedLineKeys = ui.matching.selectedLineKeys.filter(function (key) {
+      return allRows.some(function (row) { return row.lineKey === key && !row.matchingGroup; });
+    });
+    var visibleRows = allRows.filter(function (row) {
+      if (ui.matching.status === 'unmatched' && row.matchingGroup) return false;
+      if (ui.matching.status === 'matched' && !row.matchingGroup) return false;
+      return accountingControlSearchMatches(row, ui.matching.q);
+    });
+    var selectedRows = allRows.filter(function (row) { return ui.matching.selectedLineKeys.indexOf(row.lineKey) !== -1 && !row.matchingGroup; });
+    var selectedDebit = selectedRows.reduce(function (sum, row) { return sum + row.debit; }, 0);
+    var selectedCredit = selectedRows.reduce(function (sum, row) { return sum + row.credit; }, 0);
+    var selectedDifference = selectedDebit - selectedCredit;
+    var canAssign = !!selectedAccount && selectedRows.length >= 2 && selectedDebit > 0 && selectedDebit === selectedCredit;
+    var accountOptions = accounts.map(function (account) {
+      return '<option value="' + esc(account.code) + '"' + (selectedAccount && String(account.code) === String(selectedAccount.code) ? ' selected' : '') + '>' + esc(account.code + ' · ' + account.label) + '</option>';
+    }).join('');
+    var lineRows = visibleRows.map(renderMatchingLineRow).join('');
+    if (!lineRows) lineRows = '<tr><td colspan="8"><div class="empty-state reconciliation-empty"><strong>' +
+      (selectedAccount ? (allRows.length ? 'Aucune ligne ne correspond aux filtres.' : 'Aucune écriture validée pour ce compte dans le cycle.') : 'Aucun compte auxiliaire actif de classe 4 n’est disponible.') +
+      '</strong>Les brouillons ne sont pas présentés dans le lettrage.</div></td></tr>';
+    var groups = selectedAccount ? S.matchingGroups(selectedAccount.code) : [];
+    var groupsHtml = groups.map(function (group) {
+      var rowByKey = Object.create(null);
+      allRows.forEach(function (row) { rowByKey[row.lineKey] = row; });
+      var references = group.lineKeys.map(function (key) { var row = rowByKey[key]; return row ? row.reference : 'Ligne historique'; });
+      return '<tr><td><strong>' + esc(group.code) + '</strong></td><td>' + esc(String(group.lineKeys.length)) + '</td><td>' + esc(references.join(' · ')) + '</td><td class="num">' + esc(amount(group.debit)) + '</td><td class="num">' + esc(amount(group.credit)) + '</td><td><button type="button" class="btn btn-ghost btn-sm" data-action="cancel-letter" data-id="' + esc(group.id) + '">Annuler le lettrage</button></td></tr>';
+    }).join('');
+    if (!groupsHtml) groupsHtml = '<tr><td colspan="6"><div class="empty-state reconciliation-empty"><strong>Aucun lettrage actif pour ce compte.</strong>Les lignes validées restent disponibles dans la liste ci-dessus.</div></td></tr>';
+    var selectionState = selectedRows.length < 2
+      ? 'Sélectionnez au moins deux lignes non lettrées.'
+      : (selectedDebit === selectedCredit && selectedDebit > 0
+        ? 'Équilibre exact : prêt à créer le lettrage.'
+        : 'Écart débit − crédit : ' + esc(amount(selectedDifference)) + ' XOF.');
+    return '<div class="exchange-workspace reconciliation-workspace matching-workspace">' +
+      '<div class="alert info reconciliation-boundary-note"><div><strong>Lettrage au niveau du compte général auxiliaire uniquement.</strong> Les écritures validées ne sont jamais modifiées. Comme les pièces ne portent pas d’identifiant fournisseur/client, ce lettrage n’attribue pas les lignes à un tiers individuel. Plusieurs lignes peuvent être rapprochées si les totaux débit et crédit sont strictement égaux.</div></div>' +
+      '<div class="supplier-filter-controls reconciliation-toolbar"><label class="field"><span>Compte auxiliaire de classe 4</span><select id="matching-account" data-filter="matching:account"' + (accounts.length ? '' : ' disabled') + '>' + accountOptions + '</select></label>' +
+        '<label class="field"><span>Afficher</span><select id="matching-status" data-filter="matching:status"><option value="unmatched"' + (ui.matching.status === 'unmatched' ? ' selected' : '') + '>Lignes non lettrées</option><option value="matched"' + (ui.matching.status === 'matched' ? ' selected' : '') + '>Lignes déjà lettrées</option><option value="all"' + (ui.matching.status === 'all' ? ' selected' : '') + '>Toutes les lignes</option></select></label>' +
+        '<label class="field"><span>Rechercher</span><input id="matching-search" type="search" data-filter="matching:q" value="' + esc(ui.matching.q) + '" placeholder="Date, journal, référence ou libellé"></label></div>' +
+      '<div class="exchange-summary-grid reconciliation-summary-grid"><div><small>Lignes validées du compte</small><strong>' + allRows.length + '</strong></div><div><small>Lignes déjà lettrées</small><strong>' + allRows.filter(function (row) { return !!row.matchingGroup; }).length + '</strong></div><div><small>Lignes sélectionnées</small><strong>' + selectedRows.length + '</strong></div></div>' +
+      '<section class="exchange-card reconciliation-card"><div class="supplier-directory-head"><div><h4>' + esc(selectedAccount ? selectedAccount.code + ' · ' + selectedAccount.label : 'Comptes auxiliaires indisponibles') + '</h4><p>Choisissez des lignes validées du même compte. Les mouvements restent dans le grand livre inchangés.</p></div></div>' +
+        '<div class="table-wrap exchange-table-wrap reconciliation-table-wrap"><table class="exchange-mapping-table reconciliation-table matching-table"><thead><tr><th>Sél.</th><th>Date</th><th>Journal</th><th>Référence</th><th>Libellé de la pièce</th><th class="num">Débit</th><th class="num">Crédit</th><th>État</th></tr></thead><tbody>' + lineRows + '</tbody></table></div>' +
+        '<div class="reconciliation-selection-summary"><div><small>Sélection</small><strong>' + selectedRows.length + ' ligne(s) · Débit ' + esc(amount(selectedDebit)) + ' · Crédit ' + esc(amount(selectedCredit)) + ' · Écart ' + esc(amount(selectedDifference)) + ' XOF</strong><span>' + selectionState + '</span></div><button type="button" class="btn btn-primary" data-action="assign-letter"' + (canAssign ? '' : ' disabled') + '>Lettrer la sélection</button></div>' +
+      '</section>' +
+      '<section class="exchange-card reconciliation-card"><div class="supplier-directory-head"><div><h4>Lettrages actifs</h4><p>Les lettres sont un suivi local au dossier, historisé indépendamment des pièces.</p></div></div>' +
+        '<div class="table-wrap exchange-table-wrap reconciliation-table-wrap"><table class="exchange-mapping-table reconciliation-table matching-groups-table"><thead><tr><th>Lettre</th><th>Lignes</th><th>Références</th><th class="num">Débit</th><th class="num">Crédit</th><th>Action</th></tr></thead><tbody>' + groupsHtml + '</tbody></table></div>' +
+      '</section>' +
+      '<p class="exchange-footnote">Les lettres ne sont ni des imputations, ni des écritures, ni des soldes auxiliaires. L’annulation conserve l’historique et libère les lignes pour un nouveau lettrage.</p>' +
+    '</div>';
+  }
+
+  function renderPointageLineRow(row) {
+    var mark = row.pointageMark;
+    var action = mark
+      ? '<button type="button" class="btn btn-ghost btn-sm" data-action="unpoint-entry-line" data-line-key="' + esc(row.lineKey) + '">Retirer</button>'
+      : '<button type="button" class="btn btn-ghost btn-sm" data-action="point-entry-line" data-line-key="' + esc(row.lineKey) + '">Pointer</button>';
+    var markLabel = mark
+      ? '<span class="reconciliation-status is-pointed">Pointé · ' + esc(mark.code) + '</span>' + (mark.statementDate ? '<small>Relevé du ' + esc(dateLabel(mark.statementDate)) + '</small>' : '')
+      : '<span class="reconciliation-status is-open">Non pointé</span>';
+    return '<tr class="reconciliation-line-row' + (mark ? ' is-pointed' : '') + '"><td class="nowrap">' + esc(dateLabel(row.date)) + '</td><td><strong>' + esc(row.reference) + '</strong></td><td>' + esc(row.journal) + '</td><td class="reconciliation-description-cell">' + esc(row.description || '—') + '</td><td class="num">' + esc(amount(row.debit)) + '</td><td class="num">' + esc(amount(row.credit)) + '</td><td><div class="pointage-state-cell">' + markLabel + action + '</div></td></tr>';
+  }
+
+  function viewPointage() {
+    var accounts = pointageAccountRecords();
+    var selectedAccount = accounts.find(function (account) { return String(account.code) === String(ui.pointage.account); }) || accounts[0] || null;
+    ui.pointage.account = selectedAccount ? String(selectedAccount.code) : '';
+    var periods = S.periodStats(S.exercise()).map(function (period) {
+      return Object.assign({}, period, { key: Number(period.year) + '-' + String(period.month).padStart(2, '0') });
+    });
+    if (ui.pointage.month !== 'all' && !periods.some(function (period) { return period.key === ui.pointage.month; })) ui.pointage.month = 'all';
+    var allRows = selectedAccount ? accountingControlLineRows(selectedAccount.code) : [];
+    var visibleRows = allRows.filter(function (row) {
+      if (ui.pointage.month !== 'all' && row.monthKey !== ui.pointage.month) return false;
+      if (ui.pointage.status === 'pointed' && !row.pointageMark) return false;
+      if (ui.pointage.status === 'unpointed' && row.pointageMark) return false;
+      return accountingControlSearchMatches(row, ui.pointage.q);
+    });
+    var rowsHtml = visibleRows.map(renderPointageLineRow).join('');
+    if (!rowsHtml) rowsHtml = '<tr><td colspan="7"><div class="empty-state reconciliation-empty"><strong>' +
+      (selectedAccount ? (allRows.length ? 'Aucune ligne ne correspond aux filtres.' : 'Aucune écriture validée pour ce compte dans le cycle.') : 'Aucun compte de trésorerie actif de classe 5 n’est disponible.') +
+      '</strong>Les brouillons sont exclus du pointage.</div></td></tr>';
+    var accountOptions = accounts.map(function (account) {
+      return '<option value="' + esc(account.code) + '"' + (selectedAccount && String(account.code) === String(selectedAccount.code) ? ' selected' : '') + '>' + esc(account.code + ' · ' + account.label) + '</option>';
+    }).join('');
+    var monthOptions = '<option value="all"' + (ui.pointage.month === 'all' ? ' selected' : '') + '>Tout le cycle</option>' + periods.map(function (period) {
+      return '<option value="' + esc(period.key) + '"' + (ui.pointage.month === period.key ? ' selected' : '') + '>' + esc(accountMovementMonthLabel(period)) + '</option>';
+    }).join('');
+    var pointedCount = allRows.filter(function (row) { return !!row.pointageMark; }).length;
+    return '<div class="exchange-workspace reconciliation-workspace pointage-workspace">' +
+      '<div class="alert info reconciliation-boundary-note"><div><strong>Pointage manuel du grand livre de trésorerie.</strong> Les lignes validées des comptes de classe 5 sont marquées dans un registre séparé. Aucun relevé bancaire n’est importé, aucun écart bancaire n’est calculé et aucune écriture n’est générée ou modifiée.</div></div>' +
+      '<div class="supplier-filter-controls reconciliation-toolbar pointage-toolbar"><label class="field"><span>Compte de trésorerie</span><select id="pointage-account" data-filter="pointage:account"' + (accounts.length ? '' : ' disabled') + '>' + accountOptions + '</select></label>' +
+        '<label class="field"><span>Période</span><select id="pointage-month" data-filter="pointage:month">' + monthOptions + '</select></label>' +
+        '<label class="field"><span>État</span><select id="pointage-status" data-filter="pointage:status"><option value="all"' + (ui.pointage.status === 'all' ? ' selected' : '') + '>Toutes les lignes</option><option value="unpointed"' + (ui.pointage.status === 'unpointed' ? ' selected' : '') + '>Non pointées</option><option value="pointed"' + (ui.pointage.status === 'pointed' ? ' selected' : '') + '>Déjà pointées</option></select></label>' +
+        '<label class="field"><span>Rechercher</span><input id="pointage-search" type="search" data-filter="pointage:q" value="' + esc(ui.pointage.q) + '" placeholder="Date, journal, référence ou libellé"></label>' +
+        '<label class="field"><span>Date du relevé (facultative)</span><input id="pointage-statement-date" type="date" data-filter="pointage:statementDate" value="' + esc(ui.pointage.statementDate) + '"></label></div>' +
+      '<div class="exchange-summary-grid reconciliation-summary-grid"><div><small>Lignes affichées</small><strong>' + visibleRows.length + '</strong></div><div><small>Lignes pointées dans ce compte</small><strong>' + pointedCount + ' / ' + allRows.length + '</strong></div><div><small>Lignes non pointées</small><strong>' + (allRows.length - pointedCount) + '</strong></div></div>' +
+      '<section class="exchange-card reconciliation-card"><div class="supplier-directory-head"><div><h4>' + esc(selectedAccount ? selectedAccount.code + ' · ' + selectedAccount.label : 'Comptes de trésorerie indisponibles') + '</h4><p>Le pointage indique seulement qu’une ligne a été vérifiée sur un justificatif ou relevé externe.</p></div></div>' +
+        '<div class="table-wrap exchange-table-wrap reconciliation-table-wrap"><table class="exchange-mapping-table reconciliation-table pointage-table"><thead><tr><th>Date comptable</th><th>Référence</th><th>Journal</th><th>Libellé de la pièce</th><th class="num">Débit</th><th class="num">Crédit</th><th>Pointage</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>' +
+      '</section><p class="exchange-footnote">Le code de pointage et la date de relevé facultative sont enregistrés par ligne et par dossier. Un pointage n’équivaut pas à un rapprochement bancaire complet.</p>' +
+    '</div>';
+  }
+
   function analyticalCenterMatches(record, query) {
     var needle = String(query || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
     if (!needle) return true;
@@ -6751,7 +6939,7 @@
       '<div class="alert info"><div><strong>Référentiel analytique seulement.</strong> Créez ici vos propres centres, réservés à l’analytique. Ils ne sont pas des comptes généraux et ne produisent aucune écriture. Les mouvements et états analytiques restent grisés/inactifs dans la comptabilité générale.</div></div>' +
       '<div class="exchange-summary-grid supplier-summary-grid"><div><small>Centres actifs</small><strong>' + activeCount + '</strong></div><div><small>Centres archivés</small><strong>' + (records.length - activeCount) + '</strong></div><div><small>Résultats affichés</small><strong>' + visible.length + '</strong></div></div>' +
       '<section class="exchange-card analytical-center-card"><div class="supplier-directory-head"><div><h4>Centres d’analyse</h4><p>Codes et libellés propres au dossier, sans lien avec les journaux ou le plan général.</p></div><button type="button" class="btn btn-primary" data-action="new-analytical-center">＋ Nouveau centre</button></div>' +
-        '<div class="supplier-filter-controls analytical-center-filter-controls"><label class="field"><span>Rechercher</span><input type="search" data-filter="analyticalCenters:q" value="' + esc(filter.q) + '" placeholder="Code, nom, description"></label><label class="field"><span>État</span><select data-filter="analyticalCenters:status"><option value="active"' + (filter.status === 'active' ? ' selected' : '') + '>Centres actifs</option><option value="archived"' + (filter.status === 'archived' ? ' selected' : '') + '>Centres archivés</option><option value="all"' + (filter.status === 'all' ? ' selected' : '') + '>Tous les centres</option></select></label></div>' +
+        '<div class="supplier-filter-controls analytical-center-filter-controls"><label class="field"><span>Rechercher</span><input id="analytical-centers-search" type="search" data-filter="analyticalCenters:q" value="' + esc(filter.q) + '" placeholder="Code, nom, description"></label><label class="field"><span>État</span><select id="analytical-centers-status" data-filter="analyticalCenters:status"><option value="active"' + (filter.status === 'active' ? ' selected' : '') + '>Centres actifs</option><option value="archived"' + (filter.status === 'archived' ? ' selected' : '') + '>Centres archivés</option><option value="all"' + (filter.status === 'all' ? ' selected' : '') + '>Tous les centres</option></select></label></div>' +
         (visible.length
           ? '<div class="table-wrap exchange-table-wrap analytical-center-table-wrap"><table class="exchange-mapping-table analytical-center-table"><thead><tr><th>Code</th><th>Centre / description</th><th>État</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
           : '<div class="empty-state registry-empty"><span class="empty-state-icon">⌕</span><h3>Aucun résultat</h3><p>' + esc(emptyMessage) + '</p></div>') +
@@ -6842,6 +7030,10 @@
       exchangeFeature = viewEntryJournalSelector();
     } else if (group.id === 'saisie' && tab.id === 'live-cash') {
       exchangeFeature = viewAccountingCashOperations();
+    } else if (group.id === 'saisie' && tab.id === 'matching') {
+      exchangeFeature = viewMatching();
+    } else if (group.id === 'saisie' && tab.id === 'reconciliation') {
+      exchangeFeature = viewPointage();
     } else if (isAccountMovementsSubmenu && selectedChild && selectedChild.id === 'general-movements') {
       exchangeFeature = viewGeneralAccountMovements();
     } else if (isAccountMovementsSubmenu && selectedChild && selectedChild.id === 'third-party-movements') {
@@ -7181,6 +7373,7 @@
     var key = parts[1];
     if (!ui[section]) return;
     ui[section][key] = target.value;
+    if (section === 'matching' && (key === 'account' || key === 'status')) ui.matching.selectedLineKeys = [];
     rerenderKeepFocus();
   }
 
@@ -7313,6 +7506,72 @@
       case 'close-modal':
         closeModal();
         break;
+      case 'toggle-matching-line': {
+        var matchingLineKey = trigger.getAttribute('data-line-key') || '';
+        var selectedLineIndex = ui.matching.selectedLineKeys.indexOf(matchingLineKey);
+        if (selectedLineIndex === -1) ui.matching.selectedLineKeys.push(matchingLineKey);
+        else ui.matching.selectedLineKeys.splice(selectedLineIndex, 1);
+        render();
+        var matchingCheckbox = $$('[data-action="toggle-matching-line"]').find(function (item) { return item.getAttribute('data-line-key') === matchingLineKey; });
+        if (matchingCheckbox) matchingCheckbox.focus();
+        break;
+      }
+      case 'assign-letter': {
+        if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'matching.assign', accountingAccessContext())) {
+          toast('Action refusée par défaut : le droit « matching.assign » n’est pas accordé.', 'warning');
+          break;
+        }
+        var assignedLetter = S.assignLetter(ui.matching.account, ui.matching.selectedLineKeys);
+        if (!assignedLetter.ok) { toast(assignedLetter.errors.join(' ') || 'Lettrage impossible.', 'warning'); break; }
+        ui.matching.selectedLineKeys = [];
+        toast('Lettrage ' + assignedLetter.matchingGroup.code + ' créé. Les écritures restent inchangées.', 'success');
+        render();
+        break;
+      }
+      case 'cancel-letter': {
+        if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'matching.cancel', accountingAccessContext())) {
+          toast('Action refusée par défaut : le droit « matching.cancel » n’est pas accordé.', 'warning');
+          break;
+        }
+        var letterToCancel = S.matchingGroup(id);
+        if (!letterToCancel || letterToCancel.status === 'cancelled') { toast('Lettrage actif introuvable.', 'error'); break; }
+        if (!window.confirm('Annuler le lettrage « ' + letterToCancel.code + ' » ? Les pièces restent inchangées et ses lignes seront libérées.')) break;
+        var canceledLetter = S.cancelLetter(id);
+        if (!canceledLetter.ok) { toast(canceledLetter.errors.join(' ') || 'Annulation impossible.', 'warning'); break; }
+        ui.matching.selectedLineKeys = [];
+        toast('Lettrage annulé ; son historique est conservé.', 'success');
+        render();
+        break;
+      }
+      case 'point-entry-line': {
+        if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'pointage.mark', accountingAccessContext())) {
+          toast('Action refusée par défaut : le droit « pointage.mark » n’est pas accordé.', 'warning');
+          break;
+        }
+        var pointageActionLineKey = trigger.getAttribute('data-line-key') || '';
+        var pointageResult = S.pointEntryLine(pointageActionLineKey, ui.pointage.statementDate);
+        if (!pointageResult.ok) { toast(pointageResult.errors.join(' ') || 'Pointage impossible.', 'warning'); break; }
+        toast('Ligne pointée · ' + pointageResult.pointageMark.code + '. Aucune écriture n’a été modifiée.', 'success');
+        render();
+        var pointedLineAction = $$('[data-action="unpoint-entry-line"]').find(function (item) { return item.getAttribute('data-line-key') === pointageActionLineKey; });
+        if (pointedLineAction) pointedLineAction.focus();
+        break;
+      }
+      case 'unpoint-entry-line': {
+        if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'pointage.unmark', accountingAccessContext())) {
+          toast('Action refusée par défaut : le droit « pointage.unmark » n’est pas accordé.', 'warning');
+          break;
+        }
+        var pointageLineKey = trigger.getAttribute('data-line-key') || '';
+        if (!window.confirm('Retirer le pointage de cette ligne ? Son historique restera conservé.')) break;
+        var unpointResult = S.unpointEntryLine(pointageLineKey);
+        if (!unpointResult.ok) { toast(unpointResult.errors.join(' ') || 'Retrait du pointage impossible.', 'warning'); break; }
+        toast('Pointage retiré ; l’écriture reste inchangée.', 'success');
+        render();
+        var unpointedLineAction = $$('[data-action="point-entry-line"]').find(function (item) { return item.getAttribute('data-line-key') === pointageLineKey; });
+        if (unpointedLineAction) unpointedLineAction.focus();
+        break;
+      }
       case 'select-account-movement-node': {
         ui.accountMovements.nodeId = trigger.getAttribute('data-node-id') || '';
         var movementNodeId = ui.accountMovements.nodeId;

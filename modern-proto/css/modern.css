@@ -2921,3 +2921,71 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
   .analytical-center-card { padding: 11px; }
   .analytical-center-form-grid .analytical-center-description-field { grid-column: auto; }
 }
+
+/* Lettrage manuel et pointage de trésorerie, sans altérer les écritures */
+.reconciliation-workspace { margin-top: 16px; }
+.reconciliation-boundary-note { margin: 0; font-size: .72rem; line-height: 1.55; }
+.reconciliation-toolbar { grid-template-columns: minmax(210px, .9fr) minmax(170px, .7fr) minmax(240px, 1fr); }
+.reconciliation-toolbar .field { min-width: 0; }
+.reconciliation-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.reconciliation-card { padding: 15px; }
+.reconciliation-card .supplier-directory-head { margin-bottom: 9px; }
+.reconciliation-card .supplier-directory-head p { max-width: 680px; }
+.reconciliation-table-wrap { max-height: min(58vh, 580px); }
+.reconciliation-table { min-width: 990px; font-size: .65rem; }
+.reconciliation-table th,
+.reconciliation-table td { vertical-align: middle; }
+.reconciliation-table th { position: sticky; z-index: 1; top: 0; }
+.matching-table { min-width: 1120px; }
+.matching-table th:first-child { width: 55px; }
+.matching-table th:nth-child(2) { width: 95px; }
+.matching-table th:nth-child(3) { width: 82px; }
+.matching-table th:nth-child(4) { width: 145px; }
+.matching-table th:nth-child(5) { min-width: 240px; }
+.matching-table th:nth-child(6),
+.matching-table th:nth-child(7) { width: 110px; }
+.matching-table th:last-child { min-width: 135px; }
+.pointage-table { min-width: 1020px; }
+.pointage-table th:first-child { width: 105px; }
+.pointage-table th:nth-child(2) { width: 150px; }
+.pointage-table th:nth-child(3) { width: 90px; }
+.pointage-table th:nth-child(4) { min-width: 240px; }
+.pointage-table th:nth-child(5),
+.pointage-table th:nth-child(6) { width: 110px; }
+.pointage-table th:last-child { min-width: 205px; }
+.reconciliation-description-cell { max-width: 360px; line-height: 1.5; }
+.reconciliation-selection-cell { text-align: center !important; }
+.reconciliation-selection-cell input { width: 16px; height: 16px; margin: 0; accent-color: #1b8477; cursor: pointer; }
+.matching-line-letter { display: inline-flex; align-items: center; justify-content: center; min-width: 40px; padding: 3px 6px; border: 1px solid #dce9df; border-radius: 5px; color: #35654b; background: #f0f7f1; font-size: .6rem; font-weight: 850; }
+.reconciliation-status { display: inline-flex; align-items: center; padding: 3px 7px; border-radius: 999px; font-size: .56rem; font-weight: 800; white-space: nowrap; }
+.reconciliation-status.is-open { color: #7b6950; background: #f6f2e9; }
+.reconciliation-status.is-matched,
+.reconciliation-status.is-pointed { color: #28634c; background: #eaf4ed; }
+.reconciliation-line-row.is-matched > td,
+.reconciliation-line-row.is-pointed > td { background: #fbfcfa; }
+.reconciliation-selection-summary { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 11px; padding: 11px 12px; border: 1px solid #e3eae4; border-radius: 7px; background: #f7faf7; }
+.reconciliation-selection-summary > div { display: grid; gap: 4px; min-width: 0; }
+.reconciliation-selection-summary small { color: #7c897f; font-size: .58rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.reconciliation-selection-summary strong { color: #345444; font-size: .7rem; line-height: 1.5; }
+.reconciliation-selection-summary span { color: #697970; font-size: .65rem; }
+.reconciliation-selection-summary .btn { flex: 0 0 auto; }
+.reconciliation-empty { min-height: 100px; padding: 17px; font-size: .68rem; }
+.matching-groups-table { min-width: 880px; }
+.matching-groups-table th:nth-child(3) { min-width: 270px; }
+.matching-groups-table th:last-child { min-width: 160px; }
+.pointage-toolbar { grid-template-columns: minmax(185px, .9fr) minmax(155px, .7fr) minmax(155px, .7fr) minmax(205px, 1fr) minmax(185px, .8fr); }
+.pointage-state-cell { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 180px; }
+.pointage-state-cell small { color: #7a877e; font-size: .57rem; }
+.pointage-table .btn { padding: 5px 8px; font-size: .6rem; }
+@media (max-width: 1200px) {
+  .pointage-toolbar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .reconciliation-toolbar,
+  .pointage-toolbar { grid-template-columns: minmax(0, 1fr); }
+  .reconciliation-card { padding: 10px; }
+  .reconciliation-selection-summary { align-items: stretch; flex-direction: column; }
+  .reconciliation-selection-summary .btn { justify-content: center; }
+  .reconciliation-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .reconciliation-summary-grid > div { padding: 9px 8px; }
+}

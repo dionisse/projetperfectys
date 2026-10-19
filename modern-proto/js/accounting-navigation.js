@@ -62,8 +62,8 @@
         },
         { id: 'scheduled-payments', label: 'Programmation des règlements à effectuer (analytique)', status: 'inactive', reason: 'Fonction explicitement analytique.' },
         { id: 'invoice-payment-allocation', label: 'Affectation des règlements aux factures émises (analytique)', status: 'inactive', reason: 'Fonction explicitement analytique et liée à la facturation.' },
-        { id: 'matching', label: 'Lettrage', status: 'planned', reason: 'Fonction générale à construire avec les auxiliaires clients et fournisseurs.' },
-        { id: 'reconciliation', label: 'Pointage', status: 'planned', reason: 'Fonction générale à construire avec les contrôles de comptes.' },
+        { id: 'matching', label: 'Lettrage', status: 'partial', reason: 'Lettrage manuel de lignes validées et équilibrées sur un même compte auxiliaire de classe 4. Le suivi est séparé des écritures et du grand livre ; aucun client ou fournisseur individuel n’est attribué faute d’identifiant auxiliaire dans les pièces.' },
+        { id: 'reconciliation', label: 'Pointage', status: 'partial', reason: 'Pointage manuel des lignes validées de comptes de trésorerie (classe 5), conservé dans un registre distinct. Aucun relevé bancaire n’est importé et aucun rapprochement automatique ni écriture n’est généré.' },
         { id: 'supplier-orders', label: 'Commandes aux fournisseurs (analytique)', status: 'inactive', reason: 'Relève des achats et/ou de la comptabilité analytique, hors du périmètre actuel.' },
         { id: 'forecast-budgets', label: 'Budgets prévisionnels', status: 'review', reason: 'Périmètre à préciser ; reste inactif jusqu’à votre décision.' },
         { id: 'opening-balances', label: 'Reports à nouveau', status: 'planned', reason: 'Fonction générale à construire et à intégrer au passage d’exercice.' }

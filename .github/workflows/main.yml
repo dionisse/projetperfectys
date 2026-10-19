@@ -49,13 +49,16 @@ jobs:
             echo "Syntaxe OK : $file"
           done
 
-      - name: Run accounting, balance recalculation and database repair, folder, module, access policy, navigation and cancellation tests
+      - name: Run accounting, reconciliation, balance recalculation and database repair, folder, module, access policy, navigation and cancellation tests
         run: |
           node tests/store.test.js
           node tests/workspaces.test.js
           node tests/modules.test.js
           node tests/permissions.test.js
           node tests/accounting-navigation.test.js
+          node tests/account-movements.test.js
+          node tests/analytical-centers.test.js
+          node tests/reconciliation-workflows.test.js
           node tests/accounting-chart.test.js
           node tests/account-lifecycle.test.js
           node tests/payroll-centralization.test.js
