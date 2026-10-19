@@ -38,6 +38,7 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Bénéficiaires de frais de mission',
   'Natures des flux de trésorerie',
   'Saisie dans les journaux',
+  'Opérations de caisse en temps réel',
   'Reports à nouveau',
   'Journaux',
   'Comptes en devises',
@@ -79,6 +80,9 @@ assert.ok(findTab('definitions', 'journals').reason.includes('réservés au syst
 assert.equal(findTab('saisie', 'journal-entry').status, 'active');
 assert.ok(findTab('saisie', 'journal-entry').reason.includes('double-clic'));
 assert.equal(findTab('saisie', 'journal-entry').actions, undefined, 'le tableau de sélection des journaux est directement intégré au sous-menu');
+assert.equal(findTab('saisie', 'live-cash').status, 'partial');
+assert.ok(findTab('saisie', 'live-cash').reason.includes('journal Caisse (CA)'));
+assert.ok(findTab('saisie', 'live-cash').reason.includes('synchronisation multi-utilisateur'));
 assert.equal(findTab('fichier', 'export-other').status, 'partial');
 assert.equal(findTab('fichier', 'import-other').status, 'partial');
 assert.equal(findTab('fichier', 'import-balance').status, 'partial');

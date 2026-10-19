@@ -9,6 +9,7 @@
   var ModuleRegistry = window.PerfectoModules;
   var Permissions = window.PerfectoPermissions;
   var AccountingNavigation = window.PerfectoAccountingNavigation;
+  var CashOperations = window.PerfectoCashOperations;
   var AccountingExchange = window.PerfectoAccountingExchange;
   var AccountingConsolidation = window.PerfectoAccountingConsolidation;
   var BalanceRecalculation = window.PerfectoBalanceRecalculation;
@@ -6066,6 +6067,224 @@
     });
   }
 
+  function cashOperationAccounts(journalCode) {
+    return CashOperations.cashAccounts(S.accounts()).filter(function (account) {
+      return S.journalAllowsAccount(journalCode, account.code);
+    });
+  }
+
+  function cashOperationCounterpartAccounts(journalCode) {
+    return postingAccounts().filter(function (account) {
+      return !CashOperations.isCashCode(account.code) && S.journalAllowsAccount(journalCode, account.code);
+    });
+  }
+
+  function cashOperationAccountOptions(records, selected, placeholder) {
+    return '<option value="">' + esc(placeholder || '— Choisir un compte —') + '</option>' + records.map(function (account) {
+      return '<option value="' + esc(account.code) + '"' + (String(account.code) === String(selected || '') ? ' selected' : '') + '>' +
+        esc(account.code + ' · ' + account.label) + '</option>';
+    }).join('');
+  }
+
+  function cashOperationDateIsOpen(date, dossier) {
+    date = String(date || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < dossier.cycleStart || date > dossier.cycleEnd) return false;
+    return S.periodStatus(Number(date.slice(0, 4)), Number(date.slice(5, 7))) !== 'closed';
+  }
+
+  function viewAccountingCashOperations() {
+    var dossier = S.currentDossier();
+    var today = S.todayIso();
+    var defaultDate = today >= dossier.cycleStart && today <= dossier.cycleEnd ? today : dossier.cycleStart;
+    var journal = S.journal(CashOperations.CASH_JOURNAL);
+    var journalAvailable = isFillableJournal(journal);
+    var canCreate = hasDemoPermission(getActiveDemoMember(), 'accounting', 'draft.create', accountingAccessContext(dossier));
+    var canValidate = hasDemoPermission(getActiveDemoMember(), 'accounting', 'entry.validate', accountingAccessContext(dossier));
+    var cashAccounts = journal ? cashOperationAccounts(journal.code) : [];
+    var counterpartAccounts = journal ? cashOperationCounterpartAccounts(journal.code) : [];
+    var formAvailable = canCreate && journalAvailable && cashAccounts.length > 0 && counterpartAccounts.length > 0;
+    var balances = CashOperations.cashBalances(S.accounts(), S.entries(), dossier.cycleStart, dossier.cycleEnd, defaultDate);
+    var displayedBalances = balances.filter(function (record) { return record.selectable || record.balance !== 0; });
+    var totalCash = balances.reduce(function (sum, record) { return sum + record.balance; }, 0);
+    var records = CashOperations.movementRecords(S.entries(), S.accounts(), dossier.cycleStart, dossier.cycleEnd).slice(0, 12);
+    var notices = [];
+    if (!journal) notices.push('Le journal Caisse (CA) est absent du dossier. Consultez le référentiel des journaux avant toute opération.');
+    else if (!journalAvailable) notices.push('Le journal Caisse (CA) est inactif ou réservé : aucune nouvelle opération ne peut y être enregistrée.');
+    if (!canCreate) notices.push('Ce profil peut consulter la situation de caisse, mais le droit draft.create n’est pas accordé.');
+    if (journalAvailable && !cashAccounts.length) notices.push('Aucun compte de caisse actif, imputable et autorisé par le journal CA n’est disponible dans la famille 57.');
+    if (journalAvailable && !counterpartAccounts.length) notices.push('Aucun compte de contrepartie actif, imputable et autorisé par le journal CA n’est disponible.');
+    var periodIsOpen = cashOperationDateIsOpen(defaultDate, dossier);
+    var movementRows = records.length ? records.map(function (record) {
+      var cashLabels = record.cashAccounts.map(function (account) { return account.label + ' (' + account.code + ')'; }).join(', ');
+      var counterpartLabels = record.counterpartAccounts.map(function (account) { return account.label + ' (' + account.code + ')'; }).join(', ') || '—';
+      return '<tr class="clickable" data-action="open-entry" data-id="' + esc(record.id) + '" tabindex="0" aria-label="Consulter la pièce ' + esc(record.reference) + '">' +
+        '<td class="nowrap">' + esc(dateLabel(record.date)) + '</td>' +
+        '<td><strong>' + esc(record.reference) + '</strong></td>' +
+        '<td>' + esc(record.direction) + '</td>' +
+        '<td>' + esc(cashLabels) + '</td>' +
+        '<td>' + esc(counterpartLabels) + '</td>' +
+        '<td>' + esc(record.description || '—') + '</td>' +
+        '<td class="num">' + esc(amount(record.amount)) + '</td>' +
+        '<td>' + statusBadge(record.status) + '</td>' +
+      '</tr>';
+    }).join('') : '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">₣</div><strong>Aucune opération de caisse</strong>Les pièces du journal CA comportant un compte de caisse 57 apparaîtront ici.</div></td></tr>';
+
+    return '<div class="cash-operations">' +
+      '<div class="alert info cash-operations-local-note"><strong>Actualisation immédiate dans ce dossier.</strong> Le solde est recalculé depuis les pièces validées ; les brouillons ne le modifient pas. Les données de ce prototype restent locales à ce navigateur, sans synchronisation multi-utilisateur.</div>' +
+      notices.map(function (notice) { return '<div class="alert warning cash-operations-notice">' + esc(notice) + '</div>'; }).join('') +
+      '<section class="cash-register-summary" aria-label="Situation des caisses">' +
+        '<article class="cash-total-card"><span>Solde total des comptes de caisse</span><strong id="cash-total-balance">' + esc(amount(totalCash)) + ' XOF</strong><small>Soldes comptables jusqu’au <span id="cash-situation-date">' + esc(dateLabel(defaultDate)) + '</span> · période du dossier</small></article>' +
+        '<div class="cash-position-grid" id="cash-position-grid">' +
+          (displayedBalances.length ? displayedBalances.map(function (record) {
+            return '<article class="cash-position-card' + (record.balance < 0 ? ' is-negative' : '') + '" data-cash-position-card data-account-code="' + esc(record.code) + '"><span>' + esc(record.label) + '</span><small>Compte ' + esc(record.code) + '</small><strong data-cash-balance="' + esc(record.code) + '">' + esc(amount(record.balance)) + ' XOF</strong></article>';
+          }).join('') : '<p class="small muted">Aucun compte de caisse 57 n’est enregistré au plan comptable.</p>') +
+        '</div>' +
+      '</section>' +
+      '<section class="card panel cash-operation-entry">' +
+        '<div class="cash-section-heading"><div><h4>Nouvelle opération</h4><p class="sub">Une écriture équilibrée est préparée au journal Caisse (CA).</p></div><a class="btn btn-ghost btn-sm" href="#/menu?g=saisie&amp;t=journal-entry">Saisie générale</a></div>' +
+        '<div class="alert info cash-operation-rule"><strong>Comptabilisation :</strong> un encaissement débite le compte de caisse et crédite la contrepartie ; un décaissement fait l’inverse. Aucun calcul de TVA ni transfert entre caisses n’est automatisé.</div>' +
+        '<div id="cash-operation-errors" aria-live="assertive"></div>' +
+        '<form id="cash-operation-form">' +
+          '<fieldset class="cash-operation-fields"' + (formAvailable ? '' : ' disabled') + '><legend class="sr-only">Détails de l’opération de caisse</legend>' +
+            '<div class="form-grid">' +
+              '<div class="field"><label for="cash-operation-direction">Sens de l’opération</label><select id="cash-operation-direction" name="direction" required><option value="receipt">Encaissement</option><option value="disbursement">Décaissement</option></select></div>' +
+              '<div class="field"><label for="cash-operation-account">Caisse</label><select id="cash-operation-account" name="cashAccount" required>' + cashOperationAccountOptions(cashAccounts, cashAccounts[0] && cashAccounts[0].code, '— Choisir une caisse —') + '</select></div>' +
+              '<div class="field"><label for="cash-operation-counterpart">Compte de contrepartie</label><select id="cash-operation-counterpart" name="counterpartAccount" required>' + cashOperationAccountOptions(counterpartAccounts, '', '— Choisir un compte —') + '</select><span class="hint">Le compte est contrôlé selon les autorisations du journal CA.</span></div>' +
+              '<div class="field"><label for="cash-operation-date">Date</label><input id="cash-operation-date" name="date" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(defaultDate) + '" required><span class="hint" id="cash-operation-period-status">' + (periodIsOpen ? 'Période ouverte.' : 'Date hors cycle ou période clôturée.') + '</span></div>' +
+              '<div class="field"><label for="cash-operation-reference">Référence proposée</label><input id="cash-operation-reference" name="reference" type="text" value="' + esc(S.nextReference(CashOperations.CASH_JOURNAL, defaultDate)) + '" readonly required><span class="hint">Séquence du journal CA.</span></div>' +
+              '<div class="field"><label for="cash-operation-amount">Montant (XOF)</label><input id="cash-operation-amount" name="amount" type="number" min="1" step="1" inputmode="numeric" placeholder="0" required></div>' +
+              '<div class="field cash-field-wide"><label for="cash-operation-description">Libellé de l’opération</label><input id="cash-operation-description" name="description" type="text" maxlength="160" placeholder="Ex. règlement en espèces d’une facture" required></div>' +
+            '</div>' +
+          '</fieldset>' +
+          '<div class="cash-operation-preview" aria-live="polite"><div><span>Solde comptable avant</span><strong id="cash-operation-current-balance">0 XOF</strong></div><span class="cash-preview-arrow" aria-hidden="true">→</span><div><span>Solde estimé après validation</span><strong id="cash-operation-projected-balance">0 XOF</strong></div></div>' +
+          '<div id="cash-operation-negative-warning" class="alert warning cash-operation-negative-warning" hidden>Le décaissement ferait apparaître un solde de caisse négatif à cette date. Vérifiez le compte et les pièces antérieures avant de valider.</div>' +
+          '<div id="cash-operation-date-warning" class="alert warning cash-operation-date-warning"' + (periodIsOpen ? ' hidden' : '') + '>La date doit appartenir au cycle du dossier et à une période ouverte.</div>' +
+          '<div class="cash-operation-actions"><button type="submit" class="btn btn-ghost" data-cash-mode="draft"' + (formAvailable ? '' : ' disabled') + '>Enregistrer un brouillon</button><button type="submit" class="btn btn-primary" data-cash-mode="posted"' + (formAvailable && canValidate && periodIsOpen ? '' : ' disabled') + '>Valider l’opération</button></div>' +
+          (!canValidate ? '<p class="small muted cash-operation-permission-note">La validation immédiate nécessite aussi le droit entry.validate. Le brouillon reste disponible si draft.create est accordé.</p>' : '') +
+        '</form>' +
+      '</section>' +
+      '<section class="card panel cash-register-ledger">' +
+        '<div class="cash-section-heading"><div><h4>Dernières opérations de caisse</h4><p class="sub">12 pièces récentes du journal CA · brouillons visibles, mais exclus des soldes</p></div><a class="btn btn-ghost btn-sm" href="#/journal?journal=CA">Journal CA</a></div>' +
+        '<div class="table-wrap"><table class="data-table cash-operations-table"><caption>Dossier ' + esc(dossier.reference) + ' · cycle du ' + esc(dateLabel(dossier.cycleStart)) + ' au ' + esc(dateLabel(dossier.cycleEnd)) + '</caption>' +
+          '<thead><tr><th scope="col">Date</th><th scope="col">Référence</th><th scope="col">Sens</th><th scope="col">Caisse</th><th scope="col">Contrepartie</th><th scope="col">Libellé</th><th scope="col" class="num">Montant (XOF)</th><th scope="col">État</th></tr></thead><tbody>' + movementRows + '</tbody></table></div>' +
+      '</section>' +
+    '</div>';
+  }
+
+  function refreshCashOperationPreview() {
+    var dateInput = $('#cash-operation-date');
+    var cashInput = $('#cash-operation-account');
+    var directionInput = $('#cash-operation-direction');
+    var amountInput = $('#cash-operation-amount');
+    if (!dateInput || !cashInput || !directionInput || !amountInput) return;
+    var dossier = S.currentDossier();
+    var date = dateInput.value || dossier.cycleStart;
+    var balances = CashOperations.cashBalances(S.accounts(), S.entries(), dossier.cycleStart, dossier.cycleEnd, date);
+    var total = balances.reduce(function (sum, record) { return sum + record.balance; }, 0);
+    var totalNode = $('#cash-total-balance');
+    if (totalNode) totalNode.textContent = amount(total) + ' XOF';
+    var dateNode = $('#cash-situation-date');
+    if (dateNode) dateNode.textContent = dateLabel(date);
+    $$('[data-cash-position-card]').forEach(function (card) {
+      var code = card.getAttribute('data-account-code');
+      var record = balances.find(function (item) { return item.code === code; });
+      var value = record ? record.balance : 0;
+      var valueNode = $('[data-cash-balance]', card);
+      if (valueNode) valueNode.textContent = amount(value) + ' XOF';
+      card.classList.toggle('is-negative', value < 0);
+    });
+    var cashBalance = balances.find(function (record) { return record.code === cashInput.value; });
+    var current = cashBalance ? cashBalance.balance : 0;
+    var operationAmount = Number(amountInput.value) || 0;
+    var projected = current + (directionInput.value === 'receipt' ? operationAmount : -operationAmount);
+    var currentNode = $('#cash-operation-current-balance');
+    var projectedNode = $('#cash-operation-projected-balance');
+    if (currentNode) currentNode.textContent = amount(current) + ' XOF';
+    if (projectedNode) projectedNode.textContent = amount(projected) + ' XOF';
+    var negativeWarning = $('#cash-operation-negative-warning');
+    if (negativeWarning) negativeWarning.hidden = !(operationAmount > 0 && directionInput.value === 'disbursement' && projected < 0);
+    var reference = $('#cash-operation-reference');
+    if (reference) reference.value = S.nextReference(CashOperations.CASH_JOURNAL, date);
+    var periodLabel = $('#cash-operation-period-status');
+    var dateOpen = cashOperationDateIsOpen(date, dossier);
+    if (periodLabel) {
+      if (date < dossier.cycleStart || date > dossier.cycleEnd) periodLabel.textContent = 'Date hors du cycle comptable.';
+      else if (!dateOpen) periodLabel.textContent = 'Période clôturée.';
+      else periodLabel.textContent = 'Période ouverte.';
+    }
+    var dateWarning = $('#cash-operation-date-warning');
+    if (dateWarning) dateWarning.hidden = dateOpen;
+    var canCreate = hasDemoPermission(getActiveDemoMember(), 'accounting', 'draft.create', accountingAccessContext(dossier));
+    var canValidate = hasDemoPermission(getActiveDemoMember(), 'accounting', 'entry.validate', accountingAccessContext(dossier));
+    var journalAvailable = isFillableJournal(S.journal(CashOperations.CASH_JOURNAL));
+    var canStart = canCreate && journalAvailable && cashOperationAccounts(CashOperations.CASH_JOURNAL).length > 0 && cashOperationCounterpartAccounts(CashOperations.CASH_JOURNAL).length > 0;
+    var draftButton = $('[data-cash-mode="draft"]');
+    var postedButton = $('[data-cash-mode="posted"]');
+    if (draftButton) draftButton.disabled = !canStart || !dateOpen;
+    if (postedButton) postedButton.disabled = !canStart || !canValidate || !dateOpen;
+  }
+
+  function showCashOperationErrors(errors) {
+    var box = $('#cash-operation-errors');
+    if (!box) return;
+    box.innerHTML = '<div class="alert error" role="alert"><strong>Opération non enregistrée.</strong><ul>' + errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
+  }
+
+  function bindAccountingCashOperations() {
+    var form = $('#cash-operation-form');
+    if (!form) return;
+    ['cash-operation-date', 'cash-operation-account', 'cash-operation-direction', 'cash-operation-amount'].forEach(function (id) {
+      var input = document.getElementById(id);
+      if (!input) return;
+      input.addEventListener('input', refreshCashOperationPreview);
+      input.addEventListener('change', refreshCashOperationPreview);
+    });
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var submitter = event.submitter || document.activeElement;
+      var mode = submitter && submitter.getAttribute('data-cash-mode') === 'posted' ? 'posted' : 'draft';
+      var dossier = S.currentDossier();
+      var requiredActions = ['draft.create'];
+      if (mode === 'posted') requiredActions.push('entry.validate');
+      if (!requiredActions.every(function (actionId) {
+        return hasDemoPermission(getActiveDemoMember(), 'accounting', actionId, accountingAccessContext(dossier));
+      })) {
+        showCashOperationErrors(['Action refusée : les droits de démonstration requis ne sont pas accordés.']);
+        return;
+      }
+      var journal = S.journal(CashOperations.CASH_JOURNAL);
+      if (!isFillableJournal(journal)) {
+        showCashOperationErrors(['Le journal Caisse (CA) est absent, inactif ou réservé au système.']);
+        return;
+      }
+      var input = {
+        direction: $('#cash-operation-direction').value,
+        cashAccount: $('#cash-operation-account').value,
+        counterpartAccount: $('#cash-operation-counterpart').value,
+        amount: $('#cash-operation-amount').value,
+        date: $('#cash-operation-date').value,
+        reference: $('#cash-operation-reference').value,
+        description: $('#cash-operation-description').value
+      };
+      var built = CashOperations.buildEntry(input, S.accounts());
+      if (!built.ok) { showCashOperationErrors(built.errors); return; }
+      var unauthorizedAccounts = built.entry.lines.filter(function (line) { return !S.journalAllowsAccount(journal.code, line.account); });
+      if (unauthorizedAccounts.length) {
+        showCashOperationErrors(['Le journal CA n’autorise pas tous les comptes sélectionnés. Vérifiez ses paramètres avant de continuer.']);
+        return;
+      }
+      var validation = S.validateEntry(built.entry, { requireBalanced: mode === 'posted', status: mode });
+      if (!validation.ok) { showCashOperationErrors(validation.errors); return; }
+      var result = S.createEntry(built.entry, mode);
+      if (!result.ok) { showCashOperationErrors(result.errors); return; }
+      toast(mode === 'posted'
+        ? 'Opération ' + result.entry.reference + ' validée ; les soldes de caisse sont actualisés.'
+        : 'Brouillon ' + result.entry.reference + ' enregistré ; les soldes ne changent qu’après validation.', 'success');
+      render();
+    });
+    refreshCashOperationPreview();
+  }
+
   function viewAccountingMenu(params) {
     params = params || {};
     var phone = isPhoneViewport();
@@ -6095,6 +6314,7 @@
       '<span><i class="legend-dot legend-dot-inactive"></i>Inactif ou à confirmer</span>' +
       '</div>';
     var isJournalEntrySubmenu = group.id === 'saisie' && tab.id === 'journal-entry';
+    var isCashOperationsSubmenu = group.id === 'saisie' && tab.id === 'live-cash';
     var actions = isJournalEntrySubmenu ? '' : (tab.actions || []).map(function (action) { return menuActionLink(action, tab.status); }).join('');
     var childList = menuChildList(tab.children, tab.reason);
     var phoneContext = phone
@@ -6103,12 +6323,14 @@
     var irreversible = tab.irreversible
       ? '<div class="alert warning menu-irreversible-note"><strong>Attention : opération irréversible.</strong> Une copie complète du dossier devra être exportée et confirmée avant toute activation de cette fonction.</div>'
       : '';
-    var details = !isJournalEntrySubmenu && tab.reason
+    var details = !isJournalEntrySubmenu && !isCashOperationsSubmenu && tab.reason
       ? '<p class="menu-item-reason">' + esc(tab.reason) + '</p>'
       : '';
     var exchangeFeature = '';
     if (isJournalEntrySubmenu) {
       exchangeFeature = viewEntryJournalSelector();
+    } else if (group.id === 'saisie' && tab.id === 'live-cash') {
+      exchangeFeature = viewAccountingCashOperations();
     } else if (group.id === 'definitions' && tab.id === 'journals') {
       exchangeFeature = viewJournals();
     } else if (group.id === 'definitions' && tab.id === 'suppliers') {
@@ -6211,6 +6433,7 @@
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'consolidate-before-result') bindAccountingConsolidationBeforeResult();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'consolidate-after-result') bindAccountingConsolidationAfterResult();
       if (!isPhoneViewport() && menuParams.g === 'saisie' && (!menuParams.t || menuParams.t === 'journal-entry')) bindEntryJournalSelector();
+      if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'live-cash') bindAccountingCashOperations();
       return;
     }
 
