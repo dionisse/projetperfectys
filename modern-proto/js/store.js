@@ -31,6 +31,7 @@
   var ACCOUNTING_CHART = global.PerfectoAccountingChart || null;
   var ACCOUNTING_CHART_VERSION = ACCOUNTING_CHART ? ACCOUNTING_CHART.VERSION : 0;
   var SUPPLIER_REGISTRY_VERSION = 2;
+  var CLIENT_REGISTRY_VERSION = 1;
   var LEGACY_COMPTES = [
     { code: '101200', label: 'Capital social', cls: 1, nature: 'Passif', aux: false },
     { code: '162100', label: 'Emprunt bancaire', cls: 1, nature: 'Passif', aux: false },
@@ -180,7 +181,7 @@
   function normalizeIdentificationHistory(kind, values) {
     var history = [];
     (Array.isArray(values) ? values : []).forEach(function (value) {
-      var normalized = kind === 'supplier' ? normalizeSupplierCode(value) : String(value || '').trim().toLocaleUpperCase();
+      var normalized = kind === 'supplier' || kind === 'client' ? normalizeSupplierCode(value) : String(value || '').trim().toLocaleUpperCase();
       if (normalized && history.indexOf(normalized) === -1) history.push(normalized);
     });
     return history;
@@ -190,12 +191,12 @@
     var result = { data: data, changed: false };
     if (!data) return result;
     var suppliers = Array.isArray(data.suppliers) ? data.suppliers : [];
-    var sourceHistory = Array.isArray(data.supplierCodeHistory) ? data.supplierCodeHistory : [];
-    var supplierHistory = [];
-    sourceHistory.concat(suppliers.map(function (record) { return record && record.code; })).forEach(function (code) {
-      var normalized = normalizeSupplierCode(code);
-      if (normalized && supplierHistory.indexOf(normalized) === -1) supplierHistory.push(normalized);
-    });
+    var clients = Array.isArray(data.clients) ? data.clients : [];
+    var supplierHistory = normalizeIdentificationHistory('supplier',
+      (Array.isArray(data.supplierCodeHistory) ? data.supplierCodeHistory : []).concat(suppliers.map(function (record) { return record && record.code; })));
+    var clientHistory = normalizeIdentificationHistory('client',
+      (Array.isArray(data.clientCodeHistory) ? data.clientCodeHistory : []).concat(clients.map(function (record) { return record && record.code; })));
+    var personnelHistory = normalizeIdentificationHistory('personnel', data.personnelCodeHistory);
     var rawSequences = data.identificationSequences && typeof data.identificationSequences === 'object' && !Array.isArray(data.identificationSequences)
       ? data.identificationSequences : {};
     var sequences = { supplier: 1, client: 1, personnel: 1 };
@@ -203,9 +204,7 @@
       var current = Number(rawSequences[kind]);
       if (Number.isInteger(current) && current > 0) sequences[kind] = current;
       var prefix = identificationPrefix(kind) + '-';
-      var history = kind === 'supplier'
-        ? supplierHistory
-        : (Array.isArray(data[identificationHistoryField(kind)]) ? data[identificationHistoryField(kind)] : []);
+      var history = kind === 'supplier' ? supplierHistory : (kind === 'client' ? clientHistory : personnelHistory);
       history.forEach(function (value) {
         var code = String(value || '').toLocaleUpperCase();
         if (code.indexOf(prefix) !== 0) return;
@@ -213,10 +212,10 @@
         if (/^\d+$/.test(suffix)) sequences[kind] = Math.max(sequences[kind], Number(suffix) + 1);
       });
     });
-    var clientHistory = normalizeIdentificationHistory('client', data.clientCodeHistory);
-    var personnelHistory = normalizeIdentificationHistory('personnel', data.personnelCodeHistory);
     var currentVersion = Number(data.supplierRegistryVersion);
+    var currentClientVersion = Number(data.clientRegistryVersion);
     var changed = !Array.isArray(data.suppliers) || !Number.isFinite(currentVersion) || currentVersion < SUPPLIER_REGISTRY_VERSION ||
+      !Array.isArray(data.clients) || !Number.isFinite(currentClientVersion) || currentClientVersion < CLIENT_REGISTRY_VERSION ||
       JSON.stringify(data.supplierCodeHistory || []) !== JSON.stringify(supplierHistory) ||
       JSON.stringify(data.clientCodeHistory || []) !== JSON.stringify(clientHistory) ||
       JSON.stringify(data.personnelCodeHistory || []) !== JSON.stringify(personnelHistory) ||
@@ -224,7 +223,9 @@
     if (changed) {
       result.data = Object.assign({}, data, {
         supplierRegistryVersion: SUPPLIER_REGISTRY_VERSION,
+        clientRegistryVersion: Math.max(Number.isFinite(currentClientVersion) ? currentClientVersion : 0, CLIENT_REGISTRY_VERSION),
         suppliers: suppliers,
+        clients: clients,
         supplierCodeHistory: supplierHistory,
         clientCodeHistory: clientHistory,
         personnelCodeHistory: personnelHistory,
@@ -306,7 +307,9 @@
       periods: cyclePeriods(cycleStart, cycleEnd),
       deletedStandardAccountCodes: [],
       supplierRegistryVersion: SUPPLIER_REGISTRY_VERSION,
+      clientRegistryVersion: CLIENT_REGISTRY_VERSION,
       suppliers: [],
+      clients: [],
       supplierCodeHistory: [],
       clientCodeHistory: [],
       personnelCodeHistory: [],
@@ -564,6 +567,9 @@
       (data.suppliers === undefined || (Array.isArray(data.suppliers) && data.suppliers.every(function (supplier) {
         return !!supplier && typeof supplier === 'object' && !Array.isArray(supplier);
       }))) &&
+      (data.clients === undefined || (Array.isArray(data.clients) && data.clients.every(function (clientRecord) {
+        return !!clientRecord && typeof clientRecord === 'object' && !Array.isArray(clientRecord);
+      }))) &&
       (data.deletedStandardAccountCodes === undefined || (Array.isArray(data.deletedStandardAccountCodes) && data.deletedStandardAccountCodes.every(function (code) { return typeof code === 'string'; }))) &&
       data.accounts.every(function (account) { return !!account && typeof account === 'object' && !Array.isArray(account); }) &&
       data.journals.every(function (journal) { return !!journal && typeof journal === 'object' && !Array.isArray(journal); }) &&
@@ -719,6 +725,7 @@
 
   function ensureIdentificationState(st) {
     if (!Array.isArray(st.suppliers)) st.suppliers = [];
+    if (!Array.isArray(st.clients)) st.clients = [];
     ['supplier', 'client', 'personnel'].forEach(function (kind) {
       var historyField = identificationHistoryField(kind);
       if (!Array.isArray(st[historyField])) st[historyField] = [];
@@ -727,9 +734,13 @@
       var sequence = Number(sequences[kind]);
       if (!Number.isInteger(sequence) || sequence < 1) sequences[kind] = 1;
       var prefix = identificationPrefix(kind) + '-';
-      var codes = kind === 'supplier' ? st.suppliers.map(function (record) { return record && record.code; }) : [];
+      var codes = kind === 'supplier'
+        ? st.suppliers.map(function (record) { return record && record.code; })
+        : (kind === 'client' ? st.clients.map(function (record) { return record && record.code; }) : []);
       st[historyField].concat(codes).forEach(function (value) {
-        var normalized = kind === 'supplier' ? normalizeSupplierCode(value) : String(value || '').trim().toLocaleUpperCase();
+        var normalized = kind === 'supplier' || kind === 'client'
+          ? normalizeSupplierCode(value)
+          : String(value || '').trim().toLocaleUpperCase();
         if (normalized && st[historyField].indexOf(normalized) === -1) st[historyField].push(normalized);
         if (normalized.indexOf(prefix) !== 0) return;
         var suffix = normalized.slice(prefix.length);
@@ -737,6 +748,7 @@
       });
     });
     st.supplierRegistryVersion = SUPPLIER_REGISTRY_VERSION;
+    st.clientRegistryVersion = CLIENT_REGISTRY_VERSION;
     return st;
   }
 
@@ -767,7 +779,7 @@
     var prefix = identificationPrefix(kind);
     if (!prefix) return false;
     ensureIdentificationState(st);
-    var normalized = kind === 'supplier' ? normalizeSupplierCode(code) : String(code || '').trim().toLocaleUpperCase();
+    var normalized = kind === 'supplier' || kind === 'client' ? normalizeSupplierCode(code) : String(code || '').trim().toLocaleUpperCase();
     var history = st[identificationHistoryField(kind)];
     if (normalized && history.indexOf(normalized) === -1) history.push(normalized);
     var prefixWithDash = prefix + '-';
@@ -784,7 +796,7 @@
     var st = load();
     if (recoveryIssue) return { ok: false, errors: ['Attribution bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
     ensureIdentificationState(st);
-    var normalized = kind === 'supplier' ? normalizeSupplierCode(code) : String(code || '').trim().toLocaleUpperCase();
+    var normalized = kind === 'supplier' || kind === 'client' ? normalizeSupplierCode(code) : String(code || '').trim().toLocaleUpperCase();
     if (!normalized) return { ok: false, errors: ['Le code à attribuer est vide.'] };
     if (st[identificationHistoryField(kind)].indexOf(normalized) !== -1) {
       return { ok: false, errors: ['Ce code a déjà été attribué dans ce dossier.'] };
@@ -972,6 +984,193 @@
       return { ok: false, errors: ['Suppression impossible : stockage local indisponible ou plein. La fiche est conservée.'] };
     }
     return { ok: true, errors: [], supplier: clone(record) };
+  }
+
+  function clientRecordsForState(st) {
+    ensureIdentificationState(st);
+    return st.clients;
+  }
+
+  function clients() {
+    var st = load();
+    return Array.isArray(st.clients) ? st.clients : [];
+  }
+
+  function client(idOrCode) {
+    var key = String(idOrCode == null ? '' : idOrCode);
+    var normalizedCode = normalizeSupplierCode(key);
+    return clients().find(function (record) {
+      return record.id === key || normalizeSupplierCode(record.code) === normalizedCode;
+    }) || null;
+  }
+
+  function clientAccount(code) {
+    var clientRoots = ['411', '412', '413', '416', '419'];
+    return load().accounts.find(function (account) {
+      var accountCode = String(account.code);
+      var clientControl = clientRoots.some(function (rootCode) { return accountCode.indexOf(rootCode) === 0; });
+      return accountCode === String(code) && clientControl && Number(account.cls || accountCode.charAt(0)) === 4 &&
+        account.aux === true && account.active !== false && account.postable !== false;
+    }) || null;
+  }
+
+  function clientAccountReferenceCount(clientRecord, st) {
+    st = st || load();
+    var keys = /^(client|customer|debtor|thirdParty|third_party|counterparty|auxiliary|aux)(?:\w*(?:id|code|account))?$/i;
+    var identifiers = [clientRecord.id, clientRecord.code, clientRecord.auxiliaryAccountCode]
+      .filter(Boolean).map(function (value) { return String(value).toLocaleUpperCase(); });
+    var auxiliaryAccountCode = String(clientRecord.auxiliaryAccountCode || '').toLocaleUpperCase();
+    var accountKeys = /^(?:account|accountCode|account_code|generalAccount|general_account)$/i;
+    function containsIdentifier(value) {
+      if (!value || typeof value !== 'object') return identifiers.indexOf(String(value == null ? '' : value).toLocaleUpperCase()) !== -1;
+      return Object.keys(value).some(function (key) { return containsIdentifier(value[key]); });
+    }
+    function references(value) {
+      if (!value || typeof value !== 'object') return false;
+      return Object.keys(value).some(function (key) {
+        var child = value[key];
+        var normalizedChild = String(child == null ? '' : child).toLocaleUpperCase();
+        if ((keys.test(key) && containsIdentifier(child)) ||
+          (auxiliaryAccountCode && accountKeys.test(key) && normalizedChild === auxiliaryAccountCode)) return true;
+        return child && typeof child === 'object' && references(child);
+      });
+    }
+    return st.entries.filter(references).length;
+  }
+
+  function clientCodeChangeCheck(idOrCode) {
+    var record = client(idOrCode);
+    if (!record) return { ok: false, errors: ['Client introuvable dans le dossier actif.'], referenceCount: 0 };
+    var referenceCount = clientAccountReferenceCount(record, load());
+    var errors = referenceCount
+      ? ['Le code client et son compte collectif ne peuvent pas être modifiés : ' + referenceCount + ' pièce(s) ou mouvement(s) comptable(s) y font référence.']
+      : [];
+    return { ok: errors.length === 0, errors: errors, referenceCount: referenceCount };
+  }
+
+  function validateClientInput(input, excludeId) {
+    input = input || {};
+    var errors = [];
+    var code = normalizeSupplierCode(input.code);
+    var name = String(input.name == null ? '' : input.name).trim();
+    var accountCode = String(input.accountCode == null ? '' : input.accountCode).trim();
+    var email = String(input.email == null ? '' : input.email).trim();
+    var paymentTermDays = input.paymentTermDays === '' || input.paymentTermDays == null ? 30 : Number(input.paymentTermDays);
+    var st = load();
+    var currentRecord = excludeId ? st.clients.find(function (record) { return record.id === excludeId; }) : null;
+    var currentCode = currentRecord ? normalizeSupplierCode(currentRecord.code) : '';
+
+    if (!code) errors.push('Le code client est obligatoire.');
+    else if (!/^[A-Z0-9][A-Z0-9._/-]{0,31}$/.test(code)) errors.push('Le code client doit contenir au plus 32 caractères : lettres, chiffres, point, tiret, barre oblique ou souligné.');
+    if (!name) errors.push('Le nom ou la raison sociale du client est obligatoire.');
+    else if (name.length > 150) errors.push('Le nom du client ne peut pas dépasser 150 caractères.');
+    if (clients().some(function (record) { return record.id !== excludeId && normalizeSupplierCode(record.code) === code; })) {
+      errors.push('Ce code client existe déjà dans le dossier.');
+    }
+    if (Array.isArray(st.clientCodeHistory) && st.clientCodeHistory.indexOf(code) !== -1 && code !== currentCode) {
+      errors.push('Ce code client a déjà été attribué dans ce dossier et ne peut pas être réutilisé.');
+    }
+    var retainedAccount = currentRecord && String(currentRecord.accountCode || '') === accountCode
+      ? st.accounts.find(function (account) { return String(account.code) === accountCode; })
+      : null;
+    if (!clientAccount(accountCode) && !retainedAccount) errors.push('Choisissez un compte collectif client actif de classe 4 (411, 412, 413, 416 ou 419).');
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.push('L’adresse e-mail du client n’est pas valide.');
+    if (!Number.isInteger(paymentTermDays) || paymentTermDays < 0 || paymentTermDays > 3650) errors.push('Le délai de règlement doit être un nombre entier compris entre 0 et 3 650 jours.');
+    var fields = [
+      ['contactName', 'Le nom du contact', 120], ['ifu', 'Le numéro IFU', 50],
+      ['rccm', 'Le numéro RCCM', 80], ['phone', 'Le téléphone', 40],
+      ['address', 'L’adresse', 255], ['notes', 'La note', 1000]
+    ];
+    fields.forEach(function (field) {
+      if (String(input[field[0]] == null ? '' : input[field[0]]).trim().length > field[2]) {
+        errors.push(field[1] + ' ne peut pas dépasser ' + field[2] + ' caractères.');
+      }
+    });
+    if (email.length > 254) errors.push('L’adresse e-mail ne peut pas dépasser 254 caractères.');
+    return {
+      ok: errors.length === 0,
+      errors: errors,
+      value: {
+        code: code,
+        auxiliaryAccountCode: accountCode + '-' + code,
+        name: name,
+        contactName: String(input.contactName == null ? '' : input.contactName).trim(),
+        ifu: String(input.ifu == null ? '' : input.ifu).trim(),
+        rccm: String(input.rccm == null ? '' : input.rccm).trim(),
+        email: email,
+        phone: String(input.phone == null ? '' : input.phone).trim(),
+        address: String(input.address == null ? '' : input.address).trim(),
+        accountCode: accountCode,
+        paymentTermDays: paymentTermDays,
+        notes: String(input.notes == null ? '' : input.notes).trim()
+      }
+    };
+  }
+
+  function createClient(input) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Création bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var records = clientRecordsForState(st);
+    input = Object.assign({}, input || {});
+    if (!String(input.code || '').trim()) input.code = nextIdentificationCode('client');
+    var validation = validateClientInput(input);
+    if (!validation.ok) return validation;
+    var previousState = clone(st);
+    var id;
+    do {
+      id = 'client-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+    } while (records.some(function (record) { return record.id === id; }));
+    var timestamp = new Date().toISOString();
+    var record = Object.assign({ id: id, createdAt: timestamp, updatedAt: timestamp }, validation.value);
+    records.push(record);
+    reserveIdentificationCode(st, 'client', record.code);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer le client dans le stockage local de ce dossier.'] };
+    }
+    return { ok: true, errors: [], client: clone(record) };
+  }
+
+  function updateClient(id, input) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Modification bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var records = clientRecordsForState(st);
+    var index = records.findIndex(function (record) { return record.id === id; });
+    if (index < 0) return { ok: false, errors: ['Client introuvable dans le dossier actif.'] };
+    var validation = validateClientInput(input, id);
+    if (!validation.ok) return validation;
+    var previous = records[index];
+    if ((validation.value.code !== normalizeSupplierCode(previous.code) || validation.value.accountCode !== String(previous.accountCode || '')) && clientAccountReferenceCount(previous, st)) {
+      return { ok: false, errors: ['Le code client et le compte collectif ne peuvent pas être modifiés : une pièce ou un mouvement comptable y fait référence. Les écritures ne seront pas réécrites.'] };
+    }
+    var previousState = clone(st);
+    var updated = Object.assign({}, previous, validation.value, { id: previous.id, createdAt: previous.createdAt, updatedAt: new Date().toISOString() });
+    records[index] = updated;
+    reserveIdentificationCode(st, 'client', previous.code);
+    reserveIdentificationCode(st, 'client', updated.code);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer les modifications du client dans le stockage local.'] };
+    }
+    return { ok: true, errors: [], client: clone(updated) };
+  }
+
+  function deleteClient(id) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Suppression bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var records = clientRecordsForState(st);
+    var index = records.findIndex(function (record) { return record.id === id; });
+    if (index < 0) return { ok: false, errors: ['Client introuvable dans le dossier actif.'] };
+    var record = records[index];
+    var referenceCount = clientAccountReferenceCount(record, st);
+    if (referenceCount) return { ok: false, errors: ['Suppression refusée : ' + referenceCount + ' pièce(s) ou mouvement(s) comptable(s) référence(nt) ce client. La fiche doit être conservée pour préserver la traçabilité.'] };
+    var previousState = clone(st);
+    records.splice(index, 1);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Suppression impossible : stockage local indisponible ou plein. La fiche est conservée.'] };
+    }
+    return { ok: true, errors: [], client: clone(record) };
   }
 
   function entries() { return load().entries; }
@@ -1217,6 +1416,9 @@
     var linkedSuppliers = (Array.isArray(st.suppliers) ? st.suppliers : []).filter(function (supplier) {
       return String(supplier.accountCode || '') === code;
     });
+    var linkedClients = (Array.isArray(st.clients) ? st.clients : []).filter(function (clientRecord) {
+      return String(clientRecord.accountCode || '') === code;
+    });
     var childCodes = st.accounts.map(function (account) { return String(account.code); }).filter(function (candidate) {
       return candidate.length > code.length && candidate.indexOf(code) === 0;
     });
@@ -1225,6 +1427,7 @@
       draftEntryCount: linkedEntries.filter(function (entry) { return entry.status === 'draft'; }).length,
       postedEntryCount: linkedEntries.filter(function (entry) { return entry.status === 'posted'; }).length,
       supplierCount: linkedSuppliers.length,
+      clientCount: linkedClients.length,
       childCodes: childCodes
     };
   }
@@ -1237,6 +1440,7 @@
     var errors = [];
     if (references.entryCount) errors.push('Le numéro ne peut pas être modifié : ' + references.entryCount + ' pièce(s) comptable(s) y font référence. Les écritures historiques et brouillons ne seront pas réécrits.');
     if (references.supplierCount) errors.push('Le numéro ne peut pas être modifié : ' + references.supplierCount + ' fournisseur(s) utilisent ce compte de rattachement.');
+    if (references.clientCount) errors.push('Le numéro ne peut pas être modifié : ' + references.clientCount + ' client(s) utilisent ce compte de rattachement.');
     if (references.childCodes.length) errors.push('Le numéro ne peut pas être modifié avant ses sous-comptes : ' + references.childCodes.slice(0, 5).join(', ') + (references.childCodes.length > 5 ? '…' : '') + '.');
     return { ok: errors.length === 0, errors: errors, references: references };
   }
@@ -1249,6 +1453,7 @@
     var errors = [];
     if (references.entryCount) errors.push('Suppression refusée : ' + references.entryCount + ' pièce(s) comptable(s) — brouillons ou validées — utilisent ce compte. Conservez-le dans le plan pour préserver l’historique.');
     if (references.supplierCount) errors.push('Suppression refusée : ' + references.supplierCount + ' fournisseur(s) sont rattachés à ce compte. Réaffectez-les avant la suppression.');
+    if (references.clientCount) errors.push('Suppression refusée : ' + references.clientCount + ' client(s) sont rattachés à ce compte. Réaffectez-les avant la suppression.');
     if (references.childCodes.length) errors.push('Suppression refusée : ce compte possède des sous-comptes (' + references.childCodes.slice(0, 5).join(', ') + (references.childCodes.length > 5 ? '…' : '') + ').');
     return { ok: errors.length === 0, errors: errors, references: references };
   }
@@ -1956,6 +2161,12 @@
     updateSupplier: updateSupplier,
     setSupplierActive: setSupplierActive,
     deleteSupplier: deleteSupplier,
+    clients: clients,
+    client: client,
+    createClient: createClient,
+    updateClient: updateClient,
+    deleteClient: deleteClient,
+    clientCodeChangeCheck: clientCodeChangeCheck,
     nextIdentificationCode: nextIdentificationCode,
     registerIdentificationCode: registerIdentificationCode,
     entries: entries,

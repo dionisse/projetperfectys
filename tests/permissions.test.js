@@ -142,6 +142,9 @@ test('les actions disponibles sont décrites par module', () => {
   assert(actions.includes('suppliers.delete'));
   assert(actions.includes('suppliers.edit'));
   assert(actions.includes('suppliers.archive'));
+  assert(actions.includes('clients.create'));
+  assert(actions.includes('clients.edit'));
+  assert(actions.includes('clients.delete'));
   assert(actions.includes('period.close'));
   assert(actions.includes('period.reopen'));
   assert(actions.includes('data.import'));
@@ -230,4 +233,18 @@ test('la modification et la suppression des comptes exigent chacune leur grant e
   assert.strictEqual(Permissions.hasPermission(accountManager, 'accounting', 'accounts.delete', { ...accountContext, dossierId: 'dossier-2' }), false);
 });
 
-console.log('Politique d’accès : 11 scénarios réussis.');
+test('clients.create, clients.edit et clients.delete sont des droits distincts limités au dossier', () => {
+  const clientManager = {
+    role: 'manager', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view', 'clients.create', 'clients.edit'] }] }
+  };
+  const clientContext = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  assert.strictEqual(Permissions.hasPermission(clientManager, 'accounting', 'clients.create', clientContext), true);
+  assert.strictEqual(Permissions.hasPermission(clientManager, 'accounting', 'clients.edit', clientContext), true);
+  assert.strictEqual(Permissions.hasPermission(clientManager, 'accounting', 'clients.delete', clientContext), false);
+  clientManager.grants.accounting[0].actions.push('clients.delete');
+  assert.strictEqual(Permissions.hasPermission(clientManager, 'accounting', 'clients.delete', clientContext), true);
+  assert.strictEqual(Permissions.hasPermission(clientManager, 'accounting', 'clients.delete', { ...clientContext, dossierId: 'dossier-2' }), false);
+});
+
+console.log('Politique d’accès : 12 scénarios réussis.');

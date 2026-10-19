@@ -10,6 +10,7 @@ Ce document suit les décisions et les prochaines étapes du prototype natif. Le
 - Page multi-dossiers clients en place : la Comptabilité ouvre la liste avant le tableau de bord ; création avec nom, code, type comptable, référence et cycle, ainsi que coordonnées client facultatives (adresse, IFU, RCCM, email, téléphone).
 - Navigation Comptabilité générale organisée en huit menus latéraux, sous-menus en onglets verticaux et éléments imbriqués en listes ; fonctionnalités hors périmètre visibles mais inactives.
 - Sur téléphone, consultation limitée au menu Éditions (balance, journal, grand livre) ; opérations de saisie et création de dossier réservées à l’ordinateur ou à la tablette.
+- Répertoire **Définitions → Clients** livré en étape partielle : fiche tierce isolée par dossier, code `CLI` automatique/modifiable, recherche, création, modification et suppression refusée si une pièce ou un mouvement la référence. Il est distinct du registre des entreprises clientes du cabinet ; facturation, règlements, lettrage et grand livre auxiliaire complet restent à construire.
 - Menu Fichier : PERFECTO-ÉCHANGE v1 (écritures) et PERFECTO-BALANCE v1 (soldes nets) proposent des imports/exports contrôlés. Le format pivot PERFECTO-AUXILIAIRE v1 est documenté/testé, mais n’est pas exposé comme import ni comme source d’une centralisation.
 - Paie & RH : registre local partiel de lots internes, approbation et lien de centralisation vers la Comptabilité. Les calculs de paie et fonctions RH complètes restent à construire ; les données fictives de démonstration ne sont pas calculées légalement.
 - La centralisation des salaires lit exclusivement un lot approuvé du module maison Paie & RH ; elle n’accepte aucun fichier ni logiciel tiers.
@@ -62,8 +63,9 @@ Les identifiants ci-dessous sont reliés aux parcours actuels, mais leurs libell
 | `draft.edit` / `draft.delete` | Modifier ou supprimer un brouillon uniquement |
 | `entry.validate` | Valider définitivement une pièce équilibrée |
 | `centralization.cancel` | Préparer l’écriture inverse d’une centralisation interne ; validation immédiate toujours séparée |
-| `accounts.create` / `accounts.edit` / `accounts.delete` | Créer, modifier ou supprimer un compte ; la suppression et la renumérotation sont refusées si des écritures, fournisseurs ou sous-comptes le référencent |
+| `accounts.create` / `accounts.edit` / `accounts.delete` | Créer, modifier ou supprimer un compte ; la suppression et la renumérotation sont refusées si des écritures, clients/fournisseurs rattachés ou sous-comptes le référencent |
 | `suppliers.create` / `suppliers.edit` / `suppliers.archive` / `suppliers.delete` | Gérer une fiche fournisseur ; la suppression définitive est réservée aux fiches non référencées et ne libère pas son code |
+| `clients.create` / `clients.edit` / `clients.delete` | Créer, modifier ou supprimer une fiche client ; le refus par défaut et les limites par dossier sont appliqués, et une fiche référencée ne peut être ni renumérotée ni supprimée |
 | `period.close` / `period.reopen` | Clôturer ou rouvrir une période du dossier actif |
 | `data.import` / `data.export` | Importer ou exporter les données du dossier actif ; l’export couvre aussi certains états et impressions |
 | `data.reset` / `data.restore` | Réinitialiser ou restaurer les données du dossier actif |

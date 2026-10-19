@@ -2388,6 +2388,7 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
 
 /* Référentiel local des fournisseurs */
 .supplier-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.client-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .supplier-directory-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
 .supplier-directory-head h4 { margin-bottom: 4px; }
 .supplier-directory-head p { margin: 0; color: #6d7c74; font-size: .7rem; line-height: 1.5; }
@@ -2403,6 +2404,14 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
 .supplier-table td small { color: #77847d; font-size: .64rem; }
 .supplier-row-actions { display: flex; flex-wrap: wrap; gap: 5px; min-width: 236px; }
 .supplier-row-actions .btn { white-space: nowrap; }
+.client-table { min-width: 1010px; }
+.client-table th,
+.client-table td { vertical-align: top; }
+.client-table td { line-height: 1.5; }
+.client-table td strong { color: #344d43; }
+.client-table td small { color: #77847d; font-size: .64rem; }
+.client-filter-controls { grid-template-columns: minmax(220px, 1fr); }
+.client-empty { margin-top: 9px; padding: 16px 12px; border: 1px dashed #dce5de; border-radius: 8px; background: #fbfcfa; }
 .supplier-empty { margin-top: 9px; padding: 16px 12px; border: 1px dashed #dce5de; border-radius: 8px; background: #fbfcfa; }
 .supplier-form-grid .supplier-address-field,
 .supplier-form-grid .supplier-notes-field { grid-column: 1 / -1; }

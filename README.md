@@ -38,8 +38,9 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 | Organisation & accès (démo) | Profils temporaires et droits explicites par personne, module, entreprise cliente, dossier et action ; refus par défaut |
 | Dossiers clients | Liste multi-dossiers ouverte depuis le module Comptabilité ; création d’entreprise, code, type comptable, référence et cycle paramétrable |
 | Tableau de bord | Indicateurs (débit, crédit, résultat, pièces), dernières pièces, activité par journal, état des périodes |
-| Plan comptable | Référentiel complet de 147 comptes fourni, classes et sous-classes, descriptions d’usage, recherche/filtres, création, modification et suppression contrôlée ; les numéros utilisés dans les pièces, les rattachements fournisseurs ou les sous-comptes sont protégés, sans réécriture de l’historique |
+| Plan comptable | Référentiel complet de 147 comptes fourni, classes et sous-classes, descriptions d’usage, recherche/filtres, création, modification et suppression contrôlée ; les numéros utilisés dans les pièces, les rattachements clients/fournisseurs ou les sous-comptes sont protégés, sans réécriture de l’historique |
 | Fournisseurs | Répertoire local isolé par dossier : code automatique modifiable, création, modification, archivage/réactivation et suppression des fiches non référencées ; IFU/RCCM, contacts, compte général et auxiliaire individualisé ; aucune facture, aucun règlement, mouvement auxiliaire, lettrage ni centralisation n’est généré |
+| Clients | Répertoire des tiers clients de l’entreprise suivie, distinct des dossiers clients du cabinet : code `CLI` automatique/modifiable, création, modification et suppression protégée dès qu’une pièce ou un mouvement comptable référence la fiche ; aucun document de vente ou mouvement comptable n’est créé |
 | Journaux | Six journaux (AC, VE, BQ, CA, OD, PA) avec totaux et brouillons |
 | Saisie d'écriture | Saisie multiligne, contrôle d'équilibre en direct, référence auto, brouillon ou validation |
 | Pièces comptables | Liste filtrable, détail en modale, validation, modification et suppression des brouillons |
@@ -55,7 +56,11 @@ Le sous-menu **Définitions → Fournisseurs** gère un répertoire local propre
 
 Les données et l’historique des codes sont conservés dans la base locale du dossier et inclus dans la sauvegarde JSON. Les anciennes pièces et leurs montants ne sont jamais réécrits ; une suppression est refusée dès qu’une pièce ou un mouvement historique référence la fiche. Cette étape ne génère ni facture, ni paiement, ni mouvement tiers, lettrage ou solde auxiliaire. Les fichiers PERFECTO-AUXILIAIRE restent des échanges de fichiers : **seules les opérations provenant des modules PERFECTO internes pourront alimenter une centralisation**. L’interface est masquée sur le parcours téléphone, réservé aux Éditions en lecture seule.
 
-Le générateur commun connaît aussi les préfixes `CLI` et `PER` pour les futurs répertoires Client et Personnel. Leurs écrans de gestion n’étant pas encore actifs, la génération de leurs identifiants n’est pas encore proposée dans l’interface.
+### Répertoire clients — étape partielle
+
+Le sous-menu **Définitions → Clients** gère par dossier un répertoire de tiers clients pour l’entreprise suivie. Il ne s’agit pas de la liste des entreprises clientes du cabinet : cette dernière reste le registre multi-dossiers ouvert avant le tableau de bord Comptabilité. Une fiche client contient un code `CLI` proposé automatiquement à l’enregistrement et modifiable, le nom/raison sociale, les coordonnées, l’IFU/RCCM, un compte collectif client de classe 4, un code auxiliaire individuel et un délai indicatif de règlement. La liste est recherchable ; les fiches peuvent être créées, modifiées et supprimées.
+
+Les codes attribués, y compris les anciens codes modifiés ou supprimés, restent réservés dans le dossier. La suppression, le changement de code ou de compte collectif est refusé dès qu’une pièce (brouillon ou validée) ou un mouvement comptable référence le client ; un compte général collectif ne peut pas non plus être modifié ou supprimé tant qu’un client y est rattaché. Ces fiches ne créent pas de facture, règlement, lettrage, solde auxiliaire ni écriture. Les centralisations ne sont alimentées que par les modules PERFECTO internes, pas par un fichier d’échange ou un logiciel tiers. Le répertoire est exclu du parcours téléphone, limité à la consultation des Éditions.
 
 ### Interopérabilité comptable — incrément v1
 
@@ -237,7 +242,7 @@ modern-proto/icon-192.png      icônes de l'application
 modern-proto/icon-512.png
 tests/store.test.js            tests des règles métier (Node, sans dépendance)
 tests/workspaces.test.js       tests de migration, références, cycles et isolation des dossiers clients
-tests/account-lifecycle.test.js garde-fous sur les comptes, fournisseurs et codes automatiques
+tests/account-lifecycle.test.js garde-fous sur les comptes, fournisseurs/clients, suppressions référencées et codes automatiques
 ```
 
 ## Tests
@@ -252,7 +257,7 @@ node tests/account-lifecycle.test.js
 node tests/centralization-cancellation.test.js
 ```
 
-Les tests couvrent les règles comptables, les migrations, les références et le cycle de vie sécurisé des comptes, des fournisseurs et des identifiants, les cycles et l’isolation des dossiers clients, le catalogue modulaire, la politique d’accès de démonstration (refus par défaut, organisation, actions et portée par identifiant de dossier), la hiérarchie du menu et l’annulation des centralisations internes (provenance, écriture inverse, immuabilité, anti-doublon et brouillons). La CI GitHub Actions exécute ces scénarios ainsi qu’un contrôle de syntaxe et un test de service HTTP.
+Les tests couvrent les règles comptables, les migrations, les références et le cycle de vie sécurisé des comptes et des répertoires clients/fournisseurs, les codes réservés, les cycles et l’isolation des dossiers clients, le catalogue modulaire, la politique d’accès de démonstration (refus par défaut, organisation, actions et portée par identifiant de dossier), la hiérarchie du menu et l’annulation des centralisations internes (provenance, écriture inverse, immuabilité, anti-doublon et brouillons). La CI GitHub Actions exécute ces scénarios ainsi qu’un contrôle de syntaxe et un test de service HTTP.
 
 ## Limites de cette prévisualisation
 

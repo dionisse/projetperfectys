@@ -73,7 +73,8 @@
     journal: { journal: '', year: String(S.exercise()) },
     ledger: { account: '521' },
     periods: { year: S.exercise() },
-    suppliers: { q: '', status: 'active' }
+    suppliers: { q: '', status: 'active' },
+    clients: { q: '' }
   };
 
   var deferredInstallPrompt = null;
@@ -258,6 +259,17 @@
         return {
           moduleId: 'accounting',
           actionId: trigger && trigger.getAttribute('data-supplier-mode') === 'edit' ? 'suppliers.edit' : 'suppliers.create'
+        };
+      case 'new-client':
+        return { moduleId: 'accounting', actionId: 'clients.create' };
+      case 'edit-client':
+        return { moduleId: 'accounting', actionId: 'clients.edit' };
+      case 'delete-client':
+        return { moduleId: 'accounting', actionId: 'clients.delete' };
+      case 'save-client':
+        return {
+          moduleId: 'accounting',
+          actionId: trigger && trigger.getAttribute('data-client-mode') === 'edit' ? 'clients.edit' : 'clients.create'
         };
       case 'close-period':
         return { moduleId: 'accounting', actionId: 'period.close' };
@@ -1478,7 +1490,7 @@
       return true;
     });
 
-    var html = pageHeader('Plan comptable', 'Référentiel source de 147 comptes, personnalisable dans le dossier. Un numéro utilisé dans des écritures ou comme rattachement fournisseur est protégé contre le changement et la suppression.',
+    var html = pageHeader('Plan comptable', 'Référentiel source de 147 comptes, personnalisable dans le dossier. Un numéro utilisé dans des écritures ou comme rattachement auxiliaire client/fournisseur est protégé contre le changement et la suppression.',
       '<button type="button" class="btn btn-ghost" data-action="export-accounts-csv">↓ Export CSV</button>' +
       '<button type="button" class="btn btn-primary" data-action="new-account">＋ Nouveau compte</button>');
 
@@ -1529,7 +1541,7 @@
             '<td class="num strong">' + (solde === 0 ? '—' : amount(Math.abs(solde)) + (solde > 0 ? ' D' : ' C')) + '</td>' +
             '<td><div class="account-row-actions">' +
               '<button type="button" class="btn btn-ghost btn-sm" data-action="edit-account" data-id="' + esc(a.code) + '" aria-label="Modifier le compte ' + esc(a.code) + '">Modifier</button>' +
-              '<button type="button" class="btn btn-ghost btn-sm" data-action="delete-account" data-id="' + esc(a.code) + '" aria-label="Supprimer le compte ' + esc(a.code) + '" title="La suppression est refusée si le compte a des écritures, des fournisseurs rattachés ou des sous-comptes.">Supprimer</button>' +
+              '<button type="button" class="btn btn-ghost btn-sm" data-action="delete-account" data-id="' + esc(a.code) + '" aria-label="Supprimer le compte ' + esc(a.code) + '" title="La suppression est refusée si le compte a des écritures, des auxiliaires clients/fournisseurs rattachés ou des sous-comptes.">Supprimer</button>' +
             '</div></td>' +
           '</tr>';
         }).join('') : '<tr><td colspan="12"><div class="empty-state"><strong>Aucun compte ne correspond</strong>Modifiez la recherche ou les filtres.</div></td></tr>') +
@@ -4524,6 +4536,203 @@
     if (status) status.addEventListener('change', update);
   }
 
+  function clientAccountLabel(record) {
+    var account = S.account(record.accountCode);
+    return account ? account.code + ' · ' + account.label : String(record.accountCode || 'Compte non disponible');
+  }
+
+  function filteredClients(records, query) {
+    var needle = String(query || '').trim().toLocaleLowerCase();
+    return records.filter(function (record) {
+      if (!needle) return true;
+      var searchable = [
+        record.code, record.auxiliaryAccountCode, record.name, record.contactName, record.ifu, record.rccm,
+        record.email, record.phone, record.address, record.notes, clientAccountLabel(record)
+      ].join(' ').toLocaleLowerCase();
+      return searchable.indexOf(needle) !== -1;
+    });
+  }
+
+  function clientRowsHtml(records) {
+    var filter = ui.clients || { q: '' };
+    return filteredClients(records, filter.q).map(function (record) {
+      var coordinates = [
+        record.ifu ? 'IFU : ' + record.ifu : '',
+        record.rccm ? 'RCCM : ' + record.rccm : '',
+        record.email || '', record.phone || ''
+      ].filter(Boolean).map(esc).join('<br>') || '<span class="muted">Non renseignées</span>';
+      var contact = [record.contactName, record.address].filter(Boolean).map(esc).join('<br>');
+      return '<tr>' +
+        '<td><strong>' + esc(record.code) + '</strong></td>' +
+        '<td><strong>' + esc(record.name) + '</strong>' + (contact ? '<br><small>' + contact + '</small>' : '') + '</td>' +
+        '<td>' + coordinates + '</td>' +
+        '<td><strong>' + esc(record.auxiliaryAccountCode || (record.accountCode + '-' + record.code)) + '</strong><br><small>Compte collectif : ' + esc(clientAccountLabel(record)) + '</small><br><small>' + Number(record.paymentTermDays || 0) + ' jour(s)</small></td>' +
+        '<td><div class="supplier-row-actions">' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-action="edit-client" data-id="' + esc(record.id) + '" aria-label="Modifier la fiche de ' + esc(record.name) + '">Modifier</button>' +
+          '<button type="button" class="btn btn-ghost btn-sm btn-danger-quiet" data-action="delete-client" data-id="' + esc(record.id) + '" aria-label="Supprimer définitivement ' + esc(record.name) + '" title="Suppression refusée si une pièce comptable ou un mouvement référence ce client.">Supprimer</button>' +
+        '</div></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function viewClients() {
+    var records = S.clients().slice().sort(function (a, b) { return String(a.name).localeCompare(String(b.name), 'fr'); });
+    var filter = ui.clients || (ui.clients = { q: '' });
+    var visibleCount = filteredClients(records, filter.q).length;
+    var emptyMessage = records.length
+      ? 'Aucun client ne correspond à cette recherche.'
+      : 'Aucun client n’est encore enregistré pour l’entreprise de ce dossier. Utilisez « Nouveau client » pour créer la première fiche.';
+    return '<div class="exchange-workspace client-workspace" id="client-workspace">' +
+      '<div class="alert info"><div><strong>Répertoire des clients de l’entreprise suivie.</strong> Il est distinct de la liste des dossiers clients du cabinet. Les fiches et leurs codes sont isolés dans le dossier comptable actif. Elles ne créent ni facture, ni règlement, ni écriture ou centralisation ; les centralisations restent alimentées par les modules PERFECTO internes.</div></div>' +
+      '<div class="exchange-summary-grid client-summary-grid" aria-label="Résumé du répertoire clients">' +
+        '<div><small>Clients enregistrés</small><strong>' + records.length + '</strong></div>' +
+        '<div><small>Résultats affichés</small><strong id="client-visible-count">' + visibleCount + '</strong></div>' +
+      '</div>' +
+      '<section class="exchange-card client-directory-card">' +
+        '<div class="supplier-directory-head"><div><h4>Répertoire des clients</h4><p>Code automatique modifiable, identité, contacts, compte collectif et délai indicatif.</p></div>' +
+          '<button type="button" class="btn btn-primary" data-action="new-client">＋ Nouveau client</button></div>' +
+        '<form id="client-filter-form" class="supplier-filter-controls client-filter-controls" role="search">' +
+          '<label class="field"><span>Rechercher</span><input id="client-search" type="search" value="' + esc(filter.q) + '" placeholder="Code, nom, IFU, contact…" autocomplete="off"></label>' +
+        '</form>' +
+        '<p class="supplier-result-note" id="client-result-note">' + visibleCount + (visibleCount === 1 ? ' client affiché.' : ' clients affichés.') + '</p>' +
+        '<div class="table-wrap exchange-table-wrap client-table-wrap" id="client-table-wrap"' + (visibleCount ? '' : ' hidden') + '>' +
+          '<table class="exchange-mapping-table client-table"><caption class="sr-only">Clients de l’entreprise du dossier actif</caption><thead><tr>' +
+            '<th>Code</th><th>Nom / contact</th><th>Coordonnées administratives</th><th>Compte / délai</th><th>Actions</th>' +
+          '</tr></thead><tbody id="client-rows">' + clientRowsHtml(records) + '</tbody></table>' +
+        '</div>' +
+        '<div id="client-list-empty" class="empty-state client-empty"' + (visibleCount ? ' hidden' : '') + '><span class="empty-state-icon">⌕</span><h3>Aucun résultat</h3><p>' + esc(emptyMessage) + '</p></div>' +
+      '</section>' +
+      '<p class="exchange-footnote">Les codes attribués ne sont pas réutilisés après suppression. Les fiches sont incluses dans l’export et le point de restauration local du dossier.</p>' +
+    '</div>';
+  }
+
+  function refreshClientRows() {
+    var records = S.clients().slice().sort(function (a, b) { return String(a.name).localeCompare(String(b.name), 'fr'); });
+    var filter = ui.clients || { q: '' };
+    var visible = filteredClients(records, filter.q);
+    var rows = $('#client-rows');
+    var tableWrap = $('#client-table-wrap');
+    var empty = $('#client-list-empty');
+    var count = $('#client-visible-count');
+    var note = $('#client-result-note');
+    if (rows) rows.innerHTML = clientRowsHtml(records);
+    if (tableWrap) tableWrap.hidden = visible.length === 0;
+    if (empty) {
+      empty.hidden = visible.length !== 0;
+      empty.querySelector('p').textContent = records.length
+        ? 'Aucun client ne correspond à cette recherche.'
+        : 'Aucun client n’est encore enregistré pour l’entreprise de ce dossier. Utilisez « Nouveau client » pour créer la première fiche.';
+    }
+    if (count) count.textContent = String(visible.length);
+    if (note) note.textContent = visible.length + (visible.length === 1 ? ' client affiché.' : ' clients affichés.');
+    applyDemoActionGates(rows);
+  }
+
+  function bindClientView() {
+    var form = $('#client-filter-form');
+    if (!form) return;
+    var search = $('#client-search', form);
+    function update() {
+      ui.clients = ui.clients || { q: '' };
+      ui.clients.q = search ? search.value : '';
+      refreshClientRows();
+    }
+    form.addEventListener('submit', function (event) { event.preventDefault(); });
+    if (search) search.addEventListener('input', update);
+  }
+
+  function openClientModal(id) {
+    var existing = id ? S.client(id) : null;
+    if (id && !existing) { toast('Client introuvable dans le dossier actif.', 'error'); return; }
+    var mode = existing ? 'edit' : 'create';
+    var clientRoots = ['411', '412', '413', '416', '419'];
+    var accounts = S.accounts().filter(function (account) {
+      var code = String(account.code);
+      return clientRoots.some(function (rootCode) { return code.indexOf(rootCode) === 0; }) &&
+        Number(account.cls || code.charAt(0)) === 4 && account.aux === true &&
+        account.active !== false && account.postable !== false;
+    });
+    var existingAccount = existing && S.account(existing.accountCode);
+    if (existingAccount && !accounts.some(function (account) { return account.code === existingAccount.code; })) accounts.push(existingAccount);
+    accounts.sort(function (a, b) { return String(a.code).localeCompare(String(b.code)); });
+    if (!accounts.length) {
+      toast('Aucun compte auxiliaire client actif de classe 4 n’est disponible dans ce dossier.', 'warning');
+      return;
+    }
+    var defaultAccount = accounts.find(function (account) { return account.code === '411'; }) || accounts[0];
+    var selectedAccount = existing && accounts.some(function (account) { return account.code === existing.accountCode; })
+      ? existing.accountCode : defaultAccount.code;
+    var accountOptions = accounts.map(function (account) {
+      return '<option value="' + esc(account.code) + '"' + (account.code === selectedAccount ? ' selected' : '') + '>' +
+        esc(account.code + ' · ' + account.label) + '</option>';
+    }).join('');
+    var codeCheck = existing ? S.clientCodeChangeCheck(existing.id) : { ok: true, errors: [] };
+    var suggestedClientCode = existing ? existing.code : S.nextIdentificationCode('client');
+    var value = function (key) {
+      var raw = existing && existing[key] != null ? existing[key] : (key === 'code' ? suggestedClientCode : '');
+      return esc(raw);
+    };
+    var codeHint = existing && !codeCheck.ok
+      ? '<span class="hint">Code et compte collectif verrouillés pour préserver les références : ' + esc(codeCheck.errors.join(' ')) + '</span>'
+      : '<span class="hint">Code proposé automatiquement à l’enregistrement ; il reste modifiable avant validation.</span>';
+    var body = '<form id="client-form" novalidate>' +
+      '<div id="client-errors" aria-live="assertive"></div>' +
+      '<div class="form-grid supplier-form-grid client-form-grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">' +
+        '<div class="field"><label for="client-code">Code client <span aria-hidden="true">*</span></label>' +
+          '<input id="client-code" name="code" type="text" maxlength="32" value="' + value('code') + '" placeholder="Ex. CLI-0001"' + (existing && !codeCheck.ok ? ' readonly' : '') + ' required autocomplete="off">' + codeHint + '</div>' +
+        '<div class="field"><label for="client-name">Nom ou raison sociale <span aria-hidden="true">*</span></label>' +
+          '<input id="client-name" name="name" type="text" maxlength="150" value="' + value('name') + '" placeholder="Nom du client" required></div>' +
+        '<div class="field"><label for="client-ifu">Numéro IFU</label><input id="client-ifu" name="ifu" type="text" maxlength="50" value="' + value('ifu') + '"></div>' +
+        '<div class="field"><label for="client-rccm">Numéro RCCM</label><input id="client-rccm" name="rccm" type="text" maxlength="80" value="' + value('rccm') + '"></div>' +
+        '<div class="field"><label for="client-contact">Nom du contact</label><input id="client-contact" name="contactName" type="text" maxlength="120" value="' + value('contactName') + '"></div>' +
+        '<div class="field"><label for="client-email">Adresse e-mail</label><input id="client-email" name="email" type="email" maxlength="254" value="' + value('email') + '"></div>' +
+        '<div class="field"><label for="client-phone">Téléphone</label><input id="client-phone" name="phone" type="tel" maxlength="40" value="' + value('phone') + '"></div>' +
+        '<div class="field"><label for="client-account">Compte collectif client <span aria-hidden="true">*</span></label><select id="client-account" name="accountCode" required' + (existing && !codeCheck.ok ? ' disabled' : '') + '>' + accountOptions + '</select><span class="hint">Compte de rattachement et auxiliaire individuel ; aucune écriture n’est générée.</span></div>' +
+        '<div class="field"><label for="client-terms">Délai indicatif de règlement (jours)</label><input id="client-terms" name="paymentTermDays" type="number" min="0" max="3650" step="1" value="' + esc(existing ? existing.paymentTermDays : 30) + '"></div>' +
+        '<div class="field supplier-address-field"><label for="client-address">Adresse</label><input id="client-address" name="address" type="text" maxlength="255" value="' + value('address') + '"></div>' +
+        '<div class="field supplier-notes-field"><label for="client-notes">Notes internes</label><textarea id="client-notes" name="notes" rows="3" maxlength="1000">' + value('notes') + '</textarea></div>' +
+      '</div>' +
+    '</form>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button>' +
+      '<button type="submit" class="btn btn-primary" form="client-form" data-action="save-client" data-client-mode="' + mode + '">' +
+        (existing ? 'Enregistrer les modifications' : 'Enregistrer le client') + '</button>';
+    openModal(existing ? 'Modifier le client' : 'Nouveau client',
+      existing ? 'Fiche du dossier ' + esc(S.currentDossier().reference) : 'Création d’une fiche dans le dossier ' + esc(S.currentDossier().reference),
+      body, footer, true);
+
+    var form = $('#client-form');
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var actionId = mode === 'edit' ? 'clients.edit' : 'clients.create';
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', actionId, accountingAccessContext())) {
+        toast('Action refusée par défaut : le droit « ' + actionId + ' » n’est pas accordé.', 'warning');
+        return;
+      }
+      var clientInput = {
+        code: $('#client-code').value,
+        name: $('#client-name').value,
+        ifu: $('#client-ifu').value,
+        rccm: $('#client-rccm').value,
+        contactName: $('#client-contact').value,
+        email: $('#client-email').value,
+        phone: $('#client-phone').value,
+        accountCode: $('#client-account').value,
+        paymentTermDays: $('#client-terms').value,
+        address: $('#client-address').value,
+        notes: $('#client-notes').value
+      };
+      var result = existing ? S.updateClient(existing.id, clientInput) : S.createClient(clientInput);
+      if (!result.ok) {
+        $('#client-errors').innerHTML = '<div class="alert error" role="alert"><ul style="margin:0 0 0 18px">' +
+          result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
+        return;
+      }
+      toast(existing ? 'Fiche client mise à jour.' : 'Client ' + result.client.code + ' enregistré.', 'success');
+      closeModal(true);
+      render();
+    });
+  }
+
   function viewAccountingMenu(params) {
     params = params || {};
     var phone = isPhoneViewport();
@@ -4566,6 +4775,8 @@
     var exchangeFeature = '';
     if (group.id === 'definitions' && tab.id === 'suppliers') {
       exchangeFeature = viewSuppliers();
+    } else if (group.id === 'definitions' && tab.id === 'clients') {
+      exchangeFeature = viewClients();
     }
     if (group.id === 'fichier') {
       switch (tab.id) {
@@ -4625,6 +4836,7 @@
     if (route === 'menu') {
       var menuParams = parseHash().params;
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'suppliers') bindSupplierView();
+      if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'clients') bindClientView();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-other') bindAccountingExchangeImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-balance') bindAccountingBalanceImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-payroll') bindPayrollCentralization();
@@ -5051,6 +5263,26 @@
         var supplierDeletion = S.deleteSupplier(id);
         if (!supplierDeletion.ok) { toast(supplierDeletion.errors.join(' ') || 'Suppression impossible.', 'warning'); break; }
         toast('Fournisseur supprimé. Son code ne sera pas réattribué.', 'success');
+        render();
+        break;
+      }
+      case 'new-client':
+        openClientModal();
+        break;
+      case 'edit-client':
+        if (id) openClientModal(id);
+        break;
+      case 'delete-client': {
+        if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'clients.delete', accountingAccessContext())) {
+          toast('Suppression refusée par défaut : le droit « clients.delete » n’est pas accordé.', 'warning');
+          break;
+        }
+        var clientToDelete = S.client(id);
+        if (!clientToDelete) { toast('Client introuvable dans le dossier actif.', 'error'); break; }
+        if (!window.confirm('Supprimer définitivement la fiche client « ' + clientToDelete.name + ' » ? Le code ne sera pas réattribué.')) break;
+        var clientDeletion = S.deleteClient(id);
+        if (!clientDeletion.ok) { toast(clientDeletion.errors.join(' ') || 'Suppression impossible.', 'warning'); break; }
+        toast('Client supprimé. Son code ne sera pas réattribué.', 'success');
         render();
         break;
       }
