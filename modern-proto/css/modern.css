@@ -681,13 +681,18 @@ input[readonly] { background: var(--bg-subtle); color: var(--muted); }
 .journal-summary strong { color: var(--primary-dark); font-size: 1.25rem; line-height: 1; }
 .journal-summary span { color: var(--muted); font-size: .75rem; }
 .journal-system-note { margin: 0 0 16px; line-height: 1.55; }
-.entry-journal-selector { display: grid; gap: 12px; margin-top: 14px; }
+.entry-journal-selector { display: grid; gap: 12px; width: 100%; max-width: 100%; min-width: 0; margin-top: 14px; }
 .entry-journal-instructions { margin: 0; }
-.entry-journal-card { padding: 14px; }
-.entry-journal-table { min-width: 970px; }
-.entry-journal-table th:nth-child(1) { min-width: 90px; }
-.entry-journal-table th:nth-child(2) { min-width: 190px; }
-.entry-journal-table th:nth-child(6) { min-width: 200px; }
+.entry-journal-card { width: 100%; max-width: 100%; min-width: 0; padding: 14px; }
+.entry-journal-card .table-wrap { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; }
+.entry-journal-table { min-width: min(880px, 100%); }
+.entry-journal-table th:nth-child(1) { min-width: 68px; }
+.entry-journal-table th:nth-child(2) { min-width: 145px; }
+.entry-journal-table th:nth-child(6) { min-width: 165px; }
+.data-table.entry-journal-table { font-size: .76rem; }
+.data-table.entry-journal-table th,
+.data-table.entry-journal-table td { padding: 8px 8px; }
+.data-table.entry-journal-table th { font-size: .63rem; letter-spacing: .035em; }
 .entry-journal-row { cursor: pointer; transition: background-color .12s ease; }
 .entry-journal-row.is-selected td { background: var(--primary-soft); }
 .entry-journal-row.is-selected td:first-child { box-shadow: inset 3px 0 var(--primary); }
