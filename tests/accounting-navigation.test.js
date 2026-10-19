@@ -1,0 +1,58 @@
+/* Vérifie la hiérarchie des menus et le statut d’activation par défaut. */
+'use strict';
+
+const assert = require('node:assert/strict');
+const nav = require('../modern-proto/js/accounting-navigation.js');
+
+const groups = nav.all();
+assert.deepEqual(groups.map(group => group.id), [
+  'fichier', 'definitions', 'saisie', 'editions', 'declarations', 'fin-exercice', 'parametres', 'outils'
+]);
+assert.deepEqual(groups.map(group => group.label), [
+  'Fichier', 'Définitions', 'Saisie', 'Éditions', 'Déclarations périodiques',
+  'Opérations de fin d’exercice', 'Paramètres', 'Outils'
+]);
+
+const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
+  tab.label,
+  ...(tab.children || []).map(child => child.label)
+]));
+[
+  'Importation d’une balance générale',
+  'Centralisation de la comptabilité auxiliaire',
+  'Comptes généraux',
+  'Fournisseurs',
+  'Clients',
+  'Personnel',
+  'Frais sur véhicules',
+  'Bénéficiaires de frais de mission',
+  'Natures des flux de trésorerie',
+  'Saisie dans les journaux',
+  'Reports à nouveau',
+  'Journaux',
+  'Comptes en devises',
+  'États analytiques',
+  'Comptes à payer (analytique)',
+  'Tableaux financiers OHADA révisé',
+  'Arrêt définitif des comptes de l’exercice',
+  'Calculatrice',
+  'Capture d’écran'
+].forEach(label => assert(labels.includes(label), `Élément de menu manquant : ${label}`));
+
+const findTab = (groupId, tabId) => nav.getTab(groupId, tabId);
+assert.equal(findTab('definitions', 'general-accounts').status, 'active');
+assert.equal(findTab('definitions', 'journals').status, 'active');
+assert.equal(findTab('saisie', 'journal-entry').status, 'active');
+assert.equal(findTab('editions', 'journals').status, 'active');
+assert.equal(findTab('editions', 'general-accounts').status, 'active');
+assert.equal(findTab('editions', 'analytic-statements').status, 'inactive');
+assert.equal(findTab('definitions', 'responsibility-centers').status, 'inactive');
+assert.equal(findTab('outils', 'calculator').status, 'inactive');
+assert.equal(findTab('outils', 'screenshot').status, 'inactive');
+assert.equal(findTab('fin-exercice', 'period-close').status, 'partial');
+assert.equal(findTab('fin-exercice', 'period-close').actions[0].route, 'periods');
+assert.equal(findTab('fin-exercice', 'definitive-close').irreversible, true);
+assert.equal(findTab('fin-exercice', 'definitive-close').status, 'planned');
+assert.deepEqual(findTab('editions', 'general-accounts').actions.map(action => action.route), ['balance', 'ledger']);
+
+console.log('Navigation comptable : 8 menus, hiérarchie, périmètre et états inactifs — OK');

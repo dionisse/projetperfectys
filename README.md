@@ -23,6 +23,8 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 
 | Écran | Contenu |
 |---|---|
+| Navigation comptable | Huit menus latéraux (Fichier, Définitions, Saisie, Éditions, Déclarations, Fin d’exercice, Paramètres, Outils), sous-menus en onglets et éléments imbriqués en listes ; les fonctions analytiques et non réalisées restent inactives |
+| Téléphone | Consultation limitée aux Éditions (balance, journal, grand livre) ; aucune saisie comptable ni création de dossier sur téléphone |
 | Connexion (démo) | Aucun identifiant collecté ; e-mail/mot de passe et Google sont prévus, mais non actifs en démo |
 | Launcher | Catalogue modulaire, recherche et filtres ; ouverture selon les droits du profil simulé, autres modules à venir |
 | Organisation & accès (démo) | Profils temporaires et droits explicites par personne, module, entreprise cliente, dossier et action ; refus par défaut |
@@ -54,6 +56,8 @@ Le backlog et les décisions de conception sont suivis dans [`BACKLOG.md`](BACKL
 Le refus est appliqué par défaut. Le Superviseur général administre son organisation de démonstration ; les profils gestionnaire et utilisateur/employé ne reçoivent aucun droit par leur rôle. Les droits peuvent être accordés par personne, module, organisation ou identifiant de dossier client, et action. Toute action comptable exige aussi le droit de consulter le module dans le même grant et la même portée. Plusieurs grants par module se cumulent sans transférer une action d’un dossier client à un autre.
 
 Un dossier désigne une entreprise cliente enregistrée pour traitement. Le module Comptabilité ouvre d’abord la liste des dossiers autorisés ; l’ouverture d’une entreprise conduit ensuite à son tableau de bord. La création définit le nom du client, un code de dossier éditable, le type de comptabilité et les dates de début/fin du cycle. L’adresse, le N° IFU, le N° RCCM, l’email et le téléphone peuvent être ajoutés facultativement. La référence suit le format `CODETYPE-CODECLIENTANNÉE` : Cabinet Godwin, comptabilité révisée (`COR`), code `GOD` et exercice 2026 donnent `COR-GOD2026`. Le code est saisi explicitement et reste modifiable ; aucune règle automatique n’est imposée depuis le nom. L’unicité de la référence est vérifiée.
+
+La navigation comptable présente les huit rubriques demandées à gauche, avec les sous-menus en onglets et les éléments de niveau inférieur en listes. Une fonction disponible ouvre le parcours existant ; une fonction générale non développée porte l’état « À construire » ; les fonctions analytiques, dépendantes d’autres modules ou à confirmer restent inactives et n’exécutent aucun traitement. La Comptabilité analytique demeure un module séparé. Sur téléphone, l’accès est limité à la consultation des éditions (balance, journal et grand livre) ; la saisie et la création de dossiers se font sur ordinateur ou tablette.
 
 Chaque dossier a des données comptables isolées dans le navigateur. Le jeu historique principal et ses écritures sont conservés ; tout nouveau dossier démarre sans recopier ces écritures, avec le référentiel comptable initial. Le moteur garde les périodes mensuelles dans les bornes du cycle et refuse les nouvelles écritures hors cycle. Les cycles non calendaires sont pris en charge ; cette version limite un cycle à 18 mois. Le registre de dossiers migre les métadonnées héritées tout en conservant les anciennes clés et données comptables. Cette simulation reste côté client : elle n’est ni une sécurité réelle ni une authentification, ne se synchronise pas avec Google Drive et ne prend pas en charge l’écriture simultanée multi-utilisateur.
 
@@ -115,6 +119,7 @@ modern-proto/css/modern.css    identité GOBEX (papier, encre, vert canard et or
 modern-proto/js/store.js       dossiers clients, cycles, données isolées, règles métier, calculs, import/export
 modern-proto/js/modules.js     catalogue déclaratif des modules du launcher
 modern-proto/js/permissions.js politique d’accès démo (refus par défaut)
+modern-proto/js/accounting-navigation.js  menus, sous-menus et états d’activation du Lot 1
 modern-proto/js/app.js         routeur, vues multi-dossiers, formulaires et interactions comptables
 BACKLOG.md                     décisions confirmées et étapes prévues
 modern-proto/manifest.webmanifest  métadonnées PWA
@@ -132,9 +137,10 @@ node tests/store.test.js
 node tests/workspaces.test.js
 node tests/modules.test.js
 node tests/permissions.test.js
+node tests/accounting-navigation.test.js
 ```
 
-Les tests couvrent les règles comptables, la migration, les références, les cycles et l’isolation des dossiers clients, le catalogue modulaire et la politique d’accès de démonstration (refus par défaut, organisation, actions et portée par identifiant de dossier). La CI GitHub Actions exécute ces scénarios ainsi qu’un contrôle de syntaxe et un test de service HTTP.
+Les tests couvrent les règles comptables, la migration, les références, les cycles et l’isolation des dossiers clients, le catalogue modulaire, la politique d’accès de démonstration (refus par défaut, organisation, actions et portée par identifiant de dossier) ainsi que la hiérarchie et les états du menu comptable. La CI GitHub Actions exécute ces scénarios ainsi qu’un contrôle de syntaxe et un test de service HTTP.
 
 ## Limites de cette prévisualisation
 

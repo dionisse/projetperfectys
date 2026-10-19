@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#10212b" />
+  <meta name="theme-color" content="#f7f6f0" />
   <meta name="description" content="PERFECTO — prototype statique de comptabilité générale SYSCOHADA révisé. Sans Blazor, sans serveur : HTML, CSS et JavaScript natifs." />
   <title>PERFECTO · Comptabilité générale SYSCOHADA</title>
   <link rel="manifest" href="manifest.webmanifest" />
@@ -34,55 +34,27 @@
         </div>
       </div>
 
-      <nav class="sidebar-nav">
-        <div class="nav-section">
-          <p class="nav-section-heading">Comptabilité générale</p>
-          <a href="#/dossiers" data-route="dossiers">
+      <nav class="sidebar-nav" aria-label="Navigation de la comptabilité générale">
+        <div class="nav-section nav-context-links">
+          <p class="nav-section-heading">Dossier actif</p>
+          <a href="#/dossiers" data-route="dossiers" id="nav-dossiers-link">
             <span class="nav-icon" aria-hidden="true">▰</span>Dossiers clients
           </a>
-          <a href="#/dashboard" data-route="dashboard">
+          <a href="#/dashboard" data-route="dashboard" id="nav-dashboard-link">
             <span class="nav-icon" aria-hidden="true">▥</span>Tableau de bord
           </a>
         </div>
 
-        <div class="nav-section">
-          <p class="nav-section-heading">Comptabilité</p>
-          <a href="#/accounts" data-route="accounts">
-            <span class="nav-icon" aria-hidden="true">▤</span>Plan comptable
-          </a>
-          <a href="#/journals" data-route="journals">
-            <span class="nav-icon" aria-hidden="true">▦</span>Journaux
-          </a>
-          <a href="#/entry" data-route="entry">
-            <span class="nav-icon" aria-hidden="true">＋</span>Saisie d’écriture
-          </a>
-          <a href="#/entries" data-route="entries">
-            <span class="nav-icon" aria-hidden="true">▤</span>Pièces comptables
-            <span class="nav-badge" id="draft-badge" aria-label="Brouillons en attente">1</span>
-          </a>
-        </div>
-
-        <div class="nav-section">
-          <p class="nav-section-heading">États</p>
-          <a href="#/balance" data-route="balance">
-            <span class="nav-icon" aria-hidden="true">⚖︎</span>Balance générale
-          </a>
-          <a href="#/journal" data-route="journal">
-            <span class="nav-icon" aria-hidden="true">≡</span>Journal des écritures
-          </a>
-          <a href="#/ledger" data-route="ledger">
-            <span class="nav-icon" aria-hidden="true">⌕</span>Grand livre
-          </a>
-        </div>
-
-        <div class="nav-section">
-          <p class="nav-section-heading">Paramètres</p>
-          <a href="#/periods" data-route="periods">
-            <span class="nav-icon" aria-hidden="true">◷</span>Périodes
-          </a>
-          <a href="#/settings" data-route="settings">
-            <span class="nav-icon" aria-hidden="true">⚙︎</span>Données &amp; application
-          </a>
+        <div class="nav-section nav-accounting-groups">
+          <p class="nav-section-heading">Menus comptables</p>
+          <a href="#/menu?g=fichier&amp;t=export-other" data-menu-group="fichier"><span class="nav-icon" aria-hidden="true">▤</span>Fichier</a>
+          <a href="#/menu?g=definitions&amp;t=general-accounts" data-menu-group="definitions"><span class="nav-icon" aria-hidden="true">▧</span>Définitions</a>
+          <a href="#/menu?g=saisie&amp;t=journal-entry" data-menu-group="saisie"><span class="nav-icon" aria-hidden="true">＋</span>Saisie</a>
+          <a href="#/menu?g=editions&amp;t=journals" data-menu-group="editions"><span class="nav-icon" aria-hidden="true">▤</span>Éditions</a>
+          <a href="#/menu?g=declarations&amp;t=vat-difference" data-menu-group="declarations"><span class="nav-icon" aria-hidden="true">▦</span>Déclarations périodiques</a>
+          <a href="#/menu?g=fin-exercice&amp;t=balance-checks" data-menu-group="fin-exercice"><span class="nav-icon" aria-hidden="true">◷</span>Opérations de fin d’exercice</a>
+          <a href="#/menu?g=parametres&amp;t=dossier-configuration" data-menu-group="parametres"><span class="nav-icon" aria-hidden="true">⚙</span>Paramètres</a>
+          <a href="#/menu?g=outils&amp;t=calculator" data-menu-group="outils"><span class="nav-icon" aria-hidden="true">⌕</span>Outils</a>
         </div>
       </nav>
 
@@ -108,6 +80,14 @@
         </div>
       </header>
 
+      <nav class="mobile-editions-bar" id="mobile-editions-bar" aria-label="Consultation sur téléphone">
+        <a href="#/menu?g=editions&amp;t=journals" data-mobile-edition="menu">Éditions</a>
+        <a href="#/balance" data-mobile-edition="balance">Balance</a>
+        <a href="#/journal" data-mobile-edition="journal">Journal</a>
+        <a href="#/ledger" data-mobile-edition="ledger">Grand livre</a>
+        <span class="mobile-readonly-badge">Consultation</span>
+      </nav>
+
       <main class="content" id="main-content" tabindex="-1">
         <div id="view"></div>
       </main>
@@ -120,6 +100,7 @@
   <script src="js/store.js"></script>
   <script src="js/modules.js"></script>
   <script src="js/permissions.js"></script>
+  <script src="js/accounting-navigation.js"></script>
   <script src="js/app.js"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {

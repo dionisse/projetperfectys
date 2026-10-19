@@ -8,6 +8,7 @@
   var S = window.PerfectoStore;
   var ModuleRegistry = window.PerfectoModules;
   var Permissions = window.PerfectoPermissions;
+  var AccountingNavigation = window.PerfectoAccountingNavigation;
 
   /* ------------------------------ Utilitaires ------------------------------ */
   function esc(value) {
@@ -35,7 +36,7 @@
     balance: '⚖︎', journal: '≡', ledger: '⌕', periods: '◷', settings: '⚙︎'
   };
 
-  var ROUTES = ['login', 'launcher', 'organization', 'dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings'];
+  var ROUTES = ['login', 'launcher', 'organization', 'dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings', 'menu'];
 
   var TITLES = {
     login: ['Connexion', 'Accès à votre espace PERFECTO'],
@@ -51,7 +52,8 @@
     journal: ['Journal des écritures', 'Écritures validées, par journal'],
     ledger: ['Grand livre', 'Mouvements et solde progressif par compte'],
     periods: ['Périodes comptables', 'Ouverture et clôture des exercices'],
-    settings: ['Données & application', 'Sauvegarde, restauration et installation']
+    settings: ['Données & application', 'Sauvegarde, restauration et installation'],
+    menu: ['Comptabilité générale', 'Menus et fonctions du dossier']
   };
 
   var ui = {
@@ -66,12 +68,34 @@
   var deferredInstallPrompt = null;
   var launcherUi = { filter: 'all', query: '' };
   var DEMO_ORGANIZATION_ID = 'demo-org';
-  var ACCOUNTING_ROUTES = ['dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings'];
+  var ACCOUNTING_ROUTES = ['dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings', 'menu'];
+  var PHONE_REPORT_ROUTES = ['balance', 'journal', 'ledger'];
+  var PHONE_BREAKPOINT = 700;
   var ACCESS_MODULES = [{ id: 'organization', name: 'Organisation & accès', status: 'available', route: 'organization', scopeable: false }].concat(ModuleRegistry.all());
   var demoMembers = [{ id: 'demo-supervisor', name: 'Compte superviseur (démo)', role: 'supervisor', organizationId: DEMO_ORGANIZATION_ID, grants: {} }];
   var activeDemoMemberId = 'demo-supervisor';
   var activeDemoDossierId = S.currentDossier().id;
   var demoMemberSequence = 0;
+
+  function isPhoneViewport() {
+    return !!(window.matchMedia && window.matchMedia('(max-width: ' + PHONE_BREAKPOINT + 'px)').matches);
+  }
+
+  function accountingMenuHash(groupId, tabId) {
+    var group = AccountingNavigation.getGroup(groupId);
+    var tab = AccountingNavigation.getTab(group.id, tabId || group.defaultTab);
+    return '#/menu?g=' + encodeURIComponent(group.id) + '&t=' + encodeURIComponent(tab.id);
+  }
+
+  function accountingGroupForRoute(route) {
+    var routeGroups = {
+      accounts: 'definitions', journals: 'definitions',
+      entry: 'saisie', entries: 'saisie',
+      balance: 'editions', journal: 'editions', ledger: 'editions',
+      periods: 'fin-exercice', settings: 'parametres'
+    };
+    return routeGroups[route] || '';
+  }
 
   function getActiveDemoMember() {
     return demoMembers.find(function (member) { return member.id === activeDemoMemberId; }) || demoMembers[0] || null;
@@ -321,6 +345,14 @@
   function render() {
     var parsed = parseHash();
     var route = parsed.route;
+    var phoneViewport = isPhoneViewport();
+    var phoneRouteAllowed = route === 'dossiers' ||
+      (route === 'menu' && parsed.params.g === 'editions') ||
+      PHONE_REPORT_ROUTES.indexOf(route) !== -1;
+    if (phoneViewport && ACCOUNTING_ROUTES.indexOf(route) !== -1 && !phoneRouteAllowed) {
+      navigate(accountingMenuHash('editions', 'general-accounts'));
+      return;
+    }
     var view = $('#view');
     if (!view) return;
 
@@ -359,6 +391,7 @@
     var dossiersListMode = route === 'dossiers';
     document.body.classList.toggle('launcher-mode', launcherMode);
     document.body.classList.toggle('dossiers-list-mode', dossiersListMode);
+    document.body.classList.toggle('phone-editions-mode', phoneViewport && ACCOUNTING_ROUTES.indexOf(route) !== -1);
 
     var html = '';
     switch (route) {
@@ -376,6 +409,7 @@
       case 'ledger': html = viewLedger(); break;
       case 'periods': html = viewPeriods(); break;
       case 'settings': html = viewSettings(); break;
+      case 'menu': html = viewAccountingMenu(parsed.params); break;
       default: html = viewLogin();
     }
     view.innerHTML = html;
@@ -400,6 +434,11 @@
     if (topbarEntry && route === 'dossiers') topbarEntry.hidden = true;
 
     var title = TITLES[route] || TITLES.login;
+    if (route === 'menu') {
+      var menuGroupForTitle = AccountingNavigation.getGroup(phoneViewport ? 'editions' : parsed.params.g);
+      var menuTabForTitle = AccountingNavigation.getTab(menuGroupForTitle.id, parsed.params.t || menuGroupForTitle.defaultTab);
+      title = [menuGroupForTitle.label, menuTabForTitle.label];
+    }
     var pageTitle = $('#page-title');
     if (pageTitle) pageTitle.textContent = title[0];
     document.title = 'PERFECTO · ' + title[0];
@@ -407,6 +446,24 @@
     $$('[data-route]').forEach(function (link) {
       var active = link.getAttribute('data-route') === route;
       link.classList.toggle('active', active);
+      if (active) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+    });
+    var selectedMenuGroup = route === 'menu'
+      ? AccountingNavigation.getGroup(phoneViewport ? 'editions' : parsed.params.g).id
+      : accountingGroupForRoute(route);
+    $$('[data-menu-group]').forEach(function (link) {
+      var active = link.getAttribute('data-menu-group') === selectedMenuGroup;
+      link.classList.toggle('active', active);
+      if (active) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+    });
+    $$('[data-mobile-edition]').forEach(function (link) {
+      var target = link.getAttribute('data-mobile-edition');
+      var active = target === 'menu'
+        ? route === 'menu'
+        : route === target;
+      link.classList.toggle('is-active', active);
       if (active) link.setAttribute('aria-current', 'page');
       else link.removeAttribute('aria-current');
     });
@@ -672,7 +729,8 @@
   function viewDossiers() {
     var member = getActiveDemoMember();
     var accessible = permittedDemoDossiers(member);
-    var canCreate = hasDemoPermission(member, 'organization', 'organization.manageDossiers', demoAccessContext('organization'));
+    var mobileReadOnly = isPhoneViewport();
+    var canCreate = !mobileReadOnly && hasDemoPermission(member, 'organization', 'organization.manageDossiers', demoAccessContext('organization'));
     var html = pageHeader(
       'Dossiers clients',
       'Sélectionnez une entreprise cliente pour ouvrir sa comptabilité. Chaque dossier conserve ses propres données et son cycle comptable.',
@@ -707,7 +765,9 @@
           '<div class="dossier-create-footer"><p>La création n’effectue aucune copie. Le cycle est géré par périodes mensuelles dans ce prototype.</p><button type="submit" class="btn btn-primary" data-action="create-demo-dossier">＋ Créer le dossier</button></div>' +
         '</form></section>';
     } else {
-      html += '<div class="dossier-create-restricted"><span>i</span><p>La création d’un dossier client n’est pas accordée à ce profil de démonstration.</p></div>';
+      html += '<div class="dossier-create-restricted"><span>i</span><p>' + (mobileReadOnly
+        ? 'Sur téléphone, PERFECTO est limité à la consultation des éditions. La création de dossiers se fait sur ordinateur ou tablette.'
+        : 'La création d’un dossier client n’est pas accordée à ce profil de démonstration.') + '</p></div>';
     }
     html += '<p class="dossiers-storage-footnote">Ce prototype conserve les données dans le navigateur de cet appareil. Il ne se connecte ni à Google Drive ni à un service cloud.</p>';
     return html;
@@ -1836,6 +1896,86 @@
     return html;
   }
 
+  function menuStatusBadge(status) {
+    var label = AccountingNavigation.statusLabels[status] || AccountingNavigation.statusLabels.inactive;
+    return '<span class="menu-status menu-status-' + esc(status) + '">' + esc(label) + '</span>';
+  }
+
+  function menuActionLink(action, status) {
+    if (!action || !action.route || (status !== 'active' && status !== 'partial' && status !== 'mixed')) return '';
+    var href = action.route === 'menu' ? accountingMenuHash(action.group, action.tab) : '#/' + action.route;
+    return '<a class="btn btn-primary btn-sm menu-action-link" href="' + esc(href) + '">' + esc(action.label) + ' <span aria-hidden="true">→</span></a>';
+  }
+
+  function menuChildList(children, parentReason) {
+    if (!children || !children.length) return '';
+    return '<ul class="menu-child-list">' + children.map(function (child) {
+      var hasRoute = child.route && child.status === 'active';
+      var body = hasRoute
+        ? '<a href="#/' + esc(child.route) + '">' + esc(child.label) + '<span aria-hidden="true">→</span></a>'
+        : '<span class="menu-child-label">' + esc(child.label) + '</span>';
+      return '<li class="menu-child menu-child-' + esc(child.status) + '">' + body + menuStatusBadge(child.status) +
+        (child.reason || (child.status !== 'active' ? parentReason : '') ? '<small>' + esc(child.reason || parentReason || '') + '</small>' : '') +
+        '</li>';
+    }).join('') + '</ul>';
+  }
+
+  function viewAccountingMenu(params) {
+    params = params || {};
+    var phone = isPhoneViewport();
+    var group = AccountingNavigation.getGroup(phone ? 'editions' : params.g);
+    var tab = AccountingNavigation.getTab(group.id, params.t || group.defaultTab);
+    var isSelected = function (item) { return item.id === tab.id; };
+    var context = S.currentDossier();
+    var reportNote = group.id === 'editions'
+      ? (phone
+        ? '<div class="alert info menu-readonly-note">Consultation seule. Cette démonstration affiche uniquement les données enregistrées dans ce navigateur ; aucune synchronisation entre appareils n’est encore disponible.</div>'
+        : '<div class="alert info menu-readonly-note">Ce menu sert à consulter les données comptables traitées. La saisie et les modifications restent dans leurs menus dédiés.</div>')
+      : '';
+    var tabs = group.tabs.map(function (item) {
+      var active = isSelected(item);
+      return '<a role="tab" id="accounting-tab-' + esc(item.id) + '" aria-controls="accounting-menu-tabpanel" aria-selected="' + (active ? 'true' : 'false') + '"' +
+        (active ? ' aria-current="page"' : '') +
+        ' class="accounting-subtab' + (active ? ' is-active' : '') + '" data-menu-status="' + esc(item.status) + '" title="' + esc(AccountingNavigation.statusLabels[item.status] + (item.reason ? ' — ' + item.reason : '')) + '" href="' + esc(accountingMenuHash(group.id, item.id)) + '">' +
+        '<span>' + esc(item.label) + '</span>' + (item.status === 'inactive' || item.status === 'review' || item.status === 'planned' ? '<i aria-hidden="true">·</i>' : '') +
+        '</a>';
+    }).join('');
+    var statusLegend = '<div class="menu-status-legend" aria-label="Légende des statuts">' +
+      '<span><i class="legend-dot legend-dot-active"></i>Disponible</span>' +
+      '<span><i class="legend-dot legend-dot-planned"></i>À construire</span>' +
+      '<span><i class="legend-dot legend-dot-inactive"></i>Inactif ou à confirmer</span>' +
+      '</div>';
+    var actions = (tab.actions || []).map(function (action) { return menuActionLink(action, tab.status); }).join('');
+    var childList = menuChildList(tab.children, tab.reason);
+    var phoneContext = phone
+      ? '<span class="menu-phone-label">CONSULTATION TÉLÉPHONE · LECTURE SEULE</span>'
+      : '';
+    var irreversible = tab.irreversible
+      ? '<div class="alert warning menu-irreversible-note"><strong>Attention : opération irréversible.</strong> Une copie complète du dossier devra être exportée et confirmée avant toute activation de cette fonction.</div>'
+      : '';
+    var details = tab.reason
+      ? '<p class="menu-item-reason">' + esc(tab.reason) + '</p>'
+      : '';
+    var emptyActionNote = !actions && !childList
+      ? '<p class="menu-disabled-note">Aucune action n’est disponible pour cet élément.</p>'
+      : '';
+
+    return '<section class="accounting-menu-page" aria-label="Menu ' + esc(group.label) + '">' +
+      '<div class="accounting-menu-heading"><div><p class="page-kicker">COMPTABILITÉ GÉNÉRALE · ' + esc(context.reference || '') + '</p><h2>' + esc(group.label) + '</h2></div>' + phoneContext + '</div>' +
+      reportNote +
+      '<nav class="accounting-subtabs" role="tablist" aria-label="Sous-menus ' + esc(group.label) + '">' + tabs + '</nav>' +
+      statusLegend +
+      '<section class="accounting-menu-panel" id="accounting-menu-tabpanel" role="tabpanel" aria-labelledby="accounting-tab-' + esc(tab.id) + '">' +
+        '<div class="accounting-menu-panel-head"><div><p class="page-kicker">SOUS-MENU</p><h3>' + esc(tab.label) + '</h3></div>' + menuStatusBadge(tab.status) + '</div>' +
+        details + irreversible +
+        (childList ? '<div class="menu-children-wrap"><h4>Éléments de ce sous-menu</h4>' + childList + '</div>' : '') +
+        (actions ? '<div class="menu-actions">' + actions + '</div>' : '') +
+        emptyActionNote +
+      '</section>' +
+      '<p class="menu-data-boundary">Les opérations et écritures de ce dossier restent isolées de celles des autres clients.</p>' +
+    '</section>';
+  }
+
   /* ------------------------------ Liaisons vue ----------------------------- */
   function bindView(route) {
     if (route === 'launcher') {
@@ -2029,7 +2169,7 @@
     var scrim = $('#sidebar-scrim');
     if (sidebar) {
       sidebar.classList.remove('open');
-      sidebar.hidden = document.body.classList.contains('dossiers-list-mode');
+      sidebar.hidden = document.body.classList.contains('dossiers-list-mode') || document.body.classList.contains('phone-editions-mode');
     }
     if (scrim) scrim.remove();
     var toggle = $('[data-action="toggle-sidebar"]');
@@ -2147,7 +2287,7 @@
         var switchedDossier = S.switchDossier(dossier.id);
         if (!switchedDossier.ok) { toast(switchedDossier.errors[0] || 'Ouverture du dossier impossible.', 'error'); break; }
         activeDemoDossierId = dossier.id;
-        navigate('#/dashboard');
+        navigate(isPhoneViewport() ? accountingMenuHash('editions', 'general-accounts') : '#/dashboard');
         break;
       }
       case 'launcher-info':
@@ -2360,6 +2500,11 @@
     }
 
     window.addEventListener('hashchange', render);
+    if (window.matchMedia) {
+      var phoneQuery = window.matchMedia('(max-width: ' + PHONE_BREAKPOINT + 'px)');
+      if (phoneQuery.addEventListener) phoneQuery.addEventListener('change', render);
+      else if (phoneQuery.addListener) phoneQuery.addListener(render);
+    }
     window.addEventListener('beforeinstallprompt', function (event) {
       event.preventDefault();
       deferredInstallPrompt = event;
