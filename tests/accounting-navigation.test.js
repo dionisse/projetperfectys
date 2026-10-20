@@ -59,6 +59,11 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Écritures lettrées',
   'Anomalies sur les lettrages',
   'Écritures non lettrées',
+  'Écritures pointées',
+  'Écritures non pointées',
+  'Justification des soldes par pointage',
+  'Relevé de banque',
+  'Rapprochement bancaire',
   'Cumul des pièces saisies',
   'Cumul par comptes individuels',
   'Cumul par comptes de synthèse',
@@ -214,7 +219,18 @@ assert.deepEqual(findTab('editions', 'matching').children.map(child => child.lab
 assert.ok(findTab('editions', 'matching').children.every(child => child.status === 'planned'));
 assert.ok(findTab('editions', 'matching').children.find(child => child.id === 'edition-matching-anomalies').reason.includes('aucun lettrage n’est qualifié'));
 assert.equal(findTab('saisie', 'matching').children, undefined, 'le lettrage opérationnel reste séparé des éditions');
+assert.equal(findTab('editions', 'bank-reconciliation').status, 'planned');
+assert.deepEqual(findTab('editions', 'bank-reconciliation').children.map(child => child.label), [
+  'Écritures pointées', 'Écritures non pointées', 'Justification des soldes par pointage',
+  'Relevé de banque', 'Rapprochement bancaire'
+]);
+assert.deepEqual(findTab('editions', 'bank-reconciliation').children.map(child => child.section), [
+  'pointing', 'pointing', 'pointing', 'bankReconciliation', 'bankReconciliation'
+]);
+assert.ok(findTab('editions', 'bank-reconciliation').children.every(child => child.status === 'planned'));
 assert.match(appSource, /matching: \{ title: 'États du lettrage'/);
+assert.match(appSource, /pointing: \{ title: 'Écritures et justifications par pointage'/);
+assert.match(appSource, /bankReconciliation: \{ title: 'Relevés et rapprochement bancaire'/);
 assert.match(appSource, /function viewUnbalancedJournalPieces\(\)[\s\S]*total\.debit !== total\.credit/);
 assert.match(appSource, /child\.id === 'journal-unbalanced-pieces'\) return viewUnbalancedJournalPieces\(\)/);
 assert.match(appSource, /function editionReportCatalog\([\s\S]*Balances, ouvertures et situations[\s\S]*Grands livres et historiques[\s\S]*Disponibilités budgétaires/);

@@ -162,7 +162,16 @@
             { id: 'edition-unmatched-entries', label: 'Écritures non lettrées', section: 'matching', status: 'planned', reason: 'État de consultation à préciser à partir de votre capture ; aucune liste ni aucun critère de sélection n’est simulé pour le moment.' }
           ]
         },
-        { id: 'bank-reconciliation', label: 'Pointage et rapprochement bancaire', status: 'planned', reason: 'Édition générale à construire avec les fonctions de pointage.' },
+        {
+          id: 'bank-reconciliation', label: 'Pointage et rapprochement bancaire', status: 'planned', reason: 'Sous-menu organisé en deux groupes comme sur votre capture. Les critères, colonnes, calculs et rendus restent à préciser ; le pointage opérationnel demeure séparé dans Saisie.',
+          children: [
+            { id: 'edition-pointed-entries', label: 'Écritures pointées', section: 'pointing', status: 'planned', reason: 'État de consultation à préciser à partir de votre capture ; aucune liste ni aucun critère de sélection n’est simulé pour le moment.' },
+            { id: 'edition-unpointed-entries', label: 'Écritures non pointées', section: 'pointing', status: 'planned', reason: 'État de consultation à préciser à partir de votre capture ; aucune liste ni aucun critère de sélection n’est simulé pour le moment.' },
+            { id: 'edition-pointing-balance-justification', label: 'Justification des soldes par pointage', section: 'pointing', status: 'planned', reason: 'Les règles de justification, les rapprochements retenus et les montants présentés seront définis à partir de votre capture ; aucun solde n’est recalculé ici.' },
+            { id: 'edition-bank-statement', label: 'Relevé de banque', section: 'bankReconciliation', status: 'planned', reason: 'Le format, les sources et les colonnes du relevé restent à préciser à partir de votre capture ; aucun relevé n’est généré.' },
+            { id: 'edition-bank-reconciliation', label: 'Rapprochement bancaire', section: 'bankReconciliation', status: 'planned', reason: 'Les règles et le rendu du rapprochement restent à préciser à partir de votre capture ; aucune correspondance n’est calculée ici.' }
+          ]
+        },
         { id: 'fixed-assets', label: 'Immobilisations', status: 'planned', reason: 'Édition générale à construire avec le référentiel des immobilisations.' },
         { id: 'definitions-and-plans', label: 'Définitions et plans', status: 'planned', reason: 'Éditions en lecture seule à séparer des écrans de paramétrage.' }
       ]
