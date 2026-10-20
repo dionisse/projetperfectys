@@ -81,6 +81,13 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Immobilisations par Centres de responsabilité',
   'Immobilisations par Domaines d’activités',
   'Immobilisations par Sources de financement',
+  'Cadre comptable',
+  'Postes du bilan',
+  'Plan comptable',
+  'Postes associés aux comptes',
+  'Tiers',
+  'Plan des journaux',
+  'Plan analytiques',
   'Cumul des pièces saisies',
   'Cumul par comptes individuels',
   'Cumul par comptes de synthèse',
@@ -266,11 +273,28 @@ assert.deepEqual(findTab('editions', 'fixed-assets').children.map(child => child
 ]);
 assert.ok(findTab('editions', 'fixed-assets').children.slice(0, 14).every(child => child.status === 'planned'));
 assert.ok(findTab('editions', 'fixed-assets').children.slice(14).every(child => child.status === 'inactive'));
+assert.equal(findTab('editions', 'definitions-and-plans').status, 'planned');
+assert.deepEqual(findTab('editions', 'definitions-and-plans').children.map(child => child.label), [
+  'Cadre comptable', 'Postes du bilan', 'Plan comptable', 'Postes associés aux comptes',
+  'Tiers', 'Plan des journaux', 'Plan analytiques'
+]);
+assert.deepEqual(findTab('editions', 'definitions-and-plans').children.map(child => child.section), [
+  'definitionsFramework', 'definitionsFramework', 'definitionsAccounts', 'definitionsAccounts',
+  'definitionsThirdParties', 'definitionsJournals', 'definitionsAnalytics'
+]);
+assert.ok(findTab('editions', 'definitions-and-plans').children.slice(0, 6).every(child => child.status === 'planned'));
+assert.equal(findTab('editions', 'definitions-and-plans').children[6].status, 'inactive');
+assert.ok(findTab('editions', 'definitions-and-plans').children.find(child => child.id === 'edition-chart-of-accounts').reason.includes('maintenance'));
+assert.ok(findTab('editions', 'definitions-and-plans').children.find(child => child.id === 'edition-third-parties').reason.includes('maintenance'));
+assert.ok(findTab('editions', 'definitions-and-plans').children.find(child => child.id === 'edition-journal-plan').reason.includes('maintenance'));
 assert.match(appSource, /matching: \{ title: 'États du lettrage'/);
 assert.match(appSource, /pointing: \{ title: 'Écritures et justifications par pointage'/);
 assert.match(appSource, /bankReconciliation: \{ title: 'Relevés et rapprochement bancaire'/);
 assert.match(appSource, /assetDiscrepancies: \{ title: 'Écarts et anomalies'/);
 assert.match(appSource, /assetDimensions: \{ title: 'Ventilations désactivées'/);
+assert.match(appSource, /definitionsFramework: \{ title: 'Cadre comptable et postes du bilan'/);
+assert.match(appSource, /definitionsAnalytics: \{ title: 'Plan analytiques'/);
+assert.match(appSource, /child.section === 'definitionsAnalytics'/);
 assert.match(appSource, /var disabled = child\.status === 'inactive';[\s\S]*return disabled[\s\S]*edition-report-card is-disabled/);
 assert.match(appSource, /function viewUnbalancedJournalPieces\(\)[\s\S]*total\.debit !== total\.credit/);
 assert.match(appSource, /child\.id === 'journal-unbalanced-pieces'\) return viewUnbalancedJournalPieces\(\)/);

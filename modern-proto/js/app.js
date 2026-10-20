@@ -7830,6 +7830,11 @@
       assetAccounts: { title: 'Consultation par comptes', description: 'Cumul et grand-livre des éléments à définir à partir de vos captures.' },
       assetDiscrepancies: { title: 'Écarts et anomalies', description: 'Sources de comparaison, critères et résultats à préciser ; aucun écart n’est calculé ici.' },
       assetDimensions: { title: 'Ventilations désactivées', description: 'Les trois éléments restent grisés comme dans votre capture ; aucune sortie n’est affichée.' },
+      definitionsFramework: { title: 'Cadre comptable et postes du bilan', description: 'Les deux éléments sont structurés comme sur votre capture ; contenu et présentation à préciser.' },
+      definitionsAccounts: { title: 'Plan comptable et postes associés', description: 'Les deux éditions restent distinctes des fonctions de maintenance du plan.' },
+      definitionsThirdParties: { title: 'Tiers', description: 'Édition à préciser sans ouvrir les écrans de maintenance des fiches.' },
+      definitionsJournals: { title: 'Plan des journaux', description: 'Restitution à préciser sans ouvrir la maintenance des journaux.' },
+      definitionsAnalytics: { title: 'Plan analytiques', description: 'Élément visible mais désactivé dans le parcours général.' },
       cumuls: { title: 'Cumuls et ventilations', description: 'Consulter les montants selon le niveau de compte ou l’axe de ventilation à confirmer.' },
       imputation: { title: 'Imputation', description: 'Accéder aux fiches et restitutions associées à l’imputation.' },
       balances: { title: 'Balances, ouvertures et situations', description: 'États de synthèse et positions comptables à préciser selon le dossier.' },
@@ -7843,7 +7848,7 @@
       realisations: { title: 'Réalisations', description: 'Rapprochement des réalisations avec les lignes budgétaires.' },
       availability: { title: 'Disponibilités budgétaires', description: 'Restes disponibles à calculer après validation des engagements et réalisations.' }
     };
-    var sectionOrder = ['pieces', 'matching', 'pointing', 'bankReconciliation', 'assetSummary', 'assetMovements', 'assetInventory', 'assetAccounts', 'assetDiscrepancies', 'assetDimensions', 'cumuls', 'imputation', 'balances', 'ledgers', 'analysis', 'controls', 'exchange', 'situations', 'budgets', 'commitments', 'realisations', 'availability'];
+    var sectionOrder = ['pieces', 'matching', 'pointing', 'bankReconciliation', 'assetSummary', 'assetMovements', 'assetInventory', 'assetAccounts', 'assetDiscrepancies', 'assetDimensions', 'definitionsFramework', 'definitionsAccounts', 'definitionsThirdParties', 'definitionsJournals', 'definitionsAnalytics', 'cumuls', 'imputation', 'balances', 'ledgers', 'analysis', 'controls', 'exchange', 'situations', 'budgets', 'commitments', 'realisations', 'availability'];
     var sections = sectionOrder.map(function (id) { return Object.assign({ id: id }, sectionMap[id]); });
     var cards = sections.map(function (section) {
       var sectionChildren = (children || []).filter(function (child) { return child.section === section.id; });
@@ -7915,7 +7920,7 @@
     if (child.id === 'general-balance') return '<div class="edition-report-detail-view">' + backLink + viewBalance() + '</div>';
     if (child.id === 'general-ledger') return '<div class="edition-report-detail-view">' + backLink + viewLedger() + '</div>';
     var inactive = child.status === 'inactive';
-    var analytic = inactive && (child.section === 'analysis' || child.section === 'situations' || child.id.indexOf('analytic-') === 0 || child.id === 'general-analytic-balance' || child.id === 'journal-analytic-center-totals');
+    var analytic = inactive && (child.section === 'analysis' || child.section === 'situations' || child.section === 'definitionsAnalytics' || child.id.indexOf('analytic-') === 0 || child.id === 'general-analytic-balance' || child.id === 'journal-analytic-center-totals');
     var noticeTitle = analytic ? 'Comptabilité analytique séparée' : (inactive ? 'Élément désactivé' : 'Sous-élément créé · écran à préciser');
     var notice = analytic
       ? 'Cet élément reste visible pour conserver la nomenclature demandée, mais il est désactivé dans la comptabilité générale. Aucun cumul analytique n’est calculé ici.'
@@ -7941,7 +7946,7 @@
       extra = 'Le critère de contrepartie par pièce, notamment pour les pièces à plusieurs lignes, reste à confirmer avant tout cumul.';
     }
     var sectionLabels = {
-      pieces: 'SUIVI ET CONTRÔLE DES PIÈCES', matching: 'ÉTATS DU LETTRAGE', pointing: 'ÉCRITURES ET JUSTIFICATIONS PAR POINTAGE', bankReconciliation: 'RELEVÉS ET RAPPROCHEMENT BANCAIRE', assetSummary: 'TABLEAUX DES IMMOBILISATIONS', assetMovements: 'MOUVEMENTS DE LA PÉRIODE', assetInventory: 'INVENTAIRE', assetAccounts: 'CONSULTATION PAR COMPTES', assetDiscrepancies: 'ÉCARTS ET ANOMALIES', assetDimensions: 'VENTILATIONS DÉSACTIVÉES', cumuls: 'CUMULS ET VENTILATIONS', imputation: 'IMPUTATION',
+      pieces: 'SUIVI ET CONTRÔLE DES PIÈCES', matching: 'ÉTATS DU LETTRAGE', pointing: 'ÉCRITURES ET JUSTIFICATIONS PAR POINTAGE', bankReconciliation: 'RELEVÉS ET RAPPROCHEMENT BANCAIRE', assetSummary: 'TABLEAUX DES IMMOBILISATIONS', assetMovements: 'MOUVEMENTS DE LA PÉRIODE', assetInventory: 'INVENTAIRE', assetAccounts: 'CONSULTATION PAR COMPTES', assetDiscrepancies: 'ÉCARTS ET ANOMALIES', assetDimensions: 'VENTILATIONS DÉSACTIVÉES', definitionsFramework: 'CADRE COMPTABLE ET BILAN', definitionsAccounts: 'PLAN COMPTABLE ET POSTES ASSOCIÉS', definitionsThirdParties: 'TIERS', definitionsJournals: 'PLAN DES JOURNAUX', definitionsAnalytics: 'PLAN ANALYTIQUES', cumuls: 'CUMULS ET VENTILATIONS', imputation: 'IMPUTATION',
       balances: 'BALANCES, OUVERTURES ET SITUATIONS', ledgers: 'GRANDS LIVRES ET HISTORIQUES', analysis: 'ANALYSES ET CONTREPARTIES',
       controls: 'RELEVÉS ET CONTRÔLES DE TIERS', exchange: 'DEVISES ET ÉCARTS DE CHANGE', situations: 'SITUATIONS ANALYTIQUES',
       budgets: 'BUDGETS', commitments: 'COMMANDES ET ENGAGEMENTS', realisations: 'RÉALISATIONS', availability: 'DISPONIBILITÉS BUDGÉTAIRES'

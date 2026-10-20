@@ -194,7 +194,18 @@
             { id: 'edition-fixed-assets-funding-sources', label: 'Immobilisations par Sources de financement', section: 'assetDimensions', status: 'inactive', reason: 'Élément grisé dans votre capture ; il reste désactivé et ne produit aucune sortie.' }
           ]
         },
-        { id: 'definitions-and-plans', label: 'Définitions et plans', status: 'planned', reason: 'Éditions en lecture seule à séparer des écrans de paramétrage.' }
+        {
+          id: 'definitions-and-plans', label: 'Définitions et plans', status: 'planned', reason: 'Sous-menu organisé en cinq groupes selon votre capture. Le contenu reste à préciser ; aucun écran de maintenance n’est ouvert depuis les Éditions.',
+          children: [
+            { id: 'edition-accounting-framework', label: 'Cadre comptable', section: 'definitionsFramework', status: 'planned', reason: 'Contenu et présentation à préciser à partir de votre capture ; aucun paramètre de dossier n’est modifié.' },
+            { id: 'edition-balance-items', label: 'Postes du bilan', section: 'definitionsFramework', status: 'planned', reason: 'Nomenclature, critères et présentation à définir à partir de votre capture ; aucun poste n’est créé ou modifié.' },
+            { id: 'edition-chart-of-accounts', label: 'Plan comptable', section: 'definitionsAccounts', status: 'planned', reason: 'L’édition et son rendu restent à préciser par capture ; cette entrée ne dirige pas vers la maintenance du plan comptable.' },
+            { id: 'edition-account-associated-items', label: 'Postes associés aux comptes', section: 'definitionsAccounts', status: 'planned', reason: 'Correspondances et présentation à confirmer par capture ; aucun rattachement de compte n’est modifié.' },
+            { id: 'edition-third-parties', label: 'Tiers', section: 'definitionsThirdParties', status: 'planned', reason: 'Contenu et niveau de détail à préciser par capture ; aucun écran de maintenance des fiches tiers n’est ouvert.' },
+            { id: 'edition-journal-plan', label: 'Plan des journaux', section: 'definitionsJournals', status: 'planned', reason: 'Présentation à définir à partir de votre capture ; cette entrée ne dirige pas vers la maintenance des journaux.' },
+            { id: 'edition-analytic-plans', label: 'Plan analytiques', section: 'definitionsAnalytics', status: 'inactive', reason: 'Élément conservé dans la nomenclature mais désactivé dans le parcours général ; aucun écran ni résultat analytique n’est activé.' }
+          ]
+        }
       ]
     },
     {
