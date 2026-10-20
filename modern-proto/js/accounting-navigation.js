@@ -154,7 +154,14 @@
         },
         { id: 'accounts-payable', label: 'Comptes à payer (analytique)', status: 'inactive', reason: 'Élément fourni comme analytique dans votre nomenclature.' },
         { id: 'accounts-receivable', label: 'Comptes à recevoir (analytique)', status: 'inactive', reason: 'Élément fourni comme analytique dans votre nomenclature.' },
-        { id: 'matching', label: 'Lettrage', status: 'planned', reason: 'Édition générale à construire avec le lettrage des auxiliaires.' },
+        {
+          id: 'matching', label: 'Lettrage', status: 'planned', reason: 'Sous-menu organisé en trois états. Les paramètres, critères, colonnes et rendus seront précisés à partir de vos captures ; le lettrage manuel de saisie reste séparé.',
+          children: [
+            { id: 'edition-matched-entries', label: 'Écritures lettrées', section: 'matching', status: 'planned', reason: 'État de consultation à préciser à partir de votre capture ; aucune liste ni aucun critère de sélection n’est simulé pour le moment.' },
+            { id: 'edition-matching-anomalies', label: 'Anomalies sur les lettrages', section: 'matching', status: 'planned', reason: 'Les critères de détection, le traitement et le rendu des anomalies seront définis à partir de votre capture ; aucun lettrage n’est qualifié d’anomalie automatiquement.' },
+            { id: 'edition-unmatched-entries', label: 'Écritures non lettrées', section: 'matching', status: 'planned', reason: 'État de consultation à préciser à partir de votre capture ; aucune liste ni aucun critère de sélection n’est simulé pour le moment.' }
+          ]
+        },
         { id: 'bank-reconciliation', label: 'Pointage et rapprochement bancaire', status: 'planned', reason: 'Édition générale à construire avec les fonctions de pointage.' },
         { id: 'fixed-assets', label: 'Immobilisations', status: 'planned', reason: 'Édition générale à construire avec le référentiel des immobilisations.' },
         { id: 'definitions-and-plans', label: 'Définitions et plans', status: 'planned', reason: 'Éditions en lecture seule à séparer des écrans de paramétrage.' }

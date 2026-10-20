@@ -7821,6 +7821,7 @@
   function editionReportCatalog(children, groupId, tabId, tabLabel) {
     var sectionMap = {
       pieces: { title: 'Suivi et contrôle des pièces', description: 'Explorer les lignes, repérer les situations à contrôler et consulter les cumuls de saisie.' },
+      matching: { title: 'États du lettrage', description: 'Les sous-états sont structurés ; critères, colonnes et rendus attendent vos captures.' },
       cumuls: { title: 'Cumuls et ventilations', description: 'Consulter les montants selon le niveau de compte ou l’axe de ventilation à confirmer.' },
       imputation: { title: 'Imputation', description: 'Accéder aux fiches et restitutions associées à l’imputation.' },
       balances: { title: 'Balances, ouvertures et situations', description: 'États de synthèse et positions comptables à préciser selon le dossier.' },
@@ -7834,7 +7835,7 @@
       realisations: { title: 'Réalisations', description: 'Rapprochement des réalisations avec les lignes budgétaires.' },
       availability: { title: 'Disponibilités budgétaires', description: 'Restes disponibles à calculer après validation des engagements et réalisations.' }
     };
-    var sectionOrder = ['pieces', 'cumuls', 'imputation', 'balances', 'ledgers', 'analysis', 'controls', 'exchange', 'situations', 'budgets', 'commitments', 'realisations', 'availability'];
+    var sectionOrder = ['pieces', 'matching', 'cumuls', 'imputation', 'balances', 'ledgers', 'analysis', 'controls', 'exchange', 'situations', 'budgets', 'commitments', 'realisations', 'availability'];
     var sections = sectionOrder.map(function (id) { return Object.assign({ id: id }, sectionMap[id]); });
     var cards = sections.map(function (section) {
       var sectionChildren = (children || []).filter(function (child) { return child.section === section.id; });
@@ -7929,7 +7930,7 @@
       extra = 'Le critère de contrepartie par pièce, notamment pour les pièces à plusieurs lignes, reste à confirmer avant tout cumul.';
     }
     var sectionLabels = {
-      pieces: 'SUIVI ET CONTRÔLE DES PIÈCES', cumuls: 'CUMULS ET VENTILATIONS', imputation: 'IMPUTATION',
+      pieces: 'SUIVI ET CONTRÔLE DES PIÈCES', matching: 'ÉTATS DU LETTRAGE', cumuls: 'CUMULS ET VENTILATIONS', imputation: 'IMPUTATION',
       balances: 'BALANCES, OUVERTURES ET SITUATIONS', ledgers: 'GRANDS LIVRES ET HISTORIQUES', analysis: 'ANALYSES ET CONTREPARTIES',
       controls: 'RELEVÉS ET CONTRÔLES DE TIERS', exchange: 'DEVISES ET ÉCARTS DE CHANGE', situations: 'SITUATIONS ANALYTIQUES',
       budgets: 'BUDGETS', commitments: 'COMMANDES ET ENGAGEMENTS', realisations: 'RÉALISATIONS', availability: 'DISPONIBILITÉS BUDGÉTAIRES'

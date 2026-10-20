@@ -56,6 +56,9 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Détail des lignes saisies',
   'Pièces modifiées après première saisie',
   'Pièces déséquilibrées',
+  'Écritures lettrées',
+  'Anomalies sur les lettrages',
+  'Écritures non lettrées',
   'Cumul des pièces saisies',
   'Cumul par comptes individuels',
   'Cumul par comptes de synthèse',
@@ -204,6 +207,14 @@ assert.deepEqual(findTab('editions', 'journals').children.map(child => child.lab
 assert.equal(findTab('editions', 'journals').children[0].status, 'partial');
 assert.equal(findTab('editions', 'journals').children.find(child => child.id === 'journal-unbalanced-pieces').status, 'partial');
 assert.equal(findTab('editions', 'journals').children.find(child => child.id === 'journal-analytic-center-totals').status, 'inactive');
+assert.equal(findTab('editions', 'matching').status, 'planned');
+assert.deepEqual(findTab('editions', 'matching').children.map(child => child.label), [
+  'Écritures lettrées', 'Anomalies sur les lettrages', 'Écritures non lettrées'
+]);
+assert.ok(findTab('editions', 'matching').children.every(child => child.status === 'planned'));
+assert.ok(findTab('editions', 'matching').children.find(child => child.id === 'edition-matching-anomalies').reason.includes('aucun lettrage n’est qualifié'));
+assert.equal(findTab('saisie', 'matching').children, undefined, 'le lettrage opérationnel reste séparé des éditions');
+assert.match(appSource, /matching: \{ title: 'États du lettrage'/);
 assert.match(appSource, /function viewUnbalancedJournalPieces\(\)[\s\S]*total\.debit !== total\.credit/);
 assert.match(appSource, /child\.id === 'journal-unbalanced-pieces'\) return viewUnbalancedJournalPieces\(\)/);
 assert.match(appSource, /function editionReportCatalog\([\s\S]*Balances, ouvertures et situations[\s\S]*Grands livres et historiques[\s\S]*Disponibilités budgétaires/);
