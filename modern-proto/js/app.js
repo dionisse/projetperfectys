@@ -22,6 +22,7 @@
   var SalesCentralization = window.PerfectoSalesCentralization;
   var CentralizationCancellation = window.PerfectoCentralizationCancellation;
   var FixedAssetDepreciation = window.PerfectoFixedAssetDepreciation;
+  var OpeningBalances = window.PerfectoOpeningBalances;
 
   /* ------------------------------ Utilitaires ------------------------------ */
   function esc(value) {
@@ -82,6 +83,7 @@
     pointage: { q: '', account: '', status: 'all', month: 'all', statementDate: '', statementId: '', dateToleranceDays: '7' },
     thirdPartyMovements: { q: '', kind: 'all', recordId: '', month: '' },
     analyticalCenters: { q: '', status: 'active' },
+    openingBalances: { q: '', position: '', sourceDossierId: '', selectedId: '' },
     periods: { year: S.exercise() },
     suppliers: { q: '', status: 'active' },
     clients: { q: '' },
@@ -107,6 +109,8 @@
   var consolidationBeforeResultSession = null;
   var consolidationAfterResultSession = null;
   var balanceRecalculationSession = null;
+  var openingBalanceTransferSession = null;
+  var openingBalanceAuditResult = null;
   var launcherUi = { filter: 'all', query: '' };
   var DEMO_ORGANIZATION_ID = 'demo-org';
   var ACCOUNTING_ROUTES = ['dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings', 'menu'];
@@ -398,6 +402,26 @@
         };
       case 'preview-fixed-asset-depreciation':
         return { moduleId: 'accounting', actionId: 'module.view' };
+      case 'new-opening-balance':
+        return { moduleId: 'accounting', actionId: 'openingBalances.create' };
+      case 'edit-opening-balance':
+        return { moduleId: 'accounting', actionId: 'openingBalances.edit' };
+      case 'delete-opening-balance':
+        return { moduleId: 'accounting', actionId: 'openingBalances.delete' };
+      case 'save-opening-balance':
+        return {
+          moduleId: 'accounting',
+          actionId: trigger && trigger.getAttribute('data-opening-balance-mode') === 'edit' ? 'openingBalances.edit' : 'openingBalances.create'
+        };
+      case 'read-opening-balance-source':
+      case 'apply-opening-balance-transfer':
+        return { moduleId: 'accounting', actionId: 'openingBalances.transfer' };
+      case 'print-opening-balances':
+        return { moduleId: 'accounting', actionId: 'openingBalances.print' };
+      case 'audit-opening-balances':
+      case 'select-opening-balance':
+      case 'position-opening-balance':
+        return { moduleId: 'accounting', actionId: 'module.view' };
       case 'new-fixed-asset':
         return { moduleId: 'accounting', actionId: 'fixedAssets.create' };
       case 'edit-fixed-asset':
@@ -649,6 +673,7 @@
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'consolidate-before-result')) consolidationBeforeResultSession = null;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'consolidate-after-result')) consolidationAfterResultSession = null;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'recalculate-balances')) balanceRecalculationSession = null;
+    if (!(route === 'menu' && parsed.params.g === 'saisie' && parsed.params.t === 'opening-balances')) openingBalanceTransferSession = null;
 
     var activeMember = getActiveDemoMember();
     var orgContext = demoAccessContext('organization');
@@ -7446,6 +7471,353 @@
     });
   }
 
+  function openingBalanceSourceDossiers(targetDossier) {
+    if (!targetDossier || !targetDossier.cycleStart) return [];
+    var sourceCycleEnd = OpeningBalances.dayBefore(targetDossier.cycleStart);
+    if (!sourceCycleEnd) return [];
+    return S.dossiers().filter(function (dossier) {
+      return dossier.id !== targetDossier.id &&
+        dossier.clientCode === targetDossier.clientCode &&
+        dossier.accountingTypeCode === targetDossier.accountingTypeCode &&
+        dossier.cycleEnd === sourceCycleEnd &&
+        dossier.cycleStart < dossier.cycleEnd;
+    }).sort(function (left, right) {
+      return String(right.cycleEnd).localeCompare(String(left.cycleEnd));
+    });
+  }
+
+  function openingBalancePlanSignature(plan) {
+    if (!plan) return '';
+    return JSON.stringify({
+      rows: plan.rows,
+      accountBalances: plan.accountBalances,
+      reportDate: plan.reportDate,
+      targetDate: plan.targetDate,
+      sourceCycleEnd: plan.sourceCycleEnd,
+      totals: plan.totals,
+      balanced: plan.balanced
+    });
+  }
+
+  function openingBalancePreviewSignature(preview) {
+    if (!preview) return '';
+    return JSON.stringify((preview.decisions || []).map(function (item) {
+      return [item.accountCode, item.action, item.previousBalance, item.nextBalance, item.addedRows, item.replacedRows];
+    }));
+  }
+
+  function readOpeningBalanceSource() {
+    var targetDossier = S.currentDossier();
+    var sourceSelect = $('#opening-balance-source');
+    var sourceId = sourceSelect ? sourceSelect.value : ui.openingBalances.sourceDossierId;
+    if (!sourceId) { toast('Sélectionnez un dossier de l’exercice immédiatement précédent.', 'warning'); return; }
+    var sourceRead = S.readDossierStateSnapshot(sourceId);
+    if (!sourceRead.ok) {
+      openingBalanceTransferSession = null;
+      toast(sourceRead.errors[0] || 'Lecture du dossier source impossible.', 'error');
+      render();
+      return;
+    }
+    var plan = OpeningBalances.buildTransfer(sourceRead.state, sourceRead.dossier, targetDossier, S.accounts());
+    var preview = S.openingBalanceTransferPreview(sourceRead.dossier.id, plan.accountBalances, plan.rows);
+    ui.openingBalances.sourceDossierId = sourceRead.dossier.id;
+    openingBalanceTransferSession = {
+      sourceDossierId: sourceRead.dossier.id,
+      targetDossierId: targetDossier.id,
+      sourceReference: sourceRead.dossier.reference,
+      sourceCycleEnd: sourceRead.dossier.cycleEnd,
+      plan: plan,
+      preview: preview,
+      readAt: new Date().toISOString()
+    };
+    render();
+    if (!plan.ok) toast(plan.errors[0] || 'Aucun report transférable n’a été calculé.', 'warning');
+    else toast('Lecture non destructive terminée : contrôlez les comptes avant le transfert.', 'success');
+  }
+
+  function applyOpeningBalanceTransferFromSession() {
+    var session = openingBalanceTransferSession;
+    var targetDossier = S.currentDossier();
+    if (!session || session.targetDossierId !== targetDossier.id) {
+      toast('Relisez les reports de l’exercice précédent avant de lancer le transfert.', 'warning');
+      return;
+    }
+    var sourceRead = S.readDossierStateSnapshot(session.sourceDossierId);
+    if (!sourceRead.ok) { toast(sourceRead.errors[0] || 'Lecture du dossier source impossible.', 'error'); return; }
+    var freshPlan = OpeningBalances.buildTransfer(sourceRead.state, sourceRead.dossier, targetDossier, S.accounts());
+    var freshPreview = S.openingBalanceTransferPreview(sourceRead.dossier.id, freshPlan.accountBalances, freshPlan.rows);
+    var sourceChanged = openingBalancePlanSignature(freshPlan) !== openingBalancePlanSignature(session.plan);
+    var targetChanged = openingBalancePreviewSignature(freshPreview) !== openingBalancePreviewSignature(session.preview);
+    if (sourceChanged || targetChanged) {
+      openingBalanceTransferSession = {
+        sourceDossierId: sourceRead.dossier.id,
+        targetDossierId: targetDossier.id,
+        sourceReference: sourceRead.dossier.reference,
+        sourceCycleEnd: sourceRead.dossier.cycleEnd,
+        plan: freshPlan,
+        preview: freshPreview,
+        readAt: new Date().toISOString()
+      };
+      render();
+      toast('Les données source ou cible ont changé depuis la lecture. Vérifiez le nouvel aperçu avant de confirmer.', 'warning');
+      return;
+    }
+    if (!freshPlan.ok || (!freshPlan.rows.length && !freshPreview.replaceCount)) {
+      toast(freshPlan.errors[0] || 'Aucune ligne ni aucun report antérieur modifié à appliquer.', 'warning');
+      return;
+    }
+    var result = S.applyOpeningBalanceTransfer(sourceRead.dossier, freshPlan);
+    if (!result.ok) { toast(result.errors[0] || 'Transfert impossible.', 'error'); return; }
+    openingBalanceAuditResult = null;
+    ui.openingBalances.selectedId = '';
+    openingBalanceTransferSession = null;
+    render();
+    if (result.conflicts && result.conflicts.length) {
+      toast('Transfert relançable terminé avec ' + result.changedAccounts + ' compte(s) actualisé(s). ' + result.conflicts.length + ' compte(s) ont été préservés pour contrôle manuel.', 'warning');
+    } else if (result.changedAccounts) {
+      toast('Transfert terminé : ' + result.addedRows + ' ligne(s) ajoutée(s), ' + result.removedRows + ' ancienne(s) ligne(s) remplacée(s), ' + result.unchangedAccounts + ' compte(s) inchangé(s).', 'success');
+    } else {
+      toast(result.message || 'Aucun compte n’a changé depuis le dernier transfert.', 'info');
+    }
+  }
+
+  function fixedAssetOpeningBalanceControlHtml(dossier) {
+    var assets = S.fixedAssets();
+    var openingRows = S.openingBalances();
+    var cutoff = OpeningBalances.dayBefore(dossier.cycleStart);
+    var grossByAccount = Object.create(null);
+    var accumulatedByAccount = Object.create(null);
+    var undatedAssetCount = 0;
+    assets.forEach(function (asset) {
+      var accountCode = String(asset.assetAccountCode || '');
+      if (accountCode && !asset.acquisitionDate) undatedAssetCount += 1;
+      if (accountCode && asset.acquisitionDate && asset.acquisitionDate <= cutoff) {
+        if (!grossByAccount[accountCode]) grossByAccount[accountCode] = { count: 0, gross: 0 };
+        grossByAccount[accountCode].count += 1;
+        grossByAccount[accountCode].gross += Number(asset.grossCost) || 0;
+      }
+      var depreciationCode = String(asset.accumulatedDepreciationAccountCode || '');
+      if (depreciationCode && asset.acquisitionDate && asset.acquisitionDate <= cutoff) {
+        if (!accumulatedByAccount[depreciationCode]) accumulatedByAccount[depreciationCode] = 0;
+        accumulatedByAccount[depreciationCode] += 1;
+      }
+    });
+    var reportByAccount = Object.create(null);
+    openingRows.forEach(function (row) {
+      var code = String(row.accountCode || '');
+      if (!reportByAccount[code]) reportByAccount[code] = 0;
+      reportByAccount[code] += (Number(row.debit) || 0) - (Number(row.credit) || 0);
+    });
+    var grossCodes = Object.keys(grossByAccount).sort();
+    var grossTable = grossCodes.length
+      ? '<div class="table-wrap exchange-table-wrap"><table class="exchange-mapping-table opening-balance-check-table"><thead><tr><th>Compte d’immobilisation</th><th>Fiches au registre</th><th>Coût brut indiqué</th><th>Report à nouveau net</th><th>Écart indicatif</th></tr></thead><tbody>' + grossCodes.map(function (code) {
+        var group = grossByAccount[code];
+        var account = S.account(code);
+        var report = Number(reportByAccount[code]) || 0;
+        var difference = report - group.gross;
+        return '<tr><td><strong>' + esc(code) + '</strong><br><small>' + esc(account ? account.label : 'Compte absent du dossier') + '</small></td><td>' + group.count + '</td><td class="num">' + esc(money(group.gross)) + '</td><td class="num">' + esc(money(report)) + '</td><td class="num"><strong>' + esc(money(difference)) + '</strong></td></tr>';
+      }).join('') + '</tbody></table></div>'
+      : '<div class="empty-state opening-balance-check-empty"><strong>Aucune fiche du registre ne renseigne un compte d’immobilisation antérieure au report.</strong><span>La comparaison du coût brut n’est donc pas disponible dans ce dossier.</span></div>';
+    var accumulatedCodes = Object.keys(accumulatedByAccount).sort();
+    var accumulatedTable = accumulatedCodes.length
+      ? '<div class="table-wrap exchange-table-wrap"><table class="exchange-mapping-table opening-balance-check-table"><thead><tr><th>Compte d’amortissements cumulés</th><th>Fiches associées</th><th>Report à nouveau net</th><th>État du registre</th></tr></thead><tbody>' + accumulatedCodes.map(function (code) {
+        var account = S.account(code);
+        return '<tr><td><strong>' + esc(code) + '</strong><br><small>' + esc(account ? account.label : 'Compte absent du dossier') + '</small></td><td>' + accumulatedByAccount[code] + '</td><td class="num">' + esc(money(Number(reportByAccount[code]) || 0)) + '</td><td><span class="opening-balance-check-status">Montant cumulé non suivi dans le registre</span></td></tr>';
+      }).join('') + '</tbody></table></div>'
+      : '<p class="small muted">Aucun compte d’amortissements cumulés n’est renseigné dans les fiches.</p>';
+    return '<details class="opening-balance-asset-check"><summary>Contrôler les immobilisations et amortissements avec le registre (' + assets.length + ' fiche(s))</summary>' +
+      '<p class="small muted">Comparaison indicative des coûts bruts renseignés aux comptes d’immobilisations et aux reports du dossier. Le registre ne porte pas les valeurs d’amortissements cumulés au début du cycle ni les dates/valeurs de sortie historiques : les écarts doivent être justifiés par les pièces et le dossier, sans correction automatique.' + (undatedAssetCount ? ' ' + undatedAssetCount + ' fiche(s) sans date d’acquisition ne sont pas incluses dans le contrôle.' : '') + '</p>' +
+      '<h4>Coûts bruts renseignés par compte</h4>' + grossTable +
+      '<h4>Amortissements cumulés</h4>' + accumulatedTable +
+      '<p class="exchange-footnote">Une valeur identique ne constitue pas à elle seule une validation comptable ; les dates d’acquisition, cessions, travaux et autres mouvements du compte doivent être vérifiés.</p></details>';
+  }
+
+  function openingBalanceAuditHtml(dossier) {
+    if (!openingBalanceAuditResult || openingBalanceAuditResult.dossierId !== dossier.id) return '';
+    var result = openingBalanceAuditResult.result;
+    var issues = result.issues || [];
+    var body = issues.length
+      ? '<ul class="opening-balance-audit-issues">' + issues.map(function (issue) {
+        return '<li><strong>' + esc(issue.accountCode ? issue.accountCode + ' · ' : '') + '</strong>' + esc(issue.message) + '</li>';
+      }).join('') + '</ul>'
+      : '<p>Aucune anomalie structurelle n’a été détectée ; débits et crédits sont égaux.</p>';
+    return '<div class="alert ' + (result.ok ? 'success' : 'warning') + ' opening-balance-audit-result" role="status"><div><strong>Contrôle des reports</strong><br>' + body +
+      '<small>« Réparer » ne corrige pas automatiquement les montants : les sources de factures, d’analytique et les soldes d’amortissements ne sont pas déduits sans justificatif.</small></div></div>';
+  }
+
+  function openingBalanceTransferPanelHtml(dossier, sources) {
+    var session = openingBalanceTransferSession && openingBalanceTransferSession.targetDossierId === dossier.id
+      ? openingBalanceTransferSession : null;
+    var selectedSourceId = session ? session.sourceDossierId : ui.openingBalances.sourceDossierId;
+    if (selectedSourceId && !sources.some(function (item) { return item.id === selectedSourceId; })) selectedSourceId = '';
+    var sourceOptions = '<option value="">' + (sources.length ? 'Choisir l’exercice précédent…' : 'Aucun exercice précédent enregistré') + '</option>' + sources.map(function (source) {
+      return '<option value="' + esc(source.id) + '"' + (source.id === selectedSourceId ? ' selected' : '') + '>' + esc(source.reference + ' · ' + source.cycleStart + ' → ' + source.cycleEnd) + '</option>';
+    }).join('');
+    var previewHtml = '';
+    if (session) {
+      var plan = session.plan;
+      var preview = session.preview;
+      var warnings = (plan.warnings || []).map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('');
+      var errors = (plan.errors || []).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('');
+      var decisions = preview && preview.decisions || [];
+      var incomingRows = (plan.rows || []).map(function (line) {
+        var account = S.account(line.accountCode);
+        var detail = [line.thirdParty, line.dueDate ? 'Échéance ' + dateLabel(line.dueDate) : '', line.sourceDescription].filter(Boolean).join(' · ');
+        return '<tr><td><strong>' + esc(line.accountCode) + '</strong><br><small>' + esc(account ? account.label : '') + '</small></td><td>' + esc(dateLabel(line.date)) + '</td><td>' + esc(line.reference || '—') + '</td><td class="num">' + (line.debit ? esc(amount(line.debit)) : '—') + '</td><td class="num">' + (line.credit ? esc(amount(line.credit)) : '—') + '</td><td><strong>' + esc(line.label) + '</strong>' + (detail ? '<small>' + esc(detail) + '</small>' : '') + '</td></tr>';
+      }).join('');
+      var incomingDetails = incomingRows
+        ? '<details class="opening-balance-source-lines"><summary>Afficher les ' + plan.rows.length + ' ligne(s) détaillée(s) calculée(s)</summary><div class="table-wrap exchange-table-wrap opening-balance-source-lines-wrap"><table class="exchange-mapping-table opening-balance-source-lines-table"><thead><tr><th>Compte</th><th>Date</th><th>Référence</th><th>Débit</th><th>Crédit</th><th>Libellé</th></tr></thead><tbody>' + incomingRows + '</tbody></table></div></details>'
+        : '';
+      var rows = decisions.length ? decisions.map(function (decision) {
+        var account = S.account(decision.accountCode);
+        var stateLabel = decision.action === 'replace' ? 'À transférer' : (decision.action === 'conflict' ? 'À contrôler' : 'Inchangé');
+        var stateClass = decision.action === 'replace' ? 'is-transfer' : (decision.action === 'conflict' ? 'is-conflict' : 'is-unchanged');
+        return '<tr><td><strong>' + esc(decision.accountCode) + '</strong><br><small>' + esc(account ? account.label : '') + '</small></td><td><span class="opening-balance-transfer-status ' + stateClass + '">' + stateLabel + '</span><br><small>' + esc(decision.reason) + '</small></td><td class="num">' + (decision.previousBalance == null ? '—' : esc(money(decision.previousBalance))) + '</td><td class="num">' + esc(money(decision.nextBalance)) + '</td><td>' + decision.addedRows + ' ligne(s)' + (decision.replacedRows ? '<br><small>' + decision.replacedRows + ' actuelle(s)</small>' : '') + '</td></tr>';
+      }).join('') : '<tr><td colspan="5">Aucun compte de bilan avec un report à transférer.</td></tr>';
+      previewHtml = '<div class="opening-balance-transfer-preview" aria-live="polite">' +
+        '<div class="exchange-summary-grid opening-balance-transfer-summary"><div><small>Lignes calculées</small><strong>' + plan.rows.length + '</strong></div><div><small>Comptes actualisés</small><strong>' + preview.replaceCount + '</strong></div><div><small>Inchangés</small><strong>' + preview.unchangedCount + '</strong></div><div><small>À contrôler</small><strong>' + preview.conflictCount + '</strong></div></div>' +
+        '<div class="opening-balance-transfer-totals"><span>Total calculé</span><strong>Débit ' + esc(money(plan.totals.debit)) + ' · Crédit ' + esc(money(plan.totals.credit)) + '</strong><span class="' + (plan.balanced ? 'is-balanced' : 'is-unbalanced') + '">' + (plan.balanced ? 'Équilibré' : 'Non équilibré') + '</span></div>' +
+        (errors ? '<div class="alert error"><div><strong>Transfert bloqué</strong><ul>' + errors + '</ul></div></div>' : '') +
+        (warnings ? '<details class="opening-balance-transfer-notes"><summary>Règles et contrôles à vérifier</summary><ul>' + warnings + '</ul></details>' : '') +
+        '<div class="table-wrap exchange-table-wrap opening-balance-transfer-table-wrap"><table class="exchange-mapping-table opening-balance-transfer-table"><thead><tr><th>Compte</th><th>Décision</th><th>Solde précédent</th><th>Solde calculé</th><th>Détail</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+        incomingDetails +
+        (preview.conflictCount ? '<div class="alert warning"><div><strong>Les lignes manuelles ou provenant d’un autre transfert ne seront pas écrasées.</strong> Pour forcer un changement de détail (lettrable/pointable), supprimez toutes les lignes de report de ce compte puis relisez l’exercice précédent.</div></div>' : '') +
+        '<div class="exchange-preview-footer"><button type="button" class="btn btn-primary" data-action="apply-opening-balance-transfer"' + (!plan.ok || !preview.replaceCount ? ' disabled' : '') + '>Appliquer les changements calculés</button></div>' +
+        '<p class="exchange-footnote">Lecture de la source effectuée le ' + esc(new Date(session.readAt).toLocaleString('fr-FR')) + '. La source sera relue avant écriture ; toute variation exigera une nouvelle vérification de l’aperçu.</p>' +
+      '</div>';
+    }
+    return '<section class="exchange-card opening-balance-transfer-card"><div class="supplier-directory-head"><div><h4>Exercice précédent</h4><p>Le dossier source est lu sans le modifier. Le transfert peut être relancé : seuls les comptes dont le solde diffère du dernier transfert sont remplacés.</p></div></div>' +
+      '<div class="opening-balance-source-controls"><label class="field" for="opening-balance-source"><span>Dossier source enregistré</span><select id="opening-balance-source">' + sourceOptions + '</select><small class="hint">Même entreprise et même type comptable, cycle terminé la veille du début du dossier actif.</small></label>' +
+      '<button type="button" class="btn btn-primary" data-action="read-opening-balance-source"' + (!sources.length ? ' disabled' : '') + '>Lire les reports de l’exercice précédent</button></div>' +
+      (!sources.length ? '<div class="alert info"><div><strong>Aucun dossier source admissible n’a été trouvé.</strong> Le premier exercice peut être renseigné manuellement ; aucun solde n’est inventé.</div></div>' : '') +
+      previewHtml + '</section>';
+  }
+
+  function viewOpeningBalances() {
+    var dossier = S.currentDossier();
+    if (openingBalanceTransferSession && openingBalanceTransferSession.targetDossierId !== dossier.id) openingBalanceTransferSession = null;
+    var allRows = S.openingBalances().slice().sort(function (left, right) {
+      return String(left.accountCode).localeCompare(String(right.accountCode)) || String(left.reference).localeCompare(String(right.reference)) || String(left.id).localeCompare(String(right.id));
+    });
+    var query = String(ui.openingBalances.q || '').trim().toLocaleLowerCase('fr');
+    var visibleRows = allRows.filter(function (record) {
+      if (!query) return true;
+      var account = S.account(record.accountCode);
+      return [record.accountCode, account && account.label, record.reference, record.label, record.thirdParty, record.sourceDossierReference].join(' ').toLocaleLowerCase('fr').indexOf(query) !== -1;
+    });
+    var selected = visibleRows.find(function (record) { return record.id === ui.openingBalances.selectedId; }) || null;
+    var audit = S.auditOpeningBalances();
+    var totals = audit.totals;
+    var sources = openingBalanceSourceDossiers(dossier);
+    var rowsHtml = visibleRows.map(function (record) {
+      var account = S.account(record.accountCode);
+      var selectedRow = selected && selected.id === record.id;
+      var origin = record.origin === 'transfer'
+        ? 'Transféré de ' + (record.sourceDossierReference || 'l’exercice précédent')
+        : (record.origin === 'manual-adjusted' ? 'Origine transférée · modifié manuellement' : 'Saisi dans ce dossier');
+      var labelDetails = (record.thirdParty ? '<small>Tiers / facture : ' + esc(record.thirdParty) + '</small>' : '') +
+        (record.dueDate ? '<small>Échéance : ' + esc(dateLabel(record.dueDate)) + '</small>' : '') +
+        '<small>' + esc(origin) + '</small>';
+      return '<tr id="opening-balance-row-' + esc(safeFilePart(record.id)) + '" data-opening-balance-row data-id="' + esc(record.id) + '" class="' + (selectedRow ? 'opening-balance-selected' : '') + '"><td><button type="button" class="opening-balance-account-select" data-action="select-opening-balance" data-id="' + esc(record.id) + '" aria-pressed="' + (selectedRow ? 'true' : 'false') + '"><strong>' + esc(record.accountCode) + '</strong><span>' + esc(account ? account.label : 'Compte non disponible') + '</span></button></td>' +
+        '<td>' + esc(dateLabel(record.date)) + '</td><td>' + esc(record.reference || '—') + '</td><td class="num">' + (record.debit ? esc(amount(record.debit)) : '—') + '</td><td class="num">' + (record.credit ? esc(amount(record.credit)) : '—') + '</td><td class="opening-balance-label-cell"><strong>' + esc(record.label) + '</strong>' + labelDetails + '</td></tr>';
+    }).join('');
+    var emptyMessage = allRows.length ? 'Aucun report ne correspond à la recherche.' : 'Aucun report à nouveau n’est enregistré dans ce dossier.';
+    var auditStatus = audit.balanced ? 'Équilibré' : 'Écart à contrôler';
+    var auditClass = audit.balanced ? 'is-balanced' : 'is-unbalanced';
+    return '<div class="exchange-workspace opening-balances-workspace" id="opening-balances-workspace">' +
+      '<div class="alert info opening-balances-intro"><div><strong>' + esc(dossier.reference) + ' · Exercice ' + esc(dossier.exerciseYear) + '</strong><br>Reports datés du ' + esc(dateLabel(S.expectedOpeningBalanceDate())) + ' (veille du début du cycle). Les reports sont un registre distinct : aucune écriture de journal n’est créée.</div></div>' +
+      '<div class="exchange-summary-grid opening-balance-summary-grid"><div><small>Nombre de lignes</small><strong>' + totals.count + '</strong></div><div><small>Total débit</small><strong>' + esc(money(totals.debit)) + '</strong></div><div><small>Total crédit</small><strong>' + esc(money(totals.credit)) + '</strong></div><div><small>Contrôle</small><strong class="' + auditClass + '">' + auditStatus + (totals.difference ? ' · écart ' + esc(money(totals.difference)) : '') + '</strong></div></div>' +
+      '<div class="opening-balances-toolbar"><div class="opening-balance-command-row">' +
+        '<button type="button" class="btn btn-primary" data-action="new-opening-balance">＋ Insérer</button>' +
+        '<button type="button" class="btn btn-ghost" data-action="edit-opening-balance" data-id="' + esc(selected ? selected.id : '') + '"' + (!selected ? ' disabled' : '') + '>Modifier</button>' +
+        '<button type="button" class="btn btn-ghost btn-danger-quiet" data-action="delete-opening-balance" data-id="' + esc(selected ? selected.id : '') + '"' + (!selected ? ' disabled' : '') + '>Supprimer</button>' +
+        '<button type="button" class="btn btn-ghost" data-action="audit-opening-balances">Réparer</button>' +
+        '<button type="button" class="btn btn-ghost" data-action="print-opening-balances"' + (!allRows.length ? ' disabled' : '') + '>Imprimer</button>' +
+      '</div><div class="opening-balance-position-row"><label class="field" for="opening-balance-position"><span>Positionner sur un compte</span><input id="opening-balance-position" type="search" value="' + esc(ui.openingBalances.position) + '" placeholder="Code, ex. 411" autocomplete="off"></label><button type="button" class="btn btn-ghost" data-action="position-opening-balance">Positionner</button></div></div>' +
+      '<div class="opening-balance-controls"><label class="field" for="opening-balance-search"><span>Rechercher dans les reports</span><input id="opening-balance-search" type="search" data-filter="openingBalances.q" value="' + esc(ui.openingBalances.q) + '" placeholder="Compte, référence, libellé, tiers…" autocomplete="off"></label><p class="small muted">Sélectionnez une ligne dans le tableau pour la modifier ou la supprimer.</p></div>' +
+      openingBalanceAuditHtml(dossier) +
+      '<section class="exchange-card opening-balance-list-card"><div class="supplier-directory-head"><div><h4>Reports du dossier</h4><p>Liste des soldes d’ouverture et détails transmis ou saisis pour le cycle actif.</p></div><span class="opening-balance-visible-count">' + visibleRows.length + ' / ' + allRows.length + ' ligne(s)</span></div>' +
+        '<div class="table-wrap exchange-table-wrap opening-balance-table-wrap"' + (visibleRows.length ? '' : ' hidden') + '><table class="exchange-mapping-table data-table opening-balance-table"><caption class="sr-only">Reports à nouveau du dossier ' + esc(dossier.reference) + '</caption><thead><tr><th>Compte</th><th>Date</th><th>Référence</th><th class="num">Débit</th><th class="num">Crédit</th><th>Libellé</th></tr></thead><tbody>' + rowsHtml + '</tbody><tfoot><tr><td colspan="3"><strong>Total</strong></td><td class="num">' + esc(amount(totals.debit)) + '</td><td class="num">' + esc(amount(totals.credit)) + '</td><td><strong>' + auditStatus + '</strong></td></tr></tfoot></table></div>' +
+        '<div class="empty-state opening-balance-empty"' + (visibleRows.length ? ' hidden' : '') + '><strong>' + esc(emptyMessage) + '</strong><span>Utilisez « Insérer » pour un report manuel ou sélectionnez un exercice source admissible.</span></div>' +
+      '</section>' +
+      openingBalanceTransferPanelHtml(dossier, sources) +
+      '<section class="exchange-card opening-balance-rules-card"><h4>Règles et limites de contrôle</h4><ul><li>Les comptes de bilan sont repris sur leur solde net ; les brouillons et les comptes 6 à 8 sont exclus.</li><li>Les comptes auxiliaires lettrables du dossier cible sont détaillés selon les écritures non lettrées disponibles. Les factures non soldées n’ont pas de registre dans ce prototype : les champs tiers, référence et échéance peuvent être renseignés manuellement, sans inventer un état de facture.</li><li>Les comptes de trésorerie de classe 5 distinguent le solde des lignes pointées et le détail des lignes non pointées.</li><li>Les reports analytiques restent séparés et inactifs dans ce parcours général.</li></ul></section>' +
+      fixedAssetOpeningBalanceControlHtml(dossier) +
+      '<p class="exchange-footnote">Stockage local de démonstration uniquement. Aucune connexion à Google Drive ni synchronisation serveur n’est effectuée.</p>' +
+    '</div>';
+  }
+
+  function openOpeningBalanceModal(id) {
+    var existing = id ? S.openingBalance(id) : null;
+    if (id && !existing) { toast('Report à nouveau introuvable dans le dossier actif.', 'error'); return; }
+    var mode = existing ? 'edit' : 'create';
+    var expectedDate = S.expectedOpeningBalanceDate();
+    var dateValue = existing && existing.date === expectedDate ? existing.date : expectedDate;
+    var accounts = S.accounts().filter(function (account) {
+      var accountClass = Number(account.cls || String(account.code).charAt(0));
+      return accountClass >= 1 && accountClass <= 5 && account.postable !== false;
+    }).sort(function (left, right) { return String(left.code).localeCompare(String(right.code)); });
+    var accountOptions = '<option value="">Choisir un compte de bilan…</option>' + accounts.map(function (account) {
+      return '<option value="' + esc(account.code) + '"' + (existing && existing.accountCode === account.code ? ' selected' : '') + '>' + esc(account.code + ' · ' + account.label) + '</option>';
+    }).join('');
+    var sourceInfo = existing && existing.sourceDossierReference
+      ? '<div class="alert info"><div>Origine : ' + esc(existing.sourceDossierReference) + '. Enregistrer une modification protège cette ligne contre l’écrasement lors d’un prochain transfert.</div></div>' : '';
+    var body = '<form id="opening-balance-form" novalidate><div id="opening-balance-errors" aria-live="assertive"></div>' + sourceInfo +
+      '<div class="form-grid opening-balance-form-grid">' +
+        '<div class="field"><label for="opening-balance-account">Compte</label><select id="opening-balance-account" name="accountCode" required>' + accountOptions + '</select><span class="hint">Compte imputable de bilan, classes 1 à 5.</span></div>' +
+        '<div class="field"><label for="opening-balance-date">Date</label><input id="opening-balance-date" name="date" type="date" value="' + esc(dateValue) + '" min="' + esc(expectedDate) + '" max="' + esc(expectedDate) + '" required><span class="hint">Date fixe du report : veille du début du cycle.</span></div>' +
+        '<div class="field"><label for="opening-balance-reference">Référence</label><input id="opening-balance-reference" name="reference" type="text" maxlength="120" value="' + esc(existing && existing.reference || '') + '" placeholder="Facture, pièce source…"></div>' +
+        '<div class="field"><label for="opening-balance-third-party">Tiers / facture non soldée</label><input id="opening-balance-third-party" name="thirdParty" type="text" maxlength="200" value="' + esc(existing && existing.thirdParty || '') + '" placeholder="Nom ou référence documentaire"><span class="hint">Détail manuel, sans registre ni statut de facture dans ce prototype.</span></div>' +
+        '<div class="field"><label for="opening-balance-debit">Débit (XOF)</label><input id="opening-balance-debit" name="debit" type="number" min="0" step="1" value="' + (existing && existing.debit ? esc(existing.debit) : '') + '"></div>' +
+        '<div class="field"><label for="opening-balance-credit">Crédit (XOF)</label><input id="opening-balance-credit" name="credit" type="number" min="0" step="1" value="' + (existing && existing.credit ? esc(existing.credit) : '') + '"></div>' +
+        '<div class="field"><label for="opening-balance-label">Libellé</label><input id="opening-balance-label" name="label" type="text" maxlength="300" value="' + esc(existing && existing.label || 'Report au ' + dateValue) + '" required></div>' +
+        '<div class="field"><label for="opening-balance-due-date">Échéance documentaire (facultatif)</label><input id="opening-balance-due-date" name="dueDate" type="date" value="' + esc(existing && existing.dueDate || '') + '"></div>' +
+      '</div></form>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button>' +
+      '<button type="submit" class="btn btn-primary" form="opening-balance-form" data-action="save-opening-balance" data-opening-balance-mode="' + mode + '">' + (existing ? 'Enregistrer les modifications' : 'Insérer le report') + '</button>';
+    openModal(existing ? 'Modifier le report ' + esc(existing.accountCode) : 'Insérer un report à nouveau',
+      'Dossier ' + esc(S.currentDossier().reference) + ' · date du report ' + esc(dateLabel(expectedDate)), body, footer, true);
+    var form = $('#opening-balance-form');
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var permissionAction = mode === 'edit' ? 'openingBalances.edit' : 'openingBalances.create';
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', permissionAction, accountingAccessContext())) {
+        toast('Action refusée par défaut : le droit « ' + permissionAction + ' » n’est pas accordé.', 'warning');
+        return;
+      }
+      var input = {
+        accountCode: $('#opening-balance-account').value,
+        date: $('#opening-balance-date').value,
+        reference: $('#opening-balance-reference').value,
+        thirdParty: $('#opening-balance-third-party').value,
+        debit: $('#opening-balance-debit').value || 0,
+        credit: $('#opening-balance-credit').value || 0,
+        label: $('#opening-balance-label').value,
+        dueDate: $('#opening-balance-due-date').value
+      };
+      var result = existing ? S.updateOpeningBalance(existing.id, input) : S.createOpeningBalance(input);
+      if (!result.ok) {
+        $('#opening-balance-errors').innerHTML = '<div class="alert error" role="alert"><ul>' + (result.errors || []).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
+        return;
+      }
+      openingBalanceAuditResult = null;
+      ui.openingBalances.selectedId = result.openingBalance.id;
+      closeModal(true);
+      toast(existing ? 'Report à nouveau modifié.' : 'Report à nouveau inséré.', 'success');
+      render();
+    });
+  }
+
+  function bindOpeningBalancesView() {
+    var sourceSelect = $('#opening-balance-source');
+    if (sourceSelect) sourceSelect.addEventListener('change', function () {
+      ui.openingBalances.sourceDossierId = sourceSelect.value;
+      openingBalanceTransferSession = null;
+    });
+    var positionInput = $('#opening-balance-position');
+    if (positionInput) positionInput.addEventListener('input', function () { ui.openingBalances.position = positionInput.value; });
+  }
+
   function viewAccountingMenu(params) {
     params = params || {};
     var phone = isPhoneViewport();
@@ -7524,6 +7896,8 @@
       exchangeFeature = viewFixedAssetLocations();
     } else if (group.id === 'definitions' && tab.id === 'fixed-assets') {
       exchangeFeature = viewFixedAssets();
+    } else if (group.id === 'saisie' && tab.id === 'opening-balances') {
+      exchangeFeature = viewOpeningBalances();
     }
     if (group.id === 'fichier') {
       switch (tab.id) {
@@ -7602,6 +7976,7 @@
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'personnel') bindPersonnelView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'fixed-asset-locations') bindFixedAssetLocationView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'fixed-assets') bindFixedAssetView();
+      if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'opening-balances') bindOpeningBalancesView();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-other') bindAccountingExchangeImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-balance') bindAccountingBalanceImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-payroll') bindPayrollCentralization();
@@ -7973,6 +8348,65 @@
         break;
       case 'close-modal':
         closeModal();
+        break;
+      case 'new-opening-balance':
+        openingBalanceAuditResult = null;
+        openOpeningBalanceModal('');
+        break;
+      case 'edit-opening-balance':
+        openOpeningBalanceModal(id);
+        break;
+      case 'delete-opening-balance': {
+        var openingBalanceToDelete = S.openingBalance(id);
+        if (!openingBalanceToDelete) { toast('Report à nouveau introuvable.', 'error'); break; }
+        if (!window.confirm('Supprimer le report du compte ' + openingBalanceToDelete.accountCode + ' · ' + openingBalanceToDelete.label + ' ? Les écritures, lettrages et pointages restent inchangés.')) break;
+        var deletedOpeningBalance = S.deleteOpeningBalance(id);
+        if (!deletedOpeningBalance.ok) { toast(deletedOpeningBalance.errors[0] || 'Suppression impossible.', 'error'); break; }
+        ui.openingBalances.selectedId = '';
+        openingBalanceAuditResult = null;
+        toast('Report à nouveau supprimé. Les écritures, lettrages et pointages du dossier restent inchangés.', 'success');
+        render();
+        break;
+      }
+      case 'select-opening-balance':
+        ui.openingBalances.selectedId = id;
+        render();
+        break;
+      case 'position-opening-balance': {
+        var positionValue = String(($('#opening-balance-position') || {}).value || '').trim().toLocaleLowerCase('fr');
+        ui.openingBalances.position = ($('#opening-balance-position') || {}).value || '';
+        if (!positionValue) { toast('Saisissez un code de compte ou un libellé pour vous positionner.', 'warning'); break; }
+        ui.openingBalances.q = '';
+        var positioningRows = S.openingBalances();
+        var positioned = positioningRows.find(function (record) { return String(record.accountCode).toLocaleLowerCase('fr') === positionValue; }) ||
+          positioningRows.find(function (record) {
+            var account = S.account(record.accountCode);
+            return String(record.accountCode + ' ' + (account && account.label || '') + ' ' + record.label).toLocaleLowerCase('fr').indexOf(positionValue) !== -1;
+          });
+        if (!positioned) { toast('Aucun report ne correspond à « ' + ui.openingBalances.position + ' ». ', 'warning'); break; }
+        ui.openingBalances.selectedId = positioned.id;
+        render();
+        window.setTimeout(function () {
+          var row = $$('[data-opening-balance-row]').find(function (item) { return item.getAttribute('data-id') === positioned.id; });
+          if (row && typeof row.scrollIntoView === 'function') row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 0);
+        break;
+      }
+      case 'read-opening-balance-source':
+        readOpeningBalanceSource();
+        break;
+      case 'apply-opening-balance-transfer':
+        applyOpeningBalanceTransferFromSession();
+        break;
+      case 'audit-opening-balances': {
+        var openingAudit = S.auditOpeningBalances();
+        openingBalanceAuditResult = { dossierId: S.currentDossier().id, result: openingAudit };
+        render();
+        toast(openingAudit.issues.length ? 'Contrôle terminé : ' + openingAudit.issues.length + ' point(s) à vérifier. Aucun montant n’a été corrigé automatiquement.' : 'Contrôle terminé : reports équilibrés, aucune anomalie détectée.', openingAudit.issues.length ? 'warning' : 'success');
+        break;
+      }
+      case 'print-opening-balances':
+        window.print();
         break;
       case 'toggle-matching-line': {
         var matchingLineKey = trigger.getAttribute('data-line-key') || '';

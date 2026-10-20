@@ -51,6 +51,7 @@
   var FIXED_ASSET_REGISTRY_VERSION = 1;
   var ANALYTICAL_CENTER_REGISTRY_VERSION = 1;
   var RECONCILIATION_REGISTRY_VERSION = 2;
+  var OPENING_BALANCE_REGISTRY_VERSION = 1;
   var LEGACY_COMPTES = [
     { code: '101200', label: 'Capital social', cls: 1, nature: 'Passif', aux: false },
     { code: '162100', label: 'Emprunt bancaire', cls: 1, nature: 'Passif', aux: false },
@@ -274,6 +275,57 @@
     }).filter(function (mark) { return !!mark.id && !!mark.lineKey && !!mark.entryId && mark.lineIndex >= 0 && !!mark.accountCode; });
   }
 
+  function normalizeOpeningBalanceRows(values) {
+    return (Array.isArray(values) ? values : []).filter(function (record) {
+      return record && typeof record === 'object' && !Array.isArray(record);
+    }).map(function (record) {
+      var origin = ['manual', 'transfer', 'manual-adjusted'].indexOf(record.origin) !== -1 ? record.origin : 'manual';
+      return Object.assign({}, record, {
+        id: String(record.id || ''),
+        accountCode: String(record.accountCode || ''),
+        date: String(record.date || ''),
+        reference: String(record.reference || '').slice(0, 120),
+        debit: Math.max(0, Number(record.debit) || 0),
+        credit: Math.max(0, Number(record.credit) || 0),
+        label: String(record.label || '').slice(0, 300),
+        thirdParty: String(record.thirdParty || '').slice(0, 200),
+        dueDate: String(record.dueDate || ''),
+        sourceDescription: String(record.sourceDescription || '').slice(0, 500),
+        sourceEntryId: String(record.sourceEntryId || '').slice(0, 160),
+        sourceLineKey: String(record.sourceLineKey || '').slice(0, 200),
+        sourceOpeningBalanceId: String(record.sourceOpeningBalanceId || '').slice(0, 160),
+        origin: origin,
+        sourceDossierId: String(record.sourceDossierId || '').slice(0, 160),
+        sourceDossierReference: String(record.sourceDossierReference || '').slice(0, 120),
+        sourceAccountCode: String(record.sourceAccountCode || record.accountCode || ''),
+        createdAt: String(record.createdAt || ''),
+        updatedAt: String(record.updatedAt || '')
+      });
+    }).filter(function (record) { return !!record.id && !!record.accountCode; });
+  }
+
+  function normalizeOpeningBalanceTransfers(values) {
+    return (Array.isArray(values) ? values : []).filter(function (record) {
+      return record && typeof record === 'object' && !Array.isArray(record) && record.sourceDossierId;
+    }).map(function (record) {
+      var balances = {};
+      var sourceBalances = record.accountBalances && typeof record.accountBalances === 'object' && !Array.isArray(record.accountBalances)
+        ? record.accountBalances : {};
+      Object.keys(sourceBalances).forEach(function (code) {
+        var amount = Number(sourceBalances[code]);
+        if (/^[0-9]{2,8}$/.test(code) && Number.isSafeInteger(amount)) balances[code] = amount;
+      });
+      return {
+        sourceDossierId: String(record.sourceDossierId).slice(0, 160),
+        sourceDossierReference: String(record.sourceDossierReference || '').slice(0, 120),
+        sourceCycleEnd: String(record.sourceCycleEnd || ''),
+        targetDate: String(record.targetDate || ''),
+        transferredAt: String(record.transferredAt || ''),
+        accountBalances: balances
+      };
+    });
+  }
+
   function upgradeAuxiliaryRegistries(data) {
     var result = { data: data, changed: false };
     if (!data) return result;
@@ -326,6 +378,15 @@
     var currentAnalyticalCenterVersion = Number(data.analyticalCenterRegistryVersion);
     var matchingGroups = normalizeMatchingGroups(data.matchingGroups);
     var pointageMarks = normalizePointageMarks(data.pointageMarks);
+    var openingBalances = normalizeOpeningBalanceRows(data.openingBalances);
+    var openingBalanceTransfers = normalizeOpeningBalanceTransfers(data.openingBalanceTransfers);
+    var openingBalanceSequence = Number(data.openingBalanceSequence);
+    if (!Number.isInteger(openingBalanceSequence) || openingBalanceSequence < 1) openingBalanceSequence = 1;
+    openingBalances.forEach(function (record) {
+      var match = /^RAN-(\d{4})-(\d+)$/.exec(record.id);
+      if (match) openingBalanceSequence = Math.max(openingBalanceSequence, Number(match[2]) + 1);
+    });
+    var currentOpeningBalanceVersion = Number(data.openingBalanceRegistryVersion);
     var matchingSequence = Number(data.matchingSequence);
     var pointageSequence = Number(data.pointageSequence);
     if (!Number.isInteger(matchingSequence) || matchingSequence < 1) matchingSequence = 1;
@@ -380,6 +441,10 @@
       JSON.stringify(data.pointageMarks || []) !== JSON.stringify(pointageMarks) ||
       Number(data.matchingSequence) !== matchingSequence ||
       Number(data.pointageSequence) !== pointageSequence ||
+      !Number.isFinite(currentOpeningBalanceVersion) || currentOpeningBalanceVersion < OPENING_BALANCE_REGISTRY_VERSION ||
+      JSON.stringify(data.openingBalances || []) !== JSON.stringify(openingBalances) ||
+      Number(data.openingBalanceSequence) !== openingBalanceSequence ||
+      JSON.stringify(data.openingBalanceTransfers || []) !== JSON.stringify(openingBalanceTransfers) ||
       !Array.isArray(data.clients) || !Number.isFinite(currentClientVersion) || currentClientVersion < CLIENT_REGISTRY_VERSION ||
       !Array.isArray(data.otherParties) || !Number.isFinite(currentOtherPartyVersion) || currentOtherPartyVersion < OTHER_PARTY_REGISTRY_VERSION ||
       !Array.isArray(data.personnel) || !Number.isFinite(currentPersonnelVersion) || currentPersonnelVersion < PERSONNEL_REGISTRY_VERSION ||
@@ -406,6 +471,10 @@
         matchingSequence: matchingSequence,
         pointageMarks: pointageMarks,
         pointageSequence: pointageSequence,
+        openingBalanceRegistryVersion: OPENING_BALANCE_REGISTRY_VERSION,
+        openingBalances: openingBalances,
+        openingBalanceSequence: openingBalanceSequence,
+        openingBalanceTransfers: openingBalanceTransfers,
         serviceRegistryVersion: SERVICE_REGISTRY_VERSION,
         services: services,
         serviceCodeHistory: serviceCodeHistory,
@@ -852,6 +921,10 @@
       matchingSequence: 1,
       pointageMarks: [],
       pointageSequence: 1,
+      openingBalanceRegistryVersion: OPENING_BALANCE_REGISTRY_VERSION,
+      openingBalances: [],
+      openingBalanceSequence: 1,
+      openingBalanceTransfers: [],
       suppliers: [],
       clients: [],
       otherParties: [],
@@ -1084,9 +1157,13 @@
     });
   }
 
+  function dossierStorageKey(dossierId) {
+    return dossierId === DEFAULT_FOLDER_ID ? STORAGE_KEY : STORAGE_KEY + '.folder.' + dossierId;
+  }
+
   function currentFolderStorageKey() {
     ensureFolderCatalog();
-    return activeFolderId === DEFAULT_FOLDER_ID ? STORAGE_KEY : STORAGE_KEY + '.folder.' + activeFolderId;
+    return dossierStorageKey(activeFolderId);
   }
 
   function currentBackupStorageKey() {
@@ -1134,6 +1211,26 @@
         return !!entry && typeof entry === 'object' && !Array.isArray(entry) && Array.isArray(entry.lines) &&
           entry.lines.every(function (line) { return !!line && typeof line === 'object' && !Array.isArray(line); });
       });
+  }
+
+  function readDossierStateSnapshot(dossierId) {
+    ensureFolderCatalog();
+    var dossier = folderById(String(dossierId || ''));
+    if (!dossier) return { ok: false, errors: ['Dossier source introuvable.'] };
+    if (dossier.id === activeFolderId) return { ok: false, errors: ['Le dossier source ne peut pas être le dossier cible actif ; choisissez un exercice antérieur distinct.'] };
+    var raw;
+    try { raw = global.localStorage.getItem(dossierStorageKey(dossier.id)); }
+    catch (error) { return { ok: false, errors: ['Lecture du dossier source impossible dans ce navigateur.'] }; }
+    if (!raw) return { ok: false, errors: ['Aucune base comptable enregistrée n’est disponible dans ce dossier source.'] };
+    var parsed;
+    try { parsed = JSON.parse(raw); }
+    catch (error) { return { ok: false, errors: ['La base comptable source est illisible.'] }; }
+    if (!hasReadableAccountingRecords(parsed)) return { ok: false, errors: ['La structure de la base comptable source n’est pas valide.'] };
+    if (!parseIsoDate(parsed.cycleStart) || !parseIsoDate(parsed.cycleEnd) || parsed.cycleStart !== dossier.cycleStart || parsed.cycleEnd !== dossier.cycleEnd) {
+      return { ok: false, errors: ['Le cycle enregistré dans la base source ne correspond pas au dossier. Réparez d’abord ce dossier.'] };
+    }
+    if (Number(parsed.exercise) !== Number(dossier.exerciseYear)) return { ok: false, errors: ['L’exercice enregistré dans la base source ne correspond pas au dossier. Réparez d’abord ce dossier.'] };
+    return { ok: true, dossier: clone(dossier), state: clone(parsed) };
   }
 
   function periodRegistryNeedsRepair(periods) {
@@ -2009,6 +2106,364 @@
     var key = String(lineKey || '');
     var record = (load().pointageMarks || []).find(function (mark) { return mark.status !== 'cancelled' && mark.lineKey === key; });
     return record ? clone(record) : null;
+  }
+
+  function openingBalances() {
+    return clone(load().openingBalances || []);
+  }
+
+  function openingBalance(id) {
+    var key = String(id || '');
+    var record = (load().openingBalances || []).find(function (item) { return item.id === key; });
+    return record ? clone(record) : null;
+  }
+
+  function expectedOpeningBalanceDate(st) {
+    st = st || load();
+    var date = parseIsoDate(st.cycleStart);
+    if (!date) return '';
+    date.setUTCDate(date.getUTCDate() - 1);
+    return date.getUTCFullYear() + '-' + String(date.getUTCMonth() + 1).padStart(2, '0') + '-' + String(date.getUTCDate()).padStart(2, '0');
+  }
+
+  function validateOpeningBalanceInput(input, st) {
+    st = st || load();
+    input = input && typeof input === 'object' ? input : {};
+    var errors = [];
+    var accountCode = String(input.accountCode || '').trim();
+    var accountRecord = (st.accounts || []).find(function (record) { return String(record.code) === accountCode; });
+    var accountClass = accountRecord ? Number(accountRecord.cls) : Number(accountCode.charAt(0));
+    var date = String(input.date || '').trim();
+    var expectedDate = expectedOpeningBalanceDate(st);
+    var reference = String(input.reference || '').trim();
+    var label = String(input.label || '').trim();
+    var thirdParty = String(input.thirdParty || '').trim();
+    var dueDate = String(input.dueDate || '').trim();
+    var debit = Number(input.debit);
+    var credit = Number(input.credit);
+    if (!accountRecord || !Number.isInteger(accountClass) || accountClass < 1 || accountClass > 5 || accountRecord.postable === false) {
+      errors.push('Choisissez un compte imputable de bilan, classes 1 à 5, présent dans ce dossier.');
+    }
+    if (!parseIsoDate(date) || date !== expectedDate) errors.push('La date du report doit être la veille du début du cycle (' + (expectedDate || 'cycle invalide') + ').');
+    if (reference.length > 120) errors.push('La référence ne peut pas dépasser 120 caractères.');
+    if (!label) errors.push('Le libellé du report est obligatoire.');
+    else if (label.length > 300) errors.push('Le libellé ne peut pas dépasser 300 caractères.');
+    if (thirdParty.length > 200) errors.push('Le tiers ou détail de facture ne peut pas dépasser 200 caractères.');
+    if (dueDate && !parseIsoDate(dueDate)) errors.push('La date d’échéance doit être une date valide.');
+    if (!Number.isSafeInteger(debit) || debit < 0 || !Number.isSafeInteger(credit) || credit < 0) errors.push('Les montants doivent être des entiers XOF positifs ou nuls.');
+    else if ((debit > 0 && credit > 0) || (debit === 0 && credit === 0)) errors.push('Renseignez un seul côté, débit ou crédit, avec un montant strictement positif.');
+    if (errors.length) return { ok: false, errors: errors };
+    return {
+      ok: true,
+      errors: [],
+      value: {
+        accountCode: accountCode,
+        date: date,
+        reference: reference,
+        debit: debit,
+        credit: credit,
+        label: label,
+        thirdParty: thirdParty,
+        dueDate: dueDate,
+        sourceDescription: String(input.sourceDescription || '').slice(0, 500),
+        sourceEntryId: String(input.sourceEntryId || '').slice(0, 160),
+        sourceLineKey: String(input.sourceLineKey || '').slice(0, 200),
+        sourceOpeningBalanceId: String(input.sourceOpeningBalanceId || '').slice(0, 160)
+      }
+    };
+  }
+
+  function createOpeningBalance(input) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Saisie bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var validation = validateOpeningBalanceInput(input, st);
+    if (!validation.ok) return validation;
+    var previousState = clone(st);
+    var sequence = Number(st.openingBalanceSequence) || 1;
+    var year = Number(st.exercise) || EXERCICE;
+    var id;
+    do {
+      id = 'RAN-' + year + '-' + String(sequence).padStart(4, '0');
+      sequence += 1;
+    } while ((st.openingBalances || []).some(function (record) { return record.id === id; }));
+    var timestamp = new Date().toISOString();
+    var record = Object.assign({
+      id: id,
+      origin: 'manual',
+      sourceDossierId: '',
+      sourceDossierReference: '',
+      sourceAccountCode: validation.value.accountCode,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    }, validation.value);
+    st.openingBalances.push(record);
+    st.openingBalanceSequence = sequence;
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer le report dans ce dossier.'] };
+    }
+    return { ok: true, errors: [], openingBalance: clone(record) };
+  }
+
+  function updateOpeningBalance(id, input) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Modification bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var record = (st.openingBalances || []).find(function (item) { return item.id === String(id || ''); });
+    if (!record) return { ok: false, errors: ['Report à nouveau introuvable dans le dossier actif.'] };
+    var validation = validateOpeningBalanceInput(input, st);
+    if (!validation.ok) return validation;
+    var previousState = clone(st);
+    ['sourceDescription', 'sourceEntryId', 'sourceLineKey', 'sourceOpeningBalanceId'].forEach(function (field) {
+      if (!Object.prototype.hasOwnProperty.call(input, field)) validation.value[field] = record[field] || '';
+    });
+    Object.assign(record, validation.value, {
+      origin: record.origin === 'transfer' ? 'manual-adjusted' : record.origin,
+      updatedAt: new Date().toISOString()
+    });
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer les modifications du report.'] };
+    }
+    return { ok: true, errors: [], openingBalance: clone(record) };
+  }
+
+  function deleteOpeningBalance(id) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Suppression bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var index = (st.openingBalances || []).findIndex(function (item) { return item.id === String(id || ''); });
+    if (index < 0) return { ok: false, errors: ['Report à nouveau introuvable dans le dossier actif.'] };
+    var previousState = clone(st);
+    var removed = st.openingBalances.splice(index, 1)[0];
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Suppression impossible : stockage local indisponible ou plein. Le report est conservé.'] };
+    }
+    return { ok: true, errors: [], openingBalance: clone(removed) };
+  }
+
+  function auditOpeningBalances() {
+    var st = load();
+    var rows = st.openingBalances || [];
+    var totals = { debit: 0, credit: 0, difference: 0, count: rows.length };
+    var issues = [];
+    var seen = Object.create(null);
+    rows.forEach(function (record) {
+      if (seen[record.id]) issues.push({ severity: 'error', id: record.id, message: 'Identifiant de report dupliqué.' });
+      seen[record.id] = true;
+      var validation = validateOpeningBalanceInput(record, st);
+      if (!validation.ok) issues.push({ severity: 'error', id: record.id, accountCode: record.accountCode, message: validation.errors.join(' ') });
+      totals.debit += Number(record.debit) || 0;
+      totals.credit += Number(record.credit) || 0;
+    });
+    totals.difference = totals.debit - totals.credit;
+    if (totals.difference !== 0) issues.push({ severity: 'warning', message: 'Les reports ne sont pas équilibrés. Écart débit-crédit : ' + totals.difference + ' XOF.' });
+    return { ok: issues.length === 0, issues: issues, totals: totals, rows: clone(rows), balanced: totals.difference === 0 };
+  }
+
+  function openingBalanceTransferPreview(sourceDossierId, accountBalances, incomingRows) {
+    var st = load();
+    var sourceId = String(sourceDossierId || '');
+    var currentBalances = accountBalances && typeof accountBalances === 'object' && !Array.isArray(accountBalances) ? accountBalances : {};
+    var incoming = Array.isArray(incomingRows) ? incomingRows : [];
+    var existing = st.openingBalances || [];
+    var snapshot = (st.openingBalanceTransfers || []).find(function (item) { return item.sourceDossierId === sourceId; }) || null;
+    var previousBalances = snapshot && snapshot.accountBalances || {};
+    var incomingByAccount = Object.create(null);
+    incoming.forEach(function (row) {
+      var code = String(row && row.accountCode || '');
+      if (!code) return;
+      if (!incomingByAccount[code]) incomingByAccount[code] = [];
+      incomingByAccount[code].push(row);
+    });
+    var codes = Object.create(null);
+    Object.keys(previousBalances).forEach(function (code) { codes[code] = true; });
+    Object.keys(currentBalances).forEach(function (code) { codes[code] = true; });
+    Object.keys(incomingByAccount).forEach(function (code) { codes[code] = true; });
+    var decisions = [];
+    Object.keys(codes).sort(function (left, right) { return left.localeCompare(right); }).forEach(function (code) {
+      var nextBalance = Object.prototype.hasOwnProperty.call(currentBalances, code) ? Number(currentBalances[code]) : 0;
+      var hasPrevious = Object.prototype.hasOwnProperty.call(previousBalances, code);
+      var previousBalance = hasPrevious ? Number(previousBalances[code]) : null;
+      var changed = !hasPrevious || previousBalance !== nextBalance;
+      var accountRows = existing.filter(function (row) { return String(row.accountCode) === code; });
+      var sourceRows = accountRows.filter(function (row) { return row.origin === 'transfer' && row.sourceDossierId === sourceId; });
+      var manualRows = accountRows.filter(function (row) { return row.origin !== 'transfer'; });
+      var otherSourceRows = accountRows.filter(function (row) { return row.origin === 'transfer' && row.sourceDossierId !== sourceId; });
+      var newRows = incomingByAccount[code] || [];
+      var hasAnyRows = accountRows.length > 0;
+      var action;
+      var reason = '';
+      if (!changed && (hasAnyRows || !newRows.length)) {
+        action = 'unchanged';
+        reason = hasAnyRows ? 'Solde identique : les reports présents sont conservés.' : 'Solde nul inchangé : aucune ligne à transférer.';
+      } else if (manualRows.length) {
+        action = 'conflict';
+        reason = 'Des lignes saisies ou modifiées manuellement existent pour ce compte ; elles ne seront pas écrasées.';
+      } else if (otherSourceRows.length) {
+        action = 'conflict';
+        reason = 'Des lignes transférées depuis un autre dossier existent ; supprimez-les ou contrôlez-les avant ce transfert.';
+      } else {
+        action = 'replace';
+        reason = changed ? 'Le solde a changé depuis le dernier transfert.' : 'Aucun report présent : transfert forcé pour ce compte.';
+      }
+      decisions.push({
+        accountCode: code,
+        action: action,
+        reason: reason,
+        previousBalance: previousBalance,
+        nextBalance: nextBalance,
+        addedRows: newRows.length,
+        replacedRows: sourceRows.length
+      });
+    });
+    return {
+      sourceDossierId: sourceId,
+      snapshot: snapshot ? clone(snapshot) : null,
+      decisions: decisions,
+      replaceCount: decisions.filter(function (item) { return item.action === 'replace'; }).length,
+      unchangedCount: decisions.filter(function (item) { return item.action === 'unchanged'; }).length,
+      conflictCount: decisions.filter(function (item) { return item.action === 'conflict'; }).length,
+      addedRows: decisions.filter(function (item) { return item.action === 'replace'; }).reduce(function (sum, item) { return sum + item.addedRows; }, 0),
+      removedRows: decisions.filter(function (item) { return item.action === 'replace'; }).reduce(function (sum, item) { return sum + item.replacedRows; }, 0)
+    };
+  }
+
+  function applyOpeningBalanceTransfer(source, plan) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Transfert bloqué : contrôlez ou restaurez d’abord la base du dossier cible.'] };
+    source = source && typeof source === 'object' ? source : {};
+    plan = plan && typeof plan === 'object' ? plan : {};
+    var sourceId = String(source.id || '');
+    var sourceDossier = folderById(sourceId);
+    if (!sourceDossier || sourceId === activeFolderId) return { ok: false, errors: ['Choisissez un dossier précédent enregistré, différent du dossier cible.'] };
+    if (sourceDossier.clientCode !== currentDossier().clientCode || sourceDossier.accountingTypeCode !== currentDossier().accountingTypeCode) {
+      return { ok: false, errors: ['Le dossier source ne correspond pas à la même entreprise et au même type de comptabilité.'] };
+    }
+    if (plan.ok !== true || !Array.isArray(plan.rows) || !plan.accountBalances || typeof plan.accountBalances !== 'object' || Array.isArray(plan.accountBalances)) {
+      return { ok: false, errors: ['Le calcul du report est invalide ou incomplet. Relisez le dossier source.'] };
+    }
+    if (plan.balanced !== true || Number(plan.totals && plan.totals.difference) !== 0) return { ok: false, errors: ['Le transfert est bloqué tant que les débits et crédits calculés ne sont pas égaux.'] };
+    var expectedDate = expectedOpeningBalanceDate(st);
+    if (!expectedDate || plan.reportDate !== expectedDate || plan.targetDate !== st.cycleStart || plan.sourceCycleEnd !== sourceDossier.cycleEnd || sourceDossier.cycleEnd !== expectedDate) {
+      return { ok: false, errors: ['Le cycle source a changé depuis l’aperçu ou n’est pas immédiatement antérieur au cycle cible. Recalculez l’aperçu.'] };
+    }
+    var incomingByAccount = Object.create(null);
+    var accountNet = Object.create(null);
+    var incomingDebit = 0;
+    var incomingCredit = 0;
+    var validationErrors = [];
+    plan.rows.forEach(function (row) {
+      var validation = validateOpeningBalanceInput(row, st);
+      if (!validation.ok) {
+        validationErrors = validationErrors.concat(validation.errors);
+        return;
+      }
+      var code = validation.value.accountCode;
+      if (!Object.prototype.hasOwnProperty.call(plan.accountBalances, code)) validationErrors.push('Le compte ' + code + ' ne figure pas dans les soldes de contrôle du transfert.');
+      if (!incomingByAccount[code]) incomingByAccount[code] = [];
+      incomingByAccount[code].push(validation.value);
+      if (!Object.prototype.hasOwnProperty.call(accountNet, code)) accountNet[code] = 0;
+      accountNet[code] += validation.value.debit - validation.value.credit;
+      incomingDebit += validation.value.debit;
+      incomingCredit += validation.value.credit;
+    });
+    var checkedBalances = Object.create(null);
+    Object.keys(plan.accountBalances).forEach(function (code) {
+      var balance = Number(plan.accountBalances[code]);
+      if (!/^[0-9]{2,8}$/.test(code) || !Number.isSafeInteger(balance)) validationErrors.push('Solde de contrôle invalide pour le compte ' + code + '.');
+      else checkedBalances[code] = balance;
+      if ((Number(accountNet[code]) || 0) !== balance) validationErrors.push('Les lignes du compte ' + code + ' ne correspondent pas à son solde de contrôle.');
+    });
+    Object.keys(accountNet).forEach(function (code) {
+      if (!Object.prototype.hasOwnProperty.call(checkedBalances, code) && accountNet[code] !== 0) validationErrors.push('Le compte ' + code + ' n’a pas de solde de contrôle.');
+    });
+    if (!Number.isSafeInteger(incomingDebit) || !Number.isSafeInteger(incomingCredit) || incomingDebit !== incomingCredit ||
+        incomingDebit !== Number(plan.totals && plan.totals.debit) || incomingCredit !== Number(plan.totals && plan.totals.credit)) {
+      validationErrors.push('Les totaux des lignes ne correspondent pas au contrôle d’équilibre du transfert.');
+    }
+    if (validationErrors.length) return { ok: false, errors: validationErrors };
+    var preview = openingBalanceTransferPreview(sourceId, checkedBalances, plan.rows);
+    if (!preview.replaceCount) {
+      return {
+        ok: true,
+        errors: [],
+        addedRows: 0,
+        removedRows: 0,
+        changedAccounts: 0,
+        unchangedAccounts: preview.unchangedCount,
+        conflicts: preview.decisions.filter(function (item) { return item.action === 'conflict'; }),
+        message: preview.conflictCount ? 'Aucun report n’a été modifié car les comptes concernés exigent un contrôle manuel.' : 'Aucun compte n’a changé depuis le dernier transfert.'
+      };
+    }
+    var previousState = clone(st);
+    var addedRows = 0;
+    var removedRows = 0;
+    var changedAccounts = 0;
+    var now = new Date().toISOString();
+    preview.decisions.filter(function (item) { return item.action === 'replace'; }).forEach(function (decision) {
+      var code = decision.accountCode;
+      var beforeCount = st.openingBalances.filter(function (row) { return row.origin === 'transfer' && row.sourceDossierId === sourceId && row.sourceAccountCode === code; }).length;
+      st.openingBalances = st.openingBalances.filter(function (row) {
+        return !(row.origin === 'transfer' && row.sourceDossierId === sourceId && row.sourceAccountCode === code);
+      });
+      removedRows += beforeCount;
+      (incomingByAccount[code] || []).forEach(function (line) {
+        var sequence = Number(st.openingBalanceSequence) || 1;
+        var id;
+        do {
+          id = 'RAN-' + String(st.exercise) + '-' + String(sequence).padStart(4, '0');
+          sequence += 1;
+        } while (st.openingBalances.some(function (record) { return record.id === id; }));
+        st.openingBalanceSequence = sequence;
+        st.openingBalances.push(Object.assign({
+          id: id,
+          origin: 'transfer',
+          sourceDossierId: sourceId,
+          sourceDossierReference: String(sourceDossier.reference || '').slice(0, 120),
+          sourceAccountCode: code,
+          createdAt: now,
+          updatedAt: now
+        }, line));
+        addedRows += 1;
+      });
+      changedAccounts += 1;
+    });
+    var snapshot = preview.snapshot || {
+      sourceDossierId: sourceId,
+      sourceDossierReference: String(sourceDossier.reference || '').slice(0, 120),
+      sourceCycleEnd: String(sourceDossier.cycleEnd || ''),
+      targetDate: String(st.cycleStart || ''),
+      transferredAt: now,
+      accountBalances: {}
+    };
+    var nextBalances = Object.assign({}, snapshot.accountBalances || {});
+    preview.decisions.forEach(function (decision) {
+      if (decision.action !== 'conflict') nextBalances[decision.accountCode] = decision.nextBalance;
+    });
+    Object.assign(snapshot, {
+      sourceDossierReference: String(sourceDossier.reference || '').slice(0, 120),
+      sourceCycleEnd: String(sourceDossier.cycleEnd || ''),
+      targetDate: String(st.cycleStart || ''),
+      transferredAt: now,
+      accountBalances: nextBalances
+    });
+    st.openingBalanceTransfers = (st.openingBalanceTransfers || []).filter(function (item) { return item.sourceDossierId !== sourceId; });
+    st.openingBalanceTransfers.push(snapshot);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Transfert annulé : le registre local n’a pas pu être enregistré. Aucune ligne de report n’a été modifiée.'] };
+    }
+    var conflicts = preview.decisions.filter(function (item) { return item.action === 'conflict'; });
+    return {
+      ok: true,
+      errors: [],
+      addedRows: addedRows,
+      removedRows: removedRows,
+      changedAccounts: changedAccounts,
+      unchangedAccounts: preview.unchangedCount,
+      conflicts: conflicts,
+      transferredAt: now
+    };
   }
 
   function pointEntryLine(lineKey, statementDate, sourceContext) {
@@ -4346,6 +4801,7 @@
     currentDossier: currentDossier,
     currentStorageKey: currentFolderStorageKey,
     createDossier: createDossier,
+    readDossierStateSnapshot: readDossierStateSnapshot,
     switchDossier: switchFolder,
     folders: dossiers,
     currentFolder: currentDossier,
@@ -4403,6 +4859,15 @@
     cancelLetter: cancelLetter,
     pointageMarks: pointageMarks,
     pointageForLine: pointageForLine,
+    openingBalances: openingBalances,
+    openingBalance: openingBalance,
+    expectedOpeningBalanceDate: expectedOpeningBalanceDate,
+    createOpeningBalance: createOpeningBalance,
+    updateOpeningBalance: updateOpeningBalance,
+    deleteOpeningBalance: deleteOpeningBalance,
+    auditOpeningBalances: auditOpeningBalances,
+    openingBalanceTransferPreview: openingBalanceTransferPreview,
+    applyOpeningBalanceTransfer: applyOpeningBalanceTransfer,
     pointEntryLine: pointEntryLine,
     unpointEntryLine: unpointEntryLine,
     nextServiceCode: nextServiceCode,

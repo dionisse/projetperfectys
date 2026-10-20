@@ -66,7 +66,7 @@
         { id: 'reconciliation', label: 'Pointage', status: 'partial', reason: 'Import et lecture de relevés génériques CSV/Excel, choix des colonnes, aperçu et suggestions de correspondance avec les lignes validées de trésorerie. Chaque rapprochement exige une confirmation ; aucune écriture n’est créée ni modifiée. Le fichier reste dans le stockage local de démonstration du navigateur ; aucune intégration Google Drive organisationnelle n’est connectée dans PERFECTO.' },
         { id: 'supplier-orders', label: 'Commandes aux fournisseurs (analytique)', status: 'inactive', reason: 'Relève des achats et/ou de la comptabilité analytique, hors du périmètre actuel.' },
         { id: 'forecast-budgets', label: 'Budgets prévisionnels', status: 'review', reason: 'Périmètre à préciser ; reste inactif jusqu’à votre décision.' },
-        { id: 'opening-balances', label: 'Reports à nouveau', status: 'planned', reason: 'Fonction générale à construire et à intégrer au passage d’exercice.' }
+        { id: 'opening-balances', label: 'Reports à nouveau', status: 'partial', reason: 'Registre de reports distinct des écritures : lecture contrôlée d’un dossier précédent, insertion, modification, suppression, impression et audit sans correction automatique. Le transfert est relançable et préserve les lettrages/pointages courants ; les factures et l’analytique restent à contrôler séparément.' }
       ]
     },
     {
@@ -101,7 +101,7 @@
     },
     {
       id: 'fin-exercice', label: 'Opérations de fin d’exercice', icon: '◷', defaultTab: 'balance-checks', tabs: [
-        { id: 'opening-transfer', label: 'Clôture des reports à nouveau', status: 'planned', reason: 'Traitement général à construire avec contrôle et possibilité de reprise.' },
+        { id: 'opening-transfer', label: 'Passage à N+1 · reports à nouveau', status: 'partial', reason: 'Le registre, son contrôle et le transfert relançable sont accessibles dans Saisie → Reports à nouveau. Cette action ne clôture pas définitivement l’exercice et ne valide aucune écriture.', actions: [{ label: 'Ouvrir les reports à nouveau', route: 'menu', group: 'saisie', tab: 'opening-balances' }] },
         { id: 'balance-checks', label: 'Vérification des équilibres fondamentaux', status: 'planned', reason: 'Contrôles généraux à construire avant les traitements de clôture.' },
         { id: 'depreciation', label: 'Calcul automatique des amortissements au 31/12/N', status: 'planned', reason: 'Dépend du référentiel des immobilisations et des paramètres validés.' },
         { id: 'period-close', label: 'Clôture périodique au 31/12/N', status: 'partial', reason: 'La gestion réversible des périodes mensuelles est disponible ; la clôture annuelle complète reste à construire.', actions: [{ label: 'Ouvrir la gestion des périodes', route: 'periods' }] },

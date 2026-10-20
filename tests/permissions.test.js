@@ -33,6 +33,23 @@ test('la gestion des journaux est une série de droits distincts, explicitement 
   ]);
 });
 
+test('les reports à nouveau ont des droits distincts pour maintenance, transfert et impression', () => {
+  const employee = {
+    role: 'employee', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view', 'openingBalances.create', 'openingBalances.transfer'] }] }
+  };
+  const dossier = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'openingBalances.create', dossier), true);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'openingBalances.transfer', dossier), true);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'openingBalances.edit', dossier), false);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'openingBalances.delete', dossier), false);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'openingBalances.print', dossier), false);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'openingBalances.create', { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-2' }), false);
+  assert.deepEqual(Permissions.actionsForModule('accounting').filter(action => action.id.startsWith('openingBalances.')).map(action => action.id), [
+    'openingBalances.create', 'openingBalances.edit', 'openingBalances.delete', 'openingBalances.transfer', 'openingBalances.print'
+  ]);
+});
+
 test('la gestion d’organisation peut être déléguée explicitement dans le bon périmètre', () => {
   const manager = {
     role: 'manager', organizationId: 'org-1',
