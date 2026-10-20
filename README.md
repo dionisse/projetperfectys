@@ -62,7 +62,7 @@ Le dépôt fournit un serveur statique sans dépendance ni compilation. Dans Bol
 | Saisie d'écriture | Saisie multiligne dans le journal choisi, contrôle d'équilibre en direct, référence proposée automatiquement, brouillon ou validation |
 | Pièces comptables | Liste filtrable, détail en modale, validation, modification et suppression des brouillons |
 | Balance générale | Débit, crédit et solde par compte, contrôle d'équilibre, export CSV, impression |
-| Éditions → Journaux | Catalogue de 10 états rangés en « Suivi et contrôle des pièces », « Cumuls et ventilations » et « Imputation ». Le détail des lignes ouvre la vue existante ; les autres états sont des emplacements navigables à compléter après vos captures. Le cumul analytique reste désactivé dans la comptabilité générale |
+| Éditions → Journaux | Catalogue de 10 états rangés en « Suivi et contrôle des pièces », « Cumuls et ventilations » et « Imputation ». Le détail des lignes ouvre la vue existante ; « Pièces déséquilibrées » fournit un premier contrôle en lecture seule des écarts débit/crédit. Les autres états restent des emplacements à compléter après vos captures ; le cumul analytique est désactivé dans la comptabilité générale |
 | Journal des écritures | Écritures validées chronologiques, filtre journal/exercice, impression |
 | Grand livre | Mouvements par compte et solde progressif |
 | Périodes | Périodes mensuelles couvrant le cycle défini pour le dossier (calendaire ou non), ouverture et clôture persistées |

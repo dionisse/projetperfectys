@@ -168,7 +168,10 @@ assert.deepEqual(findTab('editions', 'journals').children.map(child => child.lab
   'Fiche d’imputation'
 ]);
 assert.equal(findTab('editions', 'journals').children[0].status, 'partial');
+assert.equal(findTab('editions', 'journals').children.find(child => child.id === 'journal-unbalanced-pieces').status, 'partial');
 assert.equal(findTab('editions', 'journals').children.find(child => child.id === 'journal-analytic-center-totals').status, 'inactive');
+assert.match(appSource, /function viewUnbalancedJournalPieces\(\)[\s\S]*total\.debit !== total\.credit/);
+assert.match(appSource, /child\.id === 'journal-unbalanced-pieces'\) return viewUnbalancedJournalPieces\(\)/);
 assert.match(appSource, /function journalReportCatalog\([\s\S]*Suivi et contrôle des pièces[\s\S]*Cumuls et ventilations[\s\S]*Imputation/);
 assert.match(menuRenderer, /isJournalReportsMenu[\s\S]*journalReportChildView\(selectedChild/);
 assert.equal(findTab('editions', 'general-accounts').status, 'active');

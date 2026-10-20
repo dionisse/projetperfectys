@@ -7843,10 +7843,50 @@
     return '<div class="journal-report-catalog"><div class="journal-report-catalog-intro"><span class="page-kicker">ÉDITIONS · JOURNAUX</span><strong>Choisissez une édition ou un contrôle</strong><p>Les états sont regroupés par usage. La vue des lignes saisies existe déjà ; les autres paramétrages et rendus seront finalisés à partir de vos captures.</p></div>' + cards + '</div>';
   }
 
+  function viewUnbalancedJournalPieces() {
+    var dossier = S.currentDossier();
+    var filter = ui.journal;
+    var entries = sortedEntries(S.entries()).filter(function (entry) {
+      if (entry.date < dossier.cycleStart || entry.date > dossier.cycleEnd) return false;
+      if (filter.journal && entry.journal !== filter.journal) return false;
+      var total = S.totals(entry.lines || []);
+      return total.debit !== total.credit;
+    });
+    var draftCount = entries.filter(function (entry) { return entry.status === 'draft'; }).length;
+    var postedCount = entries.filter(function (entry) { return entry.status === 'posted'; }).length;
+    var totalDebit = entries.reduce(function (sum, entry) { return sum + S.totals(entry.lines || []).debit; }, 0);
+    var totalCredit = entries.reduce(function (sum, entry) { return sum + S.totals(entry.lines || []).credit; }, 0);
+    var absoluteDifference = entries.reduce(function (sum, entry) {
+      var total = S.totals(entry.lines || []);
+      return sum + Math.abs(total.debit - total.credit);
+    }, 0);
+    var rows = entries.map(function (entry) {
+      var total = S.totals(entry.lines || []);
+      var difference = total.debit - total.credit;
+      return '<tr><td>' + esc(dateLabel(entry.date)) + '</td><td><strong>' + esc(entry.reference || '—') + '</strong></td><td>' + esc(journalDisplayName(S.journal(entry.journal)) || entry.journal) + '</td><td class="journal-report-description-cell">' + esc(entry.description || '—') + '</td><td>' + (entry.lines || []).length + '</td><td class="num">' + esc(amount(total.debit)) + '</td><td class="num">' + esc(amount(total.credit)) + '</td><td class="num journal-report-difference">' + esc(amount(Math.abs(difference))) + (difference > 0 ? ' D' : ' C') + '<small>' + (entry.status === 'posted' ? 'Validée · à vérifier' : 'Brouillon') + '</small></td></tr>';
+    }).join('');
+    var alert = postedCount
+      ? '<div class="alert error journal-unbalanced-posted-warning"><div><strong>' + postedCount + ' pièce(s) validée(s) apparaissent déséquilibrées.</strong> Les pièces validées sont normalement immuables ; ce signalement ne les corrige pas. Vérifiez la base et les justificatifs.</div></div>'
+      : '<div class="alert info journal-unbalanced-posted-warning"><div>Contrôle en lecture seule : les débits et crédits sont comparés pièce par pièce dans le cycle du dossier. Les brouillons sont signalés sans être validés ni modifiés.</div></div>';
+    return '<div class="journal-report-detail-view journal-unbalanced-view">' +
+      '<a class="btn btn-ghost btn-sm journal-report-back" href="' + esc(accountingMenuHash('editions', 'journals')) + '">← Tous les éléments Journaux</a>' +
+      pageHeader('Pièces déséquilibrées', 'Pièces du cycle dont les débits et crédits diffèrent, filtrées par journal.', '<button type="button" class="btn btn-ghost" data-action="print">⎙ Imprimer</button>') +
+      '<div class="card"><div class="panel">' +
+        '<div class="filter-row journal-unbalanced-filter-row"><div class="field"><label for="journal-unbalanced-filter">Journal</label><select id="journal-unbalanced-filter" data-filter="journal:journal">' + journalOptions(filter.journal, true, true, true) + '</select></div><div class="field grow journal-unbalanced-cycle"><span>Cycle du dossier</span><strong>' + esc(dateLabel(dossier.cycleStart)) + ' — ' + esc(dateLabel(dossier.cycleEnd)) + '</strong></div></div>' +
+        '<div class="exchange-summary-grid journal-unbalanced-summary"><div><small>Pièces signalées</small><strong>' + entries.length + '</strong></div><div><small>Brouillons</small><strong>' + draftCount + '</strong></div><div><small>Validées à vérifier</small><strong>' + postedCount + '</strong></div><div><small>Somme des écarts absolus</small><strong>' + esc(money(absoluteDifference)) + '</strong></div></div>' +
+        alert +
+        (entries.length
+          ? '<div class="table-wrap"><table class="data-table journal-unbalanced-table"><thead><tr><th>Date</th><th>Référence</th><th>Journal</th><th>Libellé</th><th>Lignes</th><th class="num">Débit</th><th class="num">Crédit</th><th class="num">Écart</th></tr></thead><tbody>' + rows + '</tbody><tfoot><tr><td colspan="5"><strong>Total des pièces listées</strong></td><td class="num">' + esc(amount(totalDebit)) + '</td><td class="num">' + esc(amount(totalCredit)) + '</td><td class="num">' + esc(amount(totalDebit - totalCredit)) + '</td></tr></tfoot></table></div>'
+          : '<div class="empty-state"><strong>Aucune pièce déséquilibrée détectée</strong>Le filtre sélectionné ne contient pas de pièce dont le débit diffère du crédit.</div>') +
+        '<p class="exchange-footnote">Cette première vue compare uniquement les totaux débit/crédit des pièces enregistrées. Elle ne valide, ne modifie et ne supprime aucune pièce ; la restitution définitive sera ajustée après votre capture.</p>' +
+      '</div></div></div>';
+  }
+
   function journalReportChildView(child, groupId, tabId) {
     if (child.id === 'journal-lines') {
       return '<div class="journal-report-detail-view"><a class="btn btn-ghost btn-sm journal-report-back" href="' + esc(accountingMenuHash(groupId, tabId)) + '">← Tous les éléments Journaux</a>' + viewJournal() + '</div>';
     }
+    if (child.id === 'journal-unbalanced-pieces') return viewUnbalancedJournalPieces();
     var analytic = child.status === 'inactive';
     var noticeTitle = analytic ? 'Comptabilité analytique séparée' : 'Sous-élément créé · écran à préciser';
     var notice = analytic
