@@ -64,6 +64,23 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Justification des soldes par pointage',
   'Relevé de banque',
   'Rapprochement bancaire',
+  'Tableau des immobilisations',
+  'Tableau des amortissements',
+  'Virements internes',
+  'Entrées de la période',
+  'Sorties de la période',
+  'Immobilisations par localisations pour inventaire',
+  'Fiches d’inventaire',
+  'Cumul par comptes',
+  'Grand-livre des éléments',
+  'Écarts à l’ouverture avec la comptabilité générale',
+  'Écarts de la période avec la comptabilité générale',
+  'Écarts sur les entrées',
+  'Écarts sur les sorties',
+  'Autres anomalies sur les immobilisations',
+  'Immobilisations par Centres de responsabilité',
+  'Immobilisations par Domaines d’activités',
+  'Immobilisations par Sources de financement',
   'Cumul des pièces saisies',
   'Cumul par comptes individuels',
   'Cumul par comptes de synthèse',
@@ -228,9 +245,33 @@ assert.deepEqual(findTab('editions', 'bank-reconciliation').children.map(child =
   'pointing', 'pointing', 'pointing', 'bankReconciliation', 'bankReconciliation'
 ]);
 assert.ok(findTab('editions', 'bank-reconciliation').children.every(child => child.status === 'planned'));
+assert.equal(findTab('editions', 'fixed-assets').status, 'planned');
+assert.deepEqual(findTab('editions', 'fixed-assets').children.map(child => child.label), [
+  'Tableau des immobilisations', 'Tableau des amortissements',
+  'Virements internes', 'Entrées de la période', 'Sorties de la période',
+  'Immobilisations par localisations pour inventaire', 'Fiches d’inventaire',
+  'Cumul par comptes', 'Grand-livre des éléments',
+  'Écarts à l’ouverture avec la comptabilité générale', 'Écarts de la période avec la comptabilité générale',
+  'Écarts sur les entrées', 'Écarts sur les sorties', 'Autres anomalies sur les immobilisations',
+  'Immobilisations par Centres de responsabilité', 'Immobilisations par Domaines d’activités',
+  'Immobilisations par Sources de financement'
+]);
+assert.deepEqual(findTab('editions', 'fixed-assets').children.map(child => child.section), [
+  'assetSummary', 'assetSummary',
+  'assetMovements', 'assetMovements', 'assetMovements',
+  'assetInventory', 'assetInventory',
+  'assetAccounts', 'assetAccounts',
+  'assetDiscrepancies', 'assetDiscrepancies', 'assetDiscrepancies', 'assetDiscrepancies', 'assetDiscrepancies',
+  'assetDimensions', 'assetDimensions', 'assetDimensions'
+]);
+assert.ok(findTab('editions', 'fixed-assets').children.slice(0, 14).every(child => child.status === 'planned'));
+assert.ok(findTab('editions', 'fixed-assets').children.slice(14).every(child => child.status === 'inactive'));
 assert.match(appSource, /matching: \{ title: 'États du lettrage'/);
 assert.match(appSource, /pointing: \{ title: 'Écritures et justifications par pointage'/);
 assert.match(appSource, /bankReconciliation: \{ title: 'Relevés et rapprochement bancaire'/);
+assert.match(appSource, /assetDiscrepancies: \{ title: 'Écarts et anomalies'/);
+assert.match(appSource, /assetDimensions: \{ title: 'Ventilations désactivées'/);
+assert.match(appSource, /var disabled = child\.status === 'inactive';[\s\S]*return disabled[\s\S]*edition-report-card is-disabled/);
 assert.match(appSource, /function viewUnbalancedJournalPieces\(\)[\s\S]*total\.debit !== total\.credit/);
 assert.match(appSource, /child\.id === 'journal-unbalanced-pieces'\) return viewUnbalancedJournalPieces\(\)/);
 assert.match(appSource, /function editionReportCatalog\([\s\S]*Balances, ouvertures et situations[\s\S]*Grands livres et historiques[\s\S]*Disponibilités budgétaires/);

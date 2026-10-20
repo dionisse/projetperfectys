@@ -7824,6 +7824,12 @@
       matching: { title: 'États du lettrage', description: 'Les sous-états sont structurés ; critères, colonnes et rendus attendent vos captures.' },
       pointing: { title: 'Écritures et justifications par pointage', description: 'Les trois sous-états sont structurés ; critères, colonnes, calculs et rendus attendent vos captures.' },
       bankReconciliation: { title: 'Relevés et rapprochement bancaire', description: 'Les deux sous-états sont structurés ; format, critères, colonnes et rendus attendent vos captures.' },
+      assetSummary: { title: 'Tableaux des immobilisations', description: 'États de synthèse structurés avant définition des paramètres et de la présentation.' },
+      assetMovements: { title: 'Mouvements de la période', description: 'Virements, entrées et sorties ; critères et rendus à confirmer par capture.' },
+      assetInventory: { title: 'Inventaire', description: 'États d’inventaire à préciser sans générer de fiches ou de listes avant vos captures.' },
+      assetAccounts: { title: 'Consultation par comptes', description: 'Cumul et grand-livre des éléments à définir à partir de vos captures.' },
+      assetDiscrepancies: { title: 'Écarts et anomalies', description: 'Sources de comparaison, critères et résultats à préciser ; aucun écart n’est calculé ici.' },
+      assetDimensions: { title: 'Ventilations désactivées', description: 'Les trois éléments restent grisés comme dans votre capture ; aucune sortie n’est affichée.' },
       cumuls: { title: 'Cumuls et ventilations', description: 'Consulter les montants selon le niveau de compte ou l’axe de ventilation à confirmer.' },
       imputation: { title: 'Imputation', description: 'Accéder aux fiches et restitutions associées à l’imputation.' },
       balances: { title: 'Balances, ouvertures et situations', description: 'États de synthèse et positions comptables à préciser selon le dossier.' },
@@ -7837,7 +7843,7 @@
       realisations: { title: 'Réalisations', description: 'Rapprochement des réalisations avec les lignes budgétaires.' },
       availability: { title: 'Disponibilités budgétaires', description: 'Restes disponibles à calculer après validation des engagements et réalisations.' }
     };
-    var sectionOrder = ['pieces', 'matching', 'pointing', 'bankReconciliation', 'cumuls', 'imputation', 'balances', 'ledgers', 'analysis', 'controls', 'exchange', 'situations', 'budgets', 'commitments', 'realisations', 'availability'];
+    var sectionOrder = ['pieces', 'matching', 'pointing', 'bankReconciliation', 'assetSummary', 'assetMovements', 'assetInventory', 'assetAccounts', 'assetDiscrepancies', 'assetDimensions', 'cumuls', 'imputation', 'balances', 'ledgers', 'analysis', 'controls', 'exchange', 'situations', 'budgets', 'commitments', 'realisations', 'availability'];
     var sections = sectionOrder.map(function (id) { return Object.assign({ id: id }, sectionMap[id]); });
     var cards = sections.map(function (section) {
       var sectionChildren = (children || []).filter(function (child) { return child.section === section.id; });
@@ -7908,11 +7914,14 @@
     if (child.id === 'journal-unbalanced-pieces') return viewUnbalancedJournalPieces();
     if (child.id === 'general-balance') return '<div class="edition-report-detail-view">' + backLink + viewBalance() + '</div>';
     if (child.id === 'general-ledger') return '<div class="edition-report-detail-view">' + backLink + viewLedger() + '</div>';
-    var analytic = child.status === 'inactive';
-    var noticeTitle = analytic ? 'Comptabilité analytique séparée' : 'Sous-élément créé · écran à préciser';
+    var inactive = child.status === 'inactive';
+    var analytic = inactive && (child.section === 'analysis' || child.section === 'situations' || child.id.indexOf('analytic-') === 0 || child.id === 'general-analytic-balance' || child.id === 'journal-analytic-center-totals');
+    var noticeTitle = analytic ? 'Comptabilité analytique séparée' : (inactive ? 'Élément désactivé' : 'Sous-élément créé · écran à préciser');
     var notice = analytic
       ? 'Cet élément reste visible pour conserver la nomenclature demandée, mais il est désactivé dans la comptabilité générale. Aucun cumul analytique n’est calculé ici.'
-      : 'La navigation et la place de cet état sont créées. Nous attendrons votre capture de paramétrage et de résultat avant d’ajouter des filtres, des règles de regroupement ou des calculs.';
+      : (inactive
+        ? 'Cet élément reste visible mais grisé selon le périmètre de votre capture. Aucune sortie ni aucun calcul n’est présenté.'
+        : 'La navigation et la place de cet état sont créées. Nous attendrons votre capture de paramétrage et de résultat avant d’ajouter des filtres, des règles de regroupement ou des calculs.');
     var extra = '';
     if (child.id === 'journal-modified-pieces') {
       extra = 'Dans le prototype actuel, une pièce validée est immuable et aucun journal de versions après première saisie n’est conservé.';
@@ -7932,7 +7941,7 @@
       extra = 'Le critère de contrepartie par pièce, notamment pour les pièces à plusieurs lignes, reste à confirmer avant tout cumul.';
     }
     var sectionLabels = {
-      pieces: 'SUIVI ET CONTRÔLE DES PIÈCES', matching: 'ÉTATS DU LETTRAGE', pointing: 'ÉCRITURES ET JUSTIFICATIONS PAR POINTAGE', bankReconciliation: 'RELEVÉS ET RAPPROCHEMENT BANCAIRE', cumuls: 'CUMULS ET VENTILATIONS', imputation: 'IMPUTATION',
+      pieces: 'SUIVI ET CONTRÔLE DES PIÈCES', matching: 'ÉTATS DU LETTRAGE', pointing: 'ÉCRITURES ET JUSTIFICATIONS PAR POINTAGE', bankReconciliation: 'RELEVÉS ET RAPPROCHEMENT BANCAIRE', assetSummary: 'TABLEAUX DES IMMOBILISATIONS', assetMovements: 'MOUVEMENTS DE LA PÉRIODE', assetInventory: 'INVENTAIRE', assetAccounts: 'CONSULTATION PAR COMPTES', assetDiscrepancies: 'ÉCARTS ET ANOMALIES', assetDimensions: 'VENTILATIONS DÉSACTIVÉES', cumuls: 'CUMULS ET VENTILATIONS', imputation: 'IMPUTATION',
       balances: 'BALANCES, OUVERTURES ET SITUATIONS', ledgers: 'GRANDS LIVRES ET HISTORIQUES', analysis: 'ANALYSES ET CONTREPARTIES',
       controls: 'RELEVÉS ET CONTRÔLES DE TIERS', exchange: 'DEVISES ET ÉCARTS DE CHANGE', situations: 'SITUATIONS ANALYTIQUES',
       budgets: 'BUDGETS', commitments: 'COMMANDES ET ENGAGEMENTS', realisations: 'RÉALISATIONS', availability: 'DISPONIBILITÉS BUDGÉTAIRES'
@@ -7940,7 +7949,7 @@
     return '<div class="edition-report-placeholder">' + backLink +
       '<section class="edition-report-placeholder-card"><div class="edition-report-placeholder-heading"><div><span class="page-kicker">' + esc(sectionLabels[child.section] || 'ÉDITION') + '</span><h4>' + esc(child.label) + '</h4></div>' + menuStatusBadge(child.status) + '</div>' +
         '<p class="edition-report-placeholder-description">' + esc(child.reason || '') + '</p>' +
-        '<div class="alert ' + (analytic ? 'info' : 'warning') + ' edition-report-placeholder-alert"><div><strong>' + esc(noticeTitle) + '</strong><br>' + esc(notice) + '</div></div>' +
+        '<div class="alert ' + (inactive ? 'info' : 'warning') + ' edition-report-placeholder-alert"><div><strong>' + esc(noticeTitle) + '</strong><br>' + esc(notice) + '</div></div>' +
         (extra ? '<p class="edition-report-placeholder-note">' + esc(extra) + '</p>' : '') +
         '<p class="exchange-footnote">Aucune donnée ni règle métier n’est simulée pour cet état en attendant vos références visuelles.</p>' +
       '</section></div>';

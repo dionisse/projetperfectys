@@ -172,7 +172,28 @@
             { id: 'edition-bank-reconciliation', label: 'Rapprochement bancaire', section: 'bankReconciliation', status: 'planned', reason: 'Les règles et le rendu du rapprochement restent à préciser à partir de votre capture ; aucune correspondance n’est calculée ici.' }
           ]
         },
-        { id: 'fixed-assets', label: 'Immobilisations', status: 'planned', reason: 'Édition générale à construire avec le référentiel des immobilisations.' },
+        {
+          id: 'fixed-assets', label: 'Immobilisations', status: 'planned', reason: 'Catalogue structuré selon votre capture. Les critères, colonnes, calculs et rendus restent à préciser ; aucune édition n’est simulée avant réception des captures.',
+          children: [
+            { id: 'edition-fixed-asset-overview', label: 'Tableau des immobilisations', section: 'assetSummary', status: 'planned', reason: 'Tableau de consultation à préciser à partir de votre capture ; aucune colonne ni aucun total n’est inventé.' },
+            { id: 'edition-fixed-asset-depreciation', label: 'Tableau des amortissements', section: 'assetSummary', status: 'planned', reason: 'Présentation et règles à confirmer par capture. La simulation linéaire existante reste indicative, sans barème fiscal ni écriture générée ou validée.' },
+            { id: 'edition-fixed-asset-transfers', label: 'Virements internes', section: 'assetMovements', status: 'planned', reason: 'Critères et présentation du mouvement à préciser ; aucune mutation d’immobilisation n’est déclenchée par cette édition.' },
+            { id: 'edition-fixed-asset-entries', label: 'Entrées de la période', section: 'assetMovements', status: 'planned', reason: 'Période, colonnes et critères de l’état à confirmer par capture ; aucune liste d’entrées n’est simulée.' },
+            { id: 'edition-fixed-asset-exits', label: 'Sorties de la période', section: 'assetMovements', status: 'planned', reason: 'Période, colonnes et critères de l’état à confirmer par capture ; aucune liste de sorties n’est simulée.' },
+            { id: 'edition-fixed-asset-locations-inventory', label: 'Immobilisations par localisations pour inventaire', section: 'assetInventory', status: 'planned', reason: 'Organisation de l’état et lien avec les localisations à préciser par capture ; aucune fiche d’inventaire n’est générée.' },
+            { id: 'edition-fixed-asset-inventory-sheets', label: 'Fiches d’inventaire', section: 'assetInventory', status: 'planned', reason: 'Format, contenu et impression des fiches à définir à partir de votre capture.' },
+            { id: 'edition-fixed-asset-account-totals', label: 'Cumul par comptes', section: 'assetAccounts', status: 'planned', reason: 'Comptes de regroupement, montants et présentation à confirmer ; aucun cumul n’est calculé ici.' },
+            { id: 'edition-fixed-asset-ledger', label: 'Grand-livre des éléments', section: 'assetAccounts', status: 'planned', reason: 'Contenu et critères du grand-livre à préciser par capture ; aucune ligne de mouvement n’est inventée.' },
+            { id: 'edition-fixed-asset-opening-discrepancies', label: 'Écarts à l’ouverture avec la comptabilité générale', section: 'assetDiscrepancies', status: 'planned', reason: 'Périmètre, source de comparaison et règles d’écart à définir à partir de votre capture ; aucun écart n’est calculé.' },
+            { id: 'edition-fixed-asset-period-discrepancies', label: 'Écarts de la période avec la comptabilité générale', section: 'assetDiscrepancies', status: 'planned', reason: 'Période, source de comparaison et règles d’écart à définir à partir de votre capture ; aucun écart n’est calculé.' },
+            { id: 'edition-fixed-asset-entry-discrepancies', label: 'Écarts sur les entrées', section: 'assetDiscrepancies', status: 'planned', reason: 'Définition des écarts et critères de contrôle à confirmer par capture ; aucun résultat n’est simulé.' },
+            { id: 'edition-fixed-asset-exit-discrepancies', label: 'Écarts sur les sorties', section: 'assetDiscrepancies', status: 'planned', reason: 'Définition des écarts et critères de contrôle à confirmer par capture ; aucun résultat n’est simulé.' },
+            { id: 'edition-fixed-asset-other-anomalies', label: 'Autres anomalies sur les immobilisations', section: 'assetDiscrepancies', status: 'planned', reason: 'Les anomalies attendues et leurs critères seront définis à partir de votre capture ; aucune anomalie n’est qualifiée automatiquement.' },
+            { id: 'edition-fixed-assets-responsibility-centers', label: 'Immobilisations par Centres de responsabilité', section: 'assetDimensions', status: 'inactive', reason: 'Élément grisé dans votre capture ; il reste désactivé et ne produit aucune sortie.' },
+            { id: 'edition-fixed-assets-activity-domains', label: 'Immobilisations par Domaines d’activités', section: 'assetDimensions', status: 'inactive', reason: 'Élément grisé dans votre capture ; il reste désactivé et ne produit aucune sortie.' },
+            { id: 'edition-fixed-assets-funding-sources', label: 'Immobilisations par Sources de financement', section: 'assetDimensions', status: 'inactive', reason: 'Élément grisé dans votre capture ; il reste désactivé et ne produit aucune sortie.' }
+          ]
+        },
         { id: 'definitions-and-plans', label: 'Définitions et plans', status: 'planned', reason: 'Éditions en lecture seule à séparer des écrans de paramétrage.' }
       ]
     },
