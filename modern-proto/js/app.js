@@ -12,6 +12,8 @@
   var CashOperations = window.PerfectoCashOperations;
   var AccountMovements = window.PerfectoAccountMovements;
   var AccountingExchange = window.PerfectoAccountingExchange;
+  var BankStatement = window.PerfectoBankStatement;
+  var BankStatementStorage = window.PerfectoBankStatementStorage;
   var AccountingConsolidation = window.PerfectoAccountingConsolidation;
   var BalanceRecalculation = window.PerfectoBalanceRecalculation;
   var PayrollHR = window.PerfectoPayrollHR;
@@ -77,7 +79,7 @@
     ledger: { account: '521' },
     accountMovements: { q: '', kind: 'all', nodeId: '', month: '' },
     matching: { q: '', account: '', status: 'unmatched', selectedLineKeys: [] },
-    pointage: { q: '', account: '', status: 'all', month: 'all', statementDate: '' },
+    pointage: { q: '', account: '', status: 'all', month: 'all', statementDate: '', statementId: '', dateToleranceDays: '7' },
     thirdPartyMovements: { q: '', kind: 'all', recordId: '', month: '' },
     analyticalCenters: { q: '', status: 'active' },
     periods: { year: S.exercise() },
@@ -91,6 +93,13 @@
   var selectedEntryJournalCode = '';
   var deferredInstallPrompt = null;
   var exchangeImportSession = null;
+  var bankStatementImportSession = null;
+  var bankStatementRecords = [];
+  var bankStatementRecordsDossierId = '';
+  var bankStatementLoadingDossierId = '';
+  var bankStatementLoadError = '';
+  var bankStatementLoadPending = false;
+  var bankStatementLoadSequence = 0;
   var balanceImportSession = null;
   var payrollCentralizationSession = null;
   var salesCentralizationSession = null;
@@ -251,6 +260,15 @@
         return { moduleId: 'accounting', actionId: 'pointage.mark' };
       case 'unpoint-entry-line':
         return { moduleId: 'accounting', actionId: 'pointage.unmark' };
+      case 'choose-bank-statement-file':
+      case 'confirm-bank-statement-import':
+        return { moduleId: 'accounting', actionId: 'pointage.statement.import' };
+      case 'confirm-bank-statement-match':
+        return { moduleId: 'accounting', actionId: 'pointage.statement.match' };
+      case 'select-bank-statement-page':
+        return { moduleId: 'accounting', actionId: 'module.view' };
+      case 'download-bank-statement':
+        return { moduleId: 'accounting', actionId: 'data.export' };
       case 'select-account-movement-node':
       case 'select-account-movement-month':
       case 'select-third-party-movement-month':
@@ -624,6 +642,7 @@
     var view = $('#view');
     if (!view) return;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'import-balance')) balanceImportSession = null;
+    if (!(route === 'menu' && parsed.params.g === 'saisie' && parsed.params.t === 'reconciliation')) bankStatementImportSession = null;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'centralize-payroll')) payrollCentralizationSession = null;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'centralize-sales')) salesCentralizationSession = null;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'cancel-centralization')) centralizationCancellationSession = null;
@@ -6868,15 +6887,246 @@
       ? '<button type="button" class="btn btn-ghost btn-sm" data-action="unpoint-entry-line" data-line-key="' + esc(row.lineKey) + '">Retirer</button>'
       : '<button type="button" class="btn btn-ghost btn-sm" data-action="point-entry-line" data-line-key="' + esc(row.lineKey) + '">Pointer</button>';
     var markLabel = mark
-      ? '<span class="reconciliation-status is-pointed">Pointé · ' + esc(mark.code) + '</span>' + (mark.statementDate ? '<small>Relevé du ' + esc(dateLabel(mark.statementDate)) + '</small>' : '')
+      ? '<span class="reconciliation-status is-pointed">Pointé · ' + esc(mark.code) + '</span>' + (mark.statementDate ? '<small>Relevé du ' + esc(dateLabel(mark.statementDate)) + '</small>' : '') + (mark.source === 'bank-statement' ? '<small>Confirmé depuis un relevé importé</small>' : '')
       : '<span class="reconciliation-status is-open">Non pointé</span>';
     return '<tr class="reconciliation-line-row' + (mark ? ' is-pointed' : '') + '"><td class="nowrap">' + esc(dateLabel(row.date)) + '</td><td><strong>' + esc(row.reference) + '</strong></td><td>' + esc(row.journal) + '</td><td class="reconciliation-description-cell">' + esc(row.description || '—') + '</td><td class="num">' + esc(amount(row.debit)) + '</td><td class="num">' + esc(amount(row.credit)) + '</td><td><div class="pointage-state-cell">' + markLabel + action + '</div></td></tr>';
+  }
+
+  function bankStatementMappingSelect(field, label, headers, selectedIndex) {
+    var options = '<option value="">— Choisir une colonne —</option>' + (headers || []).map(function (header, index) {
+      var name = String(header == null ? '' : header).trim() || ('Colonne ' + BankStatement.columnLabel(index));
+      return '<option value="' + index + '"' + (Number(selectedIndex) === index ? ' selected' : '') + '>' + esc(BankStatement.columnLabel(index) + ' · ' + name) + '</option>';
+    }).join('');
+    return '<label class="field"><span>' + esc(label) + '</span><select data-bank-map="' + esc(field) + '">' + options + '</select></label>';
+  }
+
+  function bankStatementEffectiveMapping(session) {
+    var mapping = Object.assign({}, session.mapping || {});
+    mapping.headerIndex = session.headerIndex;
+    if (session.amountMode === 'single') {
+      mapping.debitColumn = -1;
+      mapping.creditColumn = -1;
+    } else {
+      mapping.amountColumn = -1;
+    }
+    return mapping;
+  }
+
+  function analyzeBankStatementImport(session) {
+    if (!session || !Array.isArray(session.tableRows) || !session.tableRows.length) return null;
+    session.parseResult = BankStatement.parseMappedRows(session.tableRows, bankStatementEffectiveMapping(session));
+    return session.parseResult;
+  }
+
+  function configureBankStatementSheet(session, sheet) {
+    session.sheetName = sheet.name;
+    session.tableRows = sheet.rows || [];
+    session.headerIndex = BankStatement.detectHeaderIndex(session.tableRows);
+    var headers = session.tableRows[session.headerIndex] || [];
+    session.mapping = BankStatement.suggestMapping(headers);
+    session.amountMode = session.mapping.debitColumn >= 0 || session.mapping.creditColumn >= 0 ? 'columns' : 'single';
+    analyzeBankStatementImport(session);
+  }
+
+  function bestBankStatementSheet(sheets) {
+    return (sheets || []).map(function (sheet, index) {
+      var rows = sheet.rows || [];
+      var headerIndex = BankStatement.detectHeaderIndex(rows);
+      var mapping = BankStatement.suggestMapping(rows[headerIndex] || []);
+      var score = (mapping.dateColumn >= 0 ? 5 : 0) +
+        ((mapping.debitColumn >= 0 && mapping.creditColumn >= 0) ? 5 : 0) +
+        (mapping.amountColumn >= 0 ? 4 : 0) +
+        (mapping.descriptionColumn >= 0 ? 1 : 0) +
+        (mapping.referenceColumn >= 0 ? 1 : 0) + Math.min(1, rows.length / 10000);
+      return { sheet: sheet, score: score, index: index };
+    }).sort(function (left, right) { return right.score - left.score || left.index - right.index; })[0].sheet;
+  }
+
+  function readBankStatementFile(file) {
+    if (!file) return;
+    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'pointage.statement.import', accountingAccessContext())) {
+      toast('Import refusé : le droit « pointage.statement.import » n’est pas accordé.', 'warning');
+      return;
+    }
+    var name = String(file.name || 'releve-bancaire').slice(0, 240);
+    var session = { file: file, fileName: name, mimeType: String(file.type || ''), fileSize: Number(file.size) || 0, accountCode: ui.pointage.account, errors: [], sheets: [], tableRows: [], loading: true };
+    bankStatementImportSession = session;
+    if (session.fileSize > BankStatement.MAX_FILE_BYTES) {
+      session.loading = false;
+      session.errors.push('Le fichier dépasse la limite de 5 Mo.');
+      render();
+      return;
+    }
+    var isWorkbook = /\.xlsx$/i.test(name) || file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    if (!isWorkbook && !/\.csv$/i.test(name) && file.type !== 'text/csv' && file.type !== 'application/csv') {
+      session.loading = false;
+      session.errors.push('Sélectionnez un fichier CSV ou un classeur Excel .xlsx.');
+      render();
+      return;
+    }
+    render();
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var bytes = new Uint8Array(reader.result || new ArrayBuffer(0));
+        if (isWorkbook) {
+          var workbook = AccountingExchange.listTableWorkbook(bytes);
+          if (!workbook.ok) session.errors = workbook.errors || ['Classeur Excel illisible.'];
+          else {
+            session.sheets = workbook.sheets;
+            configureBankStatementSheet(session, bestBankStatementSheet(session.sheets));
+          }
+        } else {
+          var csvText = new TextDecoder('utf-8').decode(bytes);
+          var parsedCsv = AccountingExchange.parseTableCsv(csvText);
+          if (!parsedCsv.ok) session.errors = parsedCsv.errors || ['Fichier CSV illisible.'];
+          else {
+            session.sheets = [{ name: 'CSV', rows: parsedCsv.rows }];
+            configureBankStatementSheet(session, session.sheets[0]);
+          }
+        }
+      } catch (error) {
+        session.errors = [error && error.message || 'Lecture du relevé impossible.'];
+      }
+      session.loading = false;
+      render();
+    };
+    reader.onerror = function () {
+      session.loading = false;
+      session.errors = ['Lecture du fichier impossible dans ce navigateur.'];
+      render();
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function bankStatementImportPanelHtml(accounts) {
+    var session = bankStatementImportSession;
+    var selectedAccount = session && accounts.find(function (account) { return String(account.code) === String(session.accountCode); }) || accounts[0] || null;
+    var accountOptions = (accounts || []).map(function (account) {
+      var selected = session ? String(account.code) === String(session.accountCode) : selectedAccount && String(account.code) === String(selectedAccount.code);
+      return '<option value="' + esc(account.code) + '"' + (selected ? ' selected' : '') + '>' + esc(account.code + ' · ' + account.label) + '</option>';
+    }).join('');
+    var errorMarkup = session && session.errors && session.errors.length
+      ? '<div class="alert error"><div><strong>Lecture du relevé impossible</strong><ul>' + session.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div></div>'
+      : '';
+    var progressMarkup = session && session.loading ? '<div class="alert info">Lecture locale du fichier en cours…</div>' : '';
+    var previewMarkup = '';
+    if (session && !session.loading && session.tableRows && session.tableRows.length) {
+      var headers = session.tableRows[session.headerIndex] || [];
+      var mapping = session.mapping || {};
+      var headerOptions = session.tableRows.slice(0, 20).map(function (row, index) {
+        var sample = (row || []).slice(0, 5).map(function (value) { return String(value == null ? '' : value).trim(); }).filter(Boolean).join(' · ');
+        return '<option value="' + index + '"' + (index === session.headerIndex ? ' selected' : '') + '>Ligne ' + (index + 1) + (sample ? ' — ' + esc(sample.slice(0, 90)) : '') + '</option>';
+      }).join('');
+      var sheetOptions = session.sheets.length > 1
+        ? '<label class="field"><span>Feuille Excel</span><select data-bank-sheet>' + session.sheets.map(function (sheet) {
+          return '<option value="' + esc(sheet.name) + '"' + (sheet.name === session.sheetName ? ' selected' : '') + '>' + esc(sheet.name) + '</option>';
+        }).join('') + '</select></label>'
+        : '';
+      var amountOptions = '<option value="columns"' + (session.amountMode === 'columns' ? ' selected' : '') + '>Colonnes Débit et Crédit</option><option value="single"' + (session.amountMode === 'single' ? ' selected' : '') + '>Une colonne Montant signée</option>';
+      var amountMapping = session.amountMode === 'single'
+        ? bankStatementMappingSelect('amountColumn', 'Colonne Montant', headers, mapping.amountColumn) +
+          '<label class="field"><span>Le signe positif signifie</span><select data-bank-direction><option value="credit"' + (mapping.positiveDirection !== 'debit' ? ' selected' : '') + '>Crédit du relevé (entrée)</option><option value="debit"' + (mapping.positiveDirection === 'debit' ? ' selected' : '') + '>Débit du relevé (sortie)</option></select></label>'
+        : bankStatementMappingSelect('debitColumn', 'Colonne Débit du relevé', headers, mapping.debitColumn) +
+          bankStatementMappingSelect('creditColumn', 'Colonne Crédit du relevé', headers, mapping.creditColumn);
+      var controls = '<div class="bank-statement-mapping-grid">' +
+        '<label class="field"><span>Ligne d’en-tête</span><select data-bank-header>' + headerOptions + '</select></label>' + sheetOptions +
+        bankStatementMappingSelect('dateColumn', 'Date de l’opération', headers, mapping.dateColumn) +
+        bankStatementMappingSelect('descriptionColumn', 'Libellé / description (facultatif)', headers, mapping.descriptionColumn) +
+        bankStatementMappingSelect('referenceColumn', 'Référence (facultatif)', headers, mapping.referenceColumn) +
+        '<label class="field"><span>Présentation des montants</span><select data-bank-amount-mode>' + amountOptions + '</select></label>' +
+        amountMapping + '</div>';
+      var parseResult = session.parseResult || analyzeBankStatementImport(session);
+      var validation = parseResult && parseResult.errors && parseResult.errors.length
+        ? '<div class="alert warning"><div><strong>Correspondance à compléter</strong><ul>' + parseResult.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div></div>'
+        : '';
+      var rowPreview = parseResult && parseResult.rows ? parseResult.rows.slice(0, 8).map(function (row) {
+        var rowStatus = row.valid ? '<span class="reconciliation-status is-pointed">Valide</span>' : '<span class="reconciliation-status is-open">À contrôler</span>';
+        return '<tr><td>' + row.rowNumber + '</td><td>' + esc(row.date || '—') + '</td><td>' + esc(row.reference || '—') + '</td><td>' + esc(row.description || '—') + '</td><td class="num">' + (row.statementDebit ? esc(amount(row.statementDebit)) : '—') + '</td><td class="num">' + (row.statementCredit ? esc(amount(row.statementCredit)) : '—') + '</td><td>' + rowStatus + (row.errors.length ? '<small>' + esc(row.errors.join(' · ')) + '</small>' : '') + '</td></tr>';
+      }).join('') : '';
+      var previewTable = rowPreview
+        ? '<div class="table-wrap bank-statement-preview-wrap"><table class="exchange-mapping-table bank-statement-preview-table"><thead><tr><th>Ligne</th><th>Date</th><th>Référence</th><th>Libellé</th><th class="num">Débit relevé</th><th class="num">Crédit relevé</th><th>Contrôle</th></tr></thead><tbody>' + rowPreview + '</tbody></table></div>'
+        : '';
+      var importButton = '<button type="button" class="btn btn-primary" data-action="confirm-bank-statement-import"' + (parseResult && parseResult.ok && parseResult.validCount > 0 && selectedAccount && !session.saving ? '' : ' disabled') + '>' + (session.saving ? 'Enregistrement local…' : 'Enregistrer le relevé et ses lignes') + '</button>';
+      previewMarkup = '<div class="bank-statement-file-summary"><strong>' + esc(session.fileName) + '</strong><span>' + (session.fileSize / 1024).toFixed(0) + ' Ko · ' + esc(session.sheetName || 'CSV') + '</span></div>' +
+        '<div class="bank-statement-account-field"><label class="field"><span>Compte de trésorerie concerné</span><select data-bank-statement-account' + (accounts.length ? '' : ' disabled') + '>' + accountOptions + '</select></label></div>' +
+        controls + validation +
+        (parseResult ? '<div class="bank-statement-preview-summary"><strong>' + parseResult.validCount + ' ligne(s) exploitable(s)</strong><span>' + parseResult.invalidCount + ' à contrôler · ' + parseResult.rows.length + ' ligne(s) lue(s). Les lignes invalides seront conservées mais exclues des suggestions.</span></div>' : '') +
+        previewTable + '<div class="exchange-preview-footer">' + importButton + '<button type="button" class="btn btn-ghost" data-action="cancel-bank-statement-import">Annuler la prévisualisation</button></div>';
+    }
+    var storageUnavailable = !BankStatementStorage || !BankStatementStorage.available();
+    return '<section class="exchange-card bank-statement-import-card"><div class="supplier-directory-head"><div><h4>Importer un relevé bancaire</h4><p>Fichier tabulaire générique CSV ou Excel (.xlsx), sans profil bancaire présumé. Le contenu est lu dans ce navigateur et n’est pas transmis au serveur.</p></div>' +
+      '<button type="button" class="btn btn-primary" data-action="choose-bank-statement-file"' + (storageUnavailable || !accounts.length ? ' disabled' : '') + '>＋ Choisir un fichier</button></div>' +
+      '<input id="bank-statement-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>' +
+      '<div class="alert warning bank-statement-storage-note"><div><strong>Stockage de démonstration uniquement.</strong> L’original et les lignes sont conservés dans IndexedDB sur cet appareil, séparément par dossier. Ce prototype n’est pas relié aux comptes PERFECTO ni au Google Drive de l’organisation ; ce stockage local n’est pas une sauvegarde cloud.</div></div>' +
+      (storageUnavailable ? '<div class="alert error">Le stockage local du navigateur est indisponible ; le relevé ne peut pas être conservé.</div>' : '') +
+      '<p class="small muted">CSV UTF-8 ou classeur .xlsx sans macros · 5 Mo maximum · aperçu et choix des colonnes avant enregistrement · aucune écriture comptable créée ou modifiée.</p>' +
+      errorMarkup + progressMarkup + previewMarkup + '</section>';
+  }
+
+  function renderBankStatementReconciliation(statement, ledgerRows) {
+    if (!statement) return '<div class="empty-state bank-statement-empty"><strong>Aucun relevé sélectionné pour ce compte.</strong>Choisissez un fichier CSV/XLSX ci-dessus pour commencer.</div>';
+    var activeMarks = S.pointageMarks(statement.accountCode).filter(function (mark) { return mark.bankStatementId === statement.id; });
+    var marksByRowId = Object.create(null);
+    activeMarks.forEach(function (mark) { marksByRowId[mark.bankStatementRowId] = mark; });
+    var pageSize = 50;
+    var pageCount = Math.max(1, Math.ceil((statement.rows || []).length / pageSize));
+    if (!Number.isInteger(Number(ui.pointage.statementPage)) || Number(ui.pointage.statementPage) < 0) ui.pointage.statementPage = 0;
+    if (ui.pointage.statementPage >= pageCount) ui.pointage.statementPage = pageCount - 1;
+    var start = ui.pointage.statementPage * pageSize;
+    var end = Math.min(start + pageSize, (statement.rows || []).length);
+    var visibleRows = (statement.rows || []).slice(start, end);
+    var rowsHtml = visibleRows.map(function (row) {
+      var mark = marksByRowId[row.id];
+      var ledgerRow = mark && ledgerRows.find(function (item) { return item.lineKey === mark.lineKey; });
+      var matchContent = '';
+      if (!row.valid) {
+        matchContent = '<span class="reconciliation-status is-open">À contrôler</span><small>' + esc((row.errors || []).join(' · ')) + '</small>';
+      } else if (mark) {
+        matchContent = '<span class="reconciliation-status is-pointed">Pointé · ' + esc(mark.code) + '</span>' +
+          (ledgerRow ? '<small>' + esc(dateLabel(ledgerRow.date) + ' · ' + ledgerRow.journal + ' · ' + ledgerRow.reference) + '</small>' : '<small>La ligne comptable associée n’est plus dans le cycle affiché.</small>') +
+          '<small>Pour retirer ce pointage, utilisez « Retirer » dans la liste du grand livre ci-dessous.</small>';
+      } else {
+        var suggestions = BankStatement.suggestMatches(row, ledgerRows, { dateToleranceDays: Number(ui.pointage.dateToleranceDays) });
+        if (!suggestions.length) {
+          matchContent = '<span class="reconciliation-status is-open">Aucune suggestion</span><small>Montant et sens exacts requis, dans la tolérance de date choisie.</small>';
+        } else {
+          matchContent = '<div class="bank-statement-suggestion-head"><span class="reconciliation-status is-open">' + suggestions.length + ' suggestion(s) · à confirmer</span><small>Débit relevé ↔ crédit comptable · crédit relevé ↔ débit comptable</small></div><ul class="bank-statement-suggestions">' +
+            suggestions.map(function (candidate) {
+              var book = candidate.ledger;
+              return '<li><div><strong>' + esc(dateLabel(book.date) + ' · ' + book.journal + ' · ' + book.reference) + '</strong><span>' + esc(book.description || '—') + '</span><small>Débit ' + esc(amount(book.debit)) + ' · Crédit ' + esc(amount(book.credit)) + ' · ' + esc(candidate.reasons.join(' · ')) + '</small></div>' +
+                '<button type="button" class="btn btn-primary btn-sm" data-action="confirm-bank-statement-match" data-id="' + esc(statement.id) + '" data-statement-row-id="' + esc(row.id) + '" data-line-key="' + esc(book.lineKey) + '">Confirmer le pointage</button></li>';
+            }).join('') + '</ul>';
+        }
+      }
+      return '<tr class="bank-statement-row' + (!row.valid ? ' is-invalid' : (mark ? ' is-linked' : '')) + '"><td><strong>' + row.rowNumber + '</strong><br><span class="nowrap">' + esc(row.date || '—') + '</span></td>' +
+        '<td><strong>' + esc(row.reference || '—') + '</strong><br><span>' + esc(row.description || '—') + '</span></td>' +
+        '<td class="num">' + (row.statementDebit ? esc(amount(row.statementDebit)) : '—') + '</td><td class="num">' + (row.statementCredit ? esc(amount(row.statementCredit)) : '—') + '</td><td class="bank-statement-match-cell">' + matchContent + '</td></tr>';
+    }).join('');
+    if (!rowsHtml) rowsHtml = '<tr><td colspan="5"><div class="empty-state bank-statement-empty"><strong>Le relevé ne contient aucune ligne à afficher.</strong></div></td></tr>';
+    var pagination = pageCount > 1
+      ? '<div class="bank-statement-pagination"><button type="button" class="btn btn-ghost btn-sm" data-action="select-bank-statement-page" data-page="' + Math.max(0, ui.pointage.statementPage - 1) + '"' + (ui.pointage.statementPage === 0 ? ' disabled' : '') + '>← Précédent</button><span>Lignes ' + (start + 1) + '–' + end + ' sur ' + statement.rows.length + '</span><button type="button" class="btn btn-ghost btn-sm" data-action="select-bank-statement-page" data-page="' + Math.min(pageCount - 1, ui.pointage.statementPage + 1) + '"' + (ui.pointage.statementPage >= pageCount - 1 ? ' disabled' : '') + '>Suivant →</button></div>'
+      : '<div class="bank-statement-pagination"><span>' + statement.rows.length + ' ligne(s) du relevé</span></div>';
+    var validCount = Number(statement.validCount) || 0;
+    var invalidCount = Number(statement.invalidCount) || 0;
+    return '<div class="bank-statement-record-summary"><div><strong>' + esc(statement.fileName) + '</strong><span>Importé le ' + esc(dateLabel(String(statement.importedAt || '').slice(0, 10))) + ' · ' + validCount + ' ligne(s) exploitables · ' + invalidCount + ' à contrôler</span></div>' +
+      '<button type="button" class="btn btn-ghost btn-sm" data-action="download-bank-statement" data-id="' + esc(statement.id) + '">↓ Télécharger l’original</button></div>' +
+      '<div class="supplier-filter-controls bank-statement-controls"><label class="field"><span>Tolérance de date des suggestions</span><select data-filter="pointage:dateToleranceDays"><option value="0"' + (ui.pointage.dateToleranceDays === '0' ? ' selected' : '') + '>Date identique</option><option value="3"' + (ui.pointage.dateToleranceDays === '3' ? ' selected' : '') + '>± 3 jours</option><option value="7"' + (ui.pointage.dateToleranceDays === '7' ? ' selected' : '') + '>± 7 jours</option><option value="15"' + (ui.pointage.dateToleranceDays === '15' ? ' selected' : '') + '>± 15 jours</option><option value="30"' + (ui.pointage.dateToleranceDays === '30' ? ' selected' : '') + '>± 30 jours</option></select></label><p class="small muted">Les suggestions sont indicatives et ne pointent rien. La confirmation explicite ouvre un contrôle avant l’enregistrement.</p></div>' +
+      '<div class="table-wrap exchange-table-wrap bank-statement-table-wrap"><table class="exchange-mapping-table bank-statement-table"><thead><tr><th>Ligne / date</th><th>Référence / libellé du relevé</th><th class="num">Débit banque</th><th class="num">Crédit banque</th><th>Suggestions de rapprochement</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>' + pagination;
   }
 
   function viewPointage() {
     var accounts = pointageAccountRecords();
     var selectedAccount = accounts.find(function (account) { return String(account.code) === String(ui.pointage.account); }) || accounts[0] || null;
     ui.pointage.account = selectedAccount ? String(selectedAccount.code) : '';
+    var dossier = S.currentDossier();
+    var statements = bankStatementRecordsDossierId === dossier.id ? bankStatementRecords : [];
+    var accountStatements = selectedAccount ? statements.filter(function (statement) { return String(statement.accountCode) === String(selectedAccount.code); }) : [];
+    if (!accountStatements.some(function (statement) { return statement.id === ui.pointage.statementId; })) {
+      ui.pointage.statementId = accountStatements[0] ? accountStatements[0].id : '';
+      ui.pointage.statementPage = 0;
+    }
+    var selectedStatement = accountStatements.find(function (statement) { return statement.id === ui.pointage.statementId; }) || null;
     var periods = S.periodStats(S.exercise()).map(function (period) {
       return Object.assign({}, period, { key: Number(period.year) + '-' + String(period.month).padStart(2, '0') });
     });
@@ -6899,18 +7149,234 @@
       return '<option value="' + esc(period.key) + '"' + (ui.pointage.month === period.key ? ' selected' : '') + '>' + esc(accountMovementMonthLabel(period)) + '</option>';
     }).join('');
     var pointedCount = allRows.filter(function (row) { return !!row.pointageMark; }).length;
+    var statementOptions = '<option value="">— Aucun relevé pour ce compte —</option>' + accountStatements.map(function (statement) {
+      return '<option value="' + esc(statement.id) + '"' + (statement.id === ui.pointage.statementId ? ' selected' : '') + '>' + esc(statement.fileName + ' · ' + (Number(statement.validCount) || 0) + ' ligne(s)') + '</option>';
+    }).join('');
+    var loadNote = bankStatementLoadPending && bankStatementLoadingDossierId === dossier.id
+      ? '<p class="small muted">Chargement des relevés conservés sur cet appareil…</p>'
+      : (bankStatementLoadError && bankStatementRecordsDossierId === dossier.id ? '<div class="alert warning">' + esc(bankStatementLoadError) + '</div>' : '');
+    var statementPanel = '<section class="exchange-card bank-statement-reconciliation-card"><div class="supplier-directory-head"><div><h4>Relevés importés et suggestions</h4><p>' + esc(selectedAccount ? selectedAccount.code + ' · ' + selectedAccount.label : 'Aucun compte de trésorerie') + '</p></div><label class="field bank-statement-select-field"><span>Relevé conservé</span><select data-filter="pointage:statementId"' + (accountStatements.length ? '' : ' disabled') + '>' + statementOptions + '</select></label></div>' + loadNote +
+      (selectedStatement ? renderBankStatementReconciliation(selectedStatement, allRows) : (accountStatements.length ? '<div class="empty-state bank-statement-empty"><strong>Sélectionnez un relevé.</strong></div>' : '<div class="empty-state bank-statement-empty"><strong>Aucun relevé importé pour ce compte.</strong>Importez un fichier CSV ou Excel dans le panneau ci-dessus.</div>')) + '</section>';
     return '<div class="exchange-workspace reconciliation-workspace pointage-workspace">' +
-      '<div class="alert info reconciliation-boundary-note"><div><strong>Pointage manuel du grand livre de trésorerie.</strong> Les lignes validées des comptes de classe 5 sont marquées dans un registre séparé. Aucun relevé bancaire n’est importé, aucun écart bancaire n’est calculé et aucune écriture n’est générée ou modifiée.</div></div>' +
+      '<div class="alert info reconciliation-boundary-note"><div><strong>Pointage du grand livre de trésorerie et lecture de relevés.</strong> Le relevé est analysé localement ; ses dates, libellés, références et montants sont proposés en regard des lignes validées de classe 5. Les suggestions ne pointent jamais une ligne sans confirmation. Aucun écart comptable n’est généré et aucune écriture n’est créée ou modifiée.</div></div>' +
       '<div class="supplier-filter-controls reconciliation-toolbar pointage-toolbar"><label class="field"><span>Compte de trésorerie</span><select id="pointage-account" data-filter="pointage:account"' + (accounts.length ? '' : ' disabled') + '>' + accountOptions + '</select></label>' +
         '<label class="field"><span>Période</span><select id="pointage-month" data-filter="pointage:month">' + monthOptions + '</select></label>' +
         '<label class="field"><span>État</span><select id="pointage-status" data-filter="pointage:status"><option value="all"' + (ui.pointage.status === 'all' ? ' selected' : '') + '>Toutes les lignes</option><option value="unpointed"' + (ui.pointage.status === 'unpointed' ? ' selected' : '') + '>Non pointées</option><option value="pointed"' + (ui.pointage.status === 'pointed' ? ' selected' : '') + '>Déjà pointées</option></select></label>' +
         '<label class="field"><span>Rechercher</span><input id="pointage-search" type="search" data-filter="pointage:q" value="' + esc(ui.pointage.q) + '" placeholder="Date, journal, référence ou libellé"></label>' +
         '<label class="field"><span>Date du relevé (facultative)</span><input id="pointage-statement-date" type="date" data-filter="pointage:statementDate" value="' + esc(ui.pointage.statementDate) + '"></label></div>' +
       '<div class="exchange-summary-grid reconciliation-summary-grid"><div><small>Lignes affichées</small><strong>' + visibleRows.length + '</strong></div><div><small>Lignes pointées dans ce compte</small><strong>' + pointedCount + ' / ' + allRows.length + '</strong></div><div><small>Lignes non pointées</small><strong>' + (allRows.length - pointedCount) + '</strong></div></div>' +
-      '<section class="exchange-card reconciliation-card"><div class="supplier-directory-head"><div><h4>' + esc(selectedAccount ? selectedAccount.code + ' · ' + selectedAccount.label : 'Comptes de trésorerie indisponibles') + '</h4><p>Le pointage indique seulement qu’une ligne a été vérifiée sur un justificatif ou relevé externe.</p></div></div>' +
+      bankStatementImportPanelHtml(accounts) + statementPanel +
+      '<section class="exchange-card reconciliation-card"><div class="supplier-directory-head"><div><h4>' + esc(selectedAccount ? selectedAccount.code + ' · ' + selectedAccount.label : 'Comptes de trésorerie indisponibles') + '</h4><p>Pointage manuel ou confirmé depuis un relevé. Les écritures validées restent inchangées.</p></div></div>' +
         '<div class="table-wrap exchange-table-wrap reconciliation-table-wrap"><table class="exchange-mapping-table reconciliation-table pointage-table"><thead><tr><th>Date comptable</th><th>Référence</th><th>Journal</th><th>Libellé de la pièce</th><th class="num">Débit</th><th class="num">Crédit</th><th>Pointage</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>' +
-      '</section><p class="exchange-footnote">Le code de pointage et la date de relevé facultative sont enregistrés par ligne et par dossier. Un pointage n’équivaut pas à un rapprochement bancaire complet.</p>' +
+      '</section><p class="exchange-footnote">Les fichiers sources et lignes importées sont conservés uniquement dans le navigateur de démonstration, par dossier, via IndexedDB. L’intégration à l’espace cloud d’une organisation — notamment Drive partagé — reste à connecter. Un pointage n’est pas une écriture et n’équivaut pas à un rapprochement bancaire complet.</p>' +
     '</div>';
+  }
+
+  function bindPointageView() {
+    var fileInput = $('#bank-statement-file');
+    if (fileInput) fileInput.addEventListener('change', function () {
+      var file = fileInput.files && fileInput.files[0];
+      if (file) readBankStatementFile(file);
+      fileInput.value = '';
+    });
+    $$('[data-bank-map]').forEach(function (select) {
+      select.addEventListener('change', function () {
+        var session = bankStatementImportSession;
+        if (!session) return;
+        var key = select.getAttribute('data-bank-map');
+        session.mapping[key] = select.value === '' ? -1 : Number(select.value);
+        analyzeBankStatementImport(session);
+        render();
+      });
+    });
+    var headerSelect = $('[data-bank-header]');
+    if (headerSelect) headerSelect.addEventListener('change', function () {
+      var session = bankStatementImportSession;
+      if (!session) return;
+      session.headerIndex = Number(headerSelect.value);
+      session.mapping = BankStatement.suggestMapping(session.tableRows[session.headerIndex] || []);
+      session.amountMode = session.mapping.debitColumn >= 0 || session.mapping.creditColumn >= 0 ? 'columns' : 'single';
+      analyzeBankStatementImport(session);
+      render();
+    });
+    var amountModeSelect = $('[data-bank-amount-mode]');
+    if (amountModeSelect) amountModeSelect.addEventListener('change', function () {
+      if (!bankStatementImportSession) return;
+      bankStatementImportSession.amountMode = amountModeSelect.value === 'single' ? 'single' : 'columns';
+      analyzeBankStatementImport(bankStatementImportSession);
+      render();
+    });
+    var directionSelect = $('[data-bank-direction]');
+    if (directionSelect) directionSelect.addEventListener('change', function () {
+      if (!bankStatementImportSession) return;
+      bankStatementImportSession.mapping.positiveDirection = directionSelect.value === 'debit' ? 'debit' : 'credit';
+      analyzeBankStatementImport(bankStatementImportSession);
+      render();
+    });
+    var sheetSelect = $('[data-bank-sheet]');
+    if (sheetSelect) sheetSelect.addEventListener('change', function () {
+      var session = bankStatementImportSession;
+      if (!session) return;
+      var sheet = session.sheets.find(function (item) { return item.name === sheetSelect.value; });
+      if (!sheet) return;
+      configureBankStatementSheet(session, sheet);
+      render();
+    });
+    var accountSelect = $('[data-bank-statement-account]');
+    if (accountSelect) accountSelect.addEventListener('change', function () {
+      if (!bankStatementImportSession) return;
+      bankStatementImportSession.accountCode = accountSelect.value;
+      render();
+    });
+
+    var dossier = S.currentDossier();
+    if (bankStatementRecordsDossierId === dossier.id || (bankStatementLoadPending && bankStatementLoadingDossierId === dossier.id)) return;
+    if (!BankStatementStorage || !BankStatementStorage.available()) {
+      bankStatementRecords = [];
+      bankStatementRecordsDossierId = dossier.id;
+      bankStatementLoadError = 'IndexedDB n’est pas disponible dans ce navigateur.';
+      bankStatementLoadPending = false;
+      bankStatementLoadingDossierId = '';
+      return;
+    }
+    bankStatementLoadPending = true;
+    bankStatementLoadingDossierId = dossier.id;
+    bankStatementLoadError = '';
+    var sequence = ++bankStatementLoadSequence;
+    BankStatementStorage.list(dossier.id).then(function (records) {
+      if (sequence !== bankStatementLoadSequence) return;
+      bankStatementRecords = records;
+      bankStatementRecordsDossierId = dossier.id;
+      bankStatementLoadPending = false;
+      bankStatementLoadingDossierId = '';
+      bankStatementLoadError = '';
+      var account = ui.pointage.account;
+      var firstForAccount = records.find(function (statement) { return String(statement.accountCode) === String(account); });
+      if (!records.some(function (statement) { return statement.id === ui.pointage.statementId; })) {
+        ui.pointage.statementId = firstForAccount ? firstForAccount.id : '';
+        ui.pointage.statementPage = 0;
+      }
+      if (S.currentDossier().id === dossier.id) render();
+    }).catch(function (error) {
+      if (sequence !== bankStatementLoadSequence) return;
+      bankStatementRecords = [];
+      bankStatementRecordsDossierId = dossier.id;
+      bankStatementLoadPending = false;
+      bankStatementLoadingDossierId = '';
+      bankStatementLoadError = error && error.message || 'Lecture des relevés conservés localement impossible.';
+      if (S.currentDossier().id === dossier.id) render();
+    });
+  }
+
+  function newBankStatementId() {
+    return 'releve-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  }
+
+  function confirmBankStatementImport() {
+    var session = bankStatementImportSession;
+    var dossier = S.currentDossier();
+    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'pointage.statement.import', accountingAccessContext())) {
+      toast('Import refusé : le droit « pointage.statement.import » n’est pas accordé.', 'warning');
+      return;
+    }
+    if (!session || !session.file || session.saving) { toast('Choisissez un fichier à importer.', 'warning'); return; }
+    if (!BankStatementStorage || !BankStatementStorage.available()) { toast('Le stockage local IndexedDB n’est pas disponible.', 'error'); return; }
+    if (!session.accountCode || !pointageAccountRecords().some(function (account) { return String(account.code) === String(session.accountCode); })) {
+      toast('Choisissez un compte de trésorerie actif de classe 5.', 'warning');
+      return;
+    }
+    var parsed = analyzeBankStatementImport(session);
+    if (!parsed || !parsed.ok || !parsed.validCount) {
+      toast('Corrigez le mappage et obtenez au moins une ligne valide avant l’enregistrement.', 'warning');
+      render();
+      return;
+    }
+    var statement = {
+      id: newBankStatementId(),
+      dossierId: dossier.id,
+      fileName: session.fileName,
+      mimeType: session.mimeType || 'application/octet-stream',
+      fileSize: session.fileSize,
+      accountCode: String(session.accountCode),
+      sheetName: session.sheetName || 'CSV',
+      headerIndex: session.headerIndex,
+      mapping: bankStatementEffectiveMapping(session),
+      importedAt: new Date().toISOString(),
+      rowCount: parsed.rows.length,
+      validCount: parsed.validCount,
+      invalidCount: parsed.invalidCount,
+      rows: parsed.rows
+    };
+    session.saving = true;
+    render();
+    BankStatementStorage.save(statement, session.file).then(function () {
+      if (bankStatementImportSession === session) bankStatementImportSession = null;
+      if (bankStatementRecordsDossierId !== dossier.id) bankStatementRecords = [];
+      bankStatementRecordsDossierId = dossier.id;
+      bankStatementRecords = [statement].concat(bankStatementRecords.filter(function (item) { return item.id !== statement.id; }));
+      bankStatementLoadError = '';
+      ui.pointage.account = statement.accountCode;
+      ui.pointage.statementId = statement.id;
+      ui.pointage.statementPage = 0;
+      toast('Relevé conservé dans le navigateur de démonstration. Aucune écriture n’a été créée ou modifiée.', 'success');
+      render();
+    }).catch(function (error) {
+      session.saving = false;
+      toast(error && error.message || 'Le relevé n’a pas pu être conservé localement.', 'error');
+      render();
+    });
+  }
+
+  function confirmBankStatementMatch(trigger) {
+    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'pointage.statement.match', accountingAccessContext())) {
+      toast('Action refusée : le droit « pointage.statement.match » n’est pas accordé.', 'warning');
+      return;
+    }
+    var statementId = trigger.getAttribute('data-id') || '';
+    var statementRowId = trigger.getAttribute('data-statement-row-id') || '';
+    var lineKey = trigger.getAttribute('data-line-key') || '';
+    var dossier = S.currentDossier();
+    var statement = bankStatementRecordsDossierId === dossier.id
+      ? bankStatementRecords.find(function (record) { return record.id === statementId && record.dossierId === dossier.id; })
+      : null;
+    if (!statement || !Array.isArray(statement.rows)) { toast('Le relevé n’est plus disponible dans le dossier actif.', 'warning'); return; }
+    var statementRow = statement.rows.find(function (row) { return row.id === statementRowId; });
+    if (!statementRow || !statementRow.valid) { toast('La ligne du relevé est invalide ou introuvable.', 'warning'); return; }
+    var ledgerRows = accountingControlLineRows(statement.accountCode);
+    var candidates = BankStatement.suggestMatches(statementRow, ledgerRows, { dateToleranceDays: Number(ui.pointage.dateToleranceDays) });
+    var candidate = candidates.find(function (item) { return item.lineKey === lineKey; });
+    if (!candidate) { toast('Cette suggestion n’est plus valide. Actualisez la liste avant de pointer.', 'warning'); render(); return; }
+    var ledger = candidate.ledger;
+    var confirmation = 'Confirmer le pointage de la ligne du relevé « ' + (statementRow.reference || statementRow.description || statementRow.id) + ' » du ' +
+      (statementRow.date || 'date inconnue') + ' (' + amount(statementRow.statementAmount) + ' XOF) avec la ligne comptable ' + ledger.reference + ' du ' + dateLabel(ledger.date) +
+      ' ? Cette action ajoute uniquement un marqueur de pointage ; l’écriture ne sera pas modifiée.';
+    if (!window.confirm(confirmation)) return;
+    var result = S.pointEntryLine(lineKey, statementRow.date, { bankStatementId: statement.id, bankStatementRowId: statementRow.id });
+    if (!result.ok) { toast(result.errors.join(' ') || 'Pointage impossible.', 'warning'); return; }
+    toast('Rapprochement confirmé · ' + result.pointageMark.code + '. L’écriture reste inchangée.', 'success');
+    render();
+  }
+
+  function downloadBankStatement(trigger) {
+    var statementId = trigger.getAttribute('data-id') || '';
+    var dossierId = S.currentDossier().id;
+    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.export', accountingAccessContext())) {
+      toast('Téléchargement refusé par défaut : le droit data.export n’est pas accordé.', 'warning');
+      return;
+    }
+    BankStatementStorage.getFile(dossierId, statementId).then(function (record) {
+      if (!record || !record.blob) { toast('Fichier source introuvable dans le stockage local de ce dossier.', 'error'); return; }
+      var url = window.URL.createObjectURL(record.blob);
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = record.fileName || 'releve-bancaire';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(function () { window.URL.revokeObjectURL(url); }, 1000);
+    }).catch(function (error) {
+      toast(error && error.message || 'Téléchargement du fichier source impossible.', 'error');
+    });
   }
 
   function analyticalCenterMatches(record, query) {
@@ -7145,6 +7611,7 @@
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'consolidate-after-result') bindAccountingConsolidationAfterResult();
       if (!isPhoneViewport() && menuParams.g === 'saisie' && (!menuParams.t || menuParams.t === 'journal-entry')) bindEntryJournalSelector();
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'live-cash') bindAccountingCashOperations();
+      if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'reconciliation') bindPointageView();
       return;
     }
 
@@ -7374,6 +7841,7 @@
     if (!ui[section]) return;
     ui[section][key] = target.value;
     if (section === 'matching' && (key === 'account' || key === 'status')) ui.matching.selectedLineKeys = [];
+    if (section === 'pointage' && (key === 'account' || key === 'statementId')) ui.pointage.statementPage = 0;
     rerenderKeepFocus();
   }
 
@@ -7543,6 +8011,28 @@
         render();
         break;
       }
+      case 'choose-bank-statement-file': {
+        var bankStatementFileInput = $('#bank-statement-file');
+        if (bankStatementFileInput) bankStatementFileInput.click();
+        break;
+      }
+      case 'confirm-bank-statement-import':
+        confirmBankStatementImport();
+        break;
+      case 'cancel-bank-statement-import':
+        bankStatementImportSession = null;
+        render();
+        break;
+      case 'confirm-bank-statement-match':
+        confirmBankStatementMatch(trigger);
+        break;
+      case 'download-bank-statement':
+        downloadBankStatement(trigger);
+        break;
+      case 'select-bank-statement-page':
+        ui.pointage.statementPage = Math.max(0, Number(trigger.getAttribute('data-page')) || 0);
+        render();
+        break;
       case 'point-entry-line': {
         if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'pointage.mark', accountingAccessContext())) {
           toast('Action refusée par défaut : le droit « pointage.mark » n’est pas accordé.', 'warning');

@@ -56,7 +56,7 @@ Le dépôt fournit un serveur statique sans dépendance ni compilation. Dans Bol
 | Comptes généraux et auxiliaires | Cet écran apparaît après sélection de son enfant sous « Mouvements des comptes généraux, tiers et analytiques » ; aucune plateforme n’est affichée au bas du menu parent. Arborescence du plan, synthèse mensuelle (lignes, débits, crédits), totaux, soldes de clôture et détails par mois/exercice issus des écritures validées du cycle du dossier. Les fiches auxiliaires restent sans mouvements/soldes individuels faute d’identifiant auxiliaire dans les pièces |
 | Comptes tiers | Référentiels du dossier pour fournisseurs, clients, personnel et débiteurs/créditeurs divers ; consultation des montants agrégés par compte collectif uniquement. Les mouvements et soldes individuels ne sont pas inventés : les pièces actuelles ne portent pas d’identifiant de tiers |
 | Lettrage | **Saisie → Lettrage** : lettrage manuel de lignes validées et équilibrées sur un compte auxiliaire de classe 4. Les lettres sont persistées séparément, annulables avec historique, sans modifier les écritures ; faute d’identifiant auxiliaire dans les pièces, le lettrage n’est pas attribué à un fournisseur ou client individuel |
-| Pointage | **Saisie → Pointage** : pointage manuel, par ligne validée, des comptes de trésorerie de classe 5, avec date de relevé facultative. Le registre est séparé du grand livre ; aucun relevé bancaire n’est importé, aucun rapprochement automatique et aucune écriture ne sont générés |
+| Pointage | **Saisie → Pointage** : import générique CSV/XLSX, prévisualisation et choix/détection des colonnes, lignes de relevé conservées localement par dossier, suggestions sur montant/sens/date avec tolérance modifiable, confirmation explicite avant pointage ; aucun mouvement comptable créé ou modifié. L’original reste en IndexedDB sur l’appareil dans cette démo ; PERFECTO n’est relié ni à un compte utilisateur/organisation ni au Google Drive de l’organisation |
 | Centres d’analyse | Création, modification, archivage, réactivation et suppression protégée d’un référentiel de centres défini par l’utilisateur, isolé par dossier et à codes non réutilisables. Réservé à l’analytique : aucune écriture générale n’est générée. Mouvements, imputations et états analytiques restent gris/inactifs |
 | Saisie d'écriture | Saisie multiligne dans le journal choisi, contrôle d'équilibre en direct, référence proposée automatiquement, brouillon ou validation |
 | Pièces comptables | Liste filtrable, détail en modale, validation, modification et suppression des brouillons |
@@ -169,6 +169,14 @@ Le menu **Fichier** propose le format neutre `PERFECTO-ECHANGE` version 1 en cla
 - Le format commun est la première passerelle Excel/CSV, **pas encore un import direct des formats propriétaires** de Sage Comptabilité, PERFECTO historique, HYPERSOFT ou ODOO. Ces profils seront développés par version après réception et validation de fichiers d’exemple anonymisés.
 - Le JSON de **Données & application** reste une sauvegarde/restauration native PERFECTO et ne doit pas être confondu avec un fichier d’échange.
 - Les mouvements auxiliaires et soldes tiers, les données analytiques et le multidevise restent hors de ce premier incrément d’interopérabilité. Le référentiel fournisseurs est distinct des imports d’écritures et ne déclenche aucune centralisation. Les données sont lues et produites dans le navigateur ; aucun fichier n’est envoyé à un serveur.
+
+### Pointage avec relevés bancaires génériques — première étape
+
+Dans **Saisie → Pointage**, l’utilisateur peut importer un tableau CSV UTF-8 ou un classeur Excel `.xlsx` sans supposer de banque, de version ou de format propriétaire. Pour un classeur multi-feuilles, la feuille peut être choisie ; la ligne d’en-tête et les colonnes de date, libellé, référence, débit/crédit ou montant signé sont détectées puis restent modifiables. Une prévisualisation montre les lignes exploitables et celles à contrôler avant conservation. Les fichiers jusqu’à 5 Mo et 20 000 lignes sont pris en charge dans ce premier incrément.
+
+Le rapprochement suggère des lignes comptables validées du compte de trésorerie choisi lorsqu’un montant, son sens et une date dans la tolérance sélectionnée correspondent. Un débit du relevé est comparé à un crédit du compte bancaire et inversement. Une référence ou un libellé proche ne sert qu’à ordonner les suggestions ; les critères et limites sont affichés, et chaque proposition doit être confirmée dans une boîte de dialogue avant d’ajouter un marqueur de pointage. Les doublons actifs de ligne de relevé ou de grand livre sont refusés. Les écritures, soldes et journaux ne sont jamais créés ou modifiés.
+
+L’original et ses lignes normalisées sont enregistrés séparément par dossier dans IndexedDB, sans téléversement vers le serveur ; l’original peut être retéléchargé depuis l’écran. **Limite importante de la démo :** IndexedDB appartient au navigateur de cet appareil, pas à un compte authentifié ni à un espace cloud organisationnel. Aucune intégration Google Drive de PERFECTO n’est active, aucune synchronisation multi-appareil n’est fournie et ces fichiers ne sont pas inclus dans la sauvegarde JSON du grand livre. Le stockage cloud partagé devra être connecté et autorisé avant de présenter ce flux comme un stockage utilisateur/organisation réel. Les formats propriétaires bancaires, l’OCR des PDF/images, l’import automatique et les écritures de rapprochement restent hors périmètre.
 
 ### Consolidation avant résultat — première étape
 
@@ -326,6 +334,9 @@ modern-proto/js/store.js       dossiers clients, cycles, migration du plan compt
 modern-proto/js/modules.js     catalogue déclaratif des modules du launcher
 modern-proto/js/permissions.js politique d’accès démo (refus par défaut)
 modern-proto/js/accounting-navigation.js  menus, sous-menus et états d’activation du Lot 1
+modern-proto/js/accounting-exchange.js lecture et export comptable CSV/XLSX ; lecteur de tableaux génériques
+modern-proto/js/bank-statement.js normalisation locale des relevés et suggestions sans pointage automatique
+modern-proto/js/bank-statement-storage.js stockage IndexedDB de démonstration, non connecté à Drive
 modern-proto/js/account-movements.js    arborescence, filtres et agrégats des comptes généraux et auxiliaires
 modern-proto/js/centralization-cancellation.js  contrôle des sources internes et construction d’écritures inverses
 modern-proto/js/app.js         routeur, vues multi-dossiers, formulaires et interactions comptables
@@ -338,6 +349,7 @@ tests/store.test.js            tests des règles métier (Node, sans dépendance
 tests/account-movements.test.js tests de synthèse mensuelle et de cohérence avec le grand livre
 tests/workspaces.test.js       tests de migration, références, cycles et isolation des dossiers clients
 tests/account-lifecycle.test.js cycle de vie des comptes, clients, fournisseurs, tiers divers et personnel
+tests/bank-statement.test.js lecture, mappage XOF et suggestions de relevés non comptabilisantes
 ```
 
 ## Tests
@@ -352,7 +364,7 @@ node tests/account-lifecycle.test.js
 node tests/centralization-cancellation.test.js
 ```
 
-Les tests couvrent les règles comptables, les migrations, les références et le cycle de vie sécurisé des comptes et des répertoires clients, fournisseurs, débiteurs/créditeurs divers et personnel, les codes réservés, les cycles et l’isolation des dossiers clients, le catalogue modulaire, la politique d’accès de démonstration (refus par défaut, organisation, actions et portée par identifiant de dossier), la hiérarchie du menu et l’annulation des centralisations internes (provenance, écriture inverse, immuabilité, anti-doublon et brouillons). La CI GitHub Actions exécute ces scénarios ainsi qu’un contrôle de syntaxe et un test de service HTTP.
+Les tests couvrent les règles comptables, les migrations, les références et le cycle de vie sécurisé des comptes et des répertoires clients, fournisseurs, débiteurs/créditeurs divers et personnel, les codes réservés, les cycles et l’isolation des dossiers clients, le catalogue modulaire, la politique d’accès de démonstration (refus par défaut, organisation, actions et portée par identifiant de dossier), la hiérarchie du menu, les relevés tabulaires (mappage, contrôle des montants, suggestions non pointantes) et l’annulation des centralisations internes (provenance, écriture inverse, immuabilité, anti-doublon et brouillons). La CI GitHub Actions exécute ces scénarios ainsi qu’un contrôle de syntaxe et un test de service HTTP.
 
 ## Limites de cette prévisualisation
 
@@ -361,9 +373,11 @@ d'authentification réelle ni de connexion à Google Drive. Un point de restaura
 local conserve le dernier état comptable avant une modification, mais reste dans le
 même navigateur et ne remplace pas une sauvegarde externe indépendante. Il n'y a pas non plus de
 synchronisation multi-utilisateur ; les dossiers et leurs données comptables restent
-locaux dans le navigateur et ne sont pas partagés entre appareils. Les limites comptables du Lot 1 restent applicables : lettrage auxiliaire individuel
-(faute d’identifiant de tiers dans les pièces), import de relevés et rapprochement
-bancaire automatisé, extourne générale, exports PDF/Excel et états financiers
-SYSCOHADA complets restent à construire. Le lettrage et le pointage disponibles
-constituent des registres manuels séparés, sans écriture comptable. Le prototype valide le parcours avant la
+locaux dans le navigateur et ne sont pas partagés entre appareils. Le premier import
+CSV/XLSX de relevés conserve les fichiers dans IndexedDB local, et non dans un compte
+utilisateur/organisation ou un Google Drive connecté. Les profils bancaires propriétaires,
+l’OCR de PDF/images, le rapprochement entièrement automatisé, l’extourne générale,
+les exports PDF/Excel et les états financiers SYSCOHADA complets restent à construire.
+Le lettrage et le pointage disponibles constituent des registres séparés, sans écriture
+comptable. Le prototype valide le parcours avant la
 conception du stockage partagé et de l'authentification.

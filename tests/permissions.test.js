@@ -176,6 +176,8 @@ test('les actions disponibles sont décrites par module', () => {
   assert(actions.includes('matching.cancel'));
   assert(actions.includes('pointage.mark'));
   assert(actions.includes('pointage.unmark'));
+  assert(actions.includes('pointage.statement.import'));
+  assert(actions.includes('pointage.statement.match'));
   assert(actions.includes('fixedAssets.create'));
   assert(actions.includes('fixedAssets.edit'));
   assert(actions.includes('fixedAssets.delete'));
@@ -369,12 +371,18 @@ test('les droits de lettrage et de pointage sont distincts et limités au dossie
   assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'pointage.mark', context), true);
   assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'matching.cancel', context), false);
   assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'pointage.unmark', context), false);
-  member.grants.accounting[0].actions.push('matching.cancel', 'pointage.unmark');
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'pointage.statement.import', context), false);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'pointage.statement.match', context), false);
+  member.grants.accounting[0].actions.push('matching.cancel', 'pointage.unmark', 'pointage.statement.import', 'pointage.statement.match');
   assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'matching.cancel', context), true);
   assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'pointage.unmark', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'pointage.statement.import', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'pointage.statement.match', context), true);
   const otherDossier = { ...context, dossierId: 'dossier-2' };
   assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'matching.assign', otherDossier), false);
   assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'pointage.mark', otherDossier), false);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'pointage.statement.import', otherDossier), false);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'pointage.statement.match', otherDossier), false);
 });
 
 console.log('Politique d’accès : scénarios réussis.');

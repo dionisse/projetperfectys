@@ -22,7 +22,7 @@ function loadStore() {
 }
 
 let store = loadStore();
-assert.equal(store.getState().reconciliationRegistryVersion, 1);
+assert.equal(store.getState().reconciliationRegistryVersion, 2);
 assert.deepEqual(JSON.parse(JSON.stringify(store.matchingGroups())), []);
 assert.deepEqual(JSON.parse(JSON.stringify(store.pointageMarks())), []);
 
@@ -37,7 +37,7 @@ delete legacy.pointageMarks;
 delete legacy.pointageSequence;
 values.set(storageKey, JSON.stringify(legacy));
 store = loadStore();
-assert.equal(store.getState().reconciliationRegistryVersion, 1);
+assert.equal(store.getState().reconciliationRegistryVersion, 2);
 assert.deepEqual(JSON.parse(JSON.stringify(store.matchingGroups())), []);
 assert.deepEqual(JSON.parse(JSON.stringify(store.pointageMarks())), []);
 assert.equal(JSON.stringify(store.entries()), beforeMigrationEntries, 'la migration ne modifie aucune pièce comptable');
@@ -118,6 +118,16 @@ assert.equal(store.getState().pointageSequence, 3);
 assert.equal(store.matchingGroups('401').length, 1);
 assert.equal(store.pointageForLine(debitEntry.id + ':1').code, 'PNT-2026-0002');
 assert.equal(JSON.stringify(store.entries()), beforeReloadEntries);
+
+const bankStatementContext = { bankStatementId: 'statement-demo-1', bankStatementRowId: 'line-9' };
+const bankStatementPointage = store.pointEntryLine(creditEntry.id + ':0', '2026-01-18', bankStatementContext);
+assert.equal(bankStatementPointage.ok, true, bankStatementPointage.errors.join(' '));
+assert.equal(bankStatementPointage.pointageMark.code, 'PNT-2026-0003');
+assert.equal(bankStatementPointage.pointageMark.source, 'bank-statement');
+assert.equal(bankStatementPointage.pointageMark.bankStatementId, bankStatementContext.bankStatementId);
+assert.equal(bankStatementPointage.pointageMark.bankStatementRowId, bankStatementContext.bankStatementRowId);
+assert.equal(store.pointEntryLine(partialEntry.id + ':0', '2026-01-22', bankStatementContext).ok, false, 'une ligne de relevé ne peut être associée qu’à une seule ligne de trésorerie');
+assert.equal(JSON.stringify(store.entries()), beforeReloadEntries, 'le rapprochement de relevé n’altère pas le grand livre');
 
 const otherDossier = store.createDossier({
   clientName: 'Dossier de contrôle', clientCode: 'CTRL',

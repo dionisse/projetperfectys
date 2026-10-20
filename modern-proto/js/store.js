@@ -50,7 +50,7 @@
   var FIXED_ASSET_LOCATION_REGISTRY_VERSION = 1;
   var FIXED_ASSET_REGISTRY_VERSION = 1;
   var ANALYTICAL_CENTER_REGISTRY_VERSION = 1;
-  var RECONCILIATION_REGISTRY_VERSION = 1;
+  var RECONCILIATION_REGISTRY_VERSION = 2;
   var LEGACY_COMPTES = [
     { code: '101200', label: 'Capital social', cls: 1, nature: 'Passif', aux: false },
     { code: '162100', label: 'Emprunt bancaire', cls: 1, nature: 'Passif', aux: false },
@@ -266,6 +266,9 @@
         lineIndex: Number.isInteger(Number(mark.lineIndex)) ? Number(mark.lineIndex) : -1,
         accountCode: String(mark.accountCode || ''),
         statementDate: String(mark.statementDate || ''),
+        bankStatementId: mark.bankStatementId && mark.bankStatementRowId ? String(mark.bankStatementId) : '',
+        bankStatementRowId: mark.bankStatementId && mark.bankStatementRowId ? String(mark.bankStatementRowId) : '',
+        source: mark.bankStatementId && mark.bankStatementRowId ? 'bank-statement' : 'manual',
         status: mark.status === 'cancelled' ? 'cancelled' : 'pointed'
       });
     }).filter(function (mark) { return !!mark.id && !!mark.lineKey && !!mark.entryId && mark.lineIndex >= 0 && !!mark.accountCode; });
@@ -2008,9 +2011,15 @@
     return record ? clone(record) : null;
   }
 
-  function pointEntryLine(lineKey, statementDate) {
+  function pointEntryLine(lineKey, statementDate, sourceContext) {
     var st = load();
     if (recoveryIssue) return { ok: false, errors: ['Pointage bloqué : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    sourceContext = sourceContext && typeof sourceContext === 'object' ? sourceContext : {};
+    var bankStatementId = String(sourceContext.bankStatementId || '').trim();
+    var bankStatementRowId = String(sourceContext.bankStatementRowId || '').trim();
+    if (!!bankStatementId !== !!bankStatementRowId || bankStatementId.length > 160 || bankStatementRowId.length > 160) {
+      return { ok: false, errors: ['La référence du relevé ou de sa ligne est incomplète ou trop longue.'] };
+    }
     lineKey = String(lineKey || '');
     var separator = lineKey.lastIndexOf(':');
     var entryId = separator > 0 ? lineKey.slice(0, separator) : '';
@@ -2028,6 +2037,9 @@
     if ((st.pointageMarks || []).some(function (mark) { return mark.status !== 'cancelled' && mark.lineKey === lineKey; })) {
       return { ok: false, errors: ['Cette ligne est déjà pointée.'] };
     }
+    if (bankStatementId && (st.pointageMarks || []).some(function (mark) {
+      return mark.status !== 'cancelled' && mark.bankStatementId === bankStatementId && mark.bankStatementRowId === bankStatementRowId;
+    })) return { ok: false, errors: ['Cette ligne de relevé est déjà associée à un mouvement de trésorerie.'] };
     var previousState = clone(st);
     var sequence = Number(st.pointageSequence) || 1;
     var year = Number(lineRecord.entry.date.slice(0, 4)) || Number(st.exercise) || EXERCICE;
@@ -2048,6 +2060,9 @@
       reference: String(lineRecord.entry.reference || ''),
       journal: String(lineRecord.entry.journal || ''),
       statementDate: statementDate,
+      source: bankStatementId ? 'bank-statement' : 'manual',
+      bankStatementId: bankStatementId,
+      bankStatementRowId: bankStatementRowId,
       status: 'pointed',
       createdAt: timestamp,
       updatedAt: timestamp

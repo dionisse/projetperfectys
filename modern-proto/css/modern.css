@@ -2989,3 +2989,70 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
   .reconciliation-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .reconciliation-summary-grid > div { padding: 9px 8px; }
 }
+/* Import local de relevés bancaires et suggestions de pointage */
+.bank-statement-import-card,
+.bank-statement-reconciliation-card { margin-top: 13px; padding: 15px; }
+.bank-statement-import-card .supplier-directory-head,
+.bank-statement-reconciliation-card .supplier-directory-head { align-items: flex-start; gap: 12px; }
+.bank-statement-storage-note { margin: 11px 0; font-size: .68rem; }
+.bank-statement-file-summary,
+.bank-statement-record-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 11px 0; padding: 10px 12px; border: 1px solid #dce8df; border-radius: 7px; background: #f5f8f4; }
+.bank-statement-file-summary strong,
+.bank-statement-record-summary strong { color: #344f42; font-size: .72rem; overflow-wrap: anywhere; }
+.bank-statement-file-summary span,
+.bank-statement-record-summary span { display: block; color: #738076; font-size: .65rem; }
+.bank-statement-account-field { max-width: 520px; margin: 10px 0; }
+.bank-statement-mapping-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 11px 0; padding: 12px; border: 1px solid #e7ebe5; border-radius: 8px; background: #fbfcf9; }
+.bank-statement-mapping-grid .field,
+.bank-statement-account-field .field { min-width: 0; }
+.bank-statement-mapping-grid select,
+.bank-statement-account-field select,
+.bank-statement-select-field select { max-width: 100%; }
+.bank-statement-preview-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 10px 0; padding: 9px 11px; border-radius: 6px; background: #f0f6f0; color: #46604e; font-size: .67rem; }
+.bank-statement-preview-summary strong { font-size: .7rem; }
+.bank-statement-preview-summary span { color: #738076; }
+.bank-statement-preview-wrap { max-height: 300px; margin: 10px 0; overflow: auto; }
+.bank-statement-preview-table { min-width: 850px; font-size: .68rem; }
+.bank-statement-preview-table th,
+.bank-statement-table th { font-size: .63rem; }
+.bank-statement-preview-table td small { display: block; max-width: 210px; margin-top: 3px; color: #8a6b4a; white-space: normal; }
+.bank-statement-select-field { min-width: 280px; max-width: min(420px, 52%); }
+.bank-statement-controls { display: grid; grid-template-columns: minmax(220px, .6fr) minmax(280px, 1fr); align-items: end; gap: 12px; margin: 10px 0; }
+.bank-statement-controls p { margin: 0 0 8px; line-height: 1.5; }
+.bank-statement-table-wrap { max-height: min(62vh, 700px); }
+.bank-statement-table { min-width: 1180px; font-size: .68rem; }
+.bank-statement-table th:first-child { width: 115px; }
+.bank-statement-table th:nth-child(2) { min-width: 210px; }
+.bank-statement-table th:nth-child(3),
+.bank-statement-table th:nth-child(4) { width: 115px; }
+.bank-statement-table th:last-child { min-width: 500px; }
+.bank-statement-row.is-invalid td { background: #fbf7f0; }
+.bank-statement-row.is-linked td { background: #f2f8f2; }
+.bank-statement-row td:nth-child(2) > span { display: block; margin-top: 4px; color: #6f7d73; line-height: 1.45; white-space: normal; }
+.bank-statement-match-cell { min-width: 480px; white-space: normal; }
+.bank-statement-match-cell > small,
+.bank-statement-suggestion-head small { display: block; margin-top: 4px; color: #7c887f; font-size: .63rem; }
+.bank-statement-suggestion-head { margin-bottom: 6px; }
+.bank-statement-suggestions { display: grid; gap: 6px; margin: 6px 0 0; padding: 0; list-style: none; }
+.bank-statement-suggestions li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 9px; border: 1px solid #e4eae3; border-radius: 6px; background: #fbfcfa; }
+.bank-statement-suggestions li > div { display: grid; gap: 3px; min-width: 0; }
+.bank-statement-suggestions li strong { color: #40584b; font-size: .68rem; }
+.bank-statement-suggestions li span { color: #5c6d61; font-size: .66rem; white-space: normal; }
+.bank-statement-suggestions li small { color: #849087; font-size: .62rem; line-height: 1.45; white-space: normal; }
+.bank-statement-suggestions .btn { flex: 0 0 auto; }
+.bank-statement-pagination { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 10px 2px 0; color: #748077; font-size: .66rem; }
+.bank-statement-empty { min-height: 85px; padding: 16px; font-size: .68rem; }
+.bank-statement-empty strong { display: block; margin-bottom: 4px; color: #40584b; }
+@media (max-width: 1000px) {
+  .bank-statement-mapping-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bank-statement-controls { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 700px) {
+  .bank-statement-import-card,
+  .bank-statement-reconciliation-card { padding: 10px; }
+  .bank-statement-mapping-grid { grid-template-columns: minmax(0, 1fr); padding: 9px; }
+  .bank-statement-record-summary,
+  .bank-statement-file-summary { align-items: flex-start; flex-direction: column; }
+  .bank-statement-select-field { width: 100%; max-width: none; min-width: 0; }
+  .bank-statement-suggestions li { align-items: flex-start; flex-direction: column; }
+}

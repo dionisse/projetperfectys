@@ -79,13 +79,16 @@
   function detectDelimiter(text) {
     var counts = { ';': 0, ',': 0, '\t': 0 };
     var quoted = false;
+    var sampledLines = 0;
     for (var i = 0; i < text.length; i += 1) {
       var ch = text.charAt(i);
       if (ch === '"') {
         if (quoted && text.charAt(i + 1) === '"') { i += 1; continue; }
         quoted = !quoted;
       } else if (!quoted && (ch === '\r' || ch === '\n')) {
-        break;
+        sampledLines += 1;
+        if (ch === '\r' && text.charAt(i + 1) === '\n') i += 1;
+        if (sampledLines >= 10) break;
       } else if (!quoted && Object.prototype.hasOwnProperty.call(counts, ch)) {
         counts[ch] += 1;
       }
@@ -136,8 +139,8 @@
         row = [];
         if (ch === '\r' && source.charAt(i + 1) === '\n') i += 1;
         endedRow = true;
-        if (rows.length > MAX_DATA_ROWS + 1) {
-          return { ok: false, errors: ['Le fichier dépasse la limite de ' + MAX_DATA_ROWS + ' lignes comptables.'] };
+        if (rows.length > MAX_DATA_ROWS + 20) {
+          return { ok: false, errors: ['Le fichier dépasse la limite de ' + MAX_DATA_ROWS + ' lignes.'] };
         }
       } else {
         field += ch;
@@ -150,8 +153,8 @@
       row.push(field);
       if (row.some(function (cell) { return String(cell).trim() !== ''; })) rows.push(row);
     }
-    if (rows.length > MAX_DATA_ROWS + 1) {
-      return { ok: false, errors: ['Le fichier dépasse la limite de ' + MAX_DATA_ROWS + ' lignes comptables.'] };
+    if (rows.length > MAX_DATA_ROWS + 20) {
+      return { ok: false, errors: ['Le fichier dépasse la limite de ' + MAX_DATA_ROWS + ' lignes.'] };
     }
     return { ok: true, rows: rows, delimiter: delimiter };
   }
@@ -997,7 +1000,7 @@
       else parts.push(part);
     });
     var resolved = parts.join('/');
-    if (resolved.indexOf('xl/worksheets/') !== 0) throw new Error('La feuille Écritures est située hors du répertoire Excel attendu.');
+    if (resolved.indexOf('xl/worksheets/') !== 0) throw new Error('La feuille Excel est située hors du répertoire attendu.');
     return resolved;
   }
 
@@ -1044,7 +1047,7 @@
       cellNodes.forEach(function (cell, index) {
         if (directChildrenByName(cell, 'f').length) throw new Error('Les formules Excel ne sont pas importées. Remplacez-les par leurs valeurs avant l’import.');
         var column = cellColumnIndex(cell.getAttribute('r'), index);
-        if (column > 63) throw new Error('La feuille Écritures contient plus de 64 colonnes.');
+        if (column > 63) throw new Error('La feuille Excel contient plus de 64 colonnes.');
         var type = cell.getAttribute('t') || '';
         var value = '';
         if (type === 'inlineStr') {
@@ -1057,7 +1060,7 @@
             if (!Number.isSafeInteger(stringIndex) || stringIndex < 0 || stringIndex >= sharedStrings.length) throw new Error('Le classeur contient une référence de texte Excel invalide.');
             value = sharedStrings[stringIndex];
           } else if (type === 'e') {
-            throw new Error('La feuille Écritures contient une cellule en erreur Excel.');
+            throw new Error('La feuille Excel contient une cellule en erreur.');
           } else if (type === 'b') {
             value = value === '1' ? 'TRUE' : 'FALSE';
           }
@@ -1077,8 +1080,28 @@
     var dateIndex = header.indexOf('DATE');
     if (dateIndex < 0) dateIndex = header.indexOf('DATE_BALANCE');
     var result = matrix.slice(headerIndex);
-    if (dateIndex >= 0) result.slice(1).forEach(function (row) {
-      if (row[dateIndex] && /^\d+(?:\.\d+)?$/.test(row[dateIndex])) row[dateIndex] = excelSerialDate(row[dateIndex], date1904);
+    var dateIndexes = dateIndex >= 0 ? [dateIndex] : [];
+    var dateHeaderOffset = 0;
+    if (!dateIndexes.length) {
+      var bestDateHeaderScore = -1;
+      for (var headerOffset = 0; headerOffset < Math.min(20, result.length); headerOffset += 1) {
+        var candidateDateHeader = result[headerOffset] || [];
+        var possibleDateIndexes = candidateDateHeader.map(function (value, index) {
+          return normalizeToken(value).indexOf('DATE') !== -1 ? index : -1;
+        }).filter(function (index) { return index >= 0; });
+        if (!possibleDateIndexes.length) continue;
+        var dateHeaderScore = possibleDateIndexes.length * 100 + candidateDateHeader.filter(function (value) { return String(value || '').trim() !== ''; }).length;
+        if (dateHeaderScore > bestDateHeaderScore) {
+          bestDateHeaderScore = dateHeaderScore;
+          dateIndexes = possibleDateIndexes;
+          dateHeaderOffset = headerOffset;
+        }
+      }
+    }
+    result.slice(dateHeaderOffset + 1).forEach(function (row) {
+      dateIndexes.forEach(function (index) {
+        if (row[index] && /^\d+(?:\.\d+)?$/.test(row[index])) row[index] = excelSerialDate(row[index], date1904);
+      });
     });
     return result;
   }
@@ -1089,7 +1112,7 @@
     }).join('\r\n') + '\r\n';
   }
 
-  function readWorkbookRows(input, preferredSheetName, expectedHeaders) {
+  function openWorkbook(input) {
     if (!root.fflate || typeof root.fflate.unzipSync !== 'function') throw new Error('Le module local de lecture Excel n’est pas disponible.');
     var bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
     if (!bytes.length || bytes.length > MAX_WORKBOOK_BYTES) throw new Error('Le classeur doit faire au plus 5 Mo.');
@@ -1111,6 +1134,24 @@
     var sharedStrings = readSharedStrings(files);
     var workbookProperties = elementsByName(workbookDoc, 'workbookPr')[0];
     var date1904 = workbookProperties && ['1', 'true'].indexOf(String(workbookProperties.getAttribute('date1904')).toLowerCase()) !== -1;
+    return { files: files, sheets: sheets, sharedStrings: sharedStrings, date1904: !!date1904 };
+  }
+
+  function readWorkbookRows(input, preferredSheetName, expectedHeaders) {
+    var workbook = openWorkbook(input);
+    var files = workbook.files;
+    var sheets = workbook.sheets;
+    var sharedStrings = workbook.sharedStrings;
+    var date1904 = workbook.date1904;
+    if (preferredSheetName === '__ALL__') {
+      return sheets.map(function (sheet) {
+        try {
+          return { name: sheet.name, rows: readSheetRows(files, sheet.path, sharedStrings, date1904, expectedHeaders || []) };
+        } catch (err) {
+          return { name: sheet.name, rows: [], error: err.message || 'Feuille illisible.' };
+        }
+      });
+    }
     var expectedSheet = normalizeToken(preferredSheetName).replace(/[^A-Z0-9]/g, '');
     var candidate = sheets.find(function (sheet) { return normalizeToken(sheet.name).replace(/[^A-Z0-9]/g, '') === expectedSheet; });
     var rows = null;
@@ -1123,6 +1164,29 @@
     }
     if (!rows) throw new Error('Aucune feuille « ' + preferredSheetName + ' » conforme au modèle attendu n’a été trouvée.');
     return rows;
+  }
+
+  function parseTableCsv(text) {
+    return parseRows(text);
+  }
+
+  function parseTableWorkbook(input, sheetName) {
+    try {
+      var preferred = String(sheetName || 'Releve');
+      return { ok: true, rows: readWorkbookRows(input, preferred, []), sheetName: preferred };
+    } catch (err) {
+      return { ok: false, errors: [err.message || 'Classeur Excel illisible.'], rows: [] };
+    }
+  }
+
+  function listTableWorkbook(input) {
+    try {
+      var sheets = readWorkbookRows(input, '__ALL__', []).filter(function (sheet) { return sheet.rows && sheet.rows.length; });
+      if (!sheets.length) return { ok: false, errors: ['Le classeur ne contient aucune feuille tabulaire lisible.'], sheets: [] };
+      return { ok: true, errors: [], sheets: sheets };
+    } catch (err) {
+      return { ok: false, errors: [err.message || 'Classeur Excel illisible.'], sheets: [] };
+    }
   }
 
   function parseWorkbook(input) {
@@ -1160,6 +1224,9 @@
     AUXILIARY_VERSION: AUXILIARY_VERSION,
     AUXILIARY_HEADERS: AUXILIARY_HEADERS.slice(),
     parse: parse,
+    parseTableCsv: parseTableCsv,
+    parseTableWorkbook: parseTableWorkbook,
+    listTableWorkbook: listTableWorkbook,
     template: template,
     exportEntries: exportEntries,
     exportAccounts: exportAccounts,
