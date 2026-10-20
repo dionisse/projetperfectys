@@ -71,7 +71,21 @@
     },
     {
       id: 'editions', label: 'Éditions', icon: '▤', defaultTab: 'journals', tabs: [
-        { id: 'journals', label: 'Journaux', status: 'active', reason: 'Consultation des écritures validées.', actions: [{ label: 'Afficher le journal des écritures', route: 'journal' }] },
+        {
+          id: 'journals', label: 'Journaux', status: 'partial', reason: 'Choisissez un état ou un contrôle. Les dix sous-éléments sont organisés en trois groupes ; la présentation et les paramètres de chaque état seront affinés à partir de vos captures.',
+          children: [
+            { id: 'journal-lines', label: 'Détail des lignes saisies', section: 'pieces', status: 'partial', reason: 'Vue existante des écritures validées, filtrable par journal et exercice. La présentation définitive sera ajustée à partir de votre capture.' },
+            { id: 'journal-modified-pieces', label: 'Pièces modifiées après première saisie', section: 'pieces', status: 'planned', reason: 'Le prototype ne conserve pas encore l’historique des modifications de saisie ; les critères et le rendu restent à préciser à partir de votre capture.' },
+            { id: 'journal-unbalanced-pieces', label: 'Pièces déséquilibrées', section: 'pieces', status: 'planned', reason: 'Les critères de sélection (brouillons, erreurs de contrôle ou autre cas) et leur présentation attendent votre capture.' },
+            { id: 'journal-entry-totals', label: 'Cumul des pièces saisies', section: 'cumuls', status: 'planned', reason: 'Les regroupements, filtres de période et colonnes du cumul seront définis à partir de votre capture.' },
+            { id: 'journal-individual-account-totals', label: 'Cumul par comptes individuels', section: 'cumuls', status: 'planned', reason: 'État à mettre en forme sans confondre le cumul individuel avec les comptes de synthèse ; paramètres à confirmer par capture.' },
+            { id: 'journal-summary-account-totals', label: 'Cumul par comptes de synthèse', section: 'cumuls', status: 'planned', reason: 'Les règles de regroupement des comptes de synthèse et les colonnes sont à préciser par capture.' },
+            { id: 'journal-third-party-totals', label: 'Cumul par tiers', section: 'cumuls', status: 'planned', reason: 'Les pièces de démonstration ne portent pas encore d’identifiant individuel de tiers ; l’état attend vos captures et un modèle de données confirmé.' },
+            { id: 'journal-analytic-center-totals', label: 'Cumul par centres analytiques', section: 'cumuls', status: 'inactive', reason: 'La comptabilité analytique reste un module séparé et inactive dans le parcours général.' },
+            { id: 'journal-currency-totals', label: 'Cumul par devises', section: 'cumuls', status: 'planned', reason: 'Le modèle général ne gère pas encore les devises ni les conversions ; aucun taux ou montant n’est inventé.' },
+            { id: 'journal-allocation-sheet', label: 'Fiche d’imputation', section: 'imputation', status: 'planned', reason: 'Le rôle de la fiche, son paramétrage et son rendu seront définis à partir de vos captures.' }
+          ]
+        },
         { id: 'general-accounts', label: 'Comptes généraux', status: 'active', reason: 'Consultation de la balance et du grand livre.', actions: [{ label: 'Afficher la balance générale', route: 'balance' }, { label: 'Afficher le grand livre', route: 'ledger' }] },
         { id: 'third-parties', label: 'Tiers', status: 'planned', reason: 'Éditions à construire après le référentiel et les mouvements tiers.' },
         { id: 'foreign-currency', label: 'Comptes en devises', status: 'planned', reason: 'Édition générale à construire après définition de la gestion multidevise.' },

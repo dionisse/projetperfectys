@@ -53,6 +53,16 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Centres d’analyse (analytique)',
   'Reports à nouveau',
   'Journaux',
+  'Détail des lignes saisies',
+  'Pièces modifiées après première saisie',
+  'Pièces déséquilibrées',
+  'Cumul des pièces saisies',
+  'Cumul par comptes individuels',
+  'Cumul par comptes de synthèse',
+  'Cumul par tiers',
+  'Cumul par centres analytiques',
+  'Cumul par devises',
+  'Fiche d’imputation',
   'Comptes en devises',
   'États analytiques',
   'Comptes à payer (analytique)',
@@ -144,7 +154,23 @@ assert.ok(findTab('fichier', 'consolidate-before-result').reason.includes('aucun
 assert.equal(findTab('fichier', 'consolidate-after-result').status, 'partial');
 assert.ok(findTab('fichier', 'consolidate-after-result').reason.includes('provenance de chaque ligne source'));
 assert.ok(findTab('fichier', 'consolidate-after-result').reason.includes('ne sont ni calculés ni comptabilisés'));
-assert.equal(findTab('editions', 'journals').status, 'active');
+assert.equal(findTab('editions', 'journals').status, 'partial');
+assert.deepEqual(findTab('editions', 'journals').children.map(child => child.label), [
+  'Détail des lignes saisies',
+  'Pièces modifiées après première saisie',
+  'Pièces déséquilibrées',
+  'Cumul des pièces saisies',
+  'Cumul par comptes individuels',
+  'Cumul par comptes de synthèse',
+  'Cumul par tiers',
+  'Cumul par centres analytiques',
+  'Cumul par devises',
+  'Fiche d’imputation'
+]);
+assert.equal(findTab('editions', 'journals').children[0].status, 'partial');
+assert.equal(findTab('editions', 'journals').children.find(child => child.id === 'journal-analytic-center-totals').status, 'inactive');
+assert.match(appSource, /function journalReportCatalog\([\s\S]*Suivi et contrôle des pièces[\s\S]*Cumuls et ventilations[\s\S]*Imputation/);
+assert.match(menuRenderer, /isJournalReportsMenu[\s\S]*journalReportChildView\(selectedChild/);
 assert.equal(findTab('editions', 'general-accounts').status, 'active');
 assert.equal(findTab('editions', 'analytic-statements').status, 'inactive');
 assert.equal(findTab('definitions', 'responsibility-centers').status, 'partial');
