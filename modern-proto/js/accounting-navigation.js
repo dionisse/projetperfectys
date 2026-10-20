@@ -86,12 +86,72 @@
             { id: 'journal-allocation-sheet', label: 'Fiche d’imputation', section: 'imputation', status: 'planned', reason: 'Le rôle de la fiche, son paramétrage et son rendu seront définis à partir de vos captures.' }
           ]
         },
-        { id: 'general-accounts', label: 'Comptes généraux', status: 'active', reason: 'Consultation de la balance et du grand livre.', actions: [{ label: 'Afficher la balance générale', route: 'balance' }, { label: 'Afficher le grand livre', route: 'ledger' }] },
-        { id: 'third-parties', label: 'Tiers', status: 'planned', reason: 'Éditions à construire après le référentiel et les mouvements tiers.' },
-        { id: 'foreign-currency', label: 'Comptes en devises', status: 'planned', reason: 'Édition générale à construire après définition de la gestion multidevise.' },
-        { id: 'analytic-statements', label: 'États analytiques', status: 'inactive', reason: 'Relève de la comptabilité analytique, module séparé.' },
+        {
+          id: 'general-accounts', label: 'Comptes généraux', status: 'mixed', reason: 'Balances générale et grand livre ouvrent les vues existantes. Les autres éditions restent à préciser à partir de vos captures ; les états analytiques sont désactivés dans ce parcours.',
+          children: [
+            { id: 'general-balance', label: 'Balance générale des comptes', section: 'balances', status: 'partial', reason: 'Ouvre la balance générale existante, calculée à partir des pièces validées du cycle. Sa présentation définitive sera ajustée après votre capture.' },
+            { id: 'general-summary-balance', label: 'Balance de synthèse', section: 'balances', status: 'planned', reason: 'Niveau de regroupement, colonnes et paramètres à confirmer par capture ; aucun regroupement de comptes n’est présumé.' },
+            { id: 'general-aged-balance', label: 'Balance âgée', section: 'balances', status: 'planned', reason: 'Le prototype ne possède pas de registre de factures et d’échéances soldées ; les critères d’ancienneté et le rendu attendent votre capture.' },
+            { id: 'general-opening-balance', label: 'Balance d’ouverture', section: 'balances', status: 'planned', reason: 'Le registre Reports à nouveau existe séparément ; le format d’édition et ses filtres seront définis à partir de votre capture.' },
+            { id: 'general-account-situation', label: 'Situation des comptes', section: 'balances', status: 'planned', reason: 'Les colonnes, période de référence et présentation de la situation restent à préciser par capture.' },
+            { id: 'general-ledger', label: 'Grand livre des comptes', section: 'ledgers', status: 'partial', reason: 'Ouvre le grand livre existant par compte, à partir des écritures validées. La présentation définitive sera ajustée après votre capture.' },
+            { id: 'general-multiyear-history', label: 'Historique des comptes sur plusieurs exercices', section: 'ledgers', status: 'planned', reason: 'Les exercices sont isolés dans des dossiers distincts ; la sélection et la comparaison pluriannuelles attendent une source et des règles confirmées.' },
+            { id: 'general-opening-journal', label: 'Journal des reports', section: 'ledgers', status: 'planned', reason: 'Les reports sont conservés dans un registre séparé des journaux ; cette édition attend votre capture et sa définition exacte.' },
+            { id: 'general-analytic-balance', label: 'Balance détaillée analytiquement', section: 'analysis', status: 'inactive', reason: 'La comptabilité analytique reste un module séparé et inactive dans le parcours général.' },
+            { id: 'general-counterpart-detail', label: 'Détail des contreparties d’un compte', section: 'analysis', status: 'planned', reason: 'Le critère de contrepartie et le traitement des pièces multiligne seront définis à partir de votre capture.' },
+            { id: 'general-counterpart-total', label: 'Cumul des contreparties d’un compte', section: 'analysis', status: 'planned', reason: 'Les règles de cumul des contreparties et leur présentation restent à confirmer par capture.' }
+          ]
+        },
+        {
+          id: 'third-parties', label: 'Tiers', status: 'planned', reason: 'Les éditions sont structurées ci-dessous, mais les mouvements des pièces ne sont pas encore attribués aux fiches individuelles ; les paramètres et le rendu attendent vos captures.',
+          children: [
+            { id: 'third-party-balance', label: 'Balance des tiers', section: 'balances', status: 'planned', reason: 'Aucun solde individuel ne sera calculé avant que les pièces portent l’identifiant du tiers.' },
+            { id: 'third-party-opening-balance', label: 'Balance d’ouverture', section: 'balances', status: 'planned', reason: 'Le registre Reports à nouveau ne contient pas encore une balance auxiliaire individualisée ; format à définir après capture.' },
+            { id: 'third-party-situation', label: 'Situation des comptes', section: 'balances', status: 'planned', reason: 'La période, les colonnes et le niveau de détail seront définis à partir de votre capture.' },
+            { id: 'third-party-nature-breakdown', label: 'Décomposition des soldes par nature (clients/fournisseurs)', section: 'balances', status: 'planned', reason: 'Les comptes collectifs existants sont consultables ; la décomposition auxiliaire clients/fournisseurs attend des mouvements identifiés par tiers.' },
+            { id: 'third-party-ledger', label: 'Grand livre', section: 'ledgers', status: 'planned', reason: 'Le grand livre par tiers attend des écritures portant un identifiant individuel ; aucun mouvement collectif ne sera attribué à une fiche.' },
+            { id: 'third-party-statement', label: 'Relevé de compte des tiers', section: 'ledgers', status: 'planned', reason: 'La sélection du tiers, les dates et les colonnes du relevé attendent votre capture et des mouvements individualisés.' },
+            { id: 'third-party-balance-justification', label: 'Justification de solde', section: 'controls', status: 'planned', reason: 'Les règles de rapprochement avec factures, règlements et pièces justificatives seront définies à partir de votre capture.' }
+          ]
+        },
+        {
+          id: 'foreign-currency', label: 'Comptes en devises', status: 'planned', reason: 'Les cinq états sont référencés ci-dessous. Le modèle ne gère pas encore les montants en devises, taux ni écarts de conversion ; aucun calcul n’est simulé.',
+          children: [
+            { id: 'currency-balance', label: 'Balance', section: 'balances', status: 'planned', reason: 'La devise, les montants d’origine et la présentation de la balance seront définis à partir de vos captures.' },
+            { id: 'currency-opening-balance', label: 'Balance d’ouverture', section: 'balances', status: 'planned', reason: 'Les soldes d’ouverture en devises ne sont pas portés par le registre actuel ; aucun montant converti n’est inventé.' },
+            { id: 'currency-situation', label: 'Situation des comptes', section: 'balances', status: 'planned', reason: 'La situation attend les paramètres de devise, période et valorisation à confirmer par capture.' },
+            { id: 'currency-ledger', label: 'Grand livre', section: 'ledgers', status: 'planned', reason: 'Les pièces ne conservent pas de montants en devise distincts des montants comptabilisés en XOF.' },
+            { id: 'currency-exchange-differences', label: 'Écarts de change', section: 'exchange', status: 'planned', reason: 'Aucun taux de change ni historique de conversion n’est disponible ; les règles et le rendu seront définis après capture.' }
+          ]
+        },
+        {
+          id: 'analytic-statements', label: 'États analytiques', status: 'inactive', reason: 'Les éléments ci-dessous conservent la nomenclature demandée, mais restent tous désactivés dans la comptabilité générale : l’analytique demeure un module séparé.',
+          children: [
+            { id: 'analytic-center-balance', label: 'Balance des centres', section: 'balances', status: 'inactive', reason: 'État réservé au module distinct de comptabilité analytique.' },
+            { id: 'analytic-other-nature-balance', label: 'Balance détaillée par une autre nature', section: 'balances', status: 'inactive', reason: 'Autre nature analytique à définir dans le module séparé.' },
+            { id: 'analytic-ledger', label: 'Grand livre', section: 'ledgers', status: 'inactive', reason: 'État réservé au module distinct de comptabilité analytique.' },
+            { id: 'analytic-other-nature-ledger', label: 'Grand livre détaillé par une autre nature', section: 'ledgers', status: 'inactive', reason: 'Autre nature analytique à définir dans le module séparé.' },
+            { id: 'analytic-center-situation', label: 'Situation des centres', section: 'situations', status: 'inactive', reason: 'État réservé au module distinct de comptabilité analytique.' },
+            { id: 'analytic-other-nature-situation', label: 'Situation détaillée par une autre nature', section: 'situations', status: 'inactive', reason: 'Autre nature analytique à définir dans le module séparé.' },
+            { id: 'analytic-general-account-balance', label: 'Balance détaillée par comptes généraux', section: 'balances', status: 'inactive', reason: 'Aucune imputation analytique n’est créée ou calculée dans ce parcours général.' }
+          ]
+        },
         { id: 'supplier-orders', label: 'Commandes aux fournisseurs (analytique)', status: 'inactive', reason: 'Fonction analytique / achats hors du périmètre actuel.' },
-        { id: 'budget', label: 'Budget', status: 'review', reason: 'Périmètre à préciser ; reste inactif jusqu’à votre décision.' },
+        {
+          id: 'budget', label: 'Budget', status: 'planned', reason: 'Les dix états demandés sont organisés par budgets, commandes/engagements, réalisations et disponibilités. Le prototype ne possède pas encore de registre budgétaire ; règles et affichages attendent vos captures.',
+          children: [
+            { id: 'budget-entered', label: 'Budgets saisis', section: 'budgets', status: 'planned', reason: 'Aucun budget n’est enregistré ; l’exercice, la période, les axes et les colonnes seront définis à partir de votre capture.' },
+            { id: 'budget-orders-followup', label: 'Suivi par commandes', section: 'commitments', status: 'planned', reason: 'Aucune commande fournisseur ni engagement budgétaire n’est enregistré dans ce parcours.' },
+            { id: 'budget-orders-by-line', label: 'Détail des commandes sur chaque ligne budgétaire', section: 'commitments', status: 'planned', reason: 'Le rattachement commande-ligne budgétaire et son détail attendent vos captures et un modèle de données confirmé.' },
+            { id: 'budget-orders-outside', label: 'Détail des commandes hors budget', section: 'commitments', status: 'planned', reason: 'La définition d’une commande hors budget et son contrôle seront confirmés à partir de votre capture.' },
+            { id: 'budget-realizations-followup', label: 'Suivi des réalisations', section: 'realisations', status: 'planned', reason: 'Aucune réalisation n’est rapprochée d’un budget dans le prototype ; aucun taux d’exécution n’est simulé.' },
+            { id: 'budget-realizations-by-line', label: 'Détail des réalisations de chaque ligne budgétaire', section: 'realisations', status: 'planned', reason: 'Le lien entre pièce comptable, ligne budgétaire et règle d’imputation attend vos captures.' },
+            { id: 'budget-outside-realizations-total', label: 'Cumul des réalisations hors budget', section: 'realisations', status: 'planned', reason: 'La règle de classement et de cumul des réalisations hors budget reste à confirmer.' },
+            { id: 'budget-outside-realizations-detail', label: 'Détail des réalisations hors budget', section: 'realisations', status: 'planned', reason: 'La sélection, les justificatifs et le niveau de détail attendent votre capture.' },
+            { id: 'budget-available-balance', label: 'Reste disponible sur engagements et réalisations', section: 'availability', status: 'planned', reason: 'Aucun calcul de disponible n’est effectué sans budgets, engagements et réalisations rapprochés.' },
+            { id: 'budget-available-not-committed', label: 'Reste disponible sur engagements et réalisations non engagées', section: 'availability', status: 'planned', reason: 'La distinction entre engagé et non engagé, ainsi que le calcul du reste, attendent vos règles et captures.' }
+          ]
+        },
         { id: 'accounts-payable', label: 'Comptes à payer (analytique)', status: 'inactive', reason: 'Élément fourni comme analytique dans votre nomenclature.' },
         { id: 'accounts-receivable', label: 'Comptes à recevoir (analytique)', status: 'inactive', reason: 'Élément fourni comme analytique dans votre nomenclature.' },
         { id: 'matching', label: 'Lettrage', status: 'planned', reason: 'Édition générale à construire avec le lettrage des auxiliaires.' },

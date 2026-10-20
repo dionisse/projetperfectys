@@ -7818,29 +7818,45 @@
     if (positionInput) positionInput.addEventListener('input', function () { ui.openingBalances.position = positionInput.value; });
   }
 
-  function journalReportCatalog(children, groupId, tabId) {
-    var sections = [
-      { id: 'pieces', title: 'Suivi et contrôle des pièces', description: 'Explorer les lignes, repérer les situations à contrôler et consulter les cumuls de saisie.' },
-      { id: 'cumuls', title: 'Cumuls et ventilations', description: 'Consulter les montants selon le niveau de compte ou l’axe de ventilation à confirmer.' },
-      { id: 'imputation', title: 'Imputation', description: 'Accéder aux fiches et restitutions associées à l’imputation.' }
-    ];
+  function editionReportCatalog(children, groupId, tabId, tabLabel) {
+    var sectionMap = {
+      pieces: { title: 'Suivi et contrôle des pièces', description: 'Explorer les lignes, repérer les situations à contrôler et consulter les cumuls de saisie.' },
+      cumuls: { title: 'Cumuls et ventilations', description: 'Consulter les montants selon le niveau de compte ou l’axe de ventilation à confirmer.' },
+      imputation: { title: 'Imputation', description: 'Accéder aux fiches et restitutions associées à l’imputation.' },
+      balances: { title: 'Balances, ouvertures et situations', description: 'États de synthèse et positions comptables à préciser selon le dossier.' },
+      ledgers: { title: 'Grands livres et historiques', description: 'Détails chronologiques, reports et comparaisons d’exercices.' },
+      analysis: { title: 'Analyses et contreparties', description: 'Détails de contrepartie et ventilations ; les états analytiques restent séparés.' },
+      controls: { title: 'Relevés et contrôles de tiers', description: 'Restitutions à définir sans attribuer au tiers des mouvements non identifiés.' },
+      exchange: { title: 'Devises et écarts de change', description: 'Éditions à construire après définition des montants et règles de conversion.' },
+      situations: { title: 'Situations analytiques', description: 'États appartenant au module de comptabilité analytique séparé.' },
+      budgets: { title: 'Budgets', description: 'Budgets de référence et paramètres de saisie.' },
+      commitments: { title: 'Commandes et engagements', description: 'Suivi des commandes par ligne budgétaire et hors budget.' },
+      realisations: { title: 'Réalisations', description: 'Rapprochement des réalisations avec les lignes budgétaires.' },
+      availability: { title: 'Disponibilités budgétaires', description: 'Restes disponibles à calculer après validation des engagements et réalisations.' }
+    };
+    var sectionOrder = ['pieces', 'cumuls', 'imputation', 'balances', 'ledgers', 'analysis', 'controls', 'exchange', 'situations', 'budgets', 'commitments', 'realisations', 'availability'];
+    var sections = sectionOrder.map(function (id) { return Object.assign({ id: id }, sectionMap[id]); });
     var cards = sections.map(function (section) {
       var sectionChildren = (children || []).filter(function (child) { return child.section === section.id; });
       if (!sectionChildren.length) return '';
-      return '<section class="journal-report-section" aria-labelledby="journal-report-section-' + esc(section.id) + '">' +
-        '<header class="journal-report-section-head"><div><h4 id="journal-report-section-' + esc(section.id) + '">' + esc(section.title) + '</h4><p>' + esc(section.description) + '</p></div><span>' + sectionChildren.length + ' élément(s)</span></header>' +
-        '<div class="journal-report-card-grid">' + sectionChildren.map(function (child, index) {
+      return '<section class="edition-report-section" aria-labelledby="edition-report-section-' + esc(section.id) + '">' +
+        '<header class="edition-report-section-head"><div><h4 id="edition-report-section-' + esc(section.id) + '">' + esc(section.title) + '</h4><p>' + esc(section.description) + '</p></div><span>' + sectionChildren.length + ' élément(s)</span></header>' +
+        '<div class="edition-report-card-grid">' + sectionChildren.map(function (child, index) {
           var disabled = child.status === 'inactive';
-          var cardContent = '<span class="journal-report-card-top"><span class="journal-report-card-index">' + String(index + 1).padStart(2, '0') + '</span>' + menuStatusBadge(child.status) + '</span>' +
-            '<strong class="journal-report-card-title">' + esc(child.label) + '</strong>' +
-            '<span class="journal-report-card-description">' + esc(child.reason || '') + '</span>' +
-            '<span class="journal-report-card-cta">' + (disabled ? 'Hors parcours général' : (child.status === 'partial' ? 'Ouvrir la vue existante' : 'Voir le périmètre')) + (disabled ? '' : ' <span aria-hidden="true">→</span>') + '</span>';
+          var cardContent = '<span class="edition-report-card-top"><span class="edition-report-card-index">' + String(index + 1).padStart(2, '0') + '</span>' + menuStatusBadge(child.status) + '</span>' +
+            '<strong class="edition-report-card-title">' + esc(child.label) + '</strong>' +
+            '<span class="edition-report-card-description">' + esc(child.reason || '') + '</span>' +
+            '<span class="edition-report-card-cta">' + (disabled ? 'Hors parcours général' : (child.status === 'partial' ? 'Ouvrir la vue existante' : 'Voir le périmètre')) + (disabled ? '' : ' <span aria-hidden="true">→</span>') + '</span>';
           return disabled
-            ? '<article class="journal-report-card is-disabled" aria-disabled="true">' + cardContent + '</article>'
-            : '<a class="journal-report-card" href="' + esc(accountingMenuHash(groupId, tabId, child.id)) + '">' + cardContent + '</a>';
+            ? '<article class="edition-report-card is-disabled" aria-disabled="true">' + cardContent + '</article>'
+            : '<a class="edition-report-card" href="' + esc(accountingMenuHash(groupId, tabId, child.id)) + '">' + cardContent + '</a>';
         }).join('') + '</div></section>';
     }).join('');
-    return '<div class="journal-report-catalog"><div class="journal-report-catalog-intro"><span class="page-kicker">ÉDITIONS · JOURNAUX</span><strong>Choisissez une édition ou un contrôle</strong><p>Les états sont regroupés par usage. La vue des lignes saisies existe déjà ; les autres paramétrages et rendus seront finalisés à partir de vos captures.</p></div>' + cards + '</div>';
+    var allInactive = (children || []).length && children.every(function (child) { return child.status === 'inactive'; });
+    var intro = allInactive
+      ? 'Les éléments conservent la nomenclature demandée, mais tous restent désactivés dans la comptabilité générale.'
+      : 'Les états sont regroupés par usage. Les vues déjà disponibles ouvrent les écrans existants ; les autres paramètres et restitutions seront affinés à partir de vos captures.';
+    return '<div class="edition-report-catalog"><div class="edition-report-catalog-intro"><span class="page-kicker">ÉDITIONS · ' + esc(String(tabLabel || '').toLocaleUpperCase('fr')) + '</span><strong>Choisissez un état ou un contrôle</strong><p>' + esc(intro) + '</p></div>' + cards + '</div>';
   }
 
   function viewUnbalancedJournalPieces() {
@@ -7863,13 +7879,13 @@
     var rows = entries.map(function (entry) {
       var total = S.totals(entry.lines || []);
       var difference = total.debit - total.credit;
-      return '<tr><td>' + esc(dateLabel(entry.date)) + '</td><td><strong>' + esc(entry.reference || '—') + '</strong></td><td>' + esc(journalDisplayName(S.journal(entry.journal)) || entry.journal) + '</td><td class="journal-report-description-cell">' + esc(entry.description || '—') + '</td><td>' + (entry.lines || []).length + '</td><td class="num">' + esc(amount(total.debit)) + '</td><td class="num">' + esc(amount(total.credit)) + '</td><td class="num journal-report-difference">' + esc(amount(Math.abs(difference))) + (difference > 0 ? ' D' : ' C') + '<small>' + (entry.status === 'posted' ? 'Validée · à vérifier' : 'Brouillon') + '</small></td></tr>';
+      return '<tr><td>' + esc(dateLabel(entry.date)) + '</td><td><strong>' + esc(entry.reference || '—') + '</strong></td><td>' + esc(journalDisplayName(S.journal(entry.journal)) || entry.journal) + '</td><td class="edition-report-description-cell">' + esc(entry.description || '—') + '</td><td>' + (entry.lines || []).length + '</td><td class="num">' + esc(amount(total.debit)) + '</td><td class="num">' + esc(amount(total.credit)) + '</td><td class="num edition-report-difference">' + esc(amount(Math.abs(difference))) + (difference > 0 ? ' D' : ' C') + '<small>' + (entry.status === 'posted' ? 'Validée · à vérifier' : 'Brouillon') + '</small></td></tr>';
     }).join('');
     var alert = postedCount
       ? '<div class="alert error journal-unbalanced-posted-warning"><div><strong>' + postedCount + ' pièce(s) validée(s) apparaissent déséquilibrées.</strong> Les pièces validées sont normalement immuables ; ce signalement ne les corrige pas. Vérifiez la base et les justificatifs.</div></div>'
       : '<div class="alert info journal-unbalanced-posted-warning"><div>Contrôle en lecture seule : les débits et crédits sont comparés pièce par pièce dans le cycle du dossier. Les brouillons sont signalés sans être validés ni modifiés.</div></div>';
-    return '<div class="journal-report-detail-view journal-unbalanced-view">' +
-      '<a class="btn btn-ghost btn-sm journal-report-back" href="' + esc(accountingMenuHash('editions', 'journals')) + '">← Tous les éléments Journaux</a>' +
+    return '<div class="edition-report-detail-view journal-unbalanced-view">' +
+      '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(accountingMenuHash('editions', 'journals')) + '">← Tous les éléments Journaux</a>' +
       pageHeader('Pièces déséquilibrées', 'Pièces du cycle dont les débits et crédits diffèrent, filtrées par journal.', '<button type="button" class="btn btn-ghost" data-action="print">⎙ Imprimer</button>') +
       '<div class="card"><div class="panel">' +
         '<div class="filter-row journal-unbalanced-filter-row"><div class="field"><label for="journal-unbalanced-filter">Journal</label><select id="journal-unbalanced-filter" data-filter="journal:journal">' + journalOptions(filter.journal, true, true, true) + '</select></div><div class="field grow journal-unbalanced-cycle"><span>Cycle du dossier</span><strong>' + esc(dateLabel(dossier.cycleStart)) + ' — ' + esc(dateLabel(dossier.cycleEnd)) + '</strong></div></div>' +
@@ -7882,29 +7898,47 @@
       '</div></div></div>';
   }
 
-  function journalReportChildView(child, groupId, tabId) {
-    if (child.id === 'journal-lines') {
-      return '<div class="journal-report-detail-view"><a class="btn btn-ghost btn-sm journal-report-back" href="' + esc(accountingMenuHash(groupId, tabId)) + '">← Tous les éléments Journaux</a>' + viewJournal() + '</div>';
-    }
+  function editionReportChildView(child, groupId, tabId) {
+    var backLabel = groupId === 'editions' && tabId === 'journals' ? 'Tous les éléments Journaux' : 'Tous les états';
+    var backLink = '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(accountingMenuHash(groupId, tabId)) + '">← ' + esc(backLabel) + '</a>';
+    if (child.id === 'journal-lines') return '<div class="edition-report-detail-view">' + backLink + viewJournal() + '</div>';
     if (child.id === 'journal-unbalanced-pieces') return viewUnbalancedJournalPieces();
+    if (child.id === 'general-balance') return '<div class="edition-report-detail-view">' + backLink + viewBalance() + '</div>';
+    if (child.id === 'general-ledger') return '<div class="edition-report-detail-view">' + backLink + viewLedger() + '</div>';
     var analytic = child.status === 'inactive';
     var noticeTitle = analytic ? 'Comptabilité analytique séparée' : 'Sous-élément créé · écran à préciser';
     var notice = analytic
-      ? 'Cet élément reste visible pour conserver la structure demandée, mais il est désactivé dans la comptabilité générale. Aucun cumul analytique n’est calculé ici.'
+      ? 'Cet élément reste visible pour conserver la nomenclature demandée, mais il est désactivé dans la comptabilité générale. Aucun cumul analytique n’est calculé ici.'
       : 'La navigation et la place de cet état sont créées. Nous attendrons votre capture de paramétrage et de résultat avant d’ajouter des filtres, des règles de regroupement ou des calculs.';
-    var extra = child.id === 'journal-modified-pieces'
-      ? '<p class="journal-report-placeholder-note">Dans le prototype actuel, une pièce validée est immuable et aucun journal de versions après première saisie n’est conservé.</p>'
-      : (child.id === 'journal-third-party-totals'
-        ? '<p class="journal-report-placeholder-note">Les pièces ne comportent pas encore d’identifiant auxiliaire individuel ; aucun solde par fournisseur ou client ne sera présenté comme réel.</p>'
-        : (child.id === 'journal-currency-totals'
-          ? '<p class="journal-report-placeholder-note">Le modèle ne porte pas encore de montant en devise ni de taux de conversion ; aucun équivalent XOF n’est calculé.</p>'
-          : ''));
-    return '<div class="journal-report-placeholder">' +
-      '<a class="btn btn-ghost btn-sm journal-report-back" href="' + esc(accountingMenuHash(groupId, tabId)) + '">← Tous les éléments Journaux</a>' +
-      '<section class="journal-report-placeholder-card"><div class="journal-report-placeholder-heading"><div><span class="page-kicker">' + esc(child.section === 'pieces' ? 'SUIVI ET CONTRÔLE' : (child.section === 'cumuls' ? 'CUMULS ET VENTILATIONS' : 'IMPUTATION')) + '</span><h4>' + esc(child.label) + '</h4></div>' + menuStatusBadge(child.status) + '</div>' +
-        '<p class="journal-report-placeholder-description">' + esc(child.reason || '') + '</p>' +
-        '<div class="alert ' + (analytic ? 'info' : 'warning') + ' journal-report-placeholder-alert"><div><strong>' + esc(noticeTitle) + '</strong><br>' + esc(notice) + '</div></div>' +
-        extra +
+    var extra = '';
+    if (child.id === 'journal-modified-pieces') {
+      extra = 'Dans le prototype actuel, une pièce validée est immuable et aucun journal de versions après première saisie n’est conservé.';
+    } else if (child.id === 'journal-third-party-totals' || child.section === 'controls' || child.id.indexOf('third-party-') === 0) {
+      extra = 'Les pièces ne comportent pas encore d’identifiant auxiliaire individuel ; aucun solde ni mouvement ne sera attribué à un tiers comme s’il était confirmé.';
+    } else if (child.id.indexOf('currency-') === 0 || child.id.indexOf('foreign-currency') === 0) {
+      extra = 'Le modèle ne porte pas encore de montants en devise distincts ni de taux de conversion ; aucun équivalent XOF ni écart de change n’est calculé.';
+    } else if (child.id.indexOf('budget-') === 0) {
+      extra = 'Aucun registre de budget, de commande engagée ou de réalisation rapprochée n’est enregistré ; aucun disponible ni taux d’exécution n’est simulé.';
+    } else if (child.id === 'general-aged-balance') {
+      extra = 'Aucun registre de factures/règlements avec échéances et soldes ouverts n’est disponible pour calculer une ancienneté fiable.';
+    } else if (child.id === 'general-multiyear-history') {
+      extra = 'Les exercices sont stockés dans des dossiers distincts ; aucune série pluriannuelle n’est agrégée automatiquement.';
+    } else if (child.id === 'general-opening-balance' || child.id === 'general-opening-journal' || child.id.indexOf('third-party-opening') === 0 || child.id.indexOf('currency-opening') === 0) {
+      extra = 'Les reports restent dans le registre Reports à nouveau, séparé des écritures de journal ; cette carte ne les modifie pas.';
+    } else if (child.id.indexOf('general-counterpart-') === 0) {
+      extra = 'Le critère de contrepartie par pièce, notamment pour les pièces à plusieurs lignes, reste à confirmer avant tout cumul.';
+    }
+    var sectionLabels = {
+      pieces: 'SUIVI ET CONTRÔLE DES PIÈCES', cumuls: 'CUMULS ET VENTILATIONS', imputation: 'IMPUTATION',
+      balances: 'BALANCES, OUVERTURES ET SITUATIONS', ledgers: 'GRANDS LIVRES ET HISTORIQUES', analysis: 'ANALYSES ET CONTREPARTIES',
+      controls: 'RELEVÉS ET CONTRÔLES DE TIERS', exchange: 'DEVISES ET ÉCARTS DE CHANGE', situations: 'SITUATIONS ANALYTIQUES',
+      budgets: 'BUDGETS', commitments: 'COMMANDES ET ENGAGEMENTS', realisations: 'RÉALISATIONS', availability: 'DISPONIBILITÉS BUDGÉTAIRES'
+    };
+    return '<div class="edition-report-placeholder">' + backLink +
+      '<section class="edition-report-placeholder-card"><div class="edition-report-placeholder-heading"><div><span class="page-kicker">' + esc(sectionLabels[child.section] || 'ÉDITION') + '</span><h4>' + esc(child.label) + '</h4></div>' + menuStatusBadge(child.status) + '</div>' +
+        '<p class="edition-report-placeholder-description">' + esc(child.reason || '') + '</p>' +
+        '<div class="alert ' + (analytic ? 'info' : 'warning') + ' edition-report-placeholder-alert"><div><strong>' + esc(noticeTitle) + '</strong><br>' + esc(notice) + '</div></div>' +
+        (extra ? '<p class="edition-report-placeholder-note">' + esc(extra) + '</p>' : '') +
         '<p class="exchange-footnote">Aucune donnée ni règle métier n’est simulée pour cet état en attendant vos références visuelles.</p>' +
       '</section></div>';
   }
@@ -7941,25 +7975,25 @@
     var isJournalEntrySubmenu = group.id === 'saisie' && tab.id === 'journal-entry';
     var isCashOperationsSubmenu = group.id === 'saisie' && tab.id === 'live-cash';
     var isAccountMovementsSubmenu = group.id === 'saisie' && tab.id === 'account-movements';
-    var isJournalReportsMenu = group.id === 'editions' && tab.id === 'journals';
-    var actions = isJournalEntrySubmenu ? '' : (tab.actions || []).map(function (action) { return menuActionLink(action, tab.status); }).join('');
-    var childList = isJournalReportsMenu ? '' : menuChildList(tab.children, tab.reason, group.id, tab.id, selectedChild && selectedChild.id);
+    var isEditionReportsMenu = group.id === 'editions' && Array.isArray(tab.children) && tab.children.length > 0;
+    var actions = isJournalEntrySubmenu || isEditionReportsMenu ? '' : (tab.actions || []).map(function (action) { return menuActionLink(action, tab.status); }).join('');
+    var childList = isEditionReportsMenu ? '' : menuChildList(tab.children, tab.reason, group.id, tab.id, selectedChild && selectedChild.id);
     var phoneContext = phone
       ? '<span class="menu-phone-label">CONSULTATION TÉLÉPHONE · LECTURE SEULE</span>'
       : '';
     var irreversible = tab.irreversible
       ? '<div class="alert warning menu-irreversible-note"><strong>Attention : opération irréversible.</strong> Une copie complète du dossier devra être exportée et confirmée avant toute activation de cette fonction.</div>'
       : '';
-    var details = isJournalReportsMenu ? '' : (selectedChild && selectedChild.reason
+    var details = isEditionReportsMenu ? '' : (selectedChild && selectedChild.reason
       ? '<p class="menu-item-reason">' + esc(selectedChild.reason) + '</p>'
       : (!isJournalEntrySubmenu && !isCashOperationsSubmenu && !isAccountMovementsSubmenu && tab.reason
         ? '<p class="menu-item-reason">' + esc(tab.reason) + '</p>'
         : ''));
     var exchangeFeature = '';
-    if (isJournalReportsMenu) {
+    if (isEditionReportsMenu) {
       exchangeFeature = selectedChild
-        ? journalReportChildView(selectedChild, group.id, tab.id)
-        : journalReportCatalog(tab.children, group.id, tab.id);
+        ? editionReportChildView(selectedChild, group.id, tab.id)
+        : editionReportCatalog(tab.children, group.id, tab.id, tab.label);
     } else if (isJournalEntrySubmenu) {
       exchangeFeature = viewEntryJournalSelector();
     } else if (group.id === 'saisie' && tab.id === 'live-cash') {

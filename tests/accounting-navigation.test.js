@@ -63,6 +63,40 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Cumul par centres analytiques',
   'Cumul par devises',
   'Fiche d’imputation',
+  'Balance générale des comptes',
+  'Balance de synthèse',
+  'Balance âgée',
+  'Grand livre des comptes',
+  'Historique des comptes sur plusieurs exercices',
+  'Journal des reports',
+  'Balance d’ouverture',
+  'Situation des comptes',
+  'Balance détaillée analytiquement',
+  'Détail des contreparties d’un compte',
+  'Cumul des contreparties d’un compte',
+  'Balance des tiers',
+  'Grand livre',
+  'Décomposition des soldes par nature (clients/fournisseurs)',
+  'Relevé de compte des tiers',
+  'Justification de solde',
+  'Balance',
+  'Écarts de change',
+  'Balance des centres',
+  'Balance détaillée par une autre nature',
+  'Grand livre détaillé par une autre nature',
+  'Situation des centres',
+  'Situation détaillée par une autre nature',
+  'Balance détaillée par comptes généraux',
+  'Budgets saisis',
+  'Suivi par commandes',
+  'Détail des commandes sur chaque ligne budgétaire',
+  'Détail des commandes hors budget',
+  'Suivi des réalisations',
+  'Détail des réalisations de chaque ligne budgétaire',
+  'Cumul des réalisations hors budget',
+  'Détail des réalisations hors budget',
+  'Reste disponible sur engagements et réalisations',
+  'Reste disponible sur engagements et réalisations non engagées',
   'Comptes en devises',
   'États analytiques',
   'Comptes à payer (analytique)',
@@ -172,10 +206,27 @@ assert.equal(findTab('editions', 'journals').children.find(child => child.id ===
 assert.equal(findTab('editions', 'journals').children.find(child => child.id === 'journal-analytic-center-totals').status, 'inactive');
 assert.match(appSource, /function viewUnbalancedJournalPieces\(\)[\s\S]*total\.debit !== total\.credit/);
 assert.match(appSource, /child\.id === 'journal-unbalanced-pieces'\) return viewUnbalancedJournalPieces\(\)/);
-assert.match(appSource, /function journalReportCatalog\([\s\S]*Suivi et contrôle des pièces[\s\S]*Cumuls et ventilations[\s\S]*Imputation/);
-assert.match(menuRenderer, /isJournalReportsMenu[\s\S]*journalReportChildView\(selectedChild/);
-assert.equal(findTab('editions', 'general-accounts').status, 'active');
+assert.match(appSource, /function editionReportCatalog\([\s\S]*Balances, ouvertures et situations[\s\S]*Grands livres et historiques[\s\S]*Disponibilités budgétaires/);
+assert.match(menuRenderer, /isEditionReportsMenu[\s\S]*editionReportChildView\(selectedChild/);
+assert.equal(findTab('editions', 'general-accounts').status, 'mixed');
+assert.deepEqual(findTab('editions', 'general-accounts').children.map(child => child.label), [
+  'Balance générale des comptes', 'Balance de synthèse', 'Balance âgée', 'Balance d’ouverture', 'Situation des comptes',
+  'Grand livre des comptes', 'Historique des comptes sur plusieurs exercices', 'Journal des reports',
+  'Balance détaillée analytiquement', 'Détail des contreparties d’un compte', 'Cumul des contreparties d’un compte'
+]);
+assert.equal(findTab('editions', 'general-accounts').children.find(child => child.id === 'general-balance').status, 'partial');
+assert.equal(findTab('editions', 'general-accounts').children.find(child => child.id === 'general-ledger').status, 'partial');
+assert.equal(findTab('editions', 'general-accounts').children.find(child => child.id === 'general-analytic-balance').status, 'inactive');
+assert.equal(findTab('editions', 'third-parties').children.length, 7);
+assert.equal(findTab('editions', 'foreign-currency').children.length, 5);
 assert.equal(findTab('editions', 'analytic-statements').status, 'inactive');
+assert.equal(findTab('editions', 'analytic-statements').children.length, 7);
+assert.ok(findTab('editions', 'analytic-statements').children.every(child => child.status === 'inactive'));
+assert.equal(findTab('editions', 'supplier-orders').status, 'inactive');
+assert.equal(findTab('editions', 'budget').children.length, 10);
+assert.equal(findTab('editions', 'budget').status, 'planned');
+assert.equal(['general-accounts', 'third-parties', 'foreign-currency', 'analytic-statements', 'budget']
+  .reduce((total, tabId) => total + findTab('editions', tabId).children.length, 0), 40);
 assert.equal(findTab('definitions', 'responsibility-centers').status, 'partial');
 assert.equal(findTab('outils', 'calculator').status, 'inactive');
 assert.equal(findTab('outils', 'screenshot').status, 'inactive');
@@ -189,7 +240,8 @@ assert.equal(findTab('fin-exercice', 'period-close').status, 'partial');
 assert.equal(findTab('fin-exercice', 'period-close').actions[0].route, 'periods');
 assert.equal(findTab('fin-exercice', 'definitive-close').irreversible, true);
 assert.equal(findTab('fin-exercice', 'definitive-close').status, 'planned');
-assert.deepEqual(findTab('editions', 'general-accounts').actions.map(action => action.route), ['balance', 'ledger']);
+assert.match(appSource, /child\.id === 'general-balance'[\s\S]*viewBalance\(\)/);
+assert.match(appSource, /child\.id === 'general-ledger'[\s\S]*viewLedger\(\)/);
 
 assert.match(appSource, /function accountingMenuHash\(groupId, tabId, childId\)[\s\S]*return childId \? hash \+ '&c='/,
   'le lien d’un enfant conserve son identifiant dans la route');
