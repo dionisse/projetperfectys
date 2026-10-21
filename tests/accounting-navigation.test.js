@@ -332,6 +332,12 @@ assert.equal(findTab('fin-exercice', 'period-close').status, 'partial');
 assert.equal(findTab('fin-exercice', 'period-close').actions[0].route, 'periods');
 assert.equal(findTab('fin-exercice', 'definitive-close').irreversible, true);
 assert.equal(findTab('fin-exercice', 'definitive-close').status, 'planned');
+assert.equal(findTab('parametres', 'dossier-configuration').label, 'Configuration de la Comptabilité');
+assert.equal(findTab('parametres', 'dossier-configuration').actions[0].route, 'settings', 'les sauvegardes restent accessibles séparément');
+assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'dossier-configuration'[\s\S]*viewAccountingConfiguration\(\)/);
+assert.match(appSource, /function viewAccountingConfiguration\(\)[\s\S]*accounting\.configure[\s\S]*Exercice en cours/);
+assert.match(appSource, /function bindAccountingConfiguration\(\)[\s\S]*updateAccountingConfiguration/);
+assert.match(appSource, /data-action="export-json"/);
 assert.match(appSource, /child\.id === 'general-balance'[\s\S]*viewBalance\(\)/);
 assert.match(appSource, /child\.id === 'general-ledger'[\s\S]*viewLedger\(\)/);
 

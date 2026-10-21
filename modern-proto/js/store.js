@@ -17,6 +17,8 @@
   var DEFAULT_FOLDER_NAME = 'Entreprise de démonstration';
   var DEFAULT_ACCOUNTING_TYPE = 'Comptabilité révisée SYSCOHADA';
   var DEFAULT_ACCOUNTING_TYPE_CODE = 'COR';
+  var DEFAULT_ACCOUNTING_FRAMEWORK = 'SYSCOHADA révisé';
+  var DEFAULT_ACCOUNTING_COUNTRY = 'BENIN';
   var EXERCICE = 2026;
 
   var JOURNAUX = [
@@ -963,6 +965,62 @@
     return normalizeCode(typeCode) + '-' + normalizeCode(clientCode) + String(exerciseYear);
   }
 
+  function normalizedOptionalInteger(value, min, max) {
+    if (value == null || String(value).trim() === '') return null;
+    var number = Number(value);
+    return Number.isInteger(number) && number >= min && number <= max ? number : null;
+  }
+
+  function normalizeSettlementSettings(value) {
+    value = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    return {
+      minimumDelayDays: normalizedOptionalInteger(value.minimumDelayDays, 0, 3650),
+      earliestDayOfMonth: normalizedOptionalInteger(value.earliestDayOfMonth, 1, 31),
+      settlementOn: String(value.settlementOn || '').trim().slice(0, 80)
+    };
+  }
+
+  function defaultAccountingConfiguration(cycleStart, cycleEnd) {
+    return {
+      framework: DEFAULT_ACCOUNTING_FRAMEWORK,
+      country: DEFAULT_ACCOUNTING_COUNTRY,
+      specificOrganization: 'Aucun',
+      entryAllowedUntil: cycleEnd,
+      decimalPlaces: 0,
+      numberingPeriod: 'year',
+      automaticClosingMonths: null,
+      supplierSettlement: normalizeSettlementSettings(null),
+      otherPayablesSettlement: normalizeSettlementSettings(null),
+      supplierOrdersEnabled: false,
+      euroStatementsEnabled: false
+    };
+  }
+
+  function normalizeAccountingConfiguration(value, cycleStart, cycleEnd) {
+    var source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    var defaults = defaultAccountingConfiguration(cycleStart, cycleEnd);
+    var allowedUntil = String(source.entryAllowedUntil || defaults.entryAllowedUntil);
+    if (!parseIsoDate(allowedUntil) || allowedUntil < cycleStart || allowedUntil > cycleEnd) allowedUntil = cycleEnd;
+    var decimalPlaces = Number(source.decimalPlaces);
+    if (!Number.isInteger(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 4) decimalPlaces = 0;
+    var numberingPeriod = ['day', 'month', 'year', 'exercise'].indexOf(source.numberingPeriod) !== -1
+      ? source.numberingPeriod
+      : 'year';
+    return {
+      framework: String(source.framework || defaults.framework).trim().slice(0, 100) || defaults.framework,
+      country: String(source.country || defaults.country).trim().slice(0, 80) || defaults.country,
+      specificOrganization: String(source.specificOrganization || defaults.specificOrganization).trim().slice(0, 120) || defaults.specificOrganization,
+      entryAllowedUntil: allowedUntil,
+      decimalPlaces: decimalPlaces,
+      numberingPeriod: numberingPeriod,
+      automaticClosingMonths: normalizedOptionalInteger(source.automaticClosingMonths, 1, 120),
+      supplierSettlement: normalizeSettlementSettings(source.supplierSettlement),
+      otherPayablesSettlement: normalizeSettlementSettings(source.otherPayablesSettlement),
+      supplierOrdersEnabled: source.supplierOrdersEnabled === true,
+      euroStatementsEnabled: source.euroStatementsEnabled === true
+    };
+  }
+
   function defaultDossier() {
     return {
       id: DEFAULT_FOLDER_ID,
@@ -979,6 +1037,7 @@
       exerciseYear: EXERCICE,
       cycleStart: '2026-01-01',
       cycleEnd: '2026-12-31',
+      accountingConfiguration: defaultAccountingConfiguration('2026-01-01', '2026-12-31'),
       reference: 'COR-DEM2026',
       seeded: true
     };
@@ -1014,6 +1073,7 @@
       exerciseYear: exerciseYear,
       cycleStart: cycleStart,
       cycleEnd: cycleEnd,
+      accountingConfiguration: normalizeAccountingConfiguration(record && record.accountingConfiguration, cycleStart, cycleEnd),
       reference: String(record && record.reference || referenceFor(accountingTypeCode, clientCode, exerciseYear)),
       seeded: record && record.seeded !== false
     };
@@ -1078,6 +1138,11 @@
     return clone(folderById(activeFolderId));
   }
 
+  function accountingConfiguration() {
+    var dossier = currentDossier();
+    return clone(dossier && dossier.accountingConfiguration || defaultAccountingConfiguration(dossier && dossier.cycleStart, dossier && dossier.cycleEnd));
+  }
+
   function parseIsoDate(value) {
     var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
     if (!match) return null;
@@ -1133,6 +1198,7 @@
       exerciseYear: exerciseYear,
       cycleStart: cycleStart,
       cycleEnd: cycleEnd,
+      accountingConfiguration: normalizeAccountingConfiguration(input.accountingConfiguration, cycleStart, cycleEnd),
       reference: reference,
       seeded: false
     };
@@ -1155,6 +1221,160 @@
       cycleStart: EXERCICE + '-01-01',
       cycleEnd: EXERCICE + '-12-31'
     });
+  }
+
+  function updateAccountingConfiguration(input) {
+    ensureFolderCatalog();
+    input = input || {};
+    var dossier = folderById(activeFolderId);
+    if (!dossier) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    var currentState = load();
+    if (recoveryIssue) return { ok: false, errors: ['Configuration bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+
+    var cycleStart = String(input.cycleStart == null ? dossier.cycleStart : input.cycleStart);
+    var cycleEnd = String(input.cycleEnd == null ? dossier.cycleEnd : input.cycleEnd);
+    var startDate = parseIsoDate(cycleStart);
+    var endDate = parseIsoDate(cycleEnd);
+    var errors = [];
+    if (!startDate || !endDate || endDate < startDate) errors.push('L’exercice doit préciser deux dates valides dans l’ordre chronologique.');
+    if (startDate && endDate && cyclePeriods(cycleStart, cycleEnd).length > 18) errors.push('Le cycle ne peut pas dépasser 18 mois dans cette version.');
+
+    var existingConfiguration = dossier.accountingConfiguration || defaultAccountingConfiguration(dossier.cycleStart, dossier.cycleEnd);
+    var suppliedConfiguration = input.accountingConfiguration || input.configuration || input;
+    var configurationInput = suppliedConfiguration && typeof suppliedConfiguration === 'object' && !Array.isArray(suppliedConfiguration)
+      ? suppliedConfiguration
+      : {};
+    var rawConfiguration = Object.assign({}, existingConfiguration, configurationInput);
+    rawConfiguration.supplierSettlement = Object.assign({}, existingConfiguration.supplierSettlement || {}, configurationInput.supplierSettlement || {});
+    rawConfiguration.otherPayablesSettlement = Object.assign({}, existingConfiguration.otherPayablesSettlement || {}, configurationInput.otherPayablesSettlement || {});
+
+    function requiredText(value, label, maxLength) {
+      var text = String(value == null ? '' : value).trim();
+      if (!text) errors.push(label + ' est obligatoire.');
+      else if (text.length > maxLength) errors.push(label + ' ne peut pas dépasser ' + maxLength + ' caractères.');
+      return text.slice(0, maxLength);
+    }
+
+    function optionalInteger(value, label, min, max) {
+      if (value == null || String(value).trim() === '') return null;
+      var number = Number(value);
+      if (!Number.isInteger(number) || number < min || number > max) {
+        errors.push(label + ' doit être un nombre entier compris entre ' + min + ' et ' + max + '.');
+        return null;
+      }
+      return number;
+    }
+
+    var framework = requiredText(rawConfiguration.framework, 'Le cadre comptable', 100);
+    var country = requiredText(rawConfiguration.country, 'Le pays', 80);
+    var specificOrganization = requiredText(rawConfiguration.specificOrganization, 'L’organisme spécifique', 120);
+    var entryAllowedUntil = String(rawConfiguration.entryAllowedUntil == null ? '' : rawConfiguration.entryAllowedUntil);
+    if (!parseIsoDate(entryAllowedUntil)) errors.push('La date limite de saisie doit être une date valide.');
+    else if (startDate && endDate && (entryAllowedUntil < cycleStart || entryAllowedUntil > cycleEnd)) {
+      errors.push('La date limite de saisie doit rester comprise dans le nouvel exercice.');
+    }
+    var decimalPlaces = Number(rawConfiguration.decimalPlaces);
+    if (!Number.isInteger(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 4) errors.push('Le nombre de décimales doit être un entier de 0 à 4.');
+    var numberingPeriod = String(rawConfiguration.numberingPeriod || '');
+    if (['day', 'month', 'year', 'exercise'].indexOf(numberingPeriod) === -1) errors.push('La périodicité de numérotation sélectionnée n’est pas reconnue.');
+    var automaticClosingMonths = optionalInteger(rawConfiguration.automaticClosingMonths, 'Le délai de clôture automatique', 1, 120);
+
+    function settlementSettings(value, label) {
+      value = value && typeof value === 'object' ? value : {};
+      var minimumDelayDays = optionalInteger(value.minimumDelayDays, label + ' · délai minimal', 0, 3650);
+      var earliestDayOfMonth = optionalInteger(value.earliestDayOfMonth, label + ' · jour du mois au plus tôt', 1, 31);
+      var settlementOn = String(value.settlementOn == null ? '' : value.settlementOn).trim();
+      if (settlementOn.length > 80) errors.push(label + ' · « Règlement le » ne peut pas dépasser 80 caractères.');
+      return { minimumDelayDays: minimumDelayDays, earliestDayOfMonth: earliestDayOfMonth, settlementOn: settlementOn.slice(0, 80) };
+    }
+
+    var supplierSettlement = settlementSettings(rawConfiguration.supplierSettlement, 'Fournisseurs');
+    var otherPayablesSettlement = settlementSettings(rawConfiguration.otherPayablesSettlement, 'Autres comptes à payer');
+    var nextConfiguration = {
+      framework: framework,
+      country: country,
+      specificOrganization: specificOrganization,
+      entryAllowedUntil: entryAllowedUntil,
+      decimalPlaces: decimalPlaces,
+      numberingPeriod: numberingPeriod,
+      automaticClosingMonths: automaticClosingMonths,
+      supplierSettlement: supplierSettlement,
+      otherPayablesSettlement: otherPayablesSettlement,
+      supplierOrdersEnabled: rawConfiguration.supplierOrdersEnabled === true || rawConfiguration.supplierOrdersEnabled === 'true',
+      euroStatementsEnabled: rawConfiguration.euroStatementsEnabled === true || rawConfiguration.euroStatementsEnabled === 'true'
+    };
+
+    if (errors.length) return { ok: false, errors: errors };
+
+    var configuredPrecisionFactor = Math.pow(10, decimalPlaces);
+    var precisionConflictEntry = (currentState.entries || []).find(function (entry) {
+      return (entry.lines || []).some(function (line) {
+        var debit = Number(line.debit) || 0;
+        var credit = Number(line.credit) || 0;
+        return Math.abs(debit - Math.round(debit * configuredPrecisionFactor) / configuredPrecisionFactor) > 1e-8 ||
+          Math.abs(credit - Math.round(credit * configuredPrecisionFactor) / configuredPrecisionFactor) > 1e-8;
+      });
+    });
+    if (precisionConflictEntry) {
+      return { ok: false, errors: ['Configuration inchangée : la pièce « ' + String(precisionConflictEntry.reference || precisionConflictEntry.id || 'sans référence') + ' » contient un montant avec plus de décimales que le nouveau paramètre. Choisissez une précision compatible avec l’historique.'] };
+    }
+
+    var cycleChanged = cycleStart !== dossier.cycleStart || cycleEnd !== dossier.cycleEnd;
+    if (cycleChanged) {
+      var outOfCycleEntry = (currentState.entries || []).find(function (entry) {
+        return !parseIsoDate(entry.date) || entry.date < cycleStart || entry.date > cycleEnd;
+      });
+      if (outOfCycleEntry) {
+        return { ok: false, errors: ['Exercice inchangé : la pièce « ' + String(outOfCycleEntry.reference || outOfCycleEntry.id || 'sans référence') + ' » datée du ' + String(outOfCycleEntry.date || '—') + ' sortirait du nouveau cycle. Élargissez le cycle ou vérifiez ces pièces avant de modifier les dates.'] };
+      }
+    }
+
+    var exerciseYear = startDate.getUTCFullYear();
+    var nextReference = dossier.reference;
+    if (exerciseYear !== dossier.exerciseYear) {
+      nextReference = referenceFor(dossier.accountingTypeCode, dossier.clientCode, exerciseYear);
+      if (folderCatalog.some(function (record) { return record.id !== dossier.id && record.reference.toLocaleLowerCase() === nextReference.toLocaleLowerCase(); })) {
+        return { ok: false, errors: ['La référence « ' + nextReference + ' » existe déjà pour un autre dossier client. Le cycle n’a pas été modifié.'] };
+      }
+    }
+
+    var previousCatalog = clone(folderCatalog);
+    var previousState = clone(currentState);
+    var nextDossier = Object.assign({}, dossier, {
+      exerciseYear: exerciseYear,
+      cycleStart: cycleStart,
+      cycleEnd: cycleEnd,
+      accountingConfiguration: nextConfiguration,
+      reference: nextReference
+    });
+    var dossierIndex = folderCatalog.findIndex(function (record) { return record.id === dossier.id; });
+    folderCatalog[dossierIndex] = nextDossier;
+    if (!saveFolderCatalog()) {
+      folderCatalog = previousCatalog;
+      return { ok: false, errors: ['Impossible d’enregistrer la configuration dans le navigateur. Les paramètres précédents sont conservés.'] };
+    }
+
+    if (cycleChanged) {
+      var periodStatuses = Object.create(null);
+      (currentState.periods || []).forEach(function (period) {
+        periodStatuses[period.year + '-' + String(period.month).padStart(2, '0')] = period.status;
+      });
+      currentState.cycleStart = cycleStart;
+      currentState.cycleEnd = cycleEnd;
+      currentState.exercise = exerciseYear;
+      currentState.periods = cyclePeriods(cycleStart, cycleEnd).map(function (period) {
+        var key = period.year + '-' + String(period.month).padStart(2, '0');
+        return { year: period.year, month: period.month, status: periodStatuses[key] === 'closed' ? 'closed' : 'open' };
+      });
+      if (!save()) {
+        state = previousState;
+        folderCatalog = previousCatalog;
+        saveFolderCatalog();
+        return { ok: false, errors: ['Impossible d’enregistrer le nouveau cycle comptable. La configuration précédente est restaurée.'] };
+      }
+    }
+
+    return { ok: true, errors: [], dossier: clone(nextDossier), folder: clone(nextDossier) };
   }
 
   function dossierStorageKey(dossierId) {
@@ -3802,10 +4022,16 @@
 
   /* ---------------- Écritures ---------------- */
   function nextReference(journalCode, date) {
-    var year = Number(String(date || '').slice(0, 4)) || EXERCICE;
+    var dateValue = String(date || '');
+    var year = Number(dateValue.slice(0, 4)) || EXERCICE;
+    var configuration = accountingConfiguration();
+    var periodKey = year;
+    if (configuration.numberingPeriod === 'day') periodKey = dateValue;
+    else if (configuration.numberingPeriod === 'month') periodKey = dateValue.slice(0, 7) || String(year);
+    else if (configuration.numberingPeriod === 'exercise') periodKey = String(exercise());
     var journalRecord = journal(journalCode);
     var referencePrefix = journalRecord ? journalRecord.referencePrefix || journalRecord.code : normalizeJournalCode(journalCode);
-    var prefix = referencePrefix + '-' + year + '-';
+    var prefix = referencePrefix + '-' + periodKey + '-';
     var max = 0;
     entries().forEach(function (e) {
       if (e.reference && e.reference.indexOf(prefix) === 0) {
@@ -3840,6 +4066,7 @@
     var journalRecord = journal(journalCode);
     var date = payload.date;
     var lines = payload.lines || [];
+    var configuration = accountingConfiguration();
 
     if (!reference) errors.push('La référence de la pièce est obligatoire.');
     if (!opts.ignoreUnique && st.entries.some(function (e) { return e.reference === reference && e.id !== payload.id; })) {
@@ -3868,6 +4095,7 @@
       var y = Number(date.slice(0, 4));
       var m = Number(date.slice(5, 7));
       if (date < st.cycleStart || date > st.cycleEnd) errors.push('La date doit se situer dans le cycle du dossier (' + st.cycleStart + ' au ' + st.cycleEnd + ').');
+      if (date > configuration.entryAllowedUntil) errors.push('La saisie comptable est autorisée jusqu’au ' + dateLabel(configuration.entryAllowedUntil) + ' selon le paramétrage du dossier.');
       if (periodStatus(y, m) === 'closed') {
         errors.push('La période ' + monthLabel(m) + ' ' + y + ' est clôturée.');
       }
@@ -3900,6 +4128,12 @@
       }
       if (debit < 0 || credit < 0) {
         errors.push(label + 'les montants doivent être positifs.');
+        return;
+      }
+      var precisionFactor = Math.pow(10, configuration.decimalPlaces);
+      if (Math.abs(debit - Math.round(debit * precisionFactor) / precisionFactor) > 1e-8 ||
+          Math.abs(credit - Math.round(credit * precisionFactor) / precisionFactor) > 1e-8) {
+        errors.push(label + 'les montants ne peuvent pas comporter plus de ' + configuration.decimalPlaces + ' décimale(s), conformément au paramétrage du dossier.');
         return;
       }
       if (debit > 0 && credit > 0) {
@@ -3997,6 +4231,10 @@
     var st = load();
     if (existing.date < st.cycleStart || existing.date > st.cycleEnd) {
       return { ok: false, errors: ['La date doit se situer dans le cycle du dossier (' + st.cycleStart + ' au ' + st.cycleEnd + ').'] };
+    }
+    var entryAllowedUntil = accountingConfiguration().entryAllowedUntil;
+    if (existing.date > entryAllowedUntil) {
+      return { ok: false, errors: ['La saisie comptable est autorisée jusqu’au ' + dateLabel(entryAllowedUntil) + ' selon le paramétrage du dossier.'] };
     }
     var year = Number(existing.date.slice(0, 4));
     var month = Number(existing.date.slice(5, 7));
@@ -4769,15 +5007,18 @@
 
   function monthLabel(month) { return MOIS[month - 1] || String(month); }
 
-  var nf = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
+  function configuredNumberFormat() {
+    var decimalPlaces = accountingConfiguration().decimalPlaces;
+    return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: decimalPlaces, maximumFractionDigits: decimalPlaces });
+  }
 
   function money(value) {
     var n = Number(value) || 0;
-    return nf.format(n) + '\u00A0XOF';
+    return configuredNumberFormat().format(n) + '\u00A0XOF';
   }
 
   function amount(value) {
-    return nf.format(Number(value) || 0);
+    return configuredNumberFormat().format(Number(value) || 0);
   }
 
   function dateLabel(iso) {
@@ -4799,6 +5040,8 @@
     EXERCICE: EXERCICE,
     dossiers: dossiers,
     currentDossier: currentDossier,
+    accountingConfiguration: accountingConfiguration,
+    updateAccountingConfiguration: updateAccountingConfiguration,
     currentStorageKey: currentFolderStorageKey,
     createDossier: createDossier,
     readDossierStateSnapshot: readDossierStateSnapshot,

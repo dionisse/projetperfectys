@@ -9,6 +9,7 @@
   // Vocabulaire initial de démonstration, à valider avec le métier.
   var ACCOUNTING_ACTIONS = [
     { id: 'module.view', label: 'Consulter le module' },
+    { id: 'accounting.configure', label: 'Modifier la configuration comptable du dossier' },
     { id: 'draft.create', label: 'Créer une écriture / un brouillon' },
     { id: 'draft.edit', label: 'Modifier un brouillon' },
     { id: 'draft.delete', label: 'Supprimer un brouillon' },

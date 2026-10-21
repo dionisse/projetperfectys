@@ -1,0 +1,37 @@
+/* Configuration comptable par dossier — formulaire natif et responsive. */
+.accounting-config-workspace { display: grid; gap: 11px; margin-top: 15px; min-width: 0; }
+.accounting-config-workspace > .alert { margin: 0; align-items: flex-start; font-size: .72rem; line-height: 1.55; }
+.accounting-config-form { overflow: hidden; border: 1px solid #e1e8e2; border-radius: 10px; background: #fff; box-shadow: 0 4px 14px rgba(24, 53, 48, .035); }
+.accounting-config-fields { min-width: 0; margin: 0; padding: 0; border: 0; }
+.accounting-config-group { min-width: 0; padding: 16px 18px 18px; border-bottom: 1px solid #edf0eb; }
+.accounting-config-group:last-child { border-bottom: 0; }
+.accounting-config-group-heading { display: flex; align-items: baseline; gap: 10px; margin-bottom: 13px; }
+.accounting-config-group-heading > span { color: #718078; font-size: .58rem; font-weight: 800; letter-spacing: .09em; white-space: nowrap; }
+.accounting-config-group-heading h4 { margin: 0; color: #243d38; font-size: .83rem; font-weight: 800; }
+.accounting-config-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 15px; align-items: start; }
+.accounting-config-grid .field { min-width: 0; margin: 0; }
+.accounting-config-grid .field label { font-size: .68rem; }
+.accounting-config-grid .field input,
+.accounting-config-grid .field select { min-height: 38px; padding: 8px 10px; font-size: .75rem; }
+.accounting-config-grid .field .hint { font-size: .62rem; line-height: 1.4; }
+.accounting-config-subgroup + .accounting-config-subgroup { margin-top: 15px; padding-top: 14px; border-top: 1px dashed #e2e8e2; }
+.accounting-config-subgroup h5 { margin: 0 0 10px; color: #40594f; font-size: .7rem; font-weight: 800; }
+.accounting-config-options { display: flex; flex-wrap: wrap; gap: 10px 22px; }
+.accounting-config-checkbox { display: inline-flex; align-items: center; gap: 8px; min-height: 35px; color: #42564f; font-size: .71rem; font-weight: 700; cursor: pointer; }
+.accounting-config-checkbox input { width: 16px; height: 16px; margin: 0; accent-color: #0e8e83; }
+.accounting-config-fields:disabled .accounting-config-checkbox { color: #7e8982; cursor: default; }
+.accounting-config-fields:disabled input,
+.accounting-config-fields:disabled select { background: #f7f8f5; color: #68776f; }
+.accounting-config-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 18px; border-top: 1px solid #edf0eb; background: #fafbf8; }
+.accounting-config-footer .small { margin: 0; font-size: .62rem; line-height: 1.45; }
+.accounting-config-scope-note { font-size: .68rem !important; }
+@media (max-width: 900px) {
+  .accounting-config-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .accounting-config-group { padding: 14px 12px; }
+  .accounting-config-group-heading { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .accounting-config-grid { grid-template-columns: minmax(0, 1fr); }
+  .accounting-config-footer { align-items: stretch; flex-direction: column; padding: 12px; }
+  .accounting-config-footer .btn { justify-content: center; }
+}

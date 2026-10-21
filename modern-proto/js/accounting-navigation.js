@@ -236,7 +236,7 @@
     },
     {
       id: 'parametres', label: 'Paramètres', icon: '⚙', defaultTab: 'dossier-configuration', tabs: [
-        { id: 'dossier-configuration', label: 'Configuration du dossier', status: 'partial', reason: 'La sauvegarde/restauration locale existe ; les paramètres comptables du dossier restent à construire.', actions: [{ label: 'Ouvrir les données et sauvegardes locales', route: 'settings' }] },
+        { id: 'dossier-configuration', label: 'Configuration de la Comptabilité', status: 'partial', reason: 'Le formulaire de configuration du dossier permet au Superviseur général de régler les paramètres comptables ; les données et sauvegardes locales restent accessibles séparément.', actions: [{ label: 'Ouvrir les données et sauvegardes locales', route: 'settings' }] },
         { id: 'sections-accounts', label: 'Sections et comptes analytiques', status: 'inactive', reason: 'Relève de la comptabilité analytique, module séparé.' },
         { id: 'allocation-keys', label: 'Clés de répartition des sections', status: 'inactive', reason: 'Relève de la comptabilité analytique, module séparé.' },
         { id: 'general-account-natures', label: 'Natures des comptes généraux', status: 'planned', reason: 'Paramétrage général à construire.' },

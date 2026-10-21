@@ -1948,7 +1948,9 @@
     }
     var dossier = S.currentDossier();
     var today = S.todayIso();
-    var date = today >= dossier.cycleStart && today <= dossier.cycleEnd ? today : dossier.cycleStart;
+    var entryAllowedUntil = dossier.accountingConfiguration && dossier.accountingConfiguration.entryAllowedUntil || dossier.cycleEnd;
+    var latestEntryDate = entryAllowedUntil < dossier.cycleEnd ? entryAllowedUntil : dossier.cycleEnd;
+    var date = today >= dossier.cycleStart && today <= latestEntryDate ? today : (today > latestEntryDate ? latestEntryDate : dossier.cycleStart);
     var requestedJournal = params && params.journal ? S.journal(params.journal) : null;
     var defaultJournal = isFillableJournal(requestedJournal) ? requestedJournal : S.journal('OD');
     if (!isFillableJournal(defaultJournal)) {
@@ -1969,10 +1971,13 @@
   }
 
   function lineRowHtml(line, journalCode) {
+    var decimalPlaces = S.accountingConfiguration().decimalPlaces;
+    var amountStep = decimalPlaces ? String(1 / Math.pow(10, decimalPlaces)) : '1';
+    var amountInputMode = decimalPlaces ? 'decimal' : 'numeric';
     return '<div class="line-row">' +
       '<select data-field="account" aria-label="Compte de la ligne">' + accountOptions(line.account, journalCode) + '</select>' +
-      '<input type="number" data-field="debit" min="0" step="1" inputmode="numeric" value="' + esc(line.debit) + '" placeholder="0" aria-label="Montant au débit">' +
-      '<input type="number" data-field="credit" min="0" step="1" inputmode="numeric" value="' + esc(line.credit) + '" placeholder="0" aria-label="Montant au crédit">' +
+      '<input type="number" data-field="debit" min="0" step="' + amountStep + '" inputmode="' + amountInputMode + '" value="' + esc(line.debit) + '" placeholder="0" aria-label="Montant au débit">' +
+      '<input type="number" data-field="credit" min="0" step="' + amountStep + '" inputmode="' + amountInputMode + '" value="' + esc(line.credit) + '" placeholder="0" aria-label="Montant au crédit">' +
       '<button type="button" class="line-remove" data-action="remove-line" aria-label="Supprimer cette ligne">✕</button>' +
     '</div>';
   }
@@ -2005,7 +2010,7 @@
         '<div class="field"><label for="e-journal">Journal</label>' +
           '<select id="e-journal" name="journal" required>' + journalOptions(model.journal) + '</select><span class="hint">Les comptes proposés sont filtrés selon les autorisations du journal.</span></div>' +
         '<div class="field"><label for="e-date">Date</label>' +
-          '<input id="e-date" name="date" type="date" required value="' + esc(model.date) + '"></div>' +
+          '<input id="e-date" name="date" type="date" min="' + esc(S.currentDossier().cycleStart) + '" max="' + esc(S.accountingConfiguration().entryAllowedUntil) + '" required value="' + esc(model.date) + '"></div>' +
         '<div class="field"><label for="e-description">Libellé</label>' +
           '<input id="e-description" name="description" type="text" value="' + esc(model.description) + '" placeholder="Objet de la pièce"></div>' +
       '</div>' +
@@ -2470,7 +2475,7 @@
         '<div>' +
           '<h3 style="font-size:.88rem;margin-bottom:6px">Règles appliquées</h3>' +
           '<ul class="small muted" style="margin:0;padding-left:18px;line-height:1.8">' +
-            '<li>Référence de pièce unique par exercice et journal.</li>' +
+            '<li>Référence de pièce unique, proposée selon le journal et la périodicité configurée.</li>' +
             '<li>Compte existant, débit ou crédit exclusif par ligne.</li>' +
             '<li>Équilibre obligatoire avant validation définitive.</li>' +
             '<li>Une pièce validée est immuable.</li>' +
@@ -2487,6 +2492,87 @@
     '</section>';
 
     return html;
+  }
+
+  function viewAccountingConfiguration() {
+    var dossier = S.currentDossier();
+    var configuration = dossier.accountingConfiguration || S.accountingConfiguration();
+    var canManage = hasDemoPermission(getActiveDemoMember(), 'accounting', 'accounting.configure', accountingAccessContext(dossier));
+    var editable = canManage && !isPhoneViewport();
+    var disabled = editable ? '' : ' disabled';
+    var supplierSettlement = configuration.supplierSettlement || {};
+    var otherPayablesSettlement = configuration.otherPayablesSettlement || {};
+
+    function textField(id, label, value, maxLength, hint) {
+      return '<div class="field"><label for="' + id + '">' + label + '</label><input id="' + id + '" name="' + id + '" type="text" maxlength="' + maxLength + '" value="' + esc(value) + '" required>' +
+        (hint ? '<span class="hint">' + hint + '</span>' : '') + '</div>';
+    }
+
+    function numberField(id, label, value, min, max, hint) {
+      return '<div class="field"><label for="' + id + '">' + label + '</label><input id="' + id + '" name="' + id + '" type="number" min="' + min + '" max="' + max + '" step="1" value="' + esc(value == null ? '' : value) + '">' +
+        (hint ? '<span class="hint">' + hint + '</span>' : '') + '</div>';
+    }
+
+    function settlementGroup(prefix, title, settings) {
+      return '<section class="accounting-config-subgroup"><h5>' + title + '</h5><div class="accounting-config-grid">' +
+        numberField(prefix + '-minimum-delay', 'Délai minimal (jours)', settings.minimumDelayDays, 0, 3650, 'Laisser vide si aucun délai n’est défini.') +
+        numberField(prefix + '-earliest-day', 'Jour du mois au plus tôt', settings.earliestDayOfMonth, 1, 31, 'Laisser vide si aucun jour n’est défini.') +
+        textField(prefix + '-settlement-on', 'Règlement le', settings.settlementOn || '', 80, 'Valeur libre à préciser selon la règle de l’organisation.') +
+        '</div></section>';
+    }
+
+    var numberPeriods = [
+      { value: 'day', label: 'Jour' },
+      { value: 'month', label: 'Mois' },
+      { value: 'year', label: 'Année' },
+      { value: 'exercise', label: 'Exercice' }
+    ];
+    var permissionNotice = canManage
+      ? (editable ? '' : '<div class="alert info">La configuration est consultable sur téléphone, mais sa modification est réservée à un ordinateur ou une tablette.</div>')
+      : '<div class="alert warning">Consultation seule : seul le Superviseur général, ou un profil auquel le droit explicite « Modifier la configuration comptable du dossier » a été accordé, peut enregistrer ces paramètres.</div>';
+
+    return '<div class="accounting-config-workspace">' +
+      '<div class="alert info"><div><strong>Dossier actif : ' + esc(dossier.clientName) + ' · ' + esc(dossier.reference) + '</strong><br>Les dates préremplies reprennent le cycle déjà associé à ce dossier, afin de préserver ses écritures. Elles restent modifiables sous contrôle de cohérence.</div></div>' +
+      permissionNotice +
+      '<form id="accounting-configuration-form" class="accounting-config-form">' +
+        '<fieldset class="accounting-config-fields"' + disabled + '>' +
+          '<section class="accounting-config-group"><div class="accounting-config-group-heading"><span>01 · IDENTITÉ COMPTABLE</span><h4>Référentiel du dossier</h4></div>' +
+            '<div class="accounting-config-grid">' +
+              textField('config-framework', 'Cadre comptable', configuration.framework || 'SYSCOHADA révisé', 100, '') +
+              textField('config-country', 'Pays', configuration.country || 'BENIN', 80, '') +
+              textField('config-specific-organization', 'Organisme spécifique', configuration.specificOrganization || 'Aucun', 120, 'Saisir « Aucun » lorsqu’aucun organisme ne s’applique.') +
+            '</div>' +
+          '</section>' +
+          '<section class="accounting-config-group"><div class="accounting-config-group-heading"><span>02 · EXERCICE &amp; SAISIE</span><h4>Dates et règles générales</h4></div>' +
+            '<div class="accounting-config-grid">' +
+              '<div class="field"><label for="config-cycle-start">Exercice en cours · du</label><input id="config-cycle-start" name="cycle-start" type="date" value="' + esc(dossier.cycleStart) + '" required></div>' +
+              '<div class="field"><label for="config-cycle-end">Exercice en cours · au</label><input id="config-cycle-end" name="cycle-end" type="date" value="' + esc(dossier.cycleEnd) + '" required></div>' +
+              '<div class="field"><label for="config-entry-allowed-until">Saisies autorisées jusqu’au</label><input id="config-entry-allowed-until" name="entry-allowed-until" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(configuration.entryAllowedUntil || dossier.cycleEnd) + '" required></div>' +
+              numberField('config-decimal-places', 'Décimales des montants', configuration.decimalPlaces, 0, 4, 'Le nombre configuré est appliqué aux saisies et affichages.') +
+              '<div class="field"><label for="config-numbering-period">Numérotation des pièces par</label><select id="config-numbering-period" name="numbering-period" required>' + numberPeriods.map(function (period) {
+                return '<option value="' + period.value + '"' + (configuration.numberingPeriod === period.value ? ' selected' : '') + '>' + period.label + '</option>';
+              }).join('') + '</select></div>' +
+              numberField('config-auto-close-months', 'Clôture automatique après (mois)', configuration.automaticClosingMonths, 1, 120, 'Laisser vide pour ne pas définir de délai.') +
+            '</div>' +
+          '</section>' +
+          '<section class="accounting-config-group"><div class="accounting-config-group-heading"><span>03 · RÈGLEMENTS</span><h4>Délais de règlement</h4></div>' +
+            settlementGroup('config-supplier', 'Fournisseurs', supplierSettlement) +
+            settlementGroup('config-other-payables', 'Autres comptes à payer', otherPayablesSettlement) +
+          '</section>' +
+          '<section class="accounting-config-group"><div class="accounting-config-group-heading"><span>04 · OPTIONS</span><h4>Fonctions du dossier</h4></div>' +
+            '<div class="accounting-config-options">' +
+              '<label class="accounting-config-checkbox"><input type="checkbox" id="config-supplier-orders" name="supplier-orders"' + (configuration.supplierOrdersEnabled ? ' checked' : '') + '><span>Commandes fournisseurs</span></label>' +
+              '<label class="accounting-config-checkbox"><input type="checkbox" id="config-euro-statements" name="euro-statements"' + (configuration.euroStatementsEnabled ? ' checked' : '') + '><span>États en euros</span></label>' +
+            '</div>' +
+          '</section>' +
+        '</fieldset>' +
+        '<div class="accounting-config-footer">' +
+          '<span class="small muted">La modification du cycle est refusée si elle exclurait une pièce existante.</span>' +
+          '<button type="submit" class="btn btn-primary"' + (editable ? '' : ' disabled') + '>Valider et enregistrer</button>' +
+        '</div>' +
+      '</form>' +
+      '<div class="alert info accounting-config-scope-note"><div><strong>Portée du prototype.</strong> Le cycle, la date limite de saisie, le nombre de décimales et la périodicité de numérotation sont appliqués. Les autres paramètres sont conservés par dossier ; les automatisations de clôture, de règlement, de commandes fournisseurs et d’états en euros ne sont pas activées dans cette version.</div></div>' +
+    '</div>';
   }
 
   function menuStatusBadge(status) {
@@ -8045,6 +8131,8 @@
       exchangeFeature = viewFixedAssets();
     } else if (group.id === 'saisie' && tab.id === 'opening-balances') {
       exchangeFeature = viewOpeningBalances();
+    } else if (group.id === 'parametres' && tab.id === 'dossier-configuration') {
+      exchangeFeature = viewAccountingConfiguration();
     }
     if (group.id === 'fichier') {
       switch (tab.id) {
@@ -8087,6 +8175,67 @@
     '</section>';
   }
 
+  function bindAccountingConfiguration() {
+    var form = $('#accounting-configuration-form');
+    if (!form) return;
+    var cycleStartInput = $('#config-cycle-start');
+    var cycleEndInput = $('#config-cycle-end');
+    var entryLimitInput = $('#config-entry-allowed-until');
+
+    function syncEntryLimitRange() {
+      if (!entryLimitInput) return;
+      if (cycleStartInput && cycleStartInput.value) entryLimitInput.min = cycleStartInput.value;
+      if (cycleEndInput && cycleEndInput.value) entryLimitInput.max = cycleEndInput.value;
+    }
+
+    if (cycleStartInput) cycleStartInput.addEventListener('change', syncEntryLimitRange);
+    if (cycleEndInput) cycleEndInput.addEventListener('change', syncEntryLimitRange);
+    syncEntryLimitRange();
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var dossier = S.currentDossier();
+      if (isPhoneViewport() || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'accounting.configure', accountingAccessContext(dossier))) {
+        toast('Modification refusée : le droit de configuration du dossier n’est pas accordé pour ce profil ou cet appareil.', 'warning');
+        return;
+      }
+      function value(id) {
+        var input = $('#' + id, form);
+        return input ? input.value : '';
+      }
+      function settlement(prefix) {
+        return {
+          minimumDelayDays: value(prefix + '-minimum-delay'),
+          earliestDayOfMonth: value(prefix + '-earliest-day'),
+          settlementOn: value(prefix + '-settlement-on')
+        };
+      }
+      var result = S.updateAccountingConfiguration({
+        cycleStart: value('config-cycle-start'),
+        cycleEnd: value('config-cycle-end'),
+        accountingConfiguration: {
+          framework: value('config-framework'),
+          country: value('config-country'),
+          specificOrganization: value('config-specific-organization'),
+          entryAllowedUntil: value('config-entry-allowed-until'),
+          decimalPlaces: value('config-decimal-places'),
+          numberingPeriod: value('config-numbering-period'),
+          automaticClosingMonths: value('config-auto-close-months'),
+          supplierSettlement: settlement('config-supplier'),
+          otherPayablesSettlement: settlement('config-other-payables'),
+          supplierOrdersEnabled: !!($('#config-supplier-orders', form) || {}).checked,
+          euroStatementsEnabled: !!($('#config-euro-statements', form) || {}).checked
+        }
+      });
+      if (!result.ok) {
+        toast((result.errors || ['Enregistrement de la configuration impossible.']).join(' '), 'warning');
+        return;
+      }
+      toast('Configuration enregistrée pour ' + result.dossier.clientName + ' · ' + result.dossier.reference + '.', 'success');
+      render();
+    });
+  }
+
   function bindEntryJournalSelector() {
     var positionInput = $('#entry-journal-position');
     if (positionInput) {
@@ -8116,6 +8265,7 @@
     }
     if (route === 'menu') {
       var menuParams = parseHash().params;
+      if (menuParams.g === 'parametres' && menuParams.t === 'dossier-configuration') bindAccountingConfiguration();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'suppliers') bindSupplierView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'clients') bindClientView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'services') bindServicesView();
@@ -9463,7 +9613,7 @@
         '<div class="field"><label for="j-type">Type de journal</label><input id="j-type" name="type" type="text" list="journal-type-suggestions" maxlength="40" placeholder="Ex. Vente, Trésorerie, Divers" value="' + esc(existing ? existing.type : '') + '" required><datalist id="journal-type-suggestions"><option value="Achat"><option value="Vente"><option value="Trésorerie"><option value="Divers"><option value="Paie"><option value="Automatique"></datalist><span class="hint">Choisissez une suggestion ou saisissez votre propre type.</span></div>' +
         '<div class="field"><label for="j-operation-nature">Nature des opérations</label><select id="j-operation-nature" name="operationNature" required>' + operationNatureOptions + '</select></div>' +
         '<div class="field"><label for="j-authorized-accounts">Comptes autorisés</label><input id="j-authorized-accounts" name="authorizedAccounts" type="text" maxlength="1000" value="' + esc(authorizedAccounts) + '" placeholder="* ou 601100, 401100" required><span class="hint">Saisissez « * » pour tous les comptes, ou des numéros de compte de 2 à 8 chiffres (classes 1 à 8) séparés par des virgules.</span></div>' +
-        '<div class="field"><label for="j-reference-prefix">Préfixe de référence</label><input id="j-reference-prefix" name="referencePrefix" type="text" maxlength="8" pattern="[A-Za-z0-9_-]{1,8}" value="' + esc(prefixValue) + '" required><span class="hint">Les références seront proposées sous la forme « PRÉFIXE-ANNÉE-001 ».</span></div>' +
+        '<div class="field"><label for="j-reference-prefix">Préfixe de référence</label><input id="j-reference-prefix" name="referencePrefix" type="text" maxlength="8" pattern="[A-Za-z0-9_-]{1,8}" value="' + esc(prefixValue) + '" required><span class="hint">Par défaut : « PRÉFIXE-ANNÉE-001 ». La période de numérotation se règle dans Paramètres → Configuration de la Comptabilité.</span></div>' +
         '<div class="field" style="grid-column:1 / -1"><label for="j-description">Description / utilisation</label><textarea id="j-description" name="description" rows="3" maxlength="240" placeholder="Précisez les opérations à enregistrer dans ce journal">' + esc(existing ? existing.description : '') + '</textarea></div>' +
         '<label class="journal-active-toggle"><input id="j-active" name="active" type="checkbox"' + (!existing || existing.active !== false ? ' checked' : '') + '> <span><strong>Journal actif</strong><small>Un journal inactif reste consultable, mais ne reçoit plus de nouvelles écritures.</small></span></label>' +
       '</div>' +

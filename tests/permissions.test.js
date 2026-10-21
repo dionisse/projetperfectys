@@ -158,9 +158,22 @@ test('le Superviseur général gère son organisation, pas une autre', () => {
   assert.strictEqual(Permissions.hasPermission(supervisor, 'organization', 'organization.manageMembers', { organizationId: 'org-2' }), false);
 });
 
+test('la configuration comptable est réservée au Superviseur général ou à une délégation explicite', () => {
+  const supervisor = { role: 'supervisor', organizationId: 'org-1' };
+  const manager = { role: 'manager', organizationId: 'org-1', grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view'] }] } };
+  const dossier = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  assert.strictEqual(Permissions.hasPermission(supervisor, 'accounting', 'accounting.configure', dossier), true);
+  assert.strictEqual(Permissions.hasPermission(supervisor, 'accounting', 'accounting.configure', { organizationId: 'org-2', scopeType: 'dossier', dossierId: 'dossier-1' }), false);
+  assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'accounting.configure', dossier), false, 'la consultation seule ne permet pas de modifier');
+  manager.grants.accounting[0].actions.push('accounting.configure');
+  assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'accounting.configure', dossier), true, 'une délégation explicite dans le dossier autorise la modification');
+  assert.strictEqual(Permissions.hasPermission(manager, 'accounting', 'accounting.configure', { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-2' }), false);
+});
+
 test('les actions disponibles sont décrites par module', () => {
   const actions = Permissions.actionsForModule('accounting').map((action) => action.id);
   assert(actions.includes('module.view'));
+  assert(actions.includes('accounting.configure'));
   assert(actions.includes('draft.create'));
   assert(actions.includes('entry.validate'));
   assert(actions.includes('centralization.cancel'));
