@@ -116,6 +116,25 @@
     return { ok: errors.length === 0, errors: errors, debit: debit, credit: credit };
   }
 
+  function demoAccountingLines() {
+    return [
+      { accountCode: '641', accountLabel: 'Rémunérations du personnel', description: 'Rémunérations brutes · exemple', debit: 750000, credit: 0 },
+      { accountCode: '421', accountLabel: 'Personnel, rémunérations dues', description: 'Net à payer · exemple', debit: 0, credit: 675000 },
+      { accountCode: '431', accountLabel: 'Organismes sociaux', description: 'Retenues sociales · exemple', debit: 0, credit: 75000 }
+    ];
+  }
+
+  function accountingAccountCatalog() {
+    var seen = Object.create(null);
+    return demoAccountingLines().filter(function (line) {
+      if (seen[line.accountCode]) return false;
+      seen[line.accountCode] = true;
+      return true;
+    }).map(function (line) {
+      return { code: line.accountCode, label: line.accountLabel, postable: true, active: true };
+    });
+  }
+
   function runs(dossierId) {
     return clone(load(dossierId).runs).sort(function (a, b) {
       return String(b.period).localeCompare(String(a.period)) || String(a.reference).localeCompare(String(b.reference));
@@ -146,11 +165,7 @@
       status: 'draft',
       employeeCount: 3,
       totals: { grossPay: 750000, deductions: 75000, netPay: 675000 },
-      accountingLines: [
-        { accountCode: '641', accountLabel: 'Rémunérations du personnel', description: 'Rémunérations brutes · exemple', debit: 750000, credit: 0 },
-        { accountCode: '421', accountLabel: 'Personnel, rémunérations dues', description: 'Net à payer · exemple', debit: 0, credit: 675000 },
-        { accountCode: '431', accountLabel: 'Organismes sociaux', description: 'Retenues sociales · exemple', debit: 0, credit: 75000 }
-      ],
+      accountingLines: demoAccountingLines(),
       origin: 'demo',
       calculationNote: 'Montants fictifs de démonstration : aucun calcul de paie, de cotisation ou de retenue légale n’est effectué.',
       createdAt: new Date().toISOString(),
@@ -188,6 +203,7 @@
     VERSION: VERSION,
     runs: runs,
     getRun: getRun,
+    accountingAccountCatalog: accountingAccountCatalog,
     createDemoRun: createDemoRun,
     approveRun: approveRun,
     sourceId: sourceId,

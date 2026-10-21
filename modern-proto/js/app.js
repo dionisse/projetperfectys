@@ -9,6 +9,7 @@
   var ModuleRegistry = window.PerfectoModules;
   var Permissions = window.PerfectoPermissions;
   var AccountingNavigation = window.PerfectoAccountingNavigation;
+  var AccountingBridge = window.PerfectoAccountingBridge;
   var AccountingFramework = window.PerfectoAccountingFramework;
   var CashOperations = window.PerfectoCashOperations;
   var AccountMovements = window.PerfectoAccountMovements;
@@ -86,6 +87,7 @@
     thirdPartyMovements: { q: '', kind: 'all', recordId: '', month: '' },
     analyticalCenters: { q: '', status: 'active' },
     openingBalances: { q: '', position: '', sourceDossierId: '', selectedId: '' },
+    accountingBridge: { sourceModuleId: 'payroll-hr' },
     periods: { year: S.exercise() },
     suppliers: { q: '', status: 'active' },
     clients: { q: '' },
@@ -121,6 +123,7 @@
   var bankStatementLoadPending = false;
   var bankStatementLoadSequence = 0;
   var balanceImportSession = null;
+  var accountingBridgeSession = null;
   var payrollCentralizationSession = null;
   var salesCentralizationSession = null;
   var centralizationCancellationSession = null;
@@ -252,6 +255,8 @@
         return { moduleId: 'accounting', actionId: 'module.view' };
       case 'commit-accounting-sales-centralization':
         return { moduleId: 'accounting', actionId: 'data.import' };
+      case 'save-accounting-bridge-mapping':
+        return { moduleId: 'accounting', actionId: 'accounting.configure' };
       case 'select-centralization-cancellation':
         return { moduleId: 'accounting', actionId: 'module.view' };
       case 'cancel-draft-centralization':
@@ -700,6 +705,7 @@
     var view = $('#view');
     if (!view) return;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'import-balance')) balanceImportSession = null;
+    if (!(route === 'menu' && parsed.params.g === 'parametres' && parsed.params.t === 'accounting-bridge')) accountingBridgeSession = null;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'import-fec')) {
       fecImportSession = null;
       fecImportReversalSession = null;
@@ -3072,6 +3078,299 @@
     '</div>';
   }
 
+  function accountingBridgeSourceDefinitions() {
+    return [
+      {
+        id: 'payroll-hr',
+        permissionModuleId: 'payroll-hr',
+        label: 'Paie & RH',
+        operationLabel: 'Centralisation des salaires depuis Paie & RH',
+        operationTabId: 'centralize-payroll',
+        ready: true,
+        getAccountCatalog: function () { return PayrollHR.accountingAccountCatalog(); },
+        getRuns: function (dossierId) { return PayrollHR.runs(dossierId); }
+      },
+      {
+        id: 'sales-stock-invoicing',
+        permissionModuleId: 'sales-stock-invoicing',
+        label: 'Ventes, stock & facturation',
+        operationLabel: 'Centralisation des opérations depuis Vente, Stock et Facturation',
+        operationTabId: 'centralize-sales',
+        ready: true,
+        getAccountCatalog: function () { return SalesOperations.accountingAccountCatalog(); },
+        getRuns: function (dossierId) { return SalesOperations.runs(dossierId); }
+      },
+      {
+        id: 'auxiliary-internal',
+        permissionModuleId: 'accounting',
+        label: 'Centralisation auxiliaire interne',
+        operationLabel: 'Centralisation auxiliaire interne',
+        operationTabId: 'centralize-auxiliary',
+        ready: false,
+        getAccountCatalog: function () { return []; },
+        getRuns: function () { return []; }
+      }
+    ];
+  }
+
+  function accountingBridgeAvailableSources(targetDossier) {
+    var member = getActiveDemoMember();
+    return accountingBridgeSourceDefinitions().filter(function (source) {
+      return hasDemoPermission(member, source.permissionModuleId, 'module.view', accountingAccessContext(targetDossier));
+    });
+  }
+
+  function accountingBridgePostableAccounts(accounts, includeInactive) {
+    return (Array.isArray(accounts) ? accounts : []).filter(function (account) {
+      return account && account.code != null && account.postable !== false && (includeInactive || account.active !== false);
+    }).slice().sort(function (left, right) { return String(left.code).localeCompare(String(right.code)); });
+  }
+
+  function accountingBridgeSourceAccounts(source, targetDossier) {
+    var byCode = Object.create(null);
+    function addAccount(code, label) {
+      code = String(code == null ? '' : code).trim();
+      if (!code) return;
+      if (!byCode[code]) byCode[code] = { code: code, label: String(label || 'Compte source sans libellé'), postable: true, active: true };
+      else if ((!byCode[code].label || byCode[code].label === 'Compte source sans libellé') && label) byCode[code].label = String(label);
+    }
+    (source.getAccountCatalog ? source.getAccountCatalog() : []).forEach(function (account) {
+      if (account) addAccount(account.code, account.label);
+    });
+    (source.getRuns ? source.getRuns(targetDossier.id) : []).forEach(function (run) {
+      (run && Array.isArray(run.accountingLines) ? run.accountingLines : []).forEach(function (line) {
+        if (line) addAccount(line.accountCode, line.accountLabel);
+      });
+    });
+    return Object.keys(byCode).map(function (code) { return byCode[code]; }).sort(function (left, right) {
+      return left.code.localeCompare(right.code);
+    });
+  }
+
+  function accountingBridgeEnsureSession(targetDossier, sourceModuleId) {
+    if (accountingBridgeSession && accountingBridgeSession.targetDossierId === targetDossier.id && accountingBridgeSession.sourceModuleId === sourceModuleId) {
+      return accountingBridgeSession;
+    }
+    var saved = AccountingBridge.get(targetDossier.id, sourceModuleId);
+    var mappings = (saved.mappings || []).map(function (mapping) { return { sourceCode: mapping.sourceCode, targetCode: mapping.targetCode }; });
+    mappings.sort(function (left, right) { return left.sourceCode.localeCompare(right.sourceCode); });
+    accountingBridgeSession = {
+      targetDossierId: targetDossier.id,
+      sourceModuleId: sourceModuleId,
+      mappings: mappings,
+      originalMappings: mappings.map(function (mapping) { return { sourceCode: mapping.sourceCode, targetCode: mapping.targetCode }; }),
+      explicitlyUnmapped: Object.create(null),
+      updatedAt: saved.updatedAt || '',
+      loadError: saved.ok ? '' : (saved.errors || ['Lecture du tableau de passage impossible.']).join(' '),
+      dirty: false
+    };
+    return accountingBridgeSession;
+  }
+
+  function accountingBridgeCurrentContext(targetDossier, sourceModuleId) {
+    targetDossier = targetDossier || S.currentDossier();
+    sourceModuleId = sourceModuleId || ui.accountingBridge.sourceModuleId;
+    var sources = accountingBridgeAvailableSources(targetDossier);
+    var source = sources.find(function (item) { return item.id === sourceModuleId; }) || null;
+    if (!source) return { targetDossier: targetDossier, source: null, sources: sources, sourceAccounts: [], session: null };
+    var session = source.ready ? accountingBridgeEnsureSession(targetDossier, source.id) : null;
+    var sourceAccounts = source.ready ? accountingBridgeSourceAccounts(source, targetDossier) : [];
+    if (session && !session.loadError) {
+      session.mappings.forEach(function (mapping) {
+        if (!sourceAccounts.some(function (account) { return account.code === mapping.sourceCode; })) {
+          sourceAccounts.push({ code: mapping.sourceCode, label: 'Correspondance conservée · compte source absent du catalogue actuel', postable: false, active: false, outsideCatalog: true });
+        }
+      });
+      sourceAccounts.sort(function (left, right) { return left.code.localeCompare(right.code); });
+    }
+    return { targetDossier: targetDossier, source: source, sources: sources, sourceAccounts: sourceAccounts, session: session };
+  }
+
+  function accountingBridgeCanConfigure(context) {
+    return !!(context && context.targetDossier && context.source && context.source.ready && !isPhoneViewport() &&
+      hasDemoPermission(getActiveDemoMember(), 'accounting', 'accounting.configure', accountingAccessContext(context.targetDossier)) &&
+      hasDemoPermission(getActiveDemoMember(), context.source.permissionModuleId, 'module.view', accountingAccessContext(context.targetDossier)));
+  }
+
+  function accountingBridgeTargetOptions(targetAccounts, selectedCode, suggestionCode) {
+    var optionsAccounts = accountingBridgePostableAccounts(targetAccounts, false);
+    var selected = String(selectedCode || suggestionCode || '');
+    var selectedActive = optionsAccounts.find(function (account) { return String(account.code) === selected; });
+    var selectedOriginal = (Array.isArray(targetAccounts) ? targetAccounts : []).find(function (account) { return account && String(account.code) === selected; });
+    var options = '<option value=""' + (!selected ? ' selected' : '') + '>— Aucun compte choisi —</option>';
+    if (selected && !selectedActive) {
+      var status = !selectedOriginal ? 'absent du plan cible' : (selectedOriginal.active === false ? 'inactif' : 'non imputable');
+      options += '<option value="' + esc(selected) + '" selected>' + esc(selected + ' · ' + status + ' — à corriger') + '</option>';
+    }
+    return options + optionsAccounts.map(function (account) {
+      return '<option value="' + esc(account.code) + '"' + (String(account.code) === selected ? ' selected' : '') + '>' +
+        esc(String(account.code) + ' · ' + String(account.label || 'Sans libellé')) + '</option>';
+    }).join('');
+  }
+
+  function accountingBridgeOperationCard(tabId) {
+    var tab = AccountingNavigation.getTab('fichier', tabId);
+    if (!tab) return '';
+    return '<a class="accounting-bridge-operation-card" href="' + esc(accountingMenuHash('fichier', tab.id)) + '">' +
+      '<span><strong>' + esc(tab.label) + '</strong><small>' + esc(tab.reason) + '</small></span>' +
+      '<span class="accounting-bridge-operation-status">' + esc(AccountingNavigation.statusLabels[tab.status] || tab.status) + '</span></a>';
+  }
+
+  function viewAccountingBridge() {
+    var targetDossier = S.currentDossier();
+    var sources = accountingBridgeAvailableSources(targetDossier);
+    var selectedSourceId = ui.accountingBridge.sourceModuleId;
+    if (!sources.some(function (source) { return source.id === selectedSourceId; })) {
+      selectedSourceId = (sources.find(function (source) { return source.ready; }) || sources[0] || {}).id || '';
+      ui.accountingBridge.sourceModuleId = selectedSourceId;
+      accountingBridgeSession = null;
+    }
+    var context = accountingBridgeCurrentContext(targetDossier, selectedSourceId);
+    var source = context.source;
+    var session = context.session;
+    var sourceAccounts = context.sourceAccounts || [];
+    var targetAccounts = S.accounts();
+    var targetPostingAccounts = accountingBridgePostableAccounts(targetAccounts, false);
+    var canConfigure = !!source && hasDemoPermission(getActiveDemoMember(), 'accounting', 'accounting.configure', accountingAccessContext(targetDossier));
+    var editable = accountingBridgeCanConfigure(context);
+    var sourceOptions = '<option value="">Choisir une opération source…</option>' + sources.map(function (item) {
+      return '<option value="' + esc(item.id) + '"' + (item.id === selectedSourceId ? ' selected' : '') + '>' +
+        esc(item.label + (item.ready ? '' : ' · à construire')) + '</option>';
+    }).join('');
+    var permissionNote = !canConfigure
+      ? '<div class="alert warning accounting-bridge-permission"><div><strong>Consultation seule.</strong> Le droit « Modifier la configuration comptable du dossier » est requis pour enregistrer ce tableau.</div></div>'
+      : (isPhoneViewport()
+        ? '<div class="alert info accounting-bridge-permission"><div><strong>Consultation sur téléphone.</strong> Les modifications du tableau sont réservées à un ordinateur ou une tablette.</div></div>'
+        : '<div class="alert success accounting-bridge-permission"><div><strong>Configuration autorisée pour le dossier cible actif.</strong> Les opérations de centralisation redemanderont une confirmation avant leur exécution.</div></div>');
+    var sourceState = !sources.length
+      ? '<div class="alert warning"><strong>Aucune opération source accessible.</strong> Le profil ne dispose pas du droit de consultation des modules source.</div>'
+      : (!source
+        ? '<div class="empty-state accounting-bridge-empty"><strong>Choisissez une opération de centralisation</strong><span>La table est enregistrée pour le dossier cible actif et le module source choisi.</span></div>'
+        : (!source.ready
+          ? '<div class="alert info accounting-bridge-source-note"><div><strong>Paramétrage auxiliaire en attente.</strong><br>Le sous-menu Fichier correspond bien à l’opération de centralisation, mais le catalogue des comptes source auxiliaires sera fourni lorsque les mouvements auxiliaires internes seront disponibles. Aucun fichier tiers ne sera utilisé.</div></div>'
+          : (sourceAccounts.length
+            ? ''
+            : '<div class="alert warning"><strong>Aucun compte source à configurer.</strong> Le module ne fournit encore aucun compte de journal interne.</div>')));
+    var mappingBySource = Object.create(null);
+    if (session && !session.loadError) session.mappings.forEach(function (mapping) { mappingBySource[mapping.sourceCode] = mapping; });
+    var exactSuggestionCount = sourceAccounts.filter(function (account) {
+      return !mappingBySource[account.code] && !(session && session.explicitlyUnmapped[account.code]) &&
+        targetPostingAccounts.some(function (target) { return String(target.code) === String(account.code); });
+    }).length;
+    var rows = source && source.ready && session && !session.loadError
+      ? sourceAccounts.map(function (account) {
+        var savedMapping = mappingBySource[account.code];
+        var suggestion = !savedMapping && !session.explicitlyUnmapped[account.code] &&
+          targetPostingAccounts.some(function (target) { return String(target.code) === String(account.code); }) ? account.code : '';
+        var selectedTarget = savedMapping ? savedMapping.targetCode : suggestion;
+        var target = targetAccounts.find(function (candidate) { return String(candidate.code) === String(selectedTarget); });
+        var valid = !!(savedMapping && account.postable !== false && target && target.active !== false && target.postable !== false);
+        var baselineMapping = session.originalMappings.find(function (mapping) { return mapping.sourceCode === account.code; });
+        var changed = savedMapping ? (!baselineMapping || baselineMapping.targetCode !== savedMapping.targetCode) : !!baselineMapping;
+        var stateText = changed ? 'Modification en attente' : (savedMapping ? (valid ? 'Enregistrée' : 'À corriger') : (suggestion ? 'Suggestion · non enregistrée' : 'À paramétrer'));
+        var stateClass = changed ? 'is-pending' : (savedMapping ? (valid ? 'is-valid' : 'is-invalid') : 'is-suggested');
+        return '<tr><td><strong>' + esc(account.code) + '</strong><br><small>' + esc(account.label) + (account.outsideCatalog ? '<br>Code à vérifier : absent du catalogue source actuel.' : '') + '</small></td>' +
+          '<td><select aria-label="Associer le compte source ' + esc(account.code) + ' à un compte du dossier cible" data-accounting-bridge-map-source="' + esc(account.code) + '"' + (editable ? '' : ' disabled') + '>' +
+            accountingBridgeTargetOptions(targetAccounts, savedMapping && savedMapping.targetCode, suggestion) +
+          '</select></td><td><span class="accounting-bridge-row-state ' + stateClass + '">' + stateText + '</span></td></tr>';
+      }).join('')
+      : '';
+    var mappingTable = source && source.ready && session && !session.loadError
+      ? (sourceAccounts.length
+        ? '<div class="table-wrap accounting-bridge-table-wrap"><table class="data-table accounting-bridge-table"><thead><tr><th>Compte source · ' + esc(source.label) + '</th><th>Compte cible · ' + esc(targetDossier.reference) + '</th><th>État du paramétrage</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+        : '<div class="empty-state accounting-bridge-empty"><strong>Aucun compte source n’est disponible</strong><span>Créez un lot interne dans le module source pour faire apparaître ses comptes.</span></div>')
+      : '';
+    var summary = source && source.ready
+      ? '<div class="exchange-summary-grid accounting-bridge-summary"><div><small>Opération source</small><strong>' + esc(source.label) + '</strong></div><div><small>Dossier cible actif</small><strong>' + esc(targetDossier.reference) + '</strong></div><div><small>Comptes source</small><strong>' + sourceAccounts.length + '</strong></div><div><small>Correspondances enregistrées</small><strong>' + (session ? session.mappings.length : 0) + '</strong></div></div>'
+      : '';
+    var loadError = session && session.loadError
+      ? '<div class="alert error"><div><strong>Paramétrage non chargé.</strong> ' + esc(session.loadError) + ' Aucune donnée n’a été remplacée.</div></div>'
+      : '';
+    var pendingNote = session && !session.dirty && exactSuggestionCount
+      ? '<div class="alert info accounting-bridge-suggestion-note"><strong>' + exactSuggestionCount + ' code(s) identique(s) proposé(s).</strong> Les suggestions ne sont pas enregistrées avant votre action.</div>'
+      : '';
+    var dirtyNote = session && session.dirty
+      ? '<div class="alert warning accounting-bridge-dirty-note"><strong>Modifications en attente.</strong> Enregistrez le tableau pour utiliser ces correspondances comme paramètres des opérations Fichier.</div>'
+      : (session && session.updatedAt
+        ? '<p class="small muted accounting-bridge-updated">Dernier enregistrement local : ' + esc(new Date(session.updatedAt).toLocaleString('fr-FR')) + '.</p>'
+        : '');
+    var saveButton = source && source.ready && session && !session.loadError
+      ? '<div class="accounting-bridge-footer"><button type="button" class="btn btn-primary" data-action="save-accounting-bridge-mapping"' + (editable ? '' : ' disabled') + '>Enregistrer et confirmer la configuration</button></div>'
+      : '';
+    var operationLinks = '<section class="exchange-card accounting-bridge-operations"><p class="page-kicker">OPÉRATIONALISATION · MENU FICHIER</p><h4>Ces sous-menus exécutent les centralisations</h4>' +
+      '<div class="accounting-bridge-operation-list">' + accountingBridgeOperationCard('centralize-sales') + accountingBridgeOperationCard('centralize-payroll') + accountingBridgeOperationCard('centralize-auxiliary') + '</div>' +
+      '<p class="small muted">Les opérations Paie & RH et Ventes, stock & facturation chargent ces correspondances comme point de départ ; leur aperçu demande toujours une confirmation. Les corrections faites dans l’aperçu ne modifient pas ce paramétrage.</p></section>';
+    return '<div class="exchange-workspace accounting-bridge-workspace">' +
+      '<div class="alert info accounting-bridge-intro"><div><strong>Paramètres = configuration · Fichier = opérationnalisation</strong><br>Configurez les comptes source d’un module PERFECTO vers les comptes généraux existants du dossier cible actif. Les réglages sont séparés par opération source et par dossier cible ; ils ne concernent pas la comptabilité analytique.</div></div>' +
+      permissionNote +
+      '<div class="field accounting-bridge-source-field"><label for="accounting-bridge-source-module">Opération de centralisation à paramétrer</label><select id="accounting-bridge-source-module"' + (sources.length ? '' : ' disabled') + '>' + sourceOptions + '</select><span class="hint">Dossier cible actif : ' + esc(targetDossier.clientName) + ' · ' + esc(targetDossier.reference) + '.</span></div>' +
+      summary + sourceState + loadError + pendingNote +
+      mappingTable + dirtyNote + saveButton + operationLinks +
+      '<p class="exchange-footnote accounting-bridge-footnote">Les changements de correspondance n’affectent jamais les écritures déjà enregistrées. Les opérations Fichier ajoutent leurs pièces selon leur propre aperçu et confirmation. En démo, la configuration est stockée localement dans ce navigateur ; elle n’est pas synchronisée avec Google Drive ou un serveur.</p>' +
+    '</div>';
+  }
+
+  function bindAccountingBridge() {
+    var sourceSelect = $('#accounting-bridge-source-module');
+    if (sourceSelect) sourceSelect.addEventListener('change', function () {
+      ui.accountingBridge.sourceModuleId = sourceSelect.value;
+      accountingBridgeSession = null;
+      render();
+    });
+    $$('[data-accounting-bridge-map-source]').forEach(function (select) {
+      select.addEventListener('change', function () {
+        var context = accountingBridgeCurrentContext();
+        if (!context.session || !accountingBridgeCanConfigure(context)) {
+          toast('Modification refusée : le droit de configuration comptable n’est pas accordé.', 'warning');
+          render();
+          return;
+        }
+        var sourceCode = select.getAttribute('data-accounting-bridge-map-source');
+        context.session.mappings = context.session.mappings.filter(function (mapping) { return mapping.sourceCode !== sourceCode; });
+        if (select.value) {
+          context.session.mappings.push({ sourceCode: sourceCode, targetCode: select.value });
+          delete context.session.explicitlyUnmapped[sourceCode];
+        } else {
+          context.session.explicitlyUnmapped[sourceCode] = true;
+        }
+        context.session.mappings.sort(function (left, right) { return left.sourceCode.localeCompare(right.sourceCode); });
+        context.session.dirty = JSON.stringify(context.session.mappings) !== JSON.stringify(context.session.originalMappings) || Object.keys(context.session.explicitlyUnmapped).length > 0;
+        render();
+      });
+    });
+  }
+
+  function saveAccountingBridgeFromView() {
+    var context = accountingBridgeCurrentContext();
+    if (!context.session || !context.source || !context.source.ready || !accountingBridgeCanConfigure(context)) {
+      toast('Enregistrement refusé : sélectionnez un module source disponible et disposez du droit de configuration comptable.', 'warning');
+      return;
+    }
+    var mappings = [];
+    $$('[data-accounting-bridge-map-source]').forEach(function (select) {
+      if (select.value) mappings.push({ sourceCode: select.getAttribute('data-accounting-bridge-map-source'), targetCode: select.value });
+    });
+    var targetAccounts = S.accounts();
+    var validation = AccountingBridge.validateMappings(mappings, context.sourceAccounts, targetAccounts);
+    if (!validation.ok) {
+      toast((validation.errors || ['Le tableau de passage contient une correspondance invalide.']).join(' '), 'warning');
+      return;
+    }
+    if (!window.confirm('Confirmer les correspondances de ' + context.source.label + ' vers le dossier ' + context.targetDossier.reference + ' ? Les écritures déjà enregistrées ne seront pas modifiées.')) return;
+    var saved = AccountingBridge.save(context.targetDossier.id, context.source.id, mappings, context.sourceAccounts, targetAccounts);
+    if (!saved.ok) {
+      toast((saved.errors || ['Enregistrement du tableau de passage impossible.']).join(' '), 'warning');
+      return;
+    }
+    context.session.mappings = saved.mappings.map(function (mapping) { return { sourceCode: mapping.sourceCode, targetCode: mapping.targetCode }; });
+    context.session.originalMappings = context.session.mappings.map(function (mapping) { return { sourceCode: mapping.sourceCode, targetCode: mapping.targetCode }; });
+    context.session.explicitlyUnmapped = Object.create(null);
+    context.session.updatedAt = saved.updatedAt;
+    context.session.dirty = false;
+    toast('Paramétrage des correspondances enregistré pour ' + context.source.label + ' · ' + context.targetDossier.reference + '.', 'success');
+    render();
+  }
+
   function viewGeneralAccountNatures() {
     var dossier = S.currentDossier();
     var configuration = S.generalAccountNaturesConfiguration();
@@ -4658,12 +4957,25 @@
     '</div>';
   }
 
-  function createPayrollCentralizationSession(run, dossier) {
+  function accountingBridgeConfiguredAccountMap(dossier, sourceModuleId, accountingLines) {
+    var saved = AccountingBridge.get(dossier.id, sourceModuleId);
+    var savedBySource = Object.create(null);
+    if (saved.ok) (saved.mappings || []).forEach(function (mapping) { savedBySource[mapping.sourceCode] = mapping.targetCode; });
     var accountMap = Object.create(null);
-    run.accountingLines.forEach(function (line) {
-      var code = String(line.accountCode || '').trim();
-      if (!Object.prototype.hasOwnProperty.call(accountMap, code)) accountMap[code] = S.account(code) ? code : '';
+    (Array.isArray(accountingLines) ? accountingLines : []).forEach(function (line) {
+      var code = String(line && line.accountCode || '').trim();
+      if (!code || Object.prototype.hasOwnProperty.call(accountMap, code)) return;
+      var sameCodeTarget = S.account(code);
+      accountMap[code] = saved.ok && Object.prototype.hasOwnProperty.call(savedBySource, code)
+        ? savedBySource[code]
+        : (sameCodeTarget && sameCodeTarget.active !== false && sameCodeTarget.postable !== false ? code : '');
     });
+    return { accountMap: accountMap, error: saved.ok ? '' : (saved.errors || ['Lecture du tableau de passage impossible.']).join(' ') };
+  }
+
+  function createPayrollCentralizationSession(run, dossier) {
+    var configuredMappings = accountingBridgeConfiguredAccountMap(dossier, 'payroll-hr', run.accountingLines);
+    var accountMap = configuredMappings.accountMap;
     var defaultJournal = S.journals().find(function (journal) { return journal.code === 'PA'; }) || S.journals().find(function (journal) { return journal.code === 'OD'; }) || S.journals()[0];
     var parts = run.period.split('-');
     return {
@@ -4674,6 +4986,7 @@
       targetReference: 'PA-' + parts[0] + '-' + parts[1] + '-001',
       mode: 'draft',
       accountMap: accountMap,
+      mappingConfigurationError: configuredMappings.error,
       mappingsConfirmed: false,
       additiveConfirmed: false,
       aggregateResult: null,
@@ -4723,7 +5036,7 @@
     var codes = Object.keys(catalog).sort(function (a, b) { return a.localeCompare(b); });
     var accounts = postingAccounts();
     return '<details class="exchange-mapping" open><summary>Correspondance des comptes du journal interne (' + codes.length + ' codes)</summary>' +
-      '<p class="small muted">Le plan de Paie & RH est comparé au plan comptable général du dossier. Les codes identiques sont pré-sélectionnés comme propositions ; vérifiez chaque ligne et confirmez explicitement l’ensemble. Aucun compte n’est créé.</p>' +
+      '<p class="small muted">Les correspondances enregistrées dans Paramètres sont chargées en premier ; à défaut, les codes identiques sont proposés. Les corrections faites ici ne valent que pour ce lot et doivent être confirmées avant transfert. <a href="' + esc(accountingMenuHash('parametres', 'accounting-bridge')) + '">Configurer les correspondances permanentes</a>. Aucun compte n’est créé.</p>' +
       '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Compte source Paie & RH</th><th>Libellé source</th><th>Compte cible</th></tr></thead><tbody>' +
       codes.map(function (code) {
         var mappedCode = session.accountMap[code] || '';
@@ -4833,6 +5146,9 @@
       ? '<div class="alert error"><div><strong>' + errorsList.length + ' contrôle(s) bloquant(s)</strong><ul>' + errorsList.slice(0, 20).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div></div>'
       : '<div class="alert success"><div><strong>Journal de paie équilibré et comptes associés.</strong><br>' + amount(aggregate.totalDebit) + ' XOF au débit comme au crédit · ' + aggregate.lines.length + ' ligne(s) générales prévues.</div></div>';
     var mappingConfirmation = '<label class="exchange-context-confirm"><input id="payroll-centralization-confirm-mappings" type="checkbox"' + (session.mappingsConfirmed ? ' checked' : '') + '> Je confirme les correspondances affichées entre le journal Paie & RH et le plan comptable général du dossier.</label>';
+    var mappingConfigurationNote = session.mappingConfigurationError
+      ? '<div class="alert warning"><strong>Paramétrage non lu.</strong> ' + esc(session.mappingConfigurationError) + ' Vérifiez manuellement chaque correspondance avant de poursuivre.</div>'
+      : '';
     var additiveWarning = existingPostedCount
       ? '<div class="alert warning"><div><strong>Le dossier contient déjà ' + existingPostedCount + ' écriture(s) validée(s) sur le cycle.</strong><br>La centralisation s’ajoutera au grand livre ; vérifiez que ce lot de paie n’est pas déjà comptabilisé.<label class="exchange-context-confirm"><input id="payroll-centralization-confirm-additive" type="checkbox"' + (session.additiveConfirmed ? ' checked' : '') + '> Je confirme l’ajout sans remplacement des écritures existantes.</label></div></div>'
       : '';
@@ -4840,7 +5156,7 @@
       ? '<div class="alert warning">Droits requis : consulter Paie & RH, importer dans la Comptabilité et, pour une écriture validée, disposer aussi du droit de validation comptable.</div>'
       : '';
     var button = '<button type="button" class="btn btn-primary" data-action="commit-accounting-payroll-centralization"' + (canCommit ? '' : ' disabled') + '>Centraliser comme ' + (session.mode === 'posted' ? 'écriture validée' : 'brouillon') + '</button>';
-    host.innerHTML = summary + sourceTable + payrollCentralizationMappingsHtml(session, run) + mappingConfirmation +
+    host.innerHTML = summary + sourceTable + payrollCentralizationMappingsHtml(session, run) + mappingConfigurationNote + mappingConfirmation +
       (aggregate.ok ? payrollCentralizationOutputHtml(aggregate.lines) : '') + warnings + errors + additiveWarning + permissionNote +
       '<div class="exchange-preview-footer">' + button + '</div>';
     applyDemoActionGates(host);
@@ -5013,11 +5329,8 @@
   }
 
   function createSalesCentralizationSession(run, dossier) {
-    var accountMap = Object.create(null);
-    run.accountingLines.forEach(function (line) {
-      var code = String(line.accountCode || '').trim();
-      if (!Object.prototype.hasOwnProperty.call(accountMap, code)) accountMap[code] = S.account(code) ? code : '';
-    });
+    var configuredMappings = accountingBridgeConfiguredAccountMap(dossier, 'sales-stock-invoicing', run.accountingLines);
+    var accountMap = configuredMappings.accountMap;
     var defaultJournal = S.journals().find(function (journal) { return journal.code === 'VTE'; }) || S.journals().find(function (journal) { return journal.code === 'OD'; }) || S.journals()[0];
     var parts = run.period.split('-');
     return {
@@ -5028,6 +5341,7 @@
       targetReference: 'VTE-' + parts[0] + '-' + parts[1] + '-001',
       mode: 'draft',
       accountMap: accountMap,
+      mappingConfigurationError: configuredMappings.error,
       mappingsConfirmed: false,
       additiveConfirmed: false,
       aggregateResult: null,
@@ -5079,7 +5393,7 @@
     var codes = Object.keys(catalog).sort(function (a, b) { return a.localeCompare(b); });
     var accounts = postingAccounts();
     return '<details class="exchange-mapping" open><summary>Correspondance des comptes du journal interne (' + codes.length + ' codes)</summary>' +
-      '<p class="small muted">Le plan de Ventes, stock & facturation est comparé au plan comptable général du dossier. Les codes identiques sont pré-sélectionnés comme propositions ; vérifiez chaque ligne et confirmez explicitement l’ensemble. Aucun compte n’est créé.</p>' +
+      '<p class="small muted">Les correspondances enregistrées dans Paramètres sont chargées en premier ; à défaut, les codes identiques sont proposés. Les corrections faites ici ne valent que pour ce lot et doivent être confirmées avant transfert. <a href="' + esc(accountingMenuHash('parametres', 'accounting-bridge')) + '">Configurer les correspondances permanentes</a>. Aucun compte n’est créé.</p>' +
       '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Compte source</th><th>Libellé source</th><th>Compte cible</th></tr></thead><tbody>' +
       codes.map(function (code) {
         var mappedCode = session.accountMap[code] || '';
@@ -5160,6 +5474,9 @@
       ? '<div class="alert error"><div><strong>' + errorsList.length + ' contrôle(s) bloquant(s)</strong><ul>' + errorsList.slice(0, 20).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div></div>'
       : '<div class="alert success"><div><strong>Journal interne équilibré et comptes associés.</strong><br>' + amount(aggregate.totalDebit) + ' XOF au débit comme au crédit · ' + aggregate.lines.length + ' ligne(s) générales prévues.</div></div>';
     var mappingConfirmation = '<label class="exchange-context-confirm"><input id="sales-centralization-confirm-mappings" type="checkbox"' + (session.mappingsConfirmed ? ' checked' : '') + '> Je confirme les correspondances affichées entre Ventes, stock & facturation et le plan comptable général du dossier.</label>';
+    var mappingConfigurationNote = session.mappingConfigurationError
+      ? '<div class="alert warning"><strong>Paramétrage non lu.</strong> ' + esc(session.mappingConfigurationError) + ' Vérifiez manuellement chaque correspondance avant de poursuivre.</div>'
+      : '';
     var additiveWarning = existingPostedCount
       ? '<div class="alert warning"><div><strong>Le dossier contient déjà ' + existingPostedCount + ' écriture(s) validée(s) sur le cycle.</strong><br>La centralisation s’ajoutera au grand livre ; vérifiez que ce lot n’est pas déjà comptabilisé.<label class="exchange-context-confirm"><input id="sales-centralization-confirm-additive" type="checkbox"' + (session.additiveConfirmed ? ' checked' : '') + '> Je confirme l’ajout sans remplacement des écritures existantes.</label></div></div>'
       : '';
@@ -5167,7 +5484,7 @@
       ? '<div class="alert warning">Droits requis : consulter Ventes, stock & facturation, importer dans la Comptabilité et, pour une écriture validée, disposer aussi du droit de validation comptable.</div>'
       : '';
     var button = '<button type="button" class="btn btn-primary" data-action="commit-accounting-sales-centralization"' + (canCommit ? '' : ' disabled') + '>Centraliser comme ' + (session.mode === 'posted' ? 'écriture validée' : 'brouillon') + '</button>';
-    host.innerHTML = summary + sourceTable + salesCentralizationMappingsHtml(session, run) + mappingConfirmation +
+    host.innerHTML = summary + sourceTable + salesCentralizationMappingsHtml(session, run) + mappingConfigurationNote + mappingConfirmation +
       (aggregate.ok ? salesCentralizationOutputHtml(aggregate.lines) : '') + warnings + errors + additiveWarning + permissionNote +
       '<div class="exchange-preview-footer">' + button + '</div>';
     applyDemoActionGates(host);
@@ -9463,6 +9780,8 @@
       exchangeFeature = viewAccountControls();
     } else if (group.id === 'parametres' && tab.id === 'financial-framework') {
       exchangeFeature = viewFinancialFramework();
+    } else if (group.id === 'parametres' && tab.id === 'accounting-bridge') {
+      exchangeFeature = viewAccountingBridge();
     } else if (group.id === 'parametres' && tab.id === 'general-account-natures') {
       exchangeFeature = viewGeneralAccountNatures();
     }
@@ -10415,6 +10734,7 @@
       if (menuParams.g === 'parametres' && menuParams.t === 'order-natures') bindOrderNatures();
       if (menuParams.g === 'parametres' && menuParams.t === 'account-controls') bindAccountControls();
       if (menuParams.g === 'parametres' && menuParams.t === 'financial-framework') bindFinancialFramework();
+      if (menuParams.g === 'parametres' && menuParams.t === 'accounting-bridge') bindAccountingBridge();
       if (menuParams.g === 'parametres' && menuParams.t === 'general-account-natures') bindGeneralAccountNatures();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'suppliers') bindSupplierView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'clients') bindClientView();
@@ -10750,6 +11070,9 @@
         }
         break;
       }
+      case 'save-accounting-bridge-mapping':
+        saveAccountingBridgeFromView();
+        break;
       case 'create-demo-payroll-run':
         createDemoPayrollRun();
         break;

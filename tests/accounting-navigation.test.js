@@ -453,7 +453,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v74/);
+assert.match(serviceWorkerSource, /perfecto-static-v75/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/fec-import\.js/);
 assert.match(htmlSource, /js\/fec-import\.js/);

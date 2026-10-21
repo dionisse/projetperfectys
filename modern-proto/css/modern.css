@@ -2506,6 +2506,41 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
 .fec-lines-preview .exchange-mapping-table { min-width: 900px; }
 .fec-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
+/* ---------- Tableau de passage interne ---------- */
+.accounting-bridge-source-field {
+  max-width: 720px;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid #e5ebe6;
+  border-radius: 9px;
+  background: #fff;
+}
+.accounting-bridge-source-field label { display: block; margin-bottom: 6px; color: #42594f; font-weight: 800; }
+.accounting-bridge-source-field select { width: 100%; min-height: 39px; padding: 7px 9px; border: 1px solid #dfe7e0; border-radius: 6px; color: #33483f; background: #fff; font: inherit; }
+.accounting-bridge-source-field .hint { display: block; margin-top: 7px; }
+.accounting-bridge-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.accounting-bridge-table-wrap { border: 1px solid #e5ebe6; border-radius: 9px; background: #fff; }
+.accounting-bridge-table { min-width: 720px; }
+.accounting-bridge-table td:first-child { min-width: 230px; }
+.accounting-bridge-table td:first-child small { display: inline-block; margin-top: 4px; line-height: 1.5; }
+.accounting-bridge-table select { min-width: 260px; }
+.accounting-bridge-row-state { display: inline-flex; padding: 4px 7px; border-radius: 999px; font-size: .59rem; font-weight: 800; white-space: nowrap; }
+.accounting-bridge-row-state.is-valid { color: #176c59; background: #eaf5f0; }
+.accounting-bridge-row-state.is-invalid { color: #9a4c32; background: #fff0e9; }
+.accounting-bridge-row-state.is-pending { color: #425a9a; background: #edf1ff; }
+.accounting-bridge-row-state.is-suggested { color: #806321; background: #f8f1dd; }
+.accounting-bridge-footer { display: flex; justify-content: flex-end; }
+.accounting-bridge-operations { display: grid; gap: 10px; }
+.accounting-bridge-operations > p:not(.page-kicker) { margin-bottom: 0 !important; }
+.accounting-bridge-operation-list { display: grid; gap: 7px; }
+.accounting-bridge-operation-card { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 13px; border: 1px solid #e5ebe6; border-radius: 7px; color: #344d43; background: #fbfcfa; text-decoration: none; transition: border-color .16s ease, background .16s ease; }
+.accounting-bridge-operation-card:hover { border-color: #8fb8a9; background: #f4f8f5; }
+.accounting-bridge-operation-card > span:first-child { min-width: 0; }
+.accounting-bridge-operation-card strong { display: block; font-size: .72rem; }
+.accounting-bridge-operation-card small { display: block; margin-top: 4px; color: #718078; font-size: .63rem; line-height: 1.45; }
+.accounting-bridge-operation-status { flex: 0 0 auto; padding: 4px 7px; border-radius: 999px; color: #456257; background: #eef4ef; font-size: .58rem; font-weight: 800; }
+.accounting-bridge-footnote { padding-top: 2px; }
+
 /* Référentiels locaux */
 .supplier-summary-grid,
 .service-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }

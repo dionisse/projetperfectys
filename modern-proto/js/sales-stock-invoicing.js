@@ -110,6 +110,26 @@
     return { ok: errors.length === 0, errors: errors, debit: debit, credit: credit };
   }
 
+  function demoAccountingLines(invoiceReference, stockReference) {
+    return [
+      { operationType: 'customer-invoice', operationReference: invoiceReference || '', accountCode: '411', accountLabel: 'Clients', description: 'Facture client fictive · créance', debit: 1200000, credit: 0 },
+      { operationType: 'customer-invoice', operationReference: invoiceReference || '', accountCode: '701', accountLabel: 'Ventes de marchandises', description: 'Facture client fictive · vente', debit: 0, credit: 1200000 },
+      { operationType: 'stock-receipt', operationReference: stockReference || '', accountCode: '601', accountLabel: 'Achats de marchandises', description: 'Réception de stock fictive · achat', debit: 600000, credit: 0 },
+      { operationType: 'stock-receipt', operationReference: stockReference || '', accountCode: '401', accountLabel: 'Fournisseurs, dettes en compte', description: 'Réception de stock fictive · dette fournisseur', debit: 0, credit: 600000 }
+    ];
+  }
+
+  function accountingAccountCatalog() {
+    var seen = Object.create(null);
+    return demoAccountingLines('', '').filter(function (line) {
+      if (seen[line.accountCode]) return false;
+      seen[line.accountCode] = true;
+      return true;
+    }).map(function (line) {
+      return { code: line.accountCode, label: line.accountLabel, postable: true, active: true };
+    });
+  }
+
   function runs(dossierId) {
     return clone(load(dossierId).runs).sort(function (a, b) {
       return String(b.period).localeCompare(String(a.period)) || String(a.reference).localeCompare(String(b.reference));
@@ -143,12 +163,7 @@
       invoiceCount: 1,
       stockMovementCount: 1,
       totals: { invoicedSales: 1200000, stockPurchases: 600000 },
-      accountingLines: [
-        { operationType: 'customer-invoice', operationReference: invoiceReference, accountCode: '411', accountLabel: 'Clients', description: 'Facture client fictive · créance', debit: 1200000, credit: 0 },
-        { operationType: 'customer-invoice', operationReference: invoiceReference, accountCode: '701', accountLabel: 'Ventes de marchandises', description: 'Facture client fictive · vente', debit: 0, credit: 1200000 },
-        { operationType: 'stock-receipt', operationReference: stockReference, accountCode: '601', accountLabel: 'Achats de marchandises', description: 'Réception de stock fictive · achat', debit: 600000, credit: 0 },
-        { operationType: 'stock-receipt', operationReference: stockReference, accountCode: '401', accountLabel: 'Fournisseurs, dettes en compte', description: 'Réception de stock fictive · dette fournisseur', debit: 0, credit: 600000 }
-      ],
+      accountingLines: demoAccountingLines(invoiceReference, stockReference),
       origin: 'demo',
       calculationNote: 'Montants fictifs : aucun calcul de TVA, de marge, de coût de revient ou de valorisation du stock n’est effectué.',
       createdAt: new Date().toISOString(),
@@ -186,6 +201,7 @@
     VERSION: VERSION,
     runs: runs,
     getRun: getRun,
+    accountingAccountCatalog: accountingAccountCatalog,
     createDemoRun: createDemoRun,
     approveRun: approveRun,
     sourceId: sourceId,
