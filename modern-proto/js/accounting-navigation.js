@@ -237,7 +237,7 @@
     {
       id: 'parametres', label: 'Paramètres', icon: '⚙', defaultTab: 'dossier-configuration', tabs: [
         { id: 'dossier-configuration', label: 'Configuration de la Comptabilité', status: 'partial', reason: 'Le formulaire de configuration du dossier permet au Superviseur général de régler les paramètres comptables ; les données et sauvegardes locales restent accessibles séparément.', actions: [{ label: 'Ouvrir les données et sauvegardes locales', route: 'settings' }] },
-        { id: 'sections-accounts', label: 'Sections et comptes analytiques', status: 'inactive', reason: 'Relève de la comptabilité analytique, module séparé.' },
+        { id: 'sections-accounts', label: 'Sections et comptes analytiques', status: 'partial', reason: 'Le paramétrage des listes peut être validé par dossier. Après validation, les champs sont grisés ; les opérations de comptabilité analytique restent inactives.' },
         { id: 'allocation-keys', label: 'Clés de répartition des sections', status: 'inactive', reason: 'Relève de la comptabilité analytique, module séparé.' },
         { id: 'general-account-natures', label: 'Natures des comptes généraux', status: 'planned', reason: 'Paramétrage général à construire.' },
         { id: 'analytic-natures', label: 'Natures analytiques', status: 'inactive', reason: 'Relève de la comptabilité analytique, module séparé.' },

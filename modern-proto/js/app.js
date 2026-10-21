@@ -2575,6 +2575,44 @@
     '</div>';
   }
 
+  function viewAnalyticalSectionsConfiguration() {
+    var dossier = S.currentDossier();
+    var configuration = S.analyticalSectionsConfiguration();
+    var canConfigure = hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalSections.configure', accountingAccessContext(dossier));
+    var locked = configuration.configured === true;
+    var editable = canConfigure && !locked && !isPhoneViewport();
+    var disabled = editable ? '' : ' disabled';
+    var validationDate = '';
+    if (locked && configuration.validatedAt) {
+      var parsedValidationDate = new Date(configuration.validatedAt);
+      if (!isNaN(parsedValidationDate.getTime())) validationDate = parsedValidationDate.toLocaleString('fr-FR');
+    }
+    var accessNotice = locked
+      ? '<div class="alert warning analytic-sections-lock-note"><div><strong>Paramétrage validé' + (validationDate ? ' le ' + esc(validationDate) : '') + '.</strong><br>Les listes sont conservées et grisées pour le moment. Les traitements de comptabilité analytique restent inactifs.</div></div>'
+      : (!canConfigure
+        ? '<div class="alert warning">Consultation seule : le droit explicite « Configurer les sections et comptes analytiques » est requis pour valider ce paramétrage.</div>'
+        : (isPhoneViewport() ? '<div class="alert info">La consultation est disponible sur téléphone ; le paramétrage se fait sur ordinateur ou tablette.</div>' : ''));
+
+    function listField(id, label, values) {
+      return '<div class="analytic-sections-row"><label for="' + id + '">' + label + '</label><textarea id="' + id + '" name="' + id + '" rows="7" maxlength="20000" spellcheck="false" aria-label="' + label + '">' +
+        esc((Array.isArray(values) ? values : []).join('\n')) + '</textarea></div>';
+    }
+
+    return '<div class="analytic-sections-workspace">' +
+      '<div class="alert info"><div><strong>Sections et comptes du dossier : ' + esc(dossier.clientName) + ' · ' + esc(dossier.reference) + '</strong><br>Les listes sont vides par défaut. Inscrivez les valeurs souhaitées, une par ligne, puis validez. Ce paramétrage ne modifie pas le plan comptable général et ne crée aucun mouvement ni aucune écriture analytique.</div></div>' +
+      accessNotice +
+      '<form id="analytical-sections-form" class="analytic-sections-form">' +
+        '<fieldset class="analytic-sections-fields' + (locked ? ' is-locked' : '') + '"' + disabled + '>' +
+          listField('analytic-main-sections', 'Sections principales', configuration.mainSections) +
+          listField('analytic-auxiliary-sections', 'Sections auxiliaires', configuration.auxiliarySections) +
+          listField('analytic-accounts', 'Comptes', configuration.accounts) +
+        '</fieldset>' +
+        '<div class="analytic-sections-footer"><span class="small muted">Le paramétrage est propre à ce dossier.</span><button type="submit" class="btn btn-primary"' + (editable ? '' : ' disabled') + '>Valider</button></div>' +
+      '</form>' +
+      '<div class="alert info analytic-sections-inactive-note"><div><strong>Comptabilité analytique inactive.</strong> La configuration peut être consultée après validation, mais aucune imputation, ventilation ou édition analytique n’est activée dans le parcours général.</div></div>' +
+    '</div>';
+  }
+
   function menuStatusBadge(status) {
     var label = AccountingNavigation.statusLabels[status] || AccountingNavigation.statusLabels.inactive;
     return '<span class="menu-status menu-status-' + esc(status) + '">' + esc(label) + '</span>';
@@ -8133,6 +8171,8 @@
       exchangeFeature = viewOpeningBalances();
     } else if (group.id === 'parametres' && tab.id === 'dossier-configuration') {
       exchangeFeature = viewAccountingConfiguration();
+    } else if (group.id === 'parametres' && tab.id === 'sections-accounts') {
+      exchangeFeature = viewAnalyticalSectionsConfiguration();
     }
     if (group.id === 'fichier') {
       switch (tab.id) {
@@ -8236,6 +8276,39 @@
     });
   }
 
+  function bindAnalyticalSectionsConfiguration() {
+    var form = $('#analytical-sections-form');
+    if (!form) return;
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var dossier = S.currentDossier();
+      var configuration = S.analyticalSectionsConfiguration();
+      if (configuration.configured) {
+        toast('Ce paramétrage a déjà été validé et reste verrouillé pendant que la comptabilité analytique est inactive.', 'warning');
+        return;
+      }
+      if (isPhoneViewport() || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalSections.configure', accountingAccessContext(dossier))) {
+        toast('Validation refusée : le droit de configuration analytique n’est pas accordé pour ce profil ou cet appareil.', 'warning');
+        return;
+      }
+      function value(id) {
+        var input = $('#' + id, form);
+        return input ? input.value : '';
+      }
+      var result = S.saveAnalyticalSectionsConfiguration({
+        mainSections: value('analytic-main-sections'),
+        auxiliarySections: value('analytic-auxiliary-sections'),
+        accounts: value('analytic-accounts')
+      });
+      if (!result.ok) {
+        toast((result.errors || ['Validation du paramétrage impossible.']).join(' '), 'warning');
+        return;
+      }
+      toast('Paramétrage des sections et comptes analytiques validé pour ce dossier. Les opérations analytiques restent inactives.', 'success');
+      render();
+    });
+  }
+
   function bindEntryJournalSelector() {
     var positionInput = $('#entry-journal-position');
     if (positionInput) {
@@ -8266,6 +8339,7 @@
     if (route === 'menu') {
       var menuParams = parseHash().params;
       if (menuParams.g === 'parametres' && menuParams.t === 'dossier-configuration') bindAccountingConfiguration();
+      if (menuParams.g === 'parametres' && menuParams.t === 'sections-accounts') bindAnalyticalSectionsConfiguration();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'suppliers') bindSupplierView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'clients') bindClientView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'services') bindServicesView();

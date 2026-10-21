@@ -35,3 +35,27 @@
   .accounting-config-footer { align-items: stretch; flex-direction: column; padding: 12px; }
   .accounting-config-footer .btn { justify-content: center; }
 }
+
+.analytic-sections-workspace { display: grid; gap: 11px; margin-top: 15px; min-width: 0; }
+.analytic-sections-workspace > .alert { margin: 0; align-items: flex-start; font-size: .72rem; line-height: 1.55; }
+.analytic-sections-form { overflow: hidden; border: 1px solid #e1e8e2; border-radius: 10px; background: #fff; box-shadow: 0 4px 14px rgba(24, 53, 48, .035); }
+.analytic-sections-fields { min-width: 0; margin: 0; padding: 5px 16px; border: 0; }
+.analytic-sections-row { display: grid; grid-template-columns: 195px minmax(0, 1fr); align-items: start; gap: 15px; padding: 11px 0; border-bottom: 1px solid #edf0eb; }
+.analytic-sections-row:last-child { border-bottom: 0; }
+.analytic-sections-row label { padding-top: 7px; color: #334c45; font-size: .73rem; font-weight: 750; }
+.analytic-sections-row textarea { min-height: 142px; max-height: 330px; resize: vertical; padding: 10px 12px; border: 1px solid #cbd7d2; border-radius: 6px; background: #fff; color: #334f54; font: inherit; font-size: .76rem; line-height: 1.55; }
+.analytic-sections-row textarea:focus { border-color: #0b7d73; box-shadow: 0 0 0 3px rgba(14, 142, 131, .14); outline: 0; }
+.analytic-sections-fields:disabled textarea { background: #f0f2ef; color: #737f78; cursor: not-allowed; }
+.analytic-sections-fields.is-locked .analytic-sections-row label { color: #79847d; }
+.analytic-sections-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-top: 1px solid #edf0eb; background: #fafbf8; }
+.analytic-sections-footer .small { margin: 0; font-size: .63rem; }
+.analytic-sections-footer button:disabled { opacity: .55; cursor: not-allowed; }
+.analytic-sections-lock-note { color: #56675e; }
+@media (max-width: 700px) {
+  .analytic-sections-fields { padding: 4px 11px; }
+  .analytic-sections-row { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .analytic-sections-row label { padding-top: 0; }
+  .analytic-sections-row textarea { min-height: 115px; }
+  .analytic-sections-footer { align-items: stretch; flex-direction: column; padding: 11px; }
+  .analytic-sections-footer button { justify-content: center; }
+}

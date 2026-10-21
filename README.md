@@ -42,6 +42,7 @@ Le dépôt fournit un serveur statique sans dépendance ni compilation. Dans Bol
 | Organisation & accès (démo) | Profils temporaires et droits explicites par personne, module, entreprise cliente, dossier et action ; refus par défaut |
 | Dossiers clients | Liste multi-dossiers ouverte depuis le module Comptabilité ; création d’entreprise, code, type comptable, référence et cycle paramétrable |
 | Configuration de la Comptabilité | Paramètres comptables enregistrés par dossier ; modification réservée au Superviseur général ou à un droit `accounting.configure` explicite. La date limite, le cycle, la précision des montants et la périodicité des références sont appliqués ; les fonctions associées aux règlements, commandes, clôture automatique et états en euros restent inactives |
+| Sections et comptes analytiques | Listes principales, auxiliaires et comptes configurables par dossier ; après validation, elles sont verrouillées/grisées. Les mouvements et opérations analytiques restent inactifs |
 | Tableau de bord | Indicateurs (débit, crédit, résultat, pièces), dernières pièces, activité par journal, état des périodes |
 | Plan comptable | Référentiel complet de 147 comptes fourni, classes et sous-classes, descriptions d’usage, recherche/filtres, création, modification et suppression contrôlée ; les numéros utilisés dans les pièces, les rattachements clients/fournisseurs/tiers divers/personnel ou les sous-comptes sont protégés, sans réécriture de l’historique |
 | Fournisseurs | Répertoire local isolé par dossier : code automatique modifiable, création, modification, archivage/réactivation et suppression des fiches non référencées ; IFU/RCCM, contacts, compte général et auxiliaire individualisé ; aucune facture, aucun règlement, mouvement auxiliaire ni lettrage individuel fournisseur n’est généré. Le lettrage disponible porte uniquement sur le compte général faute d’identifiant auxiliaire ; aucune centralisation n’est générée |
@@ -86,6 +87,12 @@ Le sous-menu **Paramètres → Configuration de la Comptabilité** permet de con
 Le rôle de démonstration **Superviseur général** peut enregistrer ces valeurs dans sa propre organisation. Tout autre profil est refusé par défaut et doit recevoir explicitement l’action `accounting.configure` sur le dossier concerné. La date limite de saisie, le nombre de décimales (0 à 4), la numérotation par jour/mois/année/exercice et les limites du cycle sont contrôlés par la saisie générale. Les périodes fermées sont conservées lorsque le cycle change ; une modification qui exclurait une pièce existante est refusée sans réécrire celle-ci. Les dates préremplies proviennent donc du cycle réel déjà associé au dossier (le dossier de démonstration contient des pièces 2026), tandis que les autres valeurs initiales reprennent la capture.
 
 Les champs de clôture automatique, règlements, commandes fournisseurs, états en euros, cadre/pays et organisme sont persistés comme paramètres mais ne déclenchent pas encore les traitements correspondants ; aucune clôture, échéance, commande ou conversion n’est générée dans ce prototype. L’accès **Données et sauvegardes locales** reste disponible séparément depuis ce sous-menu. Le stockage reste local au navigateur et les permissions côté client ne constituent pas une sécurité de production.
+
+### Sections et comptes analytiques — paramétrage verrouillé
+
+Le sous-menu **Paramètres → Sections et comptes analytiques** reprend les trois listes de la capture : **Sections principales**, **Sections auxiliaires** et **Comptes**. Elles sont vierges par défaut ; les valeurs saisies sont conservées une par ligne et par dossier. Le droit de démonstration `analyticalSections.configure` permet au Superviseur général (ou à un profil explicitement autorisé) de valider le paramétrage. Après validation, les listes sont affichées en gris et verrouillées pour cette étape.
+
+Ce paramétrage ne crée aucun centre d’analyse, imputation, mouvement, écriture ou état. Il est séparé du référentiel **Définitions → Centres d’analyse** ; la comptabilité analytique et ses autres parcours demeurent inactifs dans la comptabilité générale.
 
 ### Journaux — gestion par dossier
 

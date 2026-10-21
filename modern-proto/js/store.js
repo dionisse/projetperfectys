@@ -1021,6 +1021,26 @@
     };
   }
 
+  function normalizeAnalyticalValueList(value) {
+    var items = Array.isArray(value) ? value : (typeof value === 'string' ? value.split(/\r?\n/) : []);
+    return items.map(function (item) { return String(item == null ? '' : item).trim().slice(0, 240); }).filter(Boolean);
+  }
+
+  function defaultAnalyticalSectionsConfiguration() {
+    return { mainSections: [], auxiliarySections: [], accounts: [], configured: false, validatedAt: '' };
+  }
+
+  function normalizeAnalyticalSectionsConfiguration(value) {
+    var source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    return {
+      mainSections: normalizeAnalyticalValueList(source.mainSections),
+      auxiliarySections: normalizeAnalyticalValueList(source.auxiliarySections),
+      accounts: normalizeAnalyticalValueList(source.accounts),
+      configured: source.configured === true,
+      validatedAt: source.configured === true ? String(source.validatedAt || '').slice(0, 40) : ''
+    };
+  }
+
   function defaultDossier() {
     return {
       id: DEFAULT_FOLDER_ID,
@@ -1038,6 +1058,7 @@
       cycleStart: '2026-01-01',
       cycleEnd: '2026-12-31',
       accountingConfiguration: defaultAccountingConfiguration('2026-01-01', '2026-12-31'),
+      analyticalSectionsConfiguration: defaultAnalyticalSectionsConfiguration(),
       reference: 'COR-DEM2026',
       seeded: true
     };
@@ -1074,6 +1095,7 @@
       cycleStart: cycleStart,
       cycleEnd: cycleEnd,
       accountingConfiguration: normalizeAccountingConfiguration(record && record.accountingConfiguration, cycleStart, cycleEnd),
+      analyticalSectionsConfiguration: normalizeAnalyticalSectionsConfiguration(record && record.analyticalSectionsConfiguration),
       reference: String(record && record.reference || referenceFor(accountingTypeCode, clientCode, exerciseYear)),
       seeded: record && record.seeded !== false
     };
@@ -1143,6 +1165,11 @@
     return clone(dossier && dossier.accountingConfiguration || defaultAccountingConfiguration(dossier && dossier.cycleStart, dossier && dossier.cycleEnd));
   }
 
+  function analyticalSectionsConfiguration() {
+    var dossier = currentDossier();
+    return clone(dossier && dossier.analyticalSectionsConfiguration || defaultAnalyticalSectionsConfiguration());
+  }
+
   function parseIsoDate(value) {
     var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
     if (!match) return null;
@@ -1199,6 +1226,7 @@
       cycleStart: cycleStart,
       cycleEnd: cycleEnd,
       accountingConfiguration: normalizeAccountingConfiguration(input.accountingConfiguration, cycleStart, cycleEnd),
+      analyticalSectionsConfiguration: defaultAnalyticalSectionsConfiguration(),
       reference: reference,
       seeded: false
     };
@@ -1375,6 +1403,65 @@
     }
 
     return { ok: true, errors: [], dossier: clone(nextDossier), folder: clone(nextDossier) };
+  }
+
+  function saveAnalyticalSectionsConfiguration(input) {
+    ensureFolderCatalog();
+    input = input || {};
+    var dossier = folderById(activeFolderId);
+    if (!dossier) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    var existing = dossier.analyticalSectionsConfiguration || defaultAnalyticalSectionsConfiguration();
+    if (existing.configured) return { ok: false, errors: ['Cette configuration est déjà validée et verrouillée pour le moment ; les opérations analytiques restent inactives.'] };
+
+    var source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    var errors = [];
+    function readValues(key, label) {
+      var value = source[key];
+      var lines;
+      if (Array.isArray(value)) lines = value;
+      else if (typeof value === 'string') lines = value.split(/\r?\n/);
+      else {
+        errors.push('La liste « ' + label + ' » est invalide.');
+        return [];
+      }
+      var cleaned = [];
+      lines.forEach(function (line) {
+        var item = String(line == null ? '' : line).trim();
+        if (!item) return;
+        if (item.length > 240) errors.push('Chaque valeur de « ' + label + ' » doit rester sous 240 caractères.');
+        else cleaned.push(item);
+      });
+      return cleaned;
+    }
+
+    var mainSections = readValues('mainSections', 'Sections principales');
+    var auxiliarySections = readValues('auxiliarySections', 'Sections auxiliaires');
+    var accounts = readValues('accounts', 'Comptes');
+    if (!mainSections.length && !auxiliarySections.length && !accounts.length) {
+      errors.push('Saisissez au moins une valeur avant de valider ; les listes vides restent le paramétrage par défaut.');
+    }
+    if (errors.length) return { ok: false, errors: errors };
+
+    var savedConfiguration = {
+      mainSections: mainSections,
+      auxiliarySections: auxiliarySections,
+      accounts: accounts,
+      configured: true,
+      validatedAt: new Date().toISOString()
+    };
+    var previousCatalog = clone(folderCatalog);
+    var dossierIndex = folderCatalog.findIndex(function (record) { return record.id === dossier.id; });
+    folderCatalog[dossierIndex] = Object.assign({}, dossier, { analyticalSectionsConfiguration: savedConfiguration });
+    if (!saveFolderCatalog()) {
+      folderCatalog = previousCatalog;
+      return { ok: false, errors: ['Impossible d’enregistrer le paramétrage analytique dans ce navigateur. Les listes restent inchangées.'] };
+    }
+    return {
+      ok: true,
+      errors: [],
+      configuration: clone(savedConfiguration),
+      dossier: clone(folderCatalog[dossierIndex])
+    };
   }
 
   function dossierStorageKey(dossierId) {
@@ -5042,6 +5129,8 @@
     currentDossier: currentDossier,
     accountingConfiguration: accountingConfiguration,
     updateAccountingConfiguration: updateAccountingConfiguration,
+    analyticalSectionsConfiguration: analyticalSectionsConfiguration,
+    saveAnalyticalSectionsConfiguration: saveAnalyticalSectionsConfiguration,
     currentStorageKey: currentFolderStorageKey,
     createDossier: createDossier,
     readDossierStateSnapshot: readDossierStateSnapshot,
