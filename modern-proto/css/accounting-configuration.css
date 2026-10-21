@@ -207,43 +207,34 @@
 
 .fixed-asset-accounts-workspace { display: grid; gap: 10px; margin-top: 15px; min-width: 0; }
 .fixed-asset-accounts-access-note { margin: 0; font-size: .68rem !important; }
-.fixed-asset-accounts-layout { display: grid; grid-template-columns: minmax(0, 1fr) 145px; align-items: start; gap: 16px; min-width: 0; }
-.fixed-asset-accounts-table-wrap { height: min(68vh, 580px); min-height: 430px; min-width: 0; overflow: auto; border: 1px solid #111; background: #fff; }
-.fixed-asset-accounts-table { width: 100%; min-width: 820px; table-layout: fixed; border-collapse: collapse; font-size: .74rem; }
+.fixed-asset-accounts-layout { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 12px; min-width: 0; }
+.fixed-asset-accounts-table-wrap { width: 100%; min-width: 0; border: 1px solid #111; background: #fff; }
+.fixed-asset-accounts-table { width: 100%; min-width: 0; table-layout: fixed; border-collapse: collapse; font-size: .74rem; }
 .fixed-asset-accounts-table th,
 .fixed-asset-accounts-table td { border: 1px solid #111; }
-.fixed-asset-accounts-table th { position: sticky; z-index: 1; top: 0; height: 62px; padding: 5px 8px; background: #f3f2f0; color: #111; font-size: .73rem; font-weight: 700; line-height: 1.23; text-align: center; }
+.fixed-asset-accounts-table th { height: 58px; padding: 5px 7px; background: #f3f2f0; color: #111; font-size: .72rem; font-weight: 700; line-height: 1.2; text-align: center; overflow-wrap: anywhere; hyphens: auto; }
 .fixed-asset-accounts-table th:nth-child(1),
 .fixed-asset-accounts-table th:nth-child(2),
 .fixed-asset-accounts-table th:nth-child(3),
 .fixed-asset-accounts-table th:nth-child(4),
 .fixed-asset-accounts-table th:nth-child(5) { width: 20%; }
-.fixed-asset-accounts-table tbody tr { height: 32px; }
+.fixed-asset-accounts-table tbody tr { height: 28px; }
 .fixed-asset-accounts-table tbody tr.fixed-asset-accounts-row { cursor: pointer; }
 .fixed-asset-accounts-table td { padding: 3px 6px; line-height: 1.2; overflow-wrap: anywhere; }
 .fixed-asset-accounts-table tbody tr.is-selected { color: #fff; background: #0782d8; }
 .fixed-asset-accounts-table tbody tr:focus-visible { outline: 2px dotted #145a95; outline-offset: -3px; }
 .fixed-asset-accounts-table tbody tr.is-selected:focus-visible { outline-color: #fff; }
-.fixed-asset-accounts-table td input { display: block; width: 100%; min-width: 0; height: 26px; padding: 3px 4px; border: 1px solid #8a9690; border-radius: 2px; background: #fff; color: #17221d; font: inherit; }
-.fixed-asset-accounts-actions { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
-.fixed-asset-accounts-actions .btn { min-height: 46px; justify-content: center; padding: 7px 8px; font-size: .75rem; white-space: nowrap; }
-.fixed-asset-accounts-actions [data-fixed-asset-account-action="reset"] { margin-top: 145px; }
-.fixed-asset-accounts-actions [data-fixed-asset-account-action="accounts"] { margin-top: 26px; }
-.fixed-asset-accounts-actions [data-fixed-asset-account-action="validate"] { margin-top: 29px; }
-.fixed-asset-accounts-actions [data-fixed-asset-account-action="cancel"] { margin-top: -8px; }
+.fixed-asset-accounts-table td input { box-sizing: border-box; display: block; width: 100%; min-width: 0; height: 26px; padding: 3px 4px; border: 1px solid #8a9690; border-radius: 2px; background: #fff; color: #17221d; font: inherit; }
+.fixed-asset-accounts-actions { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 9px; min-width: 0; }
+.fixed-asset-accounts-actions .btn { width: 100%; min-width: 0; min-height: 40px; justify-content: center; padding: 7px 8px; font-size: .72rem; line-height: 1.2; white-space: normal; overflow-wrap: anywhere; }
 .fixed-asset-accounts-footnote { margin: 0; font-size: .63rem; line-height: 1.45; }
-@media (max-width: 850px) {
-  .fixed-asset-accounts-layout { grid-template-columns: minmax(0, 1fr) 128px; gap: 11px; }
-  .fixed-asset-accounts-table-wrap { height: min(65vh, 540px); min-height: 380px; }
-  .fixed-asset-accounts-actions [data-fixed-asset-account-action="reset"] { margin-top: 100px; }
+@media (max-width: 900px) {
+  .fixed-asset-accounts-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 700px) {
-  .fixed-asset-accounts-layout { grid-template-columns: minmax(0, 1fr); }
-  .fixed-asset-accounts-table-wrap { height: 52vh; min-height: 300px; }
-  .fixed-asset-accounts-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
-  .fixed-asset-accounts-actions .btn { min-height: 40px; font-size: .69rem; }
-  .fixed-asset-accounts-actions [data-fixed-asset-account-action="reset"],
-  .fixed-asset-accounts-actions [data-fixed-asset-account-action="accounts"],
-  .fixed-asset-accounts-actions [data-fixed-asset-account-action="validate"],
-  .fixed-asset-accounts-actions [data-fixed-asset-account-action="cancel"] { margin-top: 0; }
+  .fixed-asset-accounts-table { font-size: .64rem; }
+  .fixed-asset-accounts-table th { height: auto; min-height: 54px; padding: 4px 3px; font-size: .62rem; line-height: 1.15; }
+  .fixed-asset-accounts-table td { padding: 3px 4px; }
+  .fixed-asset-accounts-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .fixed-asset-accounts-actions .btn { min-height: 38px; padding: 6px 5px; font-size: .66rem; }
 }

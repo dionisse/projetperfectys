@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const nav = require('../modern-proto/js/accounting-navigation.js');
 const appSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'app.js'), 'utf8');
+const configurationCss = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'css', 'accounting-configuration.css'), 'utf8');
 const menuRendererStart = appSource.indexOf('function viewAccountingMenu(params) {');
 const menuRendererEnd = appSource.indexOf('function bindEntryJournalSelector()', menuRendererStart);
 const menuRenderer = appSource.slice(menuRendererStart, menuRendererEnd);
@@ -364,6 +365,10 @@ assert.ok(findTab('parametres', 'fixed-asset-accounts').reason.includes('aucune 
 assert.match(appSource, /var fixedAssetAccountsSelectedId = 'fixed-assets-class-21'/, '21* est sélectionné à l’ouverture');
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'fixed-asset-accounts'[\s\S]*viewFixedAssetAccounts\(\)/);
 assert.match(appSource, /function viewFixedAssetAccounts\(\)[\s\S]*Compte de valeur brute[\s\S]*Compte d’amortissements[\s\S]*Dotations aux amortissements[\s\S]*Valeurs nettes de cession[\s\S]*Reprises de subventions[\s\S]*Réinitialiser\.\.\.[\s\S]*Valider[\s\S]*Annuler/);
+assert.match(configurationCss, /\.fixed-asset-accounts-layout\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/, 'table et actions suivent une disposition sous la grille');
+assert.match(configurationCss, /\.fixed-asset-accounts-table-wrap\s*\{[^}]*width:\s*100%[^}]*\}/, 'la table utilise toute la largeur disponible');
+assert.doesNotMatch(configurationCss, /\.fixed-asset-accounts-table-wrap\s*\{[^}]*overflow:\s*(?:auto|scroll)/, 'la table ne crée pas de barre de défilement interne');
+assert.match(configurationCss, /\.fixed-asset-accounts-actions\s*\{[^}]*grid-template-columns:\s*repeat\(6/, 'les boutons sont regroupés sous la table');
 assert.match(appSource, /function bindFixedAssetAccounts\(\)[\s\S]*initializeFixedAssetAccountsConfiguration[\s\S]*saveFixedAssetAccountsConfiguration/);
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'dossier-configuration'[\s\S]*viewAccountingConfiguration\(\)/);
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'sections-accounts'[\s\S]*viewAnalyticalSectionsConfiguration\(\)/);
