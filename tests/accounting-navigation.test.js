@@ -462,6 +462,12 @@ assert.match(appSource, /function buildFecImportReversalEntry\([\s\S]*opposite-l
 assert.match(appSource, /function commitFecImportReversal\([\s\S]*S\.importExchange/);
 assert.match(appSource, /Gérer les écritures validées/);
 assert.match(appSource, /La pièce FEC d’origine restera validée et inchangée/);
+assert.match(appSource, /id="payroll-centralization-confirm-mappings"/);
+assert.match(appSource, /id="sales-centralization-confirm-mappings"/);
+assert.equal((appSource.match(/var canCommit = aggregate\.ok && analysis\.ok && session\.mappingsConfirmed && !permissionBlocked && !additiveBlocked;/g) || []).length, 2,
+  'Paie & RH et Ventes ne centralisent pas avant confirmation des correspondances');
+assert.match(appSource, /function commitAccountingPayrollCentralization\([\s\S]*var mappingsBlocked = !session\.mappingsConfirmed[\s\S]*Confirmez les correspondances entre le module source/);
+assert.match(appSource, /function commitAccountingSalesCentralization\([\s\S]*var mappingsBlocked = !session\.mappingsConfirmed[\s\S]*Confirmez les correspondances entre le module source/);
 assert.match(configurationCss, /\.financial-framework-table[\s\S]*\.financial-framework-post-code[\s\S]*\.financial-framework-empty-cell/);
 
 console.log('Navigation comptable : 8 menus, hiérarchie, sélection des enfants, périmètre et états inactifs — OK');

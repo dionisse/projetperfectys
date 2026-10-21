@@ -4674,6 +4674,7 @@
       targetReference: 'PA-' + parts[0] + '-' + parts[1] + '-001',
       mode: 'draft',
       accountMap: accountMap,
+      mappingsConfirmed: false,
       additiveConfirmed: false,
       aggregateResult: null,
       analysis: null
@@ -4721,8 +4722,8 @@
     });
     var codes = Object.keys(catalog).sort(function (a, b) { return a.localeCompare(b); });
     var accounts = postingAccounts();
-    return '<details class="exchange-mapping"' + (codes.some(function (code) { return !session.accountMap[code]; }) ? ' open' : '') + '><summary>Correspondance des comptes du journal interne (' + codes.length + ' codes)</summary>' +
-      '<p class="small muted">Les comptes sont proposés par Paie & RH. Associez chaque compte source à un compte existant du plan du dossier ; aucun compte ne sera créé.</p>' +
+    return '<details class="exchange-mapping" open><summary>Correspondance des comptes du journal interne (' + codes.length + ' codes)</summary>' +
+      '<p class="small muted">Le plan de Paie & RH est comparé au plan comptable général du dossier. Les codes identiques sont pré-sélectionnés comme propositions ; vérifiez chaque ligne et confirmez explicitement l’ensemble. Aucun compte n’est créé.</p>' +
       '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Compte source Paie & RH</th><th>Libellé source</th><th>Compte cible</th></tr></thead><tbody>' +
       codes.map(function (code) {
         var mappedCode = session.accountMap[code] || '';
@@ -4809,7 +4810,7 @@
       return entry.status === 'posted' && entry.date >= dossier.cycleStart && entry.date <= dossier.cycleEnd;
     }).length;
     var additiveBlocked = existingPostedCount > 0 && !session.additiveConfirmed;
-    var canCommit = aggregate.ok && analysis.ok && !permissionBlocked && !additiveBlocked;
+    var canCommit = aggregate.ok && analysis.ok && session.mappingsConfirmed && !permissionBlocked && !additiveBlocked;
     var totals = run.totals || {};
     var summary = '<div class="exchange-summary-grid">' +
       '<div><small>Module source</small><strong>Paie & RH · interne</strong></div>' +
@@ -4831,6 +4832,7 @@
     var errors = errorsList.length
       ? '<div class="alert error"><div><strong>' + errorsList.length + ' contrôle(s) bloquant(s)</strong><ul>' + errorsList.slice(0, 20).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div></div>'
       : '<div class="alert success"><div><strong>Journal de paie équilibré et comptes associés.</strong><br>' + amount(aggregate.totalDebit) + ' XOF au débit comme au crédit · ' + aggregate.lines.length + ' ligne(s) générales prévues.</div></div>';
+    var mappingConfirmation = '<label class="exchange-context-confirm"><input id="payroll-centralization-confirm-mappings" type="checkbox"' + (session.mappingsConfirmed ? ' checked' : '') + '> Je confirme les correspondances affichées entre le journal Paie & RH et le plan comptable général du dossier.</label>';
     var additiveWarning = existingPostedCount
       ? '<div class="alert warning"><div><strong>Le dossier contient déjà ' + existingPostedCount + ' écriture(s) validée(s) sur le cycle.</strong><br>La centralisation s’ajoutera au grand livre ; vérifiez que ce lot de paie n’est pas déjà comptabilisé.<label class="exchange-context-confirm"><input id="payroll-centralization-confirm-additive" type="checkbox"' + (session.additiveConfirmed ? ' checked' : '') + '> Je confirme l’ajout sans remplacement des écritures existantes.</label></div></div>'
       : '';
@@ -4838,16 +4840,22 @@
       ? '<div class="alert warning">Droits requis : consulter Paie & RH, importer dans la Comptabilité et, pour une écriture validée, disposer aussi du droit de validation comptable.</div>'
       : '';
     var button = '<button type="button" class="btn btn-primary" data-action="commit-accounting-payroll-centralization"' + (canCommit ? '' : ' disabled') + '>Centraliser comme ' + (session.mode === 'posted' ? 'écriture validée' : 'brouillon') + '</button>';
-    host.innerHTML = summary + sourceTable + payrollCentralizationMappingsHtml(session, run) +
+    host.innerHTML = summary + sourceTable + payrollCentralizationMappingsHtml(session, run) + mappingConfirmation +
       (aggregate.ok ? payrollCentralizationOutputHtml(aggregate.lines) : '') + warnings + errors + additiveWarning + permissionNote +
       '<div class="exchange-preview-footer">' + button + '</div>';
     applyDemoActionGates(host);
     $$('[data-payroll-account-map]', host).forEach(function (select) {
       select.addEventListener('change', function () {
         session.accountMap[select.getAttribute('data-payroll-account-map')] = select.value;
+        session.mappingsConfirmed = false;
         session.additiveConfirmed = !!(host.querySelector('#payroll-centralization-confirm-additive') && host.querySelector('#payroll-centralization-confirm-additive').checked);
         renderPayrollCentralizationPreview();
       });
+    });
+    var confirmMappings = $('#payroll-centralization-confirm-mappings', host);
+    if (confirmMappings) confirmMappings.addEventListener('change', function () {
+      session.mappingsConfirmed = confirmMappings.checked;
+      renderPayrollCentralizationPreview();
     });
     var confirmAdditive = $('#payroll-centralization-confirm-additive', host);
     if (confirmAdditive) confirmAdditive.addEventListener('change', function () {
@@ -4938,11 +4946,12 @@
     var linkedEntry = payrollEntryForRun(run, dossier.id);
     var existingPostedCount = S.entries().filter(function (entry) { return entry.status === 'posted' && entry.date >= dossier.cycleStart && entry.date <= dossier.cycleEnd; }).length;
     var additiveBlocked = existingPostedCount > 0 && !session.additiveConfirmed;
-    if (linkedEntry || !analysis.ok || additiveBlocked) {
+    var mappingsBlocked = !session.mappingsConfirmed;
+    if (linkedEntry || !analysis.ok || additiveBlocked || mappingsBlocked) {
       renderPayrollCentralizationPreview();
       toast(linkedEntry
         ? 'Ce lot Paie & RH a déjà été centralisé ; un transfert en doublon est refusé.'
-        : (additiveBlocked ? 'Confirmez l’ajout au grand livre existant.' : 'La centralisation est bloquée par les contrôles affichés.'), 'warning');
+        : (additiveBlocked ? 'Confirmez l’ajout au grand livre existant.' : (mappingsBlocked ? 'Confirmez les correspondances entre le module source et le plan comptable général.' : 'La centralisation est bloquée par les contrôles affichés.')), 'warning');
       return;
     }
     var statusLabel = mode === 'posted' ? 'écriture validée' : 'brouillon';
@@ -5019,6 +5028,7 @@
       targetReference: 'VTE-' + parts[0] + '-' + parts[1] + '-001',
       mode: 'draft',
       accountMap: accountMap,
+      mappingsConfirmed: false,
       additiveConfirmed: false,
       aggregateResult: null,
       analysis: null
@@ -5068,8 +5078,8 @@
     });
     var codes = Object.keys(catalog).sort(function (a, b) { return a.localeCompare(b); });
     var accounts = postingAccounts();
-    return '<details class="exchange-mapping"' + (codes.some(function (code) { return !session.accountMap[code]; }) ? ' open' : '') + '><summary>Correspondance des comptes du journal interne (' + codes.length + ' codes)</summary>' +
-      '<p class="small muted">Les comptes sont produits par Ventes, stock & facturation. Associez chaque compte source à un compte existant du plan du dossier ; aucun compte ne sera créé.</p>' +
+    return '<details class="exchange-mapping" open><summary>Correspondance des comptes du journal interne (' + codes.length + ' codes)</summary>' +
+      '<p class="small muted">Le plan de Ventes, stock & facturation est comparé au plan comptable général du dossier. Les codes identiques sont pré-sélectionnés comme propositions ; vérifiez chaque ligne et confirmez explicitement l’ensemble. Aucun compte n’est créé.</p>' +
       '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Compte source</th><th>Libellé source</th><th>Compte cible</th></tr></thead><tbody>' +
       codes.map(function (code) {
         var mappedCode = session.accountMap[code] || '';
@@ -5126,7 +5136,7 @@
       return entry.status === 'posted' && entry.date >= dossier.cycleStart && entry.date <= dossier.cycleEnd;
     }).length;
     var additiveBlocked = existingPostedCount > 0 && !session.additiveConfirmed;
-    var canCommit = aggregate.ok && analysis.ok && !permissionBlocked && !additiveBlocked;
+    var canCommit = aggregate.ok && analysis.ok && session.mappingsConfirmed && !permissionBlocked && !additiveBlocked;
     var totals = run.totals || {};
     var summary = '<div class="exchange-summary-grid">' +
       '<div><small>Module source</small><strong>Ventes, stock & facturation · interne</strong></div>' +
@@ -5149,6 +5159,7 @@
     var errors = errorsList.length
       ? '<div class="alert error"><div><strong>' + errorsList.length + ' contrôle(s) bloquant(s)</strong><ul>' + errorsList.slice(0, 20).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div></div>'
       : '<div class="alert success"><div><strong>Journal interne équilibré et comptes associés.</strong><br>' + amount(aggregate.totalDebit) + ' XOF au débit comme au crédit · ' + aggregate.lines.length + ' ligne(s) générales prévues.</div></div>';
+    var mappingConfirmation = '<label class="exchange-context-confirm"><input id="sales-centralization-confirm-mappings" type="checkbox"' + (session.mappingsConfirmed ? ' checked' : '') + '> Je confirme les correspondances affichées entre Ventes, stock & facturation et le plan comptable général du dossier.</label>';
     var additiveWarning = existingPostedCount
       ? '<div class="alert warning"><div><strong>Le dossier contient déjà ' + existingPostedCount + ' écriture(s) validée(s) sur le cycle.</strong><br>La centralisation s’ajoutera au grand livre ; vérifiez que ce lot n’est pas déjà comptabilisé.<label class="exchange-context-confirm"><input id="sales-centralization-confirm-additive" type="checkbox"' + (session.additiveConfirmed ? ' checked' : '') + '> Je confirme l’ajout sans remplacement des écritures existantes.</label></div></div>'
       : '';
@@ -5156,16 +5167,22 @@
       ? '<div class="alert warning">Droits requis : consulter Ventes, stock & facturation, importer dans la Comptabilité et, pour une écriture validée, disposer aussi du droit de validation comptable.</div>'
       : '';
     var button = '<button type="button" class="btn btn-primary" data-action="commit-accounting-sales-centralization"' + (canCommit ? '' : ' disabled') + '>Centraliser comme ' + (session.mode === 'posted' ? 'écriture validée' : 'brouillon') + '</button>';
-    host.innerHTML = summary + sourceTable + salesCentralizationMappingsHtml(session, run) +
+    host.innerHTML = summary + sourceTable + salesCentralizationMappingsHtml(session, run) + mappingConfirmation +
       (aggregate.ok ? salesCentralizationOutputHtml(aggregate.lines) : '') + warnings + errors + additiveWarning + permissionNote +
       '<div class="exchange-preview-footer">' + button + '</div>';
     applyDemoActionGates(host);
     $$('[data-sales-account-map]', host).forEach(function (select) {
       select.addEventListener('change', function () {
         session.accountMap[select.getAttribute('data-sales-account-map')] = select.value;
+        session.mappingsConfirmed = false;
         session.additiveConfirmed = !!(host.querySelector('#sales-centralization-confirm-additive') && host.querySelector('#sales-centralization-confirm-additive').checked);
         renderSalesCentralizationPreview();
       });
+    });
+    var confirmMappings = $('#sales-centralization-confirm-mappings', host);
+    if (confirmMappings) confirmMappings.addEventListener('change', function () {
+      session.mappingsConfirmed = confirmMappings.checked;
+      renderSalesCentralizationPreview();
     });
     var confirmAdditive = $('#sales-centralization-confirm-additive', host);
     if (confirmAdditive) confirmAdditive.addEventListener('change', function () {
@@ -5256,11 +5273,12 @@
     var linkedEntry = salesEntryForRun(run, dossier.id);
     var existingPostedCount = S.entries().filter(function (entry) { return entry.status === 'posted' && entry.date >= dossier.cycleStart && entry.date <= dossier.cycleEnd; }).length;
     var additiveBlocked = existingPostedCount > 0 && !session.additiveConfirmed;
-    if (linkedEntry || !analysis.ok || additiveBlocked) {
+    var mappingsBlocked = !session.mappingsConfirmed;
+    if (linkedEntry || !analysis.ok || additiveBlocked || mappingsBlocked) {
       renderSalesCentralizationPreview();
       toast(linkedEntry
         ? 'Ce lot Ventes, stock & facturation a déjà été centralisé ; le doublon est refusé.'
-        : (additiveBlocked ? 'Confirmez l’ajout au grand livre existant.' : 'La centralisation est bloquée par les contrôles affichés.'), 'warning');
+        : (additiveBlocked ? 'Confirmez l’ajout au grand livre existant.' : (mappingsBlocked ? 'Confirmez les correspondances entre le module source et le plan comptable général.' : 'La centralisation est bloquée par les contrôles affichés.')), 'warning');
       return;
     }
     var statusLabel = mode === 'posted' ? 'écriture validée' : 'brouillon';

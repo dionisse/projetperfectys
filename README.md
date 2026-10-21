@@ -323,7 +323,8 @@ Les centralisations **entre modules PERFECTO** utilisent exclusivement les donn�
 Le module **Paie & RH** expose un registre interne de lots de paie isolé par dossier client. En démo, un lot fictif peut être créé pour une période du cycle, contrôlé puis approuvé ; il contient un journal comptable équilibré sans noms ni données personnelles.
 
 - La centralisation consomme exclusivement un lot approuvé produit dans le module maison Paie & RH. Aucun fichier CSV/Excel ni logiciel tiers n’est accepté dans ce parcours.
-- Les comptes source sont associés à des comptes existants du plan actif, les débits et crédits sont agrégés séparément par compte cible et le lot crée une seule pièce dans le journal de paie `PA` par défaut.
+- Le plan Paie & RH est comparé au plan comptable général du dossier ; les codes identiques sont seulement pré-sélectionnés. L’utilisateur examine le tableau visible et confirme explicitement les correspondances avant transfert ; toute modification réinitialise cette confirmation.
+- Les débits et crédits sont agrégés séparément par compte cible et le lot crée une seule pièce dans le journal de paie `PA` par défaut.
 - L’écriture est un brouillon par défaut, précédée d’un point de restauration local ; la provenance interne est conservée et un même lot ne peut pas être centralisé deux fois.
 - Le registre démo n’effectue **aucun calcul de salaire, cotisation, impôt ou retenue légale**. La gestion des employés, contrats, règles de paie, validations RH et synchronisation multi-utilisateur restent à construire. Les montants présentés sont fictifs.
 
@@ -332,7 +333,8 @@ Le module **Paie & RH** expose un registre interne de lots de paie isolé par do
 Le module **Ventes, stock & facturation** conserve localement, par dossier client, des lots d’opérations internes. En démo, un lot fictif regroupe une facture de vente et une réception d’approvisionnement avec leur journal comptable équilibré ; le lot doit être approuvé avant transfert.
 
 - La centralisation lit exclusivement les lots approuvés du module maison. Aucun CSV/Excel, fichier tiers ou logiciel externe ne peut alimenter ce parcours.
-- Les comptes source sont associés à des comptes existants du plan actif ; les mouvements sont agrégés par compte cible dans une pièce générale unique, au journal Ventes (`VTE`) par défaut.
+- Le plan Ventes, stock & facturation est comparé au plan comptable général du dossier ; les codes identiques sont seulement pré-sélectionnés. L’utilisateur examine le tableau visible et confirme explicitement les correspondances avant transfert ; toute modification réinitialise cette confirmation.
+- Les mouvements sont agrégés par compte cible dans une pièce générale unique, au journal Ventes (`VTE`) par défaut.
 - Le brouillon est le mode par défaut ; la date, le journal, la référence, les permissions, l’équilibre, le point de restauration local et l’anti-doublon sont contrôlés.
 - Le jeu d’exemple est fictif : **aucune facture réelle, TVA, marge, coût de revient, valorisation du stock ou règle fiscale n’est calculé**. Le cycle complet des clients, articles, tarifs, règlements, inventaires et retours reste à construire.
 
