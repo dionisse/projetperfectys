@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const nav = require('../modern-proto/js/accounting-navigation.js');
 const appSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'app.js'), 'utf8');
+const journalLinesSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'journal-lines-report.js'), 'utf8');
 const configurationCss = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'css', 'accounting-configuration.css'), 'utf8');
 const htmlSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'index.html'), 'utf8');
 const serviceWorkerSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'service-worker.js'), 'utf8');
@@ -266,7 +267,20 @@ assert.deepEqual(findTab('editions', 'journals').children.map(child => child.lab
   'Cumul par devises',
   'Fiche d’imputation'
 ]);
-assert.equal(findTab('editions', 'journals').children[0].status, 'partial');
+assert.equal(findTab('editions', 'journals').children[0].status, 'active');
+assert.ok(findTab('editions', 'journals').children[0].reason.includes('export Excel/TXT'));
+assert.match(appSource, /child\.id === 'journal-lines'\) return viewJournalLinesReport\(backLink\)/,
+  'le détail des lignes ouvre son parcours de sélection dédié');
+assert.match(appSource, /function bindJournalLinesReport\([\s\S]*submitJournalLinesSelection[\s\S]*submitJournalLinesLayout/,
+  'les deux écrans de sélection et de mise en page sont liés');
+assert.match(appSource, /async function generateJournalLinesReportFile[\s\S]*exportTabularWorkbook[\s\S]*toTsv/,
+  'les destinations Table et Fichier produisent les formats attendus');
+assert.match(appSource, /function printJournalLinesReport[\s\S]*window\.print\(\)/,
+  'l’impression n’est lancée qu’à partir de l’écran d’aperçu');
+assert.match(journalLinesSource, /(?=[\s\S]*subtotalByPiece)(?=[\s\S]*subtotalByMonth)/);
+assert.ok(htmlSource.indexOf('js/journal-lines-report.js') < htmlSource.indexOf('js/app.js'),
+  'les fonctions pures du rapport sont chargées avant l’application');
+assert.match(serviceWorkerSource, /\.\/js\/journal-lines-report\.js/);
 assert.equal(findTab('editions', 'journals').children.find(child => child.id === 'journal-unbalanced-pieces').status, 'partial');
 assert.equal(findTab('editions', 'journals').children.find(child => child.id === 'journal-analytic-center-totals').status, 'inactive');
 assert.equal(findTab('editions', 'matching').status, 'planned');
@@ -494,7 +508,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v83/);
+assert.match(serviceWorkerSource, /perfecto-static-v84/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

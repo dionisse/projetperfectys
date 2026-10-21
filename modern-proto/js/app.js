@@ -14,6 +14,7 @@
   var CashOperations = window.PerfectoCashOperations;
   var AccountMovements = window.PerfectoAccountMovements;
   var AccountingExchange = window.PerfectoAccountingExchange;
+  var JournalLinesReport = window.PerfectoJournalLinesReport;
   var FecImport = window.PerfectoFecImport;
   var BankStatement = window.PerfectoBankStatement;
   var BankStatementStorage = window.PerfectoBankStatementStorage;
@@ -139,6 +140,7 @@
   var balanceRecalculationSession = null;
   var openingBalanceTransferSession = null;
   var openingBalanceAuditResult = null;
+  var journalLinesReportSession = null;
   var launcherUi = { filter: 'all', query: '' };
   var DEMO_ORGANIZATION_ID = 'demo-org';
   var ACCOUNTING_ROUTES = ['dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings', 'menu'];
@@ -708,6 +710,8 @@
     if (S.setConfidentialAccountAccess) S.setConfidentialAccountAccess(isConfidentialAccountsSupervisor());
     var parsed = parseHash();
     var route = parsed.route;
+    var isJournalLinesReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'journals' && parsed.params.c === 'journal-lines';
+    if (!isJournalLinesReportRoute) journalLinesReportSession = null;
     var phoneViewport = isPhoneViewport();
     var phoneRouteAllowed = route === 'dossiers' ||
       (route === 'menu' && parsed.params.g === 'editions') ||
@@ -10709,7 +10713,7 @@
           var cardContent = '<span class="edition-report-card-top"><span class="edition-report-card-index">' + String(index + 1).padStart(2, '0') + '</span>' + menuStatusBadge(child.status) + '</span>' +
             '<strong class="edition-report-card-title">' + esc(child.label) + '</strong>' +
             '<span class="edition-report-card-description">' + esc(child.reason || '') + '</span>' +
-            '<span class="edition-report-card-cta">' + (disabled ? 'Hors parcours général' : (child.status === 'partial' ? 'Ouvrir la vue existante' : 'Voir le périmètre')) + (disabled ? '' : ' <span aria-hidden="true">→</span>') + '</span>';
+            '<span class="edition-report-card-cta">' + (disabled ? 'Hors parcours général' : (child.status === 'active' ? 'Ouvrir l’état' : (child.status === 'partial' ? 'Ouvrir la vue existante' : 'Voir le périmètre'))) + (disabled ? '' : ' <span aria-hidden="true">→</span>') + '</span>';
           return disabled
             ? '<article class="edition-report-card is-disabled" aria-disabled="true">' + cardContent + '</article>'
             : '<a class="edition-report-card" href="' + esc(accountingMenuHash(groupId, tabId, child.id)) + '">' + cardContent + '</a>';
@@ -10761,10 +10765,565 @@
       '</div></div></div>';
   }
 
+  function createJournalLinesReportSession(dossier) {
+    var columns = {};
+    JournalLinesReport.columns.forEach(function (column) {
+      columns[column.key] = !!(column.supported && column.defaultSelected);
+    });
+    return {
+      dossierId: dossier.id,
+      phase: 'selection',
+      filters: { journals: [], accounts: [], from: dossier.cycleStart, to: dossier.cycleEnd },
+      columns: columns,
+      printOptions: { newPageEachJournal: false, subtotalByPiece: false, subtotalByMonth: false },
+      layout: {
+        printer: 'pdf', style: 'plain8', orientation: 'portrait', margins: 'standard',
+        pageFirst: '', pageLast: '', parity: 'none', destination: 'preview'
+      },
+      directoryHandle: null,
+      directoryName: '',
+      report: null,
+      previewForPrinter: false,
+      exportMessage: '',
+      exportFilename: ''
+    };
+  }
+
+  function ensureJournalLinesReportSession() {
+    var dossier = S.currentDossier();
+    if (!journalLinesReportSession || journalLinesReportSession.dossierId !== dossier.id) {
+      journalLinesReportSession = createJournalLinesReportSession(dossier);
+    }
+    return journalLinesReportSession;
+  }
+
+  function journalLinesReportSteps(activeStep) {
+    return '<ol class="journal-lines-steps" aria-label="Étapes de préparation du rapport">' +
+      '<li class="' + (activeStep === 'selection' ? 'is-active' : 'is-complete') + '"><span>1</span><strong>Sélection</strong></li>' +
+      '<li class="' + (activeStep === 'selection' ? '' : 'is-active') + '"><span>2</span><strong>Mise en Page</strong></li>' +
+      '</ol>';
+  }
+
+  function journalLinesReportRecords(kind) {
+    var records = kind === 'journals' ? S.journals() : S.accounts();
+    return (Array.isArray(records) ? records : []).slice().sort(function (a, b) {
+      return String(a.code || '').localeCompare(String(b.code || ''), 'fr', { numeric: true, sensitivity: 'base' });
+    });
+  }
+
+  function journalLinesReportFilterSummary(kind, session) {
+    var isJournal = kind === 'journals';
+    var property = isJournal ? 'journals' : 'accounts';
+    var noun = isJournal ? 'journaux' : 'comptes';
+    var selected = session.filters[property] || [];
+    if (!selected.length) return 'Tous les ' + noun + ' (*)';
+    return selected.join(', ');
+  }
+
+  function journalLinesReportPicker(kind) {
+    var session = ensureJournalLinesReportSession();
+    var records = journalLinesReportRecords(kind);
+    var property = kind === 'journals' ? 'journals' : 'accounts';
+    var selected = session.filters[property] || [];
+    var selectedSet = new Set(selected);
+    var allSelected = !selected.length || (records.length > 0 && selected.length === records.length);
+    var title = kind === 'journals' ? 'Choix des journaux' : 'Choix des comptes';
+    var allLabel = kind === 'journals' ? 'Tous les journaux' : 'Tous les comptes';
+    var rows = records.map(function (record, index) {
+      var checked = allSelected || selectedSet.has(String(record.code));
+      var label = record.label || record.name || '';
+      return '<label class="journal-lines-picker-option"><input type="checkbox" data-jlr-picker-option value="' + esc(record.code) + '"' + (checked ? ' checked' : '') + '>' +
+        '<span><strong>' + esc(record.code) + '</strong>' + (label ? ' · ' + esc(label) : '') + '</span></label>';
+    }).join('');
+    var body = '<form id="journal-lines-picker-form" data-jlr-picker-form="' + esc(kind) + '">' +
+      '<label class="journal-lines-picker-all"><input type="checkbox" id="journal-lines-picker-all"' + (allSelected ? ' checked' : '') + '><strong>' + esc(allLabel) + '</strong></label>' +
+      '<div class="journal-lines-picker-list">' + (rows || '<p class="empty-state">Aucun élément disponible dans ce dossier.</p>') + '</div>' +
+      '<p class="journal-lines-picker-error" id="journal-lines-picker-error" role="alert" aria-live="polite"></p>' +
+      '</form>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button>' +
+      '<button type="submit" class="btn btn-primary" form="journal-lines-picker-form">Appliquer</button>';
+    openModal(title, 'Cochez un ou plusieurs éléments ; la sélection est consultative et ne modifie pas le dossier.', body, footer, true);
+    var form = $('#journal-lines-picker-form');
+    if (!form) return;
+    var allCheckbox = $('#journal-lines-picker-all', form);
+    var options = $$('[data-jlr-picker-option]', form);
+    if (allCheckbox) {
+      allCheckbox.addEventListener('change', function () {
+        options.forEach(function (input) { input.checked = allCheckbox.checked; });
+      });
+    }
+    options.forEach(function (input) {
+      input.addEventListener('change', function () {
+        if (!allCheckbox) return;
+        allCheckbox.checked = options.length > 0 && options.every(function (option) { return option.checked; });
+      });
+    });
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var chosen = options.filter(function (input) { return input.checked; }).map(function (input) { return input.value; });
+      var error = $('#journal-lines-picker-error', form);
+      if (!chosen.length && records.length) {
+        if (error) error.textContent = 'Sélectionnez au moins un élément ou cochez « ' + allLabel + ' ».';
+        return;
+      }
+      session.filters[property] = chosen.length === records.length ? [] : chosen;
+      closeModal(true);
+      render();
+    });
+  }
+
+  function journalLinesReportColumnControl(column, session) {
+    if (!column) return '<span class="journal-lines-column-spacer" aria-hidden="true"></span>';
+    var disabled = !column.supported;
+    var checked = !!session.columns[column.key];
+    return '<label class="journal-lines-column-option' + (disabled ? ' is-unavailable' : '') + '"' +
+      (column.unavailableReason ? ' title="' + esc(column.unavailableReason) + '"' : '') + '>' +
+      '<input type="checkbox" data-jlr-column="' + esc(column.key) + '"' + (checked ? ' checked' : '') + (disabled ? ' disabled' : '') + '>' +
+      '<span>' + esc(column.label) + (disabled ? '<small>Non disponible</small>' : '') + '</span></label>';
+  }
+
+  function journalLinesReportSelectionView(session, dossier) {
+    var columns = JournalLinesReport.columnGroups.map(function (group, index) {
+      return '<div class="journal-lines-column-list" aria-label="Groupe de colonnes ' + (index + 1) + '">' +
+        group.map(function (column) { return journalLinesReportColumnControl(column, session); }).join('') +
+        '</div>';
+    }).join('');
+    var directoryValue = session.directoryName || '';
+    return journalLinesReportSteps('selection') +
+      pageHeader('Détail des lignes saisies', 'Sélectionnez les journaux, les comptes et la période avant de définir la mise en page.', '') +
+      '<div class="alert info journal-lines-readonly-note"><div><strong>Consultation seule.</strong> Le rapport lit uniquement les écritures validées du cycle courant ; il ne modifie aucune écriture. Le répertoire est choisi localement : le fichier généré n’est pas un FEC réglementaire et ce choix ne crée aucune synchronisation Google Drive.</div></div>' +
+      '<form id="journal-lines-selection-form" novalidate>' +
+        '<section class="card journal-lines-card"><div class="panel">' +
+          '<div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div><span class="journal-lines-cycle-badge">Cycle ' + esc(dateLabel(dossier.cycleStart)) + ' — ' + esc(dateLabel(dossier.cycleEnd)) + '</span></div>' +
+          '<div class="journal-lines-filter-grid">' +
+            '<div class="field span-2"><label for="journal-lines-journals-summary">Journaux</label><div class="journal-lines-picker-control"><input id="journal-lines-journals-summary" type="text" readonly value="' + esc(journalLinesReportFilterSummary('journals', session)) + '"><button type="button" class="btn btn-ghost" data-journal-lines-picker="journals" aria-label="Choisir les journaux">…</button></div></div>' +
+            '<div class="field span-2"><label for="journal-lines-accounts-summary">Comptes</label><div class="journal-lines-picker-control"><input id="journal-lines-accounts-summary" type="text" readonly value="' + esc(journalLinesReportFilterSummary('accounts', session)) + '"><button type="button" class="btn btn-ghost" data-journal-lines-picker="accounts" aria-label="Choisir les comptes">…</button></div></div>' +
+            '<div class="field"><label for="journal-lines-from">Date de début</label><input id="journal-lines-from" name="from" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(session.filters.from) + '" required></div>' +
+            '<div class="field"><label for="journal-lines-to">Date de fin</label><input id="journal-lines-to" name="to" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(session.filters.to) + '" required></div>' +
+            '<div class="field span-2"><label for="journal-lines-directory">Répertoire FEC</label><div class="journal-lines-picker-control"><input id="journal-lines-directory" type="text" readonly placeholder="Aucun répertoire local sélectionné" value="' + esc(directoryValue) + '" title="Le choix du dossier reste dans ce navigateur."><button type="button" class="btn btn-ghost" data-journal-lines-directory aria-label="Choisir un répertoire de sortie">Générer</button></div><span class="hint">Dossier local de sortie Excel ou TXT ; l’export ne crée pas un fichier FEC normalisé.</span></div>' +
+          '</div>' +
+        '</div></section>' +
+        '<section class="card journal-lines-card"><div class="panel">' +
+          '<div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
+          '<div class="journal-lines-column-grid">' + columns + '</div>' +
+          '<p class="hint journal-lines-columns-hint">Les champs grisés ne sont pas portés par les écritures ou le modèle actuel. Ils restent désactivés pour éviter d’afficher des valeurs inventées.</p>' +
+        '</div></section>' +
+        '<section class="card journal-lines-card"><div class="panel">' +
+          '<div class="journal-lines-section-heading"><div><p class="page-kicker">PRÉSENTATION DES LIGNES</p><h3>À imprimer</h3></div></div>' +
+          '<div class="journal-lines-print-options">' +
+            '<label class="journal-lines-check-option"><input type="checkbox" id="journal-lines-new-page"' + (session.printOptions.newPageEachJournal ? ' checked' : '') + '><span>Nouvelle page pour chaque journal</span></label>' +
+            '<label class="journal-lines-check-option"><input type="checkbox" id="journal-lines-subtotal-piece"' + (session.printOptions.subtotalByPiece ? ' checked' : '') + '><span>Sous-total par pièce</span></label>' +
+            '<label class="journal-lines-check-option"><input type="checkbox" id="journal-lines-subtotal-month"' + (session.printOptions.subtotalByMonth ? ' checked' : '') + '><span>Sous-total par mois</span></label>' +
+          '</div>' +
+          '<div class="journal-lines-form-errors" id="journal-lines-selection-errors" role="alert" aria-live="polite"></div>' +
+          '<div class="journal-lines-form-actions"><a class="btn btn-ghost" href="' + esc(accountingMenuHash('editions', 'journals')) + '">Annuler</a><button type="submit" class="btn btn-primary">Valider</button></div>' +
+        '</div></section>' +
+      '</form>';
+  }
+
+  function journalLinesReportRadio(name, value, label, checked) {
+    return '<label class="journal-lines-radio-option"><input type="radio" name="' + esc(name) + '" value="' + esc(value) + '"' + (checked ? ' checked' : '') + '><span>' + label + '</span></label>';
+  }
+
+  function journalLinesReportLayoutView(session) {
+    var report = session.report || buildJournalLinesReport(session);
+    var summary = report.entryCount + ' pièce(s) · ' + report.lineCount + ' ligne(s) retenue(s)';
+    return journalLinesReportSteps('layout') +
+      pageHeader('Mise en Page', 'Choisissez le format, la présentation et la destination du rapport.', '') +
+      '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(summary) + '. Les pièces sont consultées en lecture seule.</div></div>' +
+      '<form id="journal-lines-layout-form">' +
+        '<div class="journal-lines-settings-grid">' +
+          '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div>' +
+            '<div class="field"><label for="journal-lines-printer">Imprimante</label><select id="journal-lines-printer" name="printer">' +
+              '<option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF · Enregistrer au format PDF (par défaut)</option>' +
+              '<option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante système</option>' +
+            '</select><span class="hint">Le navigateur garde la main sur le dialogue et la destination réellement disponible.</span></div>' +
+          '</div></section>' +
+          '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div>' +
+            '<div class="field"><label for="journal-lines-style">Style du rapport</label><select id="journal-lines-style" name="style">' +
+              '<option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option>' +
+              '<option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option>' +
+            '</select></div>' +
+          '</div></section>' +
+          '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div>' +
+            '<div class="journal-lines-radio-list">' +
+              journalLinesReportRadio('orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait') +
+              journalLinesReportRadio('orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape') +
+            '</div>' +
+          '</div></section>' +
+          '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div>' +
+            '<div class="journal-lines-radio-list">' +
+              journalLinesReportRadio('margins', 'standard', 'Standard', session.layout.margins === 'standard') +
+              journalLinesReportRadio('margins', 'binding', 'Reliure à gauche', session.layout.margins === 'binding') +
+            '</div>' +
+          '</div></section>' +
+          '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Plage de pages</h3></div>' +
+            '<div class="journal-lines-page-range"><div class="field"><label for="journal-lines-page-first">Première page</label><input id="journal-lines-page-first" name="pageFirst" type="number" min="1" step="1" value="' + esc(session.layout.pageFirst) + '" placeholder="1"></div>' +
+            '<span aria-hidden="true">à</span><div class="field"><label for="journal-lines-page-last">Dernière page</label><input id="journal-lines-page-last" name="pageLast" type="number" min="1" step="1" value="' + esc(session.layout.pageLast) + '" placeholder="Fin"></div></div>' +
+          '</div></section>' +
+          '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Parité</h3></div>' +
+            '<div class="field"><label for="journal-lines-parity">Pages</label><select id="journal-lines-parity" name="parity">' +
+              '<option value="none"' + (session.layout.parity === 'none' ? ' selected' : '') + '>Toutes les pages</option>' +
+              '<option value="odd"' + (session.layout.parity === 'odd' ? ' selected' : '') + '>Impaires</option>' +
+              '<option value="even"' + (session.layout.parity === 'even' ? ' selected' : '') + '>Paires</option>' +
+            '</select></div>' +
+          '</div></section>' +
+          '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div>' +
+            '<div class="journal-lines-destinations">' +
+              journalLinesReportRadio('destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table') +
+              journalLinesReportRadio('destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file') +
+              journalLinesReportRadio('destination', 'preview', '<strong>Aperçu</strong><small>Afficher le tableau dans PERFECTO</small>', session.layout.destination === 'preview') +
+              journalLinesReportRadio('destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer') +
+            '</div>' +
+          '</div></section>' +
+        '</div>' +
+        '<div class="alert info journal-lines-print-note"><div><strong>Impression :</strong> l’aperçu est toujours affiché avant l’appel à la boîte d’impression du navigateur. PDF est la préférence proposée par défaut ; le navigateur peut conserver son propre dernier choix. La plage et la parité seront à confirmer dans cette boîte.</div></div>' +
+        '<div class="journal-lines-form-errors" id="journal-lines-layout-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-journal-lines-back-selection>Annuler</button><button type="submit" class="btn btn-primary">Valider</button></div>' +
+      '</form>';
+  }
+
+  function formatJournalLinesTimestamp(value) {
+    if (!value) return '';
+    var parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return String(value);
+    return parsed.toLocaleDateString('fr-FR') + ' ' + parsed.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function journalLinesReportCell(column, row) {
+    var value = row.cells ? row.cells[column.key] : '';
+    if (value === null || value === undefined || value === '') return '';
+    if (column.key === 'date') return esc(dateLabel(value));
+    if (column.key === 'firstEntry' || column.key === 'lastEntry') return esc(formatJournalLinesTimestamp(value));
+    if (column.key === 'debit' || column.key === 'credit') return esc(amount(value));
+    return esc(value);
+  }
+
+  function journalLinesReportRowsHtml(rows, columns) {
+    return (rows || []).map(function (row) {
+      var subtotal = row.kind !== 'line';
+      var labelColumn = columns.find(function (column) { return column.key !== 'debit' && column.key !== 'credit'; });
+      var html = '';
+      if (subtotal && !labelColumn) {
+        html += '<tr class="journal-lines-subtotal-label"><th colspan="' + Math.max(columns.length, 1) + '">' + esc(row.label) + '</th></tr>';
+      }
+      html += '<tr class="' + (subtotal ? 'journal-lines-subtotal' : 'journal-lines-data-row') + '">' +
+        columns.map(function (column) {
+          var numeric = column.key === 'debit' || column.key === 'credit';
+          var tag = subtotal && labelColumn && column.key === labelColumn.key ? 'th' : 'td';
+          return '<' + tag + (numeric ? ' class="num"' : '') + '>' + journalLinesReportCell(column, row) + '</' + tag + '>';
+        }).join('') + '</tr>';
+      return html;
+    }).join('');
+  }
+
+  function journalLinesReportPreviewView(session) {
+    var report = session.report || buildJournalLinesReport(session);
+    session.report = report;
+    var columns = report.columns;
+    var groupsHtml = report.groups.map(function (group) {
+      var heading = '<div class="journal-lines-group-heading"><h3>' + esc(group.title) + '</h3><span>' + group.rows.filter(function (row) { return row.kind === 'line'; }).length + ' ligne(s)</span></div>';
+      var table = '<div class="table-wrap journal-lines-table-wrap"><table class="data-table journal-lines-table"><thead><tr>' +
+        columns.map(function (column) { return '<th' + (column.key === 'debit' || column.key === 'credit' ? ' class="num"' : '') + '>' + esc(column.label) + '</th>'; }).join('') +
+        '</tr></thead><tbody>' + journalLinesReportRowsHtml(group.rows, columns) + '</tbody></table></div>';
+      return '<section class="journal-lines-group' + (group.pageBreakBefore ? ' is-page-break' : '') + '">' + heading + table + '</section>';
+    }).join('');
+    var empty = report.groups.length
+      ? ''
+      : '<div class="empty-state"><strong>Aucune ligne ne correspond à la sélection.</strong>Vérifiez les journaux, comptes et dates ; aucune écriture n’a été modifiée.</div>';
+    var printerPreference = session.layout.printer === 'system' ? 'imprimante système' : 'PDF';
+    var printerHint = session.previewForPrinter
+      ? '<div class="alert info journal-lines-printer-preview"><div><strong>Aperçu obligatoire avant impression.</strong> Le formulaire indique la préférence « ' + esc(printerPreference) + ' », mais le navigateur conserve le choix final. La plage et la parité sont à confirmer dans sa boîte d’impression.</div></div>'
+      : '';
+    var printButtonLabel = session.previewForPrinter && session.layout.printer === 'pdf' ? 'Imprimer · PDF proposé' : 'Imprimer';
+    var pageRange = session.layout.pageFirst || session.layout.pageLast
+      ? ' · Plage demandée : ' + (session.layout.pageFirst || '1') + ' à ' + (session.layout.pageLast || 'fin')
+      : '';
+    var parityLabel = session.layout.parity === 'odd' ? ' · pages impaires' : (session.layout.parity === 'even' ? ' · pages paires' : '');
+    var orientationClass = session.layout.orientation === 'landscape' ? ' is-landscape' : '';
+    var styleClass = session.layout.style === 'color10' ? ' is-color-style' : ' is-mono-style';
+    return pageHeader('Aperçu — Détail des lignes saisies', report.entryCount + ' pièce(s) · ' + report.lineCount + ' ligne(s)' + pageRange + parityLabel, '') +
+      '<div class="journal-lines-report-print' + orientationClass + styleClass + '">' +
+        '<div class="journal-lines-preview-actions journal-lines-no-print"><span>' + esc(report.entryCount + ' pièce(s) · ' + report.lineCount + ' ligne(s)') + '</span><div>' +
+          '<button type="button" class="btn btn-ghost" data-journal-lines-back-layout>Retour à la mise en Page</button>' +
+          '<button type="button" class="btn btn-primary" data-journal-lines-print>' + printButtonLabel + '</button>' +
+        '</div></div>' +
+        printerHint +
+        '<div class="journal-lines-print-meta"><strong>' + esc(S.currentDossier().reference || S.currentDossier().name || 'Dossier') + '</strong><span>' + esc(dateLabel(session.filters.from)) + ' — ' + esc(dateLabel(session.filters.to)) + '</span></div>' +
+        (groupsHtml || empty) +
+      '</div>';
+  }
+
+  function journalLinesReportSavedView(session) {
+    return pageHeader('Export prêt', 'Le rapport a été préparé sans modifier les écritures comptables.', '') +
+      '<section class="card journal-lines-saved-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
+        '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-journal-lines-show-preview>Afficher l’aperçu</button><button type="button" class="btn btn-primary" data-journal-lines-new-report>Nouvel état</button></div>' +
+      '</div></section>';
+  }
+
+  function buildJournalLinesReport(session) {
+    return JournalLinesReport.build({
+      entries: S.postedEntries(),
+      accounts: S.accounts(),
+      journals: S.journals(),
+      filters: session.filters,
+      columns: Object.keys(session.columns).filter(function (key) { return session.columns[key]; }),
+      decimalPlaces: S.accountingConfiguration().decimalPlaces,
+      newPageEachJournal: session.printOptions.newPageEachJournal,
+      subtotalByPiece: session.printOptions.subtotalByPiece,
+      subtotalByMonth: session.printOptions.subtotalByMonth
+    });
+  }
+
+  function captureJournalLinesSelectionDraft(session) {
+    var form = $('#journal-lines-selection-form');
+    if (!form) return;
+    var from = $('#journal-lines-from', form);
+    var to = $('#journal-lines-to', form);
+    if (from) session.filters.from = from.value;
+    if (to) session.filters.to = to.value;
+    $$('[data-jlr-column]', form).forEach(function (input) { session.columns[input.getAttribute('data-jlr-column')] = input.checked; });
+    var newPage = $('#journal-lines-new-page', form);
+    var subtotalPiece = $('#journal-lines-subtotal-piece', form);
+    var subtotalMonth = $('#journal-lines-subtotal-month', form);
+    if (newPage) session.printOptions.newPageEachJournal = newPage.checked;
+    if (subtotalPiece) session.printOptions.subtotalByPiece = subtotalPiece.checked;
+    if (subtotalMonth) session.printOptions.subtotalByMonth = subtotalMonth.checked;
+  }
+
+  function journalLinesReportFileName(session, extension) {
+    var start = String(session.filters.from || '').replace(/-/g, '');
+    var end = String(session.filters.to || '').replace(/-/g, '');
+    return 'PERFECTO-detail-lignes-journaux-' + start + '-' + end + '.' + extension;
+  }
+
+  async function saveJournalLinesReportFile(session, filename, content, mime) {
+    var directory = session.directoryHandle;
+    if (directory && typeof directory.getFileHandle === 'function') {
+      try {
+        var permission = typeof directory.queryPermission === 'function'
+          ? await directory.queryPermission({ mode: 'readwrite' })
+          : 'granted';
+        if (permission !== 'granted' && typeof directory.requestPermission === 'function') {
+          permission = await directory.requestPermission({ mode: 'readwrite' });
+        }
+        if (permission !== 'granted') throw new Error('Autorisation d’écriture refusée pour le répertoire choisi.');
+        var fileHandle = await directory.getFileHandle(filename, { create: true });
+        var writable = await fileHandle.createWritable();
+        await writable.write(new Blob([content], { type: mime }));
+        await writable.close();
+        return { savedInDirectory: true, fallback: false };
+      } catch (error) {
+        downloadFile(filename, content, mime);
+        return { savedInDirectory: false, fallback: true, error: error };
+      }
+    }
+    downloadFile(filename, content, mime);
+    return { savedInDirectory: false, fallback: false };
+  }
+
+  async function generateJournalLinesReportFile(session, destination) {
+    var report = buildJournalLinesReport(session);
+    session.report = report;
+    var filename;
+    var content;
+    var mime;
+    if (destination === 'table') {
+      var matrix = JournalLinesReport.toMatrix(report);
+      filename = journalLinesReportFileName(session, 'xlsx');
+      content = AccountingExchange.exportTabularWorkbook('Détail des lignes', matrix[0], matrix.slice(1));
+      mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    } else {
+      filename = journalLinesReportFileName(session, 'txt');
+      content = JournalLinesReport.toTsv(report);
+      mime = 'text/plain;charset=utf-8';
+    }
+    var saved = await saveJournalLinesReportFile(session, filename, content, mime);
+    session.exportFilename = filename;
+    session.exportMessage = saved.savedInDirectory
+      ? 'Fichier enregistré dans le répertoire local « ' + session.directoryName + ' ».'
+      : (saved.fallback
+        ? 'Le répertoire choisi n’a pas pu être utilisé ; le téléchargement du navigateur a été lancé à la place.'
+        : 'Téléchargement lancé dans le navigateur.');
+    session.phase = 'saved';
+    render();
+  }
+
+  function showJournalLinesErrors(region, errors) {
+    if (!region) return;
+    region.innerHTML = errors && errors.length
+      ? '<div class="alert error"><ul>' + errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>'
+      : '';
+  }
+
+  function submitJournalLinesSelection(form, session) {
+    var errors = [];
+    var from = $('#journal-lines-from', form);
+    var to = $('#journal-lines-to', form);
+    var selectedColumns = $$('[data-jlr-column]:checked', form).map(function (input) { return input.getAttribute('data-jlr-column'); });
+    if (!from || !from.value || !to || !to.value) errors.push('Renseignez les deux dates de la période.');
+    else if (from.value > to.value) errors.push('La date de début doit précéder ou égaler la date de fin.');
+    else if (from.value < S.currentDossier().cycleStart || to.value > S.currentDossier().cycleEnd) errors.push('Les dates doivent rester dans le cycle du dossier.');
+    if (!selectedColumns.length) errors.push('Sélectionnez au moins une colonne à imprimer.');
+    showJournalLinesErrors($('#journal-lines-selection-errors', form), errors);
+    if (errors.length) return;
+    session.filters.from = from.value;
+    session.filters.to = to.value;
+    session.columns = {};
+    JournalLinesReport.columns.forEach(function (column) { session.columns[column.key] = selectedColumns.indexOf(column.key) !== -1; });
+    session.printOptions.newPageEachJournal = !!($('#journal-lines-new-page', form) && $('#journal-lines-new-page', form).checked);
+    session.printOptions.subtotalByPiece = !!($('#journal-lines-subtotal-piece', form) && $('#journal-lines-subtotal-piece', form).checked);
+    session.printOptions.subtotalByMonth = !!($('#journal-lines-subtotal-month', form) && $('#journal-lines-subtotal-month', form).checked);
+    session.report = buildJournalLinesReport(session);
+    session.phase = 'layout';
+    render();
+  }
+
+  function submitJournalLinesLayout(form, session) {
+    var errors = [];
+    var destination = $('input[name="destination"]:checked', form);
+    var orientation = $('input[name="orientation"]:checked', form);
+    var margins = $('input[name="margins"]:checked', form);
+    var first = $('#journal-lines-page-first', form).value;
+    var last = $('#journal-lines-page-last', form).value;
+    if (first && Number(first) < 1) errors.push('La première page doit être supérieure ou égale à 1.');
+    if (last && Number(last) < 1) errors.push('La dernière page doit être supérieure ou égale à 1.');
+    if (first && last && Number(first) > Number(last)) errors.push('La première page doit précéder ou égaler la dernière page.');
+    showJournalLinesErrors($('#journal-lines-layout-errors', form), errors);
+    if (errors.length) return;
+    session.layout.printer = $('#journal-lines-printer', form).value;
+    session.layout.style = $('#journal-lines-style', form).value;
+    session.layout.orientation = orientation ? orientation.value : 'portrait';
+    session.layout.margins = margins ? margins.value : 'standard';
+    session.layout.pageFirst = first;
+    session.layout.pageLast = last;
+    session.layout.parity = $('#journal-lines-parity', form).value;
+    session.layout.destination = destination ? destination.value : 'preview';
+    session.report = buildJournalLinesReport(session);
+    if (session.layout.destination === 'table' || session.layout.destination === 'file') {
+      generateJournalLinesReportFile(session, session.layout.destination).catch(function (error) {
+        session.phase = 'layout';
+        render();
+        toast('Export impossible : ' + (error && error.message || 'erreur inconnue.'), 'error');
+      });
+      return;
+    }
+    session.previewForPrinter = session.layout.destination === 'printer';
+    session.phase = 'preview';
+    render();
+  }
+
+  function printJournalLinesReport(session) {
+    var report = session.report || buildJournalLinesReport(session);
+    session.report = report;
+    var pageSize = session.layout.orientation === 'landscape' ? 'landscape' : 'portrait';
+    var leftMargin = session.layout.margins === 'binding' ? '18mm' : '12mm';
+    var style = $('#journal-lines-print-style');
+    if (!style) {
+      style = document.createElement('style');
+      style.id = 'journal-lines-print-style';
+      document.head.appendChild(style);
+    }
+    style.textContent = '@page { size: A4 ' + pageSize + '; margin: 12mm 12mm 12mm ' + leftMargin + '; }';
+    document.body.classList.add('journal-lines-printing');
+    var cleanup = function () { document.body.classList.remove('journal-lines-printing'); };
+    window.addEventListener('afterprint', cleanup, { once: true });
+    window.print();
+    window.setTimeout(cleanup, 30000);
+  }
+
+  async function chooseJournalLinesReportDirectory(session) {
+    if (typeof window.showDirectoryPicker !== 'function') {
+      toast('Le choix de répertoire n’est pas proposé par ce navigateur ; les fichiers seront téléchargés dans son dossier Téléchargements.', 'info');
+      return;
+    }
+    try {
+      var handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      session.directoryHandle = handle;
+      session.directoryName = handle.name || 'Répertoire sélectionné';
+      var input = $('#journal-lines-directory');
+      if (input) {
+        input.value = session.directoryName;
+        input.title = 'Dossier local choisi dans ce navigateur. Il ne s’agit pas d’une synchronisation Google Drive.';
+      }
+    } catch (error) {
+      if (error && error.name === 'AbortError') return;
+      toast('Impossible de sélectionner ce répertoire : ' + (error && error.message || 'erreur inconnue.'), 'warning');
+    }
+  }
+
+  function viewJournalLinesReport(backLink) {
+    var session = ensureJournalLinesReportSession();
+    var dossier = S.currentDossier();
+    var content;
+    if (session.phase === 'layout') content = journalLinesReportLayoutView(session);
+    else if (session.phase === 'preview') content = journalLinesReportPreviewView(session);
+    else if (session.phase === 'saved') content = journalLinesReportSavedView(session);
+    else content = journalLinesReportSelectionView(session, dossier);
+    return '<div class="edition-report-detail-view journal-lines-report-detail">' + backLink + content + '</div>';
+  }
+
+  function bindJournalLinesReport() {
+    var session = ensureJournalLinesReportSession();
+    if (session.phase === 'selection') {
+      var selectionForm = $('#journal-lines-selection-form');
+      if (!selectionForm) return;
+      selectionForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitJournalLinesSelection(selectionForm, session);
+      });
+      $$('[data-journal-lines-picker]', selectionForm).forEach(function (button) {
+        button.addEventListener('click', function () {
+          captureJournalLinesSelectionDraft(session);
+          journalLinesReportPicker(button.getAttribute('data-journal-lines-picker'));
+        });
+      });
+      var directoryButton = $('[data-journal-lines-directory]', selectionForm);
+      if (directoryButton) directoryButton.addEventListener('click', function () { chooseJournalLinesReportDirectory(session); });
+      return;
+    }
+    if (session.phase === 'layout') {
+      var layoutForm = $('#journal-lines-layout-form');
+      if (layoutForm) layoutForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitJournalLinesLayout(layoutForm, session);
+      });
+      var backButton = $('[data-journal-lines-back-selection]');
+      if (backButton) backButton.addEventListener('click', function () {
+        session.phase = 'selection';
+        render();
+      });
+      return;
+    }
+    if (session.phase === 'preview') {
+      var backLayout = $('[data-journal-lines-back-layout]');
+      if (backLayout) backLayout.addEventListener('click', function () {
+        session.phase = 'layout';
+        render();
+      });
+      var printButton = $('[data-journal-lines-print]');
+      if (printButton) printButton.addEventListener('click', function () { printJournalLinesReport(session); });
+      return;
+    }
+    if (session.phase === 'saved') {
+      var previewButton = $('[data-journal-lines-show-preview]');
+      if (previewButton) previewButton.addEventListener('click', function () {
+        session.phase = 'preview';
+        session.previewForPrinter = false;
+        render();
+      });
+      var newButton = $('[data-journal-lines-new-report]');
+      if (newButton) newButton.addEventListener('click', function () {
+        journalLinesReportSession = createJournalLinesReportSession(S.currentDossier());
+        render();
+      });
+    }
+  }
+
   function editionReportChildView(child, groupId, tabId) {
     var backLabel = groupId === 'editions' && tabId === 'journals' ? 'Tous les éléments Journaux' : 'Tous les états';
     var backLink = '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(accountingMenuHash(groupId, tabId)) + '">← ' + esc(backLabel) + '</a>';
-    if (child.id === 'journal-lines') return '<div class="edition-report-detail-view">' + backLink + viewJournal() + '</div>';
+    if (child.id === 'journal-lines') return viewJournalLinesReport(backLink);
     if (child.id === 'journal-unbalanced-pieces') return viewUnbalancedJournalPieces();
     if (child.id === 'general-balance') return '<div class="edition-report-detail-view">' + backLink + viewBalance() + '</div>';
     if (child.id === 'general-ledger') return '<div class="edition-report-detail-view">' + backLink + viewLedger() + '</div>';
@@ -12196,6 +12755,7 @@
     }
     if (route === 'menu') {
       var menuParams = parseHash().params;
+      if (menuParams.g === 'editions' && menuParams.t === 'journals' && menuParams.c === 'journal-lines') bindJournalLinesReport();
       if (menuParams.g === 'parametres' && menuParams.t === 'dossier-configuration') bindAccountingConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'sections-accounts') bindAnalyticalSectionsConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'allocation-keys') bindAnalyticalAllocationKeys();

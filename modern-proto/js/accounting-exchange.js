@@ -865,6 +865,20 @@
     return compressWorkbook(workbookSheetDefinitions(data || {}, entries || [], true));
   }
 
+  function exportTabularWorkbook(sheetName, headers, rows) {
+    if (!Array.isArray(headers) || !headers.length) throw new Error('Le tableau Excel doit comporter au moins une colonne.');
+    var cleanName = String(sheetName || 'Détail')
+      .replace(/[\\/*?:\[\]]/g, ' ')
+      .trim()
+      .slice(0, 31) || 'Détail';
+    var headerRow = headers.map(function (value) { return String(value == null ? '' : value); });
+    var dataRows = (Array.isArray(rows) ? rows : []).map(function (row) {
+      if (!Array.isArray(row)) throw new Error('Chaque ligne du tableau Excel doit être un tableau de cellules.');
+      return headerRow.map(function (_, index) { return row[index] == null ? '' : row[index]; });
+    });
+    return compressWorkbook([{ name: cleanName, rows: [headerRow].concat(dataRows), autoFilter: true }]);
+  }
+
   function templateWorkbook(data) {
     return compressWorkbook(workbookSheetDefinitions(data || {}, [], false));
   }
@@ -1382,6 +1396,7 @@
     exportAccounts: exportAccounts,
     exportJournals: exportJournals,
     exportWorkbook: exportWorkbook,
+    exportTabularWorkbook: exportTabularWorkbook,
     templateWorkbook: templateWorkbook,
     parseWorkbook: parseWorkbook,
     parseBalance: parseBalance,
