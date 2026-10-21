@@ -7,7 +7,8 @@
 
   var INTERNAL_SOURCES = Object.freeze({
     'PERFECTO-PAIE-RH': 'payroll-hr',
-    'PERFECTO-VENTES-STOCK-FACTURATION': 'sales-stock-invoicing'
+    'PERFECTO-VENTES-STOCK-FACTURATION': 'sales-stock-invoicing',
+    'PERFECTO-AUXILIAIRE-INTERNE': 'accounting'
   });
   var CANCELLATION_SOURCE = 'PERFECTO-ANNULATION-CENTRALISATION';
 
@@ -40,7 +41,7 @@
     target = target || {};
     var sourceModule = sourceModuleForEntry(original);
     if (!original || original.status !== 'posted') errors.push('Seules les centralisations internes déjà validées peuvent recevoir une écriture inverse.');
-    if (!sourceModule) errors.push('La pièce sélectionnée ne provient pas d’une centralisation interne Paie & RH ou Ventes, stock & facturation.');
+    if (!sourceModule) errors.push('La pièce sélectionnée ne provient pas d’une centralisation interne auxiliaire, Paie & RH ou Ventes, stock & facturation.');
     if (!original || !String(original.id || '').trim()) errors.push('La pièce d’origine ne possède pas d’identifiant stable.');
 
     var reference = String(target.reference || '').trim();

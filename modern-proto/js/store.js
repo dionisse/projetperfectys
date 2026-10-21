@@ -5773,10 +5773,12 @@
     if (!preview.ok) return { ok: false, errors: preview.errors, warnings: preview.warnings };
     if (sourceFile) {
       if (!sourceFile.fileName || !sourceFile.contentBase64 || !sourceFile.sha256) {
-        return { ok: false, errors: ['Import annulé : la source FEC doit conserver le nom, le fichier original et son empreinte SHA-256.'], warnings: preview.warnings };
+        return { ok: false, errors: ['Import annulé : le fichier source doit conserver son nom, son contenu original et son empreinte SHA-256.'], warnings: preview.warnings };
       }
-      if ((load().importSourceFiles || []).some(function (item) { return item && item.sha256 === sourceFile.sha256; })) {
-        return { ok: false, errors: ['Import bloqué : ce fichier source FEC a déjà été importé dans ce dossier.'], warnings: preview.warnings };
+      if ((load().importSourceFiles || []).some(function (item) {
+        return item && item.sha256 === sourceFile.sha256 && item.status !== 'cancelled';
+      })) {
+        return { ok: false, errors: ['Import bloqué : ce fichier source a déjà été importé dans ce dossier. Annulez son lot brouillon avant de le retransférer.'], warnings: preview.warnings };
       }
     }
 
@@ -5796,8 +5798,10 @@
       record.status = status;
       record.sourceSystem = item.sourceSystem;
       record.sourceId = item.sourceId;
-      record.sourceReference = String(original.reference || '');
-      record.sourceJournal = String(original.journal || '');
+      record.sourceReference = String(original.sourceReference || original.reference || '');
+      record.sourceJournal = Object.prototype.hasOwnProperty.call(original, 'sourceJournal')
+        ? String(original.sourceJournal || '')
+        : String(original.journal || '');
       record.sourceStatus = String(original.sourceStatus || '');
       if (original.sourceMetadata && typeof original.sourceMetadata === 'object') {
         record.sourceMetadata = clone(original.sourceMetadata);
@@ -5848,14 +5852,15 @@
     var st = load();
     var id = String(batchId || '');
     var batchEntries = st.entries.filter(function (entry) { return entry.importBatchId === id; });
-    if (!id || !batchEntries.length) return { ok: false, errors: ['Le lot d’import est introuvable ou ne contient plus de brouillon.'] };
-    if (batchEntries.some(function (entry) { return entry.status !== 'draft'; })) {
-      return { ok: false, errors: ['Annulation bloquée : un lot comportant des écritures validées doit être neutralisé par des écritures inverses liées, jamais supprimé.'] };
-    }
     var sourceRecord = (Array.isArray(st.importSourceFiles) ? st.importSourceFiles : []).find(function (record) {
       return record && record.id === id;
     });
-    if (!sourceRecord) return { ok: false, errors: ['La source associée à ce lot d’import est introuvable.'] };
+    if (!id || !sourceRecord || (!batchEntries.length && sourceRecord.status !== 'draft')) {
+      return { ok: false, errors: ['Le lot d’import est introuvable ou ne contient plus de brouillon annulable.'] };
+    }
+    if (batchEntries.some(function (entry) { return entry.status !== 'draft'; })) {
+      return { ok: false, errors: ['Annulation bloquée : un lot comportant des écritures validées doit être neutralisé par des écritures inverses liées, jamais supprimé.'] };
+    }
     var previousState = clone(st);
     if (!writeBackupSnapshot(previousState)) {
       return { ok: false, errors: ['Annulation impossible : le point de restauration local n’a pas pu être créé.'] };

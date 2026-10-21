@@ -1,11 +1,19 @@
 /*
- * PERFECTO · Agrégateur de centralisation auxiliaire interne.
- * Applique la règle de Comptabilité générale : regrouper les opérations réelles
- * des comptes auxiliaires par compte collectif cible. Ne lit aucun fichier et
- * ne modifie pas le dossier ; le module source doit fournir un lot contrôlé.
+ * PERFECTO · Règles pures de centralisation auxiliaire interne.
+ * Agrège les mouvements d’un lot PERFECTO-AUXILIAIRE v1 par compte cible,
+ * contrôle sa provenance déclarée et prépare une pièce générale. Ce module
+ * ne lit aucun fichier et ne modifie jamais le dossier ni ses écritures.
  */
 (function (root) {
   'use strict';
+
+  var AUXILIARY_FORMAT = 'PERFECTO-AUXILIAIRE';
+  var AUXILIARY_VERSION = '1';
+  var INTERNAL_SOURCE_SYSTEM = 'PERFECTO-AUXILIAIRE-INTERNE';
+  var INTERNAL_PRODUCERS = Object.freeze([
+    'PERFECTO-PAIE-RH',
+    'PERFECTO-VENTES-STOCK-FACTURATION'
+  ]);
 
   function aggregate(parsed, accountMap, targetAccounts) {
     var errors = [];
@@ -42,6 +50,10 @@
       }
       if (target.active === false) {
         addError('inactive:' + sourceCode + ':' + mappedCode, 'Le compte cible « ' + mappedCode + ' » est inactif et ne peut pas recevoir une centralisation.');
+        return;
+      }
+      if (target.postable === false) {
+        addError('non-postable:' + sourceCode + ':' + mappedCode, 'Le compte cible « ' + mappedCode + ' » est un compte de regroupement et ne peut pas recevoir une écriture.');
         return;
       }
       if (row.auxiliaryCode && !target.aux) {
@@ -133,7 +145,162 @@
     };
   }
 
-  var api = { aggregate: aggregate };
+  function isValidIsoDate(value) {
+    var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+    if (!match) return false;
+    var year = Number(match[1]);
+    var month = Number(match[2]);
+    var day = Number(match[3]);
+    var date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+  }
+
+  function validateSourceContext(parsed, dossier) {
+    var errors = [];
+    var metadata = parsed && parsed.metadata || {};
+    dossier = dossier || {};
+    if (!parsed || !parsed.ok) errors.push('Le lot auxiliaire n’a pas passé les contrôles de structure et d’équilibre.');
+    if (metadata.format !== AUXILIARY_FORMAT || metadata.version !== AUXILIARY_VERSION) {
+      errors.push('Le format source doit être PERFECTO-AUXILIAIRE v1.');
+    }
+    if (INTERNAL_PRODUCERS.indexOf(String(metadata.sourceSystem || '')) === -1) {
+      errors.push('Le producteur déclaré doit être Paie & RH ou Ventes, stock & facturation dans PERFECTO ; les logiciels tiers et lots déjà centralisés sont refusés.');
+    }
+    if (!dossier.reference || String(metadata.dossierReference || '') !== String(dossier.reference)) {
+      errors.push('Le dossier source déclaré ne correspond pas au dossier actif ; aucun transfert entre dossiers n’est permis ici.');
+    }
+    var targetExercise = Number(dossier.exerciseYear || dossier.exercise);
+    if (!Number.isInteger(targetExercise) || Number(metadata.exercise) !== targetExercise) {
+      errors.push('L’exercice source déclaré ne correspond pas à l’exercice du dossier actif.');
+    }
+    if (!String(metadata.batchReference || '').trim()) errors.push('La référence du lot source est obligatoire.');
+    if (parsed && Array.isArray(parsed.rows) && dossier.cycleStart && dossier.cycleEnd) {
+      var outOfCycle = parsed.rows.find(function (row) {
+        return String(row.sourceDate || '') < String(dossier.cycleStart) || String(row.sourceDate || '') > String(dossier.cycleEnd);
+      });
+      if (outOfCycle) errors.push('Au moins une date source (' + String(outOfCycle.sourceDate || '—') + ') se trouve hors du cycle comptable actif.');
+    }
+    return { ok: errors.length === 0, errors: errors, metadata: metadata };
+  }
+
+  function buildEntry(parsed, aggregation, target) {
+    target = target || {};
+    var dossier = target.dossier || {};
+    var context = validateSourceContext(parsed, dossier);
+    var errors = context.errors.slice();
+    var metadata = context.metadata;
+    if (!aggregation || !aggregation.ok) {
+      (aggregation && aggregation.errors || ['Les totaux par compte collectif ne sont pas valides.']).forEach(function (message) {
+        if (errors.indexOf(message) === -1) errors.push(message);
+      });
+    }
+    var reference = String(target.reference || '').trim();
+    var journal = String(target.journal || '').trim();
+    var date = String(target.date || '').trim();
+    if (!reference) errors.push('La référence de la pièce générale est obligatoire.');
+    if (reference.length > 100) errors.push('La référence de la pièce générale ne peut pas dépasser 100 caractères.');
+    if (!journal) errors.push('Le journal général est obligatoire.');
+    if (journal.length > 30) errors.push('Le code du journal général ne peut pas dépasser 30 caractères.');
+    if (journal.toUpperCase() === 'CEN') errors.push('Le journal CEN est réservé au futur transfert interne entre dossiers ; choisissez un journal général ordinaire.');
+    if (!isValidIsoDate(date)) errors.push('La date de la pièce générale doit être une date valide.');
+    if (isValidIsoDate(date) && dossier.cycleStart && date < dossier.cycleStart) errors.push('La date de centralisation précède le cycle comptable du dossier.');
+    if (isValidIsoDate(date) && dossier.cycleEnd && date > dossier.cycleEnd) errors.push('La date de centralisation dépasse le cycle comptable du dossier.');
+
+    var lines = aggregation && Array.isArray(aggregation.lines) ? aggregation.lines : [];
+    var totalDebit = 0;
+    var totalCredit = 0;
+    lines.forEach(function (line, index) {
+      var debit = Number(line.debit);
+      var credit = Number(line.credit);
+      if (!String(line.account || '').trim() || !Number.isSafeInteger(debit) || !Number.isSafeInteger(credit) ||
+          debit < 0 || credit < 0 || (debit > 0 && credit > 0) || (debit === 0 && credit === 0)) {
+        errors.push('La ligne agrégée ' + (index + 1) + ' contient un compte ou un montant non valide.');
+        return;
+      }
+      totalDebit += debit;
+      totalCredit += credit;
+      if (!Number.isSafeInteger(totalDebit) || !Number.isSafeInteger(totalCredit)) {
+        errors.push('Les totaux de la centralisation dépassent la capacité numérique sûre.');
+      }
+    });
+    if (lines.length < 2) errors.push('La centralisation doit contenir au moins deux lignes générales mouvementées.');
+    if (totalDebit !== totalCredit) errors.push('La centralisation préparée doit être équilibrée avant enregistrement.');
+    if (errors.length) return { ok: false, errors: errors, entry: null };
+
+    var sourceId = JSON.stringify([
+      INTERNAL_SOURCE_SYSTEM,
+      String(metadata.sourceSystem),
+      String(metadata.dossierReference),
+      String(metadata.exercise),
+      String(metadata.batchReference)
+    ]);
+    var description = String(target.description || '').trim() || 'Centralisation auxiliaire · lot ' + String(metadata.batchReference);
+    if (description.length > 250) errors.push('Le libellé de la pièce générale ne peut pas dépasser 250 caractères.');
+    if (errors.length) return { ok: false, errors: errors, entry: null };
+
+    return {
+      ok: true,
+      errors: [],
+      entry: {
+        reference: reference,
+        sourceReference: String(metadata.batchReference),
+        sourceJournal: '',
+        journal: journal,
+        date: date,
+        description: description,
+        sourceSystem: INTERNAL_SOURCE_SYSTEM,
+        sourceId: sourceId,
+        sourceMetadata: {
+          feed: 'internal',
+          operation: 'auxiliary-centralization',
+          provenance: 'manual-file-self-declared',
+          sourceModule: 'accounting',
+          runId: sourceId,
+          runReference: String(metadata.batchReference),
+          period: String(metadata.exercise),
+          sourceFormat: AUXILIARY_FORMAT,
+          sourceVersion: AUXILIARY_VERSION,
+          sourceSystem: String(metadata.sourceSystem),
+          sourceDossierReference: String(metadata.dossierReference),
+          sourceExercise: Number(metadata.exercise),
+          sourceBatchReference: String(metadata.batchReference),
+          sourceFileSha256: String(target.sourceFileSha256 || ''),
+          sourceMovementCount: parsed.rows.length,
+          sourceDocumentCount: Number(parsed.documentCount) || 0,
+          sourceAuxiliaryMovementCount: Number(parsed.auxiliaryMovementCount) || 0,
+          sourceTotalDebit: Number(parsed.totalDebit) || 0,
+          sourceTotalCredit: Number(parsed.totalCredit) || 0,
+          accountMappings: (aggregation.accountMappings || []).map(function (mapping) {
+            return {
+              sourceCode: String(mapping.sourceCode || ''),
+              sourceLabel: String(mapping.sourceLabel || ''),
+              targetCode: String(mapping.targetCode || ''),
+              targetLabel: String(mapping.targetLabel || ''),
+              auxiliaryCodeCount: Number(mapping.auxiliaryCodeCount) || 0
+            };
+          })
+        },
+        lines: lines.map(function (line) {
+          return {
+            account: String(line.account),
+            accountLabel: String(line.accountLabel || ''),
+            debit: Number(line.debit),
+            credit: Number(line.credit)
+          };
+        })
+      }
+    };
+  }
+
+  var api = {
+    AUXILIARY_FORMAT: AUXILIARY_FORMAT,
+    AUXILIARY_VERSION: AUXILIARY_VERSION,
+    INTERNAL_SOURCE_SYSTEM: INTERNAL_SOURCE_SYSTEM,
+    INTERNAL_PRODUCERS: INTERNAL_PRODUCERS,
+    aggregate: aggregate,
+    validateSourceContext: validateSourceContext,
+    buildEntry: buildEntry
+  };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PerfectoAccountingCentralization = api;
 }(typeof window !== 'undefined' ? window : globalThis));

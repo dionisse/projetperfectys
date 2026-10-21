@@ -2533,6 +2533,24 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
 .auxiliary-centralization-choice p { margin: 0; }
 .auxiliary-centralization-choice > p:not(.page-kicker) { color: #6d7c74; font-size: .72rem; line-height: 1.55; }
 .auxiliary-centralization-choice .small { font-size: .65rem; }
+.internal-auxiliary-workspace .internal-auxiliary-controls { display: grid; gap: 15px; }
+.internal-auxiliary-controls > h4 { margin: -8px 0 0; }
+.internal-auxiliary-file-field { display: grid; justify-items: start; gap: 7px; margin: 0; }
+.internal-auxiliary-file-field > label:first-child { color: #42594f; font-weight: 800; }
+.internal-auxiliary-file-field .hint { display: block; }
+.internal-auxiliary-target-controls { margin-top: 2px; }
+.internal-auxiliary-draft-lock { display: grid; gap: 4px; min-height: 40px; padding: 8px 10px; border: 1px solid #d9e6df; border-radius: 7px; background: #f4f8f5; }
+.internal-auxiliary-draft-lock strong { color: #176c59; font-size: .76rem; }
+.internal-auxiliary-draft-lock span { color: #718077; font-size: .65rem; }
+.internal-auxiliary-summary { margin-bottom: 14px; }
+.internal-auxiliary-mapping .exchange-mapping-table { min-width: 660px; }
+.internal-auxiliary-mapping select { min-width: 270px; }
+.internal-auxiliary-totalization .exchange-mapping-table { min-width: 560px; }
+.internal-auxiliary-source-detail .exchange-mapping-table { min-width: 760px; }
+.internal-auxiliary-history-table { min-width: 840px; }
+.internal-auxiliary-history-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.internal-auxiliary-history-actions .btn { white-space: nowrap; }
+.internal-auxiliary-hash { display: inline-block; max-width: 260px; color: #748279; font-size: .58rem; overflow-wrap: anywhere; }
 .accounting-bridge-source-field {
   max-width: 720px;
   margin: 0;

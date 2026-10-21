@@ -49,6 +49,25 @@ const salesEntry = {
 };
 assert.equal(Cancellation.isInternalCentralization(salesEntry), true);
 assert.equal(Cancellation.sourceModuleForEntry(salesEntry), 'sales-stock-invoicing');
+const auxiliaryEntry = {
+  ...payrollEntry,
+  id: 'internal-auxiliary-entry',
+  reference: 'AUX-CEN-2026-001',
+  sourceSystem: 'PERFECTO-AUXILIAIRE-INTERNE',
+  sourceId: '["PERFECTO-AUXILIAIRE-INTERNE","PERFECTO-PAIE-RH","COR-CIBLE2026","2026","AUX-LOT-001"]',
+  sourceMetadata: {
+    feed: 'internal', operation: 'auxiliary-centralization', sourceModule: 'accounting',
+    runId: 'aux-run-1', runReference: 'AUX-LOT-001', period: '2026'
+  }
+};
+assert.equal(Cancellation.isInternalCentralization(auxiliaryEntry), true);
+assert.equal(Cancellation.sourceModuleForEntry(auxiliaryEntry), 'accounting');
+const auxiliaryReversal = Cancellation.buildReversalEntry(auxiliaryEntry, {
+  reference: 'OD-AUX-REV-001', journal: 'OD', date: '2026-08-20', reason: 'Correction lot auxiliaire'
+});
+assert.equal(auxiliaryReversal.ok, true, auxiliaryReversal.errors.join('\n'));
+assert.equal(auxiliaryReversal.entry.sourceMetadata.originalSourceModule, 'accounting');
+assert.equal(auxiliaryReversal.entry.sourceMetadata.originalSourceRunReference, 'AUX-LOT-001');
 assert.equal(Cancellation.sourceModuleForEntry({
   ...payrollEntry,
   sourceSystem: 'SAGE',

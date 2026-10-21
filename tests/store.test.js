@@ -338,6 +338,20 @@ test('source FEC conservée localement, téléchargeable et lot brouillon annula
   assert.strictEqual(cancelled.ok, true, cancelled.errors.join(' '));
   assert.strictEqual(S.entries().some(entry => entry.importBatchId === sourceRecord.id), false);
   assert.strictEqual(S.importSourceFiles().find(item => item.id === sourceRecord.id).status, 'cancelled');
+  const retried = S.importExchange(source, 'draft', {
+    sourceSystem: 'FEC-BENIN',
+    importSourceFile: {
+      sourceSystem: 'FEC-BENIN', fileName: 'FEC_IFU_20260831.txt',
+      sha256: 'a'.repeat(64), contentBase64: 'AA==', byteLength: 1,
+      encoding: 'iso-8859-15', delimiter: 'TAB', recordSeparator: 'CRLF'
+    }
+  });
+  assert.strictEqual(retried.ok, true, retried.errors.join(' ') || 'un lot annulé peut être retransféré après nouvel aperçu');
+  const retriedDraft = S.entries().find(entry => entry.importBatchId === retried.batchId);
+  assert.ok(retriedDraft);
+  assert.strictEqual(S.deleteDraft(retriedDraft.id).ok, true);
+  assert.strictEqual(S.cancelImportBatch(retried.batchId).ok, true, 'un brouillon supprimé individuellement peut aussi clore sa source');
+  assert.strictEqual(S.importSourceFiles().find(item => item.id === retried.batchId).status, 'cancelled');
 });
 
 test('corrections FEC en aperçu préservent la source originale et sont tracées dans le brouillon', () => {

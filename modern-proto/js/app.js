@@ -23,6 +23,7 @@
   var PayrollCentralization = window.PerfectoPayrollCentralization;
   var SalesOperations = window.PerfectoSalesOperations;
   var SalesCentralization = window.PerfectoSalesCentralization;
+  var AccountingCentralization = window.PerfectoAccountingCentralization;
   var CentralizationCancellation = window.PerfectoCentralizationCancellation;
   var FixedAssetDepreciation = window.PerfectoFixedAssetDepreciation;
   var OpeningBalances = window.PerfectoOpeningBalances;
@@ -112,6 +113,8 @@
   var generalAccountNatureSelectedId = 'stable-grants';
   var deferredInstallPrompt = null;
   var exchangeImportSession = null;
+  var internalAuxiliarySession = null;
+  var internalAuxiliaryReadSequence = 0;
   var fecImportSession = null;
   var fecImportReversalSession = null;
   var fecImportReadSequence = 0;
@@ -254,7 +257,14 @@
       case 'open-accounting-sales-centralization':
         return { moduleId: 'accounting', actionId: 'module.view' };
       case 'commit-accounting-sales-centralization':
+      case 'commit-internal-auxiliary-centralization':
         return { moduleId: 'accounting', actionId: 'data.import' };
+      case 'cancel-internal-auxiliary-batch':
+        return { moduleId: 'accounting', actionId: 'draft.delete' };
+      case 'download-internal-auxiliary-source':
+      case 'download-internal-auxiliary-csv-template':
+      case 'download-internal-auxiliary-workbook-template':
+        return { moduleId: 'accounting', actionId: 'data.export' };
       case 'save-accounting-bridge-mapping':
         return { moduleId: 'accounting', actionId: 'accounting.configure' };
       case 'select-centralization-cancellation':
@@ -596,6 +606,13 @@
       var fecImportLabel = $('#fec-import-label', root);
       if (fecImportLabel) fecImportLabel.hidden = !canImportFec;
     }
+    var internalAuxiliaryImportInput = $('#internal-auxiliary-file', root);
+    if (internalAuxiliaryImportInput) {
+      var canImportAuxiliary = hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext());
+      internalAuxiliaryImportInput.hidden = !canImportAuxiliary;
+      var internalAuxiliaryImportLabel = $('#internal-auxiliary-file-label', root);
+      if (internalAuxiliaryImportLabel) internalAuxiliaryImportLabel.hidden = !canImportAuxiliary;
+    }
   }
 
   /* -------------------------------- Toasts --------------------------------- */
@@ -706,6 +723,12 @@
     if (!view) return;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'import-balance')) balanceImportSession = null;
     if (!(route === 'menu' && parsed.params.g === 'parametres' && parsed.params.t === 'accounting-bridge')) accountingBridgeSession = null;
+    var isInternalAuxiliaryRoute = route === 'menu' && parsed.params.g === 'fichier' &&
+      parsed.params.t === 'centralize-auxiliary' && parsed.params.c === 'centralize-auxiliary-perfecto';
+    if (!isInternalAuxiliaryRoute) {
+      internalAuxiliarySession = null;
+      internalAuxiliaryReadSequence += 1;
+    }
     var isFecAuxiliaryImportRoute = route === 'menu' && parsed.params.g === 'fichier' &&
       (parsed.params.t === 'import-fec' || (parsed.params.t === 'centralize-auxiliary' && parsed.params.c === 'centralize-auxiliary-fec'));
     if (!isFecAuxiliaryImportRoute) {
@@ -5972,7 +5995,9 @@
   function cancellationSourceLabel(moduleId) {
     return moduleId === 'payroll-hr'
       ? 'Paie & RH'
-      : (moduleId === 'sales-stock-invoicing' ? 'Ventes, stock & facturation' : 'Source interne');
+      : (moduleId === 'sales-stock-invoicing'
+        ? 'Ventes, stock & facturation'
+        : (moduleId === 'accounting' ? 'Comptabilité générale · auxiliaire' : 'Source interne'));
   }
 
   function canViewCentralizationSource(entry, dossier, member) {
@@ -6073,7 +6098,7 @@
     }).join('');
     var empty = entries.length
       ? ''
-      : '<div class="empty-state"><strong>Aucune centralisation interne accessible dans ce dossier</strong><span>Seules les pièces issues de Paie & RH ou de Ventes, stock & facturation apparaissent ici. Les imports Excel/CSV et logiciels tiers sont exclus. Accordez aussi le droit de consultation du module source pour afficher ses centralisations.</span></div>';
+      : '<div class="empty-state"><strong>Aucune centralisation interne accessible dans ce dossier</strong><span>Les pièces de centralisation auxiliaire, Paie & RH et Ventes, stock & facturation apparaissent ici. Les imports de logiciels tiers sont exclus. Accordez aussi le droit de consultation du module source pour afficher ses centralisations.</span></div>';
 
     var controls = '';
     var preview = '';
@@ -6096,7 +6121,7 @@
     }
 
     return '<div class="exchange-workspace centralization-cancellation-workspace">' +
-      '<div class="alert info"><div><strong>Annulation réservée aux centralisations PERFECTO internes.</strong><br>Le périmètre couvre les pièces de Paie & RH et de Ventes, stock & facturation dans le dossier actif. Les fichiers d’échange et logiciels tiers ne sont pas sélectionnables.</div></div>' +
+      '<div class="alert info"><div><strong>Annulation réservée aux centralisations PERFECTO internes.</strong><br>Le périmètre couvre les transferts auxiliaires du dossier actif, Paie & RH et Ventes, stock & facturation. Les FEC et logiciels tiers ne sont pas sélectionnables.</div></div>' +
       '<section class="exchange-card"><p class="page-kicker">HISTORIQUE DES CENTRALISATIONS INTERNES</p><h4>' + entries.length + ' pièce(s) accessible(s)</h4>' + empty +
         (entries.length ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Pièce d’origine / module source</th><th>Date et montant</th><th>État de l’annulation</th><th>Action</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '') +
       '</section>' + controls + preview +
@@ -6309,13 +6334,19 @@
       toast('Le droit « Supprimer un brouillon » est requis.', 'warning');
       return;
     }
-    if (!window.confirm('Supprimer le brouillon de centralisation « ' + entry.reference + ' » ? Il n’a aucun effet sur le grand livre. Le lot interne source restera intact et pourra être retransféré. Un point de restauration local sera conservé.')) return;
-    var result = S.deleteDraft(entry.id);
+    var auxiliaryImportBatch = entry.sourceSystem === AccountingCentralization.INTERNAL_SOURCE_SYSTEM && entry.importBatchId;
+    var confirmation = auxiliaryImportBatch
+      ? 'Annuler le lot auxiliaire « ' + (entry.sourceMetadata && entry.sourceMetadata.sourceBatchReference || entry.reference) + ' » ? Le brouillon sera retiré, le fichier source conservé et son empreinte libérée pour une nouvelle tentative.'
+      : 'Supprimer le brouillon de centralisation « ' + entry.reference + ' » ? Il n’a aucun effet sur le grand livre. Le lot interne source restera intact. Un point de restauration local sera conservé.';
+    if (!window.confirm(confirmation)) return;
+    var result = auxiliaryImportBatch ? S.cancelImportBatch(entry.importBatchId) : S.deleteDraft(entry.id);
     if (!result.ok) {
       toast(result.errors[0] || 'Suppression du brouillon impossible.', 'error');
       return;
     }
-    toast('Brouillon supprimé ; le lot interne source n’a pas été modifié.', 'success');
+    toast(auxiliaryImportBatch
+      ? 'Lot auxiliaire annulé ; le fichier source et sa traçabilité restent conservés.'
+      : 'Brouillon supprimé ; le lot interne source n’a pas été modifié.', 'success');
     render();
   }
 
@@ -6352,17 +6383,511 @@
 
   function viewAccountingAuxiliaryOverview() {
     return '<div class="exchange-workspace auxiliary-centralization-workspace">' +
-      '<div class="alert info"><div><strong>Deux origines, un traitement en Comptabilité générale.</strong><br>La centralisation interne regroupe les opérations comptables réelles enregistrées dans les comptes auxiliaires et reporte leurs totaux dans le compte collectif du grand livre. La voie externe importe manuellement les opérations FEC et en contrôle les totaux par compte collectif. Aucun connecteur direct ni traitement analytique n’est utilisé.</div></div>' +
+      '<div class="alert info"><div><strong>Deux origines, deux parcours en Comptabilité générale.</strong><br>La centralisation interne regroupe des opérations réelles de comptes auxiliaires par compte collectif ; la voie externe importe manuellement un FEC. Le transfert interne crée un brouillon, et le FEC est proposé en brouillon par défaut après aperçu et confirmation. Aucun connecteur tiers ni traitement analytique n’est utilisé.</div></div>' +
+      '<section class="exchange-card auxiliary-centralization-choice"><p class="page-kicker">VOIE INTERNE · LOT PERFECTO</p><h4>Mouvements auxiliaires du dossier actif</h4><p>Transférez un lot CSV/XLSX au format PERFECTO-AUXILIAIRE v1. PERFECTO contrôle le dossier et l’exercice déclarés, l’équilibre des pièces, les correspondances vers des comptes existants et les totaux proposés avant de créer un brouillon.</p><a class="btn btn-primary btn-sm" href="' + esc(accountingMenuHash('fichier', 'centralize-auxiliary', 'centralize-auxiliary-perfecto')) + '">Ouvrir la centralisation interne <span aria-hidden="true">→</span></a><p class="small muted">Le transfert est local au dossier actif. Le fichier déclare son producteur mais n’est pas signé ; l’export direct des modules PERFECTO n’est pas attesté.</p></section>' +
       '<section class="exchange-card auxiliary-centralization-choice"><p class="page-kicker">VOIE EXTERNE · IMPORT MANUEL</p><h4>FEC d’un logiciel externe ou d’une autre organisation</h4><p>Corrigez les écritures cibles dans l’aperçu, confirmez la conversion vers le plan comptable général et contrôlez les totaux par compte collectif avant l’ajout.</p><a class="btn btn-primary btn-sm" href="' + esc(accountingMenuHash('fichier', 'centralize-auxiliary', 'centralize-auxiliary-fec')) + '">Ouvrir le parcours FEC <span aria-hidden="true">→</span></a><p class="small muted">Le FEC original, les pièces source et les identifiants auxiliaires restent traçables ; aucun connecteur ni mouvement auxiliaire individuel n’est créé.</p></section>' +
-      '<div class="alert warning"><div><strong>Voie interne PERFECTO · règle définie, alimentation à construire.</strong><br>Le principe est fixé : regrouper les opérations réelles des comptes auxiliaires par compte collectif et reporter les totaux au grand livre. Les modules ne fournissent pas encore les mouvements comptables nécessaires ; aucun compte, montant ou ligne n’est inventé.</div></div>' +
     '</div>';
   }
 
+  function internalAuxiliaryHistoryHtml(dossier) {
+    var history = S.importSourceFiles().filter(function (source) {
+      return source && (source.sourceSystem === AccountingCentralization.AUXILIARY_FORMAT || source.sourceFormat === AccountingCentralization.AUXILIARY_FORMAT);
+    }).sort(function (a, b) { return String(b.importedAt || '').localeCompare(String(a.importedAt || '')); });
+    if (!history.length) {
+      return '<div class="empty-state"><strong>Aucun lot auxiliaire transféré dans ce dossier</strong><span>Les aperçus n’ajoutent rien. Un lot apparaît ici uniquement après confirmation et création du brouillon.</span></div>';
+    }
+    var entries = S.entries();
+    var rows = history.map(function (source) {
+      var batchId = String(source.importBatchId || source.id || '');
+      var batchEntries = entries.filter(function (entry) { return entry.importBatchId === batchId; });
+      var posted = batchEntries.filter(function (entry) { return entry.status === 'posted'; });
+      var drafts = batchEntries.filter(function (entry) { return entry.status === 'draft'; });
+      var state = '';
+      var action = '<button type="button" class="btn btn-ghost btn-sm" data-action="download-internal-auxiliary-source" data-id="' + esc(source.id) + '">Télécharger l’original</button>';
+      if (source.status === 'cancelled') {
+        state = '<span class="badge">Lot annulé</span><small>Original conservé · ' + Number(source.cancelledEntryCount || 0) + ' brouillon(s) retiré(s)</small>';
+      } else if (posted.length) {
+        var reversal = CentralizationCancellation.findReversal(entries, posted[0]);
+        state = reversal && reversal.status === 'posted'
+          ? '<span class="badge posted">Centralisation neutralisée</span><small>Écriture inverse validée : ' + esc(reversal.reference) + ' · original conservé</small>'
+          : (reversal
+            ? '<span class="badge draft">Écriture inverse en brouillon</span><small>' + esc(posted[0].reference) + ' reste validée jusqu’à validation de ' + esc(reversal.reference) + '</small>'
+            : '<span class="badge posted">Écriture validée</span><small>' + esc(posted[0].reference) + ' · le grand livre est alimenté</small>');
+        action += ' <a class="btn btn-primary btn-sm" href="' + esc(accountingMenuHash('fichier', 'cancel-centralization')) + '">Gérer l’écriture inverse</a>';
+      } else if (drafts.length || source.status === 'draft') {
+        state = drafts.length
+          ? '<span class="badge draft">Brouillon</span><small>' + esc(drafts[0].reference) + ' · aucun effet au grand livre avant validation</small>'
+          : '<span class="badge draft">Brouillon supprimé</span><small>La source reste conservée ; annulez le lot pour libérer son empreinte.</small>';
+        action += ' <button type="button" class="btn btn-danger btn-sm" data-action="cancel-internal-auxiliary-batch" data-id="' + esc(batchId) + '">Annuler le lot brouillon</button>';
+      } else {
+        state = '<span class="badge">État à contrôler</span><small>Aucune pièce liée retrouvée</small>';
+      }
+      return '<tr><td><strong>' + esc(source.fileName || 'Lot auxiliaire') + '</strong><br><span class="small muted">' + esc(source.sourceProducer || 'Module PERFECTO déclaré') + ' · lot ' + esc(source.sourceBatchReference || '—') + '</span><br><small class="internal-auxiliary-hash">SHA-256 · ' + esc(source.sha256 || '—') + '</small></td>' +
+        '<td>' + esc(source.sourceDossierReference || dossier.reference || '') + '<br><span class="small muted">Exercice ' + esc(source.sourceExercise || dossier.exerciseYear || '') + ' · ' + Number(source.documentCount || 0) + ' pièce(s), ' + Number(source.sourceMovementCount || source.lineCount || 0) + ' mouvement(s)</span></td>' +
+        '<td class="numeric">' + esc(amount(source.totalDebit || 0)) + ' / ' + esc(amount(source.totalCredit || 0)) + ' XOF</td>' +
+        '<td>' + state + '</td><td><div class="internal-auxiliary-history-actions">' + action + '</div></td></tr>';
+    }).join('');
+    return '<div class="exchange-table-wrap"><table class="exchange-mapping-table internal-auxiliary-history-table"><thead><tr><th>Fichier / lot source</th><th>Dossier et contenu</th><th>Totaux source débit / crédit</th><th>État PERFECTO</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
+
   function viewInternalAuxiliaryCentralization() {
-    return '<div class="exchange-workspace auxiliary-centralization-workspace">' +
-      '<div class="alert info"><div><strong>Règle de centralisation auxiliaire interne · Comptabilité générale</strong><br>Regrouper les opérations comptables effectivement enregistrées dans les comptes auxiliaires, calculer leur total par compte collectif puis reporter ces totaux au grand livre. Ce traitement est général, non analytique.</div></div>' +
-      '<div class="alert warning"><div><strong>Parcours non alimenté pour le moment.</strong><br>Les modules PERFECTO du dossier actif ne fournissent pas encore le registre de mouvements auxiliaires requis. Aucun mouvement, montant ou compte n’est fabriqué ; l’aperçu restera indisponible jusqu’à la présence de données réelles à contrôler.</div></div>' +
+    var dossier = S.currentDossier();
+    if (internalAuxiliarySession && internalAuxiliarySession.targetDossierId !== dossier.id) internalAuxiliarySession = null;
+    var session = internalAuxiliarySession;
+    var canImport = hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext(dossier));
+    var journals = S.journals().filter(function (journal) {
+      return journal.active !== false && !journal.retired && !journal.systemManaged && journal.code !== 'CEN';
+    });
+    var journalOptionsHtml = '<option value="">— Choisir un journal —</option>' + journals.map(function (journal) {
+      return '<option value="' + esc(journal.code) + '"' + (session && session.targetJournal === journal.code ? ' selected' : '') + '>' + esc(journalDisplayName(journal)) + '</option>';
+    }).join('');
+    var phoneNotice = isPhoneViewport()
+      ? '<div class="alert info">Transfert désactivé sur téléphone. Ouvrez ce parcours sur ordinateur ou tablette.</div>'
+      : '';
+    var importNotice = canImport
+      ? ''
+      : '<div class="alert warning">Consultation seule : un droit explicite « data.import » est requis pour charger et créer un brouillon.</div>';
+    var controls = isPhoneViewport() ? '' :
+      '<section class="exchange-card internal-auxiliary-controls"><p class="page-kicker">TRANSFERT DU LOT SOURCE</p><h4>1. Choisir le fichier et paramétrer la pièce générale</h4>' +
+        '<div class="field internal-auxiliary-file-field"><label for="internal-auxiliary-file">Fichier auxiliaire CSV ou Excel (.xlsx)</label><input id="internal-auxiliary-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden><label id="internal-auxiliary-file-label" class="btn btn-primary exchange-file-picker" for="internal-auxiliary-file">↑ Choisir un lot CSV / XLSX</label><span class="hint">PERFECTO lit le fichier dans ce navigateur. Limite locale : 1 Mio. Le transfert ne modifie aucune écriture avant confirmation.</span></div>' +
+        '<div class="exchange-button-row"><button type="button" class="btn btn-primary" data-action="download-internal-auxiliary-workbook-template">↓ Modèle Excel (.xlsx)</button><button type="button" class="btn btn-ghost" data-action="download-internal-auxiliary-csv-template">↓ Modèle CSV</button></div>' +
+        '<div class="exchange-import-controls internal-auxiliary-target-controls">' +
+          '<div class="field"><label for="internal-auxiliary-date">Date de la pièce générale</label><input id="internal-auxiliary-date" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(session && session.targetDate || '') + '"><span class="hint">À choisir dans le cycle et une période ouverte du dossier.</span></div>' +
+          '<div class="field"><label for="internal-auxiliary-journal">Journal général</label><select id="internal-auxiliary-journal">' + journalOptionsHtml + '</select><span class="hint">Aucun journal n’est créé. Le journal CEN inter-dossiers est exclu.</span></div>' +
+          '<div class="field"><label for="internal-auxiliary-reference">Référence de centralisation</label><input id="internal-auxiliary-reference" type="text" maxlength="100" value="' + esc(session && session.targetReference || '') + '" placeholder="Saisir une référence unique"><span class="hint">La référence sera contrôlée contre les pièces du dossier.</span></div>' +
+          '<div class="field"><label>Statut à la création</label><div class="internal-auxiliary-draft-lock"><strong>Brouillon uniquement</strong><span>La validation reste une action comptable distincte.</span></div></div>' +
+        '</div>' +
+        '<div class="alert info"><div><strong>Format attendu : PERFECTO-AUXILIAIRE v1.</strong><br>Le fichier doit contenir les pièces sources complètes et équilibrées, y compris leurs contreparties. Le dossier et l’exercice déclarés doivent être ceux affichés en haut de page. Les comptes cibles doivent exister et être imputables ; aucune création ni modification du plan n’est proposée.</div></div>' +
+      '</section>';
+    var formatGuide = '<details class="exchange-mapping exchange-format-guide"><summary>Voir les colonnes requises du format PERFECTO-AUXILIAIRE v1</summary><p>Le modèle vide contient uniquement les en-têtes : aucune opération ni aucun montant d’exemple n’est fourni.</p><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Famille</th><th>Colonnes / règle</th></tr></thead><tbody>' +
+      '<tr><td>Métadonnées</td><td>FORMAT, VERSION, SYSTEME_SOURCE, REFERENCE_DOSSIER, EXERCICE, REFERENCE_LOT — identiques pour toutes les lignes ; SYSTEME_SOURCE doit être PERFECTO-PAIE-RH ou PERFECTO-VENTES-STOCK-FACTURATION ; dossier et exercice actifs.</td></tr>' +
+      '<tr><td>Pièce source</td><td>CODE_JOURNAL_SOURCE, DATE_SOURCE, REFERENCE_PIECE_SOURCE, LIBELLE_PIECE_SOURCE — chaque pièce complète doit être équilibrée.</td></tr>' +
+      '<tr><td>Comptes et tiers</td><td>CODE_COMPTE_GENERAL, LIBELLE_COMPTE_GENERAL, CODE_AUXILIAIRE, LIBELLE_AUXILIAIRE, LIBELLE_MOUVEMENT — le compte cible auxiliaire doit être marqué auxiliaire dans le plan.</td></tr>' +
+      '<tr><td>Montants / trace</td><td>DEBIT_XOF, CREDIT_XOF, ID_SOURCE — XOF entiers, un seul côté positif par mouvement, identifiant unique et obligatoire.</td></tr>' +
+      '</tbody></table></div></details>';
+    return '<div class="exchange-workspace auxiliary-centralization-workspace internal-auxiliary-workspace">' +
+      '<div class="alert info"><div><strong>Centralisation interne · Comptabilité générale</strong><br>Les mouvements du fichier sont regroupés par compte collectif cible et reportés dans une pièce générale. Les pièces originales restent conservées en source ; le brouillon n’affecte pas le grand livre avant validation.</div></div>' +
+      '<div class="alert warning"><div><strong>Provenance déclarative, pas de connecteur.</strong><br>Le fichier doit provenir des mouvements réellement enregistrés dans Paie & RH ou Ventes, stock & facturation pour le dossier actif. Le contrôle vérifie les métadonnées et l’équilibre, mais le producteur n’est pas authentifié par signature technique et l’export direct des modules PERFECTO n’est pas attesté dans cette version. Ne transférez pas de fichier tiers dans ce parcours.</div></div>' +
+      phoneNotice + importNotice + controls + formatGuide +
+      '<div id="internal-auxiliary-preview" class="exchange-preview" aria-live="polite"><div class="empty-state"><strong>Aucun lot analysé</strong><span>Choisissez un lot réel. L’aperçu, les correspondances et les confirmations apparaîtront avant toute écriture.</span></div></div>' +
+      '<section class="exchange-card internal-auxiliary-history"><p class="page-kicker">HISTORIQUE ET SOURCE ORIGINALE</p><h4>Lots auxiliaires de ' + esc(dossier.reference) + '</h4>' + internalAuxiliaryHistoryHtml(dossier) + '</section>' +
+      '<p class="exchange-footnote">Les données et fichiers restent dans le stockage local de ce navigateur ; cette vue ne synchronise pas Google Drive. Une annulation de brouillon conserve le fichier source. Une pièce validée reste intacte et son annulation passe par une écriture inverse liée à l’original.</p>' +
     '</div>';
+  }
+
+  function internalAuxiliaryTargetDateErrors(date, dossier) {
+    var errors = [];
+    var value = String(date || '');
+    var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return ['Choisissez une date de centralisation valide.'];
+    var year = Number(match[1]);
+    var month = Number(match[2]);
+    var day = Number(match[3]);
+    var parsedDate = new Date(Date.UTC(year, month - 1, day));
+    if (parsedDate.getUTCFullYear() !== year || parsedDate.getUTCMonth() !== month - 1 || parsedDate.getUTCDate() !== day) {
+      return ['La date de centralisation n’existe pas dans le calendrier.'];
+    }
+    if (value < dossier.cycleStart || value > dossier.cycleEnd) errors.push('La date de centralisation doit rester dans le cycle du dossier actif.');
+    if (value >= dossier.cycleStart && value <= dossier.cycleEnd && S.periodStatus(year, month) === 'closed') {
+      errors.push('La période choisie est clôturée ; aucune centralisation ne peut y être créée.');
+    }
+    return errors;
+  }
+
+  function internalAuxiliaryAccountMappingsHtml(session) {
+    var catalog = Object.create(null);
+    (session.parseResult.rows || []).forEach(function (row) {
+      if (!catalog[row.account]) catalog[row.account] = { label: row.accountLabel || '', auxiliaryCodes: Object.create(null) };
+      if (row.auxiliaryCode) catalog[row.account].auxiliaryCodes[row.auxiliaryCode] = true;
+    });
+    var codes = Object.keys(catalog).sort(function (a, b) { return a.localeCompare(b); });
+    return '<section class="exchange-card internal-auxiliary-mapping"><p class="page-kicker">CORRESPONDANCES VERS LE PLAN CIBLE</p><h4>2. Confirmer les comptes généraux (' + codes.length + ' codes source)</h4><p class="small muted">Chaque compte doit être associé à un compte existant et imputable. Les lignes avec un auxiliaire ne peuvent être associées qu’à un compte marqué auxiliaire. Aucune création silencieuse.</p><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Compte source</th><th>Tiers auxiliaires</th><th>Compte collectif cible</th></tr></thead><tbody>' +
+      codes.map(function (code) {
+        var account = catalog[code];
+        var selected = session.accountMap && session.accountMap[code] || '';
+        return '<tr><td><strong>' + esc(code) + '</strong><br><span class="small muted">' + esc(account.label) + '</span></td><td>' + Object.keys(account.auxiliaryCodes).length + '</td><td><select data-internal-auxiliary-map="' + esc(code) + '" aria-label="Compte cible pour ' + esc(code) + '">' + accountOptions(selected, '') + '</select></td></tr>';
+      }).join('') +
+      '</tbody></table></div><label class="exchange-context-confirm"><input id="internal-auxiliary-confirm-mappings" type="checkbox"' + (session.mappingsConfirmed ? ' checked' : '') + '> Je confirme toutes les correspondances affichées ; le plan comptable et les écritures existantes ne seront pas modifiés.</label></section>';
+  }
+
+  function renderInternalAuxiliaryPreview() {
+    var host = $('#internal-auxiliary-preview');
+    if (!host) return;
+    var session = internalAuxiliarySession;
+    if (!session) {
+      host.innerHTML = '<div class="empty-state"><strong>Aucun lot analysé</strong><span>Choisissez un lot réel. L’aperçu, les correspondances et les confirmations apparaîtront avant toute écriture.</span></div>';
+      return;
+    }
+    if (session.pending) {
+      host.innerHTML = '<div class="empty-state"><strong>Lecture du fichier en cours</strong><span>' + esc(session.fileName || 'Fichier auxiliaire') + ' · aucune donnée n’a encore été importée.</span></div>';
+      return;
+    }
+    var parsed = session.parseResult;
+    if (!parsed || !parsed.ok) {
+      var parseErrors = parsed && parsed.errors || ['Le fichier n’a pas pu être analysé.'];
+      host.innerHTML = '<div class="alert error"><div><strong>Lot auxiliaire refusé</strong><ul>' + parseErrors.map(function (message) { return '<li>' + esc(message) + '</li>'; }).join('') + '</ul><span>Le fichier source n’a pas été ajouté et aucune écriture n’a été modifiée.</span></div></div>';
+      return;
+    }
+    var dossier = S.currentDossier();
+    var sourceContext = AccountingCentralization.validateSourceContext(parsed, dossier);
+    session.sourceContext = sourceContext;
+    session.targetDate = ($('#internal-auxiliary-date') || {}).value || session.targetDate || '';
+    session.targetJournal = ($('#internal-auxiliary-journal') || {}).value || session.targetJournal || '';
+    session.targetReference = ($('#internal-auxiliary-reference') || {}).value || session.targetReference || '';
+    var aggregation = sourceContext.ok
+      ? AccountingCentralization.aggregate(parsed, session.accountMap || Object.create(null), postingAccounts())
+      : null;
+    session.aggregation = aggregation;
+    var sourceSummary = '<div class="exchange-summary-grid internal-auxiliary-summary">' +
+      '<div><small>Fichier sélectionné</small><strong>' + esc(session.fileName) + '</strong></div>' +
+      '<div><small>Empreinte SHA-256</small><strong>' + esc(session.sha256 || 'Calcul en attente') + '</strong></div>' +
+      '<div><small>Producteur / lot déclarés</small><strong>' + esc(parsed.metadata.sourceSystem) + ' · ' + esc(parsed.metadata.batchReference) + '</strong></div>' +
+      '<div><small>Dossier / exercice déclarés</small><strong>' + esc(parsed.metadata.dossierReference) + ' · ' + esc(parsed.metadata.exercise) + '</strong></div>' +
+      '<div><small>Pièces / mouvements</small><strong>' + Number(parsed.documentCount || 0) + ' pièce(s) · ' + parsed.rows.length + ' mouvement(s) · ' + Number(parsed.auxiliaryMovementCount || 0) + ' avec auxiliaire</strong></div>' +
+      '<div><small>Total source débit</small><strong>' + esc(amount(parsed.totalDebit)) + ' XOF</strong></div>' +
+      '<div><small>Total source crédit</small><strong>' + esc(amount(parsed.totalCredit)) + ' XOF</strong></div>' +
+      '</div>';
+    var contextErrors = sourceContext.errors || [];
+    var duplicateSource = !!session.sha256 && S.importSourceFiles().some(function (source) {
+      return source.sha256 === session.sha256 && source.status !== 'cancelled';
+    });
+    var errors = contextErrors.slice();
+    if (aggregation && !aggregation.ok) errors = errors.concat(aggregation.errors || []);
+    if (duplicateSource) errors.push('Cette empreinte de fichier est déjà associée à un lot non annulé dans ce dossier.');
+
+    var mappingHtml = aggregation ? internalAuxiliaryAccountMappingsHtml(session) : '';
+    var documentRows = (parsed.documents || []).slice(0, 40).map(function (document) {
+      return '<tr><td>' + esc(document.sourceJournal) + '</td><td>' + esc(document.sourceDate) + '</td><td>' + esc(document.sourceReference) + '</td><td>' + esc(document.description) + '</td><td>' + Number(document.lineCount || 0) + '</td><td class="numeric">' + esc(amount(document.debit)) + '</td><td class="numeric">' + esc(amount(document.credit)) + '</td></tr>';
+    }).join('');
+    var documentTable = '<details class="exchange-mapping internal-auxiliary-source-detail" open><summary>Pièces sources contrôlées (' + parsed.documentCount + ')</summary><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Journal source</th><th>Date</th><th>Référence</th><th>Libellé source</th><th>Lignes</th><th class="numeric">Débit</th><th class="numeric">Crédit</th></tr></thead><tbody>' + documentRows + '</tbody></table></div>' +
+      (parsed.documentCount > 40 ? '<p class="small muted">Affichage des 40 premières pièces ; le fichier source complet sera conservé.</p>' : '') + '</details>';
+    var movementRows = (parsed.rows || []).slice(0, 40).map(function (row) {
+      return '<tr><td>' + esc(row.sourceReference) + '</td><td>' + esc(row.account) + '<br><span class="small muted">' + esc(row.accountLabel) + '</span></td><td>' + esc(row.auxiliaryCode || '—') + (row.auxiliaryLabel ? '<br><span class="small muted">' + esc(row.auxiliaryLabel) + '</span>' : '') + '</td><td>' + esc(row.sourceId) + '</td><td class="numeric">' + esc(amount(row.debit)) + '</td><td class="numeric">' + esc(amount(row.credit)) + '</td></tr>';
+    }).join('');
+    var movementTable = '<details class="exchange-mapping internal-auxiliary-source-detail"><summary>Mouvements source avec identifiants (' + parsed.rows.length + ')</summary><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Pièce</th><th>Compte source</th><th>Auxiliaire</th><th>ID source</th><th class="numeric">Débit</th><th class="numeric">Crédit</th></tr></thead><tbody>' + movementRows + '</tbody></table></div>' +
+      (parsed.rows.length > 40 ? '<p class="small muted">Affichage des 40 premières lignes ; la source originale complète restera téléchargeable.</p>' : '') + '</details>';
+
+    var targetErrors = [];
+    var hasTarget = !!(session.targetReference && session.targetJournal && session.targetDate);
+    var built = null;
+    var analysis = null;
+    if (hasTarget && sourceContext.ok && aggregation && aggregation.ok) {
+      targetErrors = internalAuxiliaryTargetDateErrors(session.targetDate, dossier);
+      if (!targetErrors.length) {
+        built = AccountingCentralization.buildEntry(parsed, aggregation, {
+          dossier: dossier,
+          reference: session.targetReference,
+          journal: session.targetJournal,
+          date: session.targetDate,
+          sourceFileSha256: session.sha256
+        });
+        if (!built.ok) targetErrors = targetErrors.concat(built.errors || []);
+        else {
+          analysis = S.previewExchangeImport([built.entry], 'draft', {
+            sourceSystem: AccountingCentralization.INTERNAL_SOURCE_SYSTEM,
+            accountMap: Object.create(null),
+            journalMap: Object.create(null)
+          });
+          if (!analysis.ok) targetErrors = targetErrors.concat(analysis.errors || []);
+        }
+      }
+    }
+    session.preparedEntry = built && built.ok ? built.entry : null;
+    session.analysis = analysis;
+    errors = errors.concat(targetErrors);
+    var aggregateTable = aggregation && aggregation.ok
+      ? '<section class="exchange-card internal-auxiliary-totalization"><p class="page-kicker">RÉSULTAT DE L’AGRÉGATION</p><h4>Totaux qui seront reportés au grand livre par compte cible</h4><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Compte cible</th><th>Libellé</th><th class="numeric">Débit XOF</th><th class="numeric">Crédit XOF</th></tr></thead><tbody>' + aggregation.lines.map(function (line) {
+        return '<tr><td><strong>' + esc(line.account) + '</strong></td><td>' + esc(line.accountLabel) + '</td><td class="numeric">' + esc(amount(line.debit)) + '</td><td class="numeric">' + esc(amount(line.credit)) + '</td></tr>';
+      }).join('') + '</tbody><tfoot><tr><td colspan="2">Totaux agrégés</td><td class="numeric">' + esc(amount(aggregation.totalDebit)) + '</td><td class="numeric">' + esc(amount(aggregation.totalCredit)) + '</td></tr></tfoot></table></div><p class="small muted">' + Number(aggregation.accountMappings.length) + ' compte(s) source associé(s) à ' + Number(aggregation.auxiliaryAccountCount) + ' code(s) auxiliaire(s). Les contreparties des pièces source sont incluses pour conserver l’équilibre.</p></section>'
+      : '';
+
+    var warningMessages = (aggregation && aggregation.warnings || []).concat(analysis && analysis.warnings || []);
+    var warningsHtml = warningMessages.length
+      ? '<div class="alert warning"><div><strong>' + warningMessages.length + ' point(s) à vérifier</strong><ul>' + warningMessages.map(function (message) { return '<li>' + esc(message) + '</li>'; }).join('') + '</ul></div></div>'
+      : '';
+    var validationHtml = errors.length
+      ? '<div class="alert error"><div><strong>' + errors.length + ' contrôle(s) à corriger</strong><ul>' + errors.map(function (message) { return '<li>' + esc(message) + '</li>'; }).join('') + '</ul></div></div>'
+      : (analysis && analysis.ok
+        ? '<div class="alert success"><div><strong>Aperçu équilibré et prêt à confirmer.</strong><br>Une seule pièce générale sera créée en brouillon avec ' + Number(analysis.lineCount || 0) + ' ligne(s). Le grand livre ne changera pas avant validation.</div></div>'
+        : '<div class="alert info"><div><strong>Les opérations source sont équilibrées.</strong><br>Renseignez la date, le journal et la référence de la pièce cible pour vérifier les règles du dossier.</div></div>');
+    var provenanceConfirmation = sourceContext.ok
+      ? '<label class="exchange-context-confirm"><input id="internal-auxiliary-confirm-source" type="checkbox"' + (session.sourceConfirmed ? ' checked' : '') + '> Je confirme que ce lot provient des mouvements réellement enregistrés dans un module PERFECTO du dossier actif. Cette confirmation utilisateur ne constitue pas une signature technique.</label>'
+      : '';
+    var operationConfirmation = analysis && analysis.ok
+      ? '<label class="exchange-context-confirm"><input id="internal-auxiliary-confirm-operation" type="checkbox"' + (session.operationConfirmed ? ' checked' : '') + '> Je confirme la création d’un brouillon à partir des totaux et correspondances affichés. Aucune écriture source ou existante ne sera remplacée.</label>'
+      : '';
+    var permissionNote = !hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext(dossier))
+      ? '<div class="alert warning">Le droit « data.import » est nécessaire pour créer le brouillon.</div>'
+      : '';
+    var canCommit = !!(analysis && analysis.ok && !duplicateSource && session.sourceConfirmed && session.mappingsConfirmed && session.operationConfirmed &&
+      hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext(dossier)) &&
+      session.targetDossierId === dossier.id);
+    session.canCommit = canCommit;
+    var importFooter = '<div class="exchange-preview-footer"><button type="button" class="btn btn-primary" data-action="commit-internal-auxiliary-centralization"' + (canCommit ? '' : ' disabled') + '>Créer le brouillon de centralisation</button></div>';
+    host.innerHTML = sourceSummary +
+      (aggregation ? mappingHtml : '') + aggregateTable + documentTable + movementTable + warningsHtml + validationHtml +
+      provenanceConfirmation + operationConfirmation + permissionNote +
+      (aggregation && sourceContext.ok ? importFooter : '');
+    applyDemoActionGates(host);
+    $$('[data-internal-auxiliary-map]', host).forEach(function (select) {
+      select.addEventListener('change', function () {
+        var code = select.getAttribute('data-internal-auxiliary-map');
+        session.accountMap[code] = select.value;
+        session.mappingsConfirmed = false;
+        session.operationConfirmed = false;
+        renderInternalAuxiliaryPreview();
+      });
+    });
+    var mappingConfirmation = $('#internal-auxiliary-confirm-mappings', host);
+    if (mappingConfirmation) mappingConfirmation.addEventListener('change', function () {
+      session.mappingsConfirmed = mappingConfirmation.checked;
+      session.operationConfirmed = false;
+      renderInternalAuxiliaryPreview();
+    });
+    var sourceConfirmation = $('#internal-auxiliary-confirm-source', host);
+    if (sourceConfirmation) sourceConfirmation.addEventListener('change', function () {
+      session.sourceConfirmed = sourceConfirmation.checked;
+      renderInternalAuxiliaryPreview();
+    });
+    var operationConfirmation = $('#internal-auxiliary-confirm-operation', host);
+    if (operationConfirmation) operationConfirmation.addEventListener('change', function () {
+      session.operationConfirmed = operationConfirmation.checked;
+      renderInternalAuxiliaryPreview();
+    });
+  }
+
+  function parseInternalAuxiliaryFile(session, bytes, extension) {
+    if (extension === 'xlsx') return AccountingExchange.parseAuxiliaryWorkbook(bytes);
+    var text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return AccountingExchange.parseAuxiliary(text);
+  }
+
+  function bindInternalAuxiliaryCentralization() {
+    var fileInput = $('#internal-auxiliary-file');
+    if (!fileInput || isPhoneViewport()) return;
+    var dateInput = $('#internal-auxiliary-date');
+    var journalInput = $('#internal-auxiliary-journal');
+    var referenceInput = $('#internal-auxiliary-reference');
+    [dateInput, journalInput, referenceInput].forEach(function (input) {
+      if (!input) return;
+      var updateTarget = function () {
+        if (!internalAuxiliarySession) return;
+        internalAuxiliarySession.targetDate = dateInput ? dateInput.value : '';
+        internalAuxiliarySession.targetJournal = journalInput ? journalInput.value : '';
+        internalAuxiliarySession.targetReference = referenceInput ? referenceInput.value : '';
+        internalAuxiliarySession.operationConfirmed = false;
+        renderInternalAuxiliaryPreview();
+      };
+      input.addEventListener('input', updateTarget);
+      input.addEventListener('change', updateTarget);
+    });
+    fileInput.addEventListener('change', function () {
+      var file = fileInput.files && fileInput.files[0];
+      fileInput.value = '';
+      if (!file) return;
+      var readSequence = ++internalAuxiliaryReadSequence;
+      var extensionMatch = /\.([^.]+)$/.exec(file.name || '');
+      var extension = extensionMatch ? extensionMatch[1].toLowerCase() : '';
+      internalAuxiliarySession = {
+        fileName: file.name,
+        fileSize: file.size,
+        mimeType: file.type || (extension === 'xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv;charset=utf-8'),
+        extension: extension,
+        targetDossierId: S.currentDossier().id,
+        targetDate: dateInput ? dateInput.value : '',
+        targetJournal: journalInput ? journalInput.value : '',
+        targetReference: referenceInput ? referenceInput.value : '',
+        rawBytes: null,
+        contentBase64: '',
+        sha256: '',
+        accountMap: Object.create(null),
+        sourceConfirmed: false,
+        mappingsConfirmed: false,
+        operationConfirmed: false,
+        pending: true,
+        parseResult: null
+      };
+      renderInternalAuxiliaryPreview();
+      if (extension !== 'csv' && extension !== 'xlsx') {
+        internalAuxiliarySession.pending = false;
+        internalAuxiliarySession.parseResult = { ok: false, errors: ['Choisissez un fichier CSV UTF-8 ou un classeur Excel .xlsx.'], rows: [], metadata: null, documents: [] };
+        renderInternalAuxiliaryPreview();
+        return;
+      }
+      if (!file.size || file.size > 1024 * 1024) {
+        internalAuxiliarySession.pending = false;
+        internalAuxiliarySession.parseResult = { ok: false, errors: ['Le fichier doit contenir des données et ne pas dépasser 1 Mio dans ce prototype local.'], rows: [], metadata: null, documents: [] };
+        renderInternalAuxiliaryPreview();
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function () {
+        if (readSequence !== internalAuxiliaryReadSequence) return;
+        var bytes = new Uint8Array(reader.result || new ArrayBuffer(0));
+        fecSha256(bytes).then(function (sha256) {
+          if (readSequence !== internalAuxiliaryReadSequence) return;
+          var session = internalAuxiliarySession;
+          if (!session) return;
+          try {
+            session.rawBytes = bytes;
+            session.contentBase64 = fecBytesToBase64(bytes);
+            session.sha256 = sha256;
+            session.parseResult = parseInternalAuxiliaryFile(session, bytes, extension);
+            session.pending = false;
+            if (session.parseResult.ok) {
+              var accountMap = Object.create(null);
+              session.parseResult.rows.forEach(function (row) {
+                if (!Object.prototype.hasOwnProperty.call(accountMap, row.account)) {
+                  var targetAccount = S.account(row.account);
+                  accountMap[row.account] = targetAccount && targetAccount.active !== false && targetAccount.postable !== false ? row.account : '';
+                }
+              });
+              session.accountMap = accountMap;
+            }
+          } catch (error) {
+            session.pending = false;
+            session.parseResult = { ok: false, errors: [error.message || 'Lecture du fichier auxiliaire impossible.'], rows: [], metadata: null, documents: [] };
+          }
+          renderInternalAuxiliaryPreview();
+        }).catch(function (error) {
+          if (readSequence !== internalAuxiliaryReadSequence) return;
+          internalAuxiliarySession.pending = false;
+          internalAuxiliarySession.parseResult = { ok: false, errors: [error.message || 'Empreinte SHA-256 impossible.'], rows: [], metadata: null, documents: [] };
+          renderInternalAuxiliaryPreview();
+        });
+      };
+      reader.onerror = function () {
+        if (readSequence !== internalAuxiliaryReadSequence) return;
+        internalAuxiliarySession.pending = false;
+        internalAuxiliarySession.parseResult = { ok: false, errors: ['Lecture du fichier impossible.'], rows: [], metadata: null, documents: [] };
+        renderInternalAuxiliaryPreview();
+      };
+      reader.readAsArrayBuffer(file);
+    });
+    renderInternalAuxiliaryPreview();
+  }
+
+  function commitInternalAuxiliaryCentralization() {
+    var session = internalAuxiliarySession;
+    var dossier = S.currentDossier();
+    if (!session || !session.parseResult || !session.parseResult.ok) {
+      toast('Aucun lot PERFECTO-AUXILIAIRE valide n’est prêt.', 'error');
+      return;
+    }
+    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext(dossier))) {
+      toast('Transfert refusé : le droit « data.import » est requis.', 'warning');
+      return;
+    }
+    if (session.targetDossierId !== dossier.id) {
+      toast('Le dossier actif a changé. Rechargez et vérifiez le lot dans le bon dossier.', 'error');
+      return;
+    }
+    session.targetDate = ($('#internal-auxiliary-date') || {}).value || '';
+    session.targetJournal = ($('#internal-auxiliary-journal') || {}).value || '';
+    session.targetReference = ($('#internal-auxiliary-reference') || {}).value || '';
+    renderInternalAuxiliaryPreview();
+    if (!session.canCommit || !session.preparedEntry || !session.analysis || !session.analysis.ok) {
+      toast('Transfert bloqué : corrigez les contrôles et cochez les confirmations explicites de source, correspondances et création.', 'warning');
+      return;
+    }
+    var source = session.parseResult;
+    var entry = JSON.parse(JSON.stringify(session.preparedEntry));
+    entry.sourceMetadata.provenanceConfirmed = true;
+    entry.sourceMetadata.provenanceConfirmedBy = String(getActiveDemoMember().id || '');
+    var sourceFile = {
+      sourceSystem: AccountingCentralization.AUXILIARY_FORMAT,
+      sourceFormat: AccountingCentralization.AUXILIARY_FORMAT,
+      sourceVersion: AccountingCentralization.AUXILIARY_VERSION,
+      sourceProducer: source.metadata.sourceSystem,
+      sourceDossierReference: source.metadata.dossierReference,
+      sourceExercise: source.metadata.exercise,
+      sourceBatchReference: source.metadata.batchReference,
+      provenanceConfirmed: true,
+      provenanceConfirmedBy: String(getActiveDemoMember().id || ''),
+      fileName: session.fileName,
+      mimeType: session.mimeType,
+      fileSize: session.fileSize,
+      byteLength: session.fileSize,
+      sha256: session.sha256,
+      contentBase64: session.contentBase64,
+      encoding: session.extension === 'xlsx' ? 'XLSX-OOXML' : 'UTF-8',
+      delimiter: session.extension === 'xlsx' ? 'XLSX' : source.delimiter,
+      headerCount: AccountingExchange.AUXILIARY_HEADERS.length,
+      lineCount: source.rows.length,
+      sourceMovementCount: source.rows.length,
+      documentCount: source.documentCount,
+      auxiliaryMovementCount: source.auxiliaryMovementCount,
+      totalDebit: source.totalDebit,
+      totalCredit: source.totalCredit,
+      localOnly: true
+    };
+    var confirmation = 'Créer le brouillon « ' + session.targetReference + ' » dans le journal ' + session.targetJournal + ' au ' + session.targetDate + ' ?\n\n' +
+      'Lot source : ' + source.metadata.batchReference + ' · ' + source.rows.length + ' mouvement(s) · ' + amount(session.aggregation.totalDebit) + ' XOF au débit et au crédit.\n' +
+      'Le fichier original sera conservé localement. Aucune écriture validée ne sera modifiée.';
+    if (!window.confirm(confirmation)) return;
+    var result = S.importExchange([entry], 'draft', {
+      sourceSystem: AccountingCentralization.INTERNAL_SOURCE_SYSTEM,
+      accountMap: Object.create(null),
+      journalMap: Object.create(null),
+      importSourceFile: sourceFile
+    });
+    if (!result.ok) {
+      toast(result.errors[0] || 'Centralisation impossible à enregistrer.', 'error');
+      renderInternalAuxiliaryPreview();
+      return;
+    }
+    internalAuxiliarySession = null;
+    toast('Brouillon de centralisation créé ; le lot source original et sa traçabilité sont conservés.', 'success');
+    render();
+  }
+
+  function downloadInternalAuxiliaryTemplate(workbook) {
+    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.export', accountingAccessContext())) {
+      toast('Téléchargement refusé : le droit « data.export » est requis.', 'warning');
+      return;
+    }
+    var dossier = S.currentDossier();
+    var filePart = safeFilePart(dossier.reference);
+    if (workbook) {
+      var xlsx = AccountingExchange.templateAuxiliaryWorkbook({ dossier: dossier, accounts: S.accounts(), journals: S.journals() });
+      downloadFile('PERFECTO-AUXILIAIRE-v1-' + filePart + '.xlsx', xlsx, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    } else {
+      downloadFile('PERFECTO-AUXILIAIRE-v1-' + filePart + '.csv', AccountingExchange.templateAuxiliary(), 'text/csv;charset=utf-8');
+    }
+    toast('Modèle vide téléchargé ; aucune opération ni aucun montant d’exemple n’a été ajouté.', 'success');
+  }
+
+  function downloadInternalAuxiliarySource(sourceId) {
+    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.export', accountingAccessContext())) {
+      toast('Téléchargement refusé : le droit « data.export » est requis.', 'warning');
+      return;
+    }
+    var source = S.importSourceFile(sourceId);
+    if (!source || source.sourceSystem !== AccountingCentralization.AUXILIARY_FORMAT || !source.contentBase64) {
+      toast('Fichier source auxiliaire introuvable dans le dossier actif.', 'error');
+      return;
+    }
+    downloadFile(source.fileName || 'PERFECTO-AUXILIAIRE-source.csv', fecBase64ToBytes(source.contentBase64), source.mimeType || 'text/csv');
+    toast('Fichier auxiliaire original téléchargé depuis le stockage local.', 'success');
+  }
+
+  function cancelInternalAuxiliaryBatch(batchId) {
+    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'draft.delete', accountingAccessContext())) {
+      toast('Annulation refusée : le droit « draft.delete » est requis.', 'warning');
+      return;
+    }
+    var source = S.importSourceFiles().find(function (record) { return record.id === batchId && record.sourceSystem === AccountingCentralization.AUXILIARY_FORMAT; });
+    if (!source) { toast('Lot auxiliaire introuvable dans le dossier actif.', 'error'); return; }
+    var batchEntries = S.entries().filter(function (entry) { return entry.importBatchId === batchId; });
+    if (batchEntries.some(function (entry) { return entry.status === 'posted'; })) {
+      toast('Ce lot contient une pièce validée. Elle ne peut pas être supprimée ; utilisez Annulation d’une centralisation pour créer une écriture inverse liée.', 'warning');
+      return;
+    }
+    if (!window.confirm('Annuler le lot brouillon « ' + (source.sourceBatchReference || source.fileName) + ' » ? Les brouillons de ce lot seront retirés, mais le fichier original, son empreinte et la trace resteront conservés.')) return;
+    var result = S.cancelImportBatch(batchId);
+    if (!result.ok) { toast(result.errors[0] || 'Annulation du lot impossible.', 'error'); return; }
+    toast(result.cancelledCount + ' brouillon(s) annulé(s) ; le fichier source reste conservé. Une nouvelle tentative exige un nouvel aperçu et des confirmations.', 'success');
+    render();
   }
 
   function consolidationStageOptions(stage) {
@@ -11077,6 +11602,7 @@
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-other') bindAccountingExchangeImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' &&
           (menuParams.t === 'import-fec' || (menuParams.t === 'centralize-auxiliary' && menuParams.c === 'centralize-auxiliary-fec'))) bindAccountingFecImport();
+      if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-auxiliary' && menuParams.c === 'centralize-auxiliary-perfecto') bindInternalAuxiliaryCentralization();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-balance') bindAccountingBalanceImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-payroll') bindPayrollCentralization();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-sales') bindSalesCentralization();
@@ -11996,6 +12522,9 @@
       case 'commit-accounting-fec-import':
         commitAccountingFecImport();
         break;
+      case 'commit-internal-auxiliary-centralization':
+        commitInternalAuxiliaryCentralization();
+        break;
       case 'toggle-fec-entry-editor':
         if (fecImportSession) {
           fecImportSession.editMode = !fecImportSession.editMode;
@@ -12007,6 +12536,18 @@
         break;
       case 'download-fec-source':
         downloadFecSource(id);
+        break;
+      case 'download-internal-auxiliary-source':
+        downloadInternalAuxiliarySource(id);
+        break;
+      case 'download-internal-auxiliary-csv-template':
+        downloadInternalAuxiliaryTemplate(false);
+        break;
+      case 'download-internal-auxiliary-workbook-template':
+        downloadInternalAuxiliaryTemplate(true);
+        break;
+      case 'cancel-internal-auxiliary-batch':
+        cancelInternalAuxiliaryBatch(id);
         break;
       case 'cancel-fec-import-batch':
         cancelFecImportBatch(id);
