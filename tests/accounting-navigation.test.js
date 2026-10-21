@@ -214,7 +214,13 @@ assert.equal(findTab('fichier', 'centralize-auxiliary').label, 'Centralisation a
 assert.equal(findTab('fichier', 'centralize-auxiliary').status, 'mixed');
 assert.ok(findTab('fichier', 'centralize-auxiliary').reason.includes('FEC'));
 assert.equal(findTab('fichier', 'centralize-auxiliary').children.find(child => child.id === 'centralize-auxiliary-fec').status, 'partial');
-assert.equal(findTab('fichier', 'centralize-auxiliary').children.find(child => child.id === 'centralize-auxiliary-perfecto').status, 'planned');
+const internalAuxiliaryCentralization = findTab('fichier', 'centralize-auxiliary').children.find(child => child.id === 'centralize-auxiliary-perfecto');
+assert.equal(internalAuxiliaryCentralization.status, 'planned');
+assert.ok(internalAuxiliaryCentralization.reason.includes('opérations comptables réelles'));
+assert.ok(internalAuxiliaryCentralization.reason.includes('compte collectif'));
+assert.ok(internalAuxiliaryCentralization.reason.includes('non analytique'));
+assert.ok(internalAuxiliaryCentralization.reason.includes('aucune ligne ni aucun montant de démonstration'));
+assert.match(appSource, /function viewInternalAuxiliaryCentralization\(\)[\s\S]*Regrouper les opérations comptables effectivement enregistrées dans les comptes auxiliaires[\s\S]*reporter ces totaux au grand livre[\s\S]*aucun mouvement, montant ou compte n’est fabriqué/i);
 assert.equal(findTab('fichier', 'centralize-payroll').status, 'active');
 assert.ok(findTab('fichier', 'centralize-payroll').reason.includes('Comptabilité générale'));
 assert.ok(findTab('fichier', 'centralize-payroll').reason.includes('grand livre général'));
@@ -457,7 +463,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v77/);
+assert.match(serviceWorkerSource, /perfecto-static-v78/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/fec-import\.js/);
 assert.match(htmlSource, /js\/fec-import\.js/);

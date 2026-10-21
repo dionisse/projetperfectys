@@ -1,6 +1,8 @@
 /*
- * PERFECTO · Agrégateur auxiliaire réutilisable par les modules maison.
- * Ne lit aucun fichier : la future centralisation devra lui fournir un lot interne contrôlé.
+ * PERFECTO · Agrégateur de centralisation auxiliaire interne.
+ * Applique la règle de Comptabilité générale : regrouper les opérations réelles
+ * des comptes auxiliaires par compte collectif cible. Ne lit aucun fichier et
+ * ne modifie pas le dossier ; le module source doit fournir un lot contrôlé.
  */
 (function (root) {
   'use strict';

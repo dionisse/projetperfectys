@@ -6352,14 +6352,17 @@
 
   function viewAccountingAuxiliaryOverview() {
     return '<div class="exchange-workspace auxiliary-centralization-workspace">' +
-      '<div class="alert info"><div><strong>Deux origines, un traitement en Comptabilité générale.</strong><br>La voie interne regroupera les mouvements réels des modules PERFECTO selon leurs comptes collectifs ; la voie externe importe manuellement les opérations FEC et en contrôle les totaux par compte collectif. Aucun connecteur direct ni traitement analytique n’est utilisé.</div></div>' +
+      '<div class="alert info"><div><strong>Deux origines, un traitement en Comptabilité générale.</strong><br>La centralisation interne regroupe les opérations comptables réelles enregistrées dans les comptes auxiliaires et reporte leurs totaux dans le compte collectif du grand livre. La voie externe importe manuellement les opérations FEC et en contrôle les totaux par compte collectif. Aucun connecteur direct ni traitement analytique n’est utilisé.</div></div>' +
       '<section class="exchange-card auxiliary-centralization-choice"><p class="page-kicker">VOIE EXTERNE · IMPORT MANUEL</p><h4>FEC d’un logiciel externe ou d’une autre organisation</h4><p>Corrigez les écritures cibles dans l’aperçu, confirmez la conversion vers le plan comptable général et contrôlez les totaux par compte collectif avant l’ajout.</p><a class="btn btn-primary btn-sm" href="' + esc(accountingMenuHash('fichier', 'centralize-auxiliary', 'centralize-auxiliary-fec')) + '">Ouvrir le parcours FEC <span aria-hidden="true">→</span></a><p class="small muted">Le FEC original, les pièces source et les identifiants auxiliaires restent traçables ; aucun connecteur ni mouvement auxiliaire individuel n’est créé.</p></section>' +
-      '<div class="alert warning"><div><strong>Voie interne PERFECTO · à construire.</strong><br>Les registres réels de mouvements auxiliaires ne sont pas encore définis. Aucun compte, montant ou ligne comptable n’est inventé ; la future centralisation reportera uniquement les totaux confirmés vers les comptes collectifs.</div></div>' +
+      '<div class="alert warning"><div><strong>Voie interne PERFECTO · règle définie, alimentation à construire.</strong><br>Le principe est fixé : regrouper les opérations réelles des comptes auxiliaires par compte collectif et reporter les totaux au grand livre. Les modules ne fournissent pas encore les mouvements comptables nécessaires ; aucun compte, montant ou ligne n’est inventé.</div></div>' +
     '</div>';
   }
 
   function viewInternalAuxiliaryCentralization() {
-    return '<div class="alert info"><div><strong>Mouvements auxiliaires des modules PERFECTO · à construire.</strong><br>Cette voie de Comptabilité générale sera activée lorsque les modules PERFECTO du dossier actif fourniront leurs mouvements réels : regroupement par compte collectif, sans analytique. Les données de mouvements ne sont pas encore définies ; aucun compte, montant, fichier externe ou connecteur n’est ajouté ici.</div></div>';
+    return '<div class="exchange-workspace auxiliary-centralization-workspace">' +
+      '<div class="alert info"><div><strong>Règle de centralisation auxiliaire interne · Comptabilité générale</strong><br>Regrouper les opérations comptables effectivement enregistrées dans les comptes auxiliaires, calculer leur total par compte collectif puis reporter ces totaux au grand livre. Ce traitement est général, non analytique.</div></div>' +
+      '<div class="alert warning"><div><strong>Parcours non alimenté pour le moment.</strong><br>Les modules PERFECTO du dossier actif ne fournissent pas encore le registre de mouvements auxiliaires requis. Aucun mouvement, montant ou compte n’est fabriqué ; l’aperçu restera indisponible jusqu’à la présence de données réelles à contrôler.</div></div>' +
+    '</div>';
   }
 
   function consolidationStageOptions(stage) {
