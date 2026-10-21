@@ -10768,7 +10768,7 @@
   function createJournalLinesReportSession(dossier) {
     var columns = {};
     JournalLinesReport.columns.forEach(function (column) {
-      columns[column.key] = !!(column.supported && column.defaultSelected);
+      columns[column.key] = !!(column.selectable && column.defaultSelected);
     });
     return {
       dossierId: dossier.id,
@@ -10874,12 +10874,10 @@
 
   function journalLinesReportColumnControl(column, session) {
     if (!column) return '<span class="journal-lines-column-spacer" aria-hidden="true"></span>';
-    var disabled = !column.supported;
     var checked = !!session.columns[column.key];
-    return '<label class="journal-lines-column-option' + (disabled ? ' is-unavailable' : '') + '"' +
-      (column.unavailableReason ? ' title="' + esc(column.unavailableReason) + '"' : '') + '>' +
-      '<input type="checkbox" data-jlr-column="' + esc(column.key) + '"' + (checked ? ' checked' : '') + (disabled ? ' disabled' : '') + '>' +
-      '<span>' + esc(column.label) + (disabled ? '<small>Non disponible</small>' : '') + '</span></label>';
+    return '<label class="journal-lines-column-option">' +
+      '<input type="checkbox" data-jlr-column="' + esc(column.key) + '"' + (checked ? ' checked' : '') + '>' +
+      '<span>' + esc(column.label) + '</span></label>';
   }
 
   function journalLinesReportSelectionView(session, dossier) {
@@ -10906,7 +10904,7 @@
         '<section class="card journal-lines-card"><div class="panel">' +
           '<div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
           '<div class="journal-lines-column-grid">' + columns + '</div>' +
-          '<p class="hint journal-lines-columns-hint">Les champs grisés ne sont pas portés par les écritures ou le modèle actuel. Ils restent désactivés pour éviter d’afficher des valeurs inventées.</p>' +
+          '<p class="hint journal-lines-columns-hint">Toutes les colonnes peuvent être choisies. Si une écriture ne porte aucune valeur pour une colonne sélectionnée, la cellule reste vide ; aucune donnée n’est calculée ou inventée.</p>' +
         '</div></section>' +
         '<section class="card journal-lines-card"><div class="panel">' +
           '<div class="journal-lines-section-heading"><div><p class="page-kicker">PRÉSENTATION DES LIGNES</p><h3>À imprimer</h3></div></div>' +
@@ -11017,9 +11015,25 @@
     }).join('');
   }
 
+  function journalLinesReportIdentity(dossier) {
+    var configuration = S.printedReportInformationConfiguration();
+    var rows = configuration && Array.isArray(configuration.rows) ? configuration.rows : [];
+    var licenseOwnerRow = rows.find(function (row) { return row && row.id === 'company-name'; });
+    var licenseOwner = String(licenseOwnerRow && licenseOwnerRow.value || '').trim();
+    var dossierName = String(dossier && (dossier.clientName || dossier.name) || '').trim();
+    return {
+      licenseOwner: licenseOwner || 'Nom du propriétaire de la licence non renseigné',
+      ownerConfigured: !!licenseOwner,
+      dossierName: dossierName || 'Nom du dossier non renseigné',
+      reference: String(dossier && dossier.reference || '').trim()
+    };
+  }
+
   function journalLinesReportPreviewView(session) {
     var report = session.report || buildJournalLinesReport(session);
     session.report = report;
+    var dossier = S.currentDossier();
+    var identity = journalLinesReportIdentity(dossier);
     var columns = report.columns;
     var groupsHtml = report.groups.map(function (group) {
       var heading = '<div class="journal-lines-group-heading"><h3>' + esc(group.title) + '</h3><span>' + group.rows.filter(function (row) { return row.kind === 'line'; }).length + ' ligne(s)</span></div>';
@@ -11049,7 +11063,14 @@
           '<button type="button" class="btn btn-primary" data-journal-lines-print>' + printButtonLabel + '</button>' +
         '</div></div>' +
         printerHint +
-        '<div class="journal-lines-print-meta"><strong>' + esc(S.currentDossier().reference || S.currentDossier().name || 'Dossier') + '</strong><span>' + esc(dateLabel(session.filters.from)) + ' — ' + esc(dateLabel(session.filters.to)) + '</span></div>' +
+        '<div class="journal-lines-print-meta">' +
+          '<div class="journal-lines-print-identity">' +
+            '<div class="journal-lines-print-owner"><strong>' + esc(identity.licenseOwner) + '</strong><span>Organisation · propriétaire de la licence</span></div>' +
+            '<div class="journal-lines-print-dossier"><strong>' + esc(identity.dossierName) + '</strong><span>Dossier concerné</span>' + (identity.reference ? '<small>Référence : ' + esc(identity.reference) + '</small>' : '') + '</div>' +
+          '</div>' +
+          '<div class="journal-lines-print-period"><span>Période</span><strong>' + esc(dateLabel(session.filters.from)) + ' — ' + esc(dateLabel(session.filters.to)) + '</strong></div>' +
+        '</div>' +
+        (!identity.ownerConfigured ? '<div class="alert warning journal-lines-owner-warning journal-lines-no-print"><div>Le nom du titulaire de la licence n’est pas renseigné. Complétez « Raison sociale (nom de la licence) » dans Paramètres → Informations communes aux états imprimés.</div></div>' : '') +
         (groupsHtml || empty) +
       '</div>';
   }

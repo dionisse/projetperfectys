@@ -11,21 +11,21 @@
   'use strict';
 
   var COLUMNS = [
-    { key: 'date', label: 'Date', group: 0, supported: true, defaultSelected: true },
-    { key: 'piece', label: 'N° pièce', group: 0, supported: true, defaultSelected: true },
-    { key: 'account', label: 'Compte', group: 0, supported: true, defaultSelected: true },
-    { key: 'accountTitle', label: 'Intitulé', group: 0, supported: true, defaultSelected: true },
-    { key: 'reference', label: 'Référence', group: 0, supported: true, defaultSelected: true },
-    { key: 'debit', label: 'Débit', group: 1, supported: true, defaultSelected: true },
-    { key: 'credit', label: 'Crédit', group: 1, supported: true, defaultSelected: true },
-    { key: 'currency', label: 'En devise', group: 1, supported: false, defaultSelected: false, unavailableReason: 'Les lignes ne portent pas de montant en devise.' },
-    { key: 'dueDate', label: 'Échéance', group: 1, supported: false, defaultSelected: false, unavailableReason: 'Les lignes comptables ne portent pas d’échéance.' },
-    { key: 'fixedAsset', label: 'Immobilisation', group: 1, supported: false, defaultSelected: false, unavailableReason: 'Aucun lien vers une immobilisation n’est enregistré dans les lignes.' },
-    { key: 'market', label: 'Marché', group: 2, supported: false, defaultSelected: false, unavailableReason: 'Aucun champ Marché n’est enregistré dans les pièces.' },
-    { key: 'analysis', label: 'Analyse diverse', group: 3, supported: false, defaultSelected: false, unavailableReason: 'Les imputations analytiques sont séparées et inactives dans ce parcours.' },
-    { key: 'label', label: 'Libellé', group: 3, supported: true, defaultSelected: true },
-    { key: 'firstEntry', label: '1ère saisie', group: 3, supported: true, defaultSelected: true },
-    { key: 'lastEntry', label: 'Dernière saisie', group: 3, supported: false, defaultSelected: false, unavailableReason: 'Les pièces validées sont immuables et leur historique de modification n’est pas conservé.' }
+    { key: 'date', label: 'Date', group: 0, selectable: true, defaultSelected: true },
+    { key: 'piece', label: 'N° pièce', group: 0, selectable: true, defaultSelected: true },
+    { key: 'account', label: 'Compte', group: 0, selectable: true, defaultSelected: true },
+    { key: 'accountTitle', label: 'Intitulé', group: 0, selectable: true, defaultSelected: true },
+    { key: 'reference', label: 'Référence', group: 0, selectable: true, defaultSelected: true },
+    { key: 'debit', label: 'Débit', group: 1, selectable: true, defaultSelected: true },
+    { key: 'credit', label: 'Crédit', group: 1, selectable: true, defaultSelected: true },
+    { key: 'currency', label: 'En devise', group: 1, selectable: true, defaultSelected: false },
+    { key: 'dueDate', label: 'Échéance', group: 1, selectable: true, defaultSelected: false },
+    { key: 'fixedAsset', label: 'Immobilisation', group: 1, selectable: true, defaultSelected: false },
+    { key: 'market', label: 'Marché', group: 2, selectable: true, defaultSelected: false },
+    { key: 'analysis', label: 'Analyse diverse', group: 3, selectable: true, defaultSelected: false },
+    { key: 'label', label: 'Libellé', group: 3, selectable: true, defaultSelected: true },
+    { key: 'firstEntry', label: '1ère saisie', group: 3, selectable: true, defaultSelected: true },
+    { key: 'lastEntry', label: 'Dernière saisie', group: 3, selectable: true, defaultSelected: false }
   ];
 
   var COLUMN_GROUPS = [
@@ -105,10 +105,10 @@
     var accountByCode = new Map(accounts.map(function (account) { return [String(account.code), account]; }));
     var journalByCode = new Map(journals.map(function (journal) { return [String(journal.code), journal]; }));
     var selectedKeys = Array.isArray(options.columns) ? options.columns : COLUMNS.filter(function (column) {
-      return column.supported && column.defaultSelected;
+      return column.selectable && column.defaultSelected;
     }).map(function (column) { return column.key; });
     var columns = COLUMNS.filter(function (column) {
-      return column.supported && selectedKeys.indexOf(column.key) !== -1;
+      return column.selectable && selectedKeys.indexOf(column.key) !== -1;
     });
     var jobs = [];
 

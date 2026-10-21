@@ -46,6 +46,27 @@ const entries = [
   }
 ];
 
+const optionalColumnKeys = ['currency', 'dueDate', 'fixedAsset', 'market', 'analysis', 'lastEntry'];
+assert.ok(Report.columns.every(column => column.selectable), 'Aucune colonne ne doit être grisée ou désactivée.');
+const optionalReport = Report.build({
+  entries: [{
+    reference: 'OD-OPTIONAL', journal: 'OD', date: '2026-03-02', status: 'posted',
+    updatedAt: '2026-03-02T10:00:00.000Z',
+    lines: [{
+      account: '601100', debit: 25, credit: 0, currencyCode: 'EUR', dueDate: '2026-03-31',
+      fixedAssetCode: 'IMM-01', market: 'Marché A', analyticCode: 'AN-01'
+    }]
+  }],
+  accounts,
+  journals,
+  filters: { journals: ['OD'] },
+  columns: optionalColumnKeys
+});
+assert.deepEqual(optionalReport.columns.map(column => column.key), optionalColumnKeys);
+assert.deepEqual(optionalReport.groups[0].rows[0].cells, {
+  currency: 'EUR', dueDate: '2026-03-31', fixedAsset: 'IMM-01', market: 'Marché A', analysis: 'AN-01', lastEntry: '2026-03-02T10:00:00.000Z'
+});
+
 const columns = ['date', 'piece', 'account', 'debit', 'credit', 'label', 'firstEntry'];
 const report = Report.build({
   entries,

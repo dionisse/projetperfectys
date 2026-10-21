@@ -277,6 +277,10 @@ assert.match(appSource, /async function generateJournalLinesReportFile[\s\S]*exp
   'les destinations Table et Fichier produisent les formats attendus');
 assert.match(appSource, /function printJournalLinesReport[\s\S]*window\.print\(\)/,
   'l’impression n’est lancée qu’à partir de l’écran d’aperçu');
+assert.match(appSource, /function journalLinesReportIdentity[\s\S]*id === 'company-name'[\s\S]*Dossier concerné/,
+  'l’aperçu reprend le titulaire de licence puis le dossier concerné');
+assert.match(appSource, /Organisation · propriétaire de la licence[\s\S]*Dossier concerné/,
+  'le même en-tête d’identification est inclus dans la zone d’aperçu et d’impression');
 assert.match(journalLinesSource, /(?=[\s\S]*subtotalByPiece)(?=[\s\S]*subtotalByMonth)/);
 assert.ok(htmlSource.indexOf('js/journal-lines-report.js') < htmlSource.indexOf('js/app.js'),
   'les fonctions pures du rapport sont chargées avant l’application');
@@ -508,7 +512,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v84/);
+assert.match(serviceWorkerSource, /perfecto-static-v85/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);
