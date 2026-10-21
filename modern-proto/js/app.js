@@ -267,6 +267,7 @@
       case 'download-internal-auxiliary-workbook-template':
         return { moduleId: 'accounting', actionId: 'data.export' };
       case 'save-accounting-bridge-mapping':
+      case 'save-printed-report-information':
         return { moduleId: 'accounting', actionId: 'accounting.configure' };
       case 'select-centralization-cancellation':
         return { moduleId: 'accounting', actionId: 'module.view' };
@@ -3395,6 +3396,41 @@
     context.session.dirty = false;
     toast('Paramétrage des correspondances enregistré pour ' + context.source.label + ' · ' + context.targetDossier.reference + '.', 'success');
     render();
+  }
+
+  function viewPrintedReportInformation() {
+    var dossier = S.currentDossier();
+    var configuration = S.printedReportInformationConfiguration();
+    var rows = Array.isArray(configuration.rows) ? configuration.rows : [];
+    var canConfigure = hasDemoPermission(getActiveDemoMember(), 'accounting', 'accounting.configure', accountingAccessContext(dossier));
+    var editable = canConfigure && !isPhoneViewport();
+    var tableRows = rows.map(function (row) {
+      if (row.separator) {
+        return '<tr class="printed-report-information-separator" aria-label="Section ' + esc(row.sectionLabel || '') + '"><td colspan="2"><span class="sr-only">Section ' + esc(row.sectionLabel || '') + '</span></td></tr>';
+      }
+      var inputId = 'printed-report-information-' + row.id;
+      return '<tr data-printed-report-row="' + esc(row.id) + '">' +
+        '<th scope="row"><label for="' + esc(inputId) + '">' + esc(row.label || '') + '</label></th>' +
+        '<td><input id="' + esc(inputId) + '" name="' + esc(row.id) + '" type="text" maxlength="500" autocomplete="off" spellcheck="false" data-printed-report-value="' + esc(row.id) + '" aria-label="Valeur — ' + esc(row.label || '') + '" value="' + esc(row.value || '') + '"' + (editable ? '' : ' readonly aria-readonly="true"') + '></td>' +
+      '</tr>';
+    }).join('');
+    var permissionNotice = canConfigure
+      ? (editable ? '' : '<div class="alert info printed-report-information-access-note">Consultation seule sur téléphone ; les modifications sont réservées à un ordinateur ou une tablette.</div>')
+      : '<div class="alert warning printed-report-information-access-note">Consultation seule : un droit explicite « Modifier la configuration comptable du dossier » est nécessaire pour valider ces informations.</div>';
+
+    return '<div class="printed-report-information-workspace">' +
+      '<div class="alert info"><div><strong>35 rubriques uniques · 5 sections</strong><br>Les quatre titres de fonction reprennent les valeurs indiquées ; les autres champs restent vierges, sans valeur d’exemple. Ce paramétrage ne modifie ni les écritures ni le dossier comptable.</div></div>' +
+      permissionNotice +
+      '<form id="printed-report-information-form" aria-label="Informations communes aux états imprimés">' +
+        '<div class="printed-report-information-table-wrap" role="region" aria-label="Tableau des rubriques et valeurs" tabindex="0">' +
+          '<table class="printed-report-information-table"><caption class="sr-only">Informations communes aux états imprimés</caption><thead><tr><th scope="col">Rubrique</th><th scope="col">Valeur</th></tr></thead><tbody>' + tableRows + '</tbody></table>' +
+        '</div>' +
+        '<div class="printed-report-information-footer">' +
+          '<p class="small muted">Enregistré localement dans ce navigateur, pour le dossier actif. Aucune synchronisation Google Drive.</p>' +
+          '<div><button type="button" class="btn btn-ghost" data-printed-report-action="cancel">Annuler</button> <button type="submit" class="btn btn-primary" data-action="save-printed-report-information"' + (editable ? '' : ' disabled') + '>Valider</button></div>' +
+        '</div>' +
+      '</form>' +
+    '</div>';
   }
 
   function viewGeneralAccountNatures() {
@@ -10742,6 +10778,8 @@
       exchangeFeature = viewAccountingBridge();
     } else if (group.id === 'parametres' && tab.id === 'general-account-natures') {
       exchangeFeature = viewGeneralAccountNatures();
+    } else if (group.id === 'parametres' && tab.id === 'print-information') {
+      exchangeFeature = viewPrintedReportInformation();
     }
     if (group.id === 'fichier') {
       switch (tab.id) {
@@ -11601,6 +11639,38 @@
     });
   }
 
+  function bindPrintedReportInformation() {
+    var form = $('#printed-report-information-form');
+    if (!form) return;
+    var dossier = S.currentDossier();
+    var canConfigure = hasDemoPermission(getActiveDemoMember(), 'accounting', 'accounting.configure', accountingAccessContext(dossier));
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (isPhoneViewport() || !canConfigure) {
+        toast('Validation refusée : le droit de configuration comptable n’est pas accordé pour ce profil ou cet appareil.', 'warning');
+        return;
+      }
+      var values = Object.create(null);
+      $$('[data-printed-report-value]', form).forEach(function (input) {
+        values[input.getAttribute('data-printed-report-value')] = input.value;
+      });
+      var result = S.savePrintedReportInformationConfiguration({ values: values });
+      if (!result.ok) {
+        toast((result.errors || ['Enregistrement des informations communes impossible.']).join(' '), 'warning');
+        return;
+      }
+      toast('Informations communes validées pour ' + result.dossier.clientName + ' · ' + result.dossier.reference + '.', 'success');
+      render();
+    });
+
+    var cancelButton = $('[data-printed-report-action="cancel"]', form);
+    if (cancelButton) cancelButton.addEventListener('click', function () {
+      render();
+      toast('Modifications non enregistrées annulées.', 'info');
+    });
+  }
+
   function bindGeneralAccountNatures() {
     var workspace = $('.general-account-natures-workspace');
     if (!workspace) return;
@@ -11700,6 +11770,7 @@
       if (menuParams.g === 'parametres' && menuParams.t === 'financial-framework') bindFinancialFramework();
       if (menuParams.g === 'parametres' && menuParams.t === 'accounting-bridge') bindAccountingBridge();
       if (menuParams.g === 'parametres' && menuParams.t === 'general-account-natures') bindGeneralAccountNatures();
+      if (menuParams.g === 'parametres' && menuParams.t === 'print-information') bindPrintedReportInformation();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'suppliers') bindSupplierView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'clients') bindClientView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'services') bindServicesView();

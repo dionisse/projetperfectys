@@ -372,7 +372,13 @@ assert.equal(findTab('parametres', 'allocation-keys').status, 'partial');
 assert.ok(findTab('parametres', 'allocation-keys').reason.includes('aucun calcul ou transfert analytique'));
 assert.equal(findTab('parametres', 'general-account-natures').status, 'partial');
 assert.ok(findTab('parametres', 'general-account-natures').reason.includes('contrôle des doublons'));
+assert.equal(findTab('parametres', 'print-information').status, 'partial');
+assert.ok(findTab('parametres', 'print-information').reason.includes('35 rubriques'));
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'general-account-natures'[\s\S]*viewGeneralAccountNatures\(\)/);
+assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'print-information'[\s\S]*viewPrintedReportInformation\(\)/);
+assert.match(appSource, /function viewPrintedReportInformation\(\)[\s\S]*35 rubriques uniques[\s\S]*Rubrique[\s\S]*Valeur[\s\S]*Annuler[\s\S]*Valider/);
+assert.match(appSource, /function bindPrintedReportInformation\(\)[\s\S]*savePrintedReportInformationConfiguration/);
+assert.match(configurationCss, /\.printed-report-information-table-wrap[\s\S]*overflow: auto/);
 assert.match(appSource, /function viewGeneralAccountNatures\(\)[\s\S]*generalAccountNatures\.configure[\s\S]*Nature[\s\S]*Comptes généraux\.\.\.[\s\S]*Initialisation[\s\S]*Modifier[\s\S]*Fermer/);
 assert.match(appSource, /function bindGeneralAccountNatures\(\)[\s\S]*initializeGeneralAccountNaturesConfiguration/);
 assert.match(appSource, /function openGeneralAccountNatureEditor\(natureRow\)[\s\S]*saveGeneralAccountNaturesConfiguration/);
@@ -474,7 +480,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v80/);
+assert.match(serviceWorkerSource, /perfecto-static-v81/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

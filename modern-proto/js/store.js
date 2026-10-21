@@ -1280,6 +1280,74 @@
     };
   }
 
+  function defaultPrintedReportInformationRows() {
+    return [
+      { id: 'company-name', label: 'Raison sociale (nom de la licence)', value: '' },
+      { id: 'business-name', label: 'Sigle/Enseigne commerciale', value: '' },
+      { id: 'phone', label: 'Téléphone', value: '' },
+      { id: 'insae-number', label: 'Numéro INSAE', value: '' },
+      { id: 'ifu-number', label: 'Numéro IFU', value: '' },
+      { id: 'registry-office', label: 'Greffe', value: '' },
+      { id: 'trade-register-number', label: 'Numéro Registre du Commerce', value: '' },
+      { id: 'activity-code', label: 'Code Activité', value: '' },
+      { id: 'main-activity', label: 'Activité principale', value: '' },
+      { id: 'importer-code', label: 'Code importateur', value: '' },
+      { id: 'separator-address', separator: true, sectionLabel: 'Adresse' },
+      { id: 'head-office-address', label: 'Adresse - Siège', value: '' },
+      { id: 'secondary-address-1', label: 'Et secondaire 1', value: '' },
+      { id: 'secondary-address-2', label: 'Et secondaire 2', value: '' },
+      { id: 'bp-code', label: 'Code BP', value: '' },
+      { id: 'postal-box', label: 'Boîte postale', value: '' },
+      { id: 'bp-city', label: 'Ville BP', value: '' },
+      { id: 'separator-tax', separator: true, sectionLabel: 'Fiscalité' },
+      { id: 'tax-office-city', label: 'Ville du centre des impôts', value: '' },
+      { id: 'tax-declaration-signer', label: 'Signataire des déclarations fiscales', value: '' },
+      { id: 'signature-city', label: 'Ville de signature', value: '' },
+      { id: 'separator-signatories', separator: true, sectionLabel: 'Signataires et contact' },
+      { id: 'general-manager-title', label: 'Titre <Le Directeur Général>', value: 'Le Directeur Général' },
+      { id: 'general-manager-name', label: 'Nom du D.G.', value: '' },
+      { id: 'administrative-manager-title', label: 'Titre <Le Directeur Administratif>', value: 'Le Directeur Administratif' },
+      { id: 'administrative-manager-name', label: 'Nom du D.A.', value: '' },
+      { id: 'financial-manager-title', label: 'Titre <Le Directeur Financier>', value: 'Le Directeur Financier' },
+      { id: 'financial-manager-name', label: 'Nom du D.F.', value: '' },
+      { id: 'chief-accountant-title', label: 'Titre <Le Chef comptable>', value: 'Le Chef comptable' },
+      { id: 'chief-accountant-name', label: 'Nom du C.C.', value: '' },
+      { id: 'contact-person', label: 'Personne à contacter', value: '' },
+      { id: 'staff-or-cabinet', label: 'Personnel salarié /cabinet', value: '' },
+      { id: 'separator-banks', separator: true, sectionLabel: 'Banques' },
+      { id: 'bank-1', label: 'Banque 1', value: '' },
+      { id: 'bank-1-account', label: 'N° compte banque1', value: '' },
+      { id: 'bank-2', label: 'Banque 2', value: '' },
+      { id: 'bank-2-account', label: 'N° Compte banque 2', value: '' },
+      { id: 'bank-3', label: 'Banque 3', value: '' },
+      { id: 'bank-3-account', label: 'N° Compte banque 3', value: '' }
+    ];
+  }
+
+  function defaultPrintedReportInformationConfiguration() {
+    return { rows: defaultPrintedReportInformationRows(), updatedAt: '' };
+  }
+
+  function normalizePrintedReportInformationConfiguration(value) {
+    var source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    var suppliedRows = Array.isArray(source.rows) ? source.rows : [];
+    var suppliedById = Object.create(null);
+    suppliedRows.forEach(function (row) {
+      if (row && typeof row.id === 'string' && row.id && !Object.prototype.hasOwnProperty.call(suppliedById, row.id)) suppliedById[row.id] = row;
+    });
+    var rows = defaultPrintedReportInformationRows().map(function (defaultRow) {
+      if (defaultRow.separator) return { id: defaultRow.id, separator: true, sectionLabel: defaultRow.sectionLabel };
+      var stored = suppliedById[defaultRow.id];
+      var rawValue = stored && stored.value != null ? stored.value : defaultRow.value;
+      return {
+        id: defaultRow.id,
+        label: defaultRow.label,
+        value: String(rawValue == null ? '' : rawValue).replace(/\r\n?/g, ' ').slice(0, 500)
+      };
+    });
+    return { rows: rows, updatedAt: String(source.updatedAt || '').slice(0, 40) };
+  }
+
   function defaultGeneralAccountNaturesRows() {
     return [
       { id: 'stable-resources', nature: 'Ressources stables', accounts: '1', level: 0 },
@@ -1399,6 +1467,7 @@
       orderAccountsConfiguration: defaultOrderAccountsConfiguration(),
       orderNaturesConfiguration: defaultOrderNaturesConfiguration(),
       accountControlsConfiguration: defaultAccountControlsConfiguration(),
+      printedReportInformationConfiguration: defaultPrintedReportInformationConfiguration(),
       reference: 'COR-DEM2026',
       seeded: true
     };
@@ -1442,6 +1511,7 @@
       orderAccountsConfiguration: normalizeOrderAccountsConfiguration(record && record.orderAccountsConfiguration),
       orderNaturesConfiguration: normalizeOrderNaturesConfiguration(record && record.orderNaturesConfiguration),
       accountControlsConfiguration: normalizeAccountControlsConfiguration(record && record.accountControlsConfiguration),
+      printedReportInformationConfiguration: normalizePrintedReportInformationConfiguration(record && record.printedReportInformationConfiguration),
       generalAccountNaturesConfiguration: normalizeGeneralAccountNaturesConfiguration(record && record.generalAccountNaturesConfiguration),
       reference: String(record && record.reference || referenceFor(accountingTypeCode, clientCode, exerciseYear)),
       seeded: record && record.seeded !== false
@@ -1547,6 +1617,11 @@
     return clone(dossier && dossier.accountControlsConfiguration || defaultAccountControlsConfiguration());
   }
 
+  function printedReportInformationConfiguration() {
+    var dossier = currentDossier();
+    return clone(dossier && dossier.printedReportInformationConfiguration || defaultPrintedReportInformationConfiguration());
+  }
+
   function generalAccountNaturesConfiguration() {
     var dossier = currentDossier();
     return clone(dossier && dossier.generalAccountNaturesConfiguration || defaultGeneralAccountNaturesConfiguration());
@@ -1616,6 +1691,7 @@
       orderAccountsConfiguration: defaultOrderAccountsConfiguration(),
       orderNaturesConfiguration: defaultOrderNaturesConfiguration(),
       accountControlsConfiguration: defaultAccountControlsConfiguration(),
+      printedReportInformationConfiguration: defaultPrintedReportInformationConfiguration(),
       reference: reference,
       seeded: false
     };
@@ -2278,6 +2354,54 @@
     if (!saveFolderCatalog()) {
       folderCatalog = previousCatalog;
       return { ok: false, errors: ['Impossible d’enregistrer les paramètres de suivi des comptes dans ce navigateur. Les valeurs précédentes sont conservées.'] };
+    }
+    return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
+  }
+
+  function savePrintedReportInformationConfiguration(input) {
+    ensureFolderCatalog();
+    var dossier = folderById(activeFolderId);
+    if (!dossier) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    var source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    var values = source.values;
+    if (!values || typeof values !== 'object' || Array.isArray(values)) {
+      return { ok: false, errors: ['Les valeurs des informations communes doivent être transmises sous forme de champs texte.'] };
+    }
+
+    var defaults = defaultPrintedReportInformationRows();
+    var valueRows = defaults.filter(function (row) { return !row.separator; });
+    var knownIds = Object.create(null);
+    var errors = [];
+    valueRows.forEach(function (row) { knownIds[row.id] = true; });
+    Object.keys(values).forEach(function (id) {
+      if (!Object.prototype.hasOwnProperty.call(knownIds, id)) errors.push('Le champ « ' + id + ' » n’appartient pas aux informations communes prévues.');
+    });
+
+    var normalizedRows = defaults.map(function (defaultRow) {
+      if (defaultRow.separator) return { id: defaultRow.id, separator: true, sectionLabel: defaultRow.sectionLabel };
+      if (!Object.prototype.hasOwnProperty.call(values, defaultRow.id)) {
+        errors.push('Le champ « ' + defaultRow.label + ' » est absent de la saisie.');
+        return { id: defaultRow.id, label: defaultRow.label, value: defaultRow.value };
+      }
+      var rawValue = values[defaultRow.id];
+      if (typeof rawValue !== 'string') {
+        errors.push('La valeur de « ' + defaultRow.label + ' » doit être du texte.');
+        return { id: defaultRow.id, label: defaultRow.label, value: defaultRow.value };
+      }
+      var value = rawValue.replace(/\r\n?/g, ' ').trim();
+      if (value.length > 500) errors.push('La valeur de « ' + defaultRow.label + ' » dépasse 500 caractères.');
+      return { id: defaultRow.id, label: defaultRow.label, value: value.slice(0, 500) };
+    });
+    if (errors.length) return { ok: false, errors: errors };
+
+    var configuration = { rows: normalizedRows, updatedAt: new Date().toISOString() };
+    var previousCatalog = clone(folderCatalog);
+    var dossierIndex = folderCatalog.findIndex(function (record) { return record.id === dossier.id; });
+    if (dossierIndex < 0) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    folderCatalog[dossierIndex] = Object.assign({}, dossier, { printedReportInformationConfiguration: configuration });
+    if (!saveFolderCatalog()) {
+      folderCatalog = previousCatalog;
+      return { ok: false, errors: ['Impossible d’enregistrer les informations communes dans ce navigateur. Les valeurs précédentes sont conservées.'] };
     }
     return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
   }
@@ -6122,6 +6246,8 @@
     saveOrderNaturesConfiguration: saveOrderNaturesConfiguration,
     accountControlsConfiguration: accountControlsConfiguration,
     saveAccountControlsConfiguration: saveAccountControlsConfiguration,
+    printedReportInformationConfiguration: printedReportInformationConfiguration,
+    savePrintedReportInformationConfiguration: savePrintedReportInformationConfiguration,
     saveAnalyticalAllocationKeysConfiguration: saveAnalyticalAllocationKeysConfiguration,
     generalAccountNaturesConfiguration: generalAccountNaturesConfiguration,
     saveGeneralAccountNaturesConfiguration: saveGeneralAccountNaturesConfiguration,
