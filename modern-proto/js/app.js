@@ -93,6 +93,7 @@
   };
 
   var selectedEntryJournalCode = '';
+  var generalAccountNatureSelectedId = 'stable-grants';
   var deferredInstallPrompt = null;
   var exchangeImportSession = null;
   var bankStatementImportSession = null;
@@ -2683,6 +2684,46 @@
       tableGroup('auxiliaryToMain', 'LES CLÉS DE RÉPARTITION DES SECTIONS AUXILIAIRES SUR LES PRINCIPALES', 12) +
       tableGroup('servicesBySection', 'LES CLÉS DE RÉPARTITION DES PRESTATIONS PAR SECTION', 5) +
       '<div class="alert info allocation-key-inactive-note"><div><strong>Comptabilité analytique inactive.</strong> Ce paramétrage ne génère aucune ventilation, imputation, écriture ou édition analytique.</div></div>' +
+    '</div>';
+  }
+
+  function viewGeneralAccountNatures() {
+    var dossier = S.currentDossier();
+    var configuration = S.generalAccountNaturesConfiguration();
+    var rows = Array.isArray(configuration.rows) ? configuration.rows : [];
+    var canConfigure = hasDemoPermission(getActiveDemoMember(), 'accounting', 'generalAccountNatures.configure', accountingAccessContext(dossier));
+    var editable = canConfigure && !isPhoneViewport();
+    var selected = rows.find(function (row) { return row.id === generalAccountNatureSelectedId && !row.separator; }) ||
+      rows.find(function (row) { return row.id === 'stable-grants' && !row.separator; }) ||
+      rows.find(function (row) { return !row.separator; });
+    if (selected) generalAccountNatureSelectedId = selected.id;
+
+    var tableRows = rows.map(function (row) {
+      if (row.separator) return '<tr class="general-account-natures-separator" aria-hidden="true"><td colspan="2"></td></tr>';
+      var isSelected = selected && row.id === selected.id;
+      var indentClass = row.level > 0 ? ' general-account-nature-child' : '';
+      return '<tr class="general-account-nature-row' + indentClass + (isSelected ? ' is-selected' : '') + '" data-general-account-nature-row="' + esc(row.id) + '" tabindex="0" aria-selected="' + (isSelected ? 'true' : 'false') + '">' +
+        '<td>' + esc(row.nature || '') + '</td><td>' + esc(row.accounts || '') + '</td></tr>';
+    }).join('');
+    var permissionNotice = canConfigure
+      ? (editable ? '' : '<div class="alert info general-account-natures-access-note">Consultation sur téléphone ; les modifications sont réservées à un ordinateur ou une tablette.</div>')
+      : '<div class="alert warning general-account-natures-access-note">Consultation seule : un droit explicite « Configurer les natures des comptes généraux » est nécessaire pour modifier ou initialiser cette liste.</div>';
+
+    return '<div class="general-account-natures-workspace">' +
+      '<div class="alert info"><div><strong>Nomenclature du dossier : ' + esc(dossier.clientName) + ' · ' + esc(dossier.reference) + '</strong><br>Valeurs initiales reprises de la capture. Sélectionnez une ligne puis « Modifier ». Cette configuration ne modifie ni le plan comptable, ni les pièces.</div></div>' +
+      permissionNotice +
+      '<div class="general-account-natures-table-wrap" role="region" aria-label="Natures et comptes généraux" tabindex="0">' +
+        '<table class="general-account-natures-table"><thead><tr><th scope="col">Nature</th><th scope="col">Comptes</th></tr></thead><tbody>' + tableRows + '</tbody></table>' +
+      '</div>' +
+      '<div class="general-account-natures-footer">' +
+        '<button type="button" class="btn btn-ghost" data-general-account-natures-action="accounts" disabled title="La sélection des comptes généraux est conservée désactivée comme sur la capture.">Comptes généraux...</button>' +
+        '<button type="button" class="btn btn-ghost" data-general-account-natures-action="initialize"' + (editable ? '' : ' disabled') + '>Initialisation</button>' +
+        '<div class="general-account-natures-footer-end">' +
+          '<button type="button" class="btn btn-ghost" data-general-account-natures-action="modify"' + (editable && selected ? '' : ' disabled') + '>Modifier</button>' +
+          '<button type="button" class="btn btn-ghost" data-general-account-natures-action="close">Fermer</button>' +
+        '</div>' +
+      '</div>' +
+      '<p class="small muted general-account-natures-footnote">Les numéros sont conservés tels qu’indiqués par nature ; les contrôles évitent de répéter deux fois le même code dans une ligne. Les sections qui se chevauchent dans les captures ne sont affichées qu’une fois.</p>' +
     '</div>';
   }
 
@@ -8248,6 +8289,8 @@
       exchangeFeature = viewAnalyticalSectionsConfiguration();
     } else if (group.id === 'parametres' && tab.id === 'allocation-keys') {
       exchangeFeature = viewAnalyticalAllocationKeys();
+    } else if (group.id === 'parametres' && tab.id === 'general-account-natures') {
+      exchangeFeature = viewGeneralAccountNatures();
     }
     if (group.id === 'fichier') {
       switch (tab.id) {
@@ -8471,6 +8514,109 @@
     });
   }
 
+  function openGeneralAccountNatureEditor(natureRow) {
+    if (!natureRow || natureRow.separator) return;
+    var dossier = S.currentDossier();
+    var body = '<form id="general-account-nature-form" novalidate>' +
+      '<div id="general-account-nature-errors" aria-live="assertive"></div>' +
+      '<div class="general-account-nature-editor-grid">' +
+        '<div class="field"><label for="general-account-nature-label">Nature</label><input id="general-account-nature-label" type="text" maxlength="120" value="' + esc(natureRow.nature || '') + '" required></div>' +
+        '<div class="field"><label for="general-account-nature-accounts">Comptes</label><input id="general-account-nature-accounts" type="text" maxlength="500" spellcheck="false" value="' + esc(natureRow.accounts || '') + '"><span class="hint">Conservez l’écriture de la capture et ne répétez pas deux fois un même code dans cette nature.</span></div>' +
+      '</div>' +
+    '</form>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button>' +
+      '<button type="submit" class="btn btn-primary" form="general-account-nature-form">Enregistrer</button>';
+    openModal('Modifier une nature de compte', esc(natureRow.nature), body, footer, true);
+
+    var form = $('#general-account-nature-form');
+    if (!form) return;
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (isPhoneViewport() || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'generalAccountNatures.configure', accountingAccessContext(S.currentDossier()))) {
+        toast('Modification refusée : le droit de configuration des natures de comptes n’est pas accordé pour ce profil ou cet appareil.', 'warning');
+        return;
+      }
+      var current = S.generalAccountNaturesConfiguration();
+      var rows = current.rows.map(function (row) {
+        if (row.id !== natureRow.id) return row;
+        return {
+          id: row.id,
+          nature: $('#general-account-nature-label', form).value,
+          accounts: $('#general-account-nature-accounts', form).value
+        };
+      });
+      var result = S.saveGeneralAccountNaturesConfiguration({ rows: rows });
+      if (!result.ok) {
+        var errorRegion = $('#general-account-nature-errors', form);
+        if (errorRegion) errorRegion.innerHTML = '<div class="alert error" role="alert"><ul style="margin:0 0 0 18px">' +
+          (result.errors || ['Modification impossible.']).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
+        return;
+      }
+      toast('Nature des comptes enregistrée dans le dossier. Aucune écriture n’a été modifiée.', 'success');
+      closeModal(true);
+      render();
+    });
+  }
+
+  function bindGeneralAccountNatures() {
+    var workspace = $('.general-account-natures-workspace');
+    if (!workspace) return;
+    var dossier = S.currentDossier();
+    var canConfigure = hasDemoPermission(getActiveDemoMember(), 'accounting', 'generalAccountNatures.configure', accountingAccessContext(dossier));
+
+    function selectRow(row) {
+      var id = row && row.getAttribute('data-general-account-nature-row');
+      if (!id) return;
+      generalAccountNatureSelectedId = id;
+      $$('[data-general-account-nature-row]', workspace).forEach(function (item) {
+        var isSelected = item.getAttribute('data-general-account-nature-row') === id;
+        item.classList.toggle('is-selected', isSelected);
+        item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+      });
+    }
+
+    $$('[data-general-account-nature-row]', workspace).forEach(function (row) {
+      row.addEventListener('click', function () { selectRow(row); });
+      row.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        selectRow(row);
+      });
+    });
+
+    workspace.addEventListener('click', function (event) {
+      var button = event.target.closest ? event.target.closest('[data-general-account-natures-action]') : null;
+      if (!button) return;
+      var action = button.getAttribute('data-general-account-natures-action');
+      if (action === 'close') {
+        navigate(accountingMenuHash('parametres', 'dossier-configuration'));
+      } else if (action === 'modify') {
+        if (isPhoneViewport() || !canConfigure) {
+          toast('Modification refusée : un droit explicite sur ce dossier est requis.', 'warning');
+          return;
+        }
+        var selectedRow = S.generalAccountNaturesConfiguration().rows.find(function (row) {
+          return row.id === generalAccountNatureSelectedId && !row.separator;
+        });
+        if (selectedRow) openGeneralAccountNatureEditor(selectedRow);
+      } else if (action === 'initialize') {
+        if (isPhoneViewport() || !canConfigure) {
+          toast('Initialisation refusée : un droit explicite sur ce dossier est requis.', 'warning');
+          return;
+        }
+        if (!window.confirm('Réinitialiser les natures des comptes généraux de ce dossier aux valeurs des captures ? Les modifications de cette liste seront remplacées. Les comptes réels et les écritures ne seront pas modifiés.')) return;
+        var result = S.initializeGeneralAccountNaturesConfiguration();
+        if (!result.ok) {
+          toast((result.errors || ['Initialisation impossible.']).join(' '), 'error');
+          return;
+        }
+        generalAccountNatureSelectedId = 'stable-grants';
+        toast('Nomenclature initialisée pour ce dossier ; aucune pièce comptable n’a été modifiée.', 'success');
+        render();
+      }
+    });
+  }
+
   function bindEntryJournalSelector() {
     var positionInput = $('#entry-journal-position');
     if (positionInput) {
@@ -8503,6 +8649,7 @@
       if (menuParams.g === 'parametres' && menuParams.t === 'dossier-configuration') bindAccountingConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'sections-accounts') bindAnalyticalSectionsConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'allocation-keys') bindAnalyticalAllocationKeys();
+      if (menuParams.g === 'parametres' && menuParams.t === 'general-account-natures') bindGeneralAccountNatures();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'suppliers') bindSupplierView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'clients') bindClientView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'services') bindServicesView();

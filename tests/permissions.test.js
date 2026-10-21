@@ -20,6 +20,21 @@ test('sans profil ou sans grant, aucun accès n’est accordé', () => {
   assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'module.view', context), false);
 });
 
+test('la configuration des natures de comptes généraux exige un droit explicite par dossier', () => {
+  const dossier = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  const employee = {
+    role: 'employee', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view'] }] }
+  };
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'generalAccountNatures.configure', dossier), false);
+  employee.grants.accounting[0].actions.push('generalAccountNatures.configure');
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'generalAccountNatures.configure', dossier), true);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'generalAccountNatures.configure', {
+    organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-2'
+  }), false);
+  assert.ok(Permissions.actionsForModule('accounting').some(action => action.id === 'generalAccountNatures.configure'));
+});
+
 test('les clés de répartition exigent un droit explicite dans le dossier concerné', () => {
   const dossier = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
   const employee = {

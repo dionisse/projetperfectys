@@ -1074,6 +1074,94 @@
     };
   }
 
+  function defaultGeneralAccountNaturesRows() {
+    return [
+      { id: 'stable-resources', nature: 'Ressources stables', accounts: '1', level: 0 },
+      { id: 'stable-capital-reserves', nature: 'dont capital, réserves et reports', accounts: '10 11 12 13', level: 1 },
+      { id: 'stable-grants', nature: 'dont subventions', accounts: '14', level: 1 },
+      { id: 'stable-provisions', nature: 'dont provisions', accounts: '15 19', level: 1 },
+      { id: 'stable-loans', nature: 'dont emprunts', accounts: '16 17', level: 1 },
+      { id: 'stable-liabilities', nature: 'dont comptes de liaison', accounts: '18', level: 1 },
+      { id: 'separator-stable-fixed', separator: true, nature: '', accounts: '', level: 0 },
+      { id: 'fixed-assets', nature: 'Immobilisations', accounts: '2 -28 -29 475', level: 0 },
+      { id: 'fixed-assets-in-progress', nature: 'dont en cours', accounts: '279*', level: 1 },
+      { id: 'fixed-assets-advances', nature: 'dont avances sur commandes', accounts: '25', level: 1 },
+      { id: 'participation-securities', nature: 'dont titres de participation', accounts: '26', level: 1 },
+      { id: 'financial-fixed-assets', nature: 'dont immobilisations financières', accounts: '27', level: 1 },
+      { id: 'fixed-assets-item-follow-up', nature: 'dont suivis par éléments', accounts: '21 22 23 24 -279* 26 275', level: 1 },
+      { id: 'separator-fixed-depreciation', separator: true, nature: '', accounts: '', level: 0 },
+      { id: 'fixed-assets-amortization', nature: 'Amortissements des immobilisations', accounts: '28', level: 0 },
+      { id: 'fixed-assets-impairment', nature: 'Dépréciations des immobilisations', accounts: '29', level: 0 },
+      { id: 'separator-depreciation-stocks', separator: true, nature: '', accounts: '', level: 0 },
+      { id: 'stocks', nature: 'Stocks', accounts: '3', level: 0 },
+      { id: 'separator-stocks-suppliers', separator: true, nature: '', accounts: '', level: 0 },
+      { id: 'supplier-debts', nature: 'Fournisseurs, dettes', accounts: '401 -4017 408 481 482 483 484', level: 0 },
+      { id: 'supplier-advances', nature: 'Fournisseurs, avances', accounts: '4091 4092 4093', level: 0 },
+      { id: 'supplier-guarantee-retentions', nature: 'Fournisseurs, retenues de garantie', accounts: '4017', level: 0 },
+      { id: 'supplier-rebates', nature: 'Fournisseurs, ristournes et avoirs', accounts: '', level: 0 },
+      { id: 'supplier-packaging', nature: 'Fournisseurs, emballages', accounts: '', level: 0 },
+      { id: 'supplier-provisioned-claims', nature: 'Fournisseurs, créances provisionnées', accounts: '', level: 0 },
+      { id: 'separator-suppliers-clients', separator: true, nature: '', accounts: '', level: 0 },
+      { id: 'customer-receivables', nature: 'Clients, créances', accounts: '411 -4117 485 486 488', level: 0 },
+      { id: 'customer-advances', nature: 'Clients, avances', accounts: '4191 4192', level: 0 },
+      { id: 'customer-guarantee-retentions', nature: 'Clients, retenues de garantie', accounts: '4117', level: 0 },
+      { id: 'customer-rebates', nature: 'Clients, ristournes et avoirs', accounts: '4198', level: 0 },
+      { id: 'customer-packaging', nature: 'Clients, emballages', accounts: '', level: 0 },
+      { id: 'customer-provisioned-claims', nature: 'Clients, créances provisionnées', accounts: '', level: 0 },
+      { id: 'separator-clients-personnel', separator: true, nature: '', accounts: '', level: 0 },
+      { id: 'personnel-advances-loans', nature: 'Personnel, avances et prêts', accounts: '421', level: 0 },
+      { id: 'personnel-payable', nature: 'Personnel, rémunérations dues', accounts: '422', level: 0 },
+      { id: 'separator-personnel-state', separator: true, nature: '', accounts: '', level: 0 },
+      { id: 'state', nature: 'Etat', accounts: '44', level: 0 },
+      { id: 'state-vat-collected', nature: 'dont TVA collectée', accounts: '443', level: 1 },
+      { id: 'state-vat-deductible', nature: 'dont TVA déductible', accounts: '445', level: 1 },
+      { id: 'state-vat-payable', nature: 'dont TVA à payer', accounts: '444', level: 1 },
+      { id: 'state-aib-purchases', nature: 'dont AIB retenus sur achats', accounts: '447FO', level: 1 },
+      { id: 'state-aib-sales', nature: 'dont AIB collectés sur ventes', accounts: '447CL', level: 1 },
+      { id: 'separator-state-other-parties', separator: true, nature: '', accounts: '', level: 0 },
+      { id: 'other-debtors-creditors', nature: 'Débiteurs et Créditeurs divers', accounts: '4711 4712', level: 0 },
+      { id: 'separator-other-parties-treasury', separator: true, nature: '', accounts: '', level: 0 },
+      { id: 'treasury', nature: 'Trésorerie', accounts: '5', level: 0 },
+      { id: 'treasury-cash', nature: 'dont Espèces', accounts: '57', level: 1 },
+      { id: 'treasury-banks', nature: 'dont Banques', accounts: '52', level: 1 },
+      { id: 'treasury-advance-registers', nature: "dont Régies d'avances", accounts: '', level: 1 },
+      { id: 'separator-treasury-charges', separator: true, nature: '', accounts: '', level: 0 },
+      { id: 'expenses', nature: 'Charges', accounts: '6 81 83 85 87 89', level: 0 },
+      { id: 'expenses-cashable', nature: 'dont décaissables', accounts: '60 -603 61 62 63 64 65 66 67', level: 1 },
+      { id: 'expenses-imports', nature: "dont achats à l'import", accounts: '', level: 1 },
+      { id: 'separator-charges-products', separator: true, nature: '', accounts: '', level: 0 },
+      { id: 'products', nature: 'Produits', accounts: '7 82 84 86 88', level: 0 },
+      { id: 'products-cashable', nature: 'dont encaissables', accounts: '70 71 75 -759 77 82', level: 1 },
+      { id: 'products-exports', nature: 'dont ventes à l’export', accounts: '', level: 1 },
+      { id: 'separator-products-commitments', separator: true, nature: '', accounts: '', level: 0 },
+      { id: 'commitments', nature: 'Engagements', accounts: '21 22 23 24 60 -603 61 62 63', level: 0 }
+    ];
+  }
+
+  function normalizeGeneralAccountNaturesConfiguration(value) {
+    var source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    var suppliedRows = Array.isArray(source.rows) ? source.rows : [];
+    var suppliedById = Object.create(null);
+    suppliedRows.forEach(function (row) {
+      if (row && typeof row.id === 'string' && row.id && !suppliedById[row.id]) suppliedById[row.id] = row;
+    });
+    var rows = defaultGeneralAccountNaturesRows().map(function (defaultRow) {
+      if (defaultRow.separator) return defaultRow;
+      var stored = suppliedById[defaultRow.id];
+      var nature = String(stored && stored.nature != null ? stored.nature : defaultRow.nature).trim().slice(0, 120);
+      var accounts = String(stored && stored.accounts != null ? stored.accounts : defaultRow.accounts).trim().replace(/\s+/g, ' ').slice(0, 500);
+      return { id: defaultRow.id, nature: nature || defaultRow.nature, accounts: accounts, level: defaultRow.level };
+    });
+    return {
+      rows: rows,
+      updatedAt: String(source.updatedAt || '').slice(0, 40)
+    };
+  }
+
+  function defaultGeneralAccountNaturesConfiguration() {
+    return { rows: defaultGeneralAccountNaturesRows(), updatedAt: '' };
+  }
+
   function defaultDossier() {
     return {
       id: DEFAULT_FOLDER_ID,
@@ -1093,6 +1181,7 @@
       accountingConfiguration: defaultAccountingConfiguration('2026-01-01', '2026-12-31'),
       analyticalSectionsConfiguration: defaultAnalyticalSectionsConfiguration(),
       analyticalAllocationKeysConfiguration: defaultAnalyticalAllocationKeysConfiguration(),
+      generalAccountNaturesConfiguration: defaultGeneralAccountNaturesConfiguration(),
       reference: 'COR-DEM2026',
       seeded: true
     };
@@ -1131,6 +1220,7 @@
       accountingConfiguration: normalizeAccountingConfiguration(record && record.accountingConfiguration, cycleStart, cycleEnd),
       analyticalSectionsConfiguration: normalizeAnalyticalSectionsConfiguration(record && record.analyticalSectionsConfiguration),
       analyticalAllocationKeysConfiguration: normalizeAnalyticalAllocationKeysConfiguration(record && record.analyticalAllocationKeysConfiguration),
+      generalAccountNaturesConfiguration: normalizeGeneralAccountNaturesConfiguration(record && record.generalAccountNaturesConfiguration),
       reference: String(record && record.reference || referenceFor(accountingTypeCode, clientCode, exerciseYear)),
       seeded: record && record.seeded !== false
     };
@@ -1210,6 +1300,11 @@
     return clone(dossier && dossier.analyticalAllocationKeysConfiguration || defaultAnalyticalAllocationKeysConfiguration());
   }
 
+  function generalAccountNaturesConfiguration() {
+    var dossier = currentDossier();
+    return clone(dossier && dossier.generalAccountNaturesConfiguration || defaultGeneralAccountNaturesConfiguration());
+  }
+
   function parseIsoDate(value) {
     var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
     if (!match) return null;
@@ -1268,6 +1363,7 @@
       accountingConfiguration: normalizeAccountingConfiguration(input.accountingConfiguration, cycleStart, cycleEnd),
       analyticalSectionsConfiguration: defaultAnalyticalSectionsConfiguration(),
       analyticalAllocationKeysConfiguration: defaultAnalyticalAllocationKeysConfiguration(),
+      generalAccountNaturesConfiguration: defaultGeneralAccountNaturesConfiguration(),
       reference: reference,
       seeded: false
     };
@@ -1444,6 +1540,74 @@
     }
 
     return { ok: true, errors: [], dossier: clone(nextDossier), folder: clone(nextDossier) };
+  }
+
+  function saveGeneralAccountNaturesConfiguration(input) {
+    ensureFolderCatalog();
+    var dossier = folderById(activeFolderId);
+    if (!dossier) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    input = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    var suppliedRows = Array.isArray(input.rows) ? input.rows : [];
+    var suppliedById = Object.create(null);
+    var knownIds = Object.create(null);
+    var errors = [];
+    defaultGeneralAccountNaturesRows().forEach(function (row) { knownIds[row.id] = true; });
+    suppliedRows.forEach(function (row, index) {
+      if (!row || typeof row !== 'object' || typeof row.id !== 'string' || !row.id) {
+        errors.push('La ligne ' + (index + 1) + ' ne possède pas d’identifiant valide.');
+        return;
+      }
+      if (!knownIds[row.id]) {
+        errors.push('La ligne « ' + row.id + ' » n’appartient pas à la nomenclature de ce dossier.');
+        return;
+      }
+      if (suppliedById[row.id]) {
+        errors.push('La nature « ' + row.id + ' » apparaît plusieurs fois dans la saisie.');
+        return;
+      }
+      suppliedById[row.id] = row;
+    });
+
+    var seenNatures = Object.create(null);
+    var normalizedRows = defaultGeneralAccountNaturesRows().map(function (defaultRow) {
+      if (defaultRow.separator) return defaultRow;
+      var row = suppliedById[defaultRow.id];
+      if (!row) {
+        errors.push('La nature « ' + defaultRow.nature + ' » est absente de la saisie.');
+        return defaultRow;
+      }
+      var nature = String(row.nature == null ? '' : row.nature).trim().replace(/\s+/g, ' ');
+      var accounts = String(row.accounts == null ? '' : row.accounts).trim().replace(/\s+/g, ' ');
+      if (!nature) errors.push('Le libellé de la nature « ' + defaultRow.nature + ' » ne peut pas être vide.');
+      if (nature.length > 120) errors.push('Le libellé « ' + defaultRow.nature + ' » dépasse 120 caractères.');
+      if (accounts.length > 500) errors.push('La liste de comptes de « ' + (nature || defaultRow.nature) + ' » dépasse 500 caractères.');
+      var natureKey = nature.toLocaleLowerCase();
+      if (nature && seenNatures[natureKey]) errors.push('Le libellé de nature « ' + nature + ' » est déjà utilisé.');
+      if (nature) seenNatures[natureKey] = true;
+
+      var seenAccounts = Object.create(null);
+      accounts.split(/[\s,;]+/).filter(Boolean).forEach(function (token) {
+        var accountKey = token.toLocaleUpperCase();
+        if (seenAccounts[accountKey]) errors.push('Le compte « ' + token + ' » est répété dans la nature « ' + (nature || defaultRow.nature) + ' ».');
+        seenAccounts[accountKey] = true;
+      });
+      return { id: defaultRow.id, nature: nature.slice(0, 120) || defaultRow.nature, accounts: accounts.slice(0, 500), level: defaultRow.level };
+    });
+    if (errors.length) return { ok: false, errors: errors };
+
+    var previousCatalog = clone(folderCatalog);
+    var dossierIndex = folderCatalog.findIndex(function (record) { return record.id === dossier.id; });
+    var configuration = { rows: normalizedRows, updatedAt: new Date().toISOString() };
+    folderCatalog[dossierIndex] = Object.assign({}, dossier, { generalAccountNaturesConfiguration: configuration });
+    if (!saveFolderCatalog()) {
+      folderCatalog = previousCatalog;
+      return { ok: false, errors: ['Impossible d’enregistrer les natures des comptes dans ce navigateur. Les valeurs précédentes sont conservées.'] };
+    }
+    return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
+  }
+
+  function initializeGeneralAccountNaturesConfiguration() {
+    return saveGeneralAccountNaturesConfiguration({ rows: defaultGeneralAccountNaturesRows() });
   }
 
   function saveAnalyticalSectionsConfiguration(input) {
@@ -5228,6 +5392,9 @@
     saveAnalyticalSectionsConfiguration: saveAnalyticalSectionsConfiguration,
     analyticalAllocationKeysConfiguration: analyticalAllocationKeysConfiguration,
     saveAnalyticalAllocationKeysConfiguration: saveAnalyticalAllocationKeysConfiguration,
+    generalAccountNaturesConfiguration: generalAccountNaturesConfiguration,
+    saveGeneralAccountNaturesConfiguration: saveGeneralAccountNaturesConfiguration,
+    initializeGeneralAccountNaturesConfiguration: initializeGeneralAccountNaturesConfiguration,
     currentStorageKey: currentFolderStorageKey,
     createDossier: createDossier,
     readDossierStateSnapshot: readDossierStateSnapshot,

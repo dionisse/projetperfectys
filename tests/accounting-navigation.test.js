@@ -337,6 +337,12 @@ assert.equal(findTab('parametres', 'dossier-configuration').actions[0].route, 's
 assert.equal(findTab('parametres', 'sections-accounts').status, 'partial', 'le paramétrage est accessible, sans activer les traitements analytiques');
 assert.equal(findTab('parametres', 'allocation-keys').status, 'partial');
 assert.ok(findTab('parametres', 'allocation-keys').reason.includes('aucun calcul ou transfert analytique'));
+assert.equal(findTab('parametres', 'general-account-natures').status, 'partial');
+assert.ok(findTab('parametres', 'general-account-natures').reason.includes('contrôle des doublons'));
+assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'general-account-natures'[\s\S]*viewGeneralAccountNatures\(\)/);
+assert.match(appSource, /function viewGeneralAccountNatures\(\)[\s\S]*generalAccountNatures\.configure[\s\S]*Nature[\s\S]*Comptes généraux\.\.\.[\s\S]*Initialisation[\s\S]*Modifier[\s\S]*Fermer/);
+assert.match(appSource, /function bindGeneralAccountNatures\(\)[\s\S]*initializeGeneralAccountNaturesConfiguration/);
+assert.match(appSource, /function openGeneralAccountNatureEditor\(natureRow\)[\s\S]*saveGeneralAccountNaturesConfiguration/);
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'allocation-keys'[\s\S]*viewAnalyticalAllocationKeys\(\)/);
 assert.match(appSource, /function viewAnalyticalAllocationKeys\(\)[\s\S]*analyticalAllocationKeys\.configure[\s\S]*Sections auxiliaires[\s\S]*Familles des prestations[\s\S]*data-allocation-action="destination"[\s\S]*Aperçu/);
 assert.match(appSource, /function bindAnalyticalAllocationKeys\(\)[\s\S]*saveAnalyticalAllocationKeysConfiguration/);
