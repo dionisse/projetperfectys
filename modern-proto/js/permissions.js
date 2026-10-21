@@ -12,6 +12,7 @@
     { id: 'accounting.configure', label: 'Modifier la configuration comptable du dossier' },
     { id: 'analyticalSections.configure', label: 'Configurer les sections et comptes analytiques' },
     { id: 'analyticalAllocationKeys.configure', label: 'Configurer les clés de répartition analytiques' },
+    { id: 'analyticalNatures.configure', label: 'Configurer les natures analytiques' },
     { id: 'generalAccountNatures.configure', label: 'Configurer les natures des comptes généraux' },
     { id: 'draft.create', label: 'Créer une écriture / un brouillon' },
     { id: 'draft.edit', label: 'Modifier un brouillon' },

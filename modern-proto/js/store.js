@@ -1074,6 +1074,49 @@
     };
   }
 
+  function defaultAnalyticalNaturesRows() {
+    return [
+      { id: 'responsibility-centers', genericName: 'Centres de responsabilité', individualName: 'Centre', requiredAtEntry: false, significantAccounts: '', carryForwardAccounts: '' },
+      { id: 'activity-domains', genericName: 'Domaines d\'activités', individualName: 'Activité', requiredAtEntry: false, significantAccounts: '', carryForwardAccounts: '' },
+      { id: 'expense-categories', genericName: 'Catégorie de dépenses', individualName: 'Catégorie', requiredAtEntry: false, significantAccounts: '', carryForwardAccounts: '' },
+      { id: 'funding-sources', genericName: 'Sources de financement', individualName: 'Financement', requiredAtEntry: false, significantAccounts: '', carryForwardAccounts: '' },
+      { id: 'alternate-accounts', genericName: 'Comptes alternatifs', individualName: 'Cpt alternatif', requiredAtEntry: false, significantAccounts: '', carryForwardAccounts: '' },
+      { id: 'diverse-analyses', group: true, genericName: 'Analyses Diverses', individualName: '', requiredAtEntry: false, significantAccounts: '', carryForwardAccounts: '' },
+      { id: 'vehicle-expenses', genericName: 'Frais sur véhicules', individualName: 'Véhicule', requiredAtEntry: false, significantAccounts: '', carryForwardAccounts: '' },
+      { id: 'mission-beneficiaries', genericName: 'Bénéficiaires de frais de mission', individualName: 'Bénéficiaire', requiredAtEntry: false, significantAccounts: '', carryForwardAccounts: '' },
+      { id: 'analysis-3', genericName: 'Analyse 3', individualName: 'Analyse 3', requiredAtEntry: false, significantAccounts: '', carryForwardAccounts: '' },
+      { id: 'analysis-4', genericName: 'Analyse 4', individualName: 'Analyse 4', requiredAtEntry: false, significantAccounts: '', carryForwardAccounts: '' },
+      { id: 'analysis-5', genericName: 'Analyse 5', individualName: 'Analyse 5', requiredAtEntry: false, significantAccounts: '', carryForwardAccounts: '' },
+      { id: 'cash-flow-natures', genericName: 'Natures des flux de trésorerie', individualName: 'Nature du flux', requiredAtEntry: true, significantAccounts: '5', carryForwardAccounts: '' }
+    ];
+  }
+
+  function normalizeAnalyticalNaturesConfiguration(value) {
+    var source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    var suppliedRows = Array.isArray(source.rows) ? source.rows : [];
+    var suppliedById = Object.create(null);
+    suppliedRows.forEach(function (row) {
+      if (row && typeof row.id === 'string' && row.id && !suppliedById[row.id]) suppliedById[row.id] = row;
+    });
+    var rows = defaultAnalyticalNaturesRows().map(function (defaultRow) {
+      if (defaultRow.group) return defaultRow;
+      var stored = suppliedById[defaultRow.id];
+      return {
+        id: defaultRow.id,
+        genericName: String(stored && stored.genericName != null ? stored.genericName : defaultRow.genericName).trim().slice(0, 120),
+        individualName: String(stored && stored.individualName != null ? stored.individualName : defaultRow.individualName).trim().slice(0, 120),
+        requiredAtEntry: stored && typeof stored.requiredAtEntry === 'boolean' ? stored.requiredAtEntry : defaultRow.requiredAtEntry,
+        significantAccounts: String(stored && stored.significantAccounts != null ? stored.significantAccounts : defaultRow.significantAccounts).trim().replace(/\s+/g, ' ').slice(0, 500),
+        carryForwardAccounts: String(stored && stored.carryForwardAccounts != null ? stored.carryForwardAccounts : defaultRow.carryForwardAccounts).trim().replace(/\s+/g, ' ').slice(0, 500)
+      };
+    });
+    return { rows: rows, updatedAt: String(source.updatedAt || '').slice(0, 40) };
+  }
+
+  function defaultAnalyticalNaturesConfiguration() {
+    return { rows: defaultAnalyticalNaturesRows(), updatedAt: '' };
+  }
+
   function defaultGeneralAccountNaturesRows() {
     return [
       { id: 'stable-resources', nature: 'Ressources stables', accounts: '1', level: 0 },
@@ -1187,6 +1230,7 @@
       accountingConfiguration: defaultAccountingConfiguration('2026-01-01', '2026-12-31'),
       analyticalSectionsConfiguration: defaultAnalyticalSectionsConfiguration(),
       analyticalAllocationKeysConfiguration: defaultAnalyticalAllocationKeysConfiguration(),
+      analyticalNaturesConfiguration: defaultAnalyticalNaturesConfiguration(),
       generalAccountNaturesConfiguration: defaultGeneralAccountNaturesConfiguration(),
       reference: 'COR-DEM2026',
       seeded: true
@@ -1226,6 +1270,7 @@
       accountingConfiguration: normalizeAccountingConfiguration(record && record.accountingConfiguration, cycleStart, cycleEnd),
       analyticalSectionsConfiguration: normalizeAnalyticalSectionsConfiguration(record && record.analyticalSectionsConfiguration),
       analyticalAllocationKeysConfiguration: normalizeAnalyticalAllocationKeysConfiguration(record && record.analyticalAllocationKeysConfiguration),
+      analyticalNaturesConfiguration: normalizeAnalyticalNaturesConfiguration(record && record.analyticalNaturesConfiguration),
       generalAccountNaturesConfiguration: normalizeGeneralAccountNaturesConfiguration(record && record.generalAccountNaturesConfiguration),
       reference: String(record && record.reference || referenceFor(accountingTypeCode, clientCode, exerciseYear)),
       seeded: record && record.seeded !== false
@@ -1306,6 +1351,11 @@
     return clone(dossier && dossier.analyticalAllocationKeysConfiguration || defaultAnalyticalAllocationKeysConfiguration());
   }
 
+  function analyticalNaturesConfiguration() {
+    var dossier = currentDossier();
+    return clone(dossier && dossier.analyticalNaturesConfiguration || defaultAnalyticalNaturesConfiguration());
+  }
+
   function generalAccountNaturesConfiguration() {
     var dossier = currentDossier();
     return clone(dossier && dossier.generalAccountNaturesConfiguration || defaultGeneralAccountNaturesConfiguration());
@@ -1369,6 +1419,7 @@
       accountingConfiguration: normalizeAccountingConfiguration(input.accountingConfiguration, cycleStart, cycleEnd),
       analyticalSectionsConfiguration: defaultAnalyticalSectionsConfiguration(),
       analyticalAllocationKeysConfiguration: defaultAnalyticalAllocationKeysConfiguration(),
+      analyticalNaturesConfiguration: defaultAnalyticalNaturesConfiguration(),
       generalAccountNaturesConfiguration: defaultGeneralAccountNaturesConfiguration(),
       reference: reference,
       seeded: false
@@ -1673,6 +1724,70 @@
       configuration: clone(savedConfiguration),
       dossier: clone(folderCatalog[dossierIndex])
     };
+  }
+
+  function saveAnalyticalNaturesConfiguration(input) {
+    ensureFolderCatalog();
+    input = input || {};
+    var dossier = folderById(activeFolderId);
+    if (!dossier) return { ok: false, errors: ['Dossier actif introuvable.'] };
+
+    var source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    var sourceRows = Array.isArray(source.rows) ? source.rows : [];
+    var defaultRows = defaultAnalyticalNaturesRows();
+    var knownIds = Object.create(null);
+    var suppliedById = Object.create(null);
+    var errors = [];
+    defaultRows.forEach(function (row) { knownIds[row.id] = true; });
+    sourceRows.forEach(function (row) {
+      if (!row || typeof row !== 'object' || Array.isArray(row) || typeof row.id !== 'string' || !row.id) {
+        errors.push('Une ligne de nature analytique est invalide.');
+        return;
+      }
+      if (!knownIds[row.id]) {
+        errors.push('Aucune nature analytique non prévue ne peut être ajoutée.');
+        return;
+      }
+      if (suppliedById[row.id]) {
+        errors.push('La nature analytique « ' + row.id + ' » est répétée.');
+        return;
+      }
+      suppliedById[row.id] = row;
+    });
+
+    var rows = defaultRows.map(function (defaultRow) {
+      if (defaultRow.group) return defaultRow;
+      var stored = suppliedById[defaultRow.id];
+      if (!stored) {
+        errors.push('La ligne « ' + defaultRow.genericName + ' » est absente.');
+        return defaultRow;
+      }
+      var genericName = String(stored.genericName == null ? '' : stored.genericName).trim().replace(/\s+/g, ' ');
+      var individualName = String(stored.individualName == null ? '' : stored.individualName).trim().replace(/\s+/g, ' ');
+      var significantAccounts = String(stored.significantAccounts == null ? '' : stored.significantAccounts).trim().replace(/\s+/g, ' ');
+      var carryForwardAccounts = String(stored.carryForwardAccounts == null ? '' : stored.carryForwardAccounts).trim().replace(/\s+/g, ' ');
+      if (genericName.length > 120 || individualName.length > 120) errors.push('Les noms de « ' + defaultRow.genericName + ' » ne peuvent pas dépasser 120 caractères.');
+      if (significantAccounts.length > 500 || carryForwardAccounts.length > 500) errors.push('Les listes de comptes de « ' + defaultRow.genericName + ' » ne peuvent pas dépasser 500 caractères.');
+      return {
+        id: defaultRow.id,
+        genericName: genericName.slice(0, 120),
+        individualName: individualName.slice(0, 120),
+        requiredAtEntry: typeof stored.requiredAtEntry === 'boolean' ? stored.requiredAtEntry : defaultRow.requiredAtEntry,
+        significantAccounts: significantAccounts.slice(0, 500),
+        carryForwardAccounts: carryForwardAccounts.slice(0, 500)
+      };
+    });
+    if (errors.length) return { ok: false, errors: errors };
+
+    var previousCatalog = clone(folderCatalog);
+    var dossierIndex = folderCatalog.findIndex(function (record) { return record.id === dossier.id; });
+    var configuration = { rows: rows, updatedAt: new Date().toISOString() };
+    folderCatalog[dossierIndex] = Object.assign({}, dossier, { analyticalNaturesConfiguration: configuration });
+    if (!saveFolderCatalog()) {
+      folderCatalog = previousCatalog;
+      return { ok: false, errors: ['Impossible d’enregistrer les natures analytiques dans ce navigateur. Les valeurs précédentes sont conservées.'] };
+    }
+    return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
   }
 
   function saveAnalyticalAllocationKeysConfiguration(kind, input) {
@@ -5397,6 +5512,8 @@
     analyticalSectionsConfiguration: analyticalSectionsConfiguration,
     saveAnalyticalSectionsConfiguration: saveAnalyticalSectionsConfiguration,
     analyticalAllocationKeysConfiguration: analyticalAllocationKeysConfiguration,
+    analyticalNaturesConfiguration: analyticalNaturesConfiguration,
+    saveAnalyticalNaturesConfiguration: saveAnalyticalNaturesConfiguration,
     saveAnalyticalAllocationKeysConfiguration: saveAnalyticalAllocationKeysConfiguration,
     generalAccountNaturesConfiguration: generalAccountNaturesConfiguration,
     saveGeneralAccountNaturesConfiguration: saveGeneralAccountNaturesConfiguration,

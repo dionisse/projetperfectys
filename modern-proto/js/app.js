@@ -93,6 +93,7 @@
   };
 
   var selectedEntryJournalCode = '';
+  var analyticalNatureSelectedId = 'activity-domains';
   var generalAccountNatureSelectedId = 'stable-grants';
   var deferredInstallPrompt = null;
   var exchangeImportSession = null;
@@ -2685,6 +2686,103 @@
       tableGroup('servicesBySection', 'LES CLÉS DE RÉPARTITION DES PRESTATIONS PAR SECTION', 5) +
       '<div class="alert info allocation-key-inactive-note"><div><strong>Comptabilité analytique inactive.</strong> Ce paramétrage ne génère aucune ventilation, imputation, écriture ou édition analytique.</div></div>' +
     '</div>';
+  }
+
+  function viewAnalyticalNatures() {
+    var dossier = S.currentDossier();
+    var configuration = S.analyticalNaturesConfiguration();
+    var rows = Array.isArray(configuration.rows) ? configuration.rows : [];
+    var canConfigure = hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalNatures.configure', accountingAccessContext(dossier));
+    var editable = canConfigure && !isPhoneViewport();
+    var selected = rows.find(function (row) { return row.id === analyticalNatureSelectedId && !row.group; }) ||
+      rows.find(function (row) { return row.id === 'activity-domains' && !row.group; }) ||
+      rows.find(function (row) { return !row.group; });
+    if (selected) analyticalNatureSelectedId = selected.id;
+
+    var tableRows = rows.map(function (row) {
+      if (row.group) {
+        return '<tr class="analytical-natures-group"><td>' + esc(row.genericName) + '</td><td></td><td></td><td></td><td></td></tr>';
+      }
+      var isSelected = selected && row.id === selected.id;
+      return '<tr class="analytical-natures-row' + (isSelected ? ' is-selected' : '') + '" data-analytical-nature-row="' + esc(row.id) + '" tabindex="0" aria-selected="' + (isSelected ? 'true' : 'false') + '">' +
+        '<td>' + esc(row.genericName || '') + '</td>' +
+        '<td>' + esc(row.individualName || '') + '</td>' +
+        '<td class="analytical-natures-io">' + (row.requiredAtEntry ? 'Oui' : '') + '</td>' +
+        '<td>' + esc(row.significantAccounts || '') + '</td>' +
+        '<td>' + esc(row.carryForwardAccounts || '') + '</td>' +
+      '</tr>';
+    }).join('');
+    var accessNotice = !canConfigure
+      ? '<div class="alert warning analytical-natures-access-note">Consultation seule : un droit explicite « Configurer les natures analytiques » est nécessaire pour modifier la nomenclature.</div>'
+      : (isPhoneViewport() ? '<div class="alert info analytical-natures-access-note">Consultation sur téléphone ; la modification est réservée à un ordinateur ou une tablette.</div>' : '');
+
+    return '<div class="analytical-natures-workspace">' +
+      accessNotice +
+      '<div class="analytical-natures-table-wrap" role="region" aria-label="Tableau des natures analytiques" tabindex="0">' +
+        '<table class="analytical-natures-table"><thead><tr>' +
+          '<th scope="col">Nom générique</th><th scope="col">Nom indiv.</th><th scope="col">I.O.</th><th scope="col">Comptes significatifs</th><th scope="col">Comptes à reporter</th>' +
+        '</tr></thead><tbody>' + tableRows + '</tbody></table>' +
+      '</div>' +
+      '<div class="analytical-natures-footer">' +
+        '<button type="button" class="btn btn-ghost" disabled title="La sélection des comptes généraux reste désactivée comme sur la capture.">Comptes généraux</button>' +
+        '<button type="button" class="analytical-natures-io-legend" data-analytical-nature-action="toggle-io"' + (editable && selected ? '' : ' disabled') + '><strong>I.O.</strong> (Imputation obligatoire à la saisie)</button>' +
+        '<div class="analytical-natures-footer-end">' +
+          '<button type="button" class="btn btn-ghost" data-analytical-nature-action="modify"' + (editable && selected ? '' : ' disabled') + '>Modifier</button>' +
+          '<button type="button" class="btn btn-ghost" data-analytical-nature-action="close">Fermer</button>' +
+        '</div>' +
+      '</div>' +
+      '<p class="small muted analytical-natures-footnote">Les valeurs sont conservées par dossier. Cette nomenclature ne crée aucune imputation, aucun mouvement ni aucune écriture analytique.</p>' +
+    '</div>';
+  }
+
+  function openAnalyticalNatureEditor(natureRow) {
+    if (!natureRow || natureRow.group) return;
+    var dossier = S.currentDossier();
+    var body = '<form id="analytical-nature-form" novalidate>' +
+      '<div id="analytical-nature-errors" aria-live="assertive"></div>' +
+      '<div class="analytical-nature-editor-grid">' +
+        '<div class="field"><label for="analytical-nature-generic">Nom générique</label><input id="analytical-nature-generic" type="text" maxlength="120" value="' + esc(natureRow.genericName || '') + '"></div>' +
+        '<div class="field"><label for="analytical-nature-individual">Nom individuel</label><input id="analytical-nature-individual" type="text" maxlength="120" value="' + esc(natureRow.individualName || '') + '"></div>' +
+        '<label class="analytical-nature-required"><input id="analytical-nature-required" type="checkbox"' + (natureRow.requiredAtEntry ? ' checked' : '') + '> <span>Imputation obligatoire à la saisie (I.O.)</span></label>' +
+        '<div class="field"><label for="analytical-nature-significant">Comptes significatifs</label><input id="analytical-nature-significant" type="text" maxlength="500" spellcheck="false" value="' + esc(natureRow.significantAccounts || '') + '"></div>' +
+        '<div class="field"><label for="analytical-nature-carry-forward">Comptes à reporter</label><input id="analytical-nature-carry-forward" type="text" maxlength="500" spellcheck="false" value="' + esc(natureRow.carryForwardAccounts || '') + '"></div>' +
+      '</div>' +
+      '<p class="small muted">Les valeurs sont enregistrées telles que saisies ; aucun traitement analytique n’est exécuté.</p>' +
+    '</form>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button>' +
+      '<button type="submit" class="btn btn-primary" form="analytical-nature-form">Enregistrer</button>';
+    openModal('Modifier une nature analytique', 'Dossier ' + esc(dossier.reference) + ' · ' + esc(natureRow.genericName), body, footer, true);
+
+    var form = $('#analytical-nature-form');
+    if (!form) return;
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (isPhoneViewport() || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalNatures.configure', accountingAccessContext(S.currentDossier()))) {
+        toast('Modification refusée : le droit de configuration des natures analytiques n’est pas accordé.', 'warning');
+        return;
+      }
+      var current = S.analyticalNaturesConfiguration();
+      var rows = current.rows.map(function (row) {
+        if (row.id !== natureRow.id) return row;
+        return Object.assign({}, row, {
+          genericName: $('#analytical-nature-generic', form).value,
+          individualName: $('#analytical-nature-individual', form).value,
+          requiredAtEntry: $('#analytical-nature-required', form).checked,
+          significantAccounts: $('#analytical-nature-significant', form).value,
+          carryForwardAccounts: $('#analytical-nature-carry-forward', form).value
+        });
+      });
+      var result = S.saveAnalyticalNaturesConfiguration({ rows: rows });
+      if (!result.ok) {
+        var errorRegion = $('#analytical-nature-errors', form);
+        if (errorRegion) errorRegion.innerHTML = '<div class="alert error" role="alert"><ul style="margin:0 0 0 18px">' +
+          (result.errors || ['Modification impossible.']).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
+        return;
+      }
+      toast('Nature analytique enregistrée dans le dossier. Aucun mouvement analytique n’a été créé.', 'success');
+      closeModal(true);
+      render();
+    });
   }
 
   function viewGeneralAccountNatures() {
@@ -8289,6 +8387,8 @@
       exchangeFeature = viewAnalyticalSectionsConfiguration();
     } else if (group.id === 'parametres' && tab.id === 'allocation-keys') {
       exchangeFeature = viewAnalyticalAllocationKeys();
+    } else if (group.id === 'parametres' && tab.id === 'analytic-natures') {
+      exchangeFeature = viewAnalyticalNatures();
     } else if (group.id === 'parametres' && tab.id === 'general-account-natures') {
       exchangeFeature = viewGeneralAccountNatures();
     }
@@ -8558,6 +8658,71 @@
     });
   }
 
+  function bindAnalyticalNatures() {
+    var workspace = $('.analytical-natures-workspace');
+    if (!workspace) return;
+    var dossier = S.currentDossier();
+    var canConfigure = hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalNatures.configure', accountingAccessContext(dossier));
+
+    function selectRow(row) {
+      var id = row && row.getAttribute('data-analytical-nature-row');
+      if (!id) return;
+      analyticalNatureSelectedId = id;
+      $$('[data-analytical-nature-row]', workspace).forEach(function (item) {
+        var isSelected = item.getAttribute('data-analytical-nature-row') === id;
+        item.classList.toggle('is-selected', isSelected);
+        item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+      });
+    }
+
+    $$('[data-analytical-nature-row]', workspace).forEach(function (row) {
+      row.addEventListener('click', function () { selectRow(row); });
+      row.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        selectRow(row);
+      });
+    });
+
+    workspace.addEventListener('click', function (event) {
+      var button = event.target.closest ? event.target.closest('[data-analytical-nature-action]') : null;
+      if (!button) return;
+      var action = button.getAttribute('data-analytical-nature-action');
+      if (action === 'close') {
+        navigate(accountingMenuHash('parametres', 'dossier-configuration'));
+      } else if (action === 'toggle-io') {
+        if (isPhoneViewport() || !canConfigure) {
+          toast('Modification refusée : un droit explicite sur ce dossier est requis.', 'warning');
+          return;
+        }
+        var currentConfiguration = S.analyticalNaturesConfiguration();
+        var selectedNature = currentConfiguration.rows.find(function (row) {
+          return row.id === analyticalNatureSelectedId && !row.group;
+        });
+        if (!selectedNature) return;
+        var nextRows = currentConfiguration.rows.map(function (row) {
+          return row.id === selectedNature.id ? Object.assign({}, row, { requiredAtEntry: !row.requiredAtEntry }) : row;
+        });
+        var saved = S.saveAnalyticalNaturesConfiguration({ rows: nextRows });
+        if (!saved.ok) {
+          toast((saved.errors || ['Modification impossible.']).join(' '), 'error');
+          return;
+        }
+        toast('Indicateur I.O. ' + (selectedNature.requiredAtEntry ? 'désactivé' : 'activé') + ' pour « ' + selectedNature.genericName + ' ». Les saisies restent inchangées.', 'success');
+        render();
+      } else if (action === 'modify') {
+        if (isPhoneViewport() || !canConfigure) {
+          toast('Modification refusée : un droit explicite sur ce dossier est requis.', 'warning');
+          return;
+        }
+        var selectedRow = S.analyticalNaturesConfiguration().rows.find(function (row) {
+          return row.id === analyticalNatureSelectedId && !row.group;
+        });
+        if (selectedRow) openAnalyticalNatureEditor(selectedRow);
+      }
+    });
+  }
+
   function bindGeneralAccountNatures() {
     var workspace = $('.general-account-natures-workspace');
     if (!workspace) return;
@@ -8649,6 +8814,7 @@
       if (menuParams.g === 'parametres' && menuParams.t === 'dossier-configuration') bindAccountingConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'sections-accounts') bindAnalyticalSectionsConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'allocation-keys') bindAnalyticalAllocationKeys();
+      if (menuParams.g === 'parametres' && menuParams.t === 'analytic-natures') bindAnalyticalNatures();
       if (menuParams.g === 'parametres' && menuParams.t === 'general-account-natures') bindGeneralAccountNatures();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'suppliers') bindSupplierView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'clients') bindClientView();

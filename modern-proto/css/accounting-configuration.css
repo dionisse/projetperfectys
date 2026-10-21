@@ -148,3 +148,59 @@
   .allocation-key-grid { min-width: 460px; }
   .allocation-key-control-column .btn { min-height: 38px; }
 }
+
+.analytical-natures-workspace { display: grid; gap: 10px; margin-top: 15px; min-width: 0; }
+.analytical-natures-access-note { margin: 0; font-size: .68rem !important; }
+.analytical-natures-table-wrap { height: min(54vh, 500px); min-height: 350px; min-width: 0; overflow: auto; border: 1px solid #58645d; background: #fff; }
+.analytical-natures-table { width: 100%; min-width: 880px; table-layout: fixed; border-collapse: collapse; font-size: .72rem; }
+.analytical-natures-table th,
+.analytical-natures-table td { border-right: 1px solid #66716b; }
+.analytical-natures-table th:first-child,
+.analytical-natures-table td:first-child { border-left: 1px solid #66716b; }
+.analytical-natures-table th { position: sticky; z-index: 1; top: 0; height: 38px; padding: 5px 7px; background: #f0f1ee; color: #1f2e29; font-size: .73rem; font-weight: 800; text-align: center; white-space: nowrap; }
+.analytical-natures-table th:nth-child(1) { width: 30%; }
+.analytical-natures-table th:nth-child(2) { width: 11%; }
+.analytical-natures-table th:nth-child(3) { width: 4%; }
+.analytical-natures-table th:nth-child(4) { width: 36%; }
+.analytical-natures-table th:nth-child(5) { width: 19%; }
+.analytical-natures-table tbody tr.analytical-natures-row { height: 32px; cursor: pointer; }
+.analytical-natures-table tbody tr.analytical-natures-row:nth-child(odd) { background: #fffdeb; }
+.analytical-natures-table tbody tr.analytical-natures-row:nth-child(even) { background: #fff; }
+.analytical-natures-table td { padding: 4px 7px; line-height: 1.25; overflow-wrap: anywhere; }
+.analytical-natures-table td.analytical-natures-io { text-align: center; }
+.analytical-natures-table tbody tr.analytical-natures-group { height: 32px; color: #102bdf; background: #fffdeb; }
+.analytical-natures-table tbody tr.analytical-natures-group td:first-child { border-bottom: 2px dashed #213fe7; font-weight: 600; }
+.analytical-natures-table tbody tr.analytical-natures-group td:not(:first-child) { border-right-color: transparent; }
+.analytical-natures-table tbody tr.is-selected { color: #fff; background: #080078 !important; }
+.analytical-natures-table tbody tr:focus-visible { outline: 2px dotted #1b574c; outline-offset: -3px; }
+.analytical-natures-table tbody tr.is-selected:focus-visible { outline-color: #fff; }
+.analytical-natures-footer { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(220px, 1.5fr) auto; align-items: center; gap: 10px; }
+.analytical-natures-footer > .btn,
+.analytical-natures-footer-end .btn { min-height: 38px; justify-content: center; }
+.analytical-natures-io-legend { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 5px 10px; border: 1px solid #cbd3ce; border-radius: 6px; background: #fbfcf9; color: #32483f; font: inherit; font-size: .68rem; font-weight: 700; text-align: center; cursor: pointer; }
+.analytical-natures-io-legend strong { font-size: .78rem; }
+.analytical-natures-io-legend:hover:not(:disabled) { border-color: #9bad9f; background: #f2f8f4; }
+.analytical-natures-io-legend:disabled { opacity: .55; cursor: not-allowed; }
+.analytical-natures-footer-end { display: flex; gap: 10px; }
+.analytical-natures-footer-end .btn { min-width: 105px; }
+.analytical-natures-footnote { margin: 0; font-size: .63rem; line-height: 1.45; }
+.analytical-nature-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; align-items: end; }
+.analytical-nature-editor-grid .field { min-width: 0; margin: 0; }
+.analytical-nature-editor-grid .field input { min-width: 0; }
+.analytical-nature-required { display: flex; grid-column: 1 / -1; align-items: center; gap: 8px; min-height: 34px; color: #40574e; font-size: .72rem; font-weight: 700; }
+.analytical-nature-required input { width: 16px; height: 16px; margin: 0; accent-color: #0e8e83; }
+#analytical-nature-errors:empty { display: none; }
+@media (max-width: 850px) {
+  .analytical-natures-footer { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .analytical-natures-io-legend { grid-column: 1 / -1; grid-row: 1; }
+  .analytical-natures-footer-end { grid-column: 1 / -1; justify-content: flex-end; }
+}
+@media (max-width: 700px) {
+  .analytical-natures-table-wrap { height: 55vh; min-height: 300px; }
+  .analytical-natures-footer { grid-template-columns: minmax(0, 1fr); }
+  .analytical-natures-io-legend,
+  .analytical-natures-footer-end { grid-column: auto; }
+  .analytical-natures-footer-end .btn { min-width: 0; flex: 1 1 0; }
+  .analytical-nature-editor-grid { grid-template-columns: minmax(0, 1fr); }
+  .analytical-nature-required { grid-column: auto; }
+}

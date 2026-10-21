@@ -351,7 +351,13 @@ assert.match(appSource, /if \(action === 'display'\)[\s\S]*else if \(action === 
 assert.match(appSource, /function allocationKeyRowHtml\(kind, row, index, editable\)[\s\S]*maxlength="120"[\s\S]*disabled/);
 assert.match(appSource, /insertAdjacentHTML\('beforeend', allocationKeyRowHtml\(kind, \{\}, tbody\.querySelectorAll\('\[data-allocation-row\]'\)\.length, true\)\)/);
 assert.match(appSource, /data-allocation-action="display"[\s\S]*data-allocation-action="validate"[\s\S]*data-allocation-action="destination"[\s\S]*data-allocation-action="preview"/);
-assert.equal(findTab('parametres', 'analytic-natures').status, 'inactive');
+assert.equal(findTab('parametres', 'analytic-natures').status, 'partial', 'le tableau des natures analytiques est consultable sans activer les opérations analytiques');
+assert.ok(findTab('parametres', 'analytic-natures').reason.includes('mouvements et calculs'));
+assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'analytic-natures'[\s\S]*viewAnalyticalNatures\(\)/);
+assert.match(appSource, /function viewAnalyticalNatures\(\)[\s\S]*Nom générique[\s\S]*Nom indiv\.[\s\S]*Comptes significatifs[\s\S]*Comptes à reporter[\s\S]*Modifier[\s\S]*Fermer/);
+assert.match(appSource, /function bindAnalyticalNatures\(\)[\s\S]*openAnalyticalNatureEditor/);
+assert.match(appSource, /function openAnalyticalNatureEditor\(natureRow\)[\s\S]*saveAnalyticalNaturesConfiguration/);
+assert.match(appSource, /data-analytical-nature-action="toggle-io"[\s\S]*requiredAtEntry: !row\.requiredAtEntry/);
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'dossier-configuration'[\s\S]*viewAccountingConfiguration\(\)/);
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'sections-accounts'[\s\S]*viewAnalyticalSectionsConfiguration\(\)/);
 assert.match(appSource, /function viewAccountingConfiguration\(\)[\s\S]*accounting\.configure[\s\S]*Exercice en cours/);
