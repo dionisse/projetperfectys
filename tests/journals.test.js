@@ -80,7 +80,7 @@ test('huit journaux standards et deux journaux automatiques sont présents dès 
   assert.equal(store.journal('ABO').type, 'Abonnement');
   assert.equal(store.journal('CEN').type, 'Centralisation');
   assert.equal(store.journal('ABO').description.includes('aucune écriture n’est générée automatiquement'), true);
-  assert.equal(store.journal('CEN').description.includes('tableaux de passage'), true);
+  assert.equal(store.journal('CEN').description.includes('tableau de passage des comptes est configurable'), true);
   assert.deepEqual(JSON.parse(JSON.stringify(store.journals().map(record => record.label))), [
     'Achats', 'Ventes', 'Banques', 'Caisse', 'Opérations diverses', 'Paie', 'Abonnements', 'Centralisations',
     'Amortissements automatiques', 'Résultat de la période'
