@@ -2723,7 +2723,7 @@
           '<button type="button" class="btn btn-ghost" data-general-account-natures-action="close">Fermer</button>' +
         '</div>' +
       '</div>' +
-      '<p class="small muted general-account-natures-footnote">Les numéros sont conservés tels qu’indiqués par nature ; les contrôles évitent de répéter deux fois le même code dans une ligne. Les sections qui se chevauchent dans les captures ne sont affichées qu’une fois.</p>' +
+      '<p class="small muted general-account-natures-footnote">Les numéros sont conservés tels qu’indiqués par nature ; les contrôles évitent de répéter deux fois le même code dans une ligne. Les sections qui se chevauchent dans les captures ne sont affichées qu’une fois. « * » signifie tous les comptes ; « ? » remplace un chiffre à sa position. Ainsi, « 2?9* » désigne les comptes divisionnaires à trois chiffres de classe 2 se terminant par 9, ainsi que leurs subdivisions. Ces motifs sont conservés sans calcul.</p>' +
     '</div>';
   }
 

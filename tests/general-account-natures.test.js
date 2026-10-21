@@ -41,6 +41,9 @@ for (const row of dataRows) {
 }
 assert.equal(initial.rows.find(row => row.id === 'stable-grants').accounts, '14');
 assert.equal(initial.rows.find(row => row.id === 'fixed-assets').accounts, '2 -28 -29 475');
+assert.equal(initial.rows.find(row => row.id === 'fixed-assets-in-progress').accounts, '2?9*', 'le joker de position et le joker de suffixe sont repris exactement');
+assert.ok(initial.rows.find(row => row.id === 'fixed-assets-item-follow-up').accounts.includes('-2?9*'));
+assert.ok(!initial.rows.some(row => row.accounts.includes('279*')), 'l’ancien motif 279* n’est plus présent');
 assert.equal(initial.rows.find(row => row.id === 'supplier-debts').accounts, '401 -4017 408 481 482 483 484');
 assert.equal(initial.rows.find(row => row.id === 'state-aib-sales').accounts, '447CL');
 assert.equal(initial.rows.find(row => row.id === 'commitments').accounts, '21 22 23 24 60 -603 61 62 63');
