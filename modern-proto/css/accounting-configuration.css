@@ -256,6 +256,35 @@
 .order-accounts-footer-end { display: flex; gap: 12px; }
 .order-account-editor-grid { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); gap: 13px; }
 .order-account-editor-grid .field { min-width: 0; }
+
+.order-natures-workspace { display: grid; gap: 22px; width: 100%; margin: 42px auto 0; justify-items: center; }
+.order-natures-access-note { width: min(100%, 490px); margin: 0; font-size: .68rem !important; }
+.order-natures-list-wrap { box-sizing: border-box; width: min(100%, 490px); height: 396px; overflow-y: scroll; border: 2px solid #d8d8d8; outline: 1px solid #858585; background: #fff; }
+.order-natures-table { width: 100%; border-collapse: collapse; table-layout: fixed; color: #151515; font-size: .95rem; }
+.order-natures-table tbody tr.order-natures-row { height: 32px; cursor: pointer; }
+.order-natures-table td { height: 32px; padding: 0 5px; border-bottom: 0; line-height: 32px; }
+.order-natures-table td:first-child { box-sizing: border-box; width: 38px; border-right: 2px solid #111; text-align: center; }
+.order-natures-table tbody tr.order-natures-row:not(.is-selected) { background: #fffef0; }
+.order-natures-table tbody tr.order-natures-row.is-even:not(.is-selected) { background: #fff; }
+.order-natures-table tbody tr.is-selected { color: #fff; background: #0782d8 !important; outline: 2px dotted #eda622; outline-offset: -3px; }
+.order-natures-table tbody tr.is-selected td { color: #fff; background: #0782d8 !important; }
+.order-natures-table tbody tr:focus-visible { outline: 2px dotted #eda622; outline-offset: -3px; }
+.order-natures-table tbody tr.is-selected:focus-visible { outline-color: #f6ba48; }
+.order-natures-footer { display: flex; justify-content: center; gap: 12px; width: min(100%, 490px); }
+.order-natures-footer .btn { min-width: 160px; min-height: 46px; justify-content: center; padding: 8px 14px; font-size: .82rem; }
+.order-nature-editor-grid { display: grid; grid-template-columns: minmax(100px, .38fr) minmax(0, 1fr); gap: 13px; }
+.order-nature-editor-grid .field { min-width: 0; }
+@media (max-width: 760px) {
+  .order-natures-workspace { margin-top: 22px; }
+  .order-natures-list-wrap { height: 360px; }
+  .order-natures-table { font-size: .84rem; }
+  .order-natures-footer { width: 100%; }
+  .order-natures-footer .btn { min-width: 130px; }
+  .order-nature-editor-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 520px) {
+  .order-natures-footer .btn { flex: 1; }
+}
 @media (max-width: 760px) {
   .order-accounts-table { font-size: .72rem; }
   .order-accounts-table th { padding: 5px 6px; font-size: .73rem; }

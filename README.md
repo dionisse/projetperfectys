@@ -47,6 +47,7 @@ Le dépôt fournit un serveur statique sans dépendance ni compilation. Dans Bol
 | Natures analytiques | Tableau de référence par dossier selon la capture, avec noms génériques/individuels, I.O., comptes significatifs et comptes à reporter ; modification selon un droit explicite, sans imputation ni calcul analytique |
 | Comptes associés aux immobilisations | Tableau des comptes de valeur brute, amortissements, dotations, cessions et reprises de subventions, configuré par dossier selon la capture ; aucune écriture générée |
 | Compte de suivi des commandes et marchés accordés | Grille Rubrique/Comptes paramétrable par dossier selon la capture ; les lignes vides permettent d’ajouter des rubriques sans modifier les sept lignes de référence. Aucun achat, suivi de commande, calcul ou écriture n’est activé |
+| Natures des commandes | Liste des cinq types de documents de la capture, numéros et libellés modifiables, natures ajoutables par dossier. Les commandes et écritures restent inactives |
 | Natures des comptes généraux | Tableau Nature/Comptes prérempli selon les captures, sauvegardé par dossier ; une ligne peut être modifiée et la liste réinitialisée. Les contrôles refusent les libellés de nature et codes répétés dans une même ligne ; le plan comptable et les écritures ne sont pas modifiés |
 | Tableau de bord | Indicateurs (débit, crédit, résultat, pièces), dernières pièces, activité par journal, état des périodes |
 | Plan comptable | Référentiel complet de 147 comptes fourni, classes et sous-classes, descriptions d’usage, recherche/filtres, création, modification et suppression contrôlée ; les numéros utilisés dans les pièces, les rattachements clients/fournisseurs/tiers divers/personnel ou les sous-comptes sont protégés, sans réécriture de l’historique |
@@ -132,6 +133,12 @@ La grille est enregistrée par dossier, occupe toute la largeur disponible et n�
 | Autres retenues (impôts, pénalités...) | `447FO` |
 
 La configuration est sauvegardée par dossier. Le droit `orderAccounts.configure` autorise **Modifier** ; sélectionner une ligne vide puis l’enregistrer ajoute une rubrique, sans déplacer ni réécrire les sept valeurs de référence. **Comptes généraux...** reste désactivé comme sur la capture. Cette table ne met en service ni les commandes aux fournisseurs ni le suivi opérationnel des marchés ; elle ne crée aucun achat, calcul, mouvement ou écriture comptable.
+
+### Natures des commandes — nomenclature par dossier
+
+**Paramètres → Natures des commandes** affiche, sous le titre de fenêtre **Natures des marchés accordés**, la liste à deux colonnes visuelles (numéro et nature) de la capture, avec les cinq lignes initiales : `1 Bon de commande`, `2 Lettre de commande`, `3 Contrat`, `4 Nature 4` et `5 Nature 5`. La première ligne est sélectionnée au chargement ; des lignes vides restent visibles dans la zone défilante. Les boutons **Modifier** et **Fermer** reprennent la capture.
+
+Le droit `orderNatures.configure` permet de modifier le numéro et le libellé de la ligne sélectionnée, ou d’ajouter une nature en sélectionnant une ligne vide. Une nouvelle nature reçoit le prochain numéro disponible par défaut ; les numéros et libellés doivent être renseignés et le numéro doit rester unique. Les valeurs sont persistées par dossier. Il s’agit uniquement d’une nomenclature : le parcours opérationnel de commande ou d’achat, les mouvements et les écritures restent inactifs.
 
 ### Natures des comptes généraux — nomenclature par dossier
 

@@ -1216,6 +1216,51 @@
     return { rows: defaultOrderAccountsRows(), additionalRows: [], updatedAt: '' };
   }
 
+  function defaultOrderNaturesRows() {
+    return [
+      { id: 'order-nature-1', number: '1', name: 'Bon de commande' },
+      { id: 'order-nature-2', number: '2', name: 'Lettre de commande' },
+      { id: 'order-nature-3', number: '3', name: 'Contrat' },
+      { id: 'order-nature-4', number: '4', name: 'Nature 4' },
+      { id: 'order-nature-5', number: '5', name: 'Nature 5' }
+    ];
+  }
+
+  function normalizeOrderNaturesAdditionalRows(rows) {
+    var seen = Object.create(null);
+    return (Array.isArray(rows) ? rows : []).map(function (row) {
+      if (!row || typeof row !== 'object' || Array.isArray(row) || typeof row.id !== 'string' || !/^order-natures-custom-\d+$/.test(row.id) || seen[row.id]) return null;
+      seen[row.id] = true;
+      var number = String(row.number == null ? '' : row.number).trim().replace(/\s+/g, ' ').slice(0, 12);
+      var name = String(row.name == null ? '' : row.name).trim().replace(/\s+/g, ' ').slice(0, 120);
+      return number && name ? { id: row.id, number: number, name: name } : null;
+    }).filter(Boolean);
+  }
+
+  function normalizeOrderNaturesConfiguration(value) {
+    var source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    var suppliedRows = Array.isArray(source.rows) ? source.rows : [];
+    var suppliedById = Object.create(null);
+    suppliedRows.forEach(function (row) {
+      if (row && typeof row.id === 'string' && row.id && !suppliedById[row.id]) suppliedById[row.id] = row;
+    });
+    var rows = defaultOrderNaturesRows().map(function (defaultRow) {
+      var stored = suppliedById[defaultRow.id];
+      var number = String(stored && stored.number != null ? stored.number : defaultRow.number).trim().replace(/\s+/g, ' ').slice(0, 12);
+      var name = String(stored && stored.name != null ? stored.name : defaultRow.name).trim().replace(/\s+/g, ' ').slice(0, 120);
+      return { id: defaultRow.id, number: number || defaultRow.number, name: name || defaultRow.name };
+    });
+    return {
+      rows: rows,
+      additionalRows: normalizeOrderNaturesAdditionalRows(source.additionalRows),
+      updatedAt: String(source.updatedAt || '').slice(0, 40)
+    };
+  }
+
+  function defaultOrderNaturesConfiguration() {
+    return { rows: defaultOrderNaturesRows(), additionalRows: [], updatedAt: '' };
+  }
+
   function defaultGeneralAccountNaturesRows() {
     return [
       { id: 'stable-resources', nature: 'Ressources stables', accounts: '1', level: 0 },
@@ -1333,6 +1378,7 @@
       generalAccountNaturesConfiguration: defaultGeneralAccountNaturesConfiguration(),
       fixedAssetAccountsConfiguration: defaultFixedAssetAccountsConfiguration(),
       orderAccountsConfiguration: defaultOrderAccountsConfiguration(),
+      orderNaturesConfiguration: defaultOrderNaturesConfiguration(),
       reference: 'COR-DEM2026',
       seeded: true
     };
@@ -1374,6 +1420,7 @@
       analyticalNaturesConfiguration: normalizeAnalyticalNaturesConfiguration(record && record.analyticalNaturesConfiguration),
       fixedAssetAccountsConfiguration: normalizeFixedAssetAccountsConfiguration(record && record.fixedAssetAccountsConfiguration),
       orderAccountsConfiguration: normalizeOrderAccountsConfiguration(record && record.orderAccountsConfiguration),
+      orderNaturesConfiguration: normalizeOrderNaturesConfiguration(record && record.orderNaturesConfiguration),
       generalAccountNaturesConfiguration: normalizeGeneralAccountNaturesConfiguration(record && record.generalAccountNaturesConfiguration),
       reference: String(record && record.reference || referenceFor(accountingTypeCode, clientCode, exerciseYear)),
       seeded: record && record.seeded !== false
@@ -1469,6 +1516,11 @@
     return clone(dossier && dossier.orderAccountsConfiguration || defaultOrderAccountsConfiguration());
   }
 
+  function orderNaturesConfiguration() {
+    var dossier = currentDossier();
+    return clone(dossier && dossier.orderNaturesConfiguration || defaultOrderNaturesConfiguration());
+  }
+
   function generalAccountNaturesConfiguration() {
     var dossier = currentDossier();
     return clone(dossier && dossier.generalAccountNaturesConfiguration || defaultGeneralAccountNaturesConfiguration());
@@ -1536,6 +1588,7 @@
       generalAccountNaturesConfiguration: defaultGeneralAccountNaturesConfiguration(),
       fixedAssetAccountsConfiguration: defaultFixedAssetAccountsConfiguration(),
       orderAccountsConfiguration: defaultOrderAccountsConfiguration(),
+      orderNaturesConfiguration: defaultOrderNaturesConfiguration(),
       reference: reference,
       seeded: false
     };
@@ -2075,6 +2128,97 @@
     if (!saveFolderCatalog()) {
       folderCatalog = previousCatalog;
       return { ok: false, errors: ['Impossible d’enregistrer les comptes de suivi des commandes dans ce navigateur. Les valeurs précédentes sont conservées.'] };
+    }
+    return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
+  }
+
+  function saveOrderNaturesConfiguration(input) {
+    ensureFolderCatalog();
+    var dossier = folderById(activeFolderId);
+    if (!dossier) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    var source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    var sourceRows = Array.isArray(source.rows) ? source.rows : [];
+    var defaultRows = defaultOrderNaturesRows();
+    var knownIds = Object.create(null);
+    var suppliedById = Object.create(null);
+    var usedNumbers = Object.create(null);
+    var errors = [];
+    defaultRows.forEach(function (row) { knownIds[row.id] = true; });
+    sourceRows.forEach(function (row) {
+      if (!row || typeof row !== 'object' || Array.isArray(row) || typeof row.id !== 'string' || !row.id) {
+        errors.push('Une nature de commande est invalide.');
+        return;
+      }
+      if (!knownIds[row.id]) {
+        errors.push('Une nature inconnue ne peut pas remplacer les cinq natures de référence.');
+        return;
+      }
+      if (suppliedById[row.id]) {
+        errors.push('La nature « ' + row.id + ' » est répétée.');
+        return;
+      }
+      suppliedById[row.id] = row;
+    });
+
+    var rows = defaultRows.map(function (defaultRow) {
+      var stored = suppliedById[defaultRow.id];
+      if (!stored) {
+        errors.push('La nature n°' + defaultRow.number + ' est absente.');
+        return defaultRow;
+      }
+      var number = String(stored.number == null ? '' : stored.number).trim().replace(/\s+/g, ' ');
+      var name = String(stored.name == null ? '' : stored.name).trim().replace(/\s+/g, ' ');
+      if (!number) errors.push('Le numéro de chaque nature de commande est obligatoire.');
+      if (number.length > 12) errors.push('Le numéro d’une nature ne peut pas dépasser 12 caractères.');
+      if (!name) errors.push('Le libellé de chaque nature de commande est obligatoire.');
+      if (name.length > 120) errors.push('Le libellé d’une nature ne peut pas dépasser 120 caractères.');
+      var key = number.toLocaleLowerCase();
+      if (key && usedNumbers[key]) errors.push('Le numéro « ' + number + ' » est déjà utilisé.');
+      if (key) usedNumbers[key] = true;
+      return { id: defaultRow.id, number: number.slice(0, 12) || defaultRow.number, name: name.slice(0, 120) || defaultRow.name };
+    });
+
+    var additionalRows = [];
+    if (Object.prototype.hasOwnProperty.call(source, 'additionalRows')) {
+      if (!Array.isArray(source.additionalRows)) {
+        errors.push('Les nouvelles natures de commande sont invalides.');
+      } else {
+        var customIds = Object.create(null);
+        source.additionalRows.forEach(function (row) {
+          if (!row || typeof row !== 'object' || Array.isArray(row) || typeof row.id !== 'string' || !/^order-natures-custom-\d+$/.test(row.id)) {
+            errors.push('Une nature ajoutée de commande est invalide.');
+            return;
+          }
+          if (customIds[row.id]) {
+            errors.push('La nature ajoutée « ' + row.id + ' » est répétée.');
+            return;
+          }
+          customIds[row.id] = true;
+          var number = String(row.number == null ? '' : row.number).trim().replace(/\s+/g, ' ');
+          var name = String(row.name == null ? '' : row.name).trim().replace(/\s+/g, ' ');
+          if (!number) errors.push('Le numéro d’une nature ajoutée est obligatoire.');
+          if (number.length > 12) errors.push('Le numéro d’une nature ajoutée ne peut pas dépasser 12 caractères.');
+          if (!name) errors.push('Le libellé d’une nature ajoutée est obligatoire.');
+          if (name.length > 120) errors.push('Le libellé d’une nature ajoutée ne peut pas dépasser 120 caractères.');
+          var key = number.toLocaleLowerCase();
+          if (key && usedNumbers[key]) errors.push('Le numéro « ' + number + ' » est déjà utilisé.');
+          if (key) usedNumbers[key] = true;
+          additionalRows.push({ id: row.id, number: number.slice(0, 12), name: name.slice(0, 120) });
+        });
+      }
+    } else {
+      additionalRows = normalizeOrderNaturesAdditionalRows(dossier.orderNaturesConfiguration && dossier.orderNaturesConfiguration.additionalRows);
+    }
+
+    if (errors.length) return { ok: false, errors: errors };
+    var previousCatalog = clone(folderCatalog);
+    var dossierIndex = folderCatalog.findIndex(function (record) { return record.id === dossier.id; });
+    if (dossierIndex < 0) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    var configuration = { rows: rows, additionalRows: additionalRows, updatedAt: new Date().toISOString() };
+    folderCatalog[dossierIndex] = Object.assign({}, dossier, { orderNaturesConfiguration: configuration });
+    if (!saveFolderCatalog()) {
+      folderCatalog = previousCatalog;
+      return { ok: false, errors: ['Impossible d’enregistrer les natures des commandes dans ce navigateur. Les valeurs précédentes sont conservées.'] };
     }
     return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
   }
@@ -5808,6 +5952,8 @@
     initializeFixedAssetAccountsConfiguration: initializeFixedAssetAccountsConfiguration,
     orderAccountsConfiguration: orderAccountsConfiguration,
     saveOrderAccountsConfiguration: saveOrderAccountsConfiguration,
+    orderNaturesConfiguration: orderNaturesConfiguration,
+    saveOrderNaturesConfiguration: saveOrderNaturesConfiguration,
     saveAnalyticalAllocationKeysConfiguration: saveAnalyticalAllocationKeysConfiguration,
     generalAccountNaturesConfiguration: generalAccountNaturesConfiguration,
     saveGeneralAccountNaturesConfiguration: saveGeneralAccountNaturesConfiguration,

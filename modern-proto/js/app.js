@@ -100,6 +100,8 @@
   var fixedAssetAccountsEditDossierId = '';
   var orderAccountsSelectedId = 'orders-realization-ht';
   var orderAccountsSelectedDossierId = '';
+  var orderNaturesSelectedId = 'order-nature-1';
+  var orderNaturesSelectedDossierId = '';
   var generalAccountNatureSelectedId = 'stable-grants';
   var deferredInstallPrompt = null;
   var exchangeImportSession = null;
@@ -2910,6 +2912,48 @@
           '<button type="button" class="btn btn-ghost" data-order-accounts-action="modify"' + (editable && (selected || selectedIsEmptySlot) ? '' : ' disabled') + '>Modifier</button>' +
           '<button type="button" class="btn btn-ghost" data-order-accounts-action="close">Fermer</button>' +
         '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function viewOrderNatures() {
+    var dossier = S.currentDossier();
+    if (orderNaturesSelectedDossierId !== dossier.id) {
+      orderNaturesSelectedId = 'order-nature-1';
+      orderNaturesSelectedDossierId = dossier.id;
+    }
+    var configuration = S.orderNaturesConfiguration();
+    var rows = (Array.isArray(configuration.rows) ? configuration.rows : []).concat(Array.isArray(configuration.additionalRows) ? configuration.additionalRows : []);
+    var canConfigure = hasDemoPermission(getActiveDemoMember(), 'accounting', 'orderNatures.configure', accountingAccessContext(dossier));
+    var editable = canConfigure && !isPhoneViewport();
+    var selected = rows.find(function (row) { return row.id === orderNaturesSelectedId; }) || null;
+    var selectedIsEmptySlot = /^order-natures-empty-\d+$/.test(orderNaturesSelectedId);
+    if (!selected && !selectedIsEmptySlot) {
+      selected = rows[0] || null;
+      if (selected) orderNaturesSelectedId = selected.id;
+    }
+    var tableRows = '';
+    rows.forEach(function (row, index) {
+      var isSelected = selected && selected.id === row.id;
+      tableRows += '<tr class="order-natures-row' + (index % 2 ? ' is-even' : '') + (isSelected ? ' is-selected' : '') + '" data-order-nature-row="' + esc(row.id) + '" tabindex="0" aria-selected="' + (isSelected ? 'true' : 'false') + '"><td>' + esc(row.number || '') + '</td><td>' + esc(row.name || '') + '</td></tr>';
+    });
+    var blankRows = '';
+    for (var blankIndex = 0; blankIndex < 7; blankIndex += 1) {
+      var blankId = 'order-natures-empty-' + blankIndex;
+      var blankSelected = selectedIsEmptySlot && orderNaturesSelectedId === blankId;
+      blankRows += '<tr class="order-natures-row order-natures-empty-row' + (blankIndex % 2 ? ' is-even' : '') + (blankSelected ? ' is-selected' : '') + '" data-order-nature-row="' + blankId + '" tabindex="0" aria-selected="' + (blankSelected ? 'true' : 'false') + '"><td></td><td></td></tr>';
+    }
+    var accessNote = !canConfigure
+      ? '<div class="alert warning order-natures-access-note">Consultation seule : le droit « Configurer les natures des commandes » est requis pour modifier ou ajouter une nature.</div>'
+      : (isPhoneViewport() ? '<div class="alert info order-natures-access-note">Consultation sur téléphone ; les modifications sont réservées à un ordinateur ou une tablette.</div>' : '');
+
+    return '<div class="order-natures-workspace">' + accessNote +
+      '<div class="order-natures-list-wrap" role="region" aria-label="Natures des commandes" tabindex="0">' +
+        '<table class="order-natures-table"><tbody>' + tableRows + blankRows + '</tbody></table>' +
+      '</div>' +
+      '<div class="order-natures-footer">' +
+        '<button type="button" class="btn btn-ghost" data-order-natures-action="modify"' + (editable && (selected || selectedIsEmptySlot) ? '' : ' disabled') + '>Modifier</button>' +
+        '<button type="button" class="btn btn-ghost" data-order-natures-action="close">Fermer</button>' +
       '</div>' +
     '</div>';
   }
@@ -8522,6 +8566,8 @@
       exchangeFeature = viewFixedAssetAccounts();
     } else if (group.id === 'parametres' && tab.id === 'orders-accounts') {
       exchangeFeature = viewOrderAccounts();
+    } else if (group.id === 'parametres' && tab.id === 'order-natures') {
+      exchangeFeature = viewOrderNatures();
     } else if (group.id === 'parametres' && tab.id === 'general-account-natures') {
       exchangeFeature = viewGeneralAccountNatures();
     }
@@ -8553,7 +8599,7 @@
         '<div class="accounting-menu-detail">' +
           statusLegend +
           '<section class="accounting-menu-panel" id="accounting-menu-tabpanel" role="tabpanel" aria-labelledby="accounting-tab-' + esc(tab.id) + '">' +
-            '<div class="accounting-menu-panel-head"><div><p class="page-kicker">' + (selectedChild ? 'ÉLÉMENT DU SOUS-MENU' : 'SOUS-MENU') + '</p><h3>' + esc(selectedChild ? selectedChild.label : (tab.id === 'orders-accounts' ? 'Comptes de suivi des marchés accordés' : tab.label)) + '</h3></div>' + menuStatusBadge(selectedChild ? selectedChild.status : tab.status) + '</div>' +
+            '<div class="accounting-menu-panel-head"><div><p class="page-kicker">' + (selectedChild ? 'ÉLÉMENT DU SOUS-MENU' : 'SOUS-MENU') + '</p><h3>' + esc(selectedChild ? selectedChild.label : (tab.id === 'orders-accounts' ? 'Comptes de suivi des marchés accordés' : (tab.id === 'order-natures' ? 'Natures des marchés accordés' : tab.label))) + '</h3></div>' + menuStatusBadge(selectedChild ? selectedChild.status : tab.status) + '</div>' +
             details + irreversible +
             (childList ? '<div class="menu-children-wrap"><h4>Éléments de ce sous-menu</h4>' + childList + '</div>' : '') +
             exchangeFeature +
@@ -9024,6 +9070,126 @@
     });
   }
 
+  function openOrderNatureEditor(natureRow, isNewRow) {
+    var dossier = S.currentDossier();
+    if (isPhoneViewport() || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'orderNatures.configure', accountingAccessContext(dossier))) {
+      toast('Modification refusée : un droit explicite sur ce dossier et un écran ordinateur ou tablette sont requis.', 'warning');
+      return;
+    }
+    var current = S.orderNaturesConfiguration();
+    var allRows = (Array.isArray(current.rows) ? current.rows : []).concat(Array.isArray(current.additionalRows) ? current.additionalRows : []);
+    var nextNumber = 1;
+    allRows.forEach(function (row) {
+      var value = String(row.number || '').trim();
+      if (/^\d+$/.test(value)) nextNumber = Math.max(nextNumber, Number(value) + 1);
+    });
+    var number = isNewRow ? String(nextNumber) : natureRow.number;
+    var name = isNewRow ? '' : natureRow.name;
+    var body = '<form id="order-nature-form" novalidate>' +
+      '<div id="order-nature-errors" aria-live="assertive"></div>' +
+      '<div class="order-nature-editor-grid">' +
+        '<div class="field"><label for="order-nature-number">Numéro</label><input id="order-nature-number" type="text" maxlength="12" value="' + esc(number || '') + '"></div>' +
+        '<div class="field"><label for="order-nature-name">Nature</label><input id="order-nature-name" type="text" maxlength="120" value="' + esc(name || '') + '"></div>' +
+      '</div>' +
+      '<p class="small muted">Cette nomenclature décrit les types de documents ; les commandes et leurs écritures restent inactives.</p>' +
+    '</form>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button>' +
+      '<button type="submit" class="btn btn-primary" form="order-nature-form">Enregistrer</button>';
+    openModal(isNewRow ? 'Ajouter une nature de commande' : 'Modifier une nature de commande', esc(isNewRow ? 'Nouvelle nature' : 'Nature ' + natureRow.number), body, footer, true);
+
+    var form = $('#order-nature-form');
+    if (!form) return;
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var currentDossier = S.currentDossier();
+      if (isPhoneViewport() || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'orderNatures.configure', accountingAccessContext(currentDossier))) {
+        toast('Modification refusée : le droit de configuration de ce dossier n’est pas accordé.', 'warning');
+        return;
+      }
+      var numberValue = $('#order-nature-number', form).value;
+      var nameValue = $('#order-nature-name', form).value;
+      var latest = S.orderNaturesConfiguration();
+      var rows = (Array.isArray(latest.rows) ? latest.rows : []).map(function (row) { return Object.assign({}, row); });
+      var additionalRows = (Array.isArray(latest.additionalRows) ? latest.additionalRows : []).map(function (row) { return Object.assign({}, row); });
+      var rowId = natureRow && natureRow.id;
+      if (isNewRow) {
+        var usedIds = Object.create(null);
+        additionalRows.forEach(function (row) { usedIds[row.id] = true; });
+        var customIndex = 1;
+        while (usedIds['order-natures-custom-' + customIndex]) customIndex += 1;
+        rowId = 'order-natures-custom-' + customIndex;
+        additionalRows.push({ id: rowId, number: numberValue, name: nameValue });
+      } else if (/^order-natures-custom-\d+$/.test(rowId)) {
+        additionalRows = additionalRows.map(function (row) {
+          return row.id === rowId ? { id: row.id, number: numberValue, name: nameValue } : row;
+        });
+      } else {
+        rows = rows.map(function (row) {
+          return row.id === rowId ? { id: row.id, number: numberValue, name: nameValue } : row;
+        });
+      }
+      var result = S.saveOrderNaturesConfiguration({ rows: rows, additionalRows: additionalRows });
+      if (!result.ok) {
+        var errorRegion = $('#order-nature-errors', form);
+        if (errorRegion) errorRegion.innerHTML = '<div class="alert error" role="alert"><ul style="margin:0 0 0 18px">' +
+          (result.errors || ['Enregistrement impossible.']).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
+        return;
+      }
+      orderNaturesSelectedId = rowId;
+      closeModal(true);
+      toast(isNewRow ? 'Nature de commande ajoutée au dossier.' : 'Nature de commande enregistrée dans le dossier.', 'success');
+      render();
+    });
+  }
+
+  function bindOrderNatures() {
+    var workspace = $('.order-natures-workspace');
+    if (!workspace) return;
+    var dossier = S.currentDossier();
+    var canConfigure = hasDemoPermission(getActiveDemoMember(), 'accounting', 'orderNatures.configure', accountingAccessContext(dossier));
+
+    function selectRow(row) {
+      var id = row && row.getAttribute('data-order-nature-row');
+      if (!id) return;
+      orderNaturesSelectedId = id;
+      $$('[data-order-nature-row]', workspace).forEach(function (item) {
+        var isSelected = item.getAttribute('data-order-nature-row') === id;
+        item.classList.toggle('is-selected', isSelected);
+        item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+      });
+    }
+
+    $$('[data-order-nature-row]', workspace).forEach(function (row) {
+      row.addEventListener('click', function () { selectRow(row); });
+      row.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        selectRow(row);
+      });
+    });
+
+    workspace.addEventListener('click', function (event) {
+      var button = event.target.closest ? event.target.closest('[data-order-natures-action]') : null;
+      if (!button) return;
+      var action = button.getAttribute('data-order-natures-action');
+      if (action === 'close') {
+        orderNaturesSelectedId = 'order-nature-1';
+        navigate(accountingMenuHash('parametres', 'dossier-configuration'));
+      } else if (action === 'modify') {
+        if (isPhoneViewport() || !canConfigure) {
+          toast('Modification refusée : un droit explicite sur ce dossier est requis.', 'warning');
+          return;
+        }
+        var current = S.orderNaturesConfiguration();
+        var isNewRow = /^order-natures-empty-\d+$/.test(orderNaturesSelectedId);
+        var selectedRow = (Array.isArray(current.rows) ? current.rows : []).concat(Array.isArray(current.additionalRows) ? current.additionalRows : []).find(function (row) {
+          return row.id === orderNaturesSelectedId;
+        });
+        if (selectedRow || isNewRow) openOrderNatureEditor(selectedRow || null, isNewRow);
+      }
+    });
+  }
+
   function bindAnalyticalNatures() {
     var workspace = $('.analytical-natures-workspace');
     if (!workspace) return;
@@ -9183,6 +9349,7 @@
       if (menuParams.g === 'parametres' && menuParams.t === 'analytic-natures') bindAnalyticalNatures();
       if (menuParams.g === 'parametres' && menuParams.t === 'fixed-asset-accounts') bindFixedAssetAccounts();
       if (menuParams.g === 'parametres' && menuParams.t === 'orders-accounts') bindOrderAccounts();
+      if (menuParams.g === 'parametres' && menuParams.t === 'order-natures') bindOrderNatures();
       if (menuParams.g === 'parametres' && menuParams.t === 'general-account-natures') bindGeneralAccountNatures();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'suppliers') bindSupplierView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'clients') bindClientView();

@@ -65,6 +65,7 @@
     { id: 'fixedAssets.delete', label: 'Supprimer un élément immobilisé' },
     { id: 'fixedAssetAccounts.configure', label: 'Configurer les comptes associés aux immobilisations' },
     { id: 'orderAccounts.configure', label: 'Configurer les comptes de suivi des commandes et marchés accordés' },
+    { id: 'orderNatures.configure', label: 'Configurer les natures des commandes' },
     { id: 'period.close', label: 'Clôturer une période' },
     { id: 'period.reopen', label: 'Rouvrir une période' },
     { id: 'data.import', label: 'Importer des données' },

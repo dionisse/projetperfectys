@@ -85,6 +85,7 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Cadre comptable',
   'Comptes associés aux immobilisations',
   'Compte de suivi des commandes et marchés accordés',
+  'Natures des commandes',
   'Postes du bilan',
   'Plan comptable',
   'Postes associés aux comptes',
@@ -383,6 +384,14 @@ assert.match(appSource, /function bindOrderAccounts\(\)[\s\S]*orderAccounts\.con
 assert.match(appSource, /function openOrderAccountEditor\(orderRow, isNewRow\)[\s\S]*saveOrderAccountsConfiguration/);
 assert.match(configurationCss, /\.order-accounts-table tbody tr\.order-accounts-separator td::after/);
 assert.match(appSource, /data-order-accounts-action="accounts" disabled/);
+assert.equal(findTab('parametres', 'order-natures').status, 'partial');
+assert.ok(findTab('parametres', 'order-natures').reason.includes('n’active ni commande'));
+assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'order-natures'[\s\S]*viewOrderNatures\(\)/);
+assert.match(appSource, /function viewOrderNatures\(\)[\s\S]*data-order-nature-row[\s\S]*Modifier[\s\S]*Fermer[\s\S]*order-natures-empty-/);
+assert.match(appSource, /tab\.id === 'order-natures' \? 'Natures des marchés accordés'/, 'le titre de fenêtre reprend celui de la capture');
+assert.match(appSource, /function bindOrderNatures\(\)[\s\S]*orderNatures\.configure[\s\S]*openOrderNatureEditor/);
+assert.match(appSource, /function openOrderNatureEditor\(natureRow, isNewRow\)[\s\S]*saveOrderNaturesConfiguration/);
+assert.match(configurationCss, /\.order-natures-list-wrap[\s\S]*\.order-natures-table[\s\S]*\.order-natures-table tbody tr\.is-selected/);
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'dossier-configuration'[\s\S]*viewAccountingConfiguration\(\)/);
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'sections-accounts'[\s\S]*viewAnalyticalSectionsConfiguration\(\)/);
 assert.match(appSource, /function viewAccountingConfiguration\(\)[\s\S]*accounting\.configure[\s\S]*Exercice en cours/);
