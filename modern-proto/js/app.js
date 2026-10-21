@@ -5004,7 +5004,7 @@
       '</div>'
       : '';
     return '<div class="exchange-workspace payroll-centralization-workspace">' +
-      '<div class="alert info"><div><strong>Flux interne Paie & RH → Comptabilité</strong><br>La source est exclusivement un lot interne approuvé dans Paie & RH. Aucun CSV, Excel ou logiciel tiers n’est lu par ce parcours ; les calculs de paie restent dans leur module source.</div></div>' +
+      '<div class="alert info"><div><strong>Opération de Comptabilité générale · Paie & RH → grand livre</strong><br>Cette centralisation générale est disponible pour un lot interne approuvé. La pièce alimente le grand livre général ; aucune imputation, ventilation ou écriture analytique n’est créée. Aucun CSV, Excel ou logiciel tiers n’est lu par ce parcours ; les calculs de paie restent dans leur module source.</div></div>' +
       (approvedRuns.length ? '<div class="field payroll-run-selector"><label for="payroll-centralization-run">Lot interne approuvé</label><select id="payroll-centralization-run">' + options + '</select></div>' : '') +
       noRun + linkedNotice + controls +
       (selectedRun && !linkedEntry ? '<div id="payroll-centralization-preview" class="exchange-preview" aria-live="polite"><div class="empty-state"><strong>Analyse du lot de paie</strong><span>Contrôlez le journal interne et les correspondances avant l’ajout au grand livre.</span></div></div>' : '') +
@@ -5331,7 +5331,7 @@
       '</div>'
       : '';
     return '<div class="exchange-workspace sales-centralization-workspace">' +
-      '<div class="alert info"><div><strong>Flux interne Ventes, stock & facturation → Comptabilité</strong><br>La source est exclusivement un lot approuvé produit dans le module maison. Aucun CSV, Excel ou logiciel tiers n’est lu par ce parcours ; les règles de facturation et de valorisation du stock restent à construire.</div></div>' +
+      '<div class="alert info"><div><strong>Opération de Comptabilité générale · Ventes, stock & facturation → grand livre</strong><br>Cette centralisation générale est disponible pour un lot interne approuvé. La pièce alimente le grand livre général ; aucune imputation, ventilation ou écriture analytique n’est créée. Aucun CSV, Excel ou logiciel tiers n’est lu par ce parcours ; les règles de facturation et de valorisation du stock restent à construire.</div></div>' +
       (approvedRuns.length ? '<div class="field sales-run-selector"><label for="sales-centralization-run">Lot interne approuvé</label><select id="sales-centralization-run">' + options + '</select></div>' : '') +
       noRun + linkedNotice + controls +
       (selectedRun && !linkedEntry ? '<div id="sales-centralization-preview" class="exchange-preview" aria-live="polite"><div class="empty-state"><strong>Analyse du lot d’opérations</strong><span>Contrôlez le journal interne et les correspondances avant l’ajout au grand livre.</span></div></div>' : '') +

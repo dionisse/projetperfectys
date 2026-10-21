@@ -35,6 +35,7 @@ Le dépôt fournit un serveur statique sans dépendance ni compilation. Dans Bol
 | Launcher | Catalogue modulaire, recherche et filtres ; Comptabilité générale disponible, Paie & RH et Ventes/Stock/Facturation partiels, autres modules à venir selon les droits du profil simulé |
 | Paie & RH (étape partielle) | Registre local de lots internes, approbation et lien vers la centralisation ; les calculs de paie et fonctions RH complètes restent à construire |
 | Ventes, stock & facturation (étape partielle) | Lots locaux de ventes et d’approvisionnement, approbation et centralisation interne ; facturation, fiscalité et valorisation de stock réelles à construire |
+| Centralisations internes (Comptabilité générale) | Disponible dans **Comptabilité générale → Fichier** pour les lots approuvés Paie & RH et Ventes/Stock/Facturation. Correspondances confirmées avant transfert vers le grand livre ; brouillon par défaut. Aucune imputation ou écriture analytique n’est créée. Les modules sources restent partiels et leurs calculs métier ne sont pas inventés |
 | Annulation d’une centralisation | Brouillon interne supprimable sans effet comptable ; pièce validée annulée par écriture inverse traçable, sans toucher à l’originale. Paie & RH et Ventes/Stock/Facturation uniquement ; imports et logiciels tiers exclus |
 | Consolidation avant résultat | Journal groupé consultable et exportable par période et journal, agrégé par compte général ; chaque ligne source conserve sa pièce, son journal, sa date, son numéro de ligne et son origine. Lecture seule : aucune écriture n’est ajoutée au grand livre |
 | Consolidation après résultat | Journal groupé consultable et exportable des écritures validées, avec la même traçabilité par ligne. Lecture seule ; la détection de la pièce/date de résultat, son affectation et les écritures de clôture restent à définir |
@@ -322,6 +323,8 @@ Les centralisations **entre modules PERFECTO** utilisent exclusivement les donn�
 
 Le module **Paie & RH** expose un registre interne de lots de paie isolé par dossier client. En démo, un lot fictif peut être créé pour une période du cycle, contrôlé puis approuvé ; il contient un journal comptable équilibré sans noms ni données personnelles.
 
+La centralisation est **active dans Comptabilité générale → Fichier** : elle prépare une pièce du grand livre général, en brouillon par défaut. Ce traitement n’est pas analytique et ne crée aucune imputation, ventilation ni écriture analytique. Le statut partiel du module Paie & RH concerne ses fonctions RH et ses calculs métier, pas l’accès à cette opération générale.
+
 - La centralisation consomme exclusivement un lot approuvé produit dans le module maison Paie & RH. Aucun fichier CSV/Excel ni logiciel tiers n’est accepté dans ce parcours.
 - Le plan Paie & RH est comparé au plan comptable général du dossier ; les codes identiques sont seulement pré-sélectionnés. L’utilisateur examine le tableau visible et confirme explicitement les correspondances avant transfert ; toute modification réinitialise cette confirmation.
 - Les débits et crédits sont agrégés séparément par compte cible et le lot crée une seule pièce dans le journal de paie `PA` par défaut.
@@ -331,6 +334,8 @@ Le module **Paie & RH** expose un registre interne de lots de paie isolé par do
 ### Ventes, stock & facturation et centralisation des opérations — étape partielle
 
 Le module **Ventes, stock & facturation** conserve localement, par dossier client, des lots d’opérations internes. En démo, un lot fictif regroupe une facture de vente et une réception d’approvisionnement avec leur journal comptable équilibré ; le lot doit être approuvé avant transfert.
+
+La centralisation est **active dans Comptabilité générale → Fichier** : elle prépare une pièce du grand livre général, en brouillon par défaut. Ce traitement n’est pas analytique et ne crée aucune imputation, ventilation ni écriture analytique. Le statut partiel du module Ventes concerne ses fonctions de facturation, de fiscalité et de valorisation du stock, pas l’accès à cette opération générale.
 
 - La centralisation lit exclusivement les lots approuvés du module maison. Aucun CSV/Excel, fichier tiers ou logiciel externe ne peut alimenter ce parcours.
 - Le plan Ventes, stock & facturation est comparé au plan comptable général du dossier ; les codes identiques sont seulement pré-sélectionnés. L’utilisateur examine le tableau visible et confirme explicitement les correspondances avant transfert ; toute modification réinitialise cette confirmation.

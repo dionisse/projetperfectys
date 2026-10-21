@@ -211,12 +211,14 @@ assert.ok(findTab('fichier', 'import-balance').reason.includes('PERFECTO-BALANCE
 assert.equal(findTab('fichier', 'centralize-auxiliary').status, 'planned');
 assert.ok(findTab('fichier', 'centralize-auxiliary').reason.includes('modules internes'));
 assert.ok(findTab('fichier', 'centralize-auxiliary').reason.includes('n’alimente pas une centralisation interne'));
-assert.equal(findTab('fichier', 'centralize-payroll').status, 'partial');
-assert.ok(findTab('fichier', 'centralize-payroll').reason.includes('module interne Paie & RH'));
-assert.ok(findTab('fichier', 'centralize-payroll').reason.includes('sans import de fichier externe'));
-assert.equal(findTab('fichier', 'centralize-sales').status, 'partial');
-assert.ok(findTab('fichier', 'centralize-sales').reason.includes('module maison Ventes, stock & facturation'));
-assert.ok(findTab('fichier', 'centralize-sales').reason.includes('sans fichier ni logiciel tiers'));
+assert.equal(findTab('fichier', 'centralize-payroll').status, 'active');
+assert.ok(findTab('fichier', 'centralize-payroll').reason.includes('Comptabilité générale'));
+assert.ok(findTab('fichier', 'centralize-payroll').reason.includes('grand livre général'));
+assert.ok(findTab('fichier', 'centralize-payroll').reason.includes('Aucune imputation ni écriture analytique'));
+assert.equal(findTab('fichier', 'centralize-sales').status, 'active');
+assert.ok(findTab('fichier', 'centralize-sales').reason.includes('Comptabilité générale'));
+assert.ok(findTab('fichier', 'centralize-sales').reason.includes('grand livre général'));
+assert.ok(findTab('fichier', 'centralize-sales').reason.includes('Aucune imputation ni écriture analytique'));
 assert.equal(findTab('fichier', 'cancel-centralization').status, 'partial');
 assert.ok(findTab('fichier', 'cancel-centralization').reason.includes('écriture inverse'));
 assert.ok(findTab('fichier', 'cancel-centralization').reason.includes('sources tierces'));
@@ -451,7 +453,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v73/);
+assert.match(serviceWorkerSource, /perfecto-static-v74/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/fec-import\.js/);
 assert.match(htmlSource, /js\/fec-import\.js/);
@@ -464,6 +466,10 @@ assert.match(appSource, /Gérer les écritures validées/);
 assert.match(appSource, /La pièce FEC d’origine restera validée et inchangée/);
 assert.match(appSource, /id="payroll-centralization-confirm-mappings"/);
 assert.match(appSource, /id="sales-centralization-confirm-mappings"/);
+assert.match(appSource, /Opération de Comptabilité générale · Paie & RH → grand livre/);
+assert.match(appSource, /Opération de Comptabilité générale · Ventes, stock & facturation → grand livre/);
+assert.equal((appSource.match(/aucune imputation, ventilation ou écriture analytique n’est créée/g) || []).length, 2,
+  'les centralisations générales ne doivent pas produire de mouvements analytiques');
 assert.equal((appSource.match(/var canCommit = aggregate\.ok && analysis\.ok && session\.mappingsConfirmed && !permissionBlocked && !additiveBlocked;/g) || []).length, 2,
   'Paie & RH et Ventes ne centralisent pas avant confirmation des correspondances');
 assert.match(appSource, /function commitAccountingPayrollCentralization\([\s\S]*var mappingsBlocked = !session\.mappingsConfirmed[\s\S]*Confirmez les correspondances entre le module source/);
