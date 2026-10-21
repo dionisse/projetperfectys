@@ -111,6 +111,8 @@
   var accountControlsSelectedField = 'payableAccounts';
   var accountControlsSelectedDossierId = '';
   var generalAccountNatureSelectedId = 'stable-grants';
+  var currenciesSelectedCode = 'XOF';
+  var currenciesSelectedDossierId = '';
   var deferredInstallPrompt = null;
   var exchangeImportSession = null;
   var internalAuxiliarySession = null;
@@ -269,6 +271,8 @@
       case 'save-accounting-bridge-mapping':
       case 'save-printed-report-information':
         return { moduleId: 'accounting', actionId: 'accounting.configure' };
+      case 'save-currency-configuration':
+        return { moduleId: 'accounting', actionId: 'currencies.configure' };
       case 'select-centralization-cancellation':
         return { moduleId: 'accounting', actionId: 'module.view' };
       case 'cancel-draft-centralization':
@@ -3396,6 +3400,68 @@
     context.session.dirty = false;
     toast('Paramétrage des correspondances enregistré pour ' + context.source.label + ' · ' + context.targetDossier.reference + '.', 'success');
     render();
+  }
+
+  function viewCurrencies() {
+    var dossier = S.currentDossier();
+    if (currenciesSelectedDossierId !== dossier.id) {
+      currenciesSelectedCode = 'XOF';
+      currenciesSelectedDossierId = dossier.id;
+    }
+    var configuration = S.currenciesConfiguration();
+    var rows = Array.isArray(configuration.rows) ? configuration.rows : [];
+    var preferredCode = rows.some(function (row) { return row.code === currenciesSelectedCode; }) ? currenciesSelectedCode : (configuration.defaultCurrencyCode || 'XOF');
+    var selected = rows.find(function (row) { return row.code === preferredCode; }) || rows.find(function (row) { return row.code === 'XOF'; }) || rows[0] || null;
+    if (selected) currenciesSelectedCode = selected.code;
+    var baseCurrency = rows.find(function (row) { return row.code === 'XOF'; }) || { label: 'Franc CFA' };
+    var canConfigure = hasDemoPermission(getActiveDemoMember(), 'accounting', 'currencies.configure', accountingAccessContext(dossier));
+    var editable = canConfigure && !isPhoneViewport();
+    var tableRows = rows.map(function (row, index) {
+      var isSelected = selected && row.code === selected.code;
+      return '<tr class="currency-settings-row' + (index % 2 ? ' is-even' : '') + (isSelected ? ' is-selected' : '') + '" data-currency-row="' + esc(row.code) + '" tabindex="0" aria-selected="' + (isSelected ? 'true' : 'false') + '"><th scope="row">' + esc(row.code) + '</th><td>' + esc(row.label) + (row.code === 'XOF' ? '<span class="currency-settings-base-badge">Référence</span>' : '') + '</td></tr>';
+    }).join('');
+    var emptyRows = '';
+    for (var emptyIndex = 0; emptyIndex < Math.max(0, 18 - rows.length); emptyIndex += 1) {
+      emptyRows += '<tr class="currency-settings-empty-row' + ((rows.length + emptyIndex) % 2 ? ' is-even' : '') + '" aria-hidden="true"><td colspan="2"></td></tr>';
+    }
+    var readonly = ' readonly aria-readonly="true"';
+    var permissionNote = !canConfigure
+      ? '<div class="alert warning currency-settings-access-note">Consultation seule : le droit explicite « Configurer les devises du dossier » est nécessaire pour ajouter, modifier ou supprimer une devise.</div>'
+      : (isPhoneViewport() ? '<div class="alert info currency-settings-access-note">Consultation seule sur téléphone ; les modifications sont réservées à un ordinateur ou une tablette.</div>' : '');
+    var selectedRate = selected && selected.lastRate || '';
+    var protectedDeleteTitle = selected && selected.code === 'XOF' ? 'XOF est la devise de référence du dossier et ne peut pas être supprimée.' : 'Supprimer la devise sélectionnée';
+
+    return '<div class="currency-settings-workspace">' +
+      '<div class="alert info"><div><strong>Devise de référence : XOF · ' + esc(baseCurrency.label) + '</strong><br>Le code et le cours de XOF sont protégés (1.000) ; cette devise ne peut pas être supprimée. Aucun cours n’est prérempli pour EUR ou USD. Les taux enregistrés restent des paramètres : ils ne convertissent ni les écritures ni les états.</div></div>' +
+      permissionNote +
+      '<form id="currency-settings-form" novalidate>' +
+        '<div class="currency-settings-layout">' +
+          '<div class="currency-settings-main">' +
+            '<div class="currency-settings-list-wrap" role="region" aria-label="Devises disponibles" tabindex="0">' +
+              '<table class="currency-settings-table"><caption class="sr-only">Code et intitulé des devises</caption><thead><tr><th scope="col">Code</th><th scope="col">Intitulé</th></tr></thead><tbody>' + tableRows + emptyRows + '</tbody></table>' +
+            '</div>' +
+            '<div class="currency-settings-fields">' +
+              '<div class="currency-settings-field"><label for="currency-settings-code">Code</label><input id="currency-settings-code" type="text" maxlength="3" autocomplete="off" spellcheck="false" value="' + esc(selected && selected.code || '') + '"' + readonly + '></div>' +
+              '<div class="currency-settings-field"><label for="currency-settings-label">Intitulé</label><input id="currency-settings-label" type="text" maxlength="120" autocomplete="off" value="' + esc(selected && selected.label || '') + '"' + readonly + '></div>' +
+              '<div class="currency-settings-field currency-settings-rate-field"><label for="currency-settings-rate">Dernier cours</label><input id="currency-settings-rate" type="text" maxlength="20" inputmode="decimal" autocomplete="off" value="' + esc(selectedRate) + '"' + readonly + '></div>' +
+            '</div>' +
+            '<div id="currency-settings-errors" aria-live="assertive"></div>' +
+          '</div>' +
+          '<aside class="currency-settings-actions" aria-label="Actions sur les devises">' +
+            '<div class="currency-settings-primary-actions">' +
+              '<button type="button" class="btn btn-ghost" data-currency-action="insert"' + (editable ? '' : ' disabled') + '>Insérer</button>' +
+              '<button type="button" class="btn btn-ghost" data-currency-action="modify"' + (editable && selected ? '' : ' disabled') + '>Modifier</button>' +
+              '<button type="button" class="btn btn-ghost" data-currency-action="delete"' + (editable && selected && selected.code !== 'XOF' ? '' : ' disabled') + ' title="' + esc(protectedDeleteTitle) + '">Supprimer</button>' +
+            '</div>' +
+            '<div class="currency-settings-edit-actions">' +
+              '<button type="submit" class="btn btn-primary" data-action="save-currency-configuration" disabled>Valider</button>' +
+              '<button type="button" class="btn btn-ghost" data-currency-action="cancel" disabled>Annuler</button>' +
+            '</div>' +
+          '</aside>' +
+        '</div>' +
+      '</form>' +
+      '<p class="small muted currency-settings-footnote">Configuration conservée localement dans ce navigateur, séparément pour chaque dossier. La gestion des montants en devise et les conversions restent inactives.</p>' +
+    '</div>';
   }
 
   function viewPrintedReportInformation() {
@@ -10778,6 +10844,8 @@
       exchangeFeature = viewAccountingBridge();
     } else if (group.id === 'parametres' && tab.id === 'general-account-natures') {
       exchangeFeature = viewGeneralAccountNatures();
+    } else if (group.id === 'parametres' && tab.id === 'currencies') {
+      exchangeFeature = viewCurrencies();
     } else if (group.id === 'parametres' && tab.id === 'print-information') {
       exchangeFeature = viewPrintedReportInformation();
     }
@@ -11639,6 +11707,184 @@
     });
   }
 
+  function bindCurrencies() {
+    var form = $('#currency-settings-form');
+    if (!form) return;
+    var workspace = $('.currency-settings-workspace');
+    var dossier = S.currentDossier();
+    var configuration = S.currenciesConfiguration();
+    var rows = (Array.isArray(configuration.rows) ? configuration.rows : []).map(function (row) { return Object.assign({}, row); });
+    var selectedCode = rows.some(function (row) { return row.code === currenciesSelectedCode; }) ? currenciesSelectedCode : (configuration.defaultCurrencyCode || 'XOF');
+    if (!rows.some(function (row) { return row.code === selectedCode; })) selectedCode = 'XOF';
+    var mode = 'view';
+    var canConfigure = hasDemoPermission(getActiveDemoMember(), 'accounting', 'currencies.configure', accountingAccessContext(dossier));
+    var codeInput = $('#currency-settings-code', form);
+    var labelInput = $('#currency-settings-label', form);
+    var rateInput = $('#currency-settings-rate', form);
+    var saveButton = $('[data-action="save-currency-configuration"]', form);
+    var cancelButton = $('[data-currency-action="cancel"]', form);
+    var insertButton = $('[data-currency-action="insert"]', form);
+    var modifyButton = $('[data-currency-action="modify"]', form);
+    var deleteButton = $('[data-currency-action="delete"]', form);
+    var errorRegion = $('#currency-settings-errors', form);
+
+    function isAllowed() {
+      return !isPhoneViewport() && hasDemoPermission(getActiveDemoMember(), 'accounting', 'currencies.configure', accountingAccessContext(S.currentDossier()));
+    }
+
+    function selectedCurrency() {
+      return rows.find(function (row) { return row.code === selectedCode; }) || null;
+    }
+
+    function updateButtons() {
+      var selected = selectedCurrency();
+      var editing = mode !== 'view';
+      var editable = canConfigure && !isPhoneViewport();
+      if (insertButton) insertButton.disabled = !editable || editing;
+      if (modifyButton) modifyButton.disabled = !editable || editing || !selected;
+      if (deleteButton) {
+        deleteButton.disabled = !editable || editing || !selected || selected.code === 'XOF';
+        deleteButton.title = selected && selected.code === 'XOF'
+          ? 'XOF est la devise de référence du dossier et ne peut pas être supprimée.'
+          : 'Supprimer la devise sélectionnée';
+      }
+      if (saveButton) saveButton.disabled = !editable || !editing;
+      if (cancelButton) cancelButton.disabled = !editing;
+    }
+
+    function updateEditor() {
+      var selected = selectedCurrency();
+      var item = mode === 'insert' ? { code: '', label: '', lastRate: '' } : selected;
+      var isBaseEdit = mode === 'modify' && selected && selected.code === 'XOF';
+      if (codeInput) {
+        codeInput.value = item && item.code || '';
+        codeInput.readOnly = mode === 'view' || !!isBaseEdit;
+      }
+      if (labelInput) {
+        labelInput.value = item && item.label || '';
+        labelInput.readOnly = mode === 'view';
+      }
+      if (rateInput) {
+        rateInput.value = item && item.lastRate || '';
+        rateInput.readOnly = mode === 'view' || !!isBaseEdit;
+      }
+      if (errorRegion) errorRegion.innerHTML = '';
+      updateButtons();
+      if (workspace) workspace.classList.toggle('is-editing', mode !== 'view');
+    }
+
+    function selectCurrency(code) {
+      if (mode !== 'view') return;
+      if (!rows.some(function (row) { return row.code === code; })) return;
+      selectedCode = code;
+      currenciesSelectedCode = code;
+      $$('[data-currency-row]', workspace).forEach(function (row) {
+        var selected = row.getAttribute('data-currency-row') === selectedCode;
+        row.classList.toggle('is-selected', selected);
+        row.setAttribute('aria-selected', selected ? 'true' : 'false');
+      });
+      updateEditor();
+    }
+
+    function showErrors(errors) {
+      if (!errorRegion) return;
+      errorRegion.innerHTML = '<div class="alert error currency-settings-errors" role="alert"><ul>' +
+        (errors || ['Enregistrement impossible.']).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') +
+        '</ul></div>';
+    }
+
+    $$('[data-currency-row]', workspace).forEach(function (row) {
+      row.addEventListener('click', function () { selectCurrency(row.getAttribute('data-currency-row')); });
+      row.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        selectCurrency(row.getAttribute('data-currency-row'));
+      });
+    });
+
+    workspace.addEventListener('click', function (event) {
+      var button = event.target.closest ? event.target.closest('[data-currency-action]') : null;
+      if (!button) return;
+      var action = button.getAttribute('data-currency-action');
+      if (action === 'insert') {
+        if (!isAllowed()) {
+          toast('Insertion refusée : le droit explicite de configuration des devises est requis.', 'warning');
+          return;
+        }
+        mode = 'insert';
+        updateEditor();
+        if (codeInput) codeInput.focus();
+      } else if (action === 'modify') {
+        if (!isAllowed() || !selectedCurrency()) {
+          toast('Modification refusée : le droit explicite de configuration des devises est requis.', 'warning');
+          return;
+        }
+        mode = 'modify';
+        updateEditor();
+        if (selectedCode !== 'XOF' && codeInput) codeInput.focus();
+        else if (labelInput) labelInput.focus();
+      } else if (action === 'delete') {
+        var selected = selectedCurrency();
+        if (!isAllowed() || !selected || selected.code === 'XOF') {
+          toast(selected && selected.code === 'XOF' ? 'XOF est la devise de référence et ne peut pas être supprimée.' : 'Suppression refusée : le droit explicite de configuration des devises est requis.', 'warning');
+          return;
+        }
+        if (!window.confirm('Supprimer « ' + selected.code + ' · ' + selected.label + ' » de la liste de ce dossier ? Aucune écriture comptable ne sera modifiée.')) return;
+        var result = S.saveCurrenciesConfiguration({ rows: rows.filter(function (row) { return row.code !== selected.code; }) });
+        if (!result.ok) {
+          showErrors(result.errors);
+          return;
+        }
+        currenciesSelectedCode = 'XOF';
+        toast('Devise ' + selected.code + ' supprimée de la configuration du dossier.', 'success');
+        render();
+      } else if (action === 'cancel') {
+        mode = 'view';
+        updateEditor();
+        if (codeInput) codeInput.blur();
+        toast('Modifications de devise annulées.', 'info');
+      }
+    });
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!isAllowed()) {
+        toast('Validation refusée : le droit explicite de configuration des devises est requis pour ce dossier.', 'warning');
+        return;
+      }
+      if (mode === 'view') return;
+      var code = String(codeInput && codeInput.value || '').trim().toLocaleUpperCase();
+      var label = String(labelInput && labelInput.value || '').trim();
+      var lastRate = String(rateInput && rateInput.value || '').trim();
+      var nextRows;
+      if (mode === 'insert') {
+        nextRows = rows.concat([{ code: code, label: label, lastRate: lastRate }]);
+      } else {
+        var selected = selectedCurrency();
+        if (!selected) {
+          showErrors(['La devise sélectionnée n’existe plus dans ce dossier.']);
+          return;
+        }
+        nextRows = rows.map(function (row) {
+          if (row.code !== selected.code) return row;
+          return { code: selected.code === 'XOF' ? 'XOF' : code, label: label, lastRate: selected.code === 'XOF' ? '1.000' : lastRate };
+        });
+      }
+      var result = S.saveCurrenciesConfiguration({ rows: nextRows });
+      if (!result.ok) {
+        showErrors(result.errors);
+        return;
+      }
+      var savedCode = mode === 'modify' && selectedCode === 'XOF' ? 'XOF' : code;
+      currenciesSelectedCode = savedCode;
+      currenciesSelectedDossierId = result.dossier.id;
+      toast(mode === 'insert' ? 'Devise ajoutée au dossier.' : 'Devise modifiée dans le dossier.', 'success');
+      render();
+    });
+
+    updateEditor();
+  }
+
   function bindPrintedReportInformation() {
     var form = $('#printed-report-information-form');
     if (!form) return;
@@ -11770,6 +12016,7 @@
       if (menuParams.g === 'parametres' && menuParams.t === 'financial-framework') bindFinancialFramework();
       if (menuParams.g === 'parametres' && menuParams.t === 'accounting-bridge') bindAccountingBridge();
       if (menuParams.g === 'parametres' && menuParams.t === 'general-account-natures') bindGeneralAccountNatures();
+      if (menuParams.g === 'parametres' && menuParams.t === 'currencies') bindCurrencies();
       if (menuParams.g === 'parametres' && menuParams.t === 'print-information') bindPrintedReportInformation();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'suppliers') bindSupplierView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'clients') bindClientView();

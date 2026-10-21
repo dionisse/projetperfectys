@@ -1348,6 +1348,53 @@
     return { rows: rows, updatedAt: String(source.updatedAt || '').slice(0, 40) };
   }
 
+  function defaultCurrencyRows() {
+    return [
+      { code: 'EUR', label: 'Euro', lastRate: '' },
+      { code: 'USD', label: "Dollard des E.U. d'Amérique", lastRate: '' },
+      { code: 'XOF', label: 'Franc CFA', lastRate: '1.000' }
+    ];
+  }
+
+  function defaultCurrenciesConfiguration() {
+    return { rows: defaultCurrencyRows(), defaultCurrencyCode: 'XOF', updatedAt: '' };
+  }
+
+  function normalizeCurrencyRate(value) {
+    var rate = String(value == null ? '' : value).trim().slice(0, 20);
+    if (!rate) return '';
+    if (!/^\d+(?:[.,]\d+)?$/.test(rate)) return '';
+    var numericRate = Number(rate.replace(',', '.'));
+    return Number.isFinite(numericRate) && numericRate > 0 ? rate : '';
+  }
+
+  function normalizeCurrenciesConfiguration(value) {
+    var source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    var sourceRows = Array.isArray(source.rows) ? source.rows : null;
+    var rows = [];
+    var seenCodes = Object.create(null);
+    (sourceRows || defaultCurrencyRows()).forEach(function (row) {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) return;
+      var code = String(row.code == null ? '' : row.code).trim().toLocaleUpperCase();
+      if (!/^[A-Z]{3}$/.test(code) || seenCodes[code]) return;
+      var defaultRow = defaultCurrencyRows().find(function (item) { return item.code === code; });
+      var label = String(row.label == null ? '' : row.label).trim().replace(/\s+/g, ' ').slice(0, 120);
+      if (!label && defaultRow) label = defaultRow.label;
+      if (!label) return;
+      seenCodes[code] = true;
+      rows.push({
+        code: code,
+        label: label,
+        lastRate: code === 'XOF' ? '1.000' : normalizeCurrencyRate(row.lastRate)
+      });
+    });
+    if (!seenCodes.XOF) {
+      var baseCurrency = defaultCurrencyRows().find(function (row) { return row.code === 'XOF'; });
+      rows.push(baseCurrency);
+    }
+    return { rows: rows, defaultCurrencyCode: 'XOF', updatedAt: String(source.updatedAt || '').slice(0, 40) };
+  }
+
   function defaultGeneralAccountNaturesRows() {
     return [
       { id: 'stable-resources', nature: 'Ressources stables', accounts: '1', level: 0 },
@@ -1468,6 +1515,7 @@
       orderNaturesConfiguration: defaultOrderNaturesConfiguration(),
       accountControlsConfiguration: defaultAccountControlsConfiguration(),
       printedReportInformationConfiguration: defaultPrintedReportInformationConfiguration(),
+      currenciesConfiguration: defaultCurrenciesConfiguration(),
       reference: 'COR-DEM2026',
       seeded: true
     };
@@ -1512,6 +1560,7 @@
       orderNaturesConfiguration: normalizeOrderNaturesConfiguration(record && record.orderNaturesConfiguration),
       accountControlsConfiguration: normalizeAccountControlsConfiguration(record && record.accountControlsConfiguration),
       printedReportInformationConfiguration: normalizePrintedReportInformationConfiguration(record && record.printedReportInformationConfiguration),
+      currenciesConfiguration: normalizeCurrenciesConfiguration(record && record.currenciesConfiguration),
       generalAccountNaturesConfiguration: normalizeGeneralAccountNaturesConfiguration(record && record.generalAccountNaturesConfiguration),
       reference: String(record && record.reference || referenceFor(accountingTypeCode, clientCode, exerciseYear)),
       seeded: record && record.seeded !== false
@@ -1622,6 +1671,11 @@
     return clone(dossier && dossier.printedReportInformationConfiguration || defaultPrintedReportInformationConfiguration());
   }
 
+  function currenciesConfiguration() {
+    var dossier = currentDossier();
+    return clone(dossier && dossier.currenciesConfiguration || defaultCurrenciesConfiguration());
+  }
+
   function generalAccountNaturesConfiguration() {
     var dossier = currentDossier();
     return clone(dossier && dossier.generalAccountNaturesConfiguration || defaultGeneralAccountNaturesConfiguration());
@@ -1692,6 +1746,7 @@
       orderNaturesConfiguration: defaultOrderNaturesConfiguration(),
       accountControlsConfiguration: defaultAccountControlsConfiguration(),
       printedReportInformationConfiguration: defaultPrintedReportInformationConfiguration(),
+      currenciesConfiguration: defaultCurrenciesConfiguration(),
       reference: reference,
       seeded: false
     };
@@ -2402,6 +2457,59 @@
     if (!saveFolderCatalog()) {
       folderCatalog = previousCatalog;
       return { ok: false, errors: ['Impossible d’enregistrer les informations communes dans ce navigateur. Les valeurs précédentes sont conservées.'] };
+    }
+    return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
+  }
+
+  function saveCurrenciesConfiguration(input) {
+    ensureFolderCatalog();
+    var dossier = folderById(activeFolderId);
+    if (!dossier) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    var source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    if (!Array.isArray(source.rows)) return { ok: false, errors: ['La liste des devises doit être fournie sous forme de tableau.'] };
+    if (source.rows.length > 100) return { ok: false, errors: ['Le dossier ne peut pas contenir plus de 100 devises.'] };
+
+    var rows = [];
+    var seenCodes = Object.create(null);
+    var errors = [];
+    source.rows.forEach(function (row, index) {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) {
+        errors.push('La devise ' + (index + 1) + ' est invalide.');
+        return;
+      }
+      var code = String(row.code == null ? '' : row.code).trim().toLocaleUpperCase();
+      var label = String(row.label == null ? '' : row.label).trim().replace(/\s+/g, ' ');
+      var rawRate = row.lastRate;
+      if (!/^[A-Z]{3}$/.test(code)) errors.push('Le code de devise « ' + code + ' » doit contenir trois lettres.');
+      if (seenCodes[code]) errors.push('Le code de devise « ' + code + ' » est répété.');
+      if (code) seenCodes[code] = true;
+      if (!label) errors.push('L’intitulé de la devise « ' + (code || (index + 1)) + ' » est obligatoire.');
+      if (label.length > 120) errors.push('L’intitulé de la devise « ' + code + ' » dépasse 120 caractères.');
+      if (typeof rawRate !== 'string') {
+        errors.push('Le dernier cours de « ' + (code || (index + 1)) + ' » doit être du texte.');
+        return;
+      }
+      var lastRate = rawRate.trim();
+      if (lastRate.length > 20) errors.push('Le dernier cours de « ' + code + ' » dépasse 20 caractères.');
+      if (code === 'XOF') {
+        if (lastRate !== '1.000') errors.push('XOF reste la devise de référence et conserve le cours 1.000.');
+        lastRate = '1.000';
+      } else if (lastRate && !normalizeCurrencyRate(lastRate)) {
+        errors.push('Le dernier cours de « ' + code + ' » doit être un nombre positif (point ou virgule décimale).');
+      }
+      rows.push({ code: code, label: label.slice(0, 120), lastRate: lastRate.slice(0, 20) });
+    });
+    if (!seenCodes.XOF) errors.push('La devise de référence XOF ne peut pas être supprimée.');
+    if (errors.length) return { ok: false, errors: errors };
+
+    var configuration = { rows: rows, defaultCurrencyCode: 'XOF', updatedAt: new Date().toISOString() };
+    var previousCatalog = clone(folderCatalog);
+    var dossierIndex = folderCatalog.findIndex(function (record) { return record.id === dossier.id; });
+    if (dossierIndex < 0) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    folderCatalog[dossierIndex] = Object.assign({}, dossier, { currenciesConfiguration: configuration });
+    if (!saveFolderCatalog()) {
+      folderCatalog = previousCatalog;
+      return { ok: false, errors: ['Impossible d’enregistrer les devises dans ce navigateur. Les valeurs précédentes sont conservées.'] };
     }
     return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
   }
@@ -6248,6 +6356,8 @@
     saveAccountControlsConfiguration: saveAccountControlsConfiguration,
     printedReportInformationConfiguration: printedReportInformationConfiguration,
     savePrintedReportInformationConfiguration: savePrintedReportInformationConfiguration,
+    currenciesConfiguration: currenciesConfiguration,
+    saveCurrenciesConfiguration: saveCurrenciesConfiguration,
     saveAnalyticalAllocationKeysConfiguration: saveAnalyticalAllocationKeysConfiguration,
     generalAccountNaturesConfiguration: generalAccountNaturesConfiguration,
     saveGeneralAccountNaturesConfiguration: saveGeneralAccountNaturesConfiguration,

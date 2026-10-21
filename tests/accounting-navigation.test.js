@@ -374,8 +374,16 @@ assert.equal(findTab('parametres', 'general-account-natures').status, 'partial')
 assert.ok(findTab('parametres', 'general-account-natures').reason.includes('contrôle des doublons'));
 assert.equal(findTab('parametres', 'print-information').status, 'partial');
 assert.ok(findTab('parametres', 'print-information').reason.includes('35 rubriques'));
+assert.equal(findTab('parametres', 'currencies').status, 'partial');
+assert.ok(findTab('parametres', 'currencies').reason.includes('XOF comme référence au cours 1.000'));
+assert.ok(findTab('parametres', 'currencies').reason.includes('aucune conversion'));
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'general-account-natures'[\s\S]*viewGeneralAccountNatures\(\)/);
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'print-information'[\s\S]*viewPrintedReportInformation\(\)/);
+assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'currencies'[\s\S]*viewCurrencies\(\)/);
+assert.match(appSource, /function viewCurrencies\(\)[\s\S]*Devise de référence[\s\S]*Code[\s\S]*Intitulé[\s\S]*Dernier cours[\s\S]*Insérer[\s\S]*Modifier[\s\S]*Supprimer[\s\S]*Valider[\s\S]*Annuler/);
+assert.match(appSource, /function bindCurrencies\(\)[\s\S]*'currencies\.configure'[\s\S]*saveCurrenciesConfiguration/);
+assert.match(appSource, /case 'save-currency-configuration':[\s\S]*actionId: 'currencies\.configure'/);
+assert.match(configurationCss, /\.currency-settings-list-wrap[\s\S]*overflow: auto/);
 assert.match(appSource, /function viewPrintedReportInformation\(\)[\s\S]*35 rubriques uniques[\s\S]*Rubrique[\s\S]*Valeur[\s\S]*Annuler[\s\S]*Valider/);
 assert.match(appSource, /function bindPrintedReportInformation\(\)[\s\S]*savePrintedReportInformationConfiguration/);
 assert.match(configurationCss, /\.printed-report-information-table-wrap[\s\S]*overflow: auto/);
@@ -480,7 +488,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v81/);
+assert.match(serviceWorkerSource, /perfecto-static-v82/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

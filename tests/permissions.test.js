@@ -477,6 +477,19 @@ test('la configuration des comptes lettrables, pointables, à payer et à recevo
   assert.ok(Permissions.actionsForModule('accounting').some(action => action.id === 'accountControls.configure'));
 });
 
+test('la configuration des devises exige un droit explicite limité au dossier', () => {
+  const member = {
+    role: 'manager', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view'] }] }
+  };
+  const context = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'currencies.configure', context), false);
+  member.grants.accounting[0].actions.push('currencies.configure');
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'currencies.configure', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'currencies.configure', { ...context, dossierId: 'dossier-2' }), false);
+  assert.ok(Permissions.actionsForModule('accounting').some(action => action.id === 'currencies.configure'));
+});
+
 test('les droits des centres analytiques sont distincts et limités au dossier', () => {
   const member = {
     role: 'manager', organizationId: 'org-1',

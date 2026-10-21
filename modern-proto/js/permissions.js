@@ -10,6 +10,7 @@
   var ACCOUNTING_ACTIONS = [
     { id: 'module.view', label: 'Consulter le module' },
     { id: 'accounting.configure', label: 'Modifier la configuration comptable du dossier' },
+    { id: 'currencies.configure', label: 'Configurer les devises du dossier' },
     { id: 'analyticalSections.configure', label: 'Configurer les sections et comptes analytiques' },
     { id: 'analyticalAllocationKeys.configure', label: 'Configurer les clés de répartition analytiques' },
     { id: 'analyticalNatures.configure', label: 'Configurer les natures analytiques' },
