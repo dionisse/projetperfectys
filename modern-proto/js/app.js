@@ -3535,7 +3535,7 @@
   function viewAccountingFecImport() {
     var dossierPrecision = S.accountingConfiguration().decimalPlaces;
     return '<div class="exchange-workspace fec-import-workspace">' +
-      '<div class="alert info"><div><strong>Centralisation par FEC · logiciel externe ou PERFECTO d’une autre organisation</strong><br>Le transfert se fait par fichier manuel, sans connecteur au logiciel source. Le FEC est contrôlé dans ce navigateur selon l’arrêté du 23 avril 2020, puis converti vers le plan comptable général du dossier cible après confirmation. Les identifiants auxiliaires sont conservés dans la trace source ; ce parcours ne crée pas encore de mouvements individuels de tiers.</div></div>' +
+      '<div class="alert info"><div><strong>Centralisation par FEC · logiciel externe ou PERFECTO d’une autre organisation</strong><br>Le transfert se fait par fichier manuel, sans connecteur au logiciel source. Le FEC est contrôlé dans ce navigateur selon l’arrêté du 23 avril 2020, puis converti vers le plan comptable général du dossier cible après confirmation. L’aperçu permet de corriger les écritures cibles et regroupe les totaux par compte collectif confirmé ; chaque pièce source, ses identifiants auxiliaires et le fichier original restent traçables. Ce parcours ne crée pas encore de mouvements individuels de tiers.</div></div>' +
       '<div class="alert warning"><div><strong>Stockage de cette version</strong><br>Le fichier original et sa trace seront conservés dans le stockage local de ce navigateur et dans les sauvegardes du dossier. Ce n’est pas un archivage Google Drive ni un espace partagé de l’organisation ; exportez une sauvegarde indépendante.</div></div>' +
       '<div class="alert info"><div><strong>Précision active : ' + Number(dossierPrecision) + ' décimale(s)</strong><br>Les montants FEC plus précis que le paramétrage du dossier bloquent l’import. PERFECTO n’arrondit pas silencieusement ; ajustez la précision dans Paramètres → Configuration de la Comptabilité, puis rechargez le fichier.</div></div>' +
       '<div class="exchange-import-controls fec-import-controls">' +
@@ -3958,7 +3958,7 @@
     if (!codes.length) return '';
     var accounts = postingAccounts();
     return '<details class="exchange-mapping" open><summary>Correspondance des comptes (' + codes.length + ' codes source)</summary>' +
-      '<p class="small muted">Les correspondances exactes sont seulement pré-sélectionnées comme propositions. Vérifiez chaque ligne et confirmez explicitement l’ensemble ; aucun compte n’est créé.</p>' +
+      '<p class="small muted">Les correspondances exactes sont seulement pré-sélectionnées comme propositions. Pour une ligne portant un identifiant auxiliaire, choisissez le compte collectif correspondant dans le plan cible ; le détail du tiers reste dans la trace source. Vérifiez chaque proposition et confirmez explicitement l’ensemble ; aucun compte n’est créé.</p>' +
       '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Compte FEC</th><th>Libellé source</th><th>Compte cible proposé / confirmé</th></tr></thead><tbody>' +
       codes.map(function (code) {
         var mappedCode = session.accountMap[code] || '';
@@ -3998,10 +3998,245 @@
       }).join('') + '</tbody></table></div></details>';
   }
 
+  function fecEntryValues(session, entry) {
+    var stored = session.entryEdits && session.entryEdits[entry.sourceId] || {};
+    return {
+      reference: Object.prototype.hasOwnProperty.call(stored, 'reference') ? stored.reference : entry.reference,
+      journal: Object.prototype.hasOwnProperty.call(stored, 'journal') ? stored.journal : (session.journalMap[entry.journal] || ''),
+      date: Object.prototype.hasOwnProperty.call(stored, 'date') ? stored.date : entry.date,
+      description: Object.prototype.hasOwnProperty.call(stored, 'description') ? stored.description : entry.description,
+      lines: (entry.lines || []).map(function (line, index) {
+        var savedLine = stored.lines && stored.lines[index] || {};
+        return {
+          account: Object.prototype.hasOwnProperty.call(savedLine, 'account') ? savedLine.account : (session.accountMap[line.account] || ''),
+          debit: Object.prototype.hasOwnProperty.call(savedLine, 'debit') ? Number(savedLine.debit) || 0 : Number(line.debit) || 0,
+          credit: Object.prototype.hasOwnProperty.call(savedLine, 'credit') ? Number(savedLine.credit) || 0 : Number(line.credit) || 0
+        };
+      })
+    };
+  }
+
+  function fecEntryCorrectionData(session, entry) {
+    var values = fecEntryValues(session, entry);
+    var changes = { fields: {}, lines: [] };
+    var baseline = {
+      reference: entry.reference,
+      journal: session.journalMap[entry.journal] || '',
+      date: entry.date,
+      description: entry.description
+    };
+    ['reference', 'journal', 'date', 'description'].forEach(function (field) {
+      if (String(values[field] == null ? '' : values[field]) !== String(baseline[field] == null ? '' : baseline[field])) {
+        changes.fields[field] = { before: baseline[field], after: values[field] };
+      }
+    });
+    values.lines.forEach(function (line, index) {
+      var sourceLine = (entry.lines || [])[index] || {};
+      var baselineAccount = session.accountMap[sourceLine.account] || '';
+      var lineChanges = { sourceRow: sourceLine.sourceRow || null };
+      ['account', 'debit', 'credit'].forEach(function (field) {
+        var before = field === 'account' ? baselineAccount : (Number(sourceLine[field]) || 0);
+        var after = line[field];
+        if (String(after == null ? '' : after) !== String(before == null ? '' : before)) {
+          lineChanges[field] = { before: before, after: after };
+        }
+      });
+      if (Object.keys(lineChanges).length > 1) changes.lines.push(lineChanges);
+    });
+    return Object.keys(changes.fields).length || changes.lines.length ? changes : null;
+  }
+
+  function fecPreparedEntries(session) {
+    var originals = Object.create(null);
+    var corrections = Object.create(null);
+    var targetBySourceRow = Object.create(null);
+    var entries = (session.parseResult.entries || []).map(function (entry) {
+      originals[entry.sourceId] = entry;
+      var values = fecEntryValues(session, entry);
+      var prepared = Object.assign({}, entry, {
+        sourceJournalCode: entry.journal,
+        journal: values.journal,
+        date: values.date,
+        reference: values.reference,
+        description: values.description,
+        lines: (entry.lines || []).map(function (line, index) {
+          var editedLine = values.lines[index];
+          targetBySourceRow[line.sourceRow] = editedLine.account || '';
+          return Object.assign({}, line, {
+            sourceAccountCode: line.account,
+            account: editedLine.account,
+            debit: editedLine.debit,
+            credit: editedLine.credit
+          });
+        })
+      });
+      var changes = fecEntryCorrectionData(session, entry);
+      if (changes) corrections[entry.sourceId] = changes;
+      return prepared;
+    });
+    return { entries: entries, originals: originals, corrections: corrections, targetBySourceRow: targetBySourceRow };
+  }
+
+  function fecModificationCount(session) {
+    if (session.preparedImport) return Object.keys(session.preparedImport.corrections).length;
+    return (session.parseResult.entries || []).reduce(function (count, entry) {
+      return count + (fecEntryCorrectionData(session, entry) ? 1 : 0);
+    }, 0);
+  }
+
+  function fecCollectiveSummaryHtml(session) {
+    var prepared = session.preparedImport || fecPreparedEntries(session);
+    var grouped = Object.create(null);
+    prepared.entries.forEach(function (entry) {
+      (entry.lines || []).forEach(function (line, index) {
+        var code = String(line.account || '').trim();
+        var key = code || '__unmapped__';
+        var sourceLine = (entry.sourceMetadata && entry.sourceMetadata.lines || [])[index] || {};
+        if (!grouped[key]) grouped[key] = { code: code, debit: 0, credit: 0, lineCount: 0, auxiliaryCount: 0 };
+        grouped[key].debit += Number(line.debit) || 0;
+        grouped[key].credit += Number(line.credit) || 0;
+        grouped[key].lineCount += 1;
+        if (sourceLine.auxiliaryAccount) grouped[key].auxiliaryCount += 1;
+      });
+    });
+    var rows = Object.keys(grouped).sort(function (a, b) { return a.localeCompare(b); }).map(function (key) {
+      var item = grouped[key];
+      var account = item.code ? S.account(item.code) : null;
+      var label = account ? item.code + ' — ' + account.label : (item.code || 'À associer');
+      return '<tr><td><strong>' + esc(label) + '</strong></td><td class="numeric">' + fecDisplayAmount(item.debit) + '</td><td class="numeric">' + fecDisplayAmount(item.credit) + '</td><td class="numeric">' + item.lineCount + '</td><td class="numeric">' + item.auxiliaryCount + '</td></tr>';
+    }).join('');
+    return '<section class="exchange-card fec-collective-summary"><p class="page-kicker">REGROUPEMENT DE CONTRÔLE</p><h4>Totaux regroupés par compte cible</h4><p class="small muted">Les lignes FEC portant un identifiant auxiliaire sont regroupées selon le compte collectif cible confirmé (par exemple clients ou fournisseurs). Le grand livre totalise les pièces sous ce compte ; le détail des pièces et des auxiliaires reste conservé, sans fusion ni calcul de nouvelles écritures.</p><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Compte cible</th><th class="numeric">Débit</th><th class="numeric">Crédit</th><th class="numeric">Lignes</th><th class="numeric">Lignes auxiliaires</th></tr></thead><tbody>' + rows + '</tbody></table></div></section>';
+  }
+
+  function fecCorrectionSummaryHtml(session) {
+    var prepared = session.preparedImport || fecPreparedEntries(session);
+    var entryBySourceId = Object.create(null);
+    (session.parseResult.entries || []).forEach(function (entry) { entryBySourceId[entry.sourceId] = entry; });
+    var rows = [];
+    var changedFieldCount = 0;
+    function displayValue(field, value) {
+      if (value == null || value === '') return '—';
+      if (field === 'debit' || field === 'credit') return fecDisplayAmount(Number(value) || 0);
+      if (field === 'account') {
+        var account = S.account(String(value));
+        return account ? String(value) + ' — ' + account.label : String(value);
+      }
+      return String(value);
+    }
+    Object.keys(prepared.corrections).forEach(function (sourceId) {
+      var sourceEntry = entryBySourceId[sourceId] || {};
+      var metadata = sourceEntry.sourceMetadata || {};
+      var correction = prepared.corrections[sourceId];
+      var entryLabel = [metadata.numEcriture || sourceEntry.reference, 'journal source ' + (sourceEntry.journal || '—'), sourceEntry.date].join(' · ');
+      Object.keys(correction.fields || {}).forEach(function (field) {
+        var change = correction.fields[field];
+        var labels = { reference: 'Référence cible', journal: 'Journal cible', date: 'Date cible', description: 'Libellé cible' };
+        rows.push('<tr><td>' + esc(entryLabel) + '</td><td>' + esc(labels[field] || field) + '</td><td>' + esc(displayValue(field, change.before)) + '</td><td>' + esc(displayValue(field, change.after)) + '</td></tr>');
+        changedFieldCount += 1;
+      });
+      (correction.lines || []).forEach(function (lineChange) {
+        ['account', 'debit', 'credit'].forEach(function (field) {
+          if (!lineChange[field]) return;
+          var labels = { account: 'Compte collectif cible', debit: 'Débit cible', credit: 'Crédit cible' };
+          var lineLabel = entryLabel + ' · ligne source ' + (lineChange.sourceRow || '—');
+          rows.push('<tr><td>' + esc(lineLabel) + '</td><td>' + esc(labels[field]) + '</td><td>' + esc(displayValue(field, lineChange[field].before)) + '</td><td>' + esc(displayValue(field, lineChange[field].after)) + '</td></tr>');
+          changedFieldCount += 1;
+        });
+      });
+    });
+    if (!rows.length) return '';
+    return '<section class="exchange-card fec-correction-summary"><p class="page-kicker">TRAÇABILITÉ DES CORRECTIONS</p><details open><summary>' + Object.keys(prepared.corrections).length + ' écriture(s) modifiée(s) · ' + changedFieldCount + ' changement(s) à vérifier</summary><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Écriture source / ligne</th><th>Champ cible</th><th>Avant</th><th>Après</th></tr></thead><tbody>' + rows.join('') + '</tbody></table></div></details></section>';
+  }
+
+  function fecImportEntryEditorHtml(session) {
+    var entries = session.parseResult.entries || [];
+    var modifications = fecModificationCount(session);
+    var title = '<div class="fec-entry-editor-heading"><div><p class="page-kicker">CORRECTIONS AVANT AJOUT</p><h4>Modifier le lot FEC</h4><p class="small muted">Les changements portent uniquement sur les écritures cibles. Le fichier FEC original, les lignes source et les données auxiliaires restent intacts.</p></div><button type="button" class="btn btn-secondary btn-sm" data-action="toggle-fec-entry-editor">' + (session.editMode ? 'Fermer l’éditeur' : 'Modifier les écritures') + '</button></div>';
+    var status = modifications
+      ? '<p class="fec-edit-count">' + modifications + ' écriture(s) modifiée(s) dans l’aperçu ; la confirmation dédiée sera requise avant ajout.</p>'
+      : '<p class="small muted">Aucune correction saisie. Les propositions de correspondance restent à confirmer séparément.</p>';
+    if (!session.editMode || !entries.length) {
+      return '<section class="exchange-card fec-entry-editor">' + title + status + '</section>';
+    }
+
+    var query = String(session.editSearch || '').trim().toLocaleLowerCase();
+    var currentEditingSourceId = session.editingSourceId;
+    var filtered = entries.filter(function (entry) {
+      if (!query) return true;
+      var metadata = entry.sourceMetadata || {};
+      var auxiliarySearch = (metadata.lines || []).map(function (line) { return [line.auxiliaryAccount, line.auxiliaryLabel, line.account, line.accountLabel].join(' '); }).join(' ');
+      return [metadata.numEcriture, entry.reference, entry.date, entry.description, entry.journal, auxiliarySearch].join(' ').toLocaleLowerCase().indexOf(query) !== -1;
+    });
+    var visible = filtered.slice(0, 100);
+    if (!visible.some(function (entry) { return entry.sourceId === session.editingSourceId; })) {
+      session.editingSourceId = visible.length ? visible[0].sourceId : '';
+    }
+    if (currentEditingSourceId !== session.editingSourceId) session.editLineSearch = '';
+    var selectedEntry = entries.find(function (entry) { return entry.sourceId === session.editingSourceId; }) || visible[0] || null;
+    var listLabel = filtered.length > visible.length
+      ? '<small class="hint">' + visible.length + ' premiers résultats affichés sur ' + filtered.length + '. Affinez la recherche.</small>'
+      : '<small class="hint">' + filtered.length + ' écriture(s) correspondante(s).</small>';
+    var search = '<div class="field"><label for="fec-edit-search">Rechercher une écriture source</label><input id="fec-edit-search" type="search" value="' + esc(session.editSearch || '') + '" placeholder="N° source, date, journal, libellé, auxiliaire…">' + listLabel + '</div>';
+    var selector = '<div class="field"><label for="fec-edit-entry">Écriture à modifier</label><select id="fec-edit-entry">' + visible.map(function (entry) {
+      var metadata = entry.sourceMetadata || {};
+      var label = [metadata.numEcriture || entry.reference, entry.date, entry.journal, entry.description].filter(Boolean).join(' · ');
+      return '<option value="' + esc(entry.sourceId) + '"' + (entry.sourceId === session.editingSourceId ? ' selected' : '') + '>' + esc(label) + '</option>';
+    }).join('') + '</select></div>';
+    if (!selectedEntry) {
+      return '<section class="exchange-card fec-entry-editor">' + title + status + search + '<p class="small muted">Aucune écriture ne correspond à cette recherche.</p></section>';
+    }
+
+    var values = fecEntryValues(session, selectedEntry);
+    var amountPrecision = Number(S.accountingConfiguration().decimalPlaces) || 0;
+    var amountStep = Math.pow(10, -amountPrecision).toString();
+    var journals = S.journals().filter(function (journal) { return !journal.retired && !journal.systemManaged && journal.code !== 'CEN'; });
+    var accounts = S.accounts().filter(function (account) { return account.active !== false && account.postable !== false; });
+    var journalOptions = '<option value="">— Choisir un journal —</option>' + journals.map(function (journal) {
+      return '<option value="' + esc(journal.code) + '"' + (journal.code === values.journal ? ' selected' : '') + '>' + esc(journalDisplayName(journal)) + '</option>';
+    }).join('');
+    var headerFields = '<div class="fec-entry-fields">' +
+      '<div class="field"><label for="fec-edit-reference">Référence cible</label><input id="fec-edit-reference" type="text" maxlength="100" value="' + esc(values.reference) + '" data-fec-edit-field="reference"></div>' +
+      '<div class="field"><label for="fec-edit-date">Date comptable</label><input id="fec-edit-date" type="date" value="' + esc(values.date) + '" data-fec-edit-field="date"></div>' +
+      '<div class="field"><label for="fec-edit-journal">Journal cible</label><select id="fec-edit-journal" data-fec-edit-field="journal">' + journalOptions + '</select></div>' +
+      '<div class="field fec-entry-description"><label for="fec-edit-description">Libellé cible</label><input id="fec-edit-description" type="text" maxlength="240" value="' + esc(values.description) + '" data-fec-edit-field="description"></div>' +
+      '</div>';
+    var lineQuery = String(session.editLineSearch || '').trim().toLocaleLowerCase();
+    var filteredLines = (selectedEntry.lines || []).map(function (line, index) {
+      return { line: line, index: index, sourceMetadata: (selectedEntry.sourceMetadata && selectedEntry.sourceMetadata.lines || [])[index] || {} };
+    }).filter(function (item) {
+      if (!lineQuery) return true;
+      var metadata = item.sourceMetadata;
+      return [item.index + 1, item.line.sourceRow, item.line.account, item.line.accountLabel,
+        metadata.auxiliaryAccount, metadata.auxiliaryLabel].join(' ').toLocaleLowerCase().indexOf(lineQuery) !== -1;
+    });
+    var visibleLines = filteredLines.slice(0, 100);
+    var lineSearch = '<div class="field fec-line-search"><label for="fec-edit-line-search">Rechercher une ligne source</label><input id="fec-edit-line-search" type="search" value="' + esc(session.editLineSearch || '') + '" placeholder="N° de ligne, compte ou auxiliaire…"><small class="hint">' +
+      (filteredLines.length > visibleLines.length ? 'Affichage de ' + visibleLines.length + ' lignes sur ' + filteredLines.length + ' résultats ; affinez la recherche.' : filteredLines.length + ' ligne(s) correspondante(s) sur ' + (selectedEntry.lines || []).length + '.') + '</small></div>';
+    var lineRows = visibleLines.map(function (item) {
+      var line = item.line;
+      var index = item.index;
+      var lineValue = values.lines[index];
+      var sourceMetadata = item.sourceMetadata;
+      var accountOptions = '<option value="">— Choisir le compte collectif / cible —</option>' + accounts.map(function (account) {
+        var inactive = account.active === false ? ' · inactif' : '';
+        return '<option value="' + esc(account.code) + '"' + (account.code === lineValue.account ? ' selected' : '') + '>' + esc(account.code + ' — ' + account.label + inactive) + '</option>';
+      }).join('');
+      var auxiliary = sourceMetadata.auxiliaryAccount ? '<br><small>Auxiliaire source : ' + esc(sourceMetadata.auxiliaryAccount + (sourceMetadata.auxiliaryLabel ? ' · ' + sourceMetadata.auxiliaryLabel : '')) + '</small>' : '';
+      return '<tr><td><strong>Ligne ' + (index + 1) + '</strong><br><small>Source ' + esc(line.sourceRow || sourceMetadata.sourceRow || '—') + ' · ' + esc(line.account) + ' · ' + esc(line.accountLabel || '') + '</small>' + auxiliary + '</td>' +
+        '<td><select aria-label="Compte cible de la ligne ' + (index + 1) + '" data-fec-edit-line="' + index + '" data-fec-edit-field="account">' + accountOptions + '</select></td>' +
+        '<td><input class="numeric" type="number" min="0" step="' + esc(amountStep) + '" value="' + esc(String(lineValue.debit)) + '" aria-label="Débit de la ligne ' + (index + 1) + '" data-fec-edit-line="' + index + '" data-fec-edit-field="debit"></td>' +
+        '<td><input class="numeric" type="number" min="0" step="' + esc(amountStep) + '" value="' + esc(String(lineValue.credit)) + '" aria-label="Crédit de la ligne ' + (index + 1) + '" data-fec-edit-line="' + index + '" data-fec-edit-field="credit"></td></tr>';
+    }).join('');
+    var lineEditor = lineSearch + '<div class="exchange-table-wrap fec-edit-lines"><table class="exchange-mapping-table"><thead><tr><th>Ligne FEC d’origine</th><th>Compte cible</th><th class="numeric">Débit cible</th><th class="numeric">Crédit cible</th></tr></thead><tbody>' + (lineRows || '<tr><td colspan="4">Aucune ligne ne correspond à cette recherche.</td></tr>') + '</tbody></table></div>';
+    var rules = '<div class="alert info fec-edit-rules"><div>Après chaque modification, PERFECTO relance les contrôles de compte, journal, période, précision et équilibre. Une écriture non équilibrée peut rester en brouillon si le mode brouillon est choisi ; elle ne pourra pas être importée comme validée. Aucun compte n’est créé automatiquement.</div></div>';
+    return '<section class="exchange-card fec-entry-editor">' + title + status + search + selector + headerFields + lineEditor + rules + '</section>';
+  }
+
   function fecLinesPreviewHtml(session) {
+    var targetBySourceRow = session.preparedImport && session.preparedImport.targetBySourceRow || Object.create(null);
     var rows = (session.parseResult.rows || []).slice(0, 20);
     var body = rows.map(function (row) {
-      var targetCode = session.accountMap[row.account] || '';
+      var targetCode = targetBySourceRow[row.sourceRow] || '';
       var targetAccount = targetCode ? S.account(targetCode) : null;
       return '<tr><td>' + esc(row.sourceRow) + '</td><td><strong>' + esc(row.journal) + ' · ' + esc(row.entryNumber) + '</strong><br><small>' + esc(row.date) + ' · validée le ' + esc(row.validationDate) + '</small></td>' +
         '<td><strong>' + esc(row.account) + '</strong><br><small>' + esc(row.accountLabel) + '</small></td>' +
@@ -4035,9 +4270,18 @@
     }
     var modeSelect = $('#fec-import-mode');
     session.mode = modeSelect && modeSelect.value === 'posted' ? 'posted' : 'draft';
-    var options = { sourceSystem: FecImport.FORMAT, accountMap: session.accountMap, journalMap: session.journalMap };
-    var analysis = S.previewExchangeImport(parsed.entries, session.mode, options);
+    var prepared = fecPreparedEntries(session);
+    session.preparedImport = prepared;
+    var options = {
+      sourceSystem: FecImport.FORMAT,
+      accountMap: {},
+      journalMap: {},
+      sourceOriginalEntries: prepared.originals,
+      sourceCorrections: prepared.corrections
+    };
+    var analysis = S.previewExchangeImport(prepared.entries, session.mode, options);
     session.analysis = analysis;
+    session.hasCorrections = Object.keys(prepared.corrections).length > 0;
     var canImport = hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext());
     var canPost = hasDemoPermission(getActiveDemoMember(), 'accounting', 'entry.validate', accountingAccessContext());
     var permissionBlocked = !canImport || (session.mode === 'posted' && !canPost);
@@ -4045,7 +4289,8 @@
     var nameCompliant = fecFilenameCompliant(session.fileName);
     var nameBlocked = !nameCompliant && !session.fileNameConfirmed;
     var dossierMismatch = session.targetDossierId !== S.currentDossier().id;
-    var canCommit = analysis.ok && session.complianceConfirmed && session.mappingsConfirmed && !permissionBlocked &&
+    var canCommit = analysis.ok && session.complianceConfirmed && session.mappingsConfirmed &&
+      (!session.hasCorrections || session.editsConfirmed) && !permissionBlocked &&
       !sourceDuplicate && !nameBlocked && !dossierMismatch && !!session.contentBase64;
     session.canCommit = canCommit;
 
@@ -4066,7 +4311,9 @@
       ? '<div class="alert error"><div><strong>' + analysis.errors.length + ' contrôle(s) bloquant(s)</strong><ul>' +
         analysis.errors.slice(0, 20).map(function (message) { return '<li>' + esc(message) + '</li>'; }).join('') +
         (analysis.errors.length > 20 ? '<li>… et ' + (analysis.errors.length - 20) + ' autre(s) erreur(s).</li>' : '') + '</ul></div></div>'
-      : '<div class="alert success"><div><strong>Contrôles de conversion réussis</strong><br>' + analysis.balancedCount + ' pièce(s) équilibrée(s) dans le plan cible.</div></div>';
+      : (analysis.unbalancedCount
+        ? '<div class="alert warning"><div><strong>' + analysis.unbalancedCount + ' pièce(s) non équilibrée(s) après conversion</strong><br>' + analysis.balancedCount + ' pièce(s) équilibrée(s). Le mode brouillon permet de conserver la correction en attente ; une pièce non équilibrée ne peut pas être importée comme validée.</div></div>'
+        : '<div class="alert success"><div><strong>Contrôles de conversion réussis</strong><br>' + analysis.balancedCount + ' pièce(s) équilibrée(s) dans le plan cible.</div></div>');
     var warnings = parsed.warnings.concat(analysis.warnings || []);
     var warningsHtml = warnings.length
       ? '<div class="alert warning"><div><strong>Informations de conversion</strong><ul>' + warnings.map(function (message) { return '<li>' + esc(message) + '</li>'; }).join('') + '</ul></div></div>' : '';
@@ -4075,13 +4322,17 @@
     var dossierNotice = dossierMismatch ? '<div class="alert error">Le dossier actif a changé depuis la sélection du fichier. Rechargez le fichier dans le dossier cible avant import.</div>' : '';
     var filenameText = nameCompliant ? '' : '<p class="small muted">Nom détecté comme non conforme ou non standard ; aucune IFU ni date de clôture n’est déduite automatiquement.</p>';
     var mappingConfirmation = '<label class="exchange-context-confirm"><input id="fec-import-confirm-mappings" type="checkbox"' + (session.mappingsConfirmed ? ' checked' : '') + '> Je confirme les correspondances de comptes et de journaux affichées.</label>';
+    var correctionsConfirmation = session.hasCorrections
+      ? '<label class="exchange-context-confirm fec-corrections-confirm"><input id="fec-import-confirm-corrections" type="checkbox"' + (session.editsConfirmed ? ' checked' : '') + '> Je confirme les corrections détaillées dans l’aperçu ci-dessus. Le FEC original et ses données source restent inchangés ; seules les écritures cibles seront modifiées.</label>'
+      : '';
     var complianceConfirmation = '<label class="exchange-context-confirm"><input id="fec-import-confirm-compliance" type="checkbox"' + (session.complianceConfirmed ? ' checked' : '') + '> Je confirme que la source contient des écritures validées, sans centralisation ni soldes de charges/produits, et que l’ajout est intentionnel.</label>';
     var modeLabel = session.mode === 'posted' ? 'écritures validées' : 'brouillons';
     var button = '<button type="button" class="btn btn-primary" data-action="commit-accounting-fec-import"' + (canCommit ? '' : ' disabled') + '>Importer ' + parsed.metadata.entryCount + ' écriture(s) comme ' + modeLabel + '</button>';
     var statusNote = '<p class="exchange-mode-note">Mode choisi : <strong>' + modeLabel + '</strong>. Le statut source validé ne valide pas automatiquement les écritures dans le dossier cible.</p>';
     host.innerHTML = summary + filenameText + duplicateAlert + nameAlert +
-      fecAccountMappingsHtml(session) + fecJournalMappingsHtml(session) + fecLinesPreviewHtml(session) +
-      warningsHtml + errors + dossierNotice + permissionNotice + mappingConfirmation + complianceConfirmation + statusNote +
+      fecAccountMappingsHtml(session) + fecJournalMappingsHtml(session) +
+      fecImportEntryEditorHtml(session) + fecCorrectionSummaryHtml(session) + fecCollectiveSummaryHtml(session) + fecLinesPreviewHtml(session) +
+      warningsHtml + errors + dossierNotice + permissionNotice + mappingConfirmation + correctionsConfirmation + complianceConfirmation + statusNote +
       '<div class="exchange-preview-footer">' + button + '</div>';
     applyDemoActionGates(host);
 
@@ -4089,6 +4340,7 @@
       select.addEventListener('change', function () {
         session.accountMap[select.getAttribute('data-fec-account-map')] = select.value;
         session.mappingsConfirmed = false;
+        session.editsConfirmed = false;
         renderFecImportPreview();
       });
     });
@@ -4096,11 +4348,53 @@
       select.addEventListener('change', function () {
         session.journalMap[select.getAttribute('data-fec-journal-map')] = select.value;
         session.mappingsConfirmed = false;
+        session.editsConfirmed = false;
+        renderFecImportPreview();
+      });
+    });
+    var editEntrySelect = $('#fec-edit-entry', host);
+    if (editEntrySelect) editEntrySelect.addEventListener('change', function () {
+      session.editingSourceId = editEntrySelect.value;
+      session.editLineSearch = '';
+      renderFecImportPreview();
+    });
+    var editSearch = $('#fec-edit-search', host);
+    if (editSearch) editSearch.addEventListener('change', function () {
+      session.editSearch = editSearch.value;
+      session.editLineSearch = '';
+      renderFecImportPreview();
+    });
+    var editLineSearch = $('#fec-edit-line-search', host);
+    if (editLineSearch) editLineSearch.addEventListener('change', function () {
+      session.editLineSearch = editLineSearch.value;
+      renderFecImportPreview();
+    });
+    $$('[data-fec-edit-field]', host).forEach(function (control) {
+      control.addEventListener('change', function () {
+        var sourceId = session.editingSourceId;
+        if (!sourceId) return;
+        var stored = session.entryEdits[sourceId] || {};
+        var field = control.getAttribute('data-fec-edit-field');
+        var lineIndex = control.getAttribute('data-fec-edit-line');
+        if (lineIndex != null) {
+          if (!stored.lines) stored.lines = Object.create(null);
+          if (!stored.lines[lineIndex]) stored.lines[lineIndex] = {};
+          stored.lines[lineIndex][field] = field === 'debit' || field === 'credit'
+            ? (control.value === '' ? 0 : Number(control.value))
+            : control.value;
+        } else {
+          stored[field] = control.value;
+        }
+        session.entryEdits[sourceId] = stored;
+        session.editsConfirmed = false;
+        session.mappingsConfirmed = false;
         renderFecImportPreview();
       });
     });
     var mappingConfirm = $('#fec-import-confirm-mappings', host);
     if (mappingConfirm) mappingConfirm.addEventListener('change', function () { session.mappingsConfirmed = mappingConfirm.checked; renderFecImportPreview(); });
+    var correctionsConfirm = $('#fec-import-confirm-corrections', host);
+    if (correctionsConfirm) correctionsConfirm.addEventListener('change', function () { session.editsConfirmed = correctionsConfirm.checked; renderFecImportPreview(); });
     var complianceConfirm = $('#fec-import-confirm-compliance', host);
     if (complianceConfirm) complianceConfirm.addEventListener('change', function () { session.complianceConfirmed = complianceConfirm.checked; renderFecImportPreview(); });
     var filenameConfirm = $('#fec-import-confirm-filename', host);
@@ -4117,6 +4411,12 @@
     session.delimiterOption = delimiterInput ? delimiterInput.value : 'auto';
     session.complianceConfirmed = false;
     session.mappingsConfirmed = false;
+    session.editsConfirmed = false;
+    session.entryEdits = Object.create(null);
+    session.editingSourceId = '';
+    session.editSearch = '';
+    session.editLineSearch = '';
+    session.editMode = false;
     try {
       var decoded = FecImport.decodeBytes(session.rawBytes, session.encoding);
       session.decodedText = decoded;
@@ -4186,6 +4486,12 @@
             parseResult: null,
             accountMap: Object.create(null),
             journalMap: Object.create(null),
+            entryEdits: Object.create(null),
+            editingSourceId: '',
+            editSearch: '',
+            editLineSearch: '',
+            editMode: false,
+            editsConfirmed: false,
             analysis: null
           };
           parseFecImportSession();
@@ -4245,12 +4551,17 @@
       entryCount: session.parseResult.metadata.entryCount,
       complianceConfirmed: session.complianceConfirmed,
       fileNameConfirmed: session.fileNameConfirmed,
+      correctionsConfirmed: !!session.hasCorrections && !!session.editsConfirmed,
+      correctionsCount: session.preparedImport ? Object.keys(session.preparedImport.corrections).length : 0,
       localOnly: true
     };
-    var result = S.importExchange(session.parseResult.entries, session.mode, {
+    var prepared = session.preparedImport || fecPreparedEntries(session);
+    var result = S.importExchange(prepared.entries, session.mode, {
       sourceSystem: 'FEC-BENIN',
-      accountMap: session.accountMap,
-      journalMap: session.journalMap,
+      accountMap: {},
+      journalMap: {},
+      sourceOriginalEntries: prepared.originals,
+      sourceCorrections: prepared.corrections,
       importSourceFile: sourceFile
     });
     if (!result.ok) {
@@ -6041,14 +6352,14 @@
 
   function viewAccountingAuxiliaryOverview() {
     return '<div class="exchange-workspace auxiliary-centralization-workspace">' +
-      '<div class="alert info"><div><strong>Choisissez l’origine du lot auxiliaire.</strong><br>Le parcours FEC est manuel et prévu pour un logiciel externe ou un dossier PERFECTO appartenant à une autre organisation. Les mouvements auxiliaires issus des modules PERFECTO du dossier actif restent à construire.</div></div>' +
-      '<section class="exchange-card auxiliary-centralization-choice"><p class="page-kicker">IMPORT MANUEL · SANS CONNECTEUR TIERS</p><h4>FEC externe ou d’une autre organisation</h4><p>Contrôlez le fichier, confirmez la conversion vers le plan comptable général du dossier et examinez l’aperçu avant l’ajout.</p><a class="btn btn-primary btn-sm" href="' + esc(accountingMenuHash('fichier', 'centralize-auxiliary', 'centralize-auxiliary-fec')) + '">Ouvrir le parcours FEC <span aria-hidden="true">→</span></a><p class="small muted">Les champs auxiliaires du FEC sont conservés dans la trace source ; ce parcours ne crée pas encore de mouvements individuels par tiers.</p></section>' +
-      '<div class="alert warning"><div><strong>Modules PERFECTO du dossier actif · à construire.</strong><br>La centralisation interne sera activée après définition des données de tiers et des mouvements fournis par les modules internes.</div></div>' +
+      '<div class="alert info"><div><strong>Deux origines, un traitement en Comptabilité générale.</strong><br>La voie interne regroupera les mouvements réels des modules PERFECTO selon leurs comptes collectifs ; la voie externe importe manuellement les opérations FEC et en contrôle les totaux par compte collectif. Aucun connecteur direct ni traitement analytique n’est utilisé.</div></div>' +
+      '<section class="exchange-card auxiliary-centralization-choice"><p class="page-kicker">VOIE EXTERNE · IMPORT MANUEL</p><h4>FEC d’un logiciel externe ou d’une autre organisation</h4><p>Corrigez les écritures cibles dans l’aperçu, confirmez la conversion vers le plan comptable général et contrôlez les totaux par compte collectif avant l’ajout.</p><a class="btn btn-primary btn-sm" href="' + esc(accountingMenuHash('fichier', 'centralize-auxiliary', 'centralize-auxiliary-fec')) + '">Ouvrir le parcours FEC <span aria-hidden="true">→</span></a><p class="small muted">Le FEC original, les pièces source et les identifiants auxiliaires restent traçables ; aucun connecteur ni mouvement auxiliaire individuel n’est créé.</p></section>' +
+      '<div class="alert warning"><div><strong>Voie interne PERFECTO · à construire.</strong><br>Les registres réels de mouvements auxiliaires ne sont pas encore définis. Aucun compte, montant ou ligne comptable n’est inventé ; la future centralisation reportera uniquement les totaux confirmés vers les comptes collectifs.</div></div>' +
     '</div>';
   }
 
   function viewInternalAuxiliaryCentralization() {
-    return '<div class="alert info"><div><strong>Mouvements auxiliaires des modules PERFECTO · à construire.</strong><br>Ce parcours sera activé lorsque les modules PERFECTO du dossier actif fourniront leurs registres internes de tiers et de mouvements. Aucun fichier externe ni connecteur logiciel n’alimente cette branche.</div></div>';
+    return '<div class="alert info"><div><strong>Mouvements auxiliaires des modules PERFECTO · à construire.</strong><br>Cette voie de Comptabilité générale sera activée lorsque les modules PERFECTO du dossier actif fourniront leurs mouvements réels : regroupement par compte collectif, sans analytique. Les données de mouvements ne sont pas encore définies ; aucun compte, montant, fichier externe ou connecteur n’est ajouté ici.</div></div>';
   }
 
   function consolidationStageOptions(stage) {
@@ -11681,6 +11992,15 @@
         break;
       case 'commit-accounting-fec-import':
         commitAccountingFecImport();
+        break;
+      case 'toggle-fec-entry-editor':
+        if (fecImportSession) {
+          fecImportSession.editMode = !fecImportSession.editMode;
+          if (fecImportSession.editMode && !fecImportSession.editingSourceId && fecImportSession.parseResult && fecImportSession.parseResult.entries.length) {
+            fecImportSession.editingSourceId = fecImportSession.parseResult.entries[0].sourceId;
+          }
+          renderFecImportPreview();
+        }
         break;
       case 'download-fec-source':
         downloadFecSource(id);

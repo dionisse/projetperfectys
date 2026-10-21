@@ -457,7 +457,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v76/);
+assert.match(serviceWorkerSource, /perfecto-static-v77/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/fec-import\.js/);
 assert.match(htmlSource, /js\/fec-import\.js/);
@@ -466,6 +466,10 @@ assert.match(appSource, /menuParams\.t === 'import-fec'[\s\S]*bindAccountingFecI
 assert.match(appSource, /menuParams\.t === 'centralize-auxiliary' && menuParams\.c === 'centralize-auxiliary-fec'[\s\S]*bindAccountingFecImport\(\)/);
 assert.match(appSource, /selectedChild\.id === 'centralize-auxiliary-fec'[\s\S]*viewAccountingFecImport\(\)/);
 assert.match(appSource, /function viewAccountingFecImport\(\)[\s\S]*première ligne d’en-tête/);
+assert.match(appSource, /function fecImportEntryEditorHtml\([\s\S]*data-fec-edit-field="reference"[\s\S]*data-fec-edit-field="date"[\s\S]*data-fec-edit-field="journal"[\s\S]*data-fec-edit-field="description"[\s\S]*data-fec-edit-field="debit"[\s\S]*data-fec-edit-field="credit"/);
+assert.match(appSource, /function fecPreparedEntries\([\s\S]*sourceOriginalEntries[\s\S]*sourceCorrections/);
+assert.match(appSource, /Totaux regroupés par compte cible[\s\S]*Lignes auxiliaires/);
+assert.match(appSource, /id="fec-import-confirm-corrections"/);
 assert.match(appSource, /function buildFecImportReversalEntry\([\s\S]*opposite-lines[\s\S]*originalEntryId/);
 assert.match(appSource, /function commitFecImportReversal\([\s\S]*S\.importExchange/);
 assert.match(appSource, /Gérer les écritures validées/);

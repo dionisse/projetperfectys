@@ -5644,15 +5644,20 @@
       sourceEntry = sourceEntry || {};
       var prefix = 'Pièce « ' + String(sourceEntry.reference || (index + 1)) + ' » : ';
       var reference = String(sourceEntry.reference || '').trim();
-      var originalJournal = String(sourceEntry.journal || '').trim();
-      var mappedJournal = Object.prototype.hasOwnProperty.call(journalMap, originalJournal)
-        ? String(journalMap[originalJournal] || '').trim()
-        : originalJournal;
+      var journalInput = String(sourceEntry.journal || '').trim();
+      var originalJournal = String(sourceEntry.sourceJournalCode || journalInput).trim();
+      var mappedJournal = Object.prototype.hasOwnProperty.call(journalMap, journalInput)
+        ? String(journalMap[journalInput] || '').trim()
+        : journalInput;
       var sourceId = String(sourceEntry.sourceId || '').trim();
+      var sourceOriginalEntry = sourceId && opts.sourceOriginalEntries && opts.sourceOriginalEntries[sourceId]
+        ? opts.sourceOriginalEntries[sourceId]
+        : sourceEntry;
       var entrySourceSystem = String(sourceEntry.sourceSystem || sourceSystem || 'EXCEL').trim().toUpperCase();
       var sourceKey = entrySourceSystem + '\u0000' + sourceId;
       var mappedLines = [];
       var hasUnknownReference = false;
+      var zeroedFecLine = false;
 
       if (!reference) errors.push(prefix + 'la référence est obligatoire.');
       if (reference) {
@@ -5683,10 +5688,15 @@
       }
 
       (sourceEntry.lines || []).forEach(function (line) {
-        var sourceAccount = String(line.account || '').trim();
-        var mappedAccount = Object.prototype.hasOwnProperty.call(accountMap, sourceAccount)
-          ? String(accountMap[sourceAccount] || '').trim()
-          : sourceAccount;
+        if (Number(line.sourceRow) > 0 && (Number(line.debit) || 0) === 0 && (Number(line.credit) || 0) === 0) {
+          errors.push(prefix + 'la ligne FEC source ' + line.sourceRow + ' ne peut pas être supprimée en ramenant débit et crédit à zéro.');
+          zeroedFecLine = true;
+        }
+        var accountInput = String(line.account || '').trim();
+        var sourceAccount = String(line.sourceAccountCode || accountInput).trim();
+        var mappedAccount = Object.prototype.hasOwnProperty.call(accountMap, accountInput)
+          ? String(accountMap[accountInput] || '').trim()
+          : accountInput;
         var targetAccount = account(mappedAccount);
         if (!mappedAccount || !targetAccount) {
           addUnmapped(unmappedAccounts, sourceAccount, line.accountLabel);
@@ -5704,7 +5714,7 @@
         mappedLines.push(Object.assign({}, line, { account: mappedAccount }));
       });
 
-      if (hasUnknownReference) return;
+      if (hasUnknownReference || zeroedFecLine) return;
       var result = validateEntry({
         reference: reference,
         journal: mappedJournal,
@@ -5725,7 +5735,15 @@
           warningKeys[statusWarningKey] = true;
         }
       }
-      normalizedEntries.push({ entry: result.entry, original: sourceEntry, sourceSystem: entrySourceSystem, sourceId: sourceId });
+      normalizedEntries.push({
+        entry: result.entry,
+        original: sourceOriginalEntry,
+        sourceSystem: entrySourceSystem,
+        sourceId: sourceId,
+        corrections: sourceId && opts.sourceCorrections && opts.sourceCorrections[sourceId]
+          ? opts.sourceCorrections[sourceId]
+          : null
+      });
     });
 
     unmappedAccounts.forEach(function (item) {
@@ -5783,10 +5801,14 @@
       record.sourceStatus = String(original.sourceStatus || '');
       if (original.sourceMetadata && typeof original.sourceMetadata === 'object') {
         record.sourceMetadata = clone(original.sourceMetadata);
-        if (sourceFile) {
-          record.sourceMetadata.importBatchId = batchId;
-          record.sourceMetadata.sourceFileId = sourceFile.sha256;
-        }
+      }
+      if (item.corrections) {
+        if (!record.sourceMetadata || typeof record.sourceMetadata !== 'object') record.sourceMetadata = {};
+        record.sourceMetadata.userCorrections = Object.assign({}, clone(item.corrections), { modifiedAt: now });
+      }
+      if (sourceFile && record.sourceMetadata) {
+        record.sourceMetadata.importBatchId = batchId;
+        record.sourceMetadata.sourceFileId = sourceFile.sha256;
       }
       record.importBatchId = batchId;
       record.importedAt = now;

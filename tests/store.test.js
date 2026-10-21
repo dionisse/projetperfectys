@@ -340,6 +340,63 @@ test('source FEC conservée localement, téléchargeable et lot brouillon annula
   assert.strictEqual(S.importSourceFiles().find(item => item.id === sourceRecord.id).status, 'cancelled');
 });
 
+test('corrections FEC en aperçu préservent la source originale et sont tracées dans le brouillon', () => {
+  const sourceId = 'FEC-BENIN:corrections-preview-test';
+  const original = {
+    reference: 'FEC-OD-E-ORIGINAL-EDIT', journal: 'OD', journalLabel: 'Opérations diverses',
+    date: '2026-08-17', description: 'Libellé source', sourceSystem: 'FEC-BENIN', sourceId, sourceStatus: 'posted',
+    sourceMetadata: { format: 'FEC-BENIN', numEcriture: 'E-ORIGINAL', referencePiece: 'P-ORIGINAL' },
+    lines: [
+      { account: '601100', accountLabel: 'Achats source', debit: 1250, credit: 0, sourceRow: 2 },
+      { account: '401100', accountLabel: 'Fournisseurs source', debit: 0, credit: 1250, sourceRow: 3 }
+    ]
+  };
+  const edited = Object.assign({}, original, {
+    reference: 'FEC-OD-E-CORRIGE',
+    description: 'Libellé corrigé',
+    lines: original.lines.map((line, index) => Object.assign({}, line, index === 0
+      ? { account: '601200', debit: 1300 }
+      : { credit: 1300 }))
+  });
+  const corrections = {
+    fields: { reference: { before: original.reference, after: edited.reference }, description: { before: original.description, after: edited.description } },
+    lines: [
+      { sourceRow: 2, account: { before: '601100', after: '601200' }, debit: { before: 1250, after: 1300 } },
+      { sourceRow: 3, credit: { before: 1250, after: 1300 } }
+    ]
+  };
+  const result = S.importExchange([edited], 'draft', {
+    sourceSystem: 'FEC-BENIN',
+    sourceOriginalEntries: { [sourceId]: original },
+    sourceCorrections: { [sourceId]: corrections }
+  });
+  assert.strictEqual(result.ok, true, result.errors.join(' '));
+  const imported = S.entries().find(entry => entry.reference === edited.reference);
+  assert.ok(imported);
+  assert.strictEqual(imported.sourceReference, original.reference);
+  assert.strictEqual(imported.sourceMetadata.numEcriture, 'E-ORIGINAL');
+  assert.deepStrictEqual(imported.sourceMetadata.userCorrections.fields, corrections.fields);
+  assert.deepStrictEqual(imported.sourceMetadata.userCorrections.lines, corrections.lines);
+  assert.ok(imported.sourceMetadata.userCorrections.modifiedAt);
+  assert.strictEqual(imported.lines[0].account, '601200');
+  assert.strictEqual(imported.lines[0].debit, 1300);
+  assert.strictEqual(imported.lines[0].sourceAccountCode, original.lines[0].account);
+});
+
+test('une ligne FEC ne peut pas être supprimée silencieusement en ramenant ses montants à zéro', () => {
+  const source = [{
+    reference: 'FEC-OD-E-ZERO-LINE', journal: 'OD', date: '2026-08-17', description: 'Contrôle de ligne source',
+    sourceSystem: 'FEC-BENIN', sourceId: 'FEC-ZERO-LINE',
+    lines: [
+      { account: '601100', debit: 0, credit: 0, sourceRow: 2 },
+      { account: '401100', debit: 0, credit: 100, sourceRow: 3 }
+    ]
+  }];
+  const preview = S.previewExchangeImport(source, 'draft', { sourceSystem: 'FEC-BENIN' });
+  assert.strictEqual(preview.ok, false);
+  assert.ok(preview.errors.some(error => error.includes('ligne FEC source 2')));
+});
+
 test('un lot FEC validé ne peut pas être supprimé par la fonction d’annulation de brouillon', () => {
   const source = [{
     reference: 'FEC-OD-E-POSTED-001', journal: 'OD', date: '2026-08-18', description: 'FEC validé',

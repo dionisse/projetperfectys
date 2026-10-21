@@ -2505,6 +2505,27 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
 .fec-source-history .exchange-button-row { align-items: flex-start; flex-direction: column; }
 .fec-lines-preview .exchange-mapping-table { min-width: 900px; }
 .fec-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.fec-entry-editor-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.fec-entry-editor-heading > div { min-width: 0; }
+.fec-entry-editor-heading .btn { flex: 0 0 auto; }
+.fec-entry-editor .field { min-width: 0; margin: 0; }
+.fec-entry-editor .field label { display: block; margin-bottom: 5px; color: #55685f; font-size: .66rem; font-weight: 750; }
+.fec-entry-editor .field input,
+.fec-entry-editor .field select,
+.fec-edit-lines input,
+.fec-edit-lines select { width: 100%; min-height: 36px; padding: 7px 9px; border: 1px solid #dfe7e0; border-radius: 5px; color: #33483f; background: #fff; font: inherit; font-size: .69rem; }
+.fec-entry-editor .hint { display: block; margin-top: 5px; }
+.fec-entry-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 13px 0; }
+.fec-entry-description { grid-column: 1 / -1; }
+.fec-line-search { margin: 12px 0 8px !important; }
+.fec-edit-lines .exchange-mapping-table { min-width: 760px; }
+.fec-edit-lines input.numeric { min-width: 105px; text-align: right; font-variant-numeric: tabular-nums; }
+.fec-edit-count { margin: 9px 0 0 !important; padding: 8px 10px; border-left: 3px solid #d3a64b; border-radius: 4px; color: #69582f !important; background: #fbf6e9; font-size: .67rem !important; }
+.fec-edit-rules { margin-top: 12px !important; font-size: .66rem !important; }
+.fec-collective-summary .exchange-mapping-table { min-width: 560px; }
+.fec-correction-summary details > summary { padding: 9px 2px 11px; color: #40594f; font-size: .7rem; font-weight: 800; cursor: pointer; }
+.fec-correction-summary .exchange-mapping-table { min-width: 740px; }
+.fec-corrections-confirm { border-color: #c6ddd4; color: #365b4f; background: #f0f7f3; }
 
 /* ---------- Centralisation auxiliaire et tableau de passage interne ---------- */
 .auxiliary-centralization-workspace .auxiliary-centralization-choice { display: grid; justify-items: start; gap: 8px; }
@@ -2743,6 +2764,10 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
   .exchange-button-row .btn { justify-content: center; }
   .exchange-systems li { align-items: flex-start; flex-direction: column; gap: 3px; }
   .exchange-summary-grid > div { padding: 10px; }
+  .fec-entry-editor-heading { align-items: stretch; flex-direction: column; }
+  .fec-entry-editor-heading .btn { width: 100%; justify-content: center; }
+  .fec-entry-fields { grid-template-columns: minmax(0, 1fr); }
+  .fec-entry-description { grid-column: auto; }
   .exchange-mapping-table { min-width: 570px; }
   .exchange-preview-footer .btn { width: 100%; justify-content: center; }
 }
