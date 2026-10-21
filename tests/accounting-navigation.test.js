@@ -30,7 +30,7 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Importation d’une balance générale',
   'Centralisation auxiliaire',
   'FEC externe ou d’une autre organisation',
-  'Mouvements auxiliaires des modules PERFECTO',
+  'Extraction interne et lots auxiliaires PERFECTO',
   'Centralisation des salaires depuis Paie et RH',
   'Centralisation des opérations depuis Vente, Stock et Facturation',
   'Annulation d’une centralisation',
@@ -217,10 +217,15 @@ assert.equal(findTab('fichier', 'centralize-auxiliary').children.find(child => c
 const internalAuxiliaryCentralization = findTab('fichier', 'centralize-auxiliary').children.find(child => child.id === 'centralize-auxiliary-perfecto');
 assert.equal(internalAuxiliaryCentralization.status, 'partial');
 assert.ok(internalAuxiliaryCentralization.reason.includes('PERFECTO-AUXILIAIRE v1'));
-assert.ok(internalAuxiliaryCentralization.reason.includes('correspondances'));
+assert.ok(internalAuxiliaryCentralization.reason.includes('Excel, CSV ou TXT'));
+assert.ok(internalAuxiliaryCentralization.reason.includes('lecture seule'));
+assert.ok(internalAuxiliaryCentralization.reason.includes('explicite'));
 assert.ok(internalAuxiliaryCentralization.reason.includes('brouillon'));
-assert.ok(internalAuxiliaryCentralization.reason.includes('non authentifié techniquement'));
-assert.match(appSource, /function viewInternalAuxiliaryCentralization\(\)[\s\S]*PERFECTO-AUXILIAIRE v1[\s\S]*producteur n’est pas authentifié par signature technique[\s\S]*aucun montant d’exemple/i);
+assert.ok(internalAuxiliaryCentralization.reason.includes('authentifié techniquement'));
+assert.match(appSource, /function viewInternalAuxiliaryCentralization\(\)[\s\S]*internalAuxiliaryExtractionHtml\(dossier\)[\s\S]*producteur n’est pas authentifié par signature technique/i);
+assert.match(appSource, /PERFECTO-AUXILIAIRE v1/);
+assert.match(appSource, /function internalAuxiliaryExtractionHtml\([\s\S]*S\.entries\(\)[\s\S]*Aucune ligne validée rattachée explicitement à un auxiliaire[\s\S]*data-format="xlsx"[\s\S]*data-format="csv"[\s\S]*data-format="txt"/);
+assert.match(appSource, /function exportInternalAuxiliaryExtraction\([\s\S]*exportAuxiliaryExtractionWorkbook[\s\S]*exportAuxiliaryExtractionCsv[\s\S]*exportAuxiliaryExtractionText/);
 assert.match(appSource, /function parseInternalAuxiliaryFile\([\s\S]*parseAuxiliaryWorkbook/);
 assert.match(appSource, /function bindInternalAuxiliaryCentralization\(\)[\s\S]*readAsArrayBuffer/);
 assert.match(appSource, /function commitInternalAuxiliaryCentralization\(\)[\s\S]*S\.importExchange\(\[entry\], 'draft'/);
@@ -469,7 +474,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v79/);
+assert.match(serviceWorkerSource, /perfecto-static-v80/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

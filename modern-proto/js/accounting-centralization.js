@@ -1,8 +1,8 @@
 /*
  * PERFECTO · Règles pures de centralisation auxiliaire interne.
- * Agrège les mouvements d’un lot PERFECTO-AUXILIAIRE v1 par compte cible,
- * contrôle sa provenance déclarée et prépare une pièce générale. Ce module
- * ne lit aucun fichier et ne modifie jamais le dossier ni ses écritures.
+ * Agrège les lots PERFECTO-AUXILIAIRE v1 et extrait en lecture seule les lignes
+ * validées explicitement rattachées à un auxiliaire. Le parcours par lot prépare
+ * un brouillon ; l’extraction automatique ne modifie jamais le dossier.
  */
 (function (root) {
   'use strict';
@@ -142,6 +142,265 @@
       totalCredit: totalCredit,
       accountMappings: mappings,
       auxiliaryAccountCount: auxiliaryAccountCount
+    };
+  }
+
+  function explicitAuxiliaryReference(line, sourceLine) {
+    line = line && typeof line === 'object' ? line : {};
+    sourceLine = sourceLine && typeof sourceLine === 'object' ? sourceLine : {};
+    function scalar(value) {
+      return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
+    }
+    function firstText(values) {
+      for (var valueIndex = 0; valueIndex < values.length; valueIndex += 1) {
+        var text = scalar(values[valueIndex]);
+        if (text) return text;
+      }
+      return '';
+    }
+    var lineLabel = firstText([line.auxiliaryLabel, line.auxiliaryAccountLabel, line.auxiliaryName]);
+    var sourceLabel = firstText([sourceLine.auxiliaryLabel, sourceLine.auxiliaryAccountLabel, sourceLine.auxiliaryName]);
+    var candidates = [
+      { code: line.auxiliaryAccountCode, label: lineLabel },
+      { code: line.auxiliaryCode, label: lineLabel },
+      { code: line.auxiliaryId, label: lineLabel },
+      { code: line.auxiliaryAccount, label: lineLabel },
+      { code: sourceLine.auxiliaryAccount, label: sourceLabel },
+      { code: sourceLine.auxiliaryAccountCode, label: sourceLabel },
+      { code: sourceLine.auxiliaryCode, label: sourceLabel },
+      { code: sourceLine.auxiliaryId, label: sourceLabel }
+    ];
+    for (var index = 0; index < candidates.length; index += 1) {
+      var code = scalar(candidates[index].code);
+      if (code) return { code: code, label: scalar(candidates[index].label) };
+    }
+    return { code: '', label: '' };
+  }
+
+  function extractValidatedAuxiliaryMovements(entries, accounts, dossier, options) {
+    dossier = dossier || {};
+    options = options || {};
+    var decimalPlaces = Number(options.decimalPlaces);
+    if (!Number.isInteger(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 4) decimalPlaces = 0;
+    var precision = Math.pow(10, decimalPlaces);
+    var accountLookup = Object.create(null);
+    var collectiveGroups = Object.create(null);
+    var auxiliaryGroups = Object.create(null);
+    var movements = [];
+    var errors = [];
+    var entryIds = Object.create(null);
+    var totals = { debitUnits: 0, creditUnits: 0 };
+    var stats = {
+      scannedPostedEntryCount: 0,
+      eligibleEntryCount: 0,
+      eligibleMovementCount: 0,
+      auxiliaryCount: 0,
+      unattributedMovementCount: 0,
+      unclassifiedAuxiliaryMovementCount: 0,
+      ignoredDraftEntryCount: 0,
+      excludedDemoEntryCount: 0,
+      excludedCentralizationEntryCount: 0,
+      excludedOutOfCycleEntryCount: 0,
+      totalDebit: 0,
+      totalCredit: 0,
+      decimalPlaces: decimalPlaces
+    };
+
+    (accounts || []).forEach(function (account) {
+      if (account && account.code != null) accountLookup[String(account.code)] = account;
+    });
+
+    function addError(message) {
+      if (errors.indexOf(message) === -1) errors.push(message);
+    }
+
+    function amountUnits(value) {
+      var number = Number(value);
+      if (!Number.isFinite(number) || number < 0) return null;
+      var units = Math.round(number * precision);
+      if (!Number.isSafeInteger(units) || Math.abs(number - units / precision) > Number.EPSILON * Math.max(1, Math.abs(number)) * 4) return null;
+      return units;
+    }
+
+    function addUnits(target, debitUnits, creditUnits) {
+      target.debitUnits += debitUnits;
+      target.creditUnits += creditUnits;
+      if (!Number.isSafeInteger(target.debitUnits) || !Number.isSafeInteger(target.creditUnits)) {
+        addError('Les totaux de l’extraction auxiliaire dépassent la capacité numérique sûre.');
+        return false;
+      }
+      return true;
+    }
+
+    function entryIsDemonstration(entry, metadata) {
+      return /^seed(?:-|$)/i.test(String(entry.id || '')) || entry.origin === 'demo' || metadata.demonstrationData === true;
+    }
+
+    function entryIsPriorCentralization(entry, metadata) {
+      return entry.sourceSystem === INTERNAL_SOURCE_SYSTEM || metadata.operation === 'auxiliary-centralization';
+    }
+
+    (Array.isArray(entries) ? entries : []).forEach(function (entry) {
+      if (!entry || !Array.isArray(entry.lines)) return;
+      if (entry.status !== 'posted') {
+        if (entry.status === 'draft') stats.ignoredDraftEntryCount += 1;
+        return;
+      }
+      var metadata = entry.sourceMetadata && typeof entry.sourceMetadata === 'object' ? entry.sourceMetadata : {};
+      if (entryIsDemonstration(entry, metadata)) {
+        stats.excludedDemoEntryCount += 1;
+        return;
+      }
+      if (entryIsPriorCentralization(entry, metadata)) {
+        stats.excludedCentralizationEntryCount += 1;
+        return;
+      }
+      var entryDate = String(entry.date || '');
+      if ((dossier.cycleStart && entryDate < String(dossier.cycleStart)) ||
+          (dossier.cycleEnd && entryDate > String(dossier.cycleEnd))) {
+        stats.excludedOutOfCycleEntryCount += 1;
+        return;
+      }
+      stats.scannedPostedEntryCount += 1;
+      var sourceLines = Array.isArray(metadata.lines) ? metadata.lines : [];
+      (entry.lines || []).forEach(function (line, lineIndex) {
+        line = line && typeof line === 'object' ? line : {};
+        var sourceLine = sourceLines[lineIndex] || {};
+        var auxiliary = explicitAuxiliaryReference(line, sourceLine);
+        var accountCode = String(line.account || line.accountCode || '').trim();
+        var account = accountLookup[accountCode];
+        if (!account || account.aux !== true) {
+          if (auxiliary.code) stats.unclassifiedAuxiliaryMovementCount += 1;
+          return;
+        }
+        if (!auxiliary.code) {
+          stats.unattributedMovementCount += 1;
+          return;
+        }
+        if (!isValidIsoDate(entryDate)) {
+          addError('L’écriture source « ' + String(entry.reference || entry.id || '—') + ' » porte une date invalide ; l’export est bloqué.');
+          return;
+        }
+        if (!String(entry.id || '').trim()) {
+          addError('Une ligne auxiliaire ne possède pas d’identifiant de pièce comptable ; l’export traçable est bloqué.');
+          return;
+        }
+        var debitUnits = amountUnits(line.debit);
+        var creditUnits = amountUnits(line.credit);
+        if (debitUnits === null || creditUnits === null || (debitUnits > 0 && creditUnits > 0) || (debitUnits === 0 && creditUnits === 0)) {
+          addError('L’écriture source « ' + String(entry.reference || entry.id || '—') + ' », ligne ' + (lineIndex + 1) + ' : montant auxiliaire invalide à la précision du dossier.');
+          return;
+        }
+        if (!addUnits(totals, debitUnits, creditUnits)) return;
+
+        var accountLabel = String(account.label || line.accountLabel || line.sourceAccountLabel || '').trim();
+        var movement = {
+          date: entryDate,
+          journal: String(entry.journal || '').trim(),
+          reference: String(entry.reference || '').trim(),
+          description: String(entry.description || line.description || '').trim(),
+          sourceDate: String(metadata.dateEcriture || metadata.sourceDate || sourceLine.pieceDate || entryDate).trim(),
+          sourceJournal: String(metadata.sourceJournal || metadata.sourceJournalCode || entry.sourceJournal || entry.journal || '').trim(),
+          sourceReference: String(metadata.referencePiece || metadata.numEcriture || sourceLine.pieceReference || entry.sourceReference || entry.reference || '').trim(),
+          sourceDescription: String(sourceLine.description || metadata.sourceDescription || entry.sourceDescription || entry.description || line.description || '').trim(),
+          lineNumber: lineIndex + 1,
+          sourceRow: sourceLine.sourceRow == null ? (line.sourceRow == null ? '' : String(line.sourceRow)) : String(sourceLine.sourceRow),
+          account: accountCode,
+          accountLabel: accountLabel,
+          auxiliaryCode: auxiliary.code,
+          auxiliaryLabel: auxiliary.label,
+          debit: debitUnits / precision,
+          credit: creditUnits / precision,
+          sourceEntryId: String(entry.id || ''),
+          originalEntryId: String(metadata.originalEntryId || '').trim(),
+          sourceId: String(entry.sourceId || ''),
+          sourceSystem: String(entry.sourceSystem || metadata.sourceSystem || '').trim(),
+          sourceFileId: String(metadata.sourceFileId || metadata.fileHash || '').trim()
+        };
+        movements.push(movement);
+        entryIds[movement.sourceEntryId] = true;
+
+        var collectiveGroup = collectiveGroups[accountCode];
+        if (!collectiveGroup) {
+          collectiveGroup = {
+            account: accountCode,
+            accountLabel: accountLabel,
+            debitUnits: 0,
+            creditUnits: 0,
+            movementCount: 0,
+            auxiliaryCodes: Object.create(null)
+          };
+          collectiveGroups[accountCode] = collectiveGroup;
+        }
+        if (!addUnits(collectiveGroup, debitUnits, creditUnits)) return;
+        collectiveGroup.movementCount += 1;
+        collectiveGroup.auxiliaryCodes[auxiliary.code] = true;
+
+        var auxiliaryKey = JSON.stringify([accountCode, auxiliary.code]);
+        var auxiliaryGroup = auxiliaryGroups[auxiliaryKey];
+        if (!auxiliaryGroup) {
+          auxiliaryGroup = {
+            account: accountCode,
+            accountLabel: accountLabel,
+            auxiliaryCode: auxiliary.code,
+            auxiliaryLabel: auxiliary.label,
+            debitUnits: 0,
+            creditUnits: 0,
+            movementCount: 0
+          };
+          auxiliaryGroups[auxiliaryKey] = auxiliaryGroup;
+        } else if (!auxiliaryGroup.auxiliaryLabel && auxiliary.label) {
+          auxiliaryGroup.auxiliaryLabel = auxiliary.label;
+        }
+        if (!addUnits(auxiliaryGroup, debitUnits, creditUnits)) return;
+        auxiliaryGroup.movementCount += 1;
+      });
+    });
+
+    movements.sort(function (a, b) {
+      return a.date.localeCompare(b.date) || a.journal.localeCompare(b.journal) ||
+        a.reference.localeCompare(b.reference) || a.lineNumber - b.lineNumber;
+    });
+    var byCollective = Object.keys(collectiveGroups).sort(function (a, b) { return a.localeCompare(b); }).map(function (code) {
+      var group = collectiveGroups[code];
+      return {
+        account: group.account,
+        accountLabel: group.accountLabel,
+        debit: group.debitUnits / precision,
+        credit: group.creditUnits / precision,
+        movementCount: group.movementCount,
+        auxiliaryCount: Object.keys(group.auxiliaryCodes).length
+      };
+    });
+    var byAuxiliary = Object.keys(auxiliaryGroups).sort(function (a, b) { return a.localeCompare(b); }).map(function (key) {
+      var group = auxiliaryGroups[key];
+      return {
+        account: group.account,
+        accountLabel: group.accountLabel,
+        auxiliaryCode: group.auxiliaryCode,
+        auxiliaryLabel: group.auxiliaryLabel,
+        debit: group.debitUnits / precision,
+        credit: group.creditUnits / precision,
+        movementCount: group.movementCount
+      };
+    });
+
+    stats.eligibleEntryCount = Object.keys(entryIds).length;
+    stats.eligibleMovementCount = movements.length;
+    stats.auxiliaryCount = byAuxiliary.length;
+    stats.totalDebit = totals.debitUnits / precision;
+    stats.totalCredit = totals.creditUnits / precision;
+    return {
+      ok: errors.length === 0,
+      errors: errors,
+      dossierReference: String(dossier.reference || ''),
+      exercise: Number(dossier.exerciseYear || dossier.exercise) || '',
+      cycleStart: String(dossier.cycleStart || ''),
+      cycleEnd: String(dossier.cycleEnd || ''),
+      stats: stats,
+      movements: movements,
+      byCollective: byCollective,
+      byAuxiliary: byAuxiliary
     };
   }
 
@@ -298,6 +557,7 @@
     INTERNAL_SOURCE_SYSTEM: INTERNAL_SOURCE_SYSTEM,
     INTERNAL_PRODUCERS: INTERNAL_PRODUCERS,
     aggregate: aggregate,
+    extractValidatedAuxiliaryMovements: extractValidatedAuxiliaryMovements,
     validateSourceContext: validateSourceContext,
     buildEntry: buildEntry
   };

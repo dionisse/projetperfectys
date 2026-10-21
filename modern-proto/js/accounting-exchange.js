@@ -32,6 +32,26 @@
     'DATE_SOURCE', 'REFERENCE_PIECE_SOURCE', 'LIBELLE_PIECE_SOURCE', 'CODE_COMPTE_GENERAL',
     'LIBELLE_COMPTE_GENERAL', 'CODE_AUXILIAIRE', 'LIBELLE_AUXILIAIRE', 'LIBELLE_MOUVEMENT', 'ID_SOURCE'
   ];
+  var AUXILIARY_REPORT_FORMAT = 'PERFECTO-AUXILIAIRE-INTERNE';
+  var AUXILIARY_REPORT_VERSION = '1';
+  var AUXILIARY_REPORT_HEADERS = [
+    'FORMAT', 'VERSION', 'TYPE_LIGNE', 'REFERENCE_DOSSIER', 'EXERCICE',
+    'DATE_ECRITURE', 'CODE_JOURNAL_ECRITURE', 'REFERENCE_ECRITURE', 'LIBELLE_ECRITURE',
+    'DATE_SOURCE', 'CODE_JOURNAL_SOURCE', 'REFERENCE_PIECE_SOURCE', 'LIBELLE_SOURCE',
+    'NUM_LIGNE_DANS_ECRITURE', 'NO_LIGNE_ORIGINALE', 'CODE_COMPTE_COLLECTIF',
+    'LIBELLE_COMPTE_COLLECTIF', 'CODE_AUXILIAIRE', 'LIBELLE_AUXILIAIRE_SOURCE',
+    'LIBELLE_MOUVEMENT_SOURCE', 'DEBIT_XOF', 'CREDIT_XOF', 'ID_ECRITURE_SOURCE',
+    'ID_ECRITURE_ORIGINALE_LIEE', 'ID_SOURCE', 'SYSTEME_SOURCE', 'ID_FICHIER_SOURCE',
+    'NB_MOUVEMENTS', 'NB_AUXILIAIRES'
+  ];
+  var AUXILIARY_REPORT_TEXT_HEADERS = [
+    'FORMAT', 'VERSION', 'TYPE_LIGNE', 'REFERENCE_DOSSIER', 'DATE_ECRITURE',
+    'CODE_JOURNAL_ECRITURE', 'REFERENCE_ECRITURE', 'LIBELLE_ECRITURE', 'DATE_SOURCE',
+    'CODE_JOURNAL_SOURCE', 'REFERENCE_PIECE_SOURCE', 'LIBELLE_SOURCE', 'NO_LIGNE_ORIGINALE',
+    'CODE_COMPTE_COLLECTIF', 'LIBELLE_COMPTE_COLLECTIF', 'CODE_AUXILIAIRE',
+    'LIBELLE_AUXILIAIRE_SOURCE', 'LIBELLE_MOUVEMENT_SOURCE', 'ID_ECRITURE_SOURCE',
+    'ID_ECRITURE_ORIGINALE_LIEE', 'ID_SOURCE', 'SYSTEME_SOURCE', 'ID_FICHIER_SOURCE'
+  ];
   var HEADERS = [
     'FORMAT', 'VERSION', 'SYSTEME_SOURCE', 'REFERENCE_DOSSIER', 'EXERCICE',
     'CODE_JOURNAL', 'LIBELLE_JOURNAL', 'DATE', 'REFERENCE_PIECE', 'LIBELLE_PIECE',
@@ -64,16 +84,21 @@
 
   function csvCell(value, header) {
     var text = value == null ? '' : String(value);
-    if (TEXT_HEADERS.indexOf(header) !== -1) text = protectSpreadsheetText(text);
+    if (TEXT_HEADERS.indexOf(header) !== -1 || AUXILIARY_REPORT_TEXT_HEADERS.indexOf(header) !== -1) text = protectSpreadsheetText(text);
     return '"' + text.replace(/"/g, '""') + '"';
   }
 
-  function toCsv(rows, headers) {
-    var lines = [headers.map(function (header) { return '"' + header.replace(/"/g, '""') + '"'; }).join(';')];
+  function toDelimited(rows, headers, delimiter) {
+    var separator = delimiter || ';';
+    var lines = [headers.map(function (header) { return '"' + header.replace(/"/g, '""') + '"'; }).join(separator)];
     rows.forEach(function (row) {
-      lines.push(headers.map(function (header) { return csvCell(row[header], header); }).join(';'));
+      lines.push(headers.map(function (header) { return csvCell(row[header], header); }).join(separator));
     });
     return '\uFEFF' + lines.join('\r\n') + '\r\n';
+  }
+
+  function toCsv(rows, headers) {
+    return toDelimited(rows, headers, ';');
   }
 
   function detectDelimiter(text) {
@@ -922,6 +947,128 @@
     return compressWorkbook(auxiliaryWorkbookSheetDefinitions(data || {}));
   }
 
+  function auxiliaryExtractionRecords(extraction) {
+    if (!extraction || !extraction.ok || !Array.isArray(extraction.movements) || !extraction.movements.length) {
+      throw new Error(extraction && extraction.errors && extraction.errors[0] || 'Aucun mouvement auxiliaire validé et identifié à exporter.');
+    }
+    if (extraction.movements.length > MAX_DATA_ROWS) {
+      throw new Error('L’extraction dépasse la limite de ' + MAX_DATA_ROWS + ' mouvements par export. Réduisez le périmètre de la période.');
+    }
+    var dossierReference = String(extraction.dossierReference || '');
+    var exercise = extraction.exercise == null ? '' : extraction.exercise;
+    var records = [];
+    (extraction.byCollective || []).forEach(function (group) {
+      records.push({
+        TYPE_LIGNE: 'TOTAL_COMPTE_COLLECTIF', REFERENCE_DOSSIER: dossierReference, EXERCICE: exercise,
+        CODE_COMPTE_COLLECTIF: group.account, LIBELLE_COMPTE_COLLECTIF: group.accountLabel,
+        DEBIT_XOF: group.debit, CREDIT_XOF: group.credit,
+        NB_MOUVEMENTS: group.movementCount, NB_AUXILIAIRES: group.auxiliaryCount
+      });
+    });
+    (extraction.byAuxiliary || []).forEach(function (group) {
+      records.push({
+        TYPE_LIGNE: 'TOTAL_AUXILIAIRE', REFERENCE_DOSSIER: dossierReference, EXERCICE: exercise,
+        CODE_COMPTE_COLLECTIF: group.account, LIBELLE_COMPTE_COLLECTIF: group.accountLabel,
+        CODE_AUXILIAIRE: group.auxiliaryCode, LIBELLE_AUXILIAIRE_SOURCE: group.auxiliaryLabel,
+        DEBIT_XOF: group.debit, CREDIT_XOF: group.credit,
+        NB_MOUVEMENTS: group.movementCount
+      });
+    });
+    extraction.movements.forEach(function (movement) {
+      records.push({
+        TYPE_LIGNE: 'MOUVEMENT_SOURCE', REFERENCE_DOSSIER: dossierReference, EXERCICE: exercise,
+        DATE_ECRITURE: movement.date, CODE_JOURNAL_ECRITURE: movement.journal,
+        REFERENCE_ECRITURE: movement.reference, LIBELLE_ECRITURE: movement.description,
+        DATE_SOURCE: movement.sourceDate, CODE_JOURNAL_SOURCE: movement.sourceJournal,
+        REFERENCE_PIECE_SOURCE: movement.sourceReference, LIBELLE_SOURCE: movement.sourceDescription,
+        NUM_LIGNE_DANS_ECRITURE: movement.lineNumber, NO_LIGNE_ORIGINALE: movement.sourceRow,
+        CODE_COMPTE_COLLECTIF: movement.account, LIBELLE_COMPTE_COLLECTIF: movement.accountLabel,
+        CODE_AUXILIAIRE: movement.auxiliaryCode, LIBELLE_AUXILIAIRE_SOURCE: movement.auxiliaryLabel,
+        LIBELLE_MOUVEMENT_SOURCE: movement.sourceDescription, DEBIT_XOF: movement.debit, CREDIT_XOF: movement.credit,
+        ID_ECRITURE_SOURCE: movement.sourceEntryId, ID_ECRITURE_ORIGINALE_LIEE: movement.originalEntryId,
+        ID_SOURCE: movement.sourceId, SYSTEME_SOURCE: movement.sourceSystem,
+        ID_FICHIER_SOURCE: movement.sourceFileId
+      });
+    });
+    return records.map(function (record) {
+      record.FORMAT = AUXILIARY_REPORT_FORMAT;
+      record.VERSION = AUXILIARY_REPORT_VERSION;
+      return record;
+    });
+  }
+
+  function exportAuxiliaryExtractionCsv(extraction) {
+    return toDelimited(auxiliaryExtractionRecords(extraction), AUXILIARY_REPORT_HEADERS, ';');
+  }
+
+  function exportAuxiliaryExtractionText(extraction) {
+    return toDelimited(auxiliaryExtractionRecords(extraction), AUXILIARY_REPORT_HEADERS, '\t');
+  }
+
+  function auxiliaryExtractionWorkbookSheetDefinitions(extraction, dossier) {
+    var records = auxiliaryExtractionRecords(extraction);
+    dossier = dossier || {};
+    var collectiveHeaders = [
+      'CODE_COMPTE_COLLECTIF', 'LIBELLE_COMPTE_COLLECTIF', 'NB_MOUVEMENTS',
+      'NB_AUXILIAIRES', 'DEBIT_XOF', 'CREDIT_XOF'
+    ];
+    var auxiliaryHeaders = [
+      'CODE_COMPTE_COLLECTIF', 'LIBELLE_COMPTE_COLLECTIF', 'CODE_AUXILIAIRE',
+      'LIBELLE_AUXILIAIRE_SOURCE', 'NB_MOUVEMENTS', 'DEBIT_XOF', 'CREDIT_XOF'
+    ];
+    var movementHeaders = [
+      'DATE_ECRITURE', 'CODE_JOURNAL_ECRITURE', 'REFERENCE_ECRITURE', 'LIBELLE_ECRITURE',
+      'DATE_SOURCE', 'CODE_JOURNAL_SOURCE', 'REFERENCE_PIECE_SOURCE', 'LIBELLE_SOURCE',
+      'NUM_LIGNE_DANS_ECRITURE', 'NO_LIGNE_ORIGINALE', 'CODE_COMPTE_COLLECTIF',
+      'LIBELLE_COMPTE_COLLECTIF', 'CODE_AUXILIAIRE', 'LIBELLE_AUXILIAIRE_SOURCE',
+      'LIBELLE_MOUVEMENT_SOURCE', 'DEBIT_XOF', 'CREDIT_XOF', 'ID_ECRITURE_SOURCE',
+      'ID_ECRITURE_ORIGINALE_LIEE', 'ID_SOURCE', 'SYSTEME_SOURCE', 'ID_FICHIER_SOURCE'
+    ];
+    var collectiveRows = [collectiveHeaders].concat((extraction.byCollective || []).map(function (group) {
+      return [group.account, group.accountLabel, group.movementCount, group.auxiliaryCount, group.debit, group.credit];
+    }));
+    var auxiliaryRows = [auxiliaryHeaders].concat((extraction.byAuxiliary || []).map(function (group) {
+      return [group.account, group.accountLabel, group.auxiliaryCode, group.auxiliaryLabel, group.movementCount, group.debit, group.credit];
+    }));
+    var movementRows = [movementHeaders].concat(records.filter(function (record) {
+      return record.TYPE_LIGNE === 'MOUVEMENT_SOURCE';
+    }).map(function (record) {
+      return movementHeaders.map(function (header) { return record[header] == null ? '' : record[header]; });
+    }));
+    var stats = extraction.stats || {};
+    var controlRows = [
+      ['FORMAT', AUXILIARY_REPORT_FORMAT],
+      ['VERSION', AUXILIARY_REPORT_VERSION],
+      ['REFERENCE_DOSSIER', extraction.dossierReference || dossier.reference || ''],
+      ['NOM_DOSSIER', dossier.name || dossier.clientName || ''],
+      ['EXERCICE', extraction.exercise || dossier.exerciseYear || ''],
+      ['DEBUT_CYCLE', extraction.cycleStart || dossier.cycleStart || ''],
+      ['FIN_CYCLE', extraction.cycleEnd || dossier.cycleEnd || ''],
+      ['MOUVEMENTS_VALIDES_EXPORTES', Number(stats.eligibleMovementCount) || 0],
+      ['ECRITURES_SOURCE', Number(stats.eligibleEntryCount) || 0],
+      ['AUXILIAIRES_IDENTIFIES', Number(stats.auxiliaryCount) || 0],
+      ['LIGNES_COLLECTIVES_SANS_ID_AUXILIAIRE_OMISES', Number(stats.unattributedMovementCount) || 0],
+      ['LIGNES_AUXILIAIRES_SUR_COMPTE_NON_AUXILIAIRE_OMISES', Number(stats.unclassifiedAuxiliaryMovementCount) || 0],
+      ['BROUILLONS_EXCLUS', Number(stats.ignoredDraftEntryCount) || 0],
+      ['ECRITURES_DE_DEMONSTRATION_EXCLUES', Number(stats.excludedDemoEntryCount) || 0],
+      ['CENTRALISATIONS_ANTERIEURES_EXCLUES', Number(stats.excludedCentralizationEntryCount) || 0],
+      ['ECRITURES_HORS_CYCLE_EXCLUES', Number(stats.excludedOutOfCycleEntryCount) || 0],
+      ['TOTAL_DEBIT_XOF', Number(stats.totalDebit) || 0],
+      ['TOTAL_CREDIT_XOF', Number(stats.totalCredit) || 0],
+      ['MODE', 'Export de contrôle en lecture seule ; aucune nouvelle écriture comptable n’est créée.']
+    ];
+    return [
+      { name: 'Contrôles', rows: controlRows, autoFilter: false },
+      { name: 'Totaux collectifs', rows: collectiveRows, autoFilter: true },
+      { name: 'Totaux auxiliaires', rows: auxiliaryRows, autoFilter: true },
+      { name: 'Mouvements sources', rows: movementRows, autoFilter: true }
+    ];
+  }
+
+  function exportAuxiliaryExtractionWorkbook(extraction, dossier) {
+    return compressWorkbook(auxiliaryExtractionWorkbookSheetDefinitions(extraction, dossier));
+  }
+
   function readZipDirectory(bytes) {
     function u16(offset) { return bytes[offset] | (bytes[offset + 1] << 8); }
     function u32(offset) { return (bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) | (bytes[offset + 3] << 24)) >>> 0; }
@@ -1223,6 +1370,9 @@
     AUXILIARY_FORMAT: AUXILIARY_FORMAT,
     AUXILIARY_VERSION: AUXILIARY_VERSION,
     AUXILIARY_HEADERS: AUXILIARY_HEADERS.slice(),
+    AUXILIARY_REPORT_FORMAT: AUXILIARY_REPORT_FORMAT,
+    AUXILIARY_REPORT_VERSION: AUXILIARY_REPORT_VERSION,
+    AUXILIARY_REPORT_HEADERS: AUXILIARY_REPORT_HEADERS.slice(),
     parse: parse,
     parseTableCsv: parseTableCsv,
     parseTableWorkbook: parseTableWorkbook,
@@ -1241,7 +1391,10 @@
     parseAuxiliary: parseAuxiliary,
     templateAuxiliary: templateAuxiliary,
     templateAuxiliaryWorkbook: templateAuxiliaryWorkbook,
-    parseAuxiliaryWorkbook: parseAuxiliaryWorkbook
+    parseAuxiliaryWorkbook: parseAuxiliaryWorkbook,
+    exportAuxiliaryExtractionCsv: exportAuxiliaryExtractionCsv,
+    exportAuxiliaryExtractionText: exportAuxiliaryExtractionText,
+    exportAuxiliaryExtractionWorkbook: exportAuxiliaryExtractionWorkbook
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PerfectoAccountingExchange = api;

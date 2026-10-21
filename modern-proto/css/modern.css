@@ -2551,6 +2551,21 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
 .internal-auxiliary-history-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .internal-auxiliary-history-actions .btn { white-space: nowrap; }
 .internal-auxiliary-hash { display: inline-block; max-width: 260px; color: #748279; font-size: .58rem; overflow-wrap: anywhere; }
+.internal-auxiliary-extraction { display: grid; gap: 13px; }
+.internal-auxiliary-extraction > h4,
+.internal-auxiliary-extraction > p { margin: 0; }
+.internal-auxiliary-extraction > p:not(.page-kicker) { color: #65756d; font-size: .72rem; line-height: 1.55; }
+.internal-auxiliary-extraction-table { margin: 0; padding: 12px 14px; border: 1px solid #e8eee9; border-radius: 8px; background: #fbfcfa; }
+.internal-auxiliary-extraction-table h5 { margin: 0 0 9px; color: #36564b; font-size: .74rem; }
+.internal-auxiliary-extraction-table .exchange-mapping-table { min-width: 590px; }
+.internal-auxiliary-extraction-detail > summary { padding: 9px 2px 11px; color: #40594f; font-size: .7rem; font-weight: 800; cursor: pointer; }
+.internal-auxiliary-extraction-detail .exchange-mapping-table { min-width: 940px; }
+.internal-auxiliary-extraction-detail .exchange-mapping-table td { overflow-wrap: anywhere; }
+.internal-auxiliary-extraction .exchange-preview-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
+.internal-auxiliary-extraction .exchange-preview-stats > div { display: grid; gap: 3px; min-width: 0; padding: 10px 12px; border: 1px solid #e4ebe5; border-radius: 8px; background: #f7faf7; }
+.internal-auxiliary-extraction .exchange-preview-stats strong { color: #215e4f; font-size: .92rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.internal-auxiliary-extraction .exchange-preview-stats span { color: #718077; font-size: .6rem; }
+.internal-auxiliary-export-buttons { margin-top: 2px; }
 .accounting-bridge-source-field {
   max-width: 720px;
   margin: 0;
@@ -3343,6 +3358,11 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .edition-report-description-cell { min-width: 200px; }
 .edition-report-difference { color: #984b3f; font-weight: 800; white-space: nowrap; }
 .edition-report-difference small { display: block; margin-top: 3px; color: #78837b; font-size: .55rem; font-weight: 650; }
+@media (max-width: 700px) {
+  .internal-auxiliary-extraction .exchange-preview-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .internal-auxiliary-export-buttons .btn { flex: 1 1 calc(50% - 7px); justify-content: center; }
+  .internal-auxiliary-extraction-detail .exchange-mapping-table { min-width: 840px; }
+}
 @media (max-width: 1000px) {
   .journal-unbalanced-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

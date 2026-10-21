@@ -261,6 +261,7 @@
         return { moduleId: 'accounting', actionId: 'data.import' };
       case 'cancel-internal-auxiliary-batch':
         return { moduleId: 'accounting', actionId: 'draft.delete' };
+      case 'export-internal-auxiliary-extraction':
       case 'download-internal-auxiliary-source':
       case 'download-internal-auxiliary-csv-template':
       case 'download-internal-auxiliary-workbook-template':
@@ -3736,7 +3737,10 @@
           originalSourceSystem: String(original.sourceSystem || ''),
           originalSourceId: String(original.sourceId || ''),
           sourceFileId: String(metadata.sourceFileId || ''),
-          originalImportBatchId: String(original.importBatchId || '')
+          originalImportBatchId: String(original.importBatchId || ''),
+          lines: (Array.isArray(metadata.lines) ? metadata.lines : []).map(function (sourceLine) {
+            return sourceLine && typeof sourceLine === 'object' ? Object.assign({}, sourceLine) : {};
+          })
         },
         lines: lines
       }
@@ -6383,8 +6387,9 @@
 
   function viewAccountingAuxiliaryOverview() {
     return '<div class="exchange-workspace auxiliary-centralization-workspace">' +
-      '<div class="alert info"><div><strong>Deux origines, deux parcours en Comptabilité générale.</strong><br>La centralisation interne regroupe des opérations réelles de comptes auxiliaires par compte collectif ; la voie externe importe manuellement un FEC. Le transfert interne crée un brouillon, et le FEC est proposé en brouillon par défaut après aperçu et confirmation. Aucun connecteur tiers ni traitement analytique n’est utilisé.</div></div>' +
-      '<section class="exchange-card auxiliary-centralization-choice"><p class="page-kicker">VOIE INTERNE · LOT PERFECTO</p><h4>Mouvements auxiliaires du dossier actif</h4><p>Transférez un lot CSV/XLSX au format PERFECTO-AUXILIAIRE v1. PERFECTO contrôle le dossier et l’exercice déclarés, l’équilibre des pièces, les correspondances vers des comptes existants et les totaux proposés avant de créer un brouillon.</p><a class="btn btn-primary btn-sm" href="' + esc(accountingMenuHash('fichier', 'centralize-auxiliary', 'centralize-auxiliary-perfecto')) + '">Ouvrir la centralisation interne <span aria-hidden="true">→</span></a><p class="small muted">Le transfert est local au dossier actif. Le fichier déclare son producteur mais n’est pas signé ; l’export direct des modules PERFECTO n’est pas attesté.</p></section>' +
+      '<div class="alert info"><div><strong>Centralisation auxiliaire en Comptabilité générale.</strong><br>La voie interne extrait automatiquement, sans fichier d’entrée, les lignes déjà validées qui portent une référence auxiliaire explicite et produit un état Excel, CSV ou TXT en lecture seule. Si les écritures sont déjà au grand livre, aucun nouveau mouvement n’est reposté. Un lot source PERFECTO non encore comptabilisé peut toujours être contrôlé puis préparé en brouillon. La voie externe FEC reste un import manuel distinct, proposé en brouillon après aperçu et confirmation ; aucun connecteur tiers ni traitement analytique n’est utilisé.</div></div>' +
+      '<section class="exchange-card auxiliary-centralization-choice"><p class="page-kicker">VOIE INTERNE · EXTRACTION AUTOMATIQUE</p><h4>Données validées du dossier actif — sans fichier d’entrée</h4><p>PERFECTO recherche les écritures validées rattachées explicitement à un auxiliaire, regroupe et trace les mouvements par compte collectif, puis permet un export Excel, CSV ou TXT. Les brouillons, exemples et centralisations antérieures sont exclus. Les comptes collectifs 401/411 sans identifiant de tiers ne sont jamais ventilés par supposition.</p><a class="btn btn-primary btn-sm" href="' + esc(accountingMenuHash('fichier', 'centralize-auxiliary', 'centralize-auxiliary-perfecto')) + '">Ouvrir l’extraction interne <span aria-hidden="true">→</span></a><p class="small muted">L’export automatique est un état de contrôle en lecture seule, pas une nouvelle écriture au grand livre ; il évite tout doublon de comptabilisation.</p></section>' +
+      '<section class="exchange-card auxiliary-centralization-choice"><p class="page-kicker">VOIE INTERNE · LOT SOURCE NON COMPTABILISÉ</p><h4>Préparer un lot PERFECTO en brouillon</h4><p>En complément, transférez un lot réel CSV/XLSX au format PERFECTO-AUXILIAIRE v1 lorsqu’il n’est pas déjà comptabilisé dans le grand livre. PERFECTO contrôle le dossier et l’exercice déclarés, l’équilibre des pièces, les correspondances vers des comptes existants et les totaux avant confirmation.</p><a class="btn btn-primary btn-sm" href="' + esc(accountingMenuHash('fichier', 'centralize-auxiliary', 'centralize-auxiliary-perfecto')) + '">Ouvrir les parcours internes <span aria-hidden="true">→</span></a><p class="small muted">Le fichier déclare son producteur mais n’est pas signé ; l’export direct des modules PERFECTO n’est pas attesté. Aucun transfert tiers n’est permis ici.</p></section>' +
       '<section class="exchange-card auxiliary-centralization-choice"><p class="page-kicker">VOIE EXTERNE · IMPORT MANUEL</p><h4>FEC d’un logiciel externe ou d’une autre organisation</h4><p>Corrigez les écritures cibles dans l’aperçu, confirmez la conversion vers le plan comptable général et contrôlez les totaux par compte collectif avant l’ajout.</p><a class="btn btn-primary btn-sm" href="' + esc(accountingMenuHash('fichier', 'centralize-auxiliary', 'centralize-auxiliary-fec')) + '">Ouvrir le parcours FEC <span aria-hidden="true">→</span></a><p class="small muted">Le FEC original, les pièces source et les identifiants auxiliaires restent traçables ; aucun connecteur ni mouvement auxiliaire individuel n’est créé.</p></section>' +
     '</div>';
   }
@@ -6430,6 +6435,67 @@
     return '<div class="exchange-table-wrap"><table class="exchange-mapping-table internal-auxiliary-history-table"><thead><tr><th>Fichier / lot source</th><th>Dossier et contenu</th><th>Totaux source débit / crédit</th><th>État PERFECTO</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
 
+  function internalAuxiliaryExtractionHtml(dossier) {
+    var extraction = AccountingCentralization.extractValidatedAuxiliaryMovements(
+      S.entries(), S.accounts(), dossier, { decimalPlaces: S.accountingConfiguration().decimalPlaces }
+    );
+    var stats = extraction.stats || {};
+    function count(value) { return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Number(value) || 0); }
+    var canExport = hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.export', accountingAccessContext(dossier));
+    var warnings = [];
+    if (stats.unattributedMovementCount) warnings.push(stats.unattributedMovementCount + ' ligne(s) validée(s) sur un compte collectif sans identifiant auxiliaire explicite ont été exclues.');
+    if (stats.unclassifiedAuxiliaryMovementCount) warnings.push(stats.unclassifiedAuxiliaryMovementCount + ' ligne(s) portant une référence auxiliaire sont sur un compte non marqué auxiliaire dans le plan ; elles sont exclues.');
+    if (stats.ignoredDraftEntryCount) warnings.push(stats.ignoredDraftEntryCount + ' écriture(s) en brouillon ignorée(s).');
+    if (stats.excludedDemoEntryCount) warnings.push(stats.excludedDemoEntryCount + ' écriture(s) de démonstration exclue(s).');
+    if (stats.excludedCentralizationEntryCount) warnings.push(stats.excludedCentralizationEntryCount + ' centralisation(s) antérieure(s) exclue(s) pour éviter une reprise circulaire.');
+    if (stats.excludedOutOfCycleEntryCount) warnings.push(stats.excludedOutOfCycleEntryCount + ' écriture(s) hors cycle actif exclue(s).');
+    var warningHtml = warnings.length
+      ? '<div class="alert warning"><div><strong>Limites et exclusions de l’extraction</strong><ul>' + warnings.map(function (message) { return '<li>' + esc(message) + '</li>'; }).join('') + '</ul></div></div>'
+      : '';
+    var errorHtml = extraction.errors.length
+      ? '<div class="alert error"><div><strong>Export bloqué : contrôle des sources</strong><ul>' + extraction.errors.map(function (message) { return '<li>' + esc(message) + '</li>'; }).join('') + '</ul></div></div>'
+      : '';
+    if (!extraction.movements.length) {
+      var limitation = stats.unattributedMovementCount
+        ? ' Les écritures validées sur comptes collectifs ne portant aucun identifiant auxiliaire ne sont pas attribuées à un tiers.'
+        : ' Aucun identifiant de tiers ou autre référence auxiliaire explicite n’est disponible dans les lignes admissibles du dossier.';
+      var moduleLimitation = ' Les écritures agrégées des lots Paie & RH et Ventes, stock & facturation ne portent actuellement pas d’identifiant auxiliaire par ligne ; elles ne sont donc pas ventilées par tiers dans cet état.';
+      return '<section class="exchange-card internal-auxiliary-extraction"><p class="page-kicker">EXTRACTION AUTOMATIQUE · SANS FICHIER D’ENTRÉE</p><h4>Depuis les écritures validées de ' + esc(dossier.reference) + '</h4>' +
+        '<p>PERFECTO lit le grand livre du dossier actif et recherche uniquement les lignes d’un compte marqué auxiliaire qui portent un identifiant individuel explicite dans la ligne ou ses métadonnées source.</p>' + warningHtml + errorHtml +
+        '<div class="empty-state"><strong>Aucune ligne validée rattachée explicitement à un auxiliaire</strong><span>' + esc(limitation + moduleLimitation) + ' Les brouillons et les écritures d’exemple sont exclus ; aucun mouvement, tiers ni montant n’est inventé et aucun fichier vide ne sera proposé.</span></div>' +
+        '<p class="small muted">Les données utilisables apparaîtront ici automatiquement dès qu’une écriture validée du dossier contiendra une référence auxiliaire fiable. Les écritures ainsi exportées sont déjà comptabilisées au grand livre : l’export ne crée pas une seconde pièce.</p></section>';
+    }
+    var collectiveRows = extraction.byCollective.map(function (group) {
+      return '<tr><td><strong>' + esc(group.account) + '</strong><br><span class="small muted">' + esc(group.accountLabel || '—') + '</span></td><td class="numeric">' + esc(count(group.movementCount)) + '</td><td class="numeric">' + esc(count(group.auxiliaryCount)) + '</td><td class="numeric">' + esc(amount(group.debit)) + '</td><td class="numeric">' + esc(amount(group.credit)) + '</td></tr>';
+    }).join('');
+    var auxiliaryRows = extraction.byAuxiliary.map(function (group) {
+      return '<tr><td><strong>' + esc(group.auxiliaryCode) + '</strong>' + (group.auxiliaryLabel ? '<br><span class="small muted">' + esc(group.auxiliaryLabel) + '</span>' : '<br><span class="small muted">Libellé auxiliaire absent de la source</span>') + '</td><td>' + esc(group.account + ' — ' + group.accountLabel) + '</td><td class="numeric">' + esc(count(group.movementCount)) + '</td><td class="numeric">' + esc(amount(group.debit)) + '</td><td class="numeric">' + esc(amount(group.credit)) + '</td></tr>';
+    }).join('');
+    var visibleMovements = extraction.movements.slice(0, 50);
+    var movementRows = visibleMovements.map(function (movement) {
+      var sourceIds = [movement.sourceEntryId, movement.sourceId, movement.originalEntryId ? 'inversion de ' + movement.originalEntryId : ''].filter(Boolean).join(' · ');
+      var sourceCoordinates = [movement.sourceDate, movement.sourceJournal, movement.sourceReference].filter(Boolean).join(' · ');
+      return '<tr><td>' + esc(movement.date) + '<br><span class="small muted">' + esc(movement.journal || '—') + ' · ' + esc(movement.reference || '—') + '</span>' + (sourceCoordinates ? '<br><small>Source : ' + esc(sourceCoordinates) + '</small>' : '') + '</td>' +
+        '<td><strong>' + esc(movement.auxiliaryCode) + '</strong><br><span class="small muted">' + esc(movement.auxiliaryLabel || 'Libellé source absent') + '</span></td>' +
+        '<td><strong>' + esc(movement.account) + '</strong><br><span class="small muted">' + esc(movement.accountLabel || '—') + '</span></td>' +
+        '<td>' + esc(movement.description || '—') + (movement.sourceDescription && movement.sourceDescription !== movement.description ? '<br><small>Source : ' + esc(movement.sourceDescription) + '</small>' : '') + '</td><td class="numeric">' + esc(amount(movement.debit)) + '</td><td class="numeric">' + esc(amount(movement.credit)) + '</td>' +
+        '<td><span class="small">' + esc(sourceIds || '—') + '</span>' + (movement.sourceFileId ? '<br><span class="internal-auxiliary-hash" title="' + esc(movement.sourceFileId) + '">Fichier source · ' + esc(movement.sourceFileId.slice(0, 16)) + '…</span>' : '') + '</td></tr>';
+    }).join('');
+    var exportButtons = !extraction.ok
+      ? ''
+      : (canExport
+        ? '<div class="exchange-button-row internal-auxiliary-export-buttons"><button type="button" class="btn btn-primary btn-sm" data-action="export-internal-auxiliary-extraction" data-format="xlsx">↓ Excel (.xlsx)</button><button type="button" class="btn btn-secondary btn-sm" data-action="export-internal-auxiliary-extraction" data-format="csv">↓ CSV</button><button type="button" class="btn btn-ghost btn-sm" data-action="export-internal-auxiliary-extraction" data-format="txt">↓ TXT</button></div>'
+        : '<p class="small muted">Consultation seule : le droit explicite « data.export » est requis pour télécharger ces éditions.</p>');
+    return '<section class="exchange-card internal-auxiliary-extraction"><p class="page-kicker">EXTRACTION AUTOMATIQUE · SANS FICHIER D’ENTRÉE</p><h4>Mouvements validés rattachés à un auxiliaire</h4>' +
+      '<p>Extraction depuis le dossier actif, limitée aux lignes validées dont le compte est marqué auxiliaire et qui portent une référence auxiliaire explicite. Le rapport conserve les sources, lignes et identifiants, avec des totaux par compte collectif et par auxiliaire.</p>' +
+      '<div class="alert info"><div><strong>Édition de contrôle en lecture seule.</strong><br>Ces lignes sont déjà inscrites au grand livre. L’export Excel, CSV ou TXT ne crée pas de nouvelle pièce et ne modifie aucune écriture ; il évite ainsi tout double comptage. Les inversions validées restent visibles comme lignes distinctes avec le lien vers l’écriture originale. Les données sans identifiant auxiliaire, les brouillons, les exemples et les centralisations antérieures ne sont pas ajoutés.</div></div>' + warningHtml + errorHtml +
+      '<div class="exchange-preview-stats"><div><strong>' + esc(count(stats.eligibleMovementCount)) + '</strong><span>mouvements admissibles</span></div><div><strong>' + esc(count(stats.auxiliaryCount)) + '</strong><span>auxiliaires identifiés</span></div><div><strong>' + esc(amount(stats.totalDebit)) + '</strong><span>débit XOF</span></div><div><strong>' + esc(amount(stats.totalCredit)) + '</strong><span>crédit XOF</span></div></div>' +
+      '<section class="exchange-card internal-auxiliary-extraction-table"><h5>Totaux par compte collectif</h5><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Compte collectif</th><th class="numeric">Mouvements</th><th class="numeric">Auxiliaires</th><th class="numeric">Débit XOF</th><th class="numeric">Crédit XOF</th></tr></thead><tbody>' + collectiveRows + '</tbody></table></div></section>' +
+      '<section class="exchange-card internal-auxiliary-extraction-table"><h5>Totaux par auxiliaire</h5><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Référence auxiliaire source</th><th>Compte collectif existant</th><th class="numeric">Mouvements</th><th class="numeric">Débit XOF</th><th class="numeric">Crédit XOF</th></tr></thead><tbody>' + auxiliaryRows + '</tbody></table></div></section>' +
+      '<details class="exchange-mapping internal-auxiliary-extraction-detail"><summary>Lignes source et traçabilité (' + esc(count(stats.eligibleMovementCount)) + ')</summary><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Écriture générale / source</th><th>Auxiliaire source</th><th>Compte collectif</th><th>Libellé source</th><th class="numeric">Débit XOF</th><th class="numeric">Crédit XOF</th><th>Identifiants source</th></tr></thead><tbody>' + movementRows + '</tbody></table></div>' + (extraction.movements.length > visibleMovements.length ? '<p class="small muted">' + visibleMovements.length + ' premières lignes affichées sur ' + esc(count(extraction.movements.length)) + ' ; l’export contient toutes les lignes admissibles.</p>' : '') + '</details>' +
+      exportButtons + '<p class="small muted">Période lue : ' + esc(dossier.cycleStart) + ' au ' + esc(dossier.cycleEnd) + ' · les codes de comptes et auxiliaires proviennent des données sources, sans correspondance ni création silencieuse.</p></section>';
+  }
+
   function viewInternalAuxiliaryCentralization() {
     var dossier = S.currentDossier();
     if (internalAuxiliarySession && internalAuxiliarySession.targetDossierId !== dossier.id) internalAuxiliarySession = null;
@@ -6442,13 +6508,13 @@
       return '<option value="' + esc(journal.code) + '"' + (session && session.targetJournal === journal.code ? ' selected' : '') + '>' + esc(journalDisplayName(journal)) + '</option>';
     }).join('');
     var phoneNotice = isPhoneViewport()
-      ? '<div class="alert info">Transfert désactivé sur téléphone. Ouvrez ce parcours sur ordinateur ou tablette.</div>'
+      ? '<div class="alert info">Le transfert par fichier est désactivé sur téléphone. L’extraction automatique en lecture seule reste disponible.</div>'
       : '';
     var importNotice = canImport
       ? ''
       : '<div class="alert warning">Consultation seule : un droit explicite « data.import » est requis pour charger et créer un brouillon.</div>';
     var controls = isPhoneViewport() ? '' :
-      '<section class="exchange-card internal-auxiliary-controls"><p class="page-kicker">TRANSFERT DU LOT SOURCE</p><h4>1. Choisir le fichier et paramétrer la pièce générale</h4>' +
+      '<section class="exchange-card internal-auxiliary-controls"><p class="page-kicker">OPTION · LOT SOURCE PAS ENCORE COMPTABILISÉ</p><h4>Préparer un brouillon depuis un lot auxiliaire source</h4><p class="small muted">Utilisez ce transfert uniquement si le lot n’est pas déjà inscrit au grand livre. Pour extraire les écritures validées existantes sans fichier d’entrée, utilisez l’édition automatique ci-dessus.</p>' +
         '<div class="field internal-auxiliary-file-field"><label for="internal-auxiliary-file">Fichier auxiliaire CSV ou Excel (.xlsx)</label><input id="internal-auxiliary-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden><label id="internal-auxiliary-file-label" class="btn btn-primary exchange-file-picker" for="internal-auxiliary-file">↑ Choisir un lot CSV / XLSX</label><span class="hint">PERFECTO lit le fichier dans ce navigateur. Limite locale : 1 Mio. Le transfert ne modifie aucune écriture avant confirmation.</span></div>' +
         '<div class="exchange-button-row"><button type="button" class="btn btn-primary" data-action="download-internal-auxiliary-workbook-template">↓ Modèle Excel (.xlsx)</button><button type="button" class="btn btn-ghost" data-action="download-internal-auxiliary-csv-template">↓ Modèle CSV</button></div>' +
         '<div class="exchange-import-controls internal-auxiliary-target-controls">' +
@@ -6466,10 +6532,11 @@
       '<tr><td>Montants / trace</td><td>DEBIT_XOF, CREDIT_XOF, ID_SOURCE — XOF entiers, un seul côté positif par mouvement, identifiant unique et obligatoire.</td></tr>' +
       '</tbody></table></div></details>';
     return '<div class="exchange-workspace auxiliary-centralization-workspace internal-auxiliary-workspace">' +
-      '<div class="alert info"><div><strong>Centralisation interne · Comptabilité générale</strong><br>Les mouvements du fichier sont regroupés par compte collectif cible et reportés dans une pièce générale. Les pièces originales restent conservées en source ; le brouillon n’affecte pas le grand livre avant validation.</div></div>' +
-      '<div class="alert warning"><div><strong>Provenance déclarative, pas de connecteur.</strong><br>Le fichier doit provenir des mouvements réellement enregistrés dans Paie & RH ou Ventes, stock & facturation pour le dossier actif. Le contrôle vérifie les métadonnées et l’équilibre, mais le producteur n’est pas authentifié par signature technique et l’export direct des modules PERFECTO n’est pas attesté dans cette version. Ne transférez pas de fichier tiers dans ce parcours.</div></div>' +
+      '<div class="alert info"><div><strong>Extraction et centralisation internes · Comptabilité générale</strong><br>L’extraction automatique ci-dessous lit les écritures validées portant une référence auxiliaire explicite et produit un état Excel, CSV ou TXT sans fichier d’entrée. Comme ces mouvements figurent déjà au grand livre, cet export est en lecture seule et ne crée pas de seconde écriture. Le parcours de brouillon sur lot source reste réservé aux opérations non encore comptabilisées.</div></div>' +
+      internalAuxiliaryExtractionHtml(dossier) +
+      '<div class="alert warning"><div><strong>Provenance déclarative du parcours par fichier, pas de connecteur.</strong><br>Le lot facultatif doit provenir des mouvements réellement enregistrés dans Paie & RH ou Ventes, stock & facturation pour le dossier actif. Le contrôle vérifie les métadonnées et l’équilibre, mais le producteur n’est pas authentifié par signature technique et l’export direct des modules PERFECTO n’est pas attesté dans cette version. Ne transférez pas de fichier tiers dans ce parcours.</div></div>' +
       phoneNotice + importNotice + controls + formatGuide +
-      '<div id="internal-auxiliary-preview" class="exchange-preview" aria-live="polite"><div class="empty-state"><strong>Aucun lot analysé</strong><span>Choisissez un lot réel. L’aperçu, les correspondances et les confirmations apparaîtront avant toute écriture.</span></div></div>' +
+      '<div id="internal-auxiliary-preview" class="exchange-preview" aria-live="polite"><div class="empty-state"><strong>Aucun lot analysé</strong><span>Le fichier facultatif ne sert qu’à préparer un brouillon à partir d’un lot source non comptabilisé. L’aperçu, les correspondances et les confirmations apparaîtront avant toute écriture.</span></div></div>' +
       '<section class="exchange-card internal-auxiliary-history"><p class="page-kicker">HISTORIQUE ET SOURCE ORIGINALE</p><h4>Lots auxiliaires de ' + esc(dossier.reference) + '</h4>' + internalAuxiliaryHistoryHtml(dossier) + '</section>' +
       '<p class="exchange-footnote">Les données et fichiers restent dans le stockage local de ce navigateur ; cette vue ne synchronise pas Google Drive. Une annulation de brouillon conserve le fichier source. Une pièce validée reste intacte et son annulation passe par une écriture inverse liée à l’original.</p>' +
     '</div>';
@@ -6839,6 +6906,48 @@
     internalAuxiliarySession = null;
     toast('Brouillon de centralisation créé ; le lot source original et sa traçabilité sont conservés.', 'success');
     render();
+  }
+
+  function exportInternalAuxiliaryExtraction(format) {
+    var dossier = S.currentDossier();
+    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.export', accountingAccessContext(dossier))) {
+      toast('Export refusé : le droit « data.export » est requis.', 'warning');
+      return;
+    }
+    var selectedFormat = String(format || '').toLowerCase();
+    if (['xlsx', 'csv', 'txt'].indexOf(selectedFormat) === -1) {
+      toast('Format d’export auxiliaire non pris en charge.', 'error');
+      return;
+    }
+    var extraction = AccountingCentralization.extractValidatedAuxiliaryMovements(
+      S.entries(), S.accounts(), dossier, { decimalPlaces: S.accountingConfiguration().decimalPlaces }
+    );
+    if (!extraction.ok || !extraction.movements.length) {
+      toast(extraction.errors[0] || 'Aucun mouvement validé rattaché explicitement à un auxiliaire ne peut être exporté.', 'warning');
+      return;
+    }
+    var formatLabel = selectedFormat === 'xlsx' ? 'Excel (.xlsx)' : selectedFormat.toUpperCase();
+    if (!window.confirm('Exporter ' + extraction.stats.eligibleMovementCount + ' mouvement(s) auxiliaire(s) validé(s) en ' + formatLabel + ' ? Le fichier sera une édition de contrôle en lecture seule. Ces mouvements étant déjà au grand livre, aucune nouvelle écriture ne sera créée.')) return;
+    try {
+      var filePart = safeFilePart(dossier.reference);
+      var filename = 'PERFECTO-auxiliaires-valides-' + filePart + '-' + dossier.exerciseYear + '.' + selectedFormat;
+      var content;
+      var mime;
+      if (selectedFormat === 'xlsx') {
+        content = AccountingExchange.exportAuxiliaryExtractionWorkbook(extraction, dossier);
+        mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      } else if (selectedFormat === 'csv') {
+        content = AccountingExchange.exportAuxiliaryExtractionCsv(extraction);
+        mime = 'text/csv;charset=utf-8';
+      } else {
+        content = AccountingExchange.exportAuxiliaryExtractionText(extraction);
+        mime = 'text/plain;charset=utf-8';
+      }
+      downloadFile(filename, content, mime);
+      toast('Édition auxiliaire exportée en ' + formatLabel + ' ; aucune écriture comptable n’a été ajoutée ou modifiée.', 'success');
+    } catch (error) {
+      toast(error && error.message || 'Création du fichier d’extraction impossible.', 'error');
+    }
   }
 
   function downloadInternalAuxiliaryTemplate(workbook) {
@@ -12536,6 +12645,9 @@
         break;
       case 'download-fec-source':
         downloadFecSource(id);
+        break;
+      case 'export-internal-auxiliary-extraction':
+        exportInternalAuxiliaryExtraction(trigger.getAttribute('data-format'));
         break;
       case 'download-internal-auxiliary-source':
         downloadInternalAuxiliarySource(id);
