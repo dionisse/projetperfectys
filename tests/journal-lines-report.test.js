@@ -66,6 +66,8 @@ assert.deepEqual(optionalReport.columns.map(column => column.key), optionalColum
 assert.deepEqual(optionalReport.groups[0].rows[0].cells, {
   currency: 'EUR', dueDate: '2026-03-31', fixedAsset: 'IMM-01', market: 'Marché A', analysis: 'AN-01', lastEntry: '2026-03-02T10:00:00.000Z'
 });
+assert.equal(Report.columns.find(column => column.key === 'lastEntry').defaultSelected, false,
+  'la nouvelle colonne par défaut du rapport modifié ne change pas les choix initiaux du rapport existant');
 
 const columns = ['date', 'piece', 'account', 'debit', 'credit', 'label', 'firstEntry'];
 const report = Report.build({
@@ -93,6 +95,69 @@ assert.equal(report.groups[0].rows[1].debit, 1200);
 assert.equal(report.groups[0].rows[2].label, 'Sous-total du mois 2026-01');
 assert.equal(report.groups[0].rows[3].entry.reference, 'OD-002');
 assert.equal(report.groups[0].rows[5].debit, 350);
+
+const modifiedReport = Report.build({
+  entries: [
+    {
+      id: 'modified-posted', reference: 'OD-MOD-1', journal: 'OD', date: '2025-12-31', status: 'posted',
+      createdAt: '2025-12-31T08:00:00.000Z', updatedAt: '2026-02-05T12:30:00.000Z',
+      lines: [{ account: '601100', debit: 40, credit: 0 }, { account: '401100', debit: 0, credit: 40 }]
+    },
+    {
+      id: 'modified-draft', reference: 'OD-MOD-2', journal: 'OD', date: '2026-01-10', status: 'draft',
+      createdAt: '2026-01-10T09:00:00.000Z', updatedAt: '2026-02-20T15:45:00.000Z',
+      lines: [{ account: '601100', debit: 60, credit: 0 }, { account: '401100', debit: 0, credit: 60 }]
+    },
+    {
+      id: 'unmodified', reference: 'OD-SAME', journal: 'OD', date: '2026-02-10', status: 'posted',
+      createdAt: '2026-02-10T08:00:00.000Z',
+      lines: [{ account: '601100', debit: 5, credit: 0 }]
+    },
+    {
+      id: 'no-modification-date', reference: 'OD-OLD', journal: 'OD', date: '2026-02-10', status: 'posted',
+      createdAt: '2026-02-10T08:00:00.000Z',
+      lines: [{ account: '601100', debit: 7, credit: 0 }]
+    },
+    {
+      id: 'outside-modification-period', reference: 'OD-LATE', journal: 'OD', date: '2026-02-10', status: 'posted',
+      createdAt: '2026-02-10T08:00:00.000Z', updatedAt: '2026-03-01T08:00:00.000Z',
+      lines: [{ account: '601100', debit: 8, credit: 0 }]
+    },
+    {
+      id: 'other-journal', reference: 'AC-MOD', journal: 'AC', date: '2026-02-10', status: 'posted',
+      createdAt: '2026-02-10T08:00:00.000Z', updatedAt: '2026-02-11T08:00:00.000Z',
+      lines: [{ account: '601100', debit: 9, credit: 0 }]
+    }
+  ],
+  accounts,
+  journals,
+  filters: { journals: ['OD'], from: '2026-02-01', to: '2026-02-28' },
+  columns: ['date', 'piece', 'firstEntry', 'lastEntry'],
+  includeDrafts: true,
+  modifiedOnly: true,
+  filterByModificationDate: true
+});
+assert.equal(modifiedReport.entryCount, 2, 'seules les pièces réellement modifiées, horodatées, filtrées par date de modification et journal sont retenues');
+assert.equal(modifiedReport.lineCount, 4, 'le compteur reflète les lignes de pièces modifiées validées ou encore en brouillon');
+assert.deepEqual(modifiedReport.groups.map(group => group.code), ['OD']);
+const modifiedLines = modifiedReport.groups[0].rows.filter(row => row.kind === 'line');
+assert.equal(modifiedLines[0].cells.date, '2025-12-31', 'la date de pièce reste la date comptable et ne devient pas la date de modification');
+assert.equal(modifiedLines[0].cells.firstEntry, '2025-12-31T08:00:00.000Z');
+assert.equal(modifiedLines[0].cells.lastEntry, '2026-02-05T12:30:00.000Z');
+const legacyModifiedReport = Report.build({
+  entries: [{
+    id: 'legacy-modified', reference: 'OD-LEGACY', journal: 'OD', date: '2024-10-10', status: 'draft',
+    updatedAt: '2026-02-12T10:00:00.000Z', lines: [{ account: '601100', debit: 12, credit: 0 }]
+  }],
+  accounts, journals,
+  filters: { journals: ['OD'], from: '2026-02-01', to: '2026-02-28' },
+  columns: ['firstEntry', 'lastEntry'], includeDrafts: true, modifiedOnly: true, filterByModificationDate: true
+});
+assert.equal(legacyModifiedReport.lineCount, 1);
+assert.equal(legacyModifiedReport.groups[0].rows[0].cells.firstEntry, '', 'une première saisie absente dans une ancienne donnée reste vide, sans date inventée');
+assert.equal(legacyModifiedReport.groups[0].rows[0].cells.lastEntry, '2026-02-12T10:00:00.000Z');
+assert.deepEqual(Report.build({ entries, accounts, journals }).columns.map(column => column.key),
+  Report.columns.filter(column => column.defaultSelected).map(column => column.key));
 
 const matrix = Report.toMatrix(report);
 assert.deepEqual(matrix[0], ['Date', 'N° pièce', 'Compte', 'Débit', 'Crédit', 'Libellé', '1ère saisie']);

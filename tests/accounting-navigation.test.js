@@ -269,8 +269,16 @@ assert.deepEqual(findTab('editions', 'journals').children.map(child => child.lab
 ]);
 assert.equal(findTab('editions', 'journals').children[0].status, 'active');
 assert.ok(findTab('editions', 'journals').children[0].reason.includes('export Excel/TXT'));
-assert.match(appSource, /child\.id === 'journal-lines'\) return viewJournalLinesReport\(backLink\)/,
-  'le détail des lignes ouvre son parcours de sélection dédié');
+assert.equal(findTab('editions', 'journals').children[1].status, 'active');
+assert.ok(findTab('editions', 'journals').children[1].reason.includes('compteur dynamique'));
+assert.match(appSource, /child\.id === 'journal-lines' \|\| child\.id === 'journal-modified-pieces'\) return viewJournalLinesReport\(backLink\)/,
+  'les deux rapports de lignes ouvrent le parcours partagé de sélection et mise en page');
+assert.match(appSource, /includeDrafts: isModifiedReport[\s\S]*modifiedOnly: isModifiedReport[\s\S]*filterByModificationDate: isModifiedReport/,
+  'le rapport modifié filtre la date de modification et accepte les brouillons modifiés');
+assert.match(appSource, /Lignes générées[\s\S]*data-jlr-generated-count[\s\S]*updateJournalLinesGeneratedCount/,
+  'le compteur dynamique est mis à jour lorsque la période de modification change');
+assert.match(appSource, /Date de la pièce[\s\S]*Modifications du[\s\S]*au/,
+  'le rapport sépare la date comptable de la période de modification');
 assert.match(appSource, /function bindJournalLinesReport\([\s\S]*submitJournalLinesSelection[\s\S]*submitJournalLinesLayout/,
   'les deux écrans de sélection et de mise en page sont liés');
 assert.match(appSource, /async function generateJournalLinesReportFile[\s\S]*exportTabularWorkbook[\s\S]*toTsv/,
@@ -512,7 +520,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v85/);
+assert.match(serviceWorkerSource, /perfecto-static-v86/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

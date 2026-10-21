@@ -141,6 +141,7 @@
   var openingBalanceTransferSession = null;
   var openingBalanceAuditResult = null;
   var journalLinesReportSession = null;
+  var journalLinesReportMode = 'standard';
   var launcherUi = { filter: 'all', query: '' };
   var DEMO_ORGANIZATION_ID = 'demo-org';
   var ACCOUNTING_ROUTES = ['dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings', 'menu'];
@@ -710,8 +711,16 @@
     if (S.setConfidentialAccountAccess) S.setConfidentialAccountAccess(isConfidentialAccountsSupervisor());
     var parsed = parseHash();
     var route = parsed.route;
-    var isJournalLinesReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'journals' && parsed.params.c === 'journal-lines';
-    if (!isJournalLinesReportRoute) journalLinesReportSession = null;
+    var isJournalLinesReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'journals' &&
+      (parsed.params.c === 'journal-lines' || parsed.params.c === 'journal-modified-pieces');
+    if (!isJournalLinesReportRoute) {
+      journalLinesReportSession = null;
+      journalLinesReportMode = 'standard';
+    } else {
+      var requestedJournalReportMode = parsed.params.c === 'journal-modified-pieces' ? 'modified' : 'standard';
+      if (journalLinesReportMode !== requestedJournalReportMode) journalLinesReportSession = null;
+      journalLinesReportMode = requestedJournalReportMode;
+    }
     var phoneViewport = isPhoneViewport();
     var phoneRouteAllowed = route === 'dossiers' ||
       (route === 'menu' && parsed.params.g === 'editions') ||
@@ -10765,15 +10774,26 @@
       '</div></div></div>';
   }
 
-  function createJournalLinesReportSession(dossier) {
+  function createJournalLinesReportSession(dossier, mode) {
+    mode = mode || 'standard';
+    var isModifiedReport = mode === 'modified';
+    var modifiedReportColumns = ['date', 'piece', 'account', 'accountTitle', 'reference', 'debit', 'credit', 'label', 'firstEntry', 'lastEntry'];
+    var today = new Date().toISOString().slice(0, 10);
     var columns = {};
     JournalLinesReport.columns.forEach(function (column) {
-      columns[column.key] = !!(column.selectable && column.defaultSelected);
+      columns[column.key] = !!(column.selectable && (isModifiedReport
+        ? modifiedReportColumns.indexOf(column.key) !== -1
+        : column.defaultSelected));
     });
     return {
       dossierId: dossier.id,
+      mode: mode,
       phase: 'selection',
-      filters: { journals: [], accounts: [], from: dossier.cycleStart, to: dossier.cycleEnd },
+      filters: {
+        journals: [], accounts: [],
+        from: dossier.cycleStart,
+        to: isModifiedReport && today > dossier.cycleStart ? today : dossier.cycleEnd
+      },
       columns: columns,
       printOptions: { newPageEachJournal: false, subtotalByPiece: false, subtotalByMonth: false },
       layout: {
@@ -10791,8 +10811,8 @@
 
   function ensureJournalLinesReportSession() {
     var dossier = S.currentDossier();
-    if (!journalLinesReportSession || journalLinesReportSession.dossierId !== dossier.id) {
-      journalLinesReportSession = createJournalLinesReportSession(dossier);
+    if (!journalLinesReportSession || journalLinesReportSession.dossierId !== dossier.id || journalLinesReportSession.mode !== journalLinesReportMode) {
+      journalLinesReportSession = createJournalLinesReportSession(dossier, journalLinesReportMode);
     }
     return journalLinesReportSession;
   }
@@ -10875,9 +10895,10 @@
   function journalLinesReportColumnControl(column, session) {
     if (!column) return '<span class="journal-lines-column-spacer" aria-hidden="true"></span>';
     var checked = !!session.columns[column.key];
+    var label = session.mode === 'modified' && column.key === 'date' ? 'Date de la pièce' : column.label;
     return '<label class="journal-lines-column-option">' +
       '<input type="checkbox" data-jlr-column="' + esc(column.key) + '"' + (checked ? ' checked' : '') + '>' +
-      '<span>' + esc(column.label) + '</span></label>';
+      '<span>' + esc(label) + '</span></label>';
   }
 
   function journalLinesReportSelectionView(session, dossier) {
@@ -10886,36 +10907,55 @@
         group.map(function (column) { return journalLinesReportColumnControl(column, session); }).join('') +
         '</div>';
     }).join('');
+    var isModifiedReport = session.mode === 'modified';
+    var initialReport = isModifiedReport ? buildJournalLinesReport(session) : null;
     var directoryValue = session.directoryName || '';
+    var filterFields = isModifiedReport
+      ? '<div class="field span-2"><label for="journal-lines-journals-summary">Journaux</label><div class="journal-lines-picker-control"><input id="journal-lines-journals-summary" type="text" readonly value="' + esc(journalLinesReportFilterSummary('journals', session)) + '"><button type="button" class="btn btn-ghost" data-journal-lines-picker="journals" aria-label="Choisir les journaux">…</button></div></div>' +
+        '<div class="field"><label for="journal-lines-from">Modifications du</label><input id="journal-lines-from" name="from" type="date" value="' + esc(session.filters.from) + '" required></div>' +
+        '<div class="field"><label for="journal-lines-to">au</label><input id="journal-lines-to" name="to" type="date" value="' + esc(session.filters.to) + '" required></div>'
+      : '<div class="field span-2"><label for="journal-lines-journals-summary">Journaux</label><div class="journal-lines-picker-control"><input id="journal-lines-journals-summary" type="text" readonly value="' + esc(journalLinesReportFilterSummary('journals', session)) + '"><button type="button" class="btn btn-ghost" data-journal-lines-picker="journals" aria-label="Choisir les journaux">…</button></div></div>' +
+        '<div class="field span-2"><label for="journal-lines-accounts-summary">Comptes</label><div class="journal-lines-picker-control"><input id="journal-lines-accounts-summary" type="text" readonly value="' + esc(journalLinesReportFilterSummary('accounts', session)) + '"><button type="button" class="btn btn-ghost" data-journal-lines-picker="accounts" aria-label="Choisir les comptes">…</button></div></div>' +
+        '<div class="field"><label for="journal-lines-from">Date de début</label><input id="journal-lines-from" name="from" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(session.filters.from) + '" required></div>' +
+        '<div class="field"><label for="journal-lines-to">Date de fin</label><input id="journal-lines-to" name="to" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(session.filters.to) + '" required></div>' +
+        '<div class="field span-2"><label for="journal-lines-directory">Répertoire FEC</label><div class="journal-lines-picker-control"><input id="journal-lines-directory" type="text" readonly placeholder="Aucun répertoire local sélectionné" value="' + esc(directoryValue) + '" title="Le choix du dossier reste dans ce navigateur."><button type="button" class="btn btn-ghost" data-journal-lines-directory aria-label="Choisir un répertoire de sortie">Générer</button></div><span class="hint">Dossier local de sortie Excel ou TXT ; l’export ne crée pas un fichier FEC normalisé.</span></div>';
+    var selectionNote = isModifiedReport
+      ? '<div class="alert info journal-lines-readonly-note"><div><strong>Consultation seule.</strong> La période filtre la date de dernière modification, indépendamment de la date comptable de la pièce. Les changements antérieurs sans horodatage ne peuvent pas être reconstitués ; le rapport n’altère aucune écriture.</div></div>'
+      : '<div class="alert info journal-lines-readonly-note"><div><strong>Consultation seule.</strong> Le rapport lit uniquement les écritures validées du cycle courant ; il ne modifie aucune écriture. Le répertoire est choisi localement : le fichier généré n’est pas un FEC réglementaire et ce choix ne crée aucune synchronisation Google Drive.</div></div>';
+    var generatedLines = isModifiedReport
+      ? '<div class="journal-lines-generated-count" role="status" aria-live="polite"><span>Lignes générées</span><strong data-jlr-generated-count>' + new Intl.NumberFormat('fr-FR').format(initialReport.lineCount) + '</strong></div>'
+      : '';
+    var selectionActions =
+      '<div class="journal-lines-form-errors" id="journal-lines-selection-errors" role="alert" aria-live="polite"></div>' +
+      '<div class="journal-lines-form-actions"><a class="btn btn-ghost" href="' + esc(accountingMenuHash('editions', 'journals')) + '">Annuler</a><button type="submit" class="btn btn-primary">Valider</button></div>';
+    var presentationOptions = isModifiedReport ? '' :
+      '<section class="card journal-lines-card"><div class="panel">' +
+        '<div class="journal-lines-section-heading"><div><p class="page-kicker">PRÉSENTATION DES LIGNES</p><h3>À imprimer</h3></div></div>' +
+        '<div class="journal-lines-print-options">' +
+          '<label class="journal-lines-check-option"><input type="checkbox" id="journal-lines-new-page"' + (session.printOptions.newPageEachJournal ? ' checked' : '') + '><span>Nouvelle page pour chaque journal</span></label>' +
+          '<label class="journal-lines-check-option"><input type="checkbox" id="journal-lines-subtotal-piece"' + (session.printOptions.subtotalByPiece ? ' checked' : '') + '><span>Sous-total par pièce</span></label>' +
+          '<label class="journal-lines-check-option"><input type="checkbox" id="journal-lines-subtotal-month"' + (session.printOptions.subtotalByMonth ? ' checked' : '') + '><span>Sous-total par mois</span></label>' +
+        '</div>' + selectionActions +
+      '</div></section>';
+    var modifiedActions = isModifiedReport
+      ? '<section class="card journal-lines-card"><div class="panel">' + selectionActions + '</div></section>'
+      : '';
     return journalLinesReportSteps('selection') +
-      pageHeader('Détail des lignes saisies', 'Sélectionnez les journaux, les comptes et la période avant de définir la mise en page.', '') +
-      '<div class="alert info journal-lines-readonly-note"><div><strong>Consultation seule.</strong> Le rapport lit uniquement les écritures validées du cycle courant ; il ne modifie aucune écriture. Le répertoire est choisi localement : le fichier généré n’est pas un FEC réglementaire et ce choix ne crée aucune synchronisation Google Drive.</div></div>' +
+      pageHeader(isModifiedReport ? 'Pièces modifiées après première saisie' : 'Détail des lignes saisies', isModifiedReport ? 'Sélectionnez les journaux et la période de modification avant de définir la mise en page.' : 'Sélectionnez les journaux, les comptes et la période avant de définir la mise en page.', '') +
+      selectionNote +
       '<form id="journal-lines-selection-form" novalidate>' +
         '<section class="card journal-lines-card"><div class="panel">' +
-          '<div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div><span class="journal-lines-cycle-badge">Cycle ' + esc(dateLabel(dossier.cycleStart)) + ' — ' + esc(dateLabel(dossier.cycleEnd)) + '</span></div>' +
-          '<div class="journal-lines-filter-grid">' +
-            '<div class="field span-2"><label for="journal-lines-journals-summary">Journaux</label><div class="journal-lines-picker-control"><input id="journal-lines-journals-summary" type="text" readonly value="' + esc(journalLinesReportFilterSummary('journals', session)) + '"><button type="button" class="btn btn-ghost" data-journal-lines-picker="journals" aria-label="Choisir les journaux">…</button></div></div>' +
-            '<div class="field span-2"><label for="journal-lines-accounts-summary">Comptes</label><div class="journal-lines-picker-control"><input id="journal-lines-accounts-summary" type="text" readonly value="' + esc(journalLinesReportFilterSummary('accounts', session)) + '"><button type="button" class="btn btn-ghost" data-journal-lines-picker="accounts" aria-label="Choisir les comptes">…</button></div></div>' +
-            '<div class="field"><label for="journal-lines-from">Date de début</label><input id="journal-lines-from" name="from" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(session.filters.from) + '" required></div>' +
-            '<div class="field"><label for="journal-lines-to">Date de fin</label><input id="journal-lines-to" name="to" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(session.filters.to) + '" required></div>' +
-            '<div class="field span-2"><label for="journal-lines-directory">Répertoire FEC</label><div class="journal-lines-picker-control"><input id="journal-lines-directory" type="text" readonly placeholder="Aucun répertoire local sélectionné" value="' + esc(directoryValue) + '" title="Le choix du dossier reste dans ce navigateur."><button type="button" class="btn btn-ghost" data-journal-lines-directory aria-label="Choisir un répertoire de sortie">Générer</button></div><span class="hint">Dossier local de sortie Excel ou TXT ; l’export ne crée pas un fichier FEC normalisé.</span></div>' +
-          '</div>' +
+          '<div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div><span class="journal-lines-cycle-badge">' + (isModifiedReport ? 'Période de modification' : 'Cycle ' + esc(dateLabel(dossier.cycleStart)) + ' — ' + esc(dateLabel(dossier.cycleEnd))) + '</span></div>' +
+          '<div class="journal-lines-filter-grid">' + filterFields + '</div>' +
+          generatedLines +
         '</div></section>' +
         '<section class="card journal-lines-card"><div class="panel">' +
           '<div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
           '<div class="journal-lines-column-grid">' + columns + '</div>' +
           '<p class="hint journal-lines-columns-hint">Toutes les colonnes peuvent être choisies. Si une écriture ne porte aucune valeur pour une colonne sélectionnée, la cellule reste vide ; aucune donnée n’est calculée ou inventée.</p>' +
         '</div></section>' +
-        '<section class="card journal-lines-card"><div class="panel">' +
-          '<div class="journal-lines-section-heading"><div><p class="page-kicker">PRÉSENTATION DES LIGNES</p><h3>À imprimer</h3></div></div>' +
-          '<div class="journal-lines-print-options">' +
-            '<label class="journal-lines-check-option"><input type="checkbox" id="journal-lines-new-page"' + (session.printOptions.newPageEachJournal ? ' checked' : '') + '><span>Nouvelle page pour chaque journal</span></label>' +
-            '<label class="journal-lines-check-option"><input type="checkbox" id="journal-lines-subtotal-piece"' + (session.printOptions.subtotalByPiece ? ' checked' : '') + '><span>Sous-total par pièce</span></label>' +
-            '<label class="journal-lines-check-option"><input type="checkbox" id="journal-lines-subtotal-month"' + (session.printOptions.subtotalByMonth ? ' checked' : '') + '><span>Sous-total par mois</span></label>' +
-          '</div>' +
-          '<div class="journal-lines-form-errors" id="journal-lines-selection-errors" role="alert" aria-live="polite"></div>' +
-          '<div class="journal-lines-form-actions"><a class="btn btn-ghost" href="' + esc(accountingMenuHash('editions', 'journals')) + '">Annuler</a><button type="submit" class="btn btn-primary">Valider</button></div>' +
-        '</div></section>' +
+        presentationOptions +
+        modifiedActions +
       '</form>';
   }
 
@@ -10925,7 +10965,9 @@
 
   function journalLinesReportLayoutView(session) {
     var report = session.report || buildJournalLinesReport(session);
-    var summary = report.entryCount + ' pièce(s) · ' + report.lineCount + ' ligne(s) retenue(s)';
+    var summary = session.mode === 'modified'
+      ? report.lineCount + ' ligne(s) générée(s) · ' + report.entryCount + ' pièce(s) modifiée(s)'
+      : report.entryCount + ' pièce(s) · ' + report.lineCount + ' ligne(s) retenue(s)';
     return journalLinesReportSteps('layout') +
       pageHeader('Mise en Page', 'Choisissez le format, la présentation et la destination du rapport.', '') +
       '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(summary) + '. Les pièces sont consultées en lecture seule.</div></div>' +
@@ -11044,7 +11086,9 @@
     }).join('');
     var empty = report.groups.length
       ? ''
-      : '<div class="empty-state"><strong>Aucune ligne ne correspond à la sélection.</strong>Vérifiez les journaux, comptes et dates ; aucune écriture n’a été modifiée.</div>';
+      : '<div class="empty-state"><strong>Aucune ligne ne correspond à la sélection.</strong>' + (session.mode === 'modified'
+        ? 'Vérifiez les journaux et la période de dernière modification ; aucune écriture n’a été modifiée.'
+        : 'Vérifiez les journaux, comptes et dates ; aucune écriture n’a été modifiée.') + '</div>';
     var printerPreference = session.layout.printer === 'system' ? 'imprimante système' : 'PDF';
     var printerHint = session.previewForPrinter
       ? '<div class="alert info journal-lines-printer-preview"><div><strong>Aperçu obligatoire avant impression.</strong> Le formulaire indique la préférence « ' + esc(printerPreference) + ' », mais le navigateur conserve le choix final. La plage et la parité sont à confirmer dans sa boîte d’impression.</div></div>'
@@ -11056,7 +11100,9 @@
     var parityLabel = session.layout.parity === 'odd' ? ' · pages impaires' : (session.layout.parity === 'even' ? ' · pages paires' : '');
     var orientationClass = session.layout.orientation === 'landscape' ? ' is-landscape' : '';
     var styleClass = session.layout.style === 'color10' ? ' is-color-style' : ' is-mono-style';
-    return pageHeader('Aperçu — Détail des lignes saisies', report.entryCount + ' pièce(s) · ' + report.lineCount + ' ligne(s)' + pageRange + parityLabel, '') +
+    var previewTitle = session.mode === 'modified' ? 'Aperçu — Pièces modifiées après première saisie' : 'Aperçu — Détail des lignes saisies';
+    var periodLabel = session.mode === 'modified' ? 'Modifications du' : 'Période';
+    return pageHeader(previewTitle, report.entryCount + ' pièce(s) · ' + report.lineCount + ' ligne(s)' + pageRange + parityLabel, '') +
       '<div class="journal-lines-report-print' + orientationClass + styleClass + '">' +
         '<div class="journal-lines-preview-actions journal-lines-no-print"><span>' + esc(report.entryCount + ' pièce(s) · ' + report.lineCount + ' ligne(s)') + '</span><div>' +
           '<button type="button" class="btn btn-ghost" data-journal-lines-back-layout>Retour à la mise en Page</button>' +
@@ -11068,7 +11114,7 @@
             '<div class="journal-lines-print-owner"><strong>' + esc(identity.licenseOwner) + '</strong><span>Organisation · propriétaire de la licence</span></div>' +
             '<div class="journal-lines-print-dossier"><strong>' + esc(identity.dossierName) + '</strong><span>Dossier concerné</span>' + (identity.reference ? '<small>Référence : ' + esc(identity.reference) + '</small>' : '') + '</div>' +
           '</div>' +
-          '<div class="journal-lines-print-period"><span>Période</span><strong>' + esc(dateLabel(session.filters.from)) + ' — ' + esc(dateLabel(session.filters.to)) + '</strong></div>' +
+          '<div class="journal-lines-print-period"><span>' + esc(periodLabel) + '</span><strong>' + esc(dateLabel(session.filters.from)) + ' — ' + esc(dateLabel(session.filters.to)) + '</strong></div>' +
         '</div>' +
         (!identity.ownerConfigured ? '<div class="alert warning journal-lines-owner-warning journal-lines-no-print"><div>Le nom du titulaire de la licence n’est pas renseigné. Complétez « Raison sociale (nom de la licence) » dans Paramètres → Informations communes aux états imprimés.</div></div>' : '') +
         (groupsHtml || empty) +
@@ -11083,8 +11129,9 @@
   }
 
   function buildJournalLinesReport(session) {
-    return JournalLinesReport.build({
-      entries: S.postedEntries(),
+    var isModifiedReport = session.mode === 'modified';
+    var report = JournalLinesReport.build({
+      entries: isModifiedReport ? S.entries() : S.postedEntries(),
       accounts: S.accounts(),
       journals: S.journals(),
       filters: session.filters,
@@ -11092,8 +11139,17 @@
       decimalPlaces: S.accountingConfiguration().decimalPlaces,
       newPageEachJournal: session.printOptions.newPageEachJournal,
       subtotalByPiece: session.printOptions.subtotalByPiece,
-      subtotalByMonth: session.printOptions.subtotalByMonth
+      subtotalByMonth: session.printOptions.subtotalByMonth,
+      includeDrafts: isModifiedReport,
+      modifiedOnly: isModifiedReport,
+      filterByModificationDate: isModifiedReport
     });
+    if (isModifiedReport) {
+      report.columns = report.columns.map(function (column) {
+        return Object.assign({}, column, { label: column.key === 'date' ? 'Date de la pièce' : column.label });
+      });
+    }
+    return report;
   }
 
   function captureJournalLinesSelectionDraft(session) {
@@ -11112,10 +11168,20 @@
     if (subtotalMonth) session.printOptions.subtotalByMonth = subtotalMonth.checked;
   }
 
+  function updateJournalLinesGeneratedCount(form, session) {
+    if (!form || session.mode !== 'modified') return;
+    captureJournalLinesSelectionDraft(session);
+    var count = $('[data-jlr-generated-count]', form);
+    if (!count) return;
+    var report = buildJournalLinesReport(session);
+    count.textContent = new Intl.NumberFormat('fr-FR').format(report.lineCount);
+  }
+
   function journalLinesReportFileName(session, extension) {
     var start = String(session.filters.from || '').replace(/-/g, '');
     var end = String(session.filters.to || '').replace(/-/g, '');
-    return 'PERFECTO-detail-lignes-journaux-' + start + '-' + end + '.' + extension;
+    var prefix = session.mode === 'modified' ? 'PERFECTO-pieces-modifiees-apres-premiere-saisie-' : 'PERFECTO-detail-lignes-journaux-';
+    return prefix + start + '-' + end + '.' + extension;
   }
 
   async function saveJournalLinesReportFile(session, filename, content, mime) {
@@ -11184,7 +11250,7 @@
     var selectedColumns = $$('[data-jlr-column]:checked', form).map(function (input) { return input.getAttribute('data-jlr-column'); });
     if (!from || !from.value || !to || !to.value) errors.push('Renseignez les deux dates de la période.');
     else if (from.value > to.value) errors.push('La date de début doit précéder ou égaler la date de fin.');
-    else if (from.value < S.currentDossier().cycleStart || to.value > S.currentDossier().cycleEnd) errors.push('Les dates doivent rester dans le cycle du dossier.');
+    else if (session.mode !== 'modified' && (from.value < S.currentDossier().cycleStart || to.value > S.currentDossier().cycleEnd)) errors.push('Les dates doivent rester dans le cycle du dossier.');
     if (!selectedColumns.length) errors.push('Sélectionnez au moins une colonne à imprimer.');
     showJournalLinesErrors($('#journal-lines-selection-errors', form), errors);
     if (errors.length) return;
@@ -11293,6 +11359,12 @@
         event.preventDefault();
         submitJournalLinesSelection(selectionForm, session);
       });
+      if (session.mode === 'modified') {
+        [$('#journal-lines-from', selectionForm), $('#journal-lines-to', selectionForm)].filter(Boolean).forEach(function (input) {
+          input.addEventListener('input', function () { updateJournalLinesGeneratedCount(selectionForm, session); });
+          input.addEventListener('change', function () { updateJournalLinesGeneratedCount(selectionForm, session); });
+        });
+      }
       $$('[data-journal-lines-picker]', selectionForm).forEach(function (button) {
         button.addEventListener('click', function () {
           captureJournalLinesSelectionDraft(session);
@@ -11335,7 +11407,7 @@
       });
       var newButton = $('[data-journal-lines-new-report]');
       if (newButton) newButton.addEventListener('click', function () {
-        journalLinesReportSession = createJournalLinesReportSession(S.currentDossier());
+        journalLinesReportSession = createJournalLinesReportSession(S.currentDossier(), journalLinesReportMode);
         render();
       });
     }
@@ -11344,7 +11416,7 @@
   function editionReportChildView(child, groupId, tabId) {
     var backLabel = groupId === 'editions' && tabId === 'journals' ? 'Tous les éléments Journaux' : 'Tous les états';
     var backLink = '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(accountingMenuHash(groupId, tabId)) + '">← ' + esc(backLabel) + '</a>';
-    if (child.id === 'journal-lines') return viewJournalLinesReport(backLink);
+    if (child.id === 'journal-lines' || child.id === 'journal-modified-pieces') return viewJournalLinesReport(backLink);
     if (child.id === 'journal-unbalanced-pieces') return viewUnbalancedJournalPieces();
     if (child.id === 'general-balance') return '<div class="edition-report-detail-view">' + backLink + viewBalance() + '</div>';
     if (child.id === 'general-ledger') return '<div class="edition-report-detail-view">' + backLink + viewLedger() + '</div>';
@@ -11357,9 +11429,7 @@
         ? 'Cet élément reste visible mais grisé selon le périmètre de votre capture. Aucune sortie ni aucun calcul n’est présenté.'
         : 'La navigation et la place de cet état sont créées. Nous attendrons votre capture de paramétrage et de résultat avant d’ajouter des filtres, des règles de regroupement ou des calculs.');
     var extra = '';
-    if (child.id === 'journal-modified-pieces') {
-      extra = 'Dans le prototype actuel, une pièce validée est immuable et aucun journal de versions après première saisie n’est conservé.';
-    } else if (child.id === 'journal-third-party-totals' || child.section === 'controls' || child.id.indexOf('third-party-') === 0) {
+    if (child.id === 'journal-third-party-totals' || child.section === 'controls' || child.id.indexOf('third-party-') === 0) {
       extra = 'Les pièces ne comportent pas encore d’identifiant auxiliaire individuel ; aucun solde ni mouvement ne sera attribué à un tiers comme s’il était confirmé.';
     } else if (child.id.indexOf('currency-') === 0 || child.id.indexOf('foreign-currency') === 0) {
       extra = 'Le modèle ne porte pas encore de montants en devise distincts ni de taux de conversion ; aucun équivalent XOF ni écart de change n’est calculé.';
@@ -12776,7 +12846,7 @@
     }
     if (route === 'menu') {
       var menuParams = parseHash().params;
-      if (menuParams.g === 'editions' && menuParams.t === 'journals' && menuParams.c === 'journal-lines') bindJournalLinesReport();
+      if (menuParams.g === 'editions' && menuParams.t === 'journals' && (menuParams.c === 'journal-lines' || menuParams.c === 'journal-modified-pieces')) bindJournalLinesReport();
       if (menuParams.g === 'parametres' && menuParams.t === 'dossier-configuration') bindAccountingConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'sections-accounts') bindAnalyticalSectionsConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'allocation-keys') bindAnalyticalAllocationKeys();

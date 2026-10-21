@@ -5521,6 +5521,18 @@
     return { ok: true, errors: [], entry: record };
   }
 
+  function entryContentSignature(record) {
+    return JSON.stringify({
+      reference: record && record.reference || '',
+      journal: record && record.journal || '',
+      date: record && record.date || '',
+      description: record && record.description || '',
+      lines: (record && Array.isArray(record.lines) ? record.lines : []).map(function (line) {
+        return [line.account || '', Number(line.debit) || 0, Number(line.credit) || 0];
+      })
+    });
+  }
+
   function updateDraft(id, payload) {
     var existing = entry(id);
     if (!existing) return { ok: false, errors: ['Pièce introuvable.'] };
@@ -5540,7 +5552,12 @@
     if (!result.ok) return result;
     var st = load();
     var idx = st.entries.findIndex(function (e) { return e.id === id; });
-    st.entries[idx] = Object.assign({}, existing, result.entry, { id: id });
+    var changed = entryContentSignature(existing) !== entryContentSignature(result.entry);
+    var updatedEntry = Object.assign({}, existing, result.entry, { id: id });
+    if (changed) {
+      updatedEntry.updatedAt = new Date().toISOString();
+    }
+    st.entries[idx] = updatedEntry;
     save();
     return { ok: true, errors: [], entry: st.entries[idx] };
   }

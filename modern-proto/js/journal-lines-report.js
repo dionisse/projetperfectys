@@ -1,5 +1,5 @@
 /*
- * PERFECTO · Construction des états « Détail des lignes saisies ».
+ * PERFECTO · Construction des états de lignes de journal.
  * Fonctions pures : filtrage en lecture seule, regroupements et sérialisation.
  */
 (function (root, factory) {
@@ -113,9 +113,14 @@
     var jobs = [];
 
     entries.forEach(function (entry, entryIndex) {
-      if (!entry || entry.status !== 'posted') return;
-      if (from && String(entry.date || '') < from) return;
-      if (to && String(entry.date || '') > to) return;
+      if (!entry) return;
+      var isDraft = entry.status === 'draft';
+      if (entry.status !== 'posted' && !(options.includeDrafts && isDraft)) return;
+      var updatedAt = String(entry.updatedAt || '');
+      if (options.modifiedOnly && (!updatedAt || !Number.isFinite(Date.parse(updatedAt)))) return;
+      var filterDate = options.filterByModificationDate ? updatedAt.slice(0, 10) : String(entry.date || '');
+      if (from && filterDate < from) return;
+      if (to && filterDate > to) return;
       var journalCode = String(entry.journal || '');
       if (selectedJournals.size && !selectedJournals.has(journalCode)) return;
       var lines = (Array.isArray(entry.lines) ? entry.lines : []).map(function (line, lineIndex) {
@@ -124,12 +129,18 @@
         return record.line && (!selectedAccounts.size || selectedAccounts.has(String(record.line.account || '')));
       });
       if (!lines.length) return;
-      jobs.push({ entry: entry, entryIndex: entryIndex, journalCode: journalCode, lines: lines });
+      jobs.push({
+        entry: entry,
+        entryIndex: entryIndex,
+        journalCode: journalCode,
+        sortDate: options.filterByModificationDate ? filterDate : String(entry.date || ''),
+        lines: lines
+      });
     });
 
     jobs.sort(function (a, b) {
       return compare(a.journalCode, b.journalCode) ||
-        compare(a.entry.date, b.entry.date) ||
+        compare(a.sortDate, b.sortDate) ||
         compare(a.entry.reference, b.entry.reference) ||
         a.entryIndex - b.entryIndex;
     });

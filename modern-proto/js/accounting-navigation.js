@@ -79,10 +79,10 @@
     {
       id: 'editions', label: 'Éditions', icon: '▤', defaultTab: 'journals', tabs: [
         {
-          id: 'journals', label: 'Journaux', status: 'partial', reason: 'Choisissez un état ou un contrôle. Les dix sous-éléments sont organisés en trois groupes ; la présentation et les paramètres de chaque état seront affinés à partir de vos captures.',
+          id: 'journals', label: 'Journaux', status: 'partial', reason: 'Choisissez un état ou un contrôle. Les dix sous-éléments sont organisés en trois groupes ; les deux rapports de lignes sont disponibles avec sélection, mise en page et aperçu, et les autres états seront affinés à partir de vos captures.',
           children: [
             { id: 'journal-lines', label: 'Détail des lignes saisies', section: 'pieces', status: 'active', reason: 'Sélection des journaux, comptes, périodes et colonnes, mise en page, aperçu, export Excel/TXT et impression après aperçu. Toutes les colonnes sont sélectionnables ; les cellules sans valeur source restent vides.' },
-            { id: 'journal-modified-pieces', label: 'Pièces modifiées après première saisie', section: 'pieces', status: 'planned', reason: 'Le prototype ne conserve pas encore l’historique des modifications de saisie ; les critères et le rendu restent à préciser à partir de votre capture.' },
+            { id: 'journal-modified-pieces', label: 'Pièces modifiées après première saisie', section: 'pieces', status: 'active', reason: 'Sélection des journaux et de la période de modification, colonnes sélectionnables, compteur dynamique, mise en page, aperçu, export Excel/TXT et impression après aperçu. Les changements antérieurs non horodatés ne sont pas reconstitués.' },
             { id: 'journal-unbalanced-pieces', label: 'Pièces déséquilibrées', section: 'pieces', status: 'partial', reason: 'Première vue en lecture seule : liste les pièces du cycle dont les débits diffèrent des crédits. Les colonnes et critères finaux seront ajustés à partir de votre capture.' },
             { id: 'journal-entry-totals', label: 'Cumul des pièces saisies', section: 'cumuls', status: 'planned', reason: 'Les regroupements, filtres de période et colonnes du cumul seront définis à partir de votre capture.' },
             { id: 'journal-individual-account-totals', label: 'Cumul par comptes individuels', section: 'cumuls', status: 'planned', reason: 'État à mettre en forme sans confondre le cumul individuel avec les comptes de synthèse ; paramètres à confirmer par capture.' },

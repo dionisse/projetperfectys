@@ -203,6 +203,41 @@ test('validation d’un brouillon puis immuabilité', () => {
   assert.strictEqual(S.deleteDraft(draft.entry.id).ok, false);
 });
 
+test('la première saisie et la dernière modification d’un brouillon sont horodatées sans changement de montants', () => {
+  const draft = S.createEntry({
+    reference: 'OD-2026-107A', journal: 'OD', date: '2026-06-05', description: 'Avant modification',
+    lines: [
+      { account: '622100', debit: 5000, credit: 0 },
+      { account: '401100', debit: 0, credit: 5000 }
+    ]
+  }, 'draft');
+  assert.strictEqual(draft.ok, true);
+  const firstEntry = draft.entry.createdAt;
+  assert.ok(firstEntry);
+  assert.strictEqual(draft.entry.updatedAt, undefined);
+
+  const unchanged = S.updateDraft(draft.entry.id, {
+    reference: draft.entry.reference, journal: draft.entry.journal, date: draft.entry.date,
+    description: draft.entry.description, lines: draft.entry.lines
+  });
+  assert.strictEqual(unchanged.ok, true);
+  assert.strictEqual(unchanged.entry.updatedAt, undefined, 'un simple enregistrement sans changement ne simule pas une modification');
+
+  const changed = S.updateDraft(draft.entry.id, {
+    reference: draft.entry.reference, journal: draft.entry.journal, date: draft.entry.date,
+    description: 'Après modification', lines: draft.entry.lines
+  });
+  assert.strictEqual(changed.ok, true);
+  assert.strictEqual(changed.entry.createdAt, firstEntry);
+  assert.ok(changed.entry.updatedAt);
+  assert.equal(new Date(changed.entry.updatedAt).toISOString(), changed.entry.updatedAt, 'l’horodatage de modification est un ISO réel, sans date historique fabriquée');
+  assert.strictEqual(changed.entry.lines[0].debit, 5000);
+  assert.strictEqual(changed.entry.lines[1].credit, 5000);
+  const posted = S.postEntry(draft.entry.id);
+  assert.strictEqual(posted.ok, true);
+  assert.strictEqual(posted.entry.updatedAt, changed.entry.updatedAt, 'la date de dernière modification est conservée après validation');
+});
+
 test('une suppression de brouillon échoue sans l’effacer si le stockage est plein', () => {
   const draft = S.createEntry({
     reference: 'OD-2026-108', journal: 'OD', date: '2026-06-06', description: 'Suppression protégée',
