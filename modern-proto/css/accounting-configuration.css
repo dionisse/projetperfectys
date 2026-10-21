@@ -228,6 +228,48 @@
 .fixed-asset-accounts-actions { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 9px; min-width: 0; }
 .fixed-asset-accounts-actions .btn { width: 100%; min-width: 0; min-height: 40px; justify-content: center; padding: 7px 8px; font-size: .72rem; line-height: 1.2; white-space: normal; overflow-wrap: anywhere; }
 .fixed-asset-accounts-footnote { margin: 0; font-size: .63rem; line-height: 1.45; }
+
+.order-accounts-workspace { display: grid; gap: 11px; margin-top: 15px; min-width: 0; }
+.order-accounts-access-note { margin: 0; font-size: .68rem !important; }
+.order-accounts-table-wrap { width: 100%; min-width: 0; border: 1px solid #121212; background: #fff; }
+.order-accounts-table { width: 100%; min-width: 0; table-layout: fixed; border-collapse: collapse; font-size: .83rem; }
+.order-accounts-table th,
+.order-accounts-table td { border-right: 1px solid #121212; border-left: 1px solid #121212; }
+.order-accounts-table th { height: 42px; padding: 5px 9px; border-bottom: 1px solid #121212; background: #f0f0f0; color: #111; font-size: .85rem; font-weight: 800; text-align: left; }
+.order-accounts-table th:first-child { width: 48%; }
+.order-accounts-table th:last-child { width: 52%; }
+.order-accounts-table tbody tr.order-accounts-row { height: 32px; cursor: pointer; }
+.order-accounts-table tbody tr.order-accounts-row:not(.is-selected) { background: #fffdeb; }
+.order-accounts-table tbody tr.order-accounts-row.is-even:not(.is-selected) { background: #fff; }
+.order-accounts-table td { padding: 4px 8px; line-height: 1.25; overflow-wrap: anywhere; }
+.order-accounts-table tbody tr.order-accounts-separator { height: 32px; }
+.order-accounts-table tbody tr.order-accounts-separator td { position: relative; height: 32px; padding: 0; background: #fffef2; }
+.order-accounts-table tbody tr.order-accounts-separator td::after { position: absolute; top: 50%; right: 0; left: 0; border-top: 2px dotted #171717; content: ''; }
+.order-accounts-table tbody tr.order-accounts-empty-row:not(.is-selected) { background: #fffdeb; }
+.order-accounts-table tbody tr.is-selected { color: #fff; background: #0782d8 !important; outline: 2px dotted #eda622; outline-offset: -3px; }
+.order-accounts-table tbody tr.is-selected td { color: #fff; background: #0782d8 !important; }
+.order-accounts-table tbody tr:focus-visible { outline: 2px dotted #ed9b21; outline-offset: -3px; }
+.order-accounts-table tbody tr.is-selected:focus-visible { outline-color: #f6ba48; }
+.order-accounts-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.order-accounts-footer .btn { min-height: 42px; min-width: 150px; justify-content: center; padding: 7px 12px; font-size: .76rem; }
+.order-accounts-footer > [data-order-accounts-action="accounts"] { min-width: 300px; }
+.order-accounts-footer-end { display: flex; gap: 12px; }
+.order-account-editor-grid { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); gap: 13px; }
+.order-account-editor-grid .field { min-width: 0; }
+@media (max-width: 760px) {
+  .order-accounts-table { font-size: .72rem; }
+  .order-accounts-table th { padding: 5px 6px; font-size: .73rem; }
+  .order-accounts-table td { padding: 4px 6px; }
+  .order-accounts-footer .btn { min-width: 0; }
+  .order-accounts-footer > [data-order-accounts-action="accounts"] { min-width: 0; }
+  .order-account-editor-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 520px) {
+  .order-accounts-footer { align-items: stretch; flex-direction: column; }
+  .order-accounts-footer > [data-order-accounts-action="accounts"] { width: 100%; }
+  .order-accounts-footer-end { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .order-accounts-footer-end .btn { width: 100%; }
+}
 @media (max-width: 900px) {
   .fixed-asset-accounts-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }

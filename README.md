@@ -46,6 +46,7 @@ Le dépôt fournit un serveur statique sans dépendance ni compilation. Dans Bol
 | Clés de répartition des sections | Deux grilles libres et indépendantes par dossier (sections auxiliaires sur principales ; familles de prestations par section), avec Afficher, Valider, Destination et Aperçu ; les grilles validées sont grisées. Aucune clé n’est interprétée et aucun calcul, transfert ou mouvement n’est exécuté |
 | Natures analytiques | Tableau de référence par dossier selon la capture, avec noms génériques/individuels, I.O., comptes significatifs et comptes à reporter ; modification selon un droit explicite, sans imputation ni calcul analytique |
 | Comptes associés aux immobilisations | Tableau des comptes de valeur brute, amortissements, dotations, cessions et reprises de subventions, configuré par dossier selon la capture ; aucune écriture générée |
+| Compte de suivi des commandes et marchés accordés | Grille Rubrique/Comptes paramétrable par dossier selon la capture ; les lignes vides permettent d’ajouter des rubriques sans modifier les sept lignes de référence. Aucun achat, suivi de commande, calcul ou écriture n’est activé |
 | Natures des comptes généraux | Tableau Nature/Comptes prérempli selon les captures, sauvegardé par dossier ; une ligne peut être modifiée et la liste réinitialisée. Les contrôles refusent les libellés de nature et codes répétés dans une même ligne ; le plan comptable et les écritures ne sont pas modifiés |
 | Tableau de bord | Indicateurs (débit, crédit, résultat, pièces), dernières pièces, activité par journal, état des périodes |
 | Plan comptable | Référentiel complet de 147 comptes fourni, classes et sous-classes, descriptions d’usage, recherche/filtres, création, modification et suppression contrôlée ; les numéros utilisés dans les pièces, les rattachements clients/fournisseurs/tiers divers/personnel ou les sous-comptes sont protégés, sans réécriture de l’historique |
@@ -115,6 +116,22 @@ Le droit `analyticalNatures.configure` contrôle **Modifier** et le bouton **I.O
 **Paramètres → Comptes associés aux immobilisations** reprend les cinq correspondances visibles : `21*` → `281*`, `6812`, `811`, `799` ; `22*` → `282*`, `6813`, `812`, `799` ; `23*` → `283*`, `6813`, `812`, `799` ; `24*` → `284*`, `6813`, `812`, `799` ; `26*` → cellules d’amortissement et de dotation vides, `816`, `799`. Les colonnes sont **Compte de valeur brute**, **Compte d’amortissements**, **Dotations aux amortissements**, **Valeurs nettes de cession** et **Reprises de subventions**. Les cases vides visibles sont conservées.
 
 La grille est enregistrée par dossier, occupe toute la largeur disponible et n’a pas de défilement interne ; les six boutons sont regroupés sous le tableau. Le droit `fixedAssetAccounts.configure` permet de modifier la ligne sélectionnée, d’ajouter une correspondance en choisissant une ligne vide en bas, de valider ou d’annuler les changements, et de réinitialiser la nomenclature (ce qui retire aussi les lignes ajoutées, après confirmation). L’ajout ne modifie pas les cinq lignes de référence ; **Comptes...** reste désactivé comme sur la capture. Cette correspondance n’est pas encore appliquée au registre des immobilisations et ne génère aucune écriture ni aucun calcul.
+
+### Compte de suivi des commandes et marchés accordés — tableau de correspondance
+
+**Paramètres → Compte de suivi des commandes et marchés accordés** reproduit la grille **Rubrique / Comptes** de la capture sous le titre **Comptes de suivi des marchés accordés**, avec la première ligne sélectionnée, les séparateurs pointillés, deux lignes vides et les boutons **Comptes généraux...** (désactivé), **Modifier** et **Fermer**. Les sept rubriques initiales sont :
+
+| Rubrique | Comptes |
+| --- | --- |
+| Réalisation HT (achats, travaux, honoraires) | `21 22 23 24 60 -608 61 62 63` |
+| TVA déductible | `445` |
+| Avances aux fournisseurs | `4091 4092 4093` |
+| Factures fournisseurs | `401 -4017 408 481 482 483 484` |
+| Règlements | `5` |
+| Retenues de garantie | `4017` |
+| Autres retenues (impôts, pénalités...) | `447FO` |
+
+La configuration est sauvegardée par dossier. Le droit `orderAccounts.configure` autorise **Modifier** ; sélectionner une ligne vide puis l’enregistrer ajoute une rubrique, sans déplacer ni réécrire les sept valeurs de référence. **Comptes généraux...** reste désactivé comme sur la capture. Cette table ne met en service ni les commandes aux fournisseurs ni le suivi opérationnel des marchés ; elle ne crée aucun achat, calcul, mouvement ou écriture comptable.
 
 ### Natures des comptes généraux — nomenclature par dossier
 

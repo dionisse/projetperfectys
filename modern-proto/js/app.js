@@ -98,6 +98,8 @@
   var fixedAssetAccountsSelectedDossierId = '';
   var fixedAssetAccountsEditDraft = null;
   var fixedAssetAccountsEditDossierId = '';
+  var orderAccountsSelectedId = 'orders-realization-ht';
+  var orderAccountsSelectedDossierId = '';
   var generalAccountNatureSelectedId = 'stable-grants';
   var deferredInstallPrompt = null;
   var exchangeImportSession = null;
@@ -2863,6 +2865,52 @@
         '</div>' +
       '</div>' +
       '<p class="small muted fixed-asset-accounts-footnote">Sélectionnez une ligne vide puis « Modifier » pour ajouter une correspondance, sans changer les lignes existantes. Aucun calcul ni aucune écriture ne sont produits.</p>' +
+    '</div>';
+  }
+
+  function viewOrderAccounts() {
+    var dossier = S.currentDossier();
+    if (orderAccountsSelectedDossierId !== dossier.id) {
+      orderAccountsSelectedId = 'orders-realization-ht';
+      orderAccountsSelectedDossierId = dossier.id;
+    }
+    var configuration = S.orderAccountsConfiguration();
+    var rows = (Array.isArray(configuration.rows) ? configuration.rows : []).concat(Array.isArray(configuration.additionalRows) ? configuration.additionalRows : []);
+    var canConfigure = hasDemoPermission(getActiveDemoMember(), 'accounting', 'orderAccounts.configure', accountingAccessContext(dossier));
+    var editable = canConfigure && !isPhoneViewport();
+    var selected = rows.find(function (row) { return row.id === orderAccountsSelectedId; }) || null;
+    var selectedIsEmptySlot = /^order-accounts-empty-\d+$/.test(orderAccountsSelectedId);
+    if (!selected && !selectedIsEmptySlot) {
+      selected = rows[0] || null;
+      if (selected) orderAccountsSelectedId = selected.id;
+    }
+    var tableRows = '';
+    rows.forEach(function (row, index) {
+      if (index > 0) tableRows += '<tr class="order-accounts-separator" aria-hidden="true"><td></td><td></td></tr>';
+      var isSelected = selected && selected.id === row.id;
+      tableRows += '<tr class="order-accounts-row' + (index % 2 ? ' is-even' : '') + (isSelected ? ' is-selected' : '') + '" data-order-account-row="' + esc(row.id) + '" tabindex="0" aria-selected="' + (isSelected ? 'true' : 'false') + '"><td>' + esc(row.rubric || '') + '</td><td>' + esc(row.accounts || '') + '</td></tr>';
+    });
+    var blankRows = '';
+    for (var blankIndex = 0; blankIndex < 2; blankIndex += 1) {
+      var blankId = 'order-accounts-empty-' + blankIndex;
+      var blankSelected = selectedIsEmptySlot && orderAccountsSelectedId === blankId;
+      blankRows += '<tr class="order-accounts-row order-accounts-empty-row' + (blankSelected ? ' is-selected' : '') + '" data-order-account-row="' + blankId + '" tabindex="0" aria-selected="' + (blankSelected ? 'true' : 'false') + '"><td></td><td></td></tr>';
+    }
+    var accessNote = !canConfigure
+      ? '<div class="alert warning order-accounts-access-note">Consultation seule : le droit « Configurer les comptes de suivi des commandes et marchés accordés » est requis pour modifier les rubriques.</div>'
+      : (isPhoneViewport() ? '<div class="alert info order-accounts-access-note">Consultation sur téléphone ; les modifications sont réservées à un ordinateur ou une tablette.</div>' : '');
+
+    return '<div class="order-accounts-workspace">' + accessNote +
+      '<div class="order-accounts-table-wrap" role="region" aria-label="Rubriques et comptes de suivi des commandes" tabindex="0">' +
+        '<table class="order-accounts-table"><thead><tr><th scope="col">Rubrique</th><th scope="col">Comptes</th></tr></thead><tbody>' + tableRows + blankRows + '</tbody></table>' +
+      '</div>' +
+      '<div class="order-accounts-footer">' +
+        '<button type="button" class="btn btn-ghost" data-order-accounts-action="accounts" disabled title="La sélection des comptes généraux reste désactivée comme sur la capture.">Comptes généraux...</button>' +
+        '<div class="order-accounts-footer-end">' +
+          '<button type="button" class="btn btn-ghost" data-order-accounts-action="modify"' + (editable && (selected || selectedIsEmptySlot) ? '' : ' disabled') + '>Modifier</button>' +
+          '<button type="button" class="btn btn-ghost" data-order-accounts-action="close">Fermer</button>' +
+        '</div>' +
+      '</div>' +
     '</div>';
   }
 
@@ -8472,6 +8520,8 @@
       exchangeFeature = viewAnalyticalNatures();
     } else if (group.id === 'parametres' && tab.id === 'fixed-asset-accounts') {
       exchangeFeature = viewFixedAssetAccounts();
+    } else if (group.id === 'parametres' && tab.id === 'orders-accounts') {
+      exchangeFeature = viewOrderAccounts();
     } else if (group.id === 'parametres' && tab.id === 'general-account-natures') {
       exchangeFeature = viewGeneralAccountNatures();
     }
@@ -8503,7 +8553,7 @@
         '<div class="accounting-menu-detail">' +
           statusLegend +
           '<section class="accounting-menu-panel" id="accounting-menu-tabpanel" role="tabpanel" aria-labelledby="accounting-tab-' + esc(tab.id) + '">' +
-            '<div class="accounting-menu-panel-head"><div><p class="page-kicker">' + (selectedChild ? 'ÉLÉMENT DU SOUS-MENU' : 'SOUS-MENU') + '</p><h3>' + esc(selectedChild ? selectedChild.label : tab.label) + '</h3></div>' + menuStatusBadge(selectedChild ? selectedChild.status : tab.status) + '</div>' +
+            '<div class="accounting-menu-panel-head"><div><p class="page-kicker">' + (selectedChild ? 'ÉLÉMENT DU SOUS-MENU' : 'SOUS-MENU') + '</p><h3>' + esc(selectedChild ? selectedChild.label : (tab.id === 'orders-accounts' ? 'Comptes de suivi des marchés accordés' : tab.label)) + '</h3></div>' + menuStatusBadge(selectedChild ? selectedChild.status : tab.status) + '</div>' +
             details + irreversible +
             (childList ? '<div class="menu-children-wrap"><h4>Éléments de ce sous-menu</h4>' + childList + '</div>' : '') +
             exchangeFeature +
@@ -8863,6 +8913,117 @@
     });
   }
 
+  function openOrderAccountEditor(orderRow, isNewRow) {
+    var dossier = S.currentDossier();
+    if (isPhoneViewport() || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'orderAccounts.configure', accountingAccessContext(dossier))) {
+      toast('Modification refusée : un droit explicite sur ce dossier et un écran ordinateur ou tablette sont requis.', 'warning');
+      return;
+    }
+    var body = '<form id="order-account-form" novalidate>' +
+      '<div id="order-account-errors" aria-live="assertive"></div>' +
+      '<div class="order-account-editor-grid">' +
+        '<div class="field"><label for="order-account-rubric">Rubrique</label><input id="order-account-rubric" type="text" maxlength="120" value="' + esc(orderRow && orderRow.rubric || '') + '"></div>' +
+        '<div class="field"><label for="order-account-codes">Comptes</label><input id="order-account-codes" type="text" maxlength="500" spellcheck="false" value="' + esc(orderRow && orderRow.accounts || '') + '"><span class="hint">Conservez les signes et codes tels qu’ils apparaissent dans la capture.</span></div>' +
+      '</div>' +
+      '<p class="small muted">Cette table configure des correspondances uniquement ; elle ne crée aucun achat ni aucune écriture.</p>' +
+    '</form>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button>' +
+      '<button type="submit" class="btn btn-primary" form="order-account-form">Enregistrer</button>';
+    openModal(isNewRow ? 'Ajouter une rubrique de suivi' : 'Modifier une rubrique de suivi', esc(isNewRow ? 'Nouvelle rubrique' : orderRow.rubric), body, footer, true);
+
+    var form = $('#order-account-form');
+    if (!form) return;
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var currentDossier = S.currentDossier();
+      if (isPhoneViewport() || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'orderAccounts.configure', accountingAccessContext(currentDossier))) {
+        toast('Modification refusée : le droit de configuration de ce dossier n’est pas accordé.', 'warning');
+        return;
+      }
+      var rubric = $('#order-account-rubric', form).value;
+      var accounts = $('#order-account-codes', form).value;
+      var current = S.orderAccountsConfiguration();
+      var rows = (Array.isArray(current.rows) ? current.rows : []).map(function (row) { return Object.assign({}, row); });
+      var additionalRows = (Array.isArray(current.additionalRows) ? current.additionalRows : []).map(function (row) { return Object.assign({}, row); });
+      var rowId = orderRow && orderRow.id;
+      if (isNewRow) {
+        var usedIds = Object.create(null);
+        additionalRows.forEach(function (row) { usedIds[row.id] = true; });
+        var customIndex = 1;
+        while (usedIds['order-accounts-custom-' + customIndex]) customIndex += 1;
+        rowId = 'order-accounts-custom-' + customIndex;
+        additionalRows.push({ id: rowId, rubric: rubric, accounts: accounts });
+      } else if (/^order-accounts-custom-\d+$/.test(rowId)) {
+        additionalRows = additionalRows.map(function (row) {
+          return row.id === rowId ? { id: row.id, rubric: rubric, accounts: accounts } : row;
+        });
+      } else {
+        rows = rows.map(function (row) {
+          return row.id === rowId ? { id: row.id, rubric: rubric, accounts: accounts } : row;
+        });
+      }
+      var result = S.saveOrderAccountsConfiguration({ rows: rows, additionalRows: additionalRows });
+      if (!result.ok) {
+        var errorRegion = $('#order-account-errors', form);
+        if (errorRegion) errorRegion.innerHTML = '<div class="alert error" role="alert"><ul style="margin:0 0 0 18px">' +
+          (result.errors || ['Enregistrement impossible.']).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
+        return;
+      }
+      orderAccountsSelectedId = rowId;
+      closeModal(true);
+      toast(isNewRow ? 'Nouvelle rubrique de suivi ajoutée au dossier.' : 'Rubrique de suivi enregistrée dans le dossier.', 'success');
+      render();
+    });
+  }
+
+  function bindOrderAccounts() {
+    var workspace = $('.order-accounts-workspace');
+    if (!workspace) return;
+    var dossier = S.currentDossier();
+    var canConfigure = hasDemoPermission(getActiveDemoMember(), 'accounting', 'orderAccounts.configure', accountingAccessContext(dossier));
+
+    function selectRow(row) {
+      var id = row && row.getAttribute('data-order-account-row');
+      if (!id) return;
+      orderAccountsSelectedId = id;
+      $$('[data-order-account-row]', workspace).forEach(function (item) {
+        var isSelected = item.getAttribute('data-order-account-row') === id;
+        item.classList.toggle('is-selected', isSelected);
+        item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+      });
+    }
+
+    $$('[data-order-account-row]', workspace).forEach(function (row) {
+      row.addEventListener('click', function () { selectRow(row); });
+      row.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        selectRow(row);
+      });
+    });
+
+    workspace.addEventListener('click', function (event) {
+      var button = event.target.closest ? event.target.closest('[data-order-accounts-action]') : null;
+      if (!button) return;
+      var action = button.getAttribute('data-order-accounts-action');
+      if (action === 'close') {
+        orderAccountsSelectedId = 'orders-realization-ht';
+        navigate(accountingMenuHash('parametres', 'dossier-configuration'));
+      } else if (action === 'modify') {
+        if (isPhoneViewport() || !canConfigure) {
+          toast('Modification refusée : un droit explicite sur ce dossier est requis.', 'warning');
+          return;
+        }
+        var current = S.orderAccountsConfiguration();
+        var isNewRow = /^order-accounts-empty-\d+$/.test(orderAccountsSelectedId);
+        var selectedRow = (Array.isArray(current.rows) ? current.rows : []).concat(Array.isArray(current.additionalRows) ? current.additionalRows : []).find(function (row) {
+          return row.id === orderAccountsSelectedId;
+        });
+        if (selectedRow || isNewRow) openOrderAccountEditor(selectedRow || null, isNewRow);
+      }
+    });
+  }
+
   function bindAnalyticalNatures() {
     var workspace = $('.analytical-natures-workspace');
     if (!workspace) return;
@@ -9021,6 +9182,7 @@
       if (menuParams.g === 'parametres' && menuParams.t === 'allocation-keys') bindAnalyticalAllocationKeys();
       if (menuParams.g === 'parametres' && menuParams.t === 'analytic-natures') bindAnalyticalNatures();
       if (menuParams.g === 'parametres' && menuParams.t === 'fixed-asset-accounts') bindFixedAssetAccounts();
+      if (menuParams.g === 'parametres' && menuParams.t === 'orders-accounts') bindOrderAccounts();
       if (menuParams.g === 'parametres' && menuParams.t === 'general-account-natures') bindGeneralAccountNatures();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'suppliers') bindSupplierView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'clients') bindClientView();

@@ -1169,6 +1169,53 @@
     return { rows: defaultFixedAssetAccountsRows(), additionalRows: [], updatedAt: '' };
   }
 
+  function defaultOrderAccountsRows() {
+    return [
+      { id: 'orders-realization-ht', rubric: 'Réalisation HT (achats, travaux, honoraires)', accounts: '21 22 23 24 60 -608 61 62 63' },
+      { id: 'orders-vat-deductible', rubric: 'TVA déductible', accounts: '445' },
+      { id: 'orders-supplier-advances', rubric: 'Avances aux fournisseurs', accounts: '4091 4092 4093' },
+      { id: 'orders-supplier-invoices', rubric: 'Factures fournisseurs', accounts: '401 -4017 408 481 482 483 484' },
+      { id: 'orders-payments', rubric: 'Règlements', accounts: '5' },
+      { id: 'orders-guarantee-retentions', rubric: 'Retenues de garantie', accounts: '4017' },
+      { id: 'orders-other-retentions', rubric: 'Autres retenues (impôts, pénalités...)', accounts: '447FO' }
+    ];
+  }
+
+  function normalizeOrderAccountsAdditionalRows(rows) {
+    var seen = Object.create(null);
+    return (Array.isArray(rows) ? rows : []).map(function (row) {
+      if (!row || typeof row !== 'object' || Array.isArray(row) || typeof row.id !== 'string' || !/^order-accounts-custom-\d+$/.test(row.id) || seen[row.id]) return null;
+      seen[row.id] = true;
+      var rubric = String(row.rubric == null ? '' : row.rubric).trim().replace(/\s+/g, ' ').slice(0, 120);
+      var accounts = String(row.accounts == null ? '' : row.accounts).trim().replace(/\s+/g, ' ').slice(0, 500);
+      return rubric || accounts ? { id: row.id, rubric: rubric, accounts: accounts } : null;
+    }).filter(Boolean);
+  }
+
+  function normalizeOrderAccountsConfiguration(value) {
+    var source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    var suppliedRows = Array.isArray(source.rows) ? source.rows : [];
+    var suppliedById = Object.create(null);
+    suppliedRows.forEach(function (row) {
+      if (row && typeof row.id === 'string' && row.id && !suppliedById[row.id]) suppliedById[row.id] = row;
+    });
+    var rows = defaultOrderAccountsRows().map(function (defaultRow) {
+      var stored = suppliedById[defaultRow.id];
+      var rubric = String(stored && stored.rubric != null ? stored.rubric : defaultRow.rubric).trim().replace(/\s+/g, ' ').slice(0, 120);
+      var accounts = String(stored && stored.accounts != null ? stored.accounts : defaultRow.accounts).trim().replace(/\s+/g, ' ').slice(0, 500);
+      return { id: defaultRow.id, rubric: rubric || defaultRow.rubric, accounts: accounts };
+    });
+    return {
+      rows: rows,
+      additionalRows: normalizeOrderAccountsAdditionalRows(source.additionalRows),
+      updatedAt: String(source.updatedAt || '').slice(0, 40)
+    };
+  }
+
+  function defaultOrderAccountsConfiguration() {
+    return { rows: defaultOrderAccountsRows(), additionalRows: [], updatedAt: '' };
+  }
+
   function defaultGeneralAccountNaturesRows() {
     return [
       { id: 'stable-resources', nature: 'Ressources stables', accounts: '1', level: 0 },
@@ -1285,6 +1332,7 @@
       analyticalNaturesConfiguration: defaultAnalyticalNaturesConfiguration(),
       generalAccountNaturesConfiguration: defaultGeneralAccountNaturesConfiguration(),
       fixedAssetAccountsConfiguration: defaultFixedAssetAccountsConfiguration(),
+      orderAccountsConfiguration: defaultOrderAccountsConfiguration(),
       reference: 'COR-DEM2026',
       seeded: true
     };
@@ -1325,6 +1373,7 @@
       analyticalAllocationKeysConfiguration: normalizeAnalyticalAllocationKeysConfiguration(record && record.analyticalAllocationKeysConfiguration),
       analyticalNaturesConfiguration: normalizeAnalyticalNaturesConfiguration(record && record.analyticalNaturesConfiguration),
       fixedAssetAccountsConfiguration: normalizeFixedAssetAccountsConfiguration(record && record.fixedAssetAccountsConfiguration),
+      orderAccountsConfiguration: normalizeOrderAccountsConfiguration(record && record.orderAccountsConfiguration),
       generalAccountNaturesConfiguration: normalizeGeneralAccountNaturesConfiguration(record && record.generalAccountNaturesConfiguration),
       reference: String(record && record.reference || referenceFor(accountingTypeCode, clientCode, exerciseYear)),
       seeded: record && record.seeded !== false
@@ -1415,6 +1464,11 @@
     return clone(dossier && dossier.fixedAssetAccountsConfiguration || defaultFixedAssetAccountsConfiguration());
   }
 
+  function orderAccountsConfiguration() {
+    var dossier = currentDossier();
+    return clone(dossier && dossier.orderAccountsConfiguration || defaultOrderAccountsConfiguration());
+  }
+
   function generalAccountNaturesConfiguration() {
     var dossier = currentDossier();
     return clone(dossier && dossier.generalAccountNaturesConfiguration || defaultGeneralAccountNaturesConfiguration());
@@ -1481,6 +1535,7 @@
       analyticalNaturesConfiguration: defaultAnalyticalNaturesConfiguration(),
       generalAccountNaturesConfiguration: defaultGeneralAccountNaturesConfiguration(),
       fixedAssetAccountsConfiguration: defaultFixedAssetAccountsConfiguration(),
+      orderAccountsConfiguration: defaultOrderAccountsConfiguration(),
       reference: reference,
       seeded: false
     };
@@ -1940,6 +1995,88 @@
 
   function initializeFixedAssetAccountsConfiguration() {
     return saveFixedAssetAccountsConfiguration({ rows: defaultFixedAssetAccountsRows(), additionalRows: [] });
+  }
+
+  function saveOrderAccountsConfiguration(input) {
+    ensureFolderCatalog();
+    var dossier = folderById(activeFolderId);
+    if (!dossier) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    var source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    var sourceRows = Array.isArray(source.rows) ? source.rows : [];
+    var defaultRows = defaultOrderAccountsRows();
+    var knownIds = Object.create(null);
+    var suppliedById = Object.create(null);
+    var errors = [];
+    defaultRows.forEach(function (row) { knownIds[row.id] = true; });
+    sourceRows.forEach(function (row) {
+      if (!row || typeof row !== 'object' || Array.isArray(row) || typeof row.id !== 'string' || !row.id) {
+        errors.push('Une rubrique de suivi des commandes est invalide.');
+        return;
+      }
+      if (!knownIds[row.id]) {
+        errors.push('Une rubrique inconnue ne peut pas remplacer les rubriques de référence.');
+        return;
+      }
+      if (suppliedById[row.id]) {
+        errors.push('La rubrique « ' + row.id + ' » est répétée.');
+        return;
+      }
+      suppliedById[row.id] = row;
+    });
+
+    var rows = defaultRows.map(function (defaultRow) {
+      var stored = suppliedById[defaultRow.id];
+      if (!stored) {
+        errors.push('La rubrique « ' + defaultRow.rubric + ' » est absente.');
+        return defaultRow;
+      }
+      var rubric = String(stored.rubric == null ? '' : stored.rubric).trim().replace(/\s+/g, ' ');
+      var accounts = String(stored.accounts == null ? '' : stored.accounts).trim().replace(/\s+/g, ' ');
+      if (!rubric) errors.push('Le libellé d’une rubrique de suivi ne peut pas être vide.');
+      if (rubric.length > 120) errors.push('Le libellé d’une rubrique ne peut pas dépasser 120 caractères.');
+      if (accounts.length > 500) errors.push('La liste de comptes d’une rubrique ne peut pas dépasser 500 caractères.');
+      return { id: defaultRow.id, rubric: rubric.slice(0, 120) || defaultRow.rubric, accounts: accounts.slice(0, 500) };
+    });
+
+    var additionalRows = [];
+    if (Object.prototype.hasOwnProperty.call(source, 'additionalRows')) {
+      if (!Array.isArray(source.additionalRows)) {
+        errors.push('Les nouvelles rubriques de suivi des commandes sont invalides.');
+      } else {
+        var customIds = Object.create(null);
+        source.additionalRows.forEach(function (row) {
+          if (!row || typeof row !== 'object' || Array.isArray(row) || typeof row.id !== 'string' || !/^order-accounts-custom-\d+$/.test(row.id)) {
+            errors.push('Une rubrique ajoutée de suivi des commandes est invalide.');
+            return;
+          }
+          if (customIds[row.id]) {
+            errors.push('La rubrique ajoutée « ' + row.id + ' » est répétée.');
+            return;
+          }
+          customIds[row.id] = true;
+          var rubric = String(row.rubric == null ? '' : row.rubric).trim().replace(/\s+/g, ' ');
+          var accounts = String(row.accounts == null ? '' : row.accounts).trim().replace(/\s+/g, ' ');
+          if (!rubric && !accounts) errors.push('Une rubrique ajoutée doit contenir un libellé ou des comptes.');
+          if (rubric.length > 120) errors.push('Le libellé d’une rubrique ajoutée ne peut pas dépasser 120 caractères.');
+          if (accounts.length > 500) errors.push('La liste de comptes d’une rubrique ajoutée ne peut pas dépasser 500 caractères.');
+          additionalRows.push({ id: row.id, rubric: rubric.slice(0, 120), accounts: accounts.slice(0, 500) });
+        });
+      }
+    } else {
+      additionalRows = normalizeOrderAccountsAdditionalRows(dossier.orderAccountsConfiguration && dossier.orderAccountsConfiguration.additionalRows);
+    }
+
+    if (errors.length) return { ok: false, errors: errors };
+    var previousCatalog = clone(folderCatalog);
+    var dossierIndex = folderCatalog.findIndex(function (record) { return record.id === dossier.id; });
+    if (dossierIndex < 0) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    var configuration = { rows: rows, additionalRows: additionalRows, updatedAt: new Date().toISOString() };
+    folderCatalog[dossierIndex] = Object.assign({}, dossier, { orderAccountsConfiguration: configuration });
+    if (!saveFolderCatalog()) {
+      folderCatalog = previousCatalog;
+      return { ok: false, errors: ['Impossible d’enregistrer les comptes de suivi des commandes dans ce navigateur. Les valeurs précédentes sont conservées.'] };
+    }
+    return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
   }
 
   function saveAnalyticalAllocationKeysConfiguration(kind, input) {
@@ -5669,6 +5806,8 @@
     fixedAssetAccountsConfiguration: fixedAssetAccountsConfiguration,
     saveFixedAssetAccountsConfiguration: saveFixedAssetAccountsConfiguration,
     initializeFixedAssetAccountsConfiguration: initializeFixedAssetAccountsConfiguration,
+    orderAccountsConfiguration: orderAccountsConfiguration,
+    saveOrderAccountsConfiguration: saveOrderAccountsConfiguration,
     saveAnalyticalAllocationKeysConfiguration: saveAnalyticalAllocationKeysConfiguration,
     generalAccountNaturesConfiguration: generalAccountNaturesConfiguration,
     saveGeneralAccountNaturesConfiguration: saveGeneralAccountNaturesConfiguration,
