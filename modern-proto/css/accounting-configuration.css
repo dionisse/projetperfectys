@@ -485,3 +485,59 @@
   .currency-settings-edit-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .currency-settings-edit-actions .btn { max-width: none; }
 }
+
+/* Paramétrage des comptes confidentiels : liste indépendante du plan comptable. */
+.confidential-accounts-workspace { display: grid; gap: 10px; margin-top: 15px; min-width: 0; }
+.confidential-accounts-workspace > .alert { margin: 0; align-items: flex-start; font-size: .7rem; line-height: 1.5; }
+.confidential-accounts-access-note,
+.confidential-accounts-prototype-note { font-size: .68rem !important; }
+#confidential-accounts-form { min-width: 0; margin: 0; }
+.confidential-accounts-layout { display: grid; grid-template-columns: minmax(0, 1fr) 158px; align-items: stretch; gap: 12px; min-width: 0; }
+.confidential-accounts-main { display: grid; align-content: start; gap: 0; min-width: 0; }
+.confidential-accounts-list-wrap { height: min(48vh, 380px); min-height: 235px; min-width: 0; overflow: auto; border: 1px solid #58645d; background: #fff; }
+.confidential-accounts-table { width: 100%; min-width: 400px; table-layout: fixed; border-collapse: collapse; color: #263b32; font-size: .76rem; }
+.confidential-accounts-table th,
+.confidential-accounts-table td { border: 1px solid #66716b; }
+.confidential-accounts-table thead th { position: sticky; z-index: 1; top: 0; height: 35px; padding: 5px 9px; color: #1f2e29; background: #f0f1ee; font-size: .78rem; font-weight: 800; text-align: left; }
+.confidential-accounts-table thead th:first-child { width: 24%; }
+.confidential-accounts-table tbody tr { height: 32px; }
+.confidential-accounts-table tbody tr[data-confidential-account-row] { cursor: pointer; }
+.confidential-accounts-table tbody tr:nth-child(odd) { background: #fffdeb; }
+.confidential-accounts-table tbody tr.is-even { background: #fff; }
+.confidential-accounts-table tbody th { padding: 4px 8px; color: #263b32; font-weight: 600; text-align: left; white-space: nowrap; }
+.confidential-accounts-table tbody td { padding: 4px 8px; }
+.confidential-accounts-table tbody tr.is-selected { color: #fff; background: #087fdb !important; }
+.confidential-accounts-table tbody tr.is-selected th { color: #fff; }
+.confidential-accounts-table tbody tr:focus-visible { outline: 2px dotted #1b574c; outline-offset: -3px; }
+.confidential-accounts-table tbody tr.is-selected:focus-visible { outline-color: #fff; }
+.confidential-accounts-empty-row td { height: 38px; padding: 8px; color: #6e7b74; text-align: center; }
+.confidential-accounts-picker { display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: center; gap: 10px; padding: 14px 12px; border: 1px solid #d8e0da; border-top: 0; background: #fafbf8; }
+.confidential-accounts-picker label { color: #334c45; font-size: .72rem; }
+.confidential-accounts-picker select { width: 100%; min-width: 0; min-height: 36px; padding: 6px 9px; border: 1px solid #98a49c; border-radius: 2px; background: #fff; color: #233a31; font: inherit; font-size: .75rem; }
+.confidential-accounts-picker select:focus { border-color: #187cdb; outline: 2px solid rgba(24, 124, 219, .18); }
+.confidential-accounts-picker select:disabled { color: #64736b; background: #f5f6f3; }
+.confidential-accounts-picker .hint { grid-column: 2; color: #6e7b74; font-size: .64rem; }
+.confidential-accounts-actions { display: flex; flex-direction: column; justify-content: space-between; gap: 12px; min-height: 520px; }
+.confidential-accounts-primary-actions,
+.confidential-accounts-edit-actions { display: grid; gap: 10px; }
+.confidential-accounts-actions .btn { min-height: 42px; justify-content: center; }
+.confidential-accounts-edit-actions { align-content: end; margin-top: auto; }
+.confidential-accounts-actions .btn:disabled { opacity: .58; cursor: not-allowed; }
+.confidential-accounts-footnote { margin: 0; font-size: .63rem; line-height: 1.45; }
+.confidential-accounts-errors { margin: 0; font-size: .7rem; }
+.confidential-accounts-errors ul { margin: 0 0 0 18px; padding: 0; }
+@media (max-width: 850px) {
+  .confidential-accounts-layout { grid-template-columns: minmax(0, 1fr); }
+  .confidential-accounts-actions { min-height: 0; }
+  .confidential-accounts-primary-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .confidential-accounts-edit-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: end; margin-top: 0; }
+  .confidential-accounts-edit-actions .btn { max-width: 220px; }
+}
+@media (max-width: 700px) {
+  .confidential-accounts-list-wrap { height: 42vh; min-height: 200px; }
+  .confidential-accounts-picker { grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 12px 9px; }
+  .confidential-accounts-picker .hint { grid-column: 1; }
+  .confidential-accounts-primary-actions { grid-template-columns: minmax(0, 1fr); }
+  .confidential-accounts-edit-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .confidential-accounts-edit-actions .btn { max-width: none; }
+}

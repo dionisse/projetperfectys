@@ -945,6 +945,9 @@
   var folderCatalog = null;
   var activeFolderId = null;
   var recoveryIssue = null;
+  // Prototype-only access context. The browser is not a security boundary.
+  var confidentialAccountAccessDossierId = '';
+  var confidentialAccountAccessEnabled = false;
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -1360,6 +1363,24 @@
     return { rows: defaultCurrencyRows(), defaultCurrencyCode: 'XOF', updatedAt: '' };
   }
 
+  function defaultConfidentialAccountsConfiguration() {
+    return { rows: [], updatedAt: '' };
+  }
+
+  function normalizeConfidentialAccountsConfiguration(value) {
+    var source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    var rows = [];
+    var seenCodes = Object.create(null);
+    (Array.isArray(source.rows) ? source.rows : []).forEach(function (row) {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) return;
+      var code = String(row.accountCode == null ? row.code == null ? '' : row.code : row.accountCode).trim();
+      if (!code || seenCodes[code]) return;
+      seenCodes[code] = true;
+      rows.push({ accountCode: code });
+    });
+    return { rows: rows, updatedAt: String(source.updatedAt || '').slice(0, 40) };
+  }
+
   function normalizeCurrencyRate(value) {
     var rate = String(value == null ? '' : value).trim().slice(0, 20);
     if (!rate) return '';
@@ -1516,6 +1537,7 @@
       accountControlsConfiguration: defaultAccountControlsConfiguration(),
       printedReportInformationConfiguration: defaultPrintedReportInformationConfiguration(),
       currenciesConfiguration: defaultCurrenciesConfiguration(),
+      confidentialAccountsConfiguration: defaultConfidentialAccountsConfiguration(),
       reference: 'COR-DEM2026',
       seeded: true
     };
@@ -1561,6 +1583,7 @@
       accountControlsConfiguration: normalizeAccountControlsConfiguration(record && record.accountControlsConfiguration),
       printedReportInformationConfiguration: normalizePrintedReportInformationConfiguration(record && record.printedReportInformationConfiguration),
       currenciesConfiguration: normalizeCurrenciesConfiguration(record && record.currenciesConfiguration),
+      confidentialAccountsConfiguration: normalizeConfidentialAccountsConfiguration(record && record.confidentialAccountsConfiguration),
       generalAccountNaturesConfiguration: normalizeGeneralAccountNaturesConfiguration(record && record.generalAccountNaturesConfiguration),
       reference: String(record && record.reference || referenceFor(accountingTypeCode, clientCode, exerciseYear)),
       seeded: record && record.seeded !== false
@@ -1676,6 +1699,104 @@
     return clone(dossier && dossier.currenciesConfiguration || defaultCurrenciesConfiguration());
   }
 
+  function confidentialAccountAccessIsEnabled() {
+    return confidentialAccountAccessEnabled && confidentialAccountAccessDossierId === activeFolderId;
+  }
+
+  function setConfidentialAccountAccess(supervisorAllowed) {
+    ensureFolderCatalog();
+    confidentialAccountAccessDossierId = activeFolderId || '';
+    confidentialAccountAccessEnabled = supervisorAllowed === true;
+    return { ok: true };
+  }
+
+  function confidentialAccountConfigurationForDossier(dossier) {
+    return normalizeConfidentialAccountsConfiguration(dossier && dossier.confidentialAccountsConfiguration);
+  }
+
+  function confidentialAccountCodesForDossier(dossierId) {
+    ensureFolderCatalog();
+    var dossier = folderById(dossierId || activeFolderId);
+    var codes = Object.create(null);
+    confidentialAccountConfigurationForDossier(dossier).rows.forEach(function (row) {
+      codes[String(row.accountCode)] = true;
+    });
+    return codes;
+  }
+
+  function isConfidentialAccountCode(code, dossierId) {
+    var key = String(code == null ? '' : code);
+    return !!key && !!confidentialAccountCodesForDossier(dossierId)[key];
+  }
+
+  function confidentialAccountsConfiguration() {
+    if (!confidentialAccountAccessIsEnabled()) return defaultConfidentialAccountsConfiguration();
+    var dossier = currentDossier();
+    return confidentialAccountConfigurationForDossier(dossier);
+  }
+
+  function saveConfidentialAccountRows(rows) {
+    ensureFolderCatalog();
+    if (!confidentialAccountAccessIsEnabled()) {
+      return { ok: false, errors: ['Action refusée : la configuration des comptes confidentiels est réservée au Superviseur général.'] };
+    }
+    var dossier = folderById(activeFolderId);
+    if (!dossier) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    var configuration = normalizeConfidentialAccountsConfiguration({ rows: rows, updatedAt: new Date().toISOString() });
+    var previousCatalog = clone(folderCatalog);
+    var dossierIndex = folderCatalog.findIndex(function (record) { return record.id === dossier.id; });
+    if (dossierIndex < 0) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    folderCatalog[dossierIndex] = Object.assign({}, dossier, { confidentialAccountsConfiguration: configuration });
+    if (!saveFolderCatalog()) {
+      folderCatalog = previousCatalog;
+      return { ok: false, errors: ['Impossible d’enregistrer la liste des comptes confidentiels dans ce navigateur. Les valeurs précédentes sont conservées.'] };
+    }
+    return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
+  }
+
+  function validateConfidentialAccountCode(code) {
+    var value = String(code == null ? '' : code).trim();
+    if (!value) return { ok: false, code: value, errors: ['Choisissez un compte existant du plan comptable.'] };
+    var accountRecord = load().accounts.find(function (account) { return String(account.code) === value; });
+    if (!accountRecord) return { ok: false, code: value, errors: ['Le compte choisi doit déjà exister dans le plan comptable du dossier actif.'] };
+    return { ok: true, code: value, account: accountRecord, errors: [] };
+  }
+
+  function addConfidentialAccount(code) {
+    if (!confidentialAccountAccessIsEnabled()) {
+      return { ok: false, errors: ['Action refusée : l’ajout est réservé au Superviseur général.'] };
+    }
+    var validation = validateConfidentialAccountCode(code);
+    if (!validation.ok) return { ok: false, errors: validation.errors };
+    var rows = confidentialAccountConfigurationForDossier(currentDossier()).rows;
+    if (rows.some(function (row) { return row.accountCode === validation.code; })) {
+      return { ok: false, errors: ['Ce compte figure déjà dans la liste confidentielle.'] };
+    }
+    rows.push({ accountCode: validation.code });
+    var result = saveConfidentialAccountRows(rows);
+    if (result.ok) result.account = clone(validation.account);
+    return result;
+  }
+
+  function updateConfidentialAccount(currentCode, nextCode) {
+    if (!confidentialAccountAccessIsEnabled()) {
+      return { ok: false, errors: ['Action refusée : la modification est réservée au Superviseur général.'] };
+    }
+    var oldCode = String(currentCode == null ? '' : currentCode).trim();
+    var rows = confidentialAccountConfigurationForDossier(currentDossier()).rows;
+    var index = rows.findIndex(function (row) { return row.accountCode === oldCode; });
+    if (index < 0) return { ok: false, errors: ['Le compte confidentiel à modifier est introuvable dans ce dossier.'] };
+    var validation = validateConfidentialAccountCode(nextCode);
+    if (!validation.ok) return { ok: false, errors: validation.errors };
+    if (rows.some(function (row, rowIndex) { return rowIndex !== index && row.accountCode === validation.code; })) {
+      return { ok: false, errors: ['Ce compte figure déjà dans la liste confidentielle.'] };
+    }
+    rows[index] = { accountCode: validation.code };
+    var result = saveConfidentialAccountRows(rows);
+    if (result.ok) result.account = clone(validation.account);
+    return result;
+  }
+
   function generalAccountNaturesConfiguration() {
     var dossier = currentDossier();
     return clone(dossier && dossier.generalAccountNaturesConfiguration || defaultGeneralAccountNaturesConfiguration());
@@ -1747,6 +1868,7 @@
       accountControlsConfiguration: defaultAccountControlsConfiguration(),
       printedReportInformationConfiguration: defaultPrintedReportInformationConfiguration(),
       currenciesConfiguration: defaultCurrenciesConfiguration(),
+      confidentialAccountsConfiguration: defaultConfidentialAccountsConfiguration(),
       reference: reference,
       seeded: false
     };
@@ -6319,6 +6441,593 @@
     return configuredNumberFormat().format(Number(value) || 0);
   }
 
+  function hiddenConfidentialAccountCodes(dossierId) {
+    if (confidentialAccountAccessIsEnabled()) return Object.create(null);
+    return confidentialAccountCodesForDossier(dossierId || activeFolderId);
+  }
+
+  function accountCodeFromLine(line) {
+    return String(line && (line.account == null ? line.accountCode : line.account) || '');
+  }
+
+  function entryReferencesConfidentialAccount(record, codeMap) {
+    return !!(record && Array.isArray(record.lines) && record.lines.some(function (line) {
+      return accountReferenceIsHidden(accountCodeFromLine(line), codeMap);
+    }));
+  }
+
+  function visibleEntryRecords(records, codeMap) {
+    codeMap = codeMap || hiddenConfidentialAccountCodes();
+    return clone((Array.isArray(records) ? records : []).filter(function (record) {
+      return !entryReferencesConfidentialAccount(record, codeMap);
+    }));
+  }
+
+  function accountReferenceIsHidden(value, codeMap) {
+    if (Array.isArray(value)) return value.some(function (item) { return accountReferenceIsHidden(item, codeMap); });
+    var text = String(value == null ? '' : value).trim();
+    if (!text) return false;
+    if (codeMap[text]) return true;
+    return Object.keys(codeMap).some(function (code) { return text.indexOf(code + '-') === 0; });
+  }
+
+  function recordReferencesConfidentialAccount(record, codeMap) {
+    if (!record || typeof record !== 'object') return false;
+    return [
+      'account', 'accountCode', 'account_code', 'generalAccount', 'general_account',
+      'auxiliaryAccountCode', 'assetAccountCode', 'accumulatedDepreciationAccountCode',
+      'depreciationExpenseAccountCode', 'sourceAccountCode'
+    ].some(function (key) { return accountReferenceIsHidden(record[key], codeMap); });
+  }
+
+  function visibleStateForConfidentialAccounts(sourceState, dossierId) {
+    var result = clone(sourceState || {});
+    var codeMap = hiddenConfidentialAccountCodes(dossierId);
+    if (!Object.keys(codeMap).length) return result;
+    result.accounts = (result.accounts || []).filter(function (record) { return !codeMap[String(record.code)]; });
+    result.entries = (result.entries || []).filter(function (record) { return !entryReferencesConfidentialAccount(record, codeMap); });
+    result.journals = (result.journals || []).map(function (record) {
+      var journalRecord = clone(record);
+      if (Array.isArray(journalRecord.authorizedAccounts)) {
+        journalRecord.authorizedAccounts = journalRecord.authorizedAccounts.filter(function (code) { return !codeMap[String(code)]; });
+      } else if (typeof journalRecord.authorizedAccounts === 'string' && journalRecord.authorizedAccounts !== '*') {
+        journalRecord.authorizedAccounts = journalRecord.authorizedAccounts.split(/[;,\s]+/).filter(function (code) {
+          return !!code && !codeMap[String(code)];
+        }).join(', ');
+      }
+      return journalRecord;
+    });
+    ['matchingGroups', 'pointageMarks', 'openingBalances', 'fixedAssets', 'suppliers', 'clients', 'otherParties', 'personnel'].forEach(function (key) {
+      if (Array.isArray(result[key])) result[key] = result[key].filter(function (record) { return !recordReferencesConfidentialAccount(record, codeMap); });
+    });
+    result.openingBalanceTransfers = (result.openingBalanceTransfers || []).map(function (transfer) {
+      var copy = clone(transfer);
+      if (copy.accountBalances && typeof copy.accountBalances === 'object') {
+        Object.keys(copy.accountBalances).forEach(function (code) { if (codeMap[code]) delete copy.accountBalances[code]; });
+      }
+      return copy;
+    });
+    result.importSourceFiles = [];
+    result.deletedStandardAccountCodes = (result.deletedStandardAccountCodes || []).filter(function (code) { return !codeMap[String(code)]; });
+    return result;
+  }
+
+  function visibleDossierRecord(dossier) {
+    if (!dossier) return null;
+    var result = clone(dossier);
+    if (!confidentialAccountAccessIsEnabled()) delete result.confidentialAccountsConfiguration;
+    return result;
+  }
+
+  function visibleDossiers() {
+    return dossiers().map(visibleDossierRecord);
+  }
+
+  function visibleCurrentDossier() {
+    return visibleDossierRecord(currentDossier());
+  }
+
+  function visibleSwitchFolder(folderId) {
+    var supervisorAllowed = confidentialAccountAccessIsEnabled();
+    var result = switchFolder(folderId);
+    if (!result || !result.ok) return result;
+    if (supervisorAllowed) {
+      confidentialAccountAccessDossierId = activeFolderId;
+      confidentialAccountAccessEnabled = true;
+    }
+    if (result.dossier) result.dossier = visibleDossierRecord(result.dossier);
+    if (result.folder) result.folder = visibleDossierRecord(result.folder);
+    if (result.state) result.state = visibleStateForConfidentialAccounts(result.state, folderId);
+    return result;
+  }
+
+  function visibleReadDossierStateSnapshot(dossierId) {
+    var result = readDossierStateSnapshot(dossierId);
+    if (!result || !result.ok) return result;
+    result.dossier = visibleDossierRecord(result.dossier);
+    result.state = visibleStateForConfidentialAccounts(result.state, dossierId);
+    return result;
+  }
+
+  function visibleGetState() {
+    return visibleStateForConfidentialAccounts(getState(), activeFolderId);
+  }
+
+  function visibleExportJson() {
+    var payload = {
+      application: 'PERFECTO',
+      module: 'Comptabilité générale SYSCOHADA',
+      version: 1,
+      dossier: visibleCurrentDossier(),
+      exportedAt: new Date().toISOString(),
+      data: visibleStateForConfidentialAccounts(load(), activeFolderId)
+    };
+    return JSON.stringify(payload, null, 2);
+  }
+
+  function visibleAccounts() {
+    var codeMap = hiddenConfidentialAccountCodes();
+    return clone(accounts().filter(function (record) { return !codeMap[String(record.code)]; }));
+  }
+
+  function visibleAccount(code) {
+    if (hiddenConfidentialAccountCodes()[String(code == null ? '' : code)]) return null;
+    var record = account(code);
+    return record ? clone(record) : null;
+  }
+
+  function visibleEntries() {
+    return visibleEntryRecords(entries());
+  }
+
+  function visibleEntry(id) {
+    var record = entry(id);
+    return record && !entryReferencesConfidentialAccount(record, hiddenConfidentialAccountCodes()) ? clone(record) : null;
+  }
+
+  function visiblePostedEntries() {
+    return visibleEntryRecords(postedEntries());
+  }
+
+  function visibleBalance() {
+    var codeMap = hiddenConfidentialAccountCodes();
+    var map = Object.create(null);
+    accounts().forEach(function (record) {
+      if (!codeMap[String(record.code)]) {
+        map[record.code] = { code: record.code, label: record.label, cls: record.cls, nature: record.nature, debit: 0, credit: 0 };
+      }
+    });
+    visibleEntryRecords(postedEntries(), codeMap).forEach(function (record) {
+      record.lines.forEach(function (line) {
+        var code = accountCodeFromLine(line);
+        if (!map[code]) map[code] = { code: code, label: code, cls: Number(String(code).charAt(0)), nature: '—', debit: 0, credit: 0 };
+        map[code].debit += Number(line.debit) || 0;
+        map[code].credit += Number(line.credit) || 0;
+      });
+    });
+    return Object.keys(map).map(function (key) { return map[key]; })
+      .filter(function (record) { return record.debit !== 0 || record.credit !== 0; })
+      .sort(function (a, b) { return String(a.code).localeCompare(String(b.code)); });
+  }
+
+  function visibleLedger(accountCode) {
+    var code = String(accountCode == null ? '' : accountCode);
+    var codeMap = hiddenConfidentialAccountCodes();
+    if (codeMap[code]) return { rows: [], debit: 0, credit: 0, balance: 0 };
+    var rows = [];
+    visibleEntryRecords(postedEntries(), codeMap).forEach(function (record) {
+      record.lines.forEach(function (line) {
+        if (accountCodeFromLine(line) !== code) return;
+        rows.push({ date: record.date, reference: record.reference, journal: record.journal, description: record.description,
+          debit: Number(line.debit) || 0, credit: Number(line.credit) || 0 });
+      });
+    });
+    rows.sort(function (a, b) { return a.date.localeCompare(b.date) || a.reference.localeCompare(b.reference); });
+    var running = 0;
+    rows.forEach(function (row) { running += row.debit - row.credit; row.balance = running; });
+    var debit = rows.reduce(function (sum, row) { return sum + row.debit; }, 0);
+    var credit = rows.reduce(function (sum, row) { return sum + row.credit; }, 0);
+    return { rows: rows, debit: debit, credit: credit, balance: debit - credit };
+  }
+
+  function visibleKpis() {
+    var st = load();
+    var rows = visibleBalance();
+    var visibleEntriesList = visibleEntries().filter(function (record) { return record.date >= st.cycleStart && record.date <= st.cycleEnd; });
+    var debit = rows.reduce(function (sum, row) { return sum + row.debit; }, 0);
+    var credit = rows.reduce(function (sum, row) { return sum + row.credit; }, 0);
+    var charges = 0, products = 0, cash = 0;
+    rows.forEach(function (row) {
+      if (row.cls === 6) charges += row.debit - row.credit;
+      if (row.cls === 7) products += row.credit - row.debit;
+      if (row.cls === 5) cash += row.debit - row.credit;
+    });
+    return {
+      debit: debit, credit: credit, charges: charges, produits: products,
+      resultat: products - charges, tresorerie: cash,
+      posted: visibleEntriesList.filter(function (record) { return record.status === 'posted'; }).length,
+      drafts: visibleEntriesList.filter(function (record) { return record.status === 'draft'; }).length
+    };
+  }
+
+  function visibleJournalStats() {
+    var st = load();
+    var visible = visibleEntryRecords(st.entries, hiddenConfidentialAccountCodes());
+    return journals().map(function (journalRecord) {
+      var list = visible.filter(function (record) {
+        return normalizeJournalCode(record.journal) === normalizeJournalCode(journalRecord.code) && record.date >= st.cycleStart && record.date <= st.cycleEnd;
+      });
+      var posted = list.filter(function (record) { return record.status === 'posted'; });
+      var totalsForJournal = posted.reduce(function (sum, record) {
+        var entryTotals = totals(record.lines);
+        sum.debit += entryTotals.debit;
+        sum.credit += entryTotals.credit;
+        return sum;
+      }, { debit: 0, credit: 0 });
+      var visibleJournalRecord = clone(journalRecord);
+      if (visibleJournalRecord.authorizedAccounts != null) {
+        visibleJournalRecord.authorizedAccounts = visibleAuthorizedAccounts(visibleJournalRecord.authorizedAccounts, hiddenConfidentialAccountCodes());
+      }
+      return { journal: visibleJournalRecord, count: list.length, posted: posted.length, drafts: list.length - posted.length,
+        debit: totalsForJournal.debit, credit: totalsForJournal.credit };
+    });
+  }
+
+  function visiblePeriodStats(year) {
+    var st = load();
+    if (Number(year) !== Number(st.exercise)) return [];
+    var monthKeys = Object.create(null);
+    cyclePeriods(st.cycleStart, st.cycleEnd).forEach(function (period) { monthKeys[period.year + '-' + period.month] = true; });
+    var visible = visibleEntryRecords(st.entries, hiddenConfidentialAccountCodes());
+    return st.periods.filter(function (period) { return !!monthKeys[period.year + '-' + period.month]; }).map(function (period) {
+      var list = visible.filter(function (record) {
+        return record.date >= st.cycleStart && record.date <= st.cycleEnd &&
+          Number(record.date.slice(0, 4)) === period.year && Number(record.date.slice(5, 7)) === period.month;
+      });
+      var posted = list.filter(function (record) { return record.status === 'posted'; });
+      var debit = posted.reduce(function (sum, record) { return sum + totals(record.lines).debit; }, 0);
+      return { year: period.year, month: period.month, status: period.status, count: list.length, posted: posted.length, debit: debit };
+    });
+  }
+
+  function confidentialWriteDenied() {
+    return { ok: false, errors: ['Action refusée : ce profil ne peut pas créer, modifier, valider ou importer une écriture qui référence un compte confidentiel.'] };
+  }
+
+  function payloadReferencesConfidentialAccount(payload) {
+    var codeMap = confidentialAccountCodesForDossier(activeFolderId);
+    return entryReferencesConfidentialAccount(payload, codeMap);
+  }
+
+  function visibleValidateEntry(payload, options) {
+    if (!confidentialAccountAccessIsEnabled() && payloadReferencesConfidentialAccount(payload)) return confidentialWriteDenied();
+    return validateEntry(payload, options);
+  }
+
+  function visibleCreateEntry(payload, status, options) {
+    if (!confidentialAccountAccessIsEnabled() && payloadReferencesConfidentialAccount(payload)) return confidentialWriteDenied();
+    return createEntry(payload, status, options);
+  }
+
+  function visibleUpdateDraft(id, payload) {
+    if (!confidentialAccountAccessIsEnabled() && (payloadReferencesConfidentialAccount(payload) || payloadReferencesConfidentialAccount(entry(id)))) return confidentialWriteDenied();
+    return updateDraft(id, payload);
+  }
+
+  function visiblePostEntry(id) {
+    if (!confidentialAccountAccessIsEnabled() && payloadReferencesConfidentialAccount(entry(id))) return confidentialWriteDenied();
+    return postEntry(id);
+  }
+
+  function visibleDeleteDraft(id) {
+    if (!confidentialAccountAccessIsEnabled() && payloadReferencesConfidentialAccount(entry(id))) return confidentialWriteDenied();
+    return deleteDraft(id);
+  }
+
+  function visibleAccountCodeChangeCheck(code) {
+    if (hiddenConfidentialAccountCodes()[String(code == null ? '' : code)]) {
+      return { ok: false, errors: ['Ce compte est confidentiel et ne peut pas être modifié depuis ce profil.',], references: null };
+    }
+    return accountCodeChangeCheck(code);
+  }
+
+  function visibleAccountDeleteCheck(code) {
+    if (hiddenConfidentialAccountCodes()[String(code == null ? '' : code)]) {
+      return { ok: false, errors: ['Ce compte est confidentiel et ne peut pas être supprimé depuis ce profil.',], references: null };
+    }
+    return accountDeleteCheck(code);
+  }
+
+  function visibleUpdateAccount(currentCode, data) {
+    var hidden = confidentialAccountCodesForDossier(activeFolderId);
+    var nextCode = String(!data || data.code == null ? currentCode : data.code).trim();
+    if (hidden[String(currentCode)] && nextCode !== String(currentCode)) {
+      return { ok: false, errors: ['Le numéro d’un compte confidentiel ne peut pas être changé tant qu’il figure dans cette liste.'] };
+    }
+    if (!confidentialAccountAccessIsEnabled() && hidden[nextCode]) {
+      return { ok: false, errors: ['Action refusée : ce profil ne peut pas modifier un compte confidentiel.'] };
+    }
+    return updateAccount(currentCode, data);
+  }
+
+  function visibleDeleteAccount(code) {
+    if (confidentialAccountCodesForDossier(activeFolderId)[String(code)]) {
+      return { ok: false, errors: ['Suppression refusée : retirez d’abord ce compte de la configuration confidentielle, puis réessayez.'] };
+    }
+    return deleteAccount(code);
+  }
+
+  function visibleCreateOpeningBalance(input) {
+    if (!confidentialAccountAccessIsEnabled() && confidentialAccountCodesForDossier(activeFolderId)[String(input && input.accountCode || '')]) return confidentialWriteDenied();
+    return createOpeningBalance(input);
+  }
+
+  function visibleUpdateOpeningBalance(id, input) {
+    var current = openingBalance(id);
+    if (!confidentialAccountAccessIsEnabled() && (recordReferencesConfidentialAccount(current, confidentialAccountCodesForDossier(activeFolderId)) ||
+        recordReferencesConfidentialAccount(input, confidentialAccountCodesForDossier(activeFolderId)))) return confidentialWriteDenied();
+    return updateOpeningBalance(id, input);
+  }
+
+  function visibleDeleteOpeningBalance(id) {
+    var current = openingBalance(id);
+    if (!confidentialAccountAccessIsEnabled() && recordReferencesConfidentialAccount(current, confidentialAccountCodesForDossier(activeFolderId))) return confidentialWriteDenied();
+    return deleteOpeningBalance(id);
+  }
+
+  function visiblePointEntryLine(lineKey, statementDate, sourceContext) {
+    var parts = String(lineKey || '').split(':');
+    var record = parts.length > 1 ? entry(parts.slice(0, -1).join(':')) : null;
+    var line = record && record.lines ? record.lines[Number(parts[parts.length - 1])] : null;
+    if (!confidentialAccountAccessIsEnabled() && line && confidentialAccountCodesForDossier(activeFolderId)[accountCodeFromLine(line)]) return confidentialWriteDenied();
+    return pointEntryLine(lineKey, statementDate, sourceContext);
+  }
+
+  function visibleUnpointEntryLine(lineKey) {
+    var mark = pointageForLine(lineKey);
+    if (!confidentialAccountAccessIsEnabled() && mark && confidentialAccountCodesForDossier(activeFolderId)[String(mark.accountCode)]) return confidentialWriteDenied();
+    return unpointEntryLine(lineKey);
+  }
+
+  function visibleAssignLetter(accountCode, lineKeys) {
+    if (!confidentialAccountAccessIsEnabled() && confidentialAccountCodesForDossier(activeFolderId)[String(accountCode)]) return confidentialWriteDenied();
+    return assignLetter(accountCode, lineKeys);
+  }
+
+  function visibleCancelLetter(idOrCode) {
+    var group = matchingGroup(idOrCode);
+    if (!confidentialAccountAccessIsEnabled() && group && confidentialAccountCodesForDossier(activeFolderId)[String(group.accountCode)]) return confidentialWriteDenied();
+    return cancelLetter(idOrCode);
+  }
+
+  function visibleImportJson(text) {
+    if (!confidentialAccountAccessIsEnabled() && Object.keys(confidentialAccountCodesForDossier(activeFolderId)).length) {
+      return { ok: false, errors: ['Import refusé : la restauration complète des données est réservée au Superviseur général lorsqu’un compte confidentiel est configuré.'] };
+    }
+    return importJson(text);
+  }
+
+  function visibleExchangeImport(incomingEntries, mode, options) {
+    if (!confidentialAccountAccessIsEnabled() && Array.isArray(incomingEntries) && incomingEntries.some(payloadReferencesConfidentialAccount)) {
+      return { ok: false, errors: ['Import refusé : le fichier référence un compte confidentiel.'] };
+    }
+    return importExchange(incomingEntries, mode, options);
+  }
+
+  function visibleExchangePreview(incomingEntries, mode, options) {
+    if (!confidentialAccountAccessIsEnabled() && Array.isArray(incomingEntries) && incomingEntries.some(payloadReferencesConfidentialAccount)) {
+      return { ok: false, errors: ['Aperçu refusé : le fichier référence un compte confidentiel.'], warnings: [], entries: [], lineCount: 0,
+        balancedCount: 0, unbalancedCount: 0, unmappedAccounts: [], unmappedJournals: [] };
+    }
+    return previewExchangeImport(incomingEntries, mode, options);
+  }
+
+  function visibleOpeningBalances() {
+    var codeMap = hiddenConfidentialAccountCodes();
+    return clone(openingBalances().filter(function (record) { return !recordReferencesConfidentialAccount(record, codeMap); }));
+  }
+
+  function visibleOpeningBalance(id) {
+    var record = openingBalance(id);
+    return record && !recordReferencesConfidentialAccount(record, hiddenConfidentialAccountCodes()) ? clone(record) : null;
+  }
+
+  function visibleAuditOpeningBalances() {
+    var codeMap = hiddenConfidentialAccountCodes();
+    var result = auditOpeningBalances();
+    if (!Object.keys(codeMap).length) return result;
+    var rows = visibleOpeningBalances();
+    var visibleIds = Object.create(null);
+    rows.forEach(function (record) { visibleIds[record.id] = true; });
+    result.rows = rows;
+    result.issues = result.issues.filter(function (issue) {
+      return !(issue.id && !visibleIds[issue.id]) && !(issue.accountCode && codeMap[String(issue.accountCode)]);
+    });
+    result.totals = rows.reduce(function (sum, record) {
+      sum.debit += Number(record.debit) || 0;
+      sum.credit += Number(record.credit) || 0;
+      sum.count += 1;
+      return sum;
+    }, { debit: 0, credit: 0, difference: 0, count: 0 });
+    result.totals.difference = result.totals.debit - result.totals.credit;
+    result.balanced = result.totals.difference === 0;
+    result.ok = result.issues.length === 0;
+    return result;
+  }
+
+  function visibleOpeningBalanceTransferPreview(sourceDossierId, accountBalances, incomingRows) {
+    var codeMap = hiddenConfidentialAccountCodes(sourceDossierId);
+    var targetCodeMap = hiddenConfidentialAccountCodes(activeFolderId);
+    Object.keys(targetCodeMap).forEach(function (code) { codeMap[code] = true; });
+    var result = openingBalanceTransferPreview(sourceDossierId, accountBalances, incomingRows);
+    if (!Object.keys(codeMap).length) return result;
+    result.decisions = result.decisions.filter(function (item) { return !codeMap[String(item.accountCode)]; });
+    if (result.snapshot && result.snapshot.accountBalances) {
+      Object.keys(result.snapshot.accountBalances).forEach(function (code) { if (codeMap[code]) delete result.snapshot.accountBalances[code]; });
+    }
+    result.replaceCount = result.decisions.filter(function (item) { return item.action === 'replace'; }).length;
+    result.unchangedCount = result.decisions.filter(function (item) { return item.action === 'unchanged'; }).length;
+    result.conflictCount = result.decisions.filter(function (item) { return item.action === 'conflict'; }).length;
+    result.addedRows = result.decisions.filter(function (item) { return item.action === 'replace'; }).reduce(function (sum, item) { return sum + item.addedRows; }, 0);
+    result.removedRows = result.decisions.filter(function (item) { return item.action === 'replace'; }).reduce(function (sum, item) { return sum + item.replacedRows; }, 0);
+    return result;
+  }
+
+  function visibleApplyOpeningBalanceTransfer(source, plan) {
+    if (!confidentialAccountAccessIsEnabled()) {
+      var codeMap = confidentialAccountCodesForDossier(activeFolderId);
+      var sourceCodeMap = confidentialAccountCodesForDossier(source && source.id);
+      Object.keys(sourceCodeMap).forEach(function (code) { codeMap[code] = true; });
+      var planContainsConfidential = (plan && Array.isArray(plan.rows) && plan.rows.some(function (row) { return codeMap[String(row && row.accountCode || '')]; })) ||
+        (plan && plan.accountBalances && Object.keys(plan.accountBalances).some(function (code) { return codeMap[code]; }));
+      if (planContainsConfidential) return confidentialWriteDenied();
+    }
+    return applyOpeningBalanceTransfer(source, plan);
+  }
+
+  function visibleMatchingGroups(accountCode) {
+    var codeMap = hiddenConfidentialAccountCodes();
+    if (accountCode && codeMap[String(accountCode)]) return [];
+    return clone(matchingGroups(accountCode).filter(function (record) { return !recordReferencesConfidentialAccount(record, codeMap); }));
+  }
+
+  function visibleMatchingGroup(idOrCode) {
+    var record = matchingGroup(idOrCode);
+    return record && !recordReferencesConfidentialAccount(record, hiddenConfidentialAccountCodes()) ? clone(record) : null;
+  }
+
+  function visibleMatchingForLine(lineKey) {
+    var record = matchingForLine(lineKey);
+    if (!record || hiddenConfidentialAccountCodes()[String(record.accountCode)]) return null;
+    return clone(record);
+  }
+
+  function visiblePointageMarks(accountCode) {
+    var codeMap = hiddenConfidentialAccountCodes();
+    if (accountCode && codeMap[String(accountCode)]) return [];
+    return clone(pointageMarks(accountCode).filter(function (record) { return !recordReferencesConfidentialAccount(record, codeMap); }));
+  }
+
+  function visiblePointageForLine(lineKey) {
+    var key = String(lineKey || '');
+    var mark = pointageForLine(key);
+    if (!mark || hiddenConfidentialAccountCodes()[String(mark.accountCode)]) return null;
+    return clone(mark);
+  }
+
+  function visibleImportSourceFiles() {
+    if (Object.keys(hiddenConfidentialAccountCodes()).length) return [];
+    return importSourceFiles();
+  }
+
+  function visibleImportSourceFile(id) {
+    if (Object.keys(hiddenConfidentialAccountCodes()).length) return null;
+    return importSourceFile(id);
+  }
+
+  function confidentialFilteringIsActive() {
+    return Object.keys(hiddenConfidentialAccountCodes()).length > 0;
+  }
+
+  function visibleBackupInfo() {
+    var info = backupInfo();
+    if (!info.available || !confidentialFilteringIsActive()) return info;
+    var snapshot = readBackupSnapshot();
+    if (!snapshot) return info;
+    var data = visibleStateForConfidentialAccounts(snapshot.data, activeFolderId);
+    return { available: true, createdAt: info.createdAt, accountCount: data.accounts.length,
+      entryCount: data.entries.length, periodCount: data.periods.length };
+  }
+
+  function visibleCorruptDatabaseContents() {
+    if (confidentialFilteringIsActive()) return null;
+    return corruptDatabaseContents();
+  }
+
+  function visibleDatabaseRepairAnalysis() {
+    if (!confidentialFilteringIsActive()) return databaseRepairAnalysis();
+    return { ok: false, restricted: true, canApplySafeRepair: false, safeRepairNeeded: false,
+      issues: [], summary: {}, criticalCount: 0, warningCount: 0 };
+  }
+
+  function visibleRepairDatabase() {
+    if (confidentialFilteringIsActive()) return { ok: false, errors: ['Réparation détaillée réservée au Superviseur général lorsqu’un compte confidentiel est configuré.'] };
+    return repairDatabase();
+  }
+
+  function visibleReinitializeCorruptDatabase() {
+    if (confidentialFilteringIsActive()) return { ok: false, errors: ['La réinitialisation d’une base contenant des comptes confidentiels est réservée au Superviseur général.'] };
+    return reinitializeCorruptDatabase();
+  }
+
+  function visibleRestoreBackup() {
+    if (confidentialFilteringIsActive()) return { ok: false, errors: ['La restauration complète d’un dossier contenant des comptes confidentiels est réservée au Superviseur général.'] };
+    return restoreBackup();
+  }
+
+  function visibleCancelImportBatch(batchId) {
+    var id = String(batchId || '');
+    if (!confidentialAccountAccessIsEnabled() && load().entries.some(function (record) {
+      return record.importBatchId === id && entryReferencesConfidentialAccount(record, confidentialAccountCodesForDossier(activeFolderId));
+    })) return confidentialWriteDenied();
+    return cancelImportBatch(batchId);
+  }
+
+  function visibleFixedAssets() {
+    var codeMap = hiddenConfidentialAccountCodes();
+    return clone(fixedAssets().filter(function (record) { return !recordReferencesConfidentialAccount(record, codeMap); }));
+  }
+
+  function visibleReferencedRecords(records) {
+    var codeMap = hiddenConfidentialAccountCodes();
+    return clone((Array.isArray(records) ? records : []).filter(function (record) { return !recordReferencesConfidentialAccount(record, codeMap); }));
+  }
+
+  function visibleReferencedRecord(record) {
+    return record && !recordReferencesConfidentialAccount(record, hiddenConfidentialAccountCodes()) ? clone(record) : null;
+  }
+
+  function visibleAuthorizedAccounts(value, codeMap) {
+    if (Array.isArray(value)) return value.filter(function (code) { return !codeMap[String(code)]; });
+    if (typeof value !== 'string' || value === '*') return value;
+    return value.split(/[;,\\s]+/).filter(function (code) { return !!code && !codeMap[String(code)]; }).join(', ');
+  }
+
+  function visibleJournals() {
+    var codeMap = hiddenConfidentialAccountCodes();
+    return clone(journals().map(function (record) {
+      var copy = clone(record);
+      if (copy.authorizedAccounts != null) copy.authorizedAccounts = visibleAuthorizedAccounts(copy.authorizedAccounts, codeMap);
+      return copy;
+    }));
+  }
+
+  function visibleJournal(code) {
+    var record = journal(code);
+    if (!record) return null;
+    var result = clone(record);
+    if (result.authorizedAccounts != null) result.authorizedAccounts = visibleAuthorizedAccounts(result.authorizedAccounts, hiddenConfidentialAccountCodes());
+    return result;
+  }
+
+  function visibleJournalEntryCount(codeOrIdentifier) {
+    var record = journals().find(function (item) { return item.id === codeOrIdentifier || normalizeJournalCode(item.code) === normalizeJournalCode(codeOrIdentifier); });
+    if (!record) return 0;
+    return visibleEntries().filter(function (entryRecord) { return normalizeJournalCode(entryRecord.journal) === normalizeJournalCode(record.code); }).length;
+  }
+
+  function visibleSuppliers() { return visibleReferencedRecords(suppliers()); }
+  function visibleSupplier(idOrCode) { return visibleReferencedRecord(supplier(idOrCode)); }
+  function visibleClients() { return visibleReferencedRecords(clients()); }
+  function visibleClient(idOrCode) { return visibleReferencedRecord(client(idOrCode)); }
+  function visibleOtherParties() { return visibleReferencedRecords(otherParties()); }
+  function visibleOtherParty(idOrCode) { return visibleReferencedRecord(otherParty(idOrCode)); }
+  function visiblePersonnel() { return visibleReferencedRecords(personnel()); }
+  function visiblePersonnelRecord(idOrCode) { return visibleReferencedRecord(personnelRecord(idOrCode)); }
+  function visibleFixedAsset(idOrCode) {
+    return visibleReferencedRecord(fixedAsset(idOrCode));
+  }
+
   function dateLabel(iso) {
     if (!iso) return '—';
     var parts = String(iso).split('-');
@@ -6336,8 +7045,12 @@
   global.PerfectoStore = {
     STORAGE_KEY: STORAGE_KEY,
     EXERCICE: EXERCICE,
-    dossiers: dossiers,
-    currentDossier: currentDossier,
+    dossiers: visibleDossiers,
+    currentDossier: visibleCurrentDossier,
+    confidentialAccountsConfiguration: confidentialAccountsConfiguration,
+    setConfidentialAccountAccess: setConfidentialAccountAccess,
+    addConfidentialAccount: addConfidentialAccount,
+    updateConfidentialAccount: updateConfidentialAccount,
     accountingConfiguration: accountingConfiguration,
     updateAccountingConfiguration: updateAccountingConfiguration,
     analyticalSectionsConfiguration: analyticalSectionsConfiguration,
@@ -6364,48 +7077,49 @@
     initializeGeneralAccountNaturesConfiguration: initializeGeneralAccountNaturesConfiguration,
     currentStorageKey: currentFolderStorageKey,
     createDossier: createDossier,
-    readDossierStateSnapshot: readDossierStateSnapshot,
-    switchDossier: switchFolder,
-    folders: dossiers,
-    currentFolder: currentDossier,
+    readDossierStateSnapshot: visibleReadDossierStateSnapshot,
+    switchDossier: visibleSwitchFolder,
+    folders: visibleDossiers,
+    currentFolder: visibleCurrentDossier,
     createFolder: createFolder,
-    switchFolder: switchFolder,
+    switchFolder: visibleSwitchFolder,
     load: load,
     save: save,
     reset: reset,
     getState: getState,
+    visibleState: visibleGetState,
     exercise: exercise,
-    accounts: accounts,
-    account: account,
-    journals: journals,
-    journal: journal,
+    accounts: visibleAccounts,
+    account: visibleAccount,
+    journals: visibleJournals,
+    journal: visibleJournal,
     journalOperationNatures: function () { return JOURNAL_OPERATION_NATURES.slice(); },
     journalAllowsAccount: journalAllowsAccount,
     nextJournalCode: nextJournalCode,
-    journalEntryCount: journalEntryCount,
+    journalEntryCount: visibleJournalEntryCount,
     createJournal: createJournal,
     updateJournal: updateJournal,
     deleteJournal: deleteJournal,
-    suppliers: suppliers,
-    supplier: supplier,
+    suppliers: visibleSuppliers,
+    supplier: visibleSupplier,
     createSupplier: createSupplier,
     updateSupplier: updateSupplier,
     setSupplierActive: setSupplierActive,
     deleteSupplier: deleteSupplier,
-    clients: clients,
-    client: client,
+    clients: visibleClients,
+    client: visibleClient,
     createClient: createClient,
     updateClient: updateClient,
     deleteClient: deleteClient,
     clientCodeChangeCheck: clientCodeChangeCheck,
-    otherParties: otherParties,
-    otherParty: otherParty,
+    otherParties: visibleOtherParties,
+    otherParty: visibleOtherParty,
     createOtherParty: createOtherParty,
     updateOtherParty: updateOtherParty,
     deleteOtherParty: deleteOtherParty,
     otherPartyIdentityChangeCheck: otherPartyIdentityChangeCheck,
-    personnel: personnel,
-    personnelRecord: personnelRecord,
+    personnel: visiblePersonnel,
+    personnelRecord: visiblePersonnelRecord,
     services: services,
     service: service,
     analyticalCenters: analyticalCenters,
@@ -6415,24 +7129,24 @@
     updateAnalyticalCenter: updateAnalyticalCenter,
     setAnalyticalCenterActive: setAnalyticalCenterActive,
     deleteAnalyticalCenter: deleteAnalyticalCenter,
-    matchingGroups: matchingGroups,
-    matchingGroup: matchingGroup,
-    matchingForLine: matchingForLine,
-    assignLetter: assignLetter,
-    cancelLetter: cancelLetter,
-    pointageMarks: pointageMarks,
-    pointageForLine: pointageForLine,
-    openingBalances: openingBalances,
-    openingBalance: openingBalance,
+    matchingGroups: visibleMatchingGroups,
+    matchingGroup: visibleMatchingGroup,
+    matchingForLine: visibleMatchingForLine,
+    assignLetter: visibleAssignLetter,
+    cancelLetter: visibleCancelLetter,
+    pointageMarks: visiblePointageMarks,
+    pointageForLine: visiblePointageForLine,
+    openingBalances: visibleOpeningBalances,
+    openingBalance: visibleOpeningBalance,
     expectedOpeningBalanceDate: expectedOpeningBalanceDate,
-    createOpeningBalance: createOpeningBalance,
-    updateOpeningBalance: updateOpeningBalance,
-    deleteOpeningBalance: deleteOpeningBalance,
-    auditOpeningBalances: auditOpeningBalances,
-    openingBalanceTransferPreview: openingBalanceTransferPreview,
-    applyOpeningBalanceTransfer: applyOpeningBalanceTransfer,
-    pointEntryLine: pointEntryLine,
-    unpointEntryLine: unpointEntryLine,
+    createOpeningBalance: visibleCreateOpeningBalance,
+    updateOpeningBalance: visibleUpdateOpeningBalance,
+    deleteOpeningBalance: visibleDeleteOpeningBalance,
+    auditOpeningBalances: visibleAuditOpeningBalances,
+    openingBalanceTransferPreview: visibleOpeningBalanceTransferPreview,
+    applyOpeningBalanceTransfer: visibleApplyOpeningBalanceTransfer,
+    pointEntryLine: visiblePointEntryLine,
+    unpointEntryLine: visibleUnpointEntryLine,
     nextServiceCode: nextServiceCode,
     createService: createService,
     updateService: updateService,
@@ -6446,8 +7160,8 @@
     fixedAssetLocations: fixedAssetLocations,
     fixedAssetLocation: fixedAssetLocation,
     nextFixedAssetLocationCode: nextFixedAssetLocationCode,
-    fixedAssets: fixedAssets,
-    fixedAsset: fixedAsset,
+    fixedAssets: visibleFixedAssets,
+    fixedAsset: visibleFixedAsset,
     nextFixedAssetCode: nextFixedAssetCode,
     createFixedAsset: createFixedAsset,
     updateFixedAsset: updateFixedAsset,
@@ -6457,8 +7171,8 @@
     deleteFixedAssetLocation: deleteFixedAssetLocation,
     nextIdentificationCode: nextIdentificationCode,
     registerIdentificationCode: registerIdentificationCode,
-    entries: entries,
-    entry: entry,
+    entries: visibleEntries,
+    entry: visibleEntry,
     periods: periods,
     years: years,
     period: period,
@@ -6467,36 +7181,36 @@
     setPeriod: setPeriod,
     nextReference: nextReference,
     totals: totals,
-    validateEntry: validateEntry,
-    createEntry: createEntry,
-    updateDraft: updateDraft,
-    postEntry: postEntry,
-    deleteDraft: deleteDraft,
+    validateEntry: visibleValidateEntry,
+    createEntry: visibleCreateEntry,
+    updateDraft: visibleUpdateDraft,
+    postEntry: visiblePostEntry,
+    deleteDraft: visibleDeleteDraft,
     addAccount: addAccount,
-    updateAccount: updateAccount,
-    deleteAccount: deleteAccount,
-    accountCodeChangeCheck: accountCodeChangeCheck,
-    accountDeleteCheck: accountDeleteCheck,
-    postedEntries: postedEntries,
-    balance: balance,
-    ledger: ledger,
-    kpis: kpis,
-    journalStats: journalStats,
-    periodStats: periodStats,
-    exportJson: exportJson,
-    importJson: importJson,
-    previewExchangeImport: previewExchangeImport,
-    importExchange: importExchange,
-    importSourceFiles: importSourceFiles,
-    importSourceFile: importSourceFile,
-    cancelImportBatch: cancelImportBatch,
-    backupInfo: backupInfo,
+    updateAccount: visibleUpdateAccount,
+    deleteAccount: visibleDeleteAccount,
+    accountCodeChangeCheck: visibleAccountCodeChangeCheck,
+    accountDeleteCheck: visibleAccountDeleteCheck,
+    postedEntries: visiblePostedEntries,
+    balance: visibleBalance,
+    ledger: visibleLedger,
+    kpis: visibleKpis,
+    journalStats: visibleJournalStats,
+    periodStats: visiblePeriodStats,
+    exportJson: visibleExportJson,
+    importJson: visibleImportJson,
+    previewExchangeImport: visibleExchangePreview,
+    importExchange: visibleExchangeImport,
+    importSourceFiles: visibleImportSourceFiles,
+    importSourceFile: visibleImportSourceFile,
+    cancelImportBatch: visibleCancelImportBatch,
+    backupInfo: visibleBackupInfo,
     databaseStorageStatus: databaseStorageStatus,
-    databaseRepairAnalysis: databaseRepairAnalysis,
-    repairDatabase: repairDatabase,
-    corruptDatabaseContents: corruptDatabaseContents,
-    reinitializeCorruptDatabase: reinitializeCorruptDatabase,
-    restoreBackup: restoreBackup,
+    databaseRepairAnalysis: visibleDatabaseRepairAnalysis,
+    repairDatabase: visibleRepairDatabase,
+    corruptDatabaseContents: visibleCorruptDatabaseContents,
+    reinitializeCorruptDatabase: visibleReinitializeCorruptDatabase,
+    restoreBackup: visibleRestoreBackup,
     monthLabel: monthLabel,
     money: money,
     amount: amount,

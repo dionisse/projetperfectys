@@ -256,7 +256,7 @@
         { id: 'accounting-bridge', label: 'Tableau de passage entre comptabilités', status: 'partial', reason: 'Correspondances configurables par module source PERFECTO et dossier cible actif ; les centralisations internes Paie & RH et Ventes les chargent comme pré-réglages, avec confirmation dans l’aperçu. L’auxiliaire reste à construire ; le stockage de cette démonstration est local au navigateur et n’est pas synchronisé avec Google Drive.' },
         { id: 'print-information', label: 'Informations communes aux états imprimés', status: 'partial', reason: 'La table de 35 rubriques est configurable, dédoublonnée et enregistrée séparément par dossier ; les autres états imprimés ne consomment pas encore ces valeurs.' },
         { id: 'currencies', label: 'Devises', status: 'partial', reason: 'La liste des devises et leur dernier cours sont configurables par dossier, avec XOF comme référence au cours 1.000. Ces paramètres ne déclenchent aucune conversion, aucun montant en devise ni aucun écart de change.' },
-        { id: 'confidential-accounts', label: 'Comptes confidentiels', status: 'review', reason: 'Droits et confidentialité à cadrer avant activation.' }
+        { id: 'confidential-accounts', label: 'Comptes confidentiels', status: 'partial', reason: 'La liste est configurable par dossier et réservée au Superviseur général ; les comptes et pièces associés sont masqués dans les écrans et états pour les autres profils.' }
       ]
     },
     {

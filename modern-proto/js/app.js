@@ -113,6 +113,8 @@
   var generalAccountNatureSelectedId = 'stable-grants';
   var currenciesSelectedCode = 'XOF';
   var currenciesSelectedDossierId = '';
+  var confidentialAccountsSelectedCode = '';
+  var confidentialAccountsSelectedDossierId = '';
   var deferredInstallPrompt = null;
   var exchangeImportSession = null;
   var internalAuxiliarySession = null;
@@ -173,6 +175,11 @@
     return demoMembers.find(function (member) { return member.id === activeDemoMemberId; }) || demoMembers[0] || null;
   }
 
+  function isConfidentialAccountsSupervisor(member) {
+    member = member || getActiveDemoMember();
+    return !!member && member.role === 'supervisor' && String(member.organizationId || '') === DEMO_ORGANIZATION_ID;
+  }
+
   function demoGrantList(member, moduleId) {
     var grants = member && member.grants && member.grants[moduleId];
     if (Array.isArray(grants)) return grants;
@@ -225,6 +232,7 @@
       if (switched.ok) activeDemoDossierId = selected.id;
       else return [];
     }
+    if (S.setConfidentialAccountAccess) S.setConfidentialAccountAccess(isConfidentialAccountsSupervisor(member));
     return permitted;
   }
 
@@ -697,6 +705,7 @@
   }
 
   function render() {
+    if (S.setConfidentialAccountAccess) S.setConfidentialAccountAccess(isConfidentialAccountsSupervisor());
     var parsed = parseHash();
     var route = parsed.route;
     var phoneViewport = isPhoneViewport();
@@ -2501,7 +2510,7 @@
     var raw = '';
     try { raw = window.localStorage.getItem(S.currentStorageKey()) || ''; } catch (err) { raw = ''; }
     var sizeKb = (raw.length / 1024).toFixed(1);
-    var state = S.getState();
+    var state = S.visibleState ? S.visibleState() : S.getState();
     var backupInfo = S.backupInfo();
     var backupDate = backupInfo.available ? new Date(backupInfo.createdAt).toLocaleString('fr-FR') : '';
     var backupMarkup = backupInfo.available
@@ -3461,6 +3470,64 @@
         '</div>' +
       '</form>' +
       '<p class="small muted currency-settings-footnote">Configuration conservée localement dans ce navigateur, séparément pour chaque dossier. La gestion des montants en devise et les conversions restent inactives.</p>' +
+    '</div>';
+  }
+
+  function viewConfidentialAccounts() {
+    var dossier = S.currentDossier();
+    if (confidentialAccountsSelectedDossierId !== dossier.id) {
+      confidentialAccountsSelectedCode = '';
+      confidentialAccountsSelectedDossierId = dossier.id;
+    }
+    var canConfigure = isConfidentialAccountsSupervisor(getActiveDemoMember());
+    if (!canConfigure) {
+      return '<div class="confidential-accounts-workspace">' +
+        '<div class="alert warning confidential-accounts-access-note"><strong>Accès réservé au Superviseur général.</strong><br>La liste et les comptes confidentiels ne sont pas consultables avec ce profil.</div>' +
+        '<p class="small muted">Ce prototype applique un masquage dans les écrans et états de l’application. Les données restent toutefois dans le stockage local du navigateur : ce filtrage ne remplace pas une sécurité serveur.</p>' +
+      '</div>';
+    }
+
+    var configuration = S.confidentialAccountsConfiguration();
+    var rows = Array.isArray(configuration.rows) ? configuration.rows : [];
+    var accounts = S.accounts();
+    var selectedRow = rows.find(function (row) { return row.accountCode === confidentialAccountsSelectedCode; }) || rows[0] || null;
+    if (selectedRow) confidentialAccountsSelectedCode = selectedRow.accountCode;
+    var tableRows = rows.map(function (row, index) {
+      var account = accounts.find(function (record) { return record.code === row.accountCode; });
+      var isSelected = selectedRow && selectedRow.accountCode === row.accountCode;
+      return '<tr class="confidential-accounts-row' + (index % 2 ? ' is-even' : '') + (isSelected ? ' is-selected' : '') + '" data-confidential-account-row="' + esc(row.accountCode) + '" tabindex="0" aria-selected="' + (isSelected ? 'true' : 'false') + '"><th scope="row">' + esc(row.accountCode) + '</th><td>' + esc(account ? account.label : 'Compte introuvable') + '</td></tr>';
+    }).join('');
+    var emptyMarkup = rows.length ? '' : '<tr class="confidential-accounts-empty-row"><td colspan="2">Aucun compte confidentiel configuré.</td></tr>';
+    var accountOptions = '<option value="">— Choisir un compte existant —</option>' + accounts.map(function (account) {
+      return '<option value="' + esc(account.code) + '"' + (selectedRow && account.code === selectedRow.accountCode ? ' selected' : '') + '>' +
+        esc(account.code + ' · ' + account.label) + '</option>';
+    }).join('');
+
+    return '<div class="confidential-accounts-workspace">' +
+      '<div class="alert info"><div><strong>Masquage par dossier</strong><br>Un compte choisi doit déjà exister dans le plan comptable. Toute pièce contenant au moins une ligne sur un compte confidentiel est masquée dans son intégralité aux autres profils, afin de ne pas révéler sa contrepartie ni ses montants agrégés. Aucun compte ni aucune écriture n’est créé ou modifié par ce paramétrage.</div></div>' +
+      '<div class="alert warning confidential-accounts-prototype-note">Réservé au Superviseur général dans cette démonstration. Les données du dossier restent stockées localement dans le navigateur ; le masquage de l’interface n’est pas une sécurité serveur et n’active pas de synchronisation Google Drive.</div>' +
+      '<form id="confidential-accounts-form" novalidate>' +
+        '<div class="confidential-accounts-layout">' +
+          '<div class="confidential-accounts-main">' +
+            '<div class="confidential-accounts-list-wrap" role="region" aria-label="Comptes confidentiels du dossier" tabindex="0">' +
+              '<table class="confidential-accounts-table"><caption class="sr-only">Comptes confidentiels du dossier actif</caption><thead><tr><th scope="col">Compte</th><th scope="col">Intitulé</th></tr></thead><tbody>' + tableRows + emptyMarkup + '</tbody></table>' +
+            '</div>' +
+            '<div class="field confidential-accounts-picker"><label for="confidential-account-code">Compte du plan comptable</label><select id="confidential-account-code" disabled>' + accountOptions + '</select><span class="hint">La liste ne propose que des comptes déjà présents au plan comptable de ce dossier.</span></div>' +
+            '<div id="confidential-accounts-errors" aria-live="assertive"></div>' +
+          '</div>' +
+          '<aside class="confidential-accounts-actions" aria-label="Actions sur les comptes confidentiels">' +
+            '<div class="confidential-accounts-primary-actions">' +
+              '<button type="button" class="btn btn-ghost" data-confidential-account-action="insert">Ajouter</button>' +
+              '<button type="button" class="btn btn-ghost" data-confidential-account-action="modify"' + (selectedRow ? '' : ' disabled') + '>Modifier</button>' +
+            '</div>' +
+            '<div class="confidential-accounts-edit-actions">' +
+              '<button type="submit" class="btn btn-primary" data-confidential-account-action="save" disabled>Valider</button>' +
+              '<button type="button" class="btn btn-ghost" data-confidential-account-action="cancel" disabled>Annuler</button>' +
+            '</div>' +
+          '</aside>' +
+        '</div>' +
+      '</form>' +
+      '<p class="small muted confidential-accounts-footnote">' + rows.length + ' compte(s) confidentiel(s) · liste conservée séparément pour ce dossier dans ce navigateur. Le retrait n’est pas proposé ; « Modifier » remplace le compte sélectionné.</p>' +
     '</div>';
   }
 
@@ -7522,6 +7589,11 @@
     }
 
     var report = S.databaseRepairAnalysis();
+    if (report.restricted) {
+      return '<div class="exchange-workspace database-repair-workspace">' + intro +
+        '<section class="exchange-card database-repair-report"><div class="alert warning"><div><strong>Diagnostic détaillé masqué.</strong> Lorsque des comptes confidentiels sont configurés, le diagnostic et la réparation complète sont réservés au Superviseur général. L’export JSON de ce profil reste filtré.</div></div></section>' +
+        '</div>';
+    }
     var summary = report.summary || {};
     var issueList = (report.issues || []).map(function (issue) {
       var severity = issue.severity === 'error' ? 'error' : (issue.severity === 'warning' ? 'warning' : 'info');
@@ -10846,6 +10918,8 @@
       exchangeFeature = viewGeneralAccountNatures();
     } else if (group.id === 'parametres' && tab.id === 'currencies') {
       exchangeFeature = viewCurrencies();
+    } else if (group.id === 'parametres' && tab.id === 'confidential-accounts') {
+      exchangeFeature = viewConfidentialAccounts();
     } else if (group.id === 'parametres' && tab.id === 'print-information') {
       exchangeFeature = viewPrintedReportInformation();
     }
@@ -11885,6 +11959,123 @@
     updateEditor();
   }
 
+  function bindConfidentialAccounts() {
+    var form = $('#confidential-accounts-form');
+    if (!form || !isConfidentialAccountsSupervisor(getActiveDemoMember())) return;
+    var workspace = $('.confidential-accounts-workspace');
+    var accountInput = $('#confidential-account-code', form);
+    var saveButton = $('[data-confidential-account-action="save"]', form);
+    var cancelButton = $('[data-confidential-account-action="cancel"]', form);
+    var insertButton = $('[data-confidential-account-action="insert"]', form);
+    var modifyButton = $('[data-confidential-account-action="modify"]', form);
+    var errorRegion = $('#confidential-accounts-errors', form);
+    var rows = S.confidentialAccountsConfiguration().rows || [];
+    var mode = 'view';
+    var selectedCode = rows.some(function (row) { return row.accountCode === confidentialAccountsSelectedCode; })
+      ? confidentialAccountsSelectedCode
+      : (rows[0] && rows[0].accountCode || '');
+
+    function isAllowed() {
+      return isConfidentialAccountsSupervisor(getActiveDemoMember());
+    }
+
+    function updateButtons() {
+      var editing = mode !== 'view';
+      var selected = rows.some(function (row) { return row.accountCode === selectedCode; });
+      if (insertButton) insertButton.disabled = !isAllowed() || editing;
+      if (modifyButton) modifyButton.disabled = !isAllowed() || editing || !selected;
+      if (saveButton) saveButton.disabled = !isAllowed() || !editing;
+      if (cancelButton) cancelButton.disabled = !editing;
+    }
+
+    function updateEditor() {
+      if (accountInput) {
+        accountInput.disabled = mode === 'view';
+        accountInput.value = mode === 'insert' ? '' : selectedCode;
+      }
+      if (errorRegion) errorRegion.innerHTML = '';
+      updateButtons();
+    }
+
+    function selectAccount(code) {
+      if (mode !== 'view' || !rows.some(function (row) { return row.accountCode === code; })) return;
+      selectedCode = code;
+      confidentialAccountsSelectedCode = code;
+      $$('[data-confidential-account-row]', workspace).forEach(function (row) {
+        var selected = row.getAttribute('data-confidential-account-row') === selectedCode;
+        row.classList.toggle('is-selected', selected);
+        row.setAttribute('aria-selected', selected ? 'true' : 'false');
+      });
+      updateEditor();
+    }
+
+    function showErrors(errors) {
+      if (!errorRegion) return;
+      errorRegion.innerHTML = '<div class="alert error confidential-accounts-errors" role="alert"><ul>' +
+        (errors || ['Enregistrement impossible.']).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') +
+        '</ul></div>';
+    }
+
+    $$('[data-confidential-account-row]', workspace).forEach(function (row) {
+      row.addEventListener('click', function () { selectAccount(row.getAttribute('data-confidential-account-row')); });
+      row.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        selectAccount(row.getAttribute('data-confidential-account-row'));
+      });
+    });
+
+    workspace.addEventListener('click', function (event) {
+      var button = event.target.closest ? event.target.closest('[data-confidential-account-action]') : null;
+      if (!button) return;
+      var action = button.getAttribute('data-confidential-account-action');
+      if (action === 'insert') {
+        if (!isAllowed()) {
+          toast('Ajout refusé : cette configuration est réservée au Superviseur général.', 'warning');
+          return;
+        }
+        mode = 'insert';
+        updateEditor();
+        if (accountInput) accountInput.focus();
+      } else if (action === 'modify') {
+        if (!isAllowed() || !rows.some(function (row) { return row.accountCode === selectedCode; })) {
+          toast('Modification refusée : cette configuration est réservée au Superviseur général.', 'warning');
+          return;
+        }
+        mode = 'modify';
+        updateEditor();
+        if (accountInput) accountInput.focus();
+      } else if (action === 'cancel') {
+        mode = 'view';
+        updateEditor();
+        toast('Modification des comptes confidentiels annulée.', 'info');
+      }
+    });
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!isAllowed()) {
+        toast('Enregistrement refusé : seul le Superviseur général peut modifier cette liste.', 'warning');
+        return;
+      }
+      if (mode === 'view') return;
+      var code = String(accountInput && accountInput.value || '').trim();
+      var result = mode === 'insert'
+        ? S.addConfidentialAccount(code)
+        : S.updateConfidentialAccount(selectedCode, code);
+      if (!result.ok) {
+        showErrors(result.errors);
+        return;
+      }
+      confidentialAccountsSelectedCode = result.account.code;
+      confidentialAccountsSelectedDossierId = result.dossier.id;
+      toast(mode === 'insert' ? 'Compte ajouté à la liste confidentielle.' : 'Compte confidentiel modifié.', 'success');
+      render();
+    });
+
+    updateEditor();
+  }
+
   function bindPrintedReportInformation() {
     var form = $('#printed-report-information-form');
     if (!form) return;
@@ -12017,6 +12208,7 @@
       if (menuParams.g === 'parametres' && menuParams.t === 'accounting-bridge') bindAccountingBridge();
       if (menuParams.g === 'parametres' && menuParams.t === 'general-account-natures') bindGeneralAccountNatures();
       if (menuParams.g === 'parametres' && menuParams.t === 'currencies') bindCurrencies();
+      if (menuParams.g === 'parametres' && menuParams.t === 'confidential-accounts') bindConfidentialAccounts();
       if (menuParams.g === 'parametres' && menuParams.t === 'print-information') bindPrintedReportInformation();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'suppliers') bindSupplierView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'clients') bindClientView();

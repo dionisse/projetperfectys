@@ -377,6 +377,12 @@ assert.ok(findTab('parametres', 'print-information').reason.includes('35 rubriqu
 assert.equal(findTab('parametres', 'currencies').status, 'partial');
 assert.ok(findTab('parametres', 'currencies').reason.includes('XOF comme référence au cours 1.000'));
 assert.ok(findTab('parametres', 'currencies').reason.includes('aucune conversion'));
+assert.equal(findTab('parametres', 'confidential-accounts').status, 'partial');
+assert.ok(findTab('parametres', 'confidential-accounts').reason.includes('Superviseur général'));
+assert.ok(findTab('parametres', 'confidential-accounts').reason.includes('masqués'));
+assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'confidential-accounts'[\s\S]*viewConfidentialAccounts\(\)/);
+assert.match(appSource, /function bindConfidentialAccounts\(\)[\s\S]*S\.addConfidentialAccount[\s\S]*S\.updateConfidentialAccount/);
+assert.match(configurationCss, /\.confidential-accounts-layout[\s\S]*grid-template-columns/);
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'general-account-natures'[\s\S]*viewGeneralAccountNatures\(\)/);
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'print-information'[\s\S]*viewPrintedReportInformation\(\)/);
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'currencies'[\s\S]*viewCurrencies\(\)/);

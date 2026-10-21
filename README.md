@@ -458,6 +458,7 @@ tests/store.test.js            tests des règles métier (Node, sans dépendance
 tests/account-movements.test.js tests de synthèse mensuelle et de cohérence avec le grand livre
 tests/workspaces.test.js       tests de migration, références, cycles et isolation des dossiers clients
 tests/account-lifecycle.test.js cycle de vie des comptes, clients, fournisseurs, tiers divers et personnel
+tests/confidential-accounts.test.js comptes confidentiels, masquage des écritures et isolation par dossier
 tests/bank-statement.test.js lecture, mappage XOF et suggestions de relevés non comptabilisantes
 ```
 
@@ -469,12 +470,13 @@ node tests/workspaces.test.js
 node tests/modules.test.js
 node tests/permissions.test.js
 node tests/accounting-navigation.test.js
+node tests/confidential-accounts.test.js
 node tests/accounting-framework.test.js
 node tests/account-lifecycle.test.js
 node tests/centralization-cancellation.test.js
 ```
 
-Les tests couvrent les règles comptables, la transcription exhaustive des 532 lignes du référentiel SYSCOHADA (codes, intitulés, pages et rattachements Débit/Crédit, y compris les cases vides), les migrations, les références et le cycle de vie sécurisé des comptes et des répertoires clients, fournisseurs, débiteurs/créditeurs divers et personnel, les codes réservés, les cycles et l’isolation des dossiers clients, le catalogue modulaire, la politique d’accès de démonstration (refus par défaut, organisation, actions et portée par identifiant de dossier), la hiérarchie du menu, les relevés tabulaires (mappage, contrôle des montants, suggestions non pointantes) et l’annulation des centralisations internes (provenance, écriture inverse, immuabilité, anti-doublon et brouillons). La CI GitHub Actions exécute ces scénarios ainsi qu’un contrôle de syntaxe et un test de service HTTP.
+Les tests couvrent les règles comptables, la transcription exhaustive des 532 lignes du référentiel SYSCOHADA (codes, intitulés, pages et rattachements Débit/Crédit, y compris les cases vides), les migrations, les références et le cycle de vie sécurisé des comptes et des répertoires clients, fournisseurs, débiteurs/créditeurs divers et personnel, les codes réservés, les cycles et l’isolation des dossiers clients, le masquage des comptes confidentiels et des pièces qui les contiennent, le catalogue modulaire, la politique d’accès de démonstration (refus par défaut, organisation, actions et portée par identifiant de dossier), la hiérarchie du menu, les relevés tabulaires (mappage, contrôle des montants, suggestions non pointantes) et l’annulation des centralisations internes (provenance, écriture inverse, immuabilité, anti-doublon et brouillons). La CI GitHub Actions exécute ces scénarios ainsi qu’un contrôle de syntaxe et un test de service HTTP.
 
 ## Limites de cette prévisualisation
 

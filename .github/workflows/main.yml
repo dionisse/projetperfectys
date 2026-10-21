@@ -71,6 +71,7 @@ jobs:
           node tests/accounting-consolidation.test.js
           node tests/accounting-balance-recalculation.test.js
           node tests/accounting-database-repair.test.js
+          node tests/confidential-accounts.test.js
           node tests/centralization-cancellation.test.js
 
       - name: Smoke test static server
