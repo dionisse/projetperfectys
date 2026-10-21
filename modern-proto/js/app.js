@@ -2613,6 +2613,79 @@
     '</div>';
   }
 
+  function allocationKeyRowHtml(kind, row, index, editable) {
+    row = row && typeof row === 'object' ? row : {};
+    var counterpartLabel = kind === 'auxiliaryToMain' ? 'Section auxiliaire' : 'Famille des prestations';
+    var disabled = editable ? '' : ' disabled';
+    return '<tr data-allocation-row>' +
+      '<td><input type="text" maxlength="240" data-allocation-field="mainSection" aria-label="Section principale, ligne ' + (index + 1) + '" value="' + esc(row.mainSection || '') + '"' + disabled + '></td>' +
+      '<td><input type="text" maxlength="240" data-allocation-field="counterpart" aria-label="' + counterpartLabel + ', ligne ' + (index + 1) + '" value="' + esc(row.counterpart || row.auxiliarySection || row.serviceFamily || '') + '"' + disabled + '></td>' +
+      '<td><input type="text" maxlength="120" data-allocation-field="key" aria-label="Clé, ligne ' + (index + 1) + '" value="' + esc(row.key || '') + '"' + disabled + '></td>' +
+      '</tr>';
+  }
+
+  function viewAnalyticalAllocationKeys() {
+    var dossier = S.currentDossier();
+    var configurations = S.analyticalAllocationKeysConfiguration();
+    var canConfigure = hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalAllocationKeys.configure', accountingAccessContext(dossier));
+
+    function tableGroup(kind, title, initialRows) {
+      var configuration = configurations[kind] || { rows: [], destination: '', configured: false, validatedAt: '' };
+      var locked = configuration.configured === true;
+      var editable = canConfigure && !locked && !isPhoneViewport();
+      var readOnlyClass = editable ? '' : ' is-readonly';
+      var disabled = editable ? '' : ' disabled';
+      var rows = Array.isArray(configuration.rows) ? configuration.rows.slice() : [];
+      if (!locked) {
+        while (rows.length < initialRows) rows.push({ mainSection: '', counterpart: '', key: '' });
+      }
+      var tbodyId = 'allocation-rows-' + kind;
+      var headerHtml = kind === 'auxiliaryToMain'
+        ? '<th>Sections principales</th><th>Sections auxiliaires</th><th>Clé</th>'
+        : '<th>Sections principales</th><th>Familles des prestations</th><th>Clé</th>';
+      var savedDate = '';
+      if (locked && configuration.validatedAt) {
+        var date = new Date(configuration.validatedAt);
+        if (!isNaN(date.getTime())) savedDate = date.toLocaleString('fr-FR');
+      }
+      var notice = locked
+        ? '<div class="alert warning allocation-key-lock-note"><div><strong>Grille validée' + (savedDate ? ' le ' + esc(savedDate) : '') + '.</strong> Les champs sont grisés. Aucune ventilation n’est exécutée.</div></div>'
+        : '';
+      var tableClass = 'allocation-key-grid' + (locked ? ' is-locked' : '');
+      return '<section class="allocation-key-group" data-allocation-group="' + kind + '">' +
+        '<h4>' + title + '</h4>' + notice +
+        '<form class="allocation-key-form" data-allocation-kind="' + kind + '">' +
+          '<fieldset class="allocation-key-fields' + (locked ? ' is-locked' : '') + readOnlyClass + '">' +
+            '<div class="allocation-key-table-wrap"><table class="' + tableClass + '"><thead><tr>' + headerHtml + '</tr></thead><tbody id="' + tbodyId + '" data-allocation-body="' + kind + '">' +
+              rows.map(function (row, index) { return allocationKeyRowHtml(kind, row, index, editable); }).join('') +
+            '</tbody></table></div>' +
+            '<div class="allocation-key-control-column">' +
+              '<button type="button" class="btn btn-ghost btn-sm" data-allocation-action="display">Afficher</button>' +
+              '<button type="submit" class="btn btn-ghost btn-sm" data-allocation-action="validate"' + disabled + '>Valider</button>' +
+              '<button type="button" class="btn btn-ghost btn-sm" data-allocation-action="destination" aria-controls="allocation-destination-' + kind + '"' + disabled + '>Destination</button>' +
+              '<input type="text" id="allocation-destination-' + kind + '" data-allocation-destination maxlength="240" value="' + esc(configuration.destination || '') + '" aria-label="Destination"' + disabled + '>' +
+              '<button type="button" class="btn btn-ghost btn-sm" data-allocation-action="preview">Aperçu</button>' +
+            '</div>' +
+          '</fieldset>' +
+          '<p class="allocation-key-hint">Saisir une ligne par association. La clé et la destination sont conservées telles que saisies ; aucune règle de répartition n’est calculée.</p>' +
+        '</form>' +
+        (!canConfigure && !locked ? '<div class="alert warning allocation-key-permission-note">Consultation seule : le droit explicite « Configurer les clés de répartition analytiques » est requis pour saisir ou valider.</div>' : '') +
+      '</section>';
+    }
+
+    var permissionNotice = !canConfigure
+      ? '<div class="alert warning">Les grilles sont consultables ; la saisie nécessite un droit explicite au niveau du dossier.</div>'
+      : (isPhoneViewport() ? '<div class="alert info">Consultation sur téléphone ; la configuration est réservée à un ordinateur ou une tablette.</div>' : '');
+
+    return '<div class="allocation-key-workspace">' +
+      '<div class="alert info"><div><strong>Clés de répartition · ' + esc(dossier.clientName) + ' · ' + esc(dossier.reference) + '</strong><br>Les grilles sont vides par défaut. Les valeurs validées sont conservées par dossier et deviennent grises. Les boutons de consultation n’effectuent aucun calcul.</div></div>' +
+      permissionNotice +
+      tableGroup('auxiliaryToMain', 'LES CLÉS DE RÉPARTITION DES SECTIONS AUXILIAIRES SUR LES PRINCIPALES', 12) +
+      tableGroup('servicesBySection', 'LES CLÉS DE RÉPARTITION DES PRESTATIONS PAR SECTION', 5) +
+      '<div class="alert info allocation-key-inactive-note"><div><strong>Comptabilité analytique inactive.</strong> Ce paramétrage ne génère aucune ventilation, imputation, écriture ou édition analytique.</div></div>' +
+    '</div>';
+  }
+
   function menuStatusBadge(status) {
     var label = AccountingNavigation.statusLabels[status] || AccountingNavigation.statusLabels.inactive;
     return '<span class="menu-status menu-status-' + esc(status) + '">' + esc(label) + '</span>';
@@ -8173,6 +8246,8 @@
       exchangeFeature = viewAccountingConfiguration();
     } else if (group.id === 'parametres' && tab.id === 'sections-accounts') {
       exchangeFeature = viewAnalyticalSectionsConfiguration();
+    } else if (group.id === 'parametres' && tab.id === 'allocation-keys') {
+      exchangeFeature = viewAnalyticalAllocationKeys();
     }
     if (group.id === 'fichier') {
       switch (tab.id) {
@@ -8309,6 +8384,93 @@
     });
   }
 
+  function bindAnalyticalAllocationKeys() {
+    function counterpartLabel(kind) {
+      return kind === 'auxiliaryToMain' ? 'Sections auxiliaires' : 'Familles des prestations';
+    }
+
+    function previewAllocationTable(kind, configuration, subtitle) {
+      var label = counterpartLabel(kind);
+      var rows = Array.isArray(configuration.rows) ? configuration.rows : [];
+      var visibleRows = rows.filter(function (row) {
+        return row && (row.mainSection || row.counterpart || row.auxiliarySection || row.serviceFamily || row.key);
+      });
+      var body = visibleRows.length
+        ? '<div class="table-wrap"><table class="data-table allocation-preview-table"><thead><tr><th>Sections principales</th><th>' + label + '</th><th>Clé</th></tr></thead><tbody>' +
+          visibleRows.map(function (row) {
+            return '<tr><td>' + esc(row.mainSection || '') + '</td><td>' + esc(row.counterpart || row.auxiliarySection || row.serviceFamily || '') + '</td><td>' + esc(row.key || '') + '</td></tr>';
+          }).join('') + '</tbody></table></div>'
+        : '<div class="empty-state"><strong>Aucune valeur à afficher</strong><span>Renseignez la grille avant de demander un aperçu.</span></div>';
+      var destination = configuration.destination
+        ? '<p class="allocation-preview-destination"><strong>Destination :</strong> ' + esc(configuration.destination) + '</p>'
+        : '<p class="allocation-preview-destination muted">Aucune destination renseignée.</p>';
+      openModal('Clés de répartition', subtitle, body + destination + '<p class="small muted">Aucun calcul ni transfert de données n’est exécuté par cet aperçu.</p>',
+        '<button type="button" class="btn btn-primary" data-action="close-modal">Fermer</button>', true);
+    }
+
+    function formRows(form) {
+      return $$('[data-allocation-row]', form).map(function (row) {
+        function value(field) {
+          var input = $('[data-allocation-field="' + field + '"]', row);
+          return input ? input.value : '';
+        }
+        return { mainSection: value('mainSection'), counterpart: value('counterpart'), key: value('key') };
+      });
+    }
+
+    $$('.allocation-key-form').forEach(function (form) {
+      var kind = form.getAttribute('data-allocation-kind');
+      var tbody = $('[data-allocation-body]', form);
+      if (tbody) tbody.addEventListener('input', function (event) {
+        var row = event.target.closest ? event.target.closest('[data-allocation-row]') : null;
+        if (!row || row !== tbody.lastElementChild) return;
+        var hasValue = $$('input', row).some(function (input) { return String(input.value || '').trim(); });
+        if (hasValue) tbody.insertAdjacentHTML('beforeend', allocationKeyRowHtml(kind, {}, tbody.querySelectorAll('[data-allocation-row]').length, true));
+      });
+
+      form.addEventListener('click', function (event) {
+        var button = event.target.closest ? event.target.closest('[data-allocation-action]') : null;
+        if (!button) return;
+        var action = button.getAttribute('data-allocation-action');
+        if (action === 'display') {
+          var savedTable = S.analyticalAllocationKeysConfiguration()[kind];
+          previewAllocationTable(kind, savedTable || { rows: [], destination: '' }, 'Configuration enregistrée · lecture seule');
+        } else if (action === 'destination') {
+          var destinationField = $('[data-allocation-destination]', form);
+          if (destinationField && !destinationField.disabled) destinationField.focus();
+        } else if (action === 'preview') {
+          var destination = $('[data-allocation-destination]', form);
+          previewAllocationTable(kind, { rows: formRows(form), destination: destination ? destination.value : '' }, 'Aperçu des valeurs saisies · lecture seule');
+        }
+      });
+
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var dossier = S.currentDossier();
+        var current = S.analyticalAllocationKeysConfiguration()[kind];
+        if (current && current.configured) {
+          toast('Cette grille a déjà été validée et reste verrouillée pendant que la comptabilité analytique est inactive.', 'warning');
+          return;
+        }
+        if (isPhoneViewport() || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalAllocationKeys.configure', accountingAccessContext(dossier))) {
+          toast('Validation refusée : le droit de configuration des clés analytiques n’est pas accordé pour ce profil ou cet appareil.', 'warning');
+          return;
+        }
+        var destination = $('[data-allocation-destination]', form);
+        var result = S.saveAnalyticalAllocationKeysConfiguration(kind, {
+          rows: formRows(form),
+          destination: destination ? destination.value : ''
+        });
+        if (!result.ok) {
+          toast((result.errors || ['Validation de la grille impossible.']).join(' '), 'warning');
+          return;
+        }
+        toast('Clés de répartition validées pour ce dossier. Aucun calcul ni transfert analytique n’a été exécuté.', 'success');
+        render();
+      });
+    });
+  }
+
   function bindEntryJournalSelector() {
     var positionInput = $('#entry-journal-position');
     if (positionInput) {
@@ -8340,6 +8502,7 @@
       var menuParams = parseHash().params;
       if (menuParams.g === 'parametres' && menuParams.t === 'dossier-configuration') bindAccountingConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'sections-accounts') bindAnalyticalSectionsConfiguration();
+      if (menuParams.g === 'parametres' && menuParams.t === 'allocation-keys') bindAnalyticalAllocationKeys();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'suppliers') bindSupplierView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'clients') bindClientView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'services') bindServicesView();

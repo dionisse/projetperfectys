@@ -1041,6 +1041,39 @@
     };
   }
 
+  function normalizeAnalyticalAllocationTable(value, counterpartField) {
+    var source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    var rows = Array.isArray(source.rows) ? source.rows.map(function (row) {
+      row = row && typeof row === 'object' ? row : {};
+      return {
+        mainSection: String(row.mainSection || '').trim().slice(0, 240),
+        counterpart: String(row[counterpartField] || row.counterpart || '').trim().slice(0, 240),
+        key: String(row.key || '').trim().slice(0, 120)
+      };
+    }).filter(function (row) { return row.mainSection || row.counterpart || row.key; }) : [];
+    return {
+      rows: rows,
+      destination: String(source.destination || '').trim().slice(0, 240),
+      configured: source.configured === true,
+      validatedAt: source.configured === true ? String(source.validatedAt || '').slice(0, 40) : ''
+    };
+  }
+
+  function defaultAnalyticalAllocationKeysConfiguration() {
+    return {
+      auxiliaryToMain: normalizeAnalyticalAllocationTable(null, 'auxiliarySection'),
+      servicesBySection: normalizeAnalyticalAllocationTable(null, 'serviceFamily')
+    };
+  }
+
+  function normalizeAnalyticalAllocationKeysConfiguration(value) {
+    var source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    return {
+      auxiliaryToMain: normalizeAnalyticalAllocationTable(source.auxiliaryToMain, 'auxiliarySection'),
+      servicesBySection: normalizeAnalyticalAllocationTable(source.servicesBySection, 'serviceFamily')
+    };
+  }
+
   function defaultDossier() {
     return {
       id: DEFAULT_FOLDER_ID,
@@ -1059,6 +1092,7 @@
       cycleEnd: '2026-12-31',
       accountingConfiguration: defaultAccountingConfiguration('2026-01-01', '2026-12-31'),
       analyticalSectionsConfiguration: defaultAnalyticalSectionsConfiguration(),
+      analyticalAllocationKeysConfiguration: defaultAnalyticalAllocationKeysConfiguration(),
       reference: 'COR-DEM2026',
       seeded: true
     };
@@ -1096,6 +1130,7 @@
       cycleEnd: cycleEnd,
       accountingConfiguration: normalizeAccountingConfiguration(record && record.accountingConfiguration, cycleStart, cycleEnd),
       analyticalSectionsConfiguration: normalizeAnalyticalSectionsConfiguration(record && record.analyticalSectionsConfiguration),
+      analyticalAllocationKeysConfiguration: normalizeAnalyticalAllocationKeysConfiguration(record && record.analyticalAllocationKeysConfiguration),
       reference: String(record && record.reference || referenceFor(accountingTypeCode, clientCode, exerciseYear)),
       seeded: record && record.seeded !== false
     };
@@ -1170,6 +1205,11 @@
     return clone(dossier && dossier.analyticalSectionsConfiguration || defaultAnalyticalSectionsConfiguration());
   }
 
+  function analyticalAllocationKeysConfiguration() {
+    var dossier = currentDossier();
+    return clone(dossier && dossier.analyticalAllocationKeysConfiguration || defaultAnalyticalAllocationKeysConfiguration());
+  }
+
   function parseIsoDate(value) {
     var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
     if (!match) return null;
@@ -1227,6 +1267,7 @@
       cycleEnd: cycleEnd,
       accountingConfiguration: normalizeAccountingConfiguration(input.accountingConfiguration, cycleStart, cycleEnd),
       analyticalSectionsConfiguration: defaultAnalyticalSectionsConfiguration(),
+      analyticalAllocationKeysConfiguration: defaultAnalyticalAllocationKeysConfiguration(),
       reference: reference,
       seeded: false
     };
@@ -1462,6 +1503,60 @@
       configuration: clone(savedConfiguration),
       dossier: clone(folderCatalog[dossierIndex])
     };
+  }
+
+  function saveAnalyticalAllocationKeysConfiguration(kind, input) {
+    ensureFolderCatalog();
+    input = input || {};
+    var fieldByKind = { auxiliaryToMain: 'auxiliarySection', servicesBySection: 'serviceFamily' };
+    var counterpartField = fieldByKind[kind];
+    if (!counterpartField) return { ok: false, errors: ['Type de clé de répartition inconnu.'] };
+    var dossier = folderById(activeFolderId);
+    if (!dossier) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    var current = normalizeAnalyticalAllocationKeysConfiguration(dossier.analyticalAllocationKeysConfiguration);
+    if (current[kind].configured) return { ok: false, errors: ['Cette grille est déjà validée et verrouillée pour le moment ; les opérations analytiques restent inactives.'] };
+
+    var source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    var errors = [];
+    var sourceRows = Array.isArray(source.rows) ? source.rows : [];
+    var rows = [];
+    sourceRows.forEach(function (row, index) {
+      row = row && typeof row === 'object' && !Array.isArray(row) ? row : {};
+      var mainSection = String(row.mainSection || '').trim();
+      var counterpart = String(row[counterpartField] || row.counterpart || '').trim();
+      var key = String(row.key || '').trim();
+      if (!mainSection && !counterpart && !key) return;
+      if (!mainSection || !counterpart || !key) {
+        errors.push('Complétez les trois colonnes de la ligne ' + (index + 1) + ', ou laissez cette ligne vide.');
+        return;
+      }
+      if (mainSection.length > 240 || counterpart.length > 240 || key.length > 120) {
+        errors.push('Une valeur de la ligne ' + (index + 1) + ' dépasse la longueur autorisée (240 caractères, 120 pour la clé).');
+        return;
+      }
+      rows.push({ mainSection: mainSection, counterpart: counterpart, key: key });
+    });
+    if (!rows.length) errors.push('Saisissez au moins une ligne complète avant de valider ; les grilles vides restent le paramétrage par défaut.');
+    var destination = String(source.destination || '').trim();
+    if (destination.length > 240) errors.push('La destination ne peut pas dépasser 240 caractères.');
+    if (errors.length) return { ok: false, errors: errors };
+
+    var savedTable = {
+      rows: rows,
+      destination: destination,
+      configured: true,
+      validatedAt: new Date().toISOString()
+    };
+    var nextConfiguration = current;
+    nextConfiguration[kind] = savedTable;
+    var previousCatalog = clone(folderCatalog);
+    var dossierIndex = folderCatalog.findIndex(function (record) { return record.id === dossier.id; });
+    folderCatalog[dossierIndex] = Object.assign({}, dossier, { analyticalAllocationKeysConfiguration: nextConfiguration });
+    if (!saveFolderCatalog()) {
+      folderCatalog = previousCatalog;
+      return { ok: false, errors: ['Impossible d’enregistrer les clés de répartition dans ce navigateur. La grille reste inchangée.'] };
+    }
+    return { ok: true, errors: [], configuration: clone(savedTable), dossier: clone(folderCatalog[dossierIndex]) };
   }
 
   function dossierStorageKey(dossierId) {
@@ -5131,6 +5226,8 @@
     updateAccountingConfiguration: updateAccountingConfiguration,
     analyticalSectionsConfiguration: analyticalSectionsConfiguration,
     saveAnalyticalSectionsConfiguration: saveAnalyticalSectionsConfiguration,
+    analyticalAllocationKeysConfiguration: analyticalAllocationKeysConfiguration,
+    saveAnalyticalAllocationKeysConfiguration: saveAnalyticalAllocationKeysConfiguration,
     currentStorageKey: currentFolderStorageKey,
     createDossier: createDossier,
     readDossierStateSnapshot: readDossierStateSnapshot,

@@ -11,6 +11,7 @@
     { id: 'module.view', label: 'Consulter le module' },
     { id: 'accounting.configure', label: 'Modifier la configuration comptable du dossier' },
     { id: 'analyticalSections.configure', label: 'Configurer les sections et comptes analytiques' },
+    { id: 'analyticalAllocationKeys.configure', label: 'Configurer les clés de répartition analytiques' },
     { id: 'draft.create', label: 'Créer une écriture / un brouillon' },
     { id: 'draft.edit', label: 'Modifier un brouillon' },
     { id: 'draft.delete', label: 'Supprimer un brouillon' },

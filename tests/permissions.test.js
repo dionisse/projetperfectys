@@ -20,6 +20,21 @@ test('sans profil ou sans grant, aucun accès n’est accordé', () => {
   assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'module.view', context), false);
 });
 
+test('les clés de répartition exigent un droit explicite dans le dossier concerné', () => {
+  const dossier = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  const employee = {
+    role: 'employee', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view'] }] }
+  };
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'analyticalAllocationKeys.configure', dossier), false);
+  employee.grants.accounting[0].actions.push('analyticalAllocationKeys.configure');
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'analyticalAllocationKeys.configure', dossier), true);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'analyticalAllocationKeys.configure', {
+    organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-2'
+  }), false);
+  assert.ok(Permissions.actionsForModule('accounting').some(action => action.id === 'analyticalAllocationKeys.configure'));
+});
+
 test('la gestion des journaux est une série de droits distincts, explicitement délégués', () => {
   const employee = {
     role: 'employee', organizationId: 'org-1',
