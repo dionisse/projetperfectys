@@ -425,6 +425,19 @@ test('les droits des immobilisations sont distincts et limités au dossier', () 
   assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'fixedAssets.delete', { ...context, dossierId: 'dossier-2' }), false);
 });
 
+test('la configuration des comptes associés aux immobilisations exige un droit par dossier', () => {
+  const member = {
+    role: 'manager', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view'] }] }
+  };
+  const context = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'fixedAssetAccounts.configure', context), false);
+  member.grants.accounting[0].actions.push('fixedAssetAccounts.configure');
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'fixedAssetAccounts.configure', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'fixedAssetAccounts.configure', { ...context, dossierId: 'dossier-2' }), false);
+  assert.ok(Permissions.actionsForModule('accounting').some(action => action.id === 'fixedAssetAccounts.configure'));
+});
+
 test('les droits des centres analytiques sont distincts et limités au dossier', () => {
   const member = {
     role: 'manager', organizationId: 'org-1',

@@ -1117,6 +1117,40 @@
     return { rows: defaultAnalyticalNaturesRows(), updatedAt: '' };
   }
 
+  function defaultFixedAssetAccountsRows() {
+    return [
+      { id: 'fixed-assets-class-21', grossValueAccount: '21*', accumulatedDepreciationAccount: '281*', depreciationExpenseAccount: '6812', disposalNetValueAccount: '811', grantRecoveryAccount: '799' },
+      { id: 'fixed-assets-class-22', grossValueAccount: '22*', accumulatedDepreciationAccount: '282*', depreciationExpenseAccount: '6813', disposalNetValueAccount: '812', grantRecoveryAccount: '799' },
+      { id: 'fixed-assets-class-23', grossValueAccount: '23*', accumulatedDepreciationAccount: '283*', depreciationExpenseAccount: '6813', disposalNetValueAccount: '812', grantRecoveryAccount: '799' },
+      { id: 'fixed-assets-class-24', grossValueAccount: '24*', accumulatedDepreciationAccount: '284*', depreciationExpenseAccount: '6813', disposalNetValueAccount: '812', grantRecoveryAccount: '799' },
+      { id: 'fixed-assets-class-26', grossValueAccount: '26*', accumulatedDepreciationAccount: '', depreciationExpenseAccount: '', disposalNetValueAccount: '816', grantRecoveryAccount: '799' }
+    ];
+  }
+
+  function normalizeFixedAssetAccountsConfiguration(value) {
+    var source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    var suppliedRows = Array.isArray(source.rows) ? source.rows : [];
+    var suppliedById = Object.create(null);
+    suppliedRows.forEach(function (row) {
+      if (row && typeof row.id === 'string' && row.id && !suppliedById[row.id]) suppliedById[row.id] = row;
+    });
+    var fields = ['grossValueAccount', 'accumulatedDepreciationAccount', 'depreciationExpenseAccount', 'disposalNetValueAccount', 'grantRecoveryAccount'];
+    var rows = defaultFixedAssetAccountsRows().map(function (defaultRow) {
+      var stored = suppliedById[defaultRow.id];
+      var result = { id: defaultRow.id };
+      fields.forEach(function (field) {
+        var value = stored && stored[field] != null ? stored[field] : defaultRow[field];
+        result[field] = String(value == null ? '' : value).trim().replace(/\s+/g, ' ').slice(0, 120);
+      });
+      return result;
+    });
+    return { rows: rows, updatedAt: String(source.updatedAt || '').slice(0, 40) };
+  }
+
+  function defaultFixedAssetAccountsConfiguration() {
+    return { rows: defaultFixedAssetAccountsRows(), updatedAt: '' };
+  }
+
   function defaultGeneralAccountNaturesRows() {
     return [
       { id: 'stable-resources', nature: 'Ressources stables', accounts: '1', level: 0 },
@@ -1232,6 +1266,7 @@
       analyticalAllocationKeysConfiguration: defaultAnalyticalAllocationKeysConfiguration(),
       analyticalNaturesConfiguration: defaultAnalyticalNaturesConfiguration(),
       generalAccountNaturesConfiguration: defaultGeneralAccountNaturesConfiguration(),
+      fixedAssetAccountsConfiguration: defaultFixedAssetAccountsConfiguration(),
       reference: 'COR-DEM2026',
       seeded: true
     };
@@ -1271,6 +1306,7 @@
       analyticalSectionsConfiguration: normalizeAnalyticalSectionsConfiguration(record && record.analyticalSectionsConfiguration),
       analyticalAllocationKeysConfiguration: normalizeAnalyticalAllocationKeysConfiguration(record && record.analyticalAllocationKeysConfiguration),
       analyticalNaturesConfiguration: normalizeAnalyticalNaturesConfiguration(record && record.analyticalNaturesConfiguration),
+      fixedAssetAccountsConfiguration: normalizeFixedAssetAccountsConfiguration(record && record.fixedAssetAccountsConfiguration),
       generalAccountNaturesConfiguration: normalizeGeneralAccountNaturesConfiguration(record && record.generalAccountNaturesConfiguration),
       reference: String(record && record.reference || referenceFor(accountingTypeCode, clientCode, exerciseYear)),
       seeded: record && record.seeded !== false
@@ -1356,6 +1392,11 @@
     return clone(dossier && dossier.analyticalNaturesConfiguration || defaultAnalyticalNaturesConfiguration());
   }
 
+  function fixedAssetAccountsConfiguration() {
+    var dossier = currentDossier();
+    return clone(dossier && dossier.fixedAssetAccountsConfiguration || defaultFixedAssetAccountsConfiguration());
+  }
+
   function generalAccountNaturesConfiguration() {
     var dossier = currentDossier();
     return clone(dossier && dossier.generalAccountNaturesConfiguration || defaultGeneralAccountNaturesConfiguration());
@@ -1421,6 +1462,7 @@
       analyticalAllocationKeysConfiguration: defaultAnalyticalAllocationKeysConfiguration(),
       analyticalNaturesConfiguration: defaultAnalyticalNaturesConfiguration(),
       generalAccountNaturesConfiguration: defaultGeneralAccountNaturesConfiguration(),
+      fixedAssetAccountsConfiguration: defaultFixedAssetAccountsConfiguration(),
       reference: reference,
       seeded: false
     };
@@ -1788,6 +1830,65 @@
       return { ok: false, errors: ['Impossible d’enregistrer les natures analytiques dans ce navigateur. Les valeurs précédentes sont conservées.'] };
     }
     return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
+  }
+
+  function saveFixedAssetAccountsConfiguration(input) {
+    ensureFolderCatalog();
+    var dossier = folderById(activeFolderId);
+    if (!dossier) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    var source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    var sourceRows = Array.isArray(source.rows) ? source.rows : [];
+    var defaultRows = defaultFixedAssetAccountsRows();
+    var fields = ['grossValueAccount', 'accumulatedDepreciationAccount', 'depreciationExpenseAccount', 'disposalNetValueAccount', 'grantRecoveryAccount'];
+    var knownIds = Object.create(null);
+    var suppliedById = Object.create(null);
+    var errors = [];
+    defaultRows.forEach(function (row) { knownIds[row.id] = true; });
+    sourceRows.forEach(function (row) {
+      if (!row || typeof row !== 'object' || Array.isArray(row) || typeof row.id !== 'string' || !row.id) {
+        errors.push('Une ligne de comptes associés aux immobilisations est invalide.');
+        return;
+      }
+      if (!knownIds[row.id]) {
+        errors.push('Aucune ligne de comptes associés aux immobilisations non prévue ne peut être ajoutée.');
+        return;
+      }
+      if (suppliedById[row.id]) {
+        errors.push('La ligne « ' + row.id + ' » est répétée.');
+        return;
+      }
+      suppliedById[row.id] = row;
+    });
+
+    var rows = defaultRows.map(function (defaultRow) {
+      var stored = suppliedById[defaultRow.id];
+      if (!stored) {
+        errors.push('La ligne de compte « ' + defaultRow.grossValueAccount + ' » est absente.');
+        return defaultRow;
+      }
+      var result = { id: defaultRow.id };
+      fields.forEach(function (field) {
+        var value = String(stored[field] == null ? '' : stored[field]).trim().replace(/\s+/g, ' ');
+        if (value.length > 120) errors.push('Chaque compte associé aux immobilisations doit rester sous 120 caractères.');
+        result[field] = value.slice(0, 120);
+      });
+      return result;
+    });
+    if (errors.length) return { ok: false, errors: errors };
+
+    var previousCatalog = clone(folderCatalog);
+    var dossierIndex = folderCatalog.findIndex(function (record) { return record.id === dossier.id; });
+    var configuration = { rows: rows, updatedAt: new Date().toISOString() };
+    folderCatalog[dossierIndex] = Object.assign({}, dossier, { fixedAssetAccountsConfiguration: configuration });
+    if (!saveFolderCatalog()) {
+      folderCatalog = previousCatalog;
+      return { ok: false, errors: ['Impossible d’enregistrer les comptes associés aux immobilisations dans ce navigateur. Les valeurs précédentes sont conservées.'] };
+    }
+    return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
+  }
+
+  function initializeFixedAssetAccountsConfiguration() {
+    return saveFixedAssetAccountsConfiguration({ rows: defaultFixedAssetAccountsRows() });
   }
 
   function saveAnalyticalAllocationKeysConfiguration(kind, input) {
@@ -5514,6 +5615,9 @@
     analyticalAllocationKeysConfiguration: analyticalAllocationKeysConfiguration,
     analyticalNaturesConfiguration: analyticalNaturesConfiguration,
     saveAnalyticalNaturesConfiguration: saveAnalyticalNaturesConfiguration,
+    fixedAssetAccountsConfiguration: fixedAssetAccountsConfiguration,
+    saveFixedAssetAccountsConfiguration: saveFixedAssetAccountsConfiguration,
+    initializeFixedAssetAccountsConfiguration: initializeFixedAssetAccountsConfiguration,
     saveAnalyticalAllocationKeysConfiguration: saveAnalyticalAllocationKeysConfiguration,
     generalAccountNaturesConfiguration: generalAccountNaturesConfiguration,
     saveGeneralAccountNaturesConfiguration: saveGeneralAccountNaturesConfiguration,

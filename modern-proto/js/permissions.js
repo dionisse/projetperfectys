@@ -63,6 +63,7 @@
     { id: 'fixedAssets.create', label: 'Créer un élément immobilisé' },
     { id: 'fixedAssets.edit', label: 'Modifier un élément immobilisé' },
     { id: 'fixedAssets.delete', label: 'Supprimer un élément immobilisé' },
+    { id: 'fixedAssetAccounts.configure', label: 'Configurer les comptes associés aux immobilisations' },
     { id: 'period.close', label: 'Clôturer une période' },
     { id: 'period.reopen', label: 'Rouvrir une période' },
     { id: 'data.import', label: 'Importer des données' },

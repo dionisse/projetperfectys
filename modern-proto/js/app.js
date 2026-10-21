@@ -94,6 +94,9 @@
 
   var selectedEntryJournalCode = '';
   var analyticalNatureSelectedId = 'activity-domains';
+  var fixedAssetAccountsSelectedId = 'fixed-assets-class-21';
+  var fixedAssetAccountsEditDraft = null;
+  var fixedAssetAccountsEditDossierId = '';
   var generalAccountNatureSelectedId = 'stable-grants';
   var deferredInstallPrompt = null;
   var exchangeImportSession = null;
@@ -2783,6 +2786,63 @@
       closeModal(true);
       render();
     });
+  }
+
+  function viewFixedAssetAccounts() {
+    var dossier = S.currentDossier();
+    if (fixedAssetAccountsEditDraft && fixedAssetAccountsEditDossierId !== dossier.id) {
+      fixedAssetAccountsEditDraft = null;
+      fixedAssetAccountsEditDossierId = '';
+    }
+    var configuration = S.fixedAssetAccountsConfiguration();
+    var editing = !!fixedAssetAccountsEditDraft;
+    var rows = editing ? fixedAssetAccountsEditDraft.rows : (Array.isArray(configuration.rows) ? configuration.rows : []);
+    var canConfigure = hasDemoPermission(getActiveDemoMember(), 'accounting', 'fixedAssetAccounts.configure', accountingAccessContext(dossier));
+    var editable = canConfigure && !isPhoneViewport();
+    var selected = rows.find(function (row) { return row.id === fixedAssetAccountsSelectedId; }) || rows[0];
+    if (selected) fixedAssetAccountsSelectedId = selected.id;
+    var columns = [
+      { key: 'grossValueAccount', label: 'Compte de valeur brute' },
+      { key: 'accumulatedDepreciationAccount', label: 'Compte d’amortissements' },
+      { key: 'depreciationExpenseAccount', label: 'Dotations aux amortissements' },
+      { key: 'disposalNetValueAccount', label: 'Valeurs nettes de cession' },
+      { key: 'grantRecoveryAccount', label: 'Reprises de subventions' }
+    ];
+    var tableRows = rows.map(function (row) {
+      var isSelected = selected && row.id === selected.id;
+      var cells = columns.map(function (column) {
+        if (editing && isSelected) {
+          return '<td><input type="text" maxlength="120" data-fixed-asset-account-field="' + column.key + '" aria-label="' + esc(column.label + ' — ligne ' + (row.grossValueAccount || row.id)) + '" value="' + esc(row[column.key] || '') + '"></td>';
+        }
+        return '<td>' + esc(row[column.key] || '') + '</td>';
+      }).join('');
+      return '<tr class="fixed-asset-accounts-row' + (isSelected ? ' is-selected' : '') + '" data-fixed-asset-account-row="' + esc(row.id) + '" tabindex="0" aria-selected="' + (isSelected ? 'true' : 'false') + '">' + cells + '</tr>';
+    }).join('');
+    var blankRows = '';
+    for (var blankIndex = 0; blankIndex < 11; blankIndex += 1) {
+      blankRows += '<tr class="fixed-asset-accounts-empty-row" aria-hidden="true"><td></td><td></td><td></td><td></td><td></td></tr>';
+    }
+    var accessNotice = !canConfigure
+      ? '<div class="alert warning fixed-asset-accounts-access-note">Consultation seule : un droit explicite « Configurer les comptes associés aux immobilisations » est nécessaire pour modifier ou réinitialiser cette grille.</div>'
+      : (isPhoneViewport() ? '<div class="alert info fixed-asset-accounts-access-note">Consultation sur téléphone ; les modifications sont réservées à un ordinateur ou une tablette.</div>' : '');
+
+    return '<div class="fixed-asset-accounts-workspace">' +
+      accessNotice +
+      '<div class="fixed-asset-accounts-layout">' +
+        '<div class="fixed-asset-accounts-table-wrap" role="region" aria-label="Comptes associés aux immobilisations" tabindex="0">' +
+          '<table class="fixed-asset-accounts-table"><thead><tr>' + columns.map(function (column) { return '<th scope="col">' + esc(column.label) + '</th>'; }).join('') + '</tr></thead><tbody>' + tableRows + blankRows + '</tbody></table>' +
+        '</div>' +
+        '<div class="fixed-asset-accounts-actions">' +
+          '<button type="button" class="btn btn-ghost" data-fixed-asset-account-action="close">Fermer</button>' +
+          '<button type="button" class="btn btn-ghost" data-fixed-asset-account-action="modify"' + (!editable || editing || !selected ? ' disabled' : '') + '>Modifier</button>' +
+          '<button type="button" class="btn btn-ghost" data-fixed-asset-account-action="reset"' + (!editable || editing ? ' disabled' : '') + '>Réinitialiser...</button>' +
+          '<button type="button" class="btn btn-ghost" data-fixed-asset-account-action="accounts" disabled title="La sélection de comptes reste désactivée comme sur la capture.">Comptes...</button>' +
+          '<button type="button" class="btn btn-ghost" data-fixed-asset-account-action="validate"' + (!editable || !editing ? ' disabled' : '') + '>Valider</button>' +
+          '<button type="button" class="btn btn-ghost" data-fixed-asset-account-action="cancel"' + (!editing ? ' disabled' : '') + '>Annuler</button>' +
+        '</div>' +
+      '</div>' +
+      '<p class="small muted fixed-asset-accounts-footnote">La correspondance est conservée par dossier. Elle ne génère aucune écriture et ne lance aucun calcul d’amortissement.</p>' +
+    '</div>';
   }
 
   function viewGeneralAccountNatures() {
@@ -8389,6 +8449,8 @@
       exchangeFeature = viewAnalyticalAllocationKeys();
     } else if (group.id === 'parametres' && tab.id === 'analytic-natures') {
       exchangeFeature = viewAnalyticalNatures();
+    } else if (group.id === 'parametres' && tab.id === 'fixed-asset-accounts') {
+      exchangeFeature = viewFixedAssetAccounts();
     } else if (group.id === 'parametres' && tab.id === 'general-account-natures') {
       exchangeFeature = viewGeneralAccountNatures();
     }
@@ -8658,6 +8720,94 @@
     });
   }
 
+  function bindFixedAssetAccounts() {
+    var workspace = $('.fixed-asset-accounts-workspace');
+    if (!workspace) return;
+    var dossier = S.currentDossier();
+    var canConfigure = hasDemoPermission(getActiveDemoMember(), 'accounting', 'fixedAssetAccounts.configure', accountingAccessContext(dossier));
+
+    function selectRow(row) {
+      if (fixedAssetAccountsEditDraft) return;
+      var id = row && row.getAttribute('data-fixed-asset-account-row');
+      if (!id) return;
+      fixedAssetAccountsSelectedId = id;
+      $$('[data-fixed-asset-account-row]', workspace).forEach(function (item) {
+        var isSelected = item.getAttribute('data-fixed-asset-account-row') === id;
+        item.classList.toggle('is-selected', isSelected);
+        item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+      });
+    }
+
+    $$('[data-fixed-asset-account-row]', workspace).forEach(function (row) {
+      row.addEventListener('click', function () { selectRow(row); });
+      row.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        selectRow(row);
+      });
+    });
+
+    workspace.addEventListener('click', function (event) {
+      var button = event.target.closest ? event.target.closest('[data-fixed-asset-account-action]') : null;
+      if (!button) return;
+      var action = button.getAttribute('data-fixed-asset-account-action');
+      if (action === 'close') {
+        fixedAssetAccountsEditDraft = null;
+        fixedAssetAccountsEditDossierId = '';
+        navigate(accountingMenuHash('parametres', 'dossier-configuration'));
+      } else if (action === 'modify') {
+        if (!canConfigure || isPhoneViewport()) {
+          toast('Modification refusée : un droit explicite sur ce dossier est requis.', 'warning');
+          return;
+        }
+        var current = S.fixedAssetAccountsConfiguration();
+        fixedAssetAccountsEditDraft = { rows: current.rows.map(function (row) { return Object.assign({}, row); }) };
+        fixedAssetAccountsEditDossierId = dossier.id;
+        render();
+      } else if (action === 'reset') {
+        if (!canConfigure || isPhoneViewport()) {
+          toast('Réinitialisation refusée : un droit explicite sur ce dossier est requis.', 'warning');
+          return;
+        }
+        if (!window.confirm('Réinitialiser les comptes associés aux immobilisations de ce dossier aux valeurs de la capture ? Les pièces comptables ne seront pas modifiées.')) return;
+        var initialized = S.initializeFixedAssetAccountsConfiguration();
+        if (!initialized.ok) {
+          toast((initialized.errors || ['Réinitialisation impossible.']).join(' '), 'error');
+          return;
+        }
+        fixedAssetAccountsSelectedId = 'fixed-assets-class-21';
+        toast('Comptes associés aux immobilisations réinitialisés pour ce dossier.', 'success');
+        render();
+      } else if (action === 'validate') {
+        if (!canConfigure || !fixedAssetAccountsEditDraft) {
+          toast('Validation refusée : un droit explicite sur ce dossier est requis.', 'warning');
+          return;
+        }
+        var editedFields = Object.create(null);
+        $$('[data-fixed-asset-account-field]', workspace).forEach(function (input) {
+          editedFields[input.getAttribute('data-fixed-asset-account-field')] = input.value;
+        });
+        var nextRows = fixedAssetAccountsEditDraft.rows.map(function (row) {
+          if (row.id !== fixedAssetAccountsSelectedId) return row;
+          return Object.assign({}, row, editedFields);
+        });
+        var saved = S.saveFixedAssetAccountsConfiguration({ rows: nextRows });
+        if (!saved.ok) {
+          toast((saved.errors || ['Enregistrement impossible.']).join(' '), 'error');
+          return;
+        }
+        fixedAssetAccountsEditDraft = null;
+        fixedAssetAccountsEditDossierId = '';
+        toast('Comptes associés aux immobilisations enregistrés dans le dossier. Aucune écriture n’a été créée.', 'success');
+        render();
+      } else if (action === 'cancel') {
+        fixedAssetAccountsEditDraft = null;
+        fixedAssetAccountsEditDossierId = '';
+        render();
+      }
+    });
+  }
+
   function bindAnalyticalNatures() {
     var workspace = $('.analytical-natures-workspace');
     if (!workspace) return;
@@ -8815,6 +8965,7 @@
       if (menuParams.g === 'parametres' && menuParams.t === 'sections-accounts') bindAnalyticalSectionsConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'allocation-keys') bindAnalyticalAllocationKeys();
       if (menuParams.g === 'parametres' && menuParams.t === 'analytic-natures') bindAnalyticalNatures();
+      if (menuParams.g === 'parametres' && menuParams.t === 'fixed-asset-accounts') bindFixedAssetAccounts();
       if (menuParams.g === 'parametres' && menuParams.t === 'general-account-natures') bindGeneralAccountNatures();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'suppliers') bindSupplierView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'clients') bindClientView();

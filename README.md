@@ -45,6 +45,7 @@ Le dépôt fournit un serveur statique sans dépendance ni compilation. Dans Bol
 | Sections et comptes analytiques | Listes principales, auxiliaires et comptes configurables par dossier ; après validation, elles sont verrouillées/grisées. Les mouvements et opérations analytiques restent inactifs |
 | Clés de répartition des sections | Deux grilles libres et indépendantes par dossier (sections auxiliaires sur principales ; familles de prestations par section), avec Afficher, Valider, Destination et Aperçu ; les grilles validées sont grisées. Aucune clé n’est interprétée et aucun calcul, transfert ou mouvement n’est exécuté |
 | Natures analytiques | Tableau de référence par dossier selon la capture, avec noms génériques/individuels, I.O., comptes significatifs et comptes à reporter ; modification selon un droit explicite, sans imputation ni calcul analytique |
+| Comptes associés aux immobilisations | Tableau des comptes de valeur brute, amortissements, dotations, cessions et reprises de subventions, configuré par dossier selon la capture ; aucune écriture générée |
 | Natures des comptes généraux | Tableau Nature/Comptes prérempli selon les captures, sauvegardé par dossier ; une ligne peut être modifiée et la liste réinitialisée. Les contrôles refusent les libellés de nature et codes répétés dans une même ligne ; le plan comptable et les écritures ne sont pas modifiés |
 | Tableau de bord | Indicateurs (débit, crédit, résultat, pièces), dernières pièces, activité par journal, état des périodes |
 | Plan comptable | Référentiel complet de 147 comptes fourni, classes et sous-classes, descriptions d’usage, recherche/filtres, création, modification et suppression contrôlée ; les numéros utilisés dans les pièces, les rattachements clients/fournisseurs/tiers divers/personnel ou les sous-comptes sont protégés, sans réécriture de l’historique |
@@ -108,6 +109,12 @@ Chaque bouton **Afficher** consulte les valeurs enregistrées et **Aperçu** mon
 **Paramètres → Natures analytiques** reprend le tableau de la capture : **Nom générique**, **Nom indiv.**, **I.O.**, **Comptes significatifs** et **Comptes à reporter**. Il contient les cinq natures de base, le séparateur **Analyses Diverses**, puis les six natures complémentaires visibles. Les cellules restent vides comme sur la référence, à l’exception de **Natures des flux de trésorerie** (I.O. **Oui**, comptes significatifs `5`). La ligne **Domaines d’activités** est sélectionnée à l’ouverture ; **Comptes généraux** reste désactivé.
 
 Le droit `analyticalNatures.configure` contrôle **Modifier** et le bouton **I.O.** au niveau du dossier. **I.O.** bascule le marqueur de la ligne sélectionnée ; ce marqueur n’est pas encore appliqué aux saisies. **Modifier** permet d’éditer les champs du tableau et **Fermer** revient aux paramètres. Cette nomenclature est sauvegardée par dossier, mais n’active aucun mouvement, imputation, ventilation ou calcul analytique dans le parcours général.
+
+### Comptes associés aux immobilisations — tableau de correspondance
+
+**Paramètres → Comptes associés aux immobilisations** reprend les cinq correspondances visibles : `21*` → `281*`, `6812`, `811`, `799` ; `22*` → `282*`, `6813`, `812`, `799` ; `23*` → `283*`, `6813`, `812`, `799` ; `24*` → `284*`, `6813`, `812`, `799` ; `26*` → cellules d’amortissement et de dotation vides, `816`, `799`. Les colonnes sont **Compte de valeur brute**, **Compte d’amortissements**, **Dotations aux amortissements**, **Valeurs nettes de cession** et **Reprises de subventions**. Les cases vides visibles sont conservées.
+
+La grille est enregistrée par dossier. Le droit `fixedAssetAccounts.configure` permet de modifier la ligne sélectionnée, de valider ou d’annuler les changements, et de réinitialiser la nomenclature ; **Comptes...** reste désactivé comme sur la capture. Cette correspondance n’est pas encore appliquée au registre des immobilisations et ne génère aucune écriture ni aucun calcul.
 
 ### Natures des comptes généraux — nomenclature par dossier
 

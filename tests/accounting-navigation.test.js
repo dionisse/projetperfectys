@@ -82,6 +82,7 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Immobilisations par Domaines d’activités',
   'Immobilisations par Sources de financement',
   'Cadre comptable',
+  'Comptes associés aux immobilisations',
   'Postes du bilan',
   'Plan comptable',
   'Postes associés aux comptes',
@@ -358,6 +359,12 @@ assert.match(appSource, /function viewAnalyticalNatures\(\)[\s\S]*Nom génériqu
 assert.match(appSource, /function bindAnalyticalNatures\(\)[\s\S]*openAnalyticalNatureEditor/);
 assert.match(appSource, /function openAnalyticalNatureEditor\(natureRow\)[\s\S]*saveAnalyticalNaturesConfiguration/);
 assert.match(appSource, /data-analytical-nature-action="toggle-io"[\s\S]*requiredAtEntry: !row\.requiredAtEntry/);
+assert.equal(findTab('parametres', 'fixed-asset-accounts').status, 'partial');
+assert.ok(findTab('parametres', 'fixed-asset-accounts').reason.includes('aucune écriture'));
+assert.match(appSource, /var fixedAssetAccountsSelectedId = 'fixed-assets-class-21'/, '21* est sélectionné à l’ouverture');
+assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'fixed-asset-accounts'[\s\S]*viewFixedAssetAccounts\(\)/);
+assert.match(appSource, /function viewFixedAssetAccounts\(\)[\s\S]*Compte de valeur brute[\s\S]*Compte d’amortissements[\s\S]*Dotations aux amortissements[\s\S]*Valeurs nettes de cession[\s\S]*Reprises de subventions[\s\S]*Réinitialiser\.\.\.[\s\S]*Valider[\s\S]*Annuler/);
+assert.match(appSource, /function bindFixedAssetAccounts\(\)[\s\S]*initializeFixedAssetAccountsConfiguration[\s\S]*saveFixedAssetAccountsConfiguration/);
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'dossier-configuration'[\s\S]*viewAccountingConfiguration\(\)/);
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'sections-accounts'[\s\S]*viewAnalyticalSectionsConfiguration\(\)/);
 assert.match(appSource, /function viewAccountingConfiguration\(\)[\s\S]*accounting\.configure[\s\S]*Exercice en cours/);
