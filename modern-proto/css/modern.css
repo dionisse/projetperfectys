@@ -2472,23 +2472,6 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
 .exchange-workspace .exchange-systems > p.small { margin-bottom: 0; font-size: .67rem; }
 .exchange-footnote { margin: 0; color: #89958e; font-size: .66rem; line-height: 1.55; }
 .exchange-import-controls { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(230px, .7fr); align-items: end; gap: 15px; }
-.accounting-bridge-source-field { max-width: 840px; margin: 0; }
-.accounting-bridge-mapping-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 12px; padding: 14px; border: 1px solid #e4ebe5; border-radius: 8px; background: #fbfcfa; }
-.accounting-bridge-mapping-form .field { min-width: 0; margin: 0; }
-.accounting-bridge-mapping-form select { width: 100%; }
-.accounting-bridge-mapping-add { display: flex; align-items: end; }
-.accounting-bridge-summary { margin: 2px 0; }
-.accounting-bridge-table { min-width: 740px; }
-.accounting-bridge-table td small { display: block; margin-top: 3px; color: #78867f; font-size: .61rem; }
-.accounting-bridge-row-state { display: inline-flex; padding: 4px 7px; border-radius: 999px; font-size: .57rem; font-weight: 800; white-space: nowrap; }
-.accounting-bridge-row-state.is-valid { color: #176d62; background: #eaf6f0; }
-.accounting-bridge-row-state.is-invalid { color: #8a4b3f; background: #fbefec; }
-.accounting-bridge-row-actions { white-space: nowrap; }
-.accounting-bridge-row-actions .btn + .btn { margin-left: 4px; }
-.accounting-bridge-footer { display: flex; justify-content: flex-end; }
-.accounting-bridge-empty { display: grid; gap: 7px; }
-.accounting-bridge-updated { margin: -3px 0 0; }
-.accounting-bridge-dirty-note { font-size: .68rem; }
 .fec-import-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .fec-import-controls select { width: 100%; }
 .fec-reversal-reason { grid-column: 1 / -1; }
@@ -2714,8 +2697,7 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
   .exchange-context-grid,
   .exchange-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .exchange-grid,
-  .exchange-import-controls,
-  .accounting-bridge-mapping-form { grid-template-columns: minmax(0, 1fr); }
+  .exchange-import-controls { grid-template-columns: minmax(0, 1fr); }
   .exchange-card { padding: 13px; }
   .exchange-button-row { align-items: stretch; flex-direction: column; }
   .exchange-button-row .btn { justify-content: center; }

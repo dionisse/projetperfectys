@@ -9,7 +9,6 @@
   var ModuleRegistry = window.PerfectoModules;
   var Permissions = window.PerfectoPermissions;
   var AccountingNavigation = window.PerfectoAccountingNavigation;
-  var AccountingBridge = window.PerfectoAccountingBridge;
   var AccountingFramework = window.PerfectoAccountingFramework;
   var CashOperations = window.PerfectoCashOperations;
   var AccountMovements = window.PerfectoAccountMovements;
@@ -87,7 +86,6 @@
     thirdPartyMovements: { q: '', kind: 'all', recordId: '', month: '' },
     analyticalCenters: { q: '', status: 'active' },
     openingBalances: { q: '', position: '', sourceDossierId: '', selectedId: '' },
-    accountingBridge: { sourceDossierId: '' },
     periods: { year: S.exercise() },
     suppliers: { q: '', status: 'active' },
     clients: { q: '' },
@@ -123,7 +121,6 @@
   var bankStatementLoadPending = false;
   var bankStatementLoadSequence = 0;
   var balanceImportSession = null;
-  var accountingBridgeSession = null;
   var payrollCentralizationSession = null;
   var salesCentralizationSession = null;
   var centralizationCancellationSession = null;
@@ -243,11 +240,6 @@
         return { moduleId: 'payroll-hr', actionId: 'record.create' };
       case 'approve-internal-payroll-run':
         return { moduleId: 'payroll-hr', actionId: 'record.validate' };
-      case 'add-accounting-bridge-mapping':
-      case 'edit-accounting-bridge-mapping':
-      case 'remove-accounting-bridge-mapping':
-      case 'save-accounting-bridge-mapping':
-        return { moduleId: 'accounting', actionId: 'accounting.configure' };
       case 'open-accounting-payroll-centralization':
         return { moduleId: 'accounting', actionId: 'module.view' };
       case 'commit-accounting-payroll-centralization':
@@ -708,10 +700,6 @@
     var view = $('#view');
     if (!view) return;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'import-balance')) balanceImportSession = null;
-    if (!(route === 'menu' && parsed.params.g === 'parametres' && parsed.params.t === 'accounting-bridge')) {
-      accountingBridgeSession = null;
-      ui.accountingBridge.sourceDossierId = '';
-    }
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'import-fec')) {
       fecImportSession = null;
       fecImportReversalSession = null;
@@ -1819,7 +1807,7 @@
       '<div><strong>' + stats.length + '</strong><span>journaux au total</span></div>' +
     '</div>' +
     (managementAllowed ? '' : '<div class="alert info">La création, la modification et la saisie sont masquées sur téléphone. Utilisez le menu Éditions pour consulter les écritures.</div>') +
-    '<div class="alert info journal-system-note"><strong>Journaux système protégés.</strong> <code>AMO</code> (amortissements automatiques) et <code>RPE</code> (résultat de la période) restent réservés aux traitements système. <code>ABO</code> (abonnements) et <code>CEN</code> (centralisations) sont des journaux standards dédiés. Le tableau de passage des comptes entre dossiers est configurable dans Paramètres ; le transfert comptable vers <code>CEN</code> reste à construire. La centralisation de lots internes Paie &amp; RH et Ventes vers <code>Paie (PA)</code> et <code>Ventes (VTE)</code> reste distincte de ce futur transfert. La simulation d’amortissement demeure indicative et ne comptabilise rien.</div>' +
+    '<div class="alert info journal-system-note"><strong>Journaux système protégés.</strong> <code>AMO</code> (amortissements automatiques) et <code>RPE</code> (résultat de la période) restent réservés aux traitements système. <code>ABO</code> (abonnements) et <code>CEN</code> (centralisations) sont des journaux standards dédiés : leurs traitements spécifiques sont à construire. La centralisation de lots internes Paie &amp; RH et Ventes vers <code>Paie (PA)</code> et <code>Ventes (VTE)</code> reste distincte du futur transfert entre dossiers. La simulation d’amortissement demeure indicative et ne comptabilise rien.</div>' +
     '<div class="journal-grid">' + stats.map(function (item) {
       var record = item.journal;
       var systemManaged = !!record.systemManaged;
@@ -3081,223 +3069,6 @@
         '<div id="financial-framework-empty" class="empty-state financial-framework-empty" hidden><strong>Aucun compte ni poste correspondant</strong><span>Essayez un autre code, un intitulé ou un code/libellé de poste.</span></div>' +
         '<p class="small muted financial-framework-source-note">Source : « ' + esc(metadata.sourceFile) + ' » · ' + metadata.sourcePages + ' pages. Certains libellés sont tronqués dans la source ; ils sont conservés tels quels, sans compléter les lettres manquantes.</p>' +
       '</section>' +
-    '</div>';
-  }
-
-  function accountingBridgePostableAccounts(accounts, includeInactive) {
-    return (Array.isArray(accounts) ? accounts : []).filter(function (account) {
-      return account && account.code != null && account.postable !== false && (includeInactive || account.active !== false);
-    }).slice().sort(function (left, right) { return String(left.code).localeCompare(String(right.code)); });
-  }
-
-  function accountingBridgeAccountOptions(accounts, placeholder, includeInactive) {
-    var list = accountingBridgePostableAccounts(accounts, includeInactive);
-    return '<option value="">' + esc(placeholder) + '</option>' + list.map(function (account) {
-      return '<option value="' + esc(account.code) + '">' + esc(String(account.code) + ' · ' + String(account.label || 'Sans libellé') + (account.active === false ? ' · inactif (source)' : '')) + '</option>';
-    }).join('');
-  }
-
-  function accountingBridgeSourceDossiers(targetDossier) {
-    var member = getActiveDemoMember();
-    return S.dossiers().filter(function (dossier) {
-      return dossier.id !== targetDossier.id &&
-        hasDemoPermission(member, 'accounting', 'module.view', accountingAccessContext(dossier));
-    });
-  }
-
-  function accountingBridgeCurrentContext() {
-    var targetDossier = S.currentDossier();
-    var sourceDossier = accountingBridgeSourceDossiers(targetDossier).find(function (dossier) {
-      return dossier.id === ui.accountingBridge.sourceDossierId;
-    }) || null;
-    if (!sourceDossier) return { targetDossier: targetDossier, sourceDossier: null, sourceRead: null, session: null };
-    var sourceRead = S.readDossierStateSnapshot(sourceDossier.id);
-    var session = sourceRead && sourceRead.ok ? accountingBridgeEnsureSession(targetDossier, sourceDossier.id) : null;
-    return { targetDossier: targetDossier, sourceDossier: sourceDossier, sourceRead: sourceRead, session: session };
-  }
-
-  function accountingBridgeCanConfigure(context) {
-    return !!(context && context.targetDossier && context.sourceDossier && !isPhoneViewport() &&
-      hasDemoPermission(getActiveDemoMember(), 'accounting', 'accounting.configure', accountingAccessContext(context.targetDossier)) &&
-      hasDemoPermission(getActiveDemoMember(), 'accounting', 'module.view', accountingAccessContext(context.sourceDossier)));
-  }
-
-  function addAccountingBridgeMappingFromView() {
-    var context = accountingBridgeCurrentContext();
-    if (!context.session || !context.sourceRead || !context.sourceRead.ok || !accountingBridgeCanConfigure(context)) {
-      toast('Ajout refusé : choisissez un dossier source enregistré et disposez du droit de configuration comptable.', 'warning');
-      return;
-    }
-    var sourceCode = ($('#accounting-bridge-source-account') || {}).value || '';
-    var targetCode = ($('#accounting-bridge-target-account') || {}).value || '';
-    var candidate = { sourceCode: sourceCode, targetCode: targetCode };
-    var checked = AccountingBridge.validateMappings([candidate], context.sourceRead.state.accounts, S.accounts());
-    if (!checked.ok) {
-      toast((checked.errors || ['Cette correspondance n’est pas valide.']).join(' '), 'warning');
-      return;
-    }
-    var mappings = context.session.mappings.filter(function (mapping) { return mapping.sourceCode !== sourceCode; });
-    mappings.push(candidate);
-    mappings.sort(function (left, right) { return left.sourceCode.localeCompare(right.sourceCode); });
-    context.session.mappings = mappings;
-    context.session.dirty = true;
-    render();
-  }
-
-  function editAccountingBridgeMappingFromView(sourceCode) {
-    var context = accountingBridgeCurrentContext();
-    if (!accountingBridgeCanConfigure(context)) {
-      toast('Modification refusée : le droit de configuration comptable n’est pas accordé.', 'warning');
-      return;
-    }
-    var mapping = context.session && context.session.mappings.find(function (record) { return record.sourceCode === sourceCode; });
-    var sourceSelect = $('#accounting-bridge-source-account');
-    var targetSelect = $('#accounting-bridge-target-account');
-    if (!mapping || !sourceSelect || !targetSelect) return;
-    sourceSelect.value = mapping.sourceCode;
-    targetSelect.value = mapping.targetCode;
-    targetSelect.focus();
-  }
-
-  function removeAccountingBridgeMappingFromView(sourceCode) {
-    var context = accountingBridgeCurrentContext();
-    if (!accountingBridgeCanConfigure(context) || !context.session) {
-      toast('Retrait refusé : le droit de configuration comptable n’est pas accordé.', 'warning');
-      return;
-    }
-    context.session.mappings = context.session.mappings.filter(function (mapping) { return mapping.sourceCode !== sourceCode; });
-    context.session.dirty = true;
-    render();
-  }
-
-  function saveAccountingBridgeFromView() {
-    var context = accountingBridgeCurrentContext();
-    if (!context.session || !context.sourceRead || !context.sourceRead.ok || !accountingBridgeCanConfigure(context)) {
-      toast('Enregistrement refusé : choisissez un dossier source enregistré et disposez du droit de configuration comptable.', 'warning');
-      return;
-    }
-    var validation = AccountingBridge.validateMappings(context.session.mappings, context.sourceRead.state.accounts, S.accounts());
-    if (!validation.ok) {
-      toast((validation.errors || ['Le tableau de passage contient une correspondance invalide.']).join(' '), 'warning');
-      return;
-    }
-    if (!window.confirm('Confirmer l’enregistrement des correspondances entre ' + context.sourceDossier.reference + ' et ' + context.targetDossier.reference + ' ? Les écritures déjà enregistrées ne seront pas modifiées.')) return;
-    var saved = AccountingBridge.save(context.targetDossier.id, context.sourceDossier.id, context.session.mappings,
-      context.sourceRead.state.accounts, S.accounts());
-    if (!saved.ok) {
-      toast((saved.errors || ['Enregistrement du tableau de passage impossible.']).join(' '), 'warning');
-      return;
-    }
-    context.session.mappings = saved.mappings;
-    context.session.updatedAt = saved.updatedAt;
-    context.session.dirty = false;
-    toast('Tableau de passage enregistré pour ' + context.sourceDossier.reference + ' → ' + context.targetDossier.reference + '.', 'success');
-    render();
-  }
-
-  function accountingBridgeEnsureSession(targetDossier, sourceDossierId) {
-    if (accountingBridgeSession && accountingBridgeSession.targetDossierId === targetDossier.id && accountingBridgeSession.sourceDossierId === sourceDossierId) {
-      return accountingBridgeSession;
-    }
-    var saved = AccountingBridge.get(targetDossier.id, sourceDossierId);
-    accountingBridgeSession = {
-      targetDossierId: targetDossier.id,
-      sourceDossierId: sourceDossierId,
-      mappings: (saved.mappings || []).map(function (mapping) { return { sourceCode: mapping.sourceCode, targetCode: mapping.targetCode }; }),
-      updatedAt: saved.updatedAt || '',
-      loadError: saved.ok ? '' : (saved.errors || ['Lecture du tableau de passage impossible.']).join(' '),
-      dirty: false
-    };
-    return accountingBridgeSession;
-  }
-
-  function viewAccountingBridge() {
-    var targetDossier = S.currentDossier();
-    var member = getActiveDemoMember();
-    var canConfigure = hasDemoPermission(member, 'accounting', 'accounting.configure', accountingAccessContext(targetDossier));
-    var editable = canConfigure && !isPhoneViewport();
-    var sourceDossiers = accountingBridgeSourceDossiers(targetDossier);
-    var sourceId = ui.accountingBridge.sourceDossierId;
-    if (!sourceDossiers.some(function (dossier) { return dossier.id === sourceId; })) {
-      sourceId = '';
-      ui.accountingBridge.sourceDossierId = '';
-      accountingBridgeSession = null;
-    }
-    var targetAccounts = S.accounts();
-    var targetPostingAccounts = accountingBridgePostableAccounts(targetAccounts, false);
-    var sourceOptions = '<option value="">Choisir un dossier source PERFECTO…</option>' + sourceDossiers.map(function (dossier) {
-      return '<option value="' + esc(dossier.id) + '"' + (dossier.id === sourceId ? ' selected' : '') + '>' + esc((dossier.clientName || dossier.name) + ' · ' + dossier.reference + ' · ' + dossier.cycleStart + ' → ' + dossier.cycleEnd) + '</option>';
-    }).join('');
-    var sourceDossier = sourceDossiers.find(function (dossier) { return dossier.id === sourceId; }) || null;
-    var sourceRead = sourceDossier ? S.readDossierStateSnapshot(sourceDossier.id) : null;
-    var sourceAccounts = sourceRead && sourceRead.ok ? accountingBridgePostableAccounts(sourceRead.state.accounts, true) : [];
-    var session = sourceRead && sourceRead.ok ? accountingBridgeEnsureSession(targetDossier, sourceDossier.id) : null;
-    var sourceAccountByCode = Object.create(null);
-    var targetAccountByCode = Object.create(null);
-    sourceAccounts.forEach(function (account) { sourceAccountByCode[String(account.code)] = account; });
-    targetAccounts.forEach(function (account) { targetAccountByCode[String(account.code)] = account; });
-    var exactSuggestions = sourceAccounts.filter(function (account) {
-      var target = targetPostingAccounts.find(function (candidate) { return String(candidate.code) === String(account.code); });
-      return !!target;
-    }).length;
-    var permissionNote = !canConfigure
-      ? '<div class="alert warning accounting-bridge-permission"><div><strong>Consultation seule.</strong> Le droit « Modifier la configuration comptable du dossier » est requis pour enregistrer ce tableau.</div></div>'
-      : (isPhoneViewport()
-        ? '<div class="alert info accounting-bridge-permission"><div><strong>Permission active, écran en consultation.</strong> Les modifications du tableau sont réservées à un ordinateur ou une tablette.</div></div>'
-        : '<div class="alert success accounting-bridge-permission"><div><strong>Permission de configuration comptable active.</strong> Les modifications resteront limitées au profil et au dossier autorisés.</div></div>');
-    var sourceStateHtml = !sourceDossier
-      ? (sourceDossiers.length
-        ? '<div class="empty-state accounting-bridge-empty"><strong>Choisissez un dossier source</strong><span>Le dossier actif « ' + esc(targetDossier.reference) + ' » est le dossier cible.</span></div>'
-        : '<div class="empty-state accounting-bridge-empty"><strong>Aucun autre dossier source autorisé</strong><span>Créez ou ouvrez un autre dossier PERFECTO accessible au profil, puis revenez définir la correspondance.</span><a class="btn btn-ghost btn-sm" href="#/dossiers">Gérer les dossiers</a></div>')
-      : (!sourceRead || !sourceRead.ok
-        ? '<div class="alert warning accounting-bridge-source-warning"><div><strong>Plan source indisponible.</strong><br>' + esc((sourceRead && sourceRead.errors || ['Ouvrez et enregistrez une première fois le dossier source PERFECTO avant de définir les correspondances.']).join(' ')) + '</div></div>'
-        : '');
-    var mappingRows = session && !session.loadError
-      ? session.mappings.map(function (mapping) {
-        var source = sourceAccountByCode[mapping.sourceCode];
-        var target = targetAccountByCode[mapping.targetCode];
-        var targetUsable = target && target.active !== false && target.postable !== false;
-        var valid = !!source && source.postable !== false && !!targetUsable;
-        return '<tr><td><strong>' + esc(mapping.sourceCode) + '</strong><br><small>' + esc(source && source.label || (source ? 'Sans libellé' : 'Compte absent du plan source')) + '</small></td>' +
-          '<td><strong>' + esc(mapping.targetCode) + '</strong><br><small>' + esc(target && target.label || (target ? 'Sans libellé' : 'Compte absent du plan cible')) + '</small></td>' +
-          '<td><span class="accounting-bridge-row-state ' + (valid ? 'is-valid' : 'is-invalid') + '">' + (valid ? 'Correspondance disponible' : 'À corriger') + '</span></td>' +
-          '<td class="accounting-bridge-row-actions"><button type="button" class="btn btn-ghost btn-sm" data-action="edit-accounting-bridge-mapping" data-source-code="' + esc(mapping.sourceCode) + '"' + (!editable || !source ? ' disabled' : '') + '>Modifier</button>' +
-          '<button type="button" class="btn btn-ghost btn-sm btn-danger-quiet" data-action="remove-accounting-bridge-mapping" data-source-code="' + esc(mapping.sourceCode) + '"' + (!editable ? ' disabled' : '') + '>Retirer</button></td></tr>';
-      }).join('')
-      : '';
-    var mappingTable = session && !session.loadError
-      ? (session.mappings.length
-        ? '<div class="table-wrap accounting-bridge-table-wrap"><table class="data-table accounting-bridge-table"><thead><tr><th>Compte du dossier source</th><th>Compte du dossier cible</th><th>État</th><th>Actions</th></tr></thead><tbody>' + mappingRows + '</tbody></table></div>'
-        : '<div class="empty-state accounting-bridge-empty"><strong>Aucune correspondance enregistrée pour ces deux dossiers</strong><span>Ajoutez uniquement les comptes nécessaires au transfert ; les comptes absents ne seront jamais créés automatiquement.</span></div>')
-      : '';
-    var editableForm = session && !session.loadError && sourceAccounts.length
-      ? '<form id="accounting-bridge-mapping-form" class="accounting-bridge-mapping-form" novalidate>' +
-          '<div class="field"><label for="accounting-bridge-source-account">Compte général source</label><select id="accounting-bridge-source-account" required' + (editable ? '' : ' disabled') + '>' + accountingBridgeAccountOptions(sourceAccounts, 'Choisir un compte du plan source…', true) + '</select><span class="hint">Seuls les comptes imputables du dossier source sont proposés.</span></div>' +
-          '<div class="field"><label for="accounting-bridge-target-account">Compte général cible</label><select id="accounting-bridge-target-account" required' + (editable ? '' : ' disabled') + '>' + accountingBridgeAccountOptions(targetPostingAccounts, 'Choisir un compte actif du plan cible…', false) + '</select><span class="hint">Un code identique peut être suggéré ; il n’est enregistré qu’après votre action.</span></div>' +
-          '<div class="accounting-bridge-mapping-add"><button type="button" class="btn btn-ghost" data-action="add-accounting-bridge-mapping"' + (editable ? '' : ' disabled') + '>Ajouter ou mettre à jour la correspondance</button></div>' +
-        '</form>'
-      : '';
-    var summary = sourceRead && sourceRead.ok
-      ? '<div class="exchange-summary-grid accounting-bridge-summary"><div><small>Dossier source</small><strong>' + esc(sourceDossier.reference) + '</strong></div><div><small>Dossier cible</small><strong>' + esc(targetDossier.reference) + '</strong></div><div><small>Comptes source imputables</small><strong>' + sourceAccounts.length + '</strong></div><div><small>Codes identiques proposés</small><strong>' + exactSuggestions + '</strong></div></div>'
-      : '';
-    var loadError = session && session.loadError
-      ? '<div class="alert error"><div><strong>Tableau non chargé.</strong> ' + esc(session.loadError) + ' Aucune donnée n’a été remplacée.</div></div>'
-      : '';
-    var dirtyNote = session && session.dirty
-      ? '<div class="alert warning accounting-bridge-dirty-note"><strong>Modifications en attente.</strong> Enregistrez le tableau pour conserver ces correspondances.</div>'
-      : (session && session.updatedAt
-        ? '<p class="small muted accounting-bridge-updated">Dernier enregistrement local : ' + esc(new Date(session.updatedAt).toLocaleString('fr-FR')) + '.</p>'
-        : '');
-    var saveButton = session && !session.loadError
-      ? '<div class="accounting-bridge-footer"><button type="button" class="btn btn-primary" data-action="save-accounting-bridge-mapping"' + (editable ? '' : ' disabled') + '>Enregistrer le tableau de passage</button></div>'
-      : '';
-    return '<div class="exchange-workspace accounting-bridge-workspace">' +
-      '<div class="alert info accounting-bridge-intro"><div><strong>Paramétrage de Comptabilité générale · dossiers PERFECTO</strong><br>Associez les comptes d’un dossier source aux comptes existants du dossier cible actif. Ce tableau sert aux transferts comptables entre dossiers ; il ne concerne pas la comptabilité analytique, n’importe aucun fichier et ne crée ni ne modifie aucune écriture.</div></div>' +
-      permissionNote +
-      '<div class="field accounting-bridge-source-field"><label for="accounting-bridge-source-dossier">Dossier comptable source</label><select id="accounting-bridge-source-dossier"' + (sourceDossiers.length ? '' : ' disabled') + '>' + sourceOptions + '</select><span class="hint">Dossier cible actif : ' + esc(targetDossier.clientName) + ' · ' + esc(targetDossier.reference) + '.</span></div>' +
-      summary + sourceStateHtml + loadError +
-      editableForm + mappingTable + dirtyNote + saveButton +
-      '<p class="exchange-footnote accounting-bridge-footnote">Les changements de correspondance n’affectent jamais les écritures déjà enregistrées. Un transfert futur devra encore contrôler les journaux, périodes, données choisies et doublons. En démo, le tableau est stocké localement dans ce navigateur ; il n’est pas synchronisé avec Google Drive ou un serveur.</p>' +
     '</div>';
   }
 
@@ -9692,8 +9463,6 @@
       exchangeFeature = viewAccountControls();
     } else if (group.id === 'parametres' && tab.id === 'financial-framework') {
       exchangeFeature = viewFinancialFramework();
-    } else if (group.id === 'parametres' && tab.id === 'accounting-bridge') {
-      exchangeFeature = viewAccountingBridge();
     } else if (group.id === 'parametres' && tab.id === 'general-account-natures') {
       exchangeFeature = viewGeneralAccountNatures();
     }
@@ -10484,27 +10253,6 @@
     applyFilter();
   }
 
-  function bindAccountingBridge() {
-    var dossierSelect = $('#accounting-bridge-source-dossier');
-    if (dossierSelect) dossierSelect.addEventListener('change', function () {
-      ui.accountingBridge.sourceDossierId = dossierSelect.value;
-      accountingBridgeSession = null;
-      render();
-    });
-
-    var sourceAccountSelect = $('#accounting-bridge-source-account');
-    var targetAccountSelect = $('#accounting-bridge-target-account');
-    if (sourceAccountSelect && targetAccountSelect) sourceAccountSelect.addEventListener('change', function () {
-      var context = accountingBridgeCurrentContext();
-      var existing = context.session && context.session.mappings.find(function (mapping) {
-        return mapping.sourceCode === sourceAccountSelect.value;
-      });
-      var accounts = accountingBridgePostableAccounts(S.accounts(), false);
-      var exactTarget = accounts.find(function (account) { return String(account.code) === String(sourceAccountSelect.value); });
-      targetAccountSelect.value = existing ? existing.targetCode : (exactTarget ? String(exactTarget.code) : '');
-    });
-  }
-
   function bindAnalyticalNatures() {
     var workspace = $('.analytical-natures-workspace');
     if (!workspace) return;
@@ -10667,7 +10415,6 @@
       if (menuParams.g === 'parametres' && menuParams.t === 'order-natures') bindOrderNatures();
       if (menuParams.g === 'parametres' && menuParams.t === 'account-controls') bindAccountControls();
       if (menuParams.g === 'parametres' && menuParams.t === 'financial-framework') bindFinancialFramework();
-      if (menuParams.g === 'parametres' && menuParams.t === 'accounting-bridge') bindAccountingBridge();
       if (menuParams.g === 'parametres' && menuParams.t === 'general-account-natures') bindGeneralAccountNatures();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'suppliers') bindSupplierView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'clients') bindClientView();
@@ -11003,18 +10750,6 @@
         }
         break;
       }
-      case 'add-accounting-bridge-mapping':
-        addAccountingBridgeMappingFromView();
-        break;
-      case 'edit-accounting-bridge-mapping':
-        editAccountingBridgeMappingFromView(trigger.getAttribute('data-source-code') || '');
-        break;
-      case 'remove-accounting-bridge-mapping':
-        removeAccountingBridgeMappingFromView(trigger.getAttribute('data-source-code') || '');
-        break;
-      case 'save-accounting-bridge-mapping':
-        saveAccountingBridgeFromView();
-        break;
       case 'create-demo-payroll-run':
         createDemoPayrollRun();
         break;

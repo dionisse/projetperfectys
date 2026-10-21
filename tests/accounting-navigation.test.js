@@ -440,23 +440,6 @@ assert.match(menuRenderer, /group\.id === 'saisie' && tab\.id === 'reconciliatio
 
 assert.equal(findTab('parametres', 'financial-framework').status, 'partial');
 assert.ok(findTab('parametres', 'financial-framework').reason.includes('cases vides'));
-assert.equal(findTab('parametres', 'accounting-bridge').status, 'active');
-assert.ok(findTab('parametres', 'accounting-bridge').reason.includes('Comptabilité générale'));
-assert.ok(findTab('parametres', 'accounting-bridge').reason.includes('non analytique'));
-assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'accounting-bridge'[\s\S]*viewAccountingBridge\(\)/,
-  'le tableau de passage est disponible dans les paramètres de la comptabilité générale');
-assert.match(appSource, /function viewAccountingBridge\([\s\S]*dossier source PERFECTO[\s\S]*ne crée ni ne modifie aucune écriture/);
-assert.match(appSource, /function saveAccountingBridgeFromView\([\s\S]*accountingBridgeCanConfigure[\s\S]*window\.confirm[\s\S]*AccountingBridge\.save/);
-assert.match(appSource, /function bindAccountingBridge\([\s\S]*accounting-bridge-source-dossier[\s\S]*render\(\)/);
-const accountingBridgeViewStart = appSource.indexOf('function viewAccountingBridge()');
-const accountingBridgeViewEnd = appSource.indexOf('function viewGeneralAccountNatures()', accountingBridgeViewStart);
-assert.ok(accountingBridgeViewStart >= 0 && accountingBridgeViewEnd > accountingBridgeViewStart);
-assert.doesNotMatch(appSource.slice(accountingBridgeViewStart, accountingBridgeViewEnd), /S\.(?:createEntry|importExchange|deleteEntry|updateEntry)/,
-  'le paramétrage du tableau de passage ne doit jamais créer ou modifier une écriture');
-assert.match(appSource, /case 'edit-accounting-bridge-mapping':[\s\S]*editAccountingBridgeMappingFromView/);
-assert.ok(htmlSource.indexOf('js/accounting-bridge.js') < htmlSource.indexOf('js/app.js'));
-assert.match(serviceWorkerSource, /\.\/js\/accounting-bridge\.js/);
-assert.match(htmlSource, /js\/accounting-bridge\.js/);
 assert.ok(findTab('parametres', 'financial-framework').reason.includes('aucune écriture'));
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'financial-framework'[\s\S]*viewFinancialFramework\(\)/,
   'le référentiel SYSCOHADA s’ouvre depuis le bon sous-menu Paramètres');
@@ -470,7 +453,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v75/);
+assert.match(serviceWorkerSource, /perfecto-static-v74/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/fec-import\.js/);
 assert.match(htmlSource, /js\/fec-import\.js/);

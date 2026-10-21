@@ -29,7 +29,7 @@
     { code: 'OD', label: 'Opérations diverses', type: 'Divers', referencePrefix: 'OD' },
     { code: 'PA', label: 'Paie', type: 'Paie', referencePrefix: 'PA', legacyLabels: ['Journal de paie'] },
     { code: 'ABO', label: 'Abonnements', type: 'Abonnement', operationNature: 'Abonnements', referencePrefix: 'ABO', legacyLabels: ['Journal abonnements'], description: 'Journal spécialisé des abonnements de charges ou de produits. Les schémas de répartition et d’anticipation restent à construire ; aucune écriture n’est générée automatiquement.' },
-    { code: 'CEN', label: 'Centralisations', type: 'Centralisation', operationNature: 'Centralisation', referencePrefix: 'CEN', legacyLabels: ['Journal des Centralisations'], description: 'Journal spécialisé des centralisations comptables entre dossiers PERFECTO. Le tableau de passage des comptes est configurable dans les Paramètres ; le transfert CEN et ses contrôles de cohérence restent à construire.' }
+    { code: 'CEN', label: 'Centralisations', type: 'Centralisation', operationNature: 'Centralisation', referencePrefix: 'CEN', legacyLabels: ['Journal des Centralisations'], description: 'Journal spécialisé des centralisations comptables entre dossiers PERFECTO. Le transfert, les tableaux de passage et les contrôles de cohérence restent à construire.' }
   ];
   var RETIRED_JOURNAL_CODES = ['RAN', 'AC', 'VE'];
   var JOURNAL_OPERATION_NATURES = [
