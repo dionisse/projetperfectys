@@ -370,6 +370,9 @@ assert.match(configurationCss, /\.fixed-asset-accounts-table-wrap\s*\{[^}]*width
 assert.doesNotMatch(configurationCss, /\.fixed-asset-accounts-table-wrap\s*\{[^}]*overflow:\s*(?:auto|scroll)/, 'la table ne crée pas de barre de défilement interne');
 assert.match(configurationCss, /\.fixed-asset-accounts-actions\s*\{[^}]*grid-template-columns:\s*repeat\(6/, 'les boutons sont regroupés sous la table');
 assert.match(appSource, /function bindFixedAssetAccounts\(\)[\s\S]*initializeFixedAssetAccountsConfiguration[\s\S]*saveFixedAssetAccountsConfiguration/);
+assert.match(appSource, /var blankId = 'fixed-assets-empty-' \+ blankIndex/);
+assert.match(appSource, /Nouvelle ligne ajoutée sans modifier les lignes existantes/);
+assert.match(appSource, /additionalRows: additionalRows/);
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'dossier-configuration'[\s\S]*viewAccountingConfiguration\(\)/);
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'sections-accounts'[\s\S]*viewAnalyticalSectionsConfiguration\(\)/);
 assert.match(appSource, /function viewAccountingConfiguration\(\)[\s\S]*accounting\.configure[\s\S]*Exercice en cours/);

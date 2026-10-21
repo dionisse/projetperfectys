@@ -1127,6 +1127,20 @@
     ];
   }
 
+  function normalizeFixedAssetAccountsAdditionalRows(rows) {
+    var fields = ['grossValueAccount', 'accumulatedDepreciationAccount', 'depreciationExpenseAccount', 'disposalNetValueAccount', 'grantRecoveryAccount'];
+    var seen = Object.create(null);
+    return (Array.isArray(rows) ? rows : []).map(function (row) {
+      if (!row || typeof row !== 'object' || Array.isArray(row) || typeof row.id !== 'string' || !/^fixed-assets-custom-\d+$/.test(row.id) || seen[row.id]) return null;
+      seen[row.id] = true;
+      var normalized = { id: row.id };
+      fields.forEach(function (field) {
+        normalized[field] = String(row[field] == null ? '' : row[field]).trim().replace(/\s+/g, ' ').slice(0, 120);
+      });
+      return fields.some(function (field) { return normalized[field]; }) ? normalized : null;
+    }).filter(Boolean);
+  }
+
   function normalizeFixedAssetAccountsConfiguration(value) {
     var source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
     var suppliedRows = Array.isArray(source.rows) ? source.rows : [];
@@ -1144,11 +1158,15 @@
       });
       return result;
     });
-    return { rows: rows, updatedAt: String(source.updatedAt || '').slice(0, 40) };
+    return {
+      rows: rows,
+      additionalRows: normalizeFixedAssetAccountsAdditionalRows(source.additionalRows),
+      updatedAt: String(source.updatedAt || '').slice(0, 40)
+    };
   }
 
   function defaultFixedAssetAccountsConfiguration() {
-    return { rows: defaultFixedAssetAccountsRows(), updatedAt: '' };
+    return { rows: defaultFixedAssetAccountsRows(), additionalRows: [], updatedAt: '' };
   }
 
   function defaultGeneralAccountNaturesRows() {
@@ -1850,7 +1868,7 @@
         return;
       }
       if (!knownIds[row.id]) {
-        errors.push('Aucune ligne de comptes associés aux immobilisations non prévue ne peut être ajoutée.');
+        errors.push('Une ligne inconnue ne peut pas remplacer les cinq lignes de référence des comptes associés aux immobilisations.');
         return;
       }
       if (suppliedById[row.id]) {
@@ -1874,11 +1892,44 @@
       });
       return result;
     });
+
+    var additionalRows = [];
+    if (Object.prototype.hasOwnProperty.call(source, 'additionalRows')) {
+      if (!Array.isArray(source.additionalRows)) {
+        errors.push('Les lignes ajoutées aux comptes associés aux immobilisations sont invalides.');
+      } else {
+        var customIds = Object.create(null);
+        source.additionalRows.forEach(function (row) {
+          if (!row || typeof row !== 'object' || Array.isArray(row) || typeof row.id !== 'string' || !/^fixed-assets-custom-\d+$/.test(row.id)) {
+            errors.push('Une ligne ajoutée aux comptes associés aux immobilisations est invalide.');
+            return;
+          }
+          if (customIds[row.id]) {
+            errors.push('La ligne ajoutée « ' + row.id + ' » est répétée.');
+            return;
+          }
+          customIds[row.id] = true;
+          var result = { id: row.id };
+          var hasValue = false;
+          fields.forEach(function (field) {
+            var value = String(row[field] == null ? '' : row[field]).trim().replace(/\s+/g, ' ');
+            if (value.length > 120) errors.push('Chaque compte ajouté doit rester sous 120 caractères.');
+            result[field] = value.slice(0, 120);
+            if (result[field]) hasValue = true;
+          });
+          if (!hasValue) errors.push('Une ligne ajoutée doit contenir au moins une valeur de compte.');
+          additionalRows.push(result);
+        });
+      }
+    } else {
+      additionalRows = normalizeFixedAssetAccountsAdditionalRows(dossier.fixedAssetAccountsConfiguration && dossier.fixedAssetAccountsConfiguration.additionalRows);
+    }
+
     if (errors.length) return { ok: false, errors: errors };
 
     var previousCatalog = clone(folderCatalog);
     var dossierIndex = folderCatalog.findIndex(function (record) { return record.id === dossier.id; });
-    var configuration = { rows: rows, updatedAt: new Date().toISOString() };
+    var configuration = { rows: rows, additionalRows: additionalRows, updatedAt: new Date().toISOString() };
     folderCatalog[dossierIndex] = Object.assign({}, dossier, { fixedAssetAccountsConfiguration: configuration });
     if (!saveFolderCatalog()) {
       folderCatalog = previousCatalog;
@@ -1888,7 +1939,7 @@
   }
 
   function initializeFixedAssetAccountsConfiguration() {
-    return saveFixedAssetAccountsConfiguration({ rows: defaultFixedAssetAccountsRows() });
+    return saveFixedAssetAccountsConfiguration({ rows: defaultFixedAssetAccountsRows(), additionalRows: [] });
   }
 
   function saveAnalyticalAllocationKeysConfiguration(kind, input) {

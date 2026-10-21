@@ -95,6 +95,7 @@
   var selectedEntryJournalCode = '';
   var analyticalNatureSelectedId = 'activity-domains';
   var fixedAssetAccountsSelectedId = 'fixed-assets-class-21';
+  var fixedAssetAccountsSelectedDossierId = '';
   var fixedAssetAccountsEditDraft = null;
   var fixedAssetAccountsEditDossierId = '';
   var generalAccountNatureSelectedId = 'stable-grants';
@@ -2790,17 +2791,28 @@
 
   function viewFixedAssetAccounts() {
     var dossier = S.currentDossier();
+    if (fixedAssetAccountsSelectedDossierId !== dossier.id) {
+      fixedAssetAccountsSelectedId = 'fixed-assets-class-21';
+      fixedAssetAccountsSelectedDossierId = dossier.id;
+    }
     if (fixedAssetAccountsEditDraft && fixedAssetAccountsEditDossierId !== dossier.id) {
       fixedAssetAccountsEditDraft = null;
       fixedAssetAccountsEditDossierId = '';
     }
     var configuration = S.fixedAssetAccountsConfiguration();
     var editing = !!fixedAssetAccountsEditDraft;
-    var rows = editing ? fixedAssetAccountsEditDraft.rows : (Array.isArray(configuration.rows) ? configuration.rows : []);
+    var rows = editing ? fixedAssetAccountsEditDraft.rows :
+      (Array.isArray(configuration.rows) ? configuration.rows : []).concat(Array.isArray(configuration.additionalRows) ? configuration.additionalRows : []);
     var canConfigure = hasDemoPermission(getActiveDemoMember(), 'accounting', 'fixedAssetAccounts.configure', accountingAccessContext(dossier));
     var editable = canConfigure && !isPhoneViewport();
-    var selected = rows.find(function (row) { return row.id === fixedAssetAccountsSelectedId; }) || rows[0];
-    if (selected) fixedAssetAccountsSelectedId = selected.id;
+    var selected = rows.find(function (row) { return row.id === fixedAssetAccountsSelectedId; }) || null;
+    var selectedIsEmptySlot = /^fixed-assets-empty-\d+$/.test(fixedAssetAccountsSelectedId);
+    if (!selected && !selectedIsEmptySlot) {
+      selected = rows[0] || null;
+      if (selected) fixedAssetAccountsSelectedId = selected.id;
+    }
+    var hasSelection = !!selected || selectedIsEmptySlot;
+    var editingNewRow = editing && fixedAssetAccountsEditDraft.isNewRow === true;
     var columns = [
       { key: 'grossValueAccount', label: 'Compte de valeur brute' },
       { key: 'accumulatedDepreciationAccount', label: 'Compte d’amortissements' },
@@ -2811,7 +2823,7 @@
     var tableRows = rows.map(function (row) {
       var isSelected = selected && row.id === selected.id;
       var cells = columns.map(function (column) {
-        if (editing && isSelected) {
+        if (editing && !editingNewRow && isSelected) {
           return '<td><input type="text" maxlength="120" data-fixed-asset-account-field="' + column.key + '" aria-label="' + esc(column.label + ' — ligne ' + (row.grossValueAccount || row.id)) + '" value="' + esc(row[column.key] || '') + '"></td>';
         }
         return '<td>' + esc(row[column.key] || '') + '</td>';
@@ -2820,7 +2832,16 @@
     }).join('');
     var blankRows = '';
     for (var blankIndex = 0; blankIndex < 11; blankIndex += 1) {
-      blankRows += '<tr class="fixed-asset-accounts-empty-row" aria-hidden="true"><td></td><td></td><td></td><td></td><td></td></tr>';
+      var blankId = 'fixed-assets-empty-' + blankIndex;
+      var blankSelected = selectedIsEmptySlot && fixedAssetAccountsSelectedId === blankId;
+      var editBlank = editingNewRow && fixedAssetAccountsEditDraft.slotId === blankId;
+      var blankCells = columns.map(function (column) {
+        if (editBlank) {
+          return '<td><input type="text" maxlength="120" data-fixed-asset-account-field="' + column.key + '" aria-label="' + esc(column.label + ' — nouvelle ligne') + '" value="' + esc(fixedAssetAccountsEditDraft.newRow[column.key] || '') + '"></td>';
+        }
+        return '<td></td>';
+      }).join('');
+      blankRows += '<tr class="fixed-asset-accounts-row fixed-asset-accounts-empty-row' + (blankSelected ? ' is-selected' : '') + '" data-fixed-asset-account-row="' + blankId + '" tabindex="0" aria-selected="' + (blankSelected ? 'true' : 'false') + '">' + blankCells + '</tr>';
     }
     var accessNotice = !canConfigure
       ? '<div class="alert warning fixed-asset-accounts-access-note">Consultation seule : un droit explicite « Configurer les comptes associés aux immobilisations » est nécessaire pour modifier ou réinitialiser cette grille.</div>'
@@ -2834,14 +2855,14 @@
         '</div>' +
         '<div class="fixed-asset-accounts-actions">' +
           '<button type="button" class="btn btn-ghost" data-fixed-asset-account-action="close">Fermer</button>' +
-          '<button type="button" class="btn btn-ghost" data-fixed-asset-account-action="modify"' + (!editable || editing || !selected ? ' disabled' : '') + '>Modifier</button>' +
+          '<button type="button" class="btn btn-ghost" data-fixed-asset-account-action="modify"' + (!editable || editing || !hasSelection ? ' disabled' : '') + '>Modifier</button>' +
           '<button type="button" class="btn btn-ghost" data-fixed-asset-account-action="reset"' + (!editable || editing ? ' disabled' : '') + '>Réinitialiser...</button>' +
           '<button type="button" class="btn btn-ghost" data-fixed-asset-account-action="accounts" disabled title="La sélection de comptes reste désactivée comme sur la capture.">Comptes...</button>' +
           '<button type="button" class="btn btn-ghost" data-fixed-asset-account-action="validate"' + (!editable || !editing ? ' disabled' : '') + '>Valider</button>' +
           '<button type="button" class="btn btn-ghost" data-fixed-asset-account-action="cancel"' + (!editing ? ' disabled' : '') + '>Annuler</button>' +
         '</div>' +
       '</div>' +
-      '<p class="small muted fixed-asset-accounts-footnote">La correspondance est conservée par dossier. Elle ne génère aucune écriture et ne lance aucun calcul d’amortissement.</p>' +
+      '<p class="small muted fixed-asset-accounts-footnote">Sélectionnez une ligne vide puis « Modifier » pour ajouter une correspondance, sans changer les lignes existantes. Aucun calcul ni aucune écriture ne sont produits.</p>' +
     '</div>';
   }
 
@@ -8725,6 +8746,7 @@
     if (!workspace) return;
     var dossier = S.currentDossier();
     var canConfigure = hasDemoPermission(getActiveDemoMember(), 'accounting', 'fixedAssetAccounts.configure', accountingAccessContext(dossier));
+    var fields = ['grossValueAccount', 'accumulatedDepreciationAccount', 'depreciationExpenseAccount', 'disposalNetValueAccount', 'grantRecoveryAccount'];
 
     function selectRow(row) {
       if (fixedAssetAccountsEditDraft) return;
@@ -8754,6 +8776,7 @@
       if (action === 'close') {
         fixedAssetAccountsEditDraft = null;
         fixedAssetAccountsEditDossierId = '';
+        fixedAssetAccountsSelectedId = 'fixed-assets-class-21';
         navigate(accountingMenuHash('parametres', 'dossier-configuration'));
       } else if (action === 'modify') {
         if (!canConfigure || isPhoneViewport()) {
@@ -8761,7 +8784,23 @@
           return;
         }
         var current = S.fixedAssetAccountsConfiguration();
-        fixedAssetAccountsEditDraft = { rows: current.rows.map(function (row) { return Object.assign({}, row); }) };
+        var storedRows = (Array.isArray(current.rows) ? current.rows : []).concat(Array.isArray(current.additionalRows) ? current.additionalRows : []);
+        var isNewRow = /^fixed-assets-empty-\d+$/.test(fixedAssetAccountsSelectedId);
+        var newRow = null;
+        if (isNewRow) {
+          var usedCustomIds = Object.create(null);
+          (current.additionalRows || []).forEach(function (row) { usedCustomIds[row.id] = true; });
+          var customIndex = 1;
+          while (usedCustomIds['fixed-assets-custom-' + customIndex]) customIndex += 1;
+          newRow = { id: 'fixed-assets-custom-' + customIndex };
+          fields.forEach(function (field) { newRow[field] = ''; });
+        }
+        fixedAssetAccountsEditDraft = {
+          rows: storedRows.map(function (row) { return Object.assign({}, row); }),
+          isNewRow: isNewRow,
+          slotId: isNewRow ? fixedAssetAccountsSelectedId : '',
+          newRow: newRow
+        };
         fixedAssetAccountsEditDossierId = dossier.id;
         render();
       } else if (action === 'reset') {
@@ -8769,7 +8808,7 @@
           toast('Réinitialisation refusée : un droit explicite sur ce dossier est requis.', 'warning');
           return;
         }
-        if (!window.confirm('Réinitialiser les comptes associés aux immobilisations de ce dossier aux valeurs de la capture ? Les pièces comptables ne seront pas modifiées.')) return;
+        if (!window.confirm('Réinitialiser les comptes associés aux immobilisations de ce dossier aux valeurs de la capture ? Les lignes ajoutées seront retirées ; les pièces comptables ne seront pas modifiées.')) return;
         var initialized = S.initializeFixedAssetAccountsConfiguration();
         if (!initialized.ok) {
           toast((initialized.errors || ['Réinitialisation impossible.']).join(' '), 'error');
@@ -8779,26 +8818,42 @@
         toast('Comptes associés aux immobilisations réinitialisés pour ce dossier.', 'success');
         render();
       } else if (action === 'validate') {
-        if (!canConfigure || !fixedAssetAccountsEditDraft) {
-          toast('Validation refusée : un droit explicite sur ce dossier est requis.', 'warning');
+        if (!canConfigure || !fixedAssetAccountsEditDraft || isPhoneViewport()) {
+          toast('Validation refusée : un droit explicite sur ce dossier et un écran ordinateur ou tablette sont requis.', 'warning');
           return;
         }
         var editedFields = Object.create(null);
         $$('[data-fixed-asset-account-field]', workspace).forEach(function (input) {
           editedFields[input.getAttribute('data-fixed-asset-account-field')] = input.value;
         });
-        var nextRows = fixedAssetAccountsEditDraft.rows.map(function (row) {
-          if (row.id !== fixedAssetAccountsSelectedId) return row;
-          return Object.assign({}, row, editedFields);
-        });
-        var saved = S.saveFixedAssetAccountsConfiguration({ rows: nextRows });
+        var draft = fixedAssetAccountsEditDraft;
+        var nextRows;
+        var selectedAfterSave = fixedAssetAccountsSelectedId;
+        if (draft.isNewRow) {
+          var addedRow = Object.assign({}, draft.newRow, editedFields);
+          if (!fields.some(function (field) { return String(addedRow[field] || '').trim(); })) {
+            toast('Renseignez au moins une cellule avant d’ajouter la ligne.', 'warning');
+            return;
+          }
+          nextRows = draft.rows.concat([addedRow]);
+          selectedAfterSave = addedRow.id;
+        } else {
+          nextRows = draft.rows.map(function (row) {
+            if (row.id !== fixedAssetAccountsSelectedId) return row;
+            return Object.assign({}, row, editedFields);
+          });
+        }
+        var fixedRows = nextRows.filter(function (row) { return !/^fixed-assets-custom-\d+$/.test(row.id); });
+        var additionalRows = nextRows.filter(function (row) { return /^fixed-assets-custom-\d+$/.test(row.id); });
+        var saved = S.saveFixedAssetAccountsConfiguration({ rows: fixedRows, additionalRows: additionalRows });
         if (!saved.ok) {
           toast((saved.errors || ['Enregistrement impossible.']).join(' '), 'error');
           return;
         }
+        fixedAssetAccountsSelectedId = selectedAfterSave;
         fixedAssetAccountsEditDraft = null;
         fixedAssetAccountsEditDossierId = '';
-        toast('Comptes associés aux immobilisations enregistrés dans le dossier. Aucune écriture n’a été créée.', 'success');
+        toast(draft.isNewRow ? 'Nouvelle ligne ajoutée sans modifier les lignes existantes.' : 'Comptes associés aux immobilisations enregistrés dans le dossier. Aucune écriture n’a été créée.', 'success');
         render();
       } else if (action === 'cancel') {
         fixedAssetAccountsEditDraft = null;

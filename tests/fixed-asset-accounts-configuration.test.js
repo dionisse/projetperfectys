@@ -53,12 +53,26 @@ assert.equal(store.fixedAssetAccountsConfiguration().rows.find(row => row.id ===
 const persistedCatalog = JSON.parse(values.get('perfecto.dossiers.v1'));
 assert.equal(persistedCatalog[0].fixedAssetAccountsConfiguration.rows.find(row => row.id === 'fixed-assets-class-21').disposalNetValueAccount, '811 812');
 
+assert.deepEqual(initial.additionalRows, [], 'aucune ligne supplémentaire n’est créée par défaut');
 const reloadedStore = loadStore();
 assert.equal(reloadedStore.fixedAssetAccountsConfiguration().rows.find(row => row.id === 'fixed-assets-class-26').accumulatedDepreciationAccount, '281*', 'les changements sont conservés après rechargement');
+const additionalRow = {
+  id: 'fixed-assets-custom-1', grossValueAccount: '25*', accumulatedDepreciationAccount: '285*',
+  depreciationExpenseAccount: '6813', disposalNetValueAccount: '812', grantRecoveryAccount: '799'
+};
+const added = store.saveFixedAssetAccountsConfiguration({ rows: editedRows, additionalRows: [additionalRow] });
+assert.equal(added.ok, true, added.errors && added.errors.join(' '));
+assert.equal(store.fixedAssetAccountsConfiguration().additionalRows[0].grossValueAccount, '25*', 'une ligne vide peut recevoir une nouvelle correspondance');
+assert.equal(store.fixedAssetAccountsConfiguration().rows.find(row => row.id === 'fixed-assets-class-21').disposalNetValueAccount, '811 812', 'l’ajout ne modifie pas les lignes existantes');
+const afterAddingStore = loadStore();
+assert.equal(afterAddingStore.fixedAssetAccountsConfiguration().additionalRows[0].id, 'fixed-assets-custom-1', 'la nouvelle ligne est persistée après rechargement');
+const emptyAdditional = store.saveFixedAssetAccountsConfiguration({ rows: editedRows, additionalRows: [{ id: 'fixed-assets-custom-2' }] });
+assert.equal(emptyAdditional.ok, false, 'une ligne totalement vide reste un emplacement de saisie, pas une donnée enregistrée');
+assert.equal(store.fixedAssetAccountsConfiguration().additionalRows.length, 1, 'un ajout vide ne supprime pas la ligne déjà enregistrée');
 const missingRow = store.saveFixedAssetAccountsConfiguration({ rows: editedRows.filter(row => row.id !== 'fixed-assets-class-23') });
-assert.equal(missingRow.ok, false, 'les cinq lignes du tableau doivent être conservées');
+assert.equal(missingRow.ok, false, 'les cinq lignes de référence doivent être conservées');
 const unknownRow = store.saveFixedAssetAccountsConfiguration({ rows: [...editedRows, { id: 'custom', grossValueAccount: '20*' }] });
-assert.equal(unknownRow.ok, false, 'aucune correspondance non visible dans la capture n’est ajoutée');
+assert.equal(unknownRow.ok, false, 'une ligne inconnue ne peut pas remplacer les lignes de référence');
 
 const other = store.createDossier({
   clientName: 'Comptes immobilisés isolés', clientCode: 'CIM', accountingTypeLabel: 'Comptabilité révisée SYSCOHADA',
@@ -67,12 +81,15 @@ const other = store.createDossier({
 assert.equal(other.ok, true, other.errors && other.errors.join(' '));
 assert.equal(store.switchDossier(other.dossier.id).ok, true);
 assert.equal(store.fixedAssetAccountsConfiguration().rows.find(row => row.id === 'fixed-assets-class-21').disposalNetValueAccount, '811', 'les configurations restent propres à chaque dossier');
+assert.deepEqual(store.fixedAssetAccountsConfiguration().additionalRows, [], 'les lignes ajoutées ne sont pas partagées avec un autre dossier');
 assert.equal(store.switchDossier(store.dossiers()[0].id).ok, true);
 assert.equal(store.fixedAssetAccountsConfiguration().rows.find(row => row.id === 'fixed-assets-class-21').disposalNetValueAccount, '811 812');
+assert.equal(store.fixedAssetAccountsConfiguration().additionalRows[0].grossValueAccount, '25*', 'la ligne ajoutée reste dans son dossier');
 
 const reset = store.initializeFixedAssetAccountsConfiguration();
 assert.equal(reset.ok, true, reset.errors && reset.errors.join(' '));
 assert.equal(store.fixedAssetAccountsConfiguration().rows.find(row => row.id === 'fixed-assets-class-21').disposalNetValueAccount, '811', 'la réinitialisation restaure les valeurs de la capture');
+assert.deepEqual(store.fixedAssetAccountsConfiguration().additionalRows, [], 'la réinitialisation retire les lignes ajoutées du dossier');
 assert.equal(store.entries().length, initialEntryCount, 'la configuration ne crée aucune pièce');
 assert.equal(store.accounts().length, initialAccountCount, 'la configuration ne crée ni ne modifie de compte général');
 
@@ -89,4 +106,4 @@ const migratedStore = loadStore();
 assert.equal(migratedStore.fixedAssetAccountsConfiguration().rows.find(row => row.id === 'fixed-assets-class-21').disposalNetValueAccount, '811', 'les dossiers existants reçoivent les valeurs de référence');
 assert.equal(JSON.parse(values.get('perfecto.dossiers.v1'))[0].fixedAssetAccountsConfiguration.rows.length, 5, 'la migration du catalogue persiste les cinq lignes par dossier');
 
-console.log('  ✓ Comptes associés aux immobilisations conformes à la capture, modifiables, isolés par dossier et sans écriture.');
+console.log('  ✓ Comptes associés aux immobilisations conformes à la capture, avec ajouts non destructifs, isolation par dossier et sans écriture.');
