@@ -1,0 +1,117 @@
+/*
+ * PERFECTO · Design system des tableaux
+ * Référence visuelle : grilles comptables SYSCOHADA (entêtes groupées, quadrillage fin, zebra discret).
+ * Les règles sont globales : elles couvrent les tableaux existants et ceux ajoutés ultérieurement.
+ */
+:root {
+  --table-ink: #34423c;
+  --table-line: #dce5e0;
+  --table-head-bg: #eff4f1;
+  --table-head-ink: #33453d;
+  --table-row-bg: #fff;
+  --table-row-alt: #f8faf9;
+  --table-row-hover: #f0f5f2;
+  --table-total-bg: #f0f4f1;
+  --table-cell-pad-y: 8px;
+  --table-cell-pad-x: 10px;
+  --table-head-height: 42px;
+}
+
+:where(.table-wrap, [class*="table-wrap"]) {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+table {
+  width: 100%;
+  max-width: 100%;
+  border: 1px solid var(--table-line) !important;
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
+  background: var(--table-row-bg);
+  color: var(--table-ink) !important;
+  font-family: var(--font) !important;
+  font-size: .84rem !important;
+  line-height: 1.4;
+}
+
+table :is(th, td) {
+  padding: var(--table-cell-pad-y) var(--table-cell-pad-x) !important;
+  border: 1px solid var(--table-line) !important;
+  font-family: inherit;
+  font-size: inherit !important;
+  line-height: inherit;
+  vertical-align: middle !important;
+}
+
+table thead :is(th, td) {
+  height: var(--table-head-height) !important;
+  color: var(--table-head-ink) !important;
+  background: var(--table-head-bg) !important;
+  font-weight: 700 !important;
+  letter-spacing: normal !important;
+  text-align: left;
+  text-transform: none !important;
+  white-space: nowrap;
+}
+
+table thead :is(th, td)[colspan] { text-align: center !important; }
+table tbody th { font-weight: 700; }
+table :is(.num, .numeric) { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+table tbody > tr:nth-child(odd):not([class*="selected"]):not([class*="separator"]):not([class*="group"]):not([class*="total"]):not([class*="invalid"]):not([class*="linked"]):not([class*="pointed"]):not([class*="warning"]):not([class*="error"]):not([class*="disabled"]):not([data-status]) {
+  background-color: var(--table-row-bg) !important;
+}
+
+table tbody > tr:nth-child(even):not([class*="selected"]):not([class*="separator"]):not([class*="group"]):not([class*="total"]):not([class*="invalid"]):not([class*="linked"]):not([class*="pointed"]):not([class*="warning"]):not([class*="error"]):not([class*="disabled"]):not([data-status]) {
+  background-color: var(--table-row-alt) !important;
+}
+
+table tbody > tr:hover:not([class*="selected"]):not([class*="separator"]):not([class*="group"]):not([class*="total"]):not([class*="invalid"]):not([class*="linked"]):not([class*="pointed"]):not([class*="warning"]):not([class*="error"]):not([data-status]) {
+  background-color: var(--table-row-hover) !important;
+}
+
+table tfoot :is(th, td) {
+  border-top: 2px solid var(--table-line) !important;
+  background: var(--table-total-bg) !important;
+  font-weight: 700;
+}
+
+table caption {
+  color: #617169;
+  font-size: .78rem;
+  text-align: left;
+}
+
+/* Keep account/setting editors usable inside the shared grid. */
+.allocation-key-grid tbody td,
+.printed-report-information-table tbody td { padding: 0 !important; }
+
+.general-account-natures-table tbody tr.general-account-natures-separator td,
+.printed-report-information-table tbody tr.printed-report-information-separator td {
+  height: 12px;
+  padding: 0 !important;
+  border: 0 !important;
+  border-bottom: 2px dashed var(--table-line) !important;
+  background: var(--table-row-bg) !important;
+}
+.analytical-natures-table tbody tr.analytical-natures-group td:first-child {
+  border-bottom: 2px dashed var(--table-line) !important;
+}
+.analytical-natures-table tbody tr.analytical-natures-group td:not(:first-child) {
+  border-right-color: transparent !important;
+}
+
+/* The framework table has a two-level sticky header; keep the second level below the first. */
+.financial-framework-table thead tr:first-child th { height: var(--table-head-height) !important; }
+.financial-framework-table thead tr:nth-child(2) th { top: var(--table-head-height) !important; }
+
+@media (max-width: 700px) {
+  table { font-size: .8rem !important; }
+  table :is(th, td) { padding: 7px 8px !important; }
+  table thead :is(th, td) { height: 38px !important; }
+  .financial-framework-table thead tr:first-child th { height: 38px !important; }
+  .financial-framework-table thead tr:nth-child(2) th { top: 38px !important; }
+}
