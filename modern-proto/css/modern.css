@@ -2472,6 +2472,10 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
 .exchange-workspace .exchange-systems > p.small { margin-bottom: 0; font-size: .67rem; }
 .exchange-footnote { margin: 0; color: #89958e; font-size: .66rem; line-height: 1.55; }
 .exchange-import-controls { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(230px, .7fr); align-items: end; gap: 15px; }
+.fec-import-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.fec-import-controls select { width: 100%; }
+.fec-reversal-reason { grid-column: 1 / -1; }
+.fec-reversal-reason textarea { width: 100%; resize: vertical; }
 .exchange-import-controls .field { min-width: 0; margin: 0; }
 .exchange-file-picker { display: inline-flex; align-items: center; justify-content: center; margin-top: 2px; cursor: pointer; }
 .exchange-import-controls .hint { display: block; margin-top: 7px; }
@@ -2496,6 +2500,11 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
 .exchange-context-confirm { display: flex; align-items: flex-start; gap: 9px; padding: 11px 12px; border: 1px solid #ead8b0; border-radius: 7px; color: #65552f; background: #fbf6e9; font-size: .69rem; line-height: 1.5; }
 .exchange-context-confirm input { flex: 0 0 auto; margin-top: 2px; accent-color: #8d671e; }
 .exchange-preview-footer { display: flex; justify-content: flex-end; padding-top: 2px; }
+.fec-source-history { margin-top: 13px; }
+.fec-source-history .exchange-mapping-table { min-width: 860px; }
+.fec-source-history .exchange-button-row { align-items: flex-start; flex-direction: column; }
+.fec-lines-preview .exchange-mapping-table { min-width: 900px; }
+.fec-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 /* Référentiels locaux */
 .supplier-summary-grid,

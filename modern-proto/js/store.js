@@ -896,6 +896,7 @@
       journals: defaultJournalRecords(),
       journalCodeHistory: defaultJournalRecords().map(function (journal) { return normalizeJournalCode(journal.code); }).concat(RETIRED_JOURNAL_CODES),
       entries: withSeedEntries === false ? [] : seedEntries(),
+      importSourceFiles: [],
       periods: cyclePeriods(cycleStart, cycleEnd),
       deletedStandardAccountCodes: [],
       supplierRegistryVersion: SUPPLIER_REGISTRY_VERSION,
@@ -2432,6 +2433,7 @@
         var parsed = JSON.parse(raw);
         if (hasReadableAccountingRecords(parsed)) {
           state = parsed;
+          if (!Array.isArray(state.importSourceFiles)) state.importSourceFiles = [];
           var dossier = folderById(activeFolderId);
           var fallbackStart = (dossier && dossier.cycleStart) || EXERCICE + '-01-01';
           var fallbackEnd = (dossier && dossier.cycleEnd) || EXERCICE + '-12-31';
@@ -2542,6 +2544,22 @@
   }
 
   function getState() { return load(); }
+
+  function importSourceFiles() {
+    var records = load().importSourceFiles;
+    return (Array.isArray(records) ? records : []).map(function (record) {
+      var summary = Object.assign({}, record);
+      delete summary.contentBase64;
+      return summary;
+    });
+  }
+
+  function importSourceFile(id) {
+    var record = (Array.isArray(load().importSourceFiles) ? load().importSourceFiles : []).find(function (item) {
+      return item && item.id === id;
+    });
+    return record ? clone(record) : null;
+  }
 
   function exercise() { return Number(load().exercise) || EXERCICE; }
 
@@ -5007,7 +5025,12 @@
       debit += Number(l.debit) || 0;
       credit += Number(l.credit) || 0;
     });
-    return { debit: debit, credit: credit, balanced: debit === credit && debit > 0 };
+    // Compare at the precision configured for the dossier. This removes only
+    // IEEE-754 addition noise (e.g. 0.1 + 0.2) after line precision is validated.
+    var precision = Math.pow(10, accountingConfiguration().decimalPlaces || 0);
+    var debitUnits = Math.round(debit * precision);
+    var creditUnits = Math.round(credit * precision);
+    return { debit: debit, credit: credit, balanced: debitUnits === creditUnits && debitUnits > 0 };
   }
 
   /**
@@ -5726,8 +5749,18 @@
   }
 
   function importExchange(incomingEntries, mode, options) {
-    var preview = previewExchangeImport(incomingEntries, mode, options);
+    var opts = options || {};
+    var sourceFile = opts.importSourceFile || null;
+    var preview = previewExchangeImport(incomingEntries, mode, opts);
     if (!preview.ok) return { ok: false, errors: preview.errors, warnings: preview.warnings };
+    if (sourceFile) {
+      if (!sourceFile.fileName || !sourceFile.contentBase64 || !sourceFile.sha256) {
+        return { ok: false, errors: ['Import annulé : la source FEC doit conserver le nom, le fichier original et son empreinte SHA-256.'], warnings: preview.warnings };
+      }
+      if ((load().importSourceFiles || []).some(function (item) { return item && item.sha256 === sourceFile.sha256; })) {
+        return { ok: false, errors: ['Import bloqué : ce fichier source FEC a déjà été importé dans ce dossier.'], warnings: preview.warnings };
+      }
+    }
 
     var previousState = clone(load());
     if (!writeBackupSnapshot(previousState)) {
@@ -5748,7 +5781,13 @@
       record.sourceReference = String(original.reference || '');
       record.sourceJournal = String(original.journal || '');
       record.sourceStatus = String(original.sourceStatus || '');
-      if (original.sourceMetadata && typeof original.sourceMetadata === 'object') record.sourceMetadata = clone(original.sourceMetadata);
+      if (original.sourceMetadata && typeof original.sourceMetadata === 'object') {
+        record.sourceMetadata = clone(original.sourceMetadata);
+        if (sourceFile) {
+          record.sourceMetadata.importBatchId = batchId;
+          record.sourceMetadata.sourceFileId = sourceFile.sha256;
+        }
+      }
       record.importBatchId = batchId;
       record.importedAt = now;
       if (status === 'posted') record.postedAt = now;
@@ -5761,11 +5800,53 @@
       return record;
     });
     st.entries = st.entries.concat(imported);
+    if (sourceFile) {
+      if (!Array.isArray(st.importSourceFiles)) st.importSourceFiles = [];
+      var sourceRecord = Object.assign({}, sourceFile, {
+        id: batchId,
+        importBatchId: batchId,
+        sourceSystem: String(sourceFile.sourceSystem || 'FEC-BENIN'),
+        importedAt: now,
+        importMode: status,
+        status: status,
+        entryCount: imported.length,
+        lineCount: preview.lineCount,
+        localOnly: true
+      });
+      st.importSourceFiles.push(sourceRecord);
+    }
     if (!save()) {
       state = previousState;
       return { ok: false, errors: ['Import impossible : stockage local indisponible ou plein. Aucune écriture n’a été conservée.'], warnings: preview.warnings };
     }
     return { ok: true, errors: [], warnings: preview.warnings, importedCount: imported.length, lineCount: preview.lineCount, batchId: batchId };
+  }
+
+  function cancelImportBatch(batchId) {
+    var st = load();
+    var id = String(batchId || '');
+    var batchEntries = st.entries.filter(function (entry) { return entry.importBatchId === id; });
+    if (!id || !batchEntries.length) return { ok: false, errors: ['Le lot d’import est introuvable ou ne contient plus de brouillon.'] };
+    if (batchEntries.some(function (entry) { return entry.status !== 'draft'; })) {
+      return { ok: false, errors: ['Annulation bloquée : un lot comportant des écritures validées doit être neutralisé par des écritures inverses liées, jamais supprimé.'] };
+    }
+    var sourceRecord = (Array.isArray(st.importSourceFiles) ? st.importSourceFiles : []).find(function (record) {
+      return record && record.id === id;
+    });
+    if (!sourceRecord) return { ok: false, errors: ['La source associée à ce lot d’import est introuvable.'] };
+    var previousState = clone(st);
+    if (!writeBackupSnapshot(previousState)) {
+      return { ok: false, errors: ['Annulation impossible : le point de restauration local n’a pas pu être créé.'] };
+    }
+    st.entries = st.entries.filter(function (entry) { return entry.importBatchId !== id; });
+    sourceRecord.status = 'cancelled';
+    sourceRecord.cancelledAt = new Date().toISOString();
+    sourceRecord.cancelledEntryCount = batchEntries.length;
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Annulation impossible : stockage local indisponible ou plein. Les brouillons du lot sont conservés.'] };
+    }
+    return { ok: true, errors: [], cancelledCount: batchEntries.length, sourceFileId: id };
   }
 
   function readBackupSnapshot() {
@@ -6143,6 +6224,9 @@
     importJson: importJson,
     previewExchangeImport: previewExchangeImport,
     importExchange: importExchange,
+    importSourceFiles: importSourceFiles,
+    importSourceFile: importSourceFile,
+    cancelImportBatch: cancelImportBatch,
     backupInfo: backupInfo,
     databaseStorageStatus: databaseStorageStatus,
     databaseRepairAnalysis: databaseRepairAnalysis,

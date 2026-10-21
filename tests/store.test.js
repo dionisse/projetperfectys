@@ -308,6 +308,110 @@ test('écritures importées comme brouillons, traçabilité et doublons refusés
   assert.ok(duplicate.errors.some(error => error.includes('existe déjà')));
 });
 
+test('source FEC conservée localement, téléchargeable et lot brouillon annulable', () => {
+  const source = [{
+    reference: 'FEC-OD-E-LOCAL-001', journal: 'OD', date: '2026-08-17', description: 'Import FEC de test',
+    sourceSystem: 'FEC-BENIN', sourceId: 'FEC-LOCAL-001', sourceStatus: 'posted',
+    sourceMetadata: { format: 'FEC-BENIN', sourceRow: 2, sourceFileId: 'a'.repeat(64) },
+    lines: [
+      { account: '601100', accountLabel: 'Achats', debit: 1250, credit: 0 },
+      { account: '401100', accountLabel: 'Fournisseurs', debit: 0, credit: 1250 }
+    ]
+  }];
+  const result = S.importExchange(source, 'draft', {
+    sourceSystem: 'FEC-BENIN',
+    importSourceFile: {
+      sourceSystem: 'FEC-BENIN', fileName: 'FEC_IFU_20260831.txt',
+      sha256: 'a'.repeat(64), contentBase64: 'AA==', byteLength: 1,
+      encoding: 'iso-8859-15', delimiter: 'TAB', recordSeparator: 'CRLF'
+    }
+  });
+  assert.strictEqual(result.ok, true, result.errors.join(' '));
+  const sourceRecord = S.importSourceFiles().find(item => item.sha256 === 'a'.repeat(64));
+  assert.ok(sourceRecord);
+  assert.strictEqual(sourceRecord.contentBase64, undefined, 'La liste d’historique ne doit pas exposer le contenu brut.');
+  assert.strictEqual(S.importSourceFile(sourceRecord.id).contentBase64, 'AA==');
+  const imported = S.entries().find(entry => entry.sourceId === 'FEC-LOCAL-001');
+  assert.strictEqual(imported.status, 'draft');
+  assert.strictEqual(imported.sourceMetadata.sourceFileId, 'a'.repeat(64));
+  const cancelled = S.cancelImportBatch(sourceRecord.id);
+  assert.strictEqual(cancelled.ok, true, cancelled.errors.join(' '));
+  assert.strictEqual(S.entries().some(entry => entry.importBatchId === sourceRecord.id), false);
+  assert.strictEqual(S.importSourceFiles().find(item => item.id === sourceRecord.id).status, 'cancelled');
+});
+
+test('un lot FEC validé ne peut pas être supprimé par la fonction d’annulation de brouillon', () => {
+  const source = [{
+    reference: 'FEC-OD-E-POSTED-001', journal: 'OD', date: '2026-08-18', description: 'FEC validé',
+    sourceSystem: 'FEC-BENIN', sourceId: 'FEC-POSTED-001', sourceStatus: 'posted',
+    sourceMetadata: { format: 'FEC-BENIN', sourceFileId: 'b'.repeat(64) },
+    lines: [
+      { account: '601100', accountLabel: 'Achats', debit: 950, credit: 0 },
+      { account: '401100', accountLabel: 'Fournisseurs', debit: 0, credit: 950 }
+    ]
+  }];
+  const result = S.importExchange(source, 'posted', {
+    sourceSystem: 'FEC-BENIN',
+    importSourceFile: {
+      sourceSystem: 'FEC-BENIN', fileName: 'FEC_IFU_20260831.txt',
+      sha256: 'b'.repeat(64), contentBase64: 'AQ==', byteLength: 1,
+      encoding: 'iso-8859-15', delimiter: 'TAB', recordSeparator: 'CRLF'
+    }
+  });
+  assert.strictEqual(result.ok, true, result.errors.join(' '));
+  const sourceRecord = S.importSourceFiles().find(item => item.sha256 === 'b'.repeat(64));
+  const cancelled = S.cancelImportBatch(sourceRecord.id);
+  assert.strictEqual(cancelled.ok, false);
+  assert.ok(cancelled.errors[0].includes('écritures validées'));
+  assert.strictEqual(S.entries().some(entry => entry.importBatchId === sourceRecord.id), true);
+
+  const original = S.entries().find(entry => entry.sourceId === 'FEC-POSTED-001');
+  const reversal = [{
+    reference: 'FEC-REV-OD-POSTED-001', journal: 'OD', date: '2026-08-20', description: 'Écriture inverse liée au FEC',
+    sourceSystem: 'PERFECTO-ANNULATION-FEC', sourceId: JSON.stringify(['PERFECTO-ANNULATION-FEC', original.id]),
+    sourceStatus: 'posted', sourceMetadata: {
+      operation: 'fec-import-reversal', originalEntryId: original.id, originalReference: original.reference,
+      sourceFileId: original.sourceMetadata.sourceFileId, reversalMethod: 'opposite-lines'
+    },
+    lines: original.lines.map(line => ({ account: line.account, accountLabel: line.accountLabel, debit: line.credit, credit: line.debit }))
+  }];
+  const reversalPreview = S.previewExchangeImport(reversal, 'posted', { sourceSystem: 'PERFECTO-ANNULATION-FEC' });
+  assert.strictEqual(reversalPreview.ok, true, reversalPreview.errors.join(' '));
+  const reversalResult = S.importExchange(reversal, 'posted', { sourceSystem: 'PERFECTO-ANNULATION-FEC' });
+  assert.strictEqual(reversalResult.ok, true, reversalResult.errors.join(' '));
+  const storedOriginal = S.entries().find(entry => entry.id === original.id);
+  const storedReversal = S.entries().find(entry => entry.sourceId === reversal[0].sourceId);
+  assert.strictEqual(storedOriginal.status, 'posted', 'La pièce FEC originale validée reste dans l’historique.');
+  assert.strictEqual(storedReversal.status, 'posted');
+  assert.strictEqual(storedReversal.sourceMetadata.originalEntryId, storedOriginal.id);
+  assert.deepStrictEqual(storedReversal.lines.map(line => [line.debit, line.credit]), original.lines.map(line => [line.credit, line.debit]));
+  assert.strictEqual(S.previewExchangeImport(reversal, 'posted', { sourceSystem: 'PERFECTO-ANNULATION-FEC' }).ok, false,
+    'Une même pièce ne reçoit pas deux inversions liées.');
+});
+
+test('l’équilibre des montants décimaux suit la précision du dossier sans erreur IEEE-754', () => {
+  const previousConfiguration = S.accountingConfiguration();
+  try {
+    const configured = S.updateAccountingConfiguration(Object.assign({}, previousConfiguration, { decimalPlaces: 2 }));
+    assert.strictEqual(configured.ok, true, configured.errors.join(' '));
+    const source = [{
+      reference: 'OD-2026-EXCHANGE-DECIMAL-001', journal: 'OD', date: '2026-08-19', description: 'Contrôle décimal',
+      sourceSystem: 'FEC-BENIN', sourceId: 'fec-decimal-test',
+      lines: [
+        { account: '601100', debit: 0.1, credit: 0 },
+        { account: '601100', debit: 0.2, credit: 0 },
+        { account: '401100', debit: 0, credit: 0.3 }
+      ]
+    }];
+    const preview = S.previewExchangeImport(source, 'posted', { sourceSystem: 'FEC-BENIN' });
+    assert.strictEqual(preview.ok, true, preview.errors.join(' '));
+    assert.strictEqual(preview.balancedCount, 1);
+  } finally {
+    const restored = S.updateAccountingConfiguration(previousConfiguration);
+    assert.strictEqual(restored.ok, true, restored.errors.join(' '));
+  }
+});
+
 test('écriture déséquilibrée acceptée en brouillon mais refusée comme validée', () => {
   const source = [{
     reference: 'OD-2026-EXCHANGE-003', journal: 'OD', date: '2026-08-14', description: 'Lot incomplet',

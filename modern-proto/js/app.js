@@ -13,6 +13,7 @@
   var CashOperations = window.PerfectoCashOperations;
   var AccountMovements = window.PerfectoAccountMovements;
   var AccountingExchange = window.PerfectoAccountingExchange;
+  var FecImport = window.PerfectoFecImport;
   var BankStatement = window.PerfectoBankStatement;
   var BankStatementStorage = window.PerfectoBankStatementStorage;
   var AccountingConsolidation = window.PerfectoAccountingConsolidation;
@@ -109,6 +110,9 @@
   var generalAccountNatureSelectedId = 'stable-grants';
   var deferredInstallPrompt = null;
   var exchangeImportSession = null;
+  var fecImportSession = null;
+  var fecImportReversalSession = null;
+  var fecImportReadSequence = 0;
   var bankStatementImportSession = null;
   var bankStatementRecords = [];
   var bankStatementRecordsDossierId = '';
@@ -457,7 +461,16 @@
         return { moduleId: 'accounting', actionId: 'data.restore' };
       case 'commit-accounting-exchange-import':
       case 'commit-accounting-balance-import':
+      case 'commit-accounting-fec-import':
         return { moduleId: 'accounting', actionId: 'data.import' };
+      case 'cancel-fec-import-batch':
+        return { moduleId: 'accounting', actionId: 'draft.delete' };
+      case 'open-fec-import-reversal':
+        return { moduleId: 'accounting', actionId: 'module.view' };
+      case 'commit-fec-import-reversal':
+        return { moduleId: 'accounting', actionId: 'data.import' };
+      case 'download-fec-source':
+        return { moduleId: 'accounting', actionId: 'data.export' };
       case 'export-json':
       case 'export-accounts-csv':
       case 'export-balance-csv':
@@ -571,6 +584,13 @@
       var balanceImportLabel = $('#balance-import-label', root);
       if (balanceImportLabel) balanceImportLabel.hidden = !canImportBalance;
     }
+    var fecImportInput = $('#fec-import-file', root);
+    if (fecImportInput) {
+      var canImportFec = hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext());
+      fecImportInput.hidden = !canImportFec;
+      var fecImportLabel = $('#fec-import-label', root);
+      if (fecImportLabel) fecImportLabel.hidden = !canImportFec;
+    }
   }
 
   /* -------------------------------- Toasts --------------------------------- */
@@ -680,6 +700,11 @@
     var view = $('#view');
     if (!view) return;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'import-balance')) balanceImportSession = null;
+    if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'import-fec')) {
+      fecImportSession = null;
+      fecImportReversalSession = null;
+      fecImportReadSequence += 1;
+    }
     if (!(route === 'menu' && parsed.params.g === 'saisie' && parsed.params.t === 'reconciliation')) bankStatementImportSession = null;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'centralize-payroll')) payrollCentralizationSession = null;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'centralize-sales')) salesCentralizationSession = null;
@@ -3204,6 +3229,765 @@
       viewExchangeFormatGuide() +
       '<p class="exchange-footnote">Importation initiale : écritures générales uniquement depuis le format commun Excel/CSV. Les tiers, données analytiques, devises et fichiers natifs Sage/PERFECTO/HYPERSOFT/ODOO ne sont pas encore importés directement.</p>' +
     '</div>';
+  }
+
+  function viewAccountingFecImport() {
+    var dossierPrecision = S.accountingConfiguration().decimalPlaces;
+    return '<div class="exchange-workspace fec-import-workspace">' +
+      '<div class="alert info"><div><strong>Import manuel du FEC béninois</strong><br>Le fichier est contrôlé dans ce navigateur selon l’arrêté du 23 avril 2020 : en-tête obligatoire, 18 champs de base (ou 21 pour la trésorerie), dates AAAAMMJJ, montants décimaux et écritures équilibrées. PERFECTO ne se connecte pas directement au logiciel source.</div></div>' +
+      '<div class="alert warning"><div><strong>Stockage de cette version</strong><br>Le fichier original et sa trace seront conservés dans le stockage local de ce navigateur et dans les sauvegardes du dossier. Ce n’est pas un archivage Google Drive ni un espace partagé de l’organisation ; exportez une sauvegarde indépendante.</div></div>' +
+      '<div class="alert info"><div><strong>Précision active : ' + Number(dossierPrecision) + ' décimale(s)</strong><br>Les montants FEC plus précis que le paramétrage du dossier bloquent l’import. PERFECTO n’arrondit pas silencieusement ; ajustez la précision dans Paramètres → Configuration de la Comptabilité, puis rechargez le fichier.</div></div>' +
+      '<div class="exchange-import-controls fec-import-controls">' +
+        '<div class="field"><label for="fec-import-file">Fichier FEC (.txt ou .csv)</label>' +
+          '<input id="fec-import-file" type="file" accept=".txt,.csv,text/plain,text/csv" hidden>' +
+          '<label id="fec-import-label" class="btn btn-primary exchange-file-picker" for="fec-import-file">↑ Choisir un fichier FEC</label>' +
+          '<span class="hint">1 Mo maximum par fichier dans ce prototype local · les fichiers volumineux peuvent être fractionnés selon la norme.</span></div>' +
+        '<div class="field"><label for="fec-import-encoding">Jeu de caractères déclaré</label>' +
+          '<select id="fec-import-encoding"><option value="iso-8859-15" selected>ISO 8859-15 (échantillon)</option><option value="ascii">ASCII</option><option value="ibm037">EBCDIC IBM037</option><option value="ibm500">EBCDIC IBM500</option></select>' +
+          '<span class="hint">« EBCDIC » seul ne précise pas le code de page ; sélectionnez la variante indiquée par la source.</span></div>' +
+        '<div class="field"><label for="fec-import-delimiter">Séparateur de champs</label>' +
+          '<select id="fec-import-delimiter"><option value="auto" selected>Détection de l’en-tête</option><option value="tab">Tabulation</option><option value="pipe">Caractère |</option></select>' +
+          '<span class="hint">L’exemple transmis utilise la tabulation et des fins de ligne CRLF.</span></div>' +
+        '<div class="field"><label for="fec-import-mode">Statut dans PERFECTO</label>' +
+          '<select id="fec-import-mode"><option value="draft" selected>Créer des brouillons (recommandé)</option><option value="posted">Importer comme écritures validées</option></select>' +
+          '<span class="hint">La source FEC est validée ; l’import reste un brouillon par défaut. Le choix « validées » exige les droits de validation.</span></div>' +
+      '</div>' +
+      '<div id="fec-import-preview" class="exchange-preview" aria-live="polite"><div class="empty-state"><strong>Aucun fichier analysé</strong><span>Choisissez un fichier : l’aperçu et les correspondances seront proposés avant toute écriture comptable.</span></div></div>' +
+      '<section class="exchange-card fec-source-history"><p class="page-kicker">TRAÇABILITÉ LOCALE</p><h4>Sources FEC déjà importées</h4>' + fecImportHistoryHtml() + '</section>' +
+      fecImportReversalHtml() +
+      '<details class="exchange-mapping exchange-format-guide"><summary>Règles vérifiées par le lecteur FEC</summary><p class="small muted">Le lecteur contrôle la première ligne d’en-tête et son ordre, les variantes MontDebit/MontCredit ou Montant/sens, les dates, les comptes SYSCOHADA, les montants sans séparateur de milliers, l’ordre chronologique de validation et l’équilibre de chaque écriture. Les informations auxiliaires, de lettrage, de devise et de règlement restent dans la trace source ; aucun taux de change, tiers ni écriture supplémentaire n’est calculé.</p><p class="small muted">La source doit contenir uniquement des écritures validées et ne doit pas inclure les écritures de centralisation ni les soldes de charges/produits. L’application demande une confirmation de conformité avant l’import ; ces exclusions ne peuvent pas toutes être déduites automatiquement des colonnes.</p></details>' +
+      '<p class="exchange-footnote">Le nom réglementaire du fichier doit inclure l’IFU et la date de clôture. Le contrôle de contenu reste distinct du nom de la pièce jointe. Aucun fichier n’est envoyé à un serveur.</p>' +
+    '</div>';
+  }
+
+  var FEC_IMPORT_REVERSAL_SOURCE = 'PERFECTO-ANNULATION-FEC';
+
+  function findFecImportReversal(entries, original) {
+    if (!original || !original.id || !Array.isArray(entries)) return null;
+    return entries.find(function (entry) {
+      return entry.sourceSystem === FEC_IMPORT_REVERSAL_SOURCE && entry.sourceMetadata &&
+        entry.sourceMetadata.operation === 'fec-import-reversal' &&
+        entry.sourceMetadata.originalEntryId === original.id;
+    }) || null;
+  }
+
+  function fecImportHistoryHtml() {
+    var sources = (S.importSourceFiles ? S.importSourceFiles() : []).filter(function (record) {
+      return record && record.sourceSystem === 'FEC-BENIN';
+    }).sort(function (a, b) { return String(b.importedAt || '').localeCompare(String(a.importedAt || '')); });
+    if (!sources.length) return '<p class="small muted">Aucun fichier FEC n’a encore été archivé dans ce navigateur.</p>';
+    var allEntries = S.entries();
+    return '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Fichier source</th><th>Import</th><th>Contenu</th><th>État</th><th>Actions</th></tr></thead><tbody>' +
+      sources.map(function (source) {
+        var batchEntries = allEntries.filter(function (entry) { return entry.importBatchId === source.id; });
+        var allDrafts = batchEntries.length > 0 && batchEntries.every(function (entry) { return entry.status === 'draft'; });
+        var postedEntries = batchEntries.filter(function (entry) { return entry.sourceSystem === 'FEC-BENIN' && entry.status === 'posted'; });
+        var reversedCount = postedEntries.filter(function (entry) { return !!findFecImportReversal(allEntries, entry); }).length;
+        var statusLabel = source.status === 'cancelled' ? 'Brouillons annulés · source conservée'
+          : (postedEntries.length ? postedEntries.length + ' écriture(s) validée(s) · ' + reversedCount + ' écriture(s) inverse(s) liée(s)'
+            : (allDrafts ? 'Brouillons' : 'Source conservée'));
+        var cancelButton = source.status !== 'cancelled' && allDrafts
+          ? '<button type="button" class="btn btn-danger btn-sm" data-action="cancel-fec-import-batch" data-id="' + esc(source.id) + '">Annuler le lot brouillon</button>'
+          : '';
+        var reversalButton = postedEntries.length
+          ? '<button type="button" class="btn btn-ghost btn-sm" data-action="open-fec-import-reversal" data-id="' + esc(source.id) + '">Gérer les écritures validées</button>'
+          : '';
+        return '<tr><td><strong>' + esc(source.fileName || 'Fichier FEC') + '</strong><br><small>' + esc(source.sha256 || '') + '</small></td>' +
+          '<td>' + esc(source.importedAt ? new Date(source.importedAt).toLocaleString('fr-FR') : '—') + '</td>' +
+          '<td>' + esc(source.entryCount || 0) + ' pièce(s) · ' + esc(source.lineCount || 0) + ' ligne(s)<br><small>' + esc(source.encoding || '') + ' · ' + esc(source.delimiter || '') + '</small></td>' +
+          '<td>' + esc(statusLabel) + '</td><td><div class="exchange-button-row"><button type="button" class="btn btn-ghost btn-sm" data-action="download-fec-source" data-id="' + esc(source.id) + '">Télécharger l’original</button>' + reversalButton + cancelButton + '</div></td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  function fecImportReversalDateIsOpen(date, dossier) {
+    var value = String(date || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value < dossier.cycleStart || value > dossier.cycleEnd) return false;
+    var year = Number(value.slice(0, 4));
+    var month = Number(value.slice(5, 7));
+    var day = Number(value.slice(8, 10));
+    var check = new Date(Date.UTC(year, month - 1, day));
+    if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) return false;
+    return S.periodStatus(year, month) !== 'closed';
+  }
+
+  function defaultFecImportReversalDate(original, dossier) {
+    if (original && fecImportReversalDateIsOpen(original.date, dossier)) return original.date;
+    var today = S.todayIso();
+    if (fecImportReversalDateIsOpen(today, dossier)) return today;
+    var startYear = Number(dossier.cycleStart.slice(0, 4));
+    var startMonth = Number(dossier.cycleStart.slice(5, 7));
+    var endYear = Number(dossier.cycleEnd.slice(0, 4));
+    var endMonth = Number(dossier.cycleEnd.slice(5, 7));
+    var monthCount = (endYear - startYear) * 12 + endMonth - startMonth;
+    for (var offset = 0; offset <= monthCount; offset += 1) {
+      var absoluteMonth = startYear * 12 + startMonth - 1 + offset;
+      var year = Math.floor(absoluteMonth / 12);
+      var month = absoluteMonth % 12 + 1;
+      var monthStart = String(year).padStart(4, '0') + '-' + String(month).padStart(2, '0') + '-01';
+      var candidate = offset === 0 && dossier.cycleStart.slice(8, 10) > '01' ? dossier.cycleStart : monthStart;
+      if (candidate <= dossier.cycleEnd && fecImportReversalDateIsOpen(candidate, dossier)) return candidate;
+    }
+    return '';
+  }
+
+  function fecReversalJournal(original) {
+    var originalJournal = original && S.journal(original.journal);
+    var candidateCode = originalJournal && originalJournal.retired ? originalJournal.replacedBy : (originalJournal && originalJournal.code);
+    var candidate = candidateCode && S.journal(candidateCode);
+    if (candidate && !candidate.retired && !candidate.systemManaged && candidate.code !== 'CEN') return candidate.code;
+    return (S.journals().find(function (journal) { return journal.code === 'OD' && !journal.retired && !journal.systemManaged; }) ||
+      S.journals().find(function (journal) { return !journal.retired && !journal.systemManaged && journal.code !== 'CEN'; }) || {}).code || '';
+  }
+
+  function buildFecImportReversalEntry(original, target) {
+    var errors = [];
+    target = target || {};
+    if (!original || original.sourceSystem !== 'FEC-BENIN' || original.status !== 'posted') {
+      errors.push('Seules les écritures FEC déjà validées peuvent recevoir une écriture inverse.');
+    }
+    if (!original || !original.sourceMetadata || !original.sourceMetadata.sourceFileId) {
+      errors.push('La trace du fichier FEC source est absente ; aucune inversion ne peut être préparée.');
+    }
+    if (!original || !String(original.id || '').trim()) errors.push('La pièce FEC d’origine ne possède pas d’identifiant stable.');
+    var reference = String(target.reference || '').trim();
+    var journal = String(target.journal || '').trim();
+    var date = String(target.date || '').trim();
+    var reason = String(target.reason || '').trim();
+    if (!reference) errors.push('La référence de l’écriture inverse est obligatoire.');
+    if (!journal) errors.push('Le journal de l’écriture inverse est obligatoire.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) errors.push('La date de l’écriture inverse doit respecter AAAA-MM-JJ.');
+    if (!reason) errors.push('Le motif de l’inversion est obligatoire pour assurer la traçabilité.');
+    if (reason.length > 250) errors.push('Le motif de l’inversion ne peut pas dépasser 250 caractères.');
+
+    var lines = [];
+    var totalDebit = 0;
+    var totalCredit = 0;
+    var originalLines = original && Array.isArray(original.lines) ? original.lines : [];
+    if (originalLines.length < 2) errors.push('La pièce FEC d’origine ne contient pas assez de lignes pour former une écriture inverse.');
+    originalLines.forEach(function (line, index) {
+      line = line || {};
+      var account = String(line.account || '').trim();
+      var debit = Number(line.debit);
+      var credit = Number(line.credit);
+      if (!account || !Number.isFinite(debit) || !Number.isFinite(credit) || debit < 0 || credit < 0 ||
+          (debit > 0 && credit > 0) || (debit === 0 && credit === 0)) {
+        errors.push('La ligne ' + (index + 1) + ' de la pièce FEC d’origine contient un compte ou un montant non valide.');
+        return;
+      }
+      totalDebit += debit;
+      totalCredit += credit;
+      if (!Number.isFinite(totalDebit) || !Number.isFinite(totalCredit)) {
+        errors.push('Les totaux de la pièce FEC d’origine dépassent la capacité numérique sûre.');
+        return;
+      }
+      lines.push({
+        account: account,
+        accountLabel: String(line.accountLabel || line.sourceAccountLabel || '').trim(),
+        debit: credit,
+        credit: debit
+      });
+    });
+    if (lines.length < 2) errors.push('L’écriture inverse doit contenir au moins deux lignes valides.');
+    if (originalLines.length >= 2 && !S.totals(originalLines).balanced) errors.push('La pièce FEC d’origine n’est pas équilibrée à la précision du dossier ; aucune écriture inverse ne peut être préparée.');
+    if (errors.length) return { ok: false, errors: errors, entry: null };
+
+    var metadata = original.sourceMetadata || {};
+    return {
+      ok: true,
+      errors: [],
+      entry: {
+        reference: reference,
+        journal: journal,
+        date: date,
+        description: 'Écriture inverse liée à l’import FEC ' + String(original.reference || original.id) + ' — ' + reason,
+        sourceSystem: FEC_IMPORT_REVERSAL_SOURCE,
+        sourceId: JSON.stringify([FEC_IMPORT_REVERSAL_SOURCE, original.id]),
+        sourceStatus: 'posted',
+        sourceMetadata: {
+          operation: 'fec-import-reversal',
+          reversalMethod: 'opposite-lines',
+          cancellationReason: reason,
+          originalEntryId: original.id,
+          originalReference: String(original.reference || ''),
+          originalSourceSystem: String(original.sourceSystem || ''),
+          originalSourceId: String(original.sourceId || ''),
+          sourceFileId: String(metadata.sourceFileId || ''),
+          originalImportBatchId: String(original.importBatchId || '')
+        },
+        lines: lines
+      }
+    };
+  }
+
+  function openFecImportReversal(batchId) {
+    var dossier = S.currentDossier();
+    var source = S.importSourceFiles().find(function (record) { return record.id === batchId && record.sourceSystem === 'FEC-BENIN'; });
+    var entries = S.entries().filter(function (entry) { return entry.importBatchId === batchId && entry.sourceSystem === 'FEC-BENIN' && entry.status === 'posted'; });
+    if (!source || !entries.length) {
+      toast('Aucune écriture FEC validée n’est disponible dans ce lot.', 'warning');
+      return;
+    }
+    var allEntries = S.entries();
+    var selected = entries.find(function (entry) { return !findFecImportReversal(allEntries, entry); }) || entries[0];
+    var journal = fecReversalJournal(selected);
+    var date = defaultFecImportReversalDate(selected, dossier);
+    fecImportReversalSession = {
+      batchId: batchId,
+      targetDossierId: dossier.id,
+      selectedEntryId: selected.id,
+      targetDate: date,
+      targetJournal: journal,
+      targetReference: date && journal ? S.nextReference(journal, date) : '',
+      referenceTouched: false,
+      reason: '',
+      mode: 'draft'
+    };
+    render();
+  }
+
+  function fecImportReversalHtml() {
+    var session = fecImportReversalSession;
+    if (!session) return '';
+    var source = S.importSourceFiles().find(function (record) { return record.id === session.batchId && record.sourceSystem === 'FEC-BENIN'; });
+    var entries = S.entries().filter(function (entry) { return entry.importBatchId === session.batchId && entry.sourceSystem === 'FEC-BENIN' && entry.status === 'posted'; });
+    if (!source || !entries.length) return '<section id="fec-import-reversal-panel" class="exchange-card"><div class="alert error">Le lot FEC sélectionné ne contient plus d’écriture validée accessible.</div></section>';
+    var allEntries = S.entries();
+    var selected = entries.find(function (entry) { return entry.id === session.selectedEntryId; }) || entries[0];
+    session.selectedEntryId = selected.id;
+    var options = '<option value="">— Choisir une écriture source —</option>' + entries.map(function (entry) {
+      var reversal = findFecImportReversal(allEntries, entry);
+      var suffix = reversal ? ' · écriture inverse ' + reversal.reference + ' (' + (reversal.status === 'posted' ? 'validée' : 'brouillon') + ')' : '';
+      return '<option value="' + esc(entry.id) + '"' + (entry.id === selected.id ? ' selected' : '') + (reversal ? ' disabled' : '') + '>' +
+        esc(entry.reference + ' · ' + entry.journal + ' · ' + entry.date + suffix) + '</option>';
+    }).join('');
+    var journalList = S.journals().filter(function (journal) { return !journal.retired && !journal.systemManaged && journal.code !== 'CEN'; });
+    if (session.targetDossierId !== S.currentDossier().id) {
+      return '<section id="fec-import-reversal-panel" class="exchange-card"><div class="alert error">Le dossier actif a changé. Fermez ce panneau puis sélectionnez de nouveau la source dans le dossier cible.</div></section>';
+    }
+    if (findFecImportReversal(allEntries, selected)) {
+      return '<section id="fec-import-reversal-panel" class="exchange-card"><div class="supplier-directory-head"><div><p class="page-kicker">ÉCRITURE INVERSE · IMPORT FEC</p><h4>' + esc(source.fileName || 'Fichier FEC') + '</h4></div><button type="button" class="btn btn-ghost btn-sm" data-action="close-fec-import-reversal">Fermer</button></div>' +
+        '<div class="field"><label for="fec-reversal-entry">Écriture validée du lot</label><select id="fec-reversal-entry">' + options + '</select></div>' +
+        '<div class="alert info"><div>Une écriture inverse est déjà liée à <strong>' + esc(selected.reference) + '</strong> : ' + esc(findFecImportReversal(allEntries, selected).reference) + ' · ' + esc(findFecImportReversal(allEntries, selected).status === 'posted' ? 'validée' : 'brouillon') + '. L’original est conservé.</div></div></section>';
+    }
+    var accountLines = (selected.lines || []).map(function (line) {
+      var account = S.account(line.account);
+      return '<tr><td>' + esc(line.account) + ' · ' + esc(account ? account.label : (line.accountLabel || '')) + '</td><td class="numeric">' + fecDisplayAmount(line.debit) + '</td><td class="numeric">' + fecDisplayAmount(line.credit) + '</td></tr>';
+    }).join('');
+    return '<section id="fec-import-reversal-panel" class="exchange-card"><div class="supplier-directory-head"><div><p class="page-kicker">ÉCRITURE INVERSE · IMPORT FEC</p><h4>' + esc(source.fileName || 'Fichier FEC') + '</h4><p>L’écriture d’origine reste validée et inchangée. L’inversion reprend les mêmes comptes et montants en côtés opposés, puis ajoute une pièce liée.</p></div><button type="button" class="btn btn-ghost btn-sm" data-action="close-fec-import-reversal">Fermer</button></div>' +
+      '<div class="field"><label for="fec-reversal-entry">Écriture validée du lot</label><select id="fec-reversal-entry">' + options + '</select></div>' +
+      '<div class="exchange-import-controls fec-import-controls">' +
+        '<div class="field"><label for="fec-reversal-date">Date de l’écriture inverse</label><input id="fec-reversal-date" type="date" min="' + esc(S.currentDossier().cycleStart) + '" max="' + esc(S.currentDossier().cycleEnd) + '" value="' + esc(session.targetDate) + '"></div>' +
+        '<div class="field"><label for="fec-reversal-journal">Journal de l’écriture inverse</label><select id="fec-reversal-journal">' + journalList.map(function (journal) {
+          return '<option value="' + esc(journal.code) + '"' + (journal.code === session.targetJournal ? ' selected' : '') + '>' + esc(journalDisplayName(journal)) + '</option>';
+        }).join('') + '</select></div>' +
+        '<div class="field"><label for="fec-reversal-reference">Référence</label><input id="fec-reversal-reference" maxlength="100" value="' + esc(session.targetReference) + '"></div>' +
+        '<div class="field"><label for="fec-reversal-mode">Statut de l’écriture inverse</label><select id="fec-reversal-mode"><option value="draft"' + (session.mode === 'draft' ? ' selected' : '') + '>Créer un brouillon (recommandé)</option><option value="posted"' + (session.mode === 'posted' ? ' selected' : '') + '>Créer comme écriture validée</option></select></div>' +
+        '<div class="field fec-reversal-reason"><label for="fec-reversal-reason">Motif de l’inversion</label><textarea id="fec-reversal-reason" maxlength="250" rows="2">' + esc(session.reason) + '</textarea></div>' +
+      '</div>' +
+      '<section class="exchange-card"><p class="page-kicker">ÉCRITURE SOURCE CONSERVÉE · ' + esc(selected.reference) + '</p><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Compte cible</th><th class="numeric">Débit source</th><th class="numeric">Crédit source</th></tr></thead><tbody>' + accountLines + '</tbody></table></div></section>' +
+      '<div id="fec-reversal-preview" class="exchange-preview" aria-live="polite"><div class="empty-state"><strong>Vérification en cours</strong><span>Contrôle du lien, de la période et de l’équilibre.</span></div></div></section>';
+  }
+
+  function renderFecImportReversalPreview() {
+    var host = $('#fec-reversal-preview');
+    var session = fecImportReversalSession;
+    if (!host || !session) return;
+    var dossier = S.currentDossier();
+    var original = S.entry(session.selectedEntryId);
+    var allEntries = S.entries();
+    if (!original || original.importBatchId !== session.batchId || original.sourceSystem !== 'FEC-BENIN' || original.status !== 'posted') {
+      session.canCommit = false;
+      host.innerHTML = '<div class="alert error">L’écriture FEC d’origine n’est plus disponible ou n’est pas validée.</div>';
+      return;
+    }
+    var existing = findFecImportReversal(allEntries, original);
+    if (existing) {
+      session.canCommit = false;
+      host.innerHTML = '<div class="alert warning">Une écriture inverse est déjà liée à cette pièce : ' + esc(existing.reference) + ' (' + esc(existing.status === 'posted' ? 'validée' : 'brouillon') + '). L’original reste conservé.</div>';
+      return;
+    }
+    if (session.targetDossierId !== dossier.id) {
+      session.canCommit = false;
+      host.innerHTML = '<div class="alert error">Le dossier actif a changé depuis l’ouverture du panneau.</div>';
+      return;
+    }
+    var built = buildFecImportReversalEntry(original, {
+      date: session.targetDate,
+      journal: session.targetJournal,
+      reference: session.targetReference,
+      reason: session.reason
+    });
+    var analysis = built.ok ? S.previewExchangeImport([built.entry], session.mode, { sourceSystem: FEC_IMPORT_REVERSAL_SOURCE })
+      : { ok: false, errors: built.errors, warnings: [] };
+    var canImport = hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext(dossier));
+    var canPost = hasDemoPermission(getActiveDemoMember(), 'accounting', 'entry.validate', accountingAccessContext(dossier));
+    var permissionBlocked = !canImport || (session.mode === 'posted' && !canPost);
+    var canCommit = built.ok && analysis.ok && !permissionBlocked;
+    session.canCommit = canCommit;
+    var errors = analysis.errors && analysis.errors.length
+      ? '<div class="alert error"><div><strong>' + analysis.errors.length + ' contrôle(s) bloquant(s)</strong><ul>' + analysis.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div></div>'
+      : '<div class="alert success"><div><strong>Écriture inverse équilibrée</strong><br>Les lignes source ne sont pas modifiées ; une nouvelle pièce liée sera ajoutée.</div></div>';
+    var permission = permissionBlocked
+      ? '<div class="alert warning">' + (!canImport ? 'Le droit « data.import » est requis pour créer l’écriture inverse.' : 'Le droit « entry.validate » est requis pour créer une écriture inverse validée.') + '</div>'
+      : '';
+    var warnings = (analysis.warnings || []).length
+      ? '<div class="alert warning"><ul>' + analysis.warnings.map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('') + '</ul></div>' : '';
+    var rows = (built.ok ? built.entry.lines : []).map(function (line) {
+      return '<tr><td>' + esc(line.account) + '</td><td class="numeric">' + fecDisplayAmount(line.debit) + '</td><td class="numeric">' + fecDisplayAmount(line.credit) + '</td></tr>';
+    }).join('');
+    var table = rows ? '<section class="exchange-card"><p class="page-kicker">APERÇU DE LA NOUVELLE ÉCRITURE</p><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Compte</th><th class="numeric">Débit inverse</th><th class="numeric">Crédit inverse</th></tr></thead><tbody>' + rows + '</tbody></table></div></section>' : '';
+    var action = '<div class="exchange-preview-footer"><button type="button" class="btn btn-primary" data-action="commit-fec-import-reversal"' + (canCommit ? '' : ' disabled') + '>Créer l’écriture inverse · ' + (session.mode === 'posted' ? 'validée' : 'brouillon') + '</button></div>';
+    host.innerHTML = errors + warnings + permission + table + action;
+    applyDemoActionGates(host);
+  }
+
+  function bindFecImportReversal() {
+    var session = fecImportReversalSession;
+    var panel = $('#fec-import-reversal-panel');
+    if (!session || !panel) return;
+    var entryInput = $('#fec-reversal-entry', panel);
+    if (entryInput) entryInput.addEventListener('change', function () {
+      var entry = S.entry(entryInput.value);
+      if (!entry) return;
+      session.selectedEntryId = entry.id;
+      session.targetDate = defaultFecImportReversalDate(entry, S.currentDossier());
+      session.targetJournal = fecReversalJournal(entry);
+      session.targetReference = session.targetDate && session.targetJournal ? S.nextReference(session.targetJournal, session.targetDate) : '';
+      session.referenceTouched = false;
+      session.reason = '';
+      render();
+    });
+    var dateInput = $('#fec-reversal-date', panel);
+    var journalInput = $('#fec-reversal-journal', panel);
+    var referenceInput = $('#fec-reversal-reference', panel);
+    var reasonInput = $('#fec-reversal-reason', panel);
+    var modeInput = $('#fec-reversal-mode', panel);
+    function syncAndPreview(control) {
+      if (dateInput) session.targetDate = dateInput.value;
+      if (journalInput) session.targetJournal = journalInput.value;
+      if (control === dateInput || control === journalInput) {
+        if (!session.referenceTouched && session.targetDate && session.targetJournal) {
+          session.targetReference = S.nextReference(session.targetJournal, session.targetDate);
+          if (referenceInput) referenceInput.value = session.targetReference;
+        }
+      }
+      if (referenceInput) session.targetReference = referenceInput.value;
+      if (control === referenceInput) session.referenceTouched = true;
+      if (reasonInput) session.reason = reasonInput.value;
+      if (modeInput) session.mode = modeInput.value === 'posted' ? 'posted' : 'draft';
+      renderFecImportReversalPreview();
+    }
+    [dateInput, journalInput, modeInput].forEach(function (control) {
+      if (control) control.addEventListener('change', function () { syncAndPreview(control); });
+    });
+    if (referenceInput) referenceInput.addEventListener('input', function () { syncAndPreview(referenceInput); });
+    if (reasonInput) reasonInput.addEventListener('input', function () { syncAndPreview(reasonInput); });
+    renderFecImportReversalPreview();
+  }
+
+  function commitFecImportReversal() {
+    var session = fecImportReversalSession;
+    if (!session) return;
+    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext())) {
+      toast('Création de l’écriture inverse refusée : le droit « data.import » est requis.', 'warning');
+      return;
+    }
+    if (session.mode === 'posted' && !hasDemoPermission(getActiveDemoMember(), 'accounting', 'entry.validate', accountingAccessContext())) {
+      toast('Validation refusée : choisissez le mode brouillon ou demandez le droit « entry.validate ».', 'warning');
+      return;
+    }
+    renderFecImportReversalPreview();
+    if (!session.canCommit) {
+      toast('Écriture inverse bloquée : vérifiez le motif, le journal, la période et les contrôles affichés.', 'warning');
+      return;
+    }
+    var original = S.entry(session.selectedEntryId);
+    var built = buildFecImportReversalEntry(original, {
+      date: session.targetDate,
+      journal: session.targetJournal,
+      reference: session.targetReference,
+      reason: session.reason
+    });
+    if (!built.ok) { toast(built.errors[0] || 'Écriture inverse impossible.', 'error'); return; }
+    if (!window.confirm('Ajouter une écriture ' + (session.mode === 'posted' ? 'validée' : 'brouillon') + ' qui inverse « ' + original.reference + ' » ? La pièce FEC d’origine restera validée et inchangée.')) return;
+    var result = S.importExchange([built.entry], session.mode, { sourceSystem: FEC_IMPORT_REVERSAL_SOURCE });
+    if (!result.ok) { toast(result.errors[0] || 'Écriture inverse impossible.', 'error'); return; }
+    fecImportReversalSession = null;
+    toast('Écriture inverse créée et liée à la pièce FEC d’origine ; aucune écriture historique n’a été supprimée.', 'success');
+    render();
+  }
+
+  function fecFilenameCompliant(name) {
+    var stem = String(name || '').replace(/\.(txt|csv)$/i, '');
+    return /^FEC(?:[_ -]+)(?:IFU[_ -]+)?[A-Z0-9]+[_ -]+\d{8}(?:[_ -]+\d+)?$/i.test(stem);
+  }
+
+  function fecBytesToBase64(bytes) {
+    var binary = '';
+    for (var offset = 0; offset < bytes.length; offset += 0x8000) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(offset, Math.min(offset + 0x8000, bytes.length)));
+    }
+    return window.btoa(binary);
+  }
+
+  function fecBase64ToBytes(base64) {
+    var binary = window.atob(String(base64 || ''));
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  function fecSha256(bytes) {
+    if (!window.crypto || !window.crypto.subtle) return Promise.reject(new Error('SHA-256 indisponible dans ce contexte navigateur sécurisé.'));
+    return window.crypto.subtle.digest('SHA-256', bytes).then(function (digest) {
+      return Array.prototype.map.call(new Uint8Array(digest), function (byte) { return byte.toString(16).padStart(2, '0'); }).join('');
+    });
+  }
+
+  function fecDisplayAmount(value) {
+    return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 4 }).format(Number(value) || 0);
+  }
+
+  function fecAccountMappingsHtml(session) {
+    var catalog = Object.create(null);
+    (session.parseResult.rows || []).forEach(function (row) {
+      if (!catalog[row.account]) catalog[row.account] = row.accountLabel || '';
+    });
+    var codes = Object.keys(catalog).sort(function (a, b) { return a.localeCompare(b); });
+    if (!codes.length) return '';
+    var accounts = postingAccounts();
+    return '<details class="exchange-mapping" open><summary>Correspondance des comptes (' + codes.length + ' codes source)</summary>' +
+      '<p class="small muted">Les correspondances exactes sont seulement pré-sélectionnées comme propositions. Vérifiez chaque ligne et confirmez explicitement l’ensemble ; aucun compte n’est créé.</p>' +
+      '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Compte FEC</th><th>Libellé source</th><th>Compte cible proposé / confirmé</th></tr></thead><tbody>' +
+      codes.map(function (code) {
+        var mappedCode = session.accountMap[code] || '';
+        var exactMatch = S.account(code);
+        var selectOptions = '<option value="">— Choisir une correspondance —</option>' + accounts.map(function (account) {
+          var inactive = account.active === false ? ' · inactif' : '';
+          return '<option value="' + esc(account.code) + '"' + (account.code === mappedCode ? ' selected' : '') + '>' + esc(account.code + ' — ' + account.label + inactive) + '</option>';
+        }).join('');
+        return '<tr><td><strong>' + esc(code) + '</strong></td><td>' + esc(catalog[code] || '—') + '</td><td>' +
+          '<select aria-label="Associer le compte FEC ' + esc(code) + '" data-fec-account-map="' + esc(code) + '">' + selectOptions + '</select>' +
+          (exactMatch ? '<small class="hint">Code identique proposé ; confirmation requise.</small>' : '<small class="hint">Aucun code identique dans le plan cible.</small>') +
+          '</td></tr>';
+      }).join('') + '</tbody></table></div></details>';
+  }
+
+  function fecJournalMappingsHtml(session) {
+    var catalog = Object.create(null);
+    (session.parseResult.entries || []).forEach(function (entry) {
+      if (!catalog[entry.journal]) catalog[entry.journal] = entry.journalLabel || '';
+    });
+    var codes = Object.keys(catalog).sort(function (a, b) { return a.localeCompare(b); });
+    if (!codes.length) return '';
+    var journals = S.journals().filter(function (journal) { return !journal.retired && !journal.systemManaged && journal.code !== 'CEN'; });
+    return '<details class="exchange-mapping" open><summary>Correspondance des journaux (' + codes.length + ' codes source)</summary>' +
+      '<p class="small muted">Associez chaque journal source à un journal actif du dossier cible. Le journal CEN et les journaux système sont exclus des imports externes.</p>' +
+      '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Journal FEC</th><th>Libellé source</th><th>Journal cible</th></tr></thead><tbody>' +
+      codes.map(function (code) {
+        var mappedCode = session.journalMap[code] || '';
+        var exactMatch = S.journal(code);
+        var selectOptions = '<option value="">— Choisir un journal —</option>' + journals.map(function (journal) {
+          return '<option value="' + esc(journal.code) + '"' + (journal.code === mappedCode ? ' selected' : '') + '>' + esc(journalDisplayName(journal)) + '</option>';
+        }).join('');
+        return '<tr><td><strong>' + esc(code) + '</strong></td><td>' + esc(catalog[code] || '—') + '</td><td>' +
+          '<select aria-label="Associer le journal FEC ' + esc(code) + '" data-fec-journal-map="' + esc(code) + '">' + selectOptions + '</select>' +
+          (exactMatch ? '<small class="hint">Code identique proposé ; confirmation requise.</small>' : '<small class="hint">Aucun code identique dans le dossier.</small>') +
+          '</td></tr>';
+      }).join('') + '</tbody></table></div></details>';
+  }
+
+  function fecLinesPreviewHtml(session) {
+    var rows = (session.parseResult.rows || []).slice(0, 20);
+    var body = rows.map(function (row) {
+      var targetCode = session.accountMap[row.account] || '';
+      var targetAccount = targetCode ? S.account(targetCode) : null;
+      return '<tr><td>' + esc(row.sourceRow) + '</td><td><strong>' + esc(row.journal) + ' · ' + esc(row.entryNumber) + '</strong><br><small>' + esc(row.date) + ' · validée le ' + esc(row.validationDate) + '</small></td>' +
+        '<td><strong>' + esc(row.account) + '</strong><br><small>' + esc(row.accountLabel) + '</small></td>' +
+        '<td class="numeric">' + esc(row.debitRaw || '—') + '</td><td class="numeric">' + esc(row.creditRaw || '—') + '</td>' +
+        '<td>' + (row.signNormalized ? '<span class="badge draft">Signe reporté au côté opposé</span>' : '—') + '</td>' +
+        '<td>' + esc(targetAccount ? targetAccount.code + ' — ' + targetAccount.label : 'À associer') + '</td></tr>';
+    }).join('');
+    var note = session.parseResult.rows.length > rows.length
+      ? '<p class="small muted">Aperçu des ' + rows.length + ' premières lignes sur ' + session.parseResult.rows.length + '. Les contrôles couvrent tout le fichier.</p>'
+      : '';
+    return '<section class="exchange-card fec-lines-preview"><p class="page-kicker">APERÇU DES LIGNES FEC</p><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Ligne</th><th>Journal · écriture</th><th>Compte source</th><th class="numeric">Débit source</th><th class="numeric">Crédit source</th><th>Signe</th><th>Compte cible</th></tr></thead><tbody>' + body + '</tbody></table></div>' + note + '</section>';
+  }
+
+  function renderFecImportPreview() {
+    var host = $('#fec-import-preview');
+    var session = fecImportSession;
+    if (!host || !session) return;
+    if (session.pending) {
+      host.innerHTML = '<div class="alert info">Lecture du fichier et calcul de l’empreinte SHA-256 en cours…</div>';
+      return;
+    }
+    var parsed = session.parseResult;
+    if (!parsed || !parsed.ok) {
+      var parseErrors = parsed && parsed.errors || ['Le fichier FEC n’a pas pu être analysé.'];
+      host.innerHTML = '<div class="alert error"><div><strong>Fichier FEC non reconnu ou invalide</strong><ul>' +
+        parseErrors.slice(0, 20).map(function (message) { return '<li>' + esc(message) + '</li>'; }).join('') +
+        (parseErrors.length > 20 ? '<li>… et ' + (parseErrors.length - 20) + ' autre(s) erreur(s).</li>' : '') + '</ul></div></div>';
+      session.analysis = null;
+      session.canCommit = false;
+      return;
+    }
+    var modeSelect = $('#fec-import-mode');
+    session.mode = modeSelect && modeSelect.value === 'posted' ? 'posted' : 'draft';
+    var options = { sourceSystem: FecImport.FORMAT, accountMap: session.accountMap, journalMap: session.journalMap };
+    var analysis = S.previewExchangeImport(parsed.entries, session.mode, options);
+    session.analysis = analysis;
+    var canImport = hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext());
+    var canPost = hasDemoPermission(getActiveDemoMember(), 'accounting', 'entry.validate', accountingAccessContext());
+    var permissionBlocked = !canImport || (session.mode === 'posted' && !canPost);
+    var sourceDuplicate = S.importSourceFiles().some(function (source) { return source.sha256 === session.sha256; });
+    var nameCompliant = fecFilenameCompliant(session.fileName);
+    var nameBlocked = !nameCompliant && !session.fileNameConfirmed;
+    var dossierMismatch = session.targetDossierId !== S.currentDossier().id;
+    var canCommit = analysis.ok && session.complianceConfirmed && session.mappingsConfirmed && !permissionBlocked &&
+      !sourceDuplicate && !nameBlocked && !dossierMismatch && !!session.contentBase64;
+    session.canCommit = canCommit;
+
+    var dateRange = parsed.metadata.dateRange || {};
+    var summary = '<div class="exchange-summary-grid fec-summary-grid">' +
+      '<div><small>Fichier source</small><strong>' + esc(session.fileName || '—') + '</strong></div>' +
+      '<div><small>Schéma FEC</small><strong>' + parsed.metadata.headerCount + ' champs · ' + (parsed.metadata.amountVariant === 'amount-sense' ? 'Montant/sens' : 'Débit/crédit') + '</strong></div>' +
+      '<div><small>Lecture</small><strong>' + esc(session.encodingLabel || session.encoding) + ' · ' + esc(parsed.metadata.delimiter) + ' · ' + esc(parsed.metadata.recordSeparator) + '</strong></div>' +
+      '<div><small>Écritures / lignes</small><strong>' + parsed.metadata.entryCount + ' · ' + parsed.metadata.lineCount + '</strong></div>' +
+      '<div><small>Période de validation</small><strong>' + esc(dateRange.firstValidationDate || '—') + ' → ' + esc(dateRange.lastValidationDate || '—') + '</strong></div>' +
+      '<div><small>Totaux de contrôle source</small><strong>' + fecDisplayAmount(parsed.metadata.totalDebit) + ' / ' + fecDisplayAmount(parsed.metadata.totalCredit) + ' XOF</strong></div>' +
+      '</div>';
+    var duplicateAlert = sourceDuplicate
+      ? '<div class="alert error"><strong>Import bloqué :</strong> le même fichier source a déjà été importé dans ce dossier.</div>' : '';
+    var nameAlert = !nameCompliant
+      ? '<div class="alert warning"><div><strong>Nom de fichier à vérifier</strong><br>Le nom ne correspond pas au motif FEC/IFU/date de clôture décrit par l’arrêté (ou le nom est anonymisé).<label class="exchange-context-confirm"><input id="fec-import-confirm-filename" type="checkbox"' + (session.fileNameConfirmed ? ' checked' : '') + '> Je confirme que ce nom est intentionnel pour ce fichier.</label></div></div>' : '';
+    var errors = analysis.errors.length
+      ? '<div class="alert error"><div><strong>' + analysis.errors.length + ' contrôle(s) bloquant(s)</strong><ul>' +
+        analysis.errors.slice(0, 20).map(function (message) { return '<li>' + esc(message) + '</li>'; }).join('') +
+        (analysis.errors.length > 20 ? '<li>… et ' + (analysis.errors.length - 20) + ' autre(s) erreur(s).</li>' : '') + '</ul></div></div>'
+      : '<div class="alert success"><div><strong>Contrôles de conversion réussis</strong><br>' + analysis.balancedCount + ' pièce(s) équilibrée(s) dans le plan cible.</div></div>';
+    var warnings = parsed.warnings.concat(analysis.warnings || []);
+    var warningsHtml = warnings.length
+      ? '<div class="alert warning"><div><strong>Informations de conversion</strong><ul>' + warnings.map(function (message) { return '<li>' + esc(message) + '</li>'; }).join('') + '</ul></div></div>' : '';
+    var permissionNotice = permissionBlocked
+      ? '<div class="alert warning">' + (!canImport ? 'Le droit « data.import » est requis.' : 'Ce profil ne possède pas le droit « Valider une écriture » ; choisissez le mode brouillon.') + '</div>' : '';
+    var dossierNotice = dossierMismatch ? '<div class="alert error">Le dossier actif a changé depuis la sélection du fichier. Rechargez le fichier dans le dossier cible avant import.</div>' : '';
+    var filenameText = nameCompliant ? '' : '<p class="small muted">Nom détecté comme non conforme ou non standard ; aucune IFU ni date de clôture n’est déduite automatiquement.</p>';
+    var mappingConfirmation = '<label class="exchange-context-confirm"><input id="fec-import-confirm-mappings" type="checkbox"' + (session.mappingsConfirmed ? ' checked' : '') + '> Je confirme les correspondances de comptes et de journaux affichées.</label>';
+    var complianceConfirmation = '<label class="exchange-context-confirm"><input id="fec-import-confirm-compliance" type="checkbox"' + (session.complianceConfirmed ? ' checked' : '') + '> Je confirme que la source contient des écritures validées, sans centralisation ni soldes de charges/produits, et que l’ajout est intentionnel.</label>';
+    var modeLabel = session.mode === 'posted' ? 'écritures validées' : 'brouillons';
+    var button = '<button type="button" class="btn btn-primary" data-action="commit-accounting-fec-import"' + (canCommit ? '' : ' disabled') + '>Importer ' + parsed.metadata.entryCount + ' écriture(s) comme ' + modeLabel + '</button>';
+    var statusNote = '<p class="exchange-mode-note">Mode choisi : <strong>' + modeLabel + '</strong>. Le statut source validé ne valide pas automatiquement les écritures dans le dossier cible.</p>';
+    host.innerHTML = summary + filenameText + duplicateAlert + nameAlert +
+      fecAccountMappingsHtml(session) + fecJournalMappingsHtml(session) + fecLinesPreviewHtml(session) +
+      warningsHtml + errors + dossierNotice + permissionNotice + mappingConfirmation + complianceConfirmation + statusNote +
+      '<div class="exchange-preview-footer">' + button + '</div>';
+    applyDemoActionGates(host);
+
+    $$('[data-fec-account-map]', host).forEach(function (select) {
+      select.addEventListener('change', function () {
+        session.accountMap[select.getAttribute('data-fec-account-map')] = select.value;
+        session.mappingsConfirmed = false;
+        renderFecImportPreview();
+      });
+    });
+    $$('[data-fec-journal-map]', host).forEach(function (select) {
+      select.addEventListener('change', function () {
+        session.journalMap[select.getAttribute('data-fec-journal-map')] = select.value;
+        session.mappingsConfirmed = false;
+        renderFecImportPreview();
+      });
+    });
+    var mappingConfirm = $('#fec-import-confirm-mappings', host);
+    if (mappingConfirm) mappingConfirm.addEventListener('change', function () { session.mappingsConfirmed = mappingConfirm.checked; renderFecImportPreview(); });
+    var complianceConfirm = $('#fec-import-confirm-compliance', host);
+    if (complianceConfirm) complianceConfirm.addEventListener('change', function () { session.complianceConfirmed = complianceConfirm.checked; renderFecImportPreview(); });
+    var filenameConfirm = $('#fec-import-confirm-filename', host);
+    if (filenameConfirm) filenameConfirm.addEventListener('change', function () { session.fileNameConfirmed = filenameConfirm.checked; renderFecImportPreview(); });
+  }
+
+  function parseFecImportSession() {
+    var session = fecImportSession;
+    if (!session || !session.rawBytes) return;
+    var encodingInput = $('#fec-import-encoding');
+    var delimiterInput = $('#fec-import-delimiter');
+    session.encoding = encodingInput ? encodingInput.value : 'iso-8859-15';
+    session.encodingLabel = encodingInput && encodingInput.selectedOptions[0] ? encodingInput.selectedOptions[0].textContent : session.encoding;
+    session.delimiterOption = delimiterInput ? delimiterInput.value : 'auto';
+    session.complianceConfirmed = false;
+    session.mappingsConfirmed = false;
+    try {
+      var decoded = FecImport.decodeBytes(session.rawBytes, session.encoding);
+      session.decodedText = decoded;
+      session.parseResult = FecImport.parse(decoded, {
+        fileName: session.fileName,
+        fileHash: session.sha256,
+        encoding: session.encoding,
+        delimiter: session.delimiterOption
+      });
+      if (session.parseResult.ok) {
+        var accountMap = Object.create(null);
+        var journalMap = Object.create(null);
+        session.parseResult.rows.forEach(function (row) {
+          if (!Object.prototype.hasOwnProperty.call(accountMap, row.account)) accountMap[row.account] = S.account(row.account) ? row.account : '';
+        });
+        session.parseResult.entries.forEach(function (entry) {
+          if (!Object.prototype.hasOwnProperty.call(journalMap, entry.journal)) journalMap[entry.journal] = S.journal(entry.journal) ? entry.journal : '';
+        });
+        session.accountMap = accountMap;
+        session.journalMap = journalMap;
+      }
+    } catch (error) {
+      session.parseResult = { ok: false, errors: [error.message || 'Décodage du FEC impossible.'], entries: [], rows: [], metadata: null, warnings: [] };
+    }
+    renderFecImportPreview();
+  }
+
+  function bindAccountingFecImport() {
+    var fileInput = $('#fec-import-file');
+    var encodingInput = $('#fec-import-encoding');
+    var delimiterInput = $('#fec-import-delimiter');
+    var modeInput = $('#fec-import-mode');
+    if (!fileInput || !encodingInput || !delimiterInput || !modeInput) return;
+    [encodingInput, delimiterInput].forEach(function (input) {
+      input.addEventListener('change', function () { parseFecImportSession(); });
+    });
+    modeInput.addEventListener('change', function () { renderFecImportPreview(); });
+    fileInput.addEventListener('change', function () {
+      var file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      var readSequence = ++fecImportReadSequence;
+      fecImportSession = { fileName: file.name, pending: true, parseResult: null };
+      renderFecImportPreview();
+      if (file.size > 1024 * 1024) {
+        fecImportSession = { fileName: file.name, parseResult: { ok: false, errors: ['Le fichier dépasse 1 Mo dans ce prototype local. Fractionnez-le conformément à la norme, ou utilisez un stockage organisationnel avant d’augmenter cette limite.'], entries: [], rows: [], metadata: null } };
+        renderFecImportPreview();
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function () {
+        if (readSequence !== fecImportReadSequence) return;
+        var bytes = new Uint8Array(reader.result || new ArrayBuffer(0));
+        fecSha256(bytes).then(function (sha256) {
+          if (readSequence !== fecImportReadSequence) return;
+          fecImportSession = {
+            fileName: file.name,
+            fileSize: file.size,
+            mimeType: file.type || 'text/plain',
+            targetDossierId: S.currentDossier().id,
+            rawBytes: bytes,
+            contentBase64: fecBytesToBase64(bytes),
+            sha256: sha256,
+            fileNameConfirmed: false,
+            complianceConfirmed: false,
+            mappingsConfirmed: false,
+            mode: modeInput.value === 'posted' ? 'posted' : 'draft',
+            parseResult: null,
+            accountMap: Object.create(null),
+            journalMap: Object.create(null),
+            analysis: null
+          };
+          parseFecImportSession();
+        }).catch(function (error) {
+          if (readSequence !== fecImportReadSequence) return;
+          fecImportSession = { fileName: file.name, parseResult: { ok: false, errors: [error.message || 'Empreinte SHA-256 impossible.'], entries: [], rows: [], metadata: null } };
+          renderFecImportPreview();
+        });
+      };
+      reader.onerror = function () {
+        if (readSequence !== fecImportReadSequence) return;
+        fecImportSession = { fileName: file.name, parseResult: { ok: false, errors: ['Lecture du fichier impossible.'], entries: [], rows: [], metadata: null } };
+        renderFecImportPreview();
+      };
+      reader.readAsArrayBuffer(file);
+    });
+    bindFecImportReversal();
+  }
+
+  function commitAccountingFecImport() {
+    var session = fecImportSession;
+    if (!session || !session.parseResult || !session.parseResult.ok) {
+      toast('Aucun fichier FEC valide n’est prêt à être importé.', 'error');
+      return;
+    }
+    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.import', accountingAccessContext())) {
+      toast('Import FEC refusé par défaut : le droit « data.import » n’est pas accordé.', 'warning');
+      return;
+    }
+    if (session.targetDossierId !== S.currentDossier().id) {
+      toast('Le dossier actif a changé. Rechargez et contrôlez le FEC dans le bon dossier.', 'error');
+      return;
+    }
+    if (session.mode === 'posted' && !hasDemoPermission(getActiveDemoMember(), 'accounting', 'entry.validate', accountingAccessContext())) {
+      toast('La validation comptable est refusée : choisissez le mode brouillon ou demandez le droit « entry.validate ».', 'warning');
+      return;
+    }
+    renderFecImportPreview();
+    if (!session.canCommit) {
+      toast('Import bloqué : vérifiez les correspondances, confirmations et contrôles de l’aperçu.', 'warning');
+      return;
+    }
+    var sourceFile = {
+      sourceSystem: 'FEC-BENIN',
+      fileName: session.fileName,
+      mimeType: session.mimeType,
+      fileSize: session.fileSize,
+      byteLength: session.fileSize,
+      sha256: session.sha256,
+      contentBase64: session.contentBase64,
+      encoding: session.encoding,
+      delimiter: session.parseResult.metadata.delimiter,
+      recordSeparator: session.parseResult.metadata.recordSeparator,
+      headerCount: session.parseResult.metadata.headerCount,
+      amountVariant: session.parseResult.metadata.amountVariant,
+      lineCount: session.parseResult.metadata.lineCount,
+      entryCount: session.parseResult.metadata.entryCount,
+      complianceConfirmed: session.complianceConfirmed,
+      fileNameConfirmed: session.fileNameConfirmed,
+      localOnly: true
+    };
+    var result = S.importExchange(session.parseResult.entries, session.mode, {
+      sourceSystem: 'FEC-BENIN',
+      accountMap: session.accountMap,
+      journalMap: session.journalMap,
+      importSourceFile: sourceFile
+    });
+    if (!result.ok) {
+      toast(result.errors[0] || 'Import FEC impossible. Aucun changement n’a été conservé.', 'error');
+      return;
+    }
+    var statusLabel = session.mode === 'posted' ? 'écriture(s) validée(s)' : 'brouillon(s)';
+    toast(result.importedCount + ' ' + statusLabel + ' importé(s). Le fichier source est conservé localement.', 'success');
+    fecImportSession = null;
+    render();
+  }
+
+  function downloadFecSource(sourceId) {
+    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.export', accountingAccessContext())) {
+      toast('Téléchargement refusé : le droit « data.export » est requis.', 'warning');
+      return;
+    }
+    var source = S.importSourceFile(sourceId);
+    if (!source || !source.contentBase64) {
+      toast('Fichier source FEC introuvable dans le stockage local.', 'error');
+      return;
+    }
+    downloadFile(source.fileName || 'source-fec.txt', fecBase64ToBytes(source.contentBase64), source.mimeType || 'text/plain');
+    toast('Fichier FEC original téléchargé depuis le stockage local.', 'success');
+  }
+
+  function cancelFecImportBatch(batchId) {
+    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'draft.delete', accountingAccessContext())) {
+      toast('Annulation refusée par défaut : le droit « draft.delete » n’est pas accordé.', 'warning');
+      return;
+    }
+    var source = S.importSourceFiles().find(function (record) { return record.id === batchId; });
+    if (!source) { toast('Lot FEC introuvable.', 'error'); return; }
+    if (!window.confirm('Annuler les brouillons de ce lot FEC ? Le fichier source et sa trace seront conservés ; aucune écriture validée ne sera supprimée.')) return;
+    var result = S.cancelImportBatch(batchId);
+    if (!result.ok) { toast(result.errors[0] || 'Annulation du lot impossible.', 'error'); return; }
+    toast(result.cancelledCount + ' brouillon(s) annulé(s) ; le FEC source reste archivé localement.', 'success');
+    render();
   }
 
   function viewAccountingBalanceImport() {
@@ -8668,6 +9452,7 @@
       switch (tab.id) {
         case 'export-other': exchangeFeature = viewAccountingExchangeExport(); break;
         case 'import-other': exchangeFeature = viewAccountingExchangeImport(); break;
+        case 'import-fec': exchangeFeature = viewAccountingFecImport(); break;
         case 'import-balance': exchangeFeature = viewAccountingBalanceImport(); break;
         case 'centralize-auxiliary': exchangeFeature = viewInternalAuxiliaryCentralization(); break;
         case 'centralize-payroll': exchangeFeature = viewAccountingPayrollCentralization(); break;
@@ -9622,6 +10407,7 @@
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'fixed-assets') bindFixedAssetView();
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'opening-balances') bindOpeningBalancesView();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-other') bindAccountingExchangeImport();
+      if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-fec') bindAccountingFecImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-balance') bindAccountingBalanceImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-payroll') bindPayrollCentralization();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-sales') bindSalesCentralization();
@@ -10534,6 +11320,25 @@
       }
       case 'commit-accounting-exchange-import':
         commitAccountingExchangeImport();
+        break;
+      case 'commit-accounting-fec-import':
+        commitAccountingFecImport();
+        break;
+      case 'download-fec-source':
+        downloadFecSource(id);
+        break;
+      case 'cancel-fec-import-batch':
+        cancelFecImportBatch(id);
+        break;
+      case 'open-fec-import-reversal':
+        openFecImportReversal(id);
+        break;
+      case 'close-fec-import-reversal':
+        fecImportReversalSession = null;
+        render();
+        break;
+      case 'commit-fec-import-reversal':
+        commitFecImportReversal();
         break;
       case 'commit-accounting-balance-import':
         commitAccountingBalanceImport();
