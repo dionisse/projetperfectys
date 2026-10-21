@@ -1149,7 +1149,13 @@
       if (defaultRow.separator) return defaultRow;
       var stored = suppliedById[defaultRow.id];
       var nature = String(stored && stored.nature != null ? stored.nature : defaultRow.nature).trim().slice(0, 120);
-      var accounts = String(stored && stored.accounts != null ? stored.accounts : defaultRow.accounts).trim().replace(/\s+/g, ' ').slice(0, 500);
+      var accounts = String(stored && stored.accounts != null ? stored.accounts : defaultRow.accounts).trim().replace(/\s+/g, ' ');
+      if (defaultRow.id === 'fixed-assets-in-progress') {
+        accounts = accounts.replace(/(^|[\s,;])279\*(?=$|[\s,;])/g, function (match, separator) { return separator + '2?9*'; });
+      } else if (defaultRow.id === 'fixed-assets-item-follow-up') {
+        accounts = accounts.replace(/(^|[\s,;])-279\*(?=$|[\s,;])/g, function (match, separator) { return separator + '-2?9*'; });
+      }
+      accounts = accounts.slice(0, 500);
       return { id: defaultRow.id, nature: nature || defaultRow.nature, accounts: accounts, level: defaultRow.level };
     });
     return {

@@ -115,4 +115,20 @@ storageWritesBlocked = false;
 assert.equal(failedSave.ok, false, 'un échec de stockage refuse l’enregistrement');
 assert.equal(store.generalAccountNaturesConfiguration().rows.find(row => row.id === 'stable-grants').accounts, '14 145', 'un échec de stockage conserve la configuration précédente');
 
-console.log('  ✓ Natures des comptes chargées depuis les captures, sans ligne dupliquée, éditables et isolées par dossier.');
+const legacyCatalog = JSON.parse(values.get('perfecto.dossiers.v1'));
+legacyCatalog[0].generalAccountNaturesConfiguration.rows = legacyCatalog[0].generalAccountNaturesConfiguration.rows.map(row => {
+  if (row.id === 'fixed-assets-in-progress') return { ...row, accounts: '279*' };
+  if (row.id === 'fixed-assets-item-follow-up') return { ...row, accounts: '21 22 23 24 -279* 26 275' };
+  return row;
+});
+values.set('perfecto.dossiers.v1', JSON.stringify(legacyCatalog));
+values.set('perfecto.activeDossier.v1', legacyCatalog[0].id);
+const migratedStore = loadStore();
+const migratedConfiguration = migratedStore.generalAccountNaturesConfiguration();
+assert.equal(migratedConfiguration.rows.find(row => row.id === 'fixed-assets-in-progress').accounts, '2?9*', 'un dossier existant migre l’ancien motif de la ligne « dont en cours »');
+assert.equal(migratedConfiguration.rows.find(row => row.id === 'fixed-assets-item-follow-up').accounts, '21 22 23 24 -2?9* 26 275', 'un dossier existant migre aussi le motif négatif de la ligne de suivi');
+const migratedCatalog = JSON.parse(values.get('perfecto.dossiers.v1'));
+assert.equal(migratedCatalog[0].generalAccountNaturesConfiguration.rows.find(row => row.id === 'fixed-assets-in-progress').accounts, '2?9*', 'la migration est persistée dans le catalogue du dossier');
+assert.equal(migratedCatalog[0].generalAccountNaturesConfiguration.rows.find(row => row.id === 'fixed-assets-item-follow-up').accounts, '21 22 23 24 -2?9* 26 275');
+
+console.log('  ✓ Natures des comptes chargées depuis les captures, migrées pour les dossiers existants, éditables et isolées par dossier.');
