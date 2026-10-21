@@ -2506,7 +2506,12 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
 .fec-lines-preview .exchange-mapping-table { min-width: 900px; }
 .fec-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
-/* ---------- Tableau de passage interne ---------- */
+/* ---------- Centralisation auxiliaire et tableau de passage interne ---------- */
+.auxiliary-centralization-workspace .auxiliary-centralization-choice { display: grid; justify-items: start; gap: 8px; }
+.auxiliary-centralization-choice h4,
+.auxiliary-centralization-choice p { margin: 0; }
+.auxiliary-centralization-choice > p:not(.page-kicker) { color: #6d7c74; font-size: .72rem; line-height: 1.55; }
+.auxiliary-centralization-choice .small { font-size: .65rem; }
 .accounting-bridge-source-field {
   max-width: 720px;
   margin: 0;

@@ -28,7 +28,9 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
 ]));
 [
   'Importation d’une balance générale',
-  'Centralisation auxiliaire interne',
+  'Centralisation auxiliaire',
+  'FEC externe ou d’une autre organisation',
+  'Mouvements auxiliaires des modules PERFECTO',
   'Centralisation des salaires depuis Paie et RH',
   'Centralisation des opérations depuis Vente, Stock et Facturation',
   'Annulation d’une centralisation',
@@ -208,9 +210,11 @@ assert.ok(findTab('fichier', 'import-fec').reason.includes('arrêté béninois')
 assert.ok(findTab('fichier', 'import-fec').reason.includes('Aucun connecteur direct'));
 assert.equal(findTab('fichier', 'import-balance').status, 'partial');
 assert.ok(findTab('fichier', 'import-balance').reason.includes('PERFECTO-BALANCE v1'));
-assert.equal(findTab('fichier', 'centralize-auxiliary').status, 'planned');
-assert.ok(findTab('fichier', 'centralize-auxiliary').reason.includes('modules internes'));
-assert.ok(findTab('fichier', 'centralize-auxiliary').reason.includes('n’alimente pas une centralisation interne'));
+assert.equal(findTab('fichier', 'centralize-auxiliary').label, 'Centralisation auxiliaire');
+assert.equal(findTab('fichier', 'centralize-auxiliary').status, 'mixed');
+assert.ok(findTab('fichier', 'centralize-auxiliary').reason.includes('FEC'));
+assert.equal(findTab('fichier', 'centralize-auxiliary').children.find(child => child.id === 'centralize-auxiliary-fec').status, 'partial');
+assert.equal(findTab('fichier', 'centralize-auxiliary').children.find(child => child.id === 'centralize-auxiliary-perfecto').status, 'planned');
 assert.equal(findTab('fichier', 'centralize-payroll').status, 'active');
 assert.ok(findTab('fichier', 'centralize-payroll').reason.includes('Comptabilité générale'));
 assert.ok(findTab('fichier', 'centralize-payroll').reason.includes('grand livre général'));
@@ -453,12 +457,14 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v75/);
+assert.match(serviceWorkerSource, /perfecto-static-v76/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/fec-import\.js/);
 assert.match(htmlSource, /js\/fec-import\.js/);
 assert.match(menuRenderer, /case 'import-fec': exchangeFeature = viewAccountingFecImport\(\)/);
-assert.match(appSource, /menuParams\.t === 'import-fec'\) bindAccountingFecImport\(\)/);
+assert.match(appSource, /menuParams\.t === 'import-fec'[\s\S]*bindAccountingFecImport\(\)/);
+assert.match(appSource, /menuParams\.t === 'centralize-auxiliary' && menuParams\.c === 'centralize-auxiliary-fec'[\s\S]*bindAccountingFecImport\(\)/);
+assert.match(appSource, /selectedChild\.id === 'centralize-auxiliary-fec'[\s\S]*viewAccountingFecImport\(\)/);
 assert.match(appSource, /function viewAccountingFecImport\(\)[\s\S]*première ligne d’en-tête/);
 assert.match(appSource, /function buildFecImportReversalEntry\([\s\S]*opposite-lines[\s\S]*originalEntryId/);
 assert.match(appSource, /function commitFecImportReversal\([\s\S]*S\.importExchange/);

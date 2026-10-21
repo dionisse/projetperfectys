@@ -706,7 +706,9 @@
     if (!view) return;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'import-balance')) balanceImportSession = null;
     if (!(route === 'menu' && parsed.params.g === 'parametres' && parsed.params.t === 'accounting-bridge')) accountingBridgeSession = null;
-    if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'import-fec')) {
+    var isFecAuxiliaryImportRoute = route === 'menu' && parsed.params.g === 'fichier' &&
+      (parsed.params.t === 'import-fec' || (parsed.params.t === 'centralize-auxiliary' && parsed.params.c === 'centralize-auxiliary-fec'));
+    if (!isFecAuxiliaryImportRoute) {
       fecImportSession = null;
       fecImportReversalSession = null;
       fecImportReadSequence += 1;
@@ -3533,7 +3535,7 @@
   function viewAccountingFecImport() {
     var dossierPrecision = S.accountingConfiguration().decimalPlaces;
     return '<div class="exchange-workspace fec-import-workspace">' +
-      '<div class="alert info"><div><strong>Import manuel du FEC béninois</strong><br>Le fichier est contrôlé dans ce navigateur selon l’arrêté du 23 avril 2020 : en-tête obligatoire, 18 champs de base (ou 21 pour la trésorerie), dates AAAAMMJJ, montants décimaux et écritures équilibrées. PERFECTO ne se connecte pas directement au logiciel source.</div></div>' +
+      '<div class="alert info"><div><strong>Centralisation par FEC · logiciel externe ou PERFECTO d’une autre organisation</strong><br>Le transfert se fait par fichier manuel, sans connecteur au logiciel source. Le FEC est contrôlé dans ce navigateur selon l’arrêté du 23 avril 2020, puis converti vers le plan comptable général du dossier cible après confirmation. Les identifiants auxiliaires sont conservés dans la trace source ; ce parcours ne crée pas encore de mouvements individuels de tiers.</div></div>' +
       '<div class="alert warning"><div><strong>Stockage de cette version</strong><br>Le fichier original et sa trace seront conservés dans le stockage local de ce navigateur et dans les sauvegardes du dossier. Ce n’est pas un archivage Google Drive ni un espace partagé de l’organisation ; exportez une sauvegarde indépendante.</div></div>' +
       '<div class="alert info"><div><strong>Précision active : ' + Number(dossierPrecision) + ' décimale(s)</strong><br>Les montants FEC plus précis que le paramétrage du dossier bloquent l’import. PERFECTO n’arrondit pas silencieusement ; ajustez la précision dans Paramètres → Configuration de la Comptabilité, puis rechargez le fichier.</div></div>' +
       '<div class="exchange-import-controls fec-import-controls">' +
@@ -6037,8 +6039,16 @@
     render();
   }
 
+  function viewAccountingAuxiliaryOverview() {
+    return '<div class="exchange-workspace auxiliary-centralization-workspace">' +
+      '<div class="alert info"><div><strong>Choisissez l’origine du lot auxiliaire.</strong><br>Le parcours FEC est manuel et prévu pour un logiciel externe ou un dossier PERFECTO appartenant à une autre organisation. Les mouvements auxiliaires issus des modules PERFECTO du dossier actif restent à construire.</div></div>' +
+      '<section class="exchange-card auxiliary-centralization-choice"><p class="page-kicker">IMPORT MANUEL · SANS CONNECTEUR TIERS</p><h4>FEC externe ou d’une autre organisation</h4><p>Contrôlez le fichier, confirmez la conversion vers le plan comptable général du dossier et examinez l’aperçu avant l’ajout.</p><a class="btn btn-primary btn-sm" href="' + esc(accountingMenuHash('fichier', 'centralize-auxiliary', 'centralize-auxiliary-fec')) + '">Ouvrir le parcours FEC <span aria-hidden="true">→</span></a><p class="small muted">Les champs auxiliaires du FEC sont conservés dans la trace source ; ce parcours ne crée pas encore de mouvements individuels par tiers.</p></section>' +
+      '<div class="alert warning"><div><strong>Modules PERFECTO du dossier actif · à construire.</strong><br>La centralisation interne sera activée après définition des données de tiers et des mouvements fournis par les modules internes.</div></div>' +
+    '</div>';
+  }
+
   function viewInternalAuxiliaryCentralization() {
-    return '<div class="alert info"><div><strong>Centralisation auxiliaire depuis les modules maison uniquement.</strong><br>Ce parcours sera activé lorsque les modules PERFECTO de gestion des tiers et de leurs mouvements fourniront leurs données internes. Le format pivot CSV/Excel PERFECTO-AUXILIAIRE v1 est réservé à l’interopérabilité ; aucun fichier ni logiciel tiers ne peut alimenter cette centralisation.</div></div>';
+    return '<div class="alert info"><div><strong>Mouvements auxiliaires des modules PERFECTO · à construire.</strong><br>Ce parcours sera activé lorsque les modules PERFECTO du dossier actif fourniront leurs registres internes de tiers et de mouvements. Aucun fichier externe ni connecteur logiciel n’alimente cette branche.</div></div>';
   }
 
   function consolidationStageOptions(stage) {
@@ -9791,7 +9801,13 @@
         case 'import-other': exchangeFeature = viewAccountingExchangeImport(); break;
         case 'import-fec': exchangeFeature = viewAccountingFecImport(); break;
         case 'import-balance': exchangeFeature = viewAccountingBalanceImport(); break;
-        case 'centralize-auxiliary': exchangeFeature = viewInternalAuxiliaryCentralization(); break;
+        case 'centralize-auxiliary':
+          exchangeFeature = selectedChild && selectedChild.id === 'centralize-auxiliary-fec'
+            ? viewAccountingFecImport()
+            : (selectedChild && selectedChild.id === 'centralize-auxiliary-perfecto'
+              ? viewInternalAuxiliaryCentralization()
+              : viewAccountingAuxiliaryOverview());
+          break;
         case 'centralize-payroll': exchangeFeature = viewAccountingPayrollCentralization(); break;
         case 'centralize-sales': exchangeFeature = viewAccountingSalesCentralization(); break;
         case 'cancel-centralization': exchangeFeature = viewAccountingCentralizationCancellation(); break;
@@ -10745,7 +10761,8 @@
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'fixed-assets') bindFixedAssetView();
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'opening-balances') bindOpeningBalancesView();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-other') bindAccountingExchangeImport();
-      if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-fec') bindAccountingFecImport();
+      if (!isPhoneViewport() && menuParams.g === 'fichier' &&
+          (menuParams.t === 'import-fec' || (menuParams.t === 'centralize-auxiliary' && menuParams.c === 'centralize-auxiliary-fec'))) bindAccountingFecImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-balance') bindAccountingBalanceImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-payroll') bindPayrollCentralization();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'centralize-sales') bindSalesCentralization();

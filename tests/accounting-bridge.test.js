@@ -102,7 +102,8 @@ storage.set(corruptKey, '{broken');
 assert.equal(Bridge.get('dossier-corrupt', 'payroll-hr').ok, false, 'un paramétrage illisible reste signalé et n’est pas remplacé');
 
 assert.equal(Navigation.getTab('parametres', 'accounting-bridge').status, 'partial');
-assert.equal(Navigation.getTab('fichier', 'centralize-auxiliary').status, 'planned');
+assert.equal(Navigation.getTab('fichier', 'centralize-auxiliary').status, 'mixed');
+assert.equal(Navigation.getTab('fichier', 'centralize-auxiliary').children.find(child => child.id === 'centralize-auxiliary-fec').status, 'partial');
 assert.ok(Navigation.getTab('parametres', 'accounting-bridge').reason.includes('par module source PERFECTO et dossier cible actif'));
 assert.match(appSource, /group\.id === 'parametres' && tab\.id === 'accounting-bridge'[\s\S]*viewAccountingBridge\(\)/);
 assert.match(appSource, /menuParams\.t === 'accounting-bridge'\) bindAccountingBridge\(\)/);
