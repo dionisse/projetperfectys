@@ -7,6 +7,8 @@ const path = require('node:path');
 const nav = require('../modern-proto/js/accounting-navigation.js');
 const appSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'app.js'), 'utf8');
 const configurationCss = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'css', 'accounting-configuration.css'), 'utf8');
+const htmlSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'index.html'), 'utf8');
+const serviceWorkerSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'service-worker.js'), 'utf8');
 const menuRendererStart = appSource.indexOf('function viewAccountingMenu(params) {');
 const menuRendererEnd = appSource.indexOf('function bindEntryJournalSelector()', menuRendererStart);
 const menuRenderer = appSource.slice(menuRendererStart, menuRendererEnd);
@@ -430,5 +432,24 @@ assert.match(menuRenderer, /group\.id === 'saisie' && tab\.id === 'matching'[\s\
   'le sous-menu Lettrage ouvre son écran dédié');
 assert.match(menuRenderer, /group\.id === 'saisie' && tab\.id === 'reconciliation'[\s\S]*viewPointage\(\)/,
   'le sous-menu Pointage ouvre son écran dédié');
+
+assert.equal(findTab('parametres', 'financial-framework').status, 'partial');
+assert.ok(findTab('parametres', 'financial-framework').reason.includes('cases vides'));
+assert.ok(findTab('parametres', 'financial-framework').reason.includes('aucune écriture'));
+assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'financial-framework'[\s\S]*viewFinancialFramework\(\)/,
+  'le référentiel SYSCOHADA s’ouvre depuis le bon sous-menu Paramètres');
+assert.match(appSource, /function viewFinancialFramework\(\)[\s\S]*metadata\.rowCount/);
+assert.match(appSource, /Référentiel SYSCOHADA révisé · consultation seule[\s\S]*Débit\/Crédit/);
+assert.match(appSource, /Cellule vide dans le PDF/,
+  'la vue distingue les deux colonnes et laisse les cellules vides sans calcul comptable');
+assert.match(appSource, /function bindFinancialFramework\(\)[\s\S]*AccountingFramework\.search[\s\S]*row\.hidden/,
+  'la recherche filtre localement le référentiel sans écrire dans le dossier');
+assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancialFramework\(\)/,
+  'la recherche est liée lorsque le sous-menu est ouvert');
+assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
+  'le référentiel est chargé avant le routeur de l’application');
+assert.match(serviceWorkerSource, /perfecto-static-v71/);
+assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
+assert.match(configurationCss, /\.financial-framework-table[\s\S]*\.financial-framework-post-code[\s\S]*\.financial-framework-empty-cell/);
 
 console.log('Navigation comptable : 8 menus, hiérarchie, sélection des enfants, périmètre et états inactifs — OK');

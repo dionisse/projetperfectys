@@ -352,3 +352,48 @@
   .fixed-asset-accounts-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .fixed-asset-accounts-actions .btn { min-height: 38px; padding: 6px 5px; font-size: .66rem; }
 }
+
+/* Cadre comptable SYSCOHADA révisé : référentiel de source en lecture seule. */
+.financial-framework-workspace { display: grid; gap: 13px; min-width: 0; margin-top: 14px; }
+.financial-framework-note { margin: 0; font-size: .72rem !important; line-height: 1.55; }
+.financial-framework-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
+.financial-framework-summary > div { min-width: 0; padding: 11px 13px; border: 1px solid #e6ece7; border-radius: 8px; background: #fbfcfa; }
+.financial-framework-summary small { display: block; margin-bottom: 5px; color: #78867f; font-size: .61rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+.financial-framework-summary strong { display: block; color: #2f4840; font-size: .84rem; font-variant-numeric: tabular-nums; }
+.financial-framework-card { display: grid; gap: 12px; padding: 14px; }
+.financial-framework-card .supplier-directory-head { align-items: flex-start; margin: 0; }
+.financial-framework-card .supplier-directory-head p { margin: 4px 0 0; }
+.financial-framework-result-count { flex: 0 0 auto; padding: 5px 8px; border: 1px solid #e3eae4; border-radius: 999px; color: #687a70; background: #f8faf7; font-size: .63rem; font-weight: 750; white-space: nowrap; }
+.financial-framework-search { max-width: 560px; }
+.financial-framework-search .field { margin: 0; }
+.financial-framework-search .field span { display: block; margin-bottom: 5px; }
+.financial-framework-search input { width: 100%; }
+.financial-framework-table-wrap { max-height: min(62vh, 680px); overflow: auto; border: 1px solid #dfe7e1; border-radius: 6px; background: #fff; }
+.financial-framework-table { width: 100%; min-width: 980px; border-collapse: separate; border-spacing: 0; color: #263b32; font-size: .69rem; line-height: 1.4; }
+.financial-framework-table th,
+.financial-framework-table td { padding: 6px 8px; border-right: 1px solid #e5ebe6; border-bottom: 1px solid #e5ebe6; text-align: left; vertical-align: top; }
+.financial-framework-table thead th { position: sticky; top: 0; z-index: 2; color: #314a41; background: #f1f5f1; font-size: .66rem; font-weight: 800; }
+.financial-framework-table thead tr:first-child th { height: 27px; vertical-align: middle; }
+.financial-framework-table thead tr:first-child th:nth-child(3),
+.financial-framework-table thead tr:first-child th:nth-child(4) { text-align: center; }
+.financial-framework-table thead tr:nth-child(2) th { top: 27px; z-index: 3; height: 30px; vertical-align: middle; }
+.financial-framework-table thead th:first-child { min-width: 68px; }
+.financial-framework-table tbody tr:nth-child(even) { background: #fbfcfa; }
+.financial-framework-table tbody tr:hover { background: #f0f7f2; }
+.financial-framework-table tbody tr:last-child td,
+.financial-framework-table tbody tr:last-child th { border-bottom: 0; }
+.financial-framework-table tbody th { color: #30483f; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.financial-framework-table .financial-framework-account-label { min-width: 255px; color: #33483f; overflow-wrap: anywhere; }
+.financial-framework-table .financial-framework-post-code { min-width: 88px; white-space: nowrap; }
+.financial-framework-table .financial-framework-post-code code { color: #355b50; font-size: .66rem; font-weight: 800; }
+.financial-framework-table .financial-framework-post-label { min-width: 205px; overflow-wrap: anywhere; }
+.financial-framework-table .financial-framework-empty-cell { min-width: 50px; background: rgba(248, 250, 247, .5); }
+.financial-framework-empty { margin: 0; }
+.financial-framework-source-note { margin: 0; line-height: 1.5; }
+@media (max-width: 760px) {
+  .financial-framework-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .financial-framework-card { padding: 11px; }
+  .financial-framework-card .supplier-directory-head { align-items: flex-start; flex-direction: column; }
+  .financial-framework-result-count { align-self: flex-start; }
+  .financial-framework-table-wrap { max-height: 65vh; }
+}

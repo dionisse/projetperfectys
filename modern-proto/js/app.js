@@ -9,6 +9,7 @@
   var ModuleRegistry = window.PerfectoModules;
   var Permissions = window.PerfectoPermissions;
   var AccountingNavigation = window.PerfectoAccountingNavigation;
+  var AccountingFramework = window.PerfectoAccountingFramework;
   var CashOperations = window.PerfectoCashOperations;
   var AccountMovements = window.PerfectoAccountMovements;
   var AccountingExchange = window.PerfectoAccountingExchange;
@@ -89,7 +90,8 @@
     clients: { q: '' },
     otherParties: { q: '', type: 'all' },
     personnel: { q: '' },
-    fixedAssets: { q: '', status: 'all', assetType: 'all' }
+    fixedAssets: { q: '', status: 'all', assetType: 'all' },
+    financialFramework: { q: '' }
   };
 
   var selectedEntryJournalCode = '';
@@ -2997,6 +2999,52 @@
       '</div>' +
       '<div class="account-controls-status" role="status" aria-live="polite"></div>' +
     '</form>';
+  }
+
+  function viewFinancialFramework() {
+    var metadata = AccountingFramework.metadata;
+    var records = AccountingFramework.all();
+
+    function mappingCells(posting, side) {
+      if (!posting) {
+        return '<td class="financial-framework-empty-cell" aria-label="Cellule vide dans le PDF"></td>' +
+          '<td class="financial-framework-empty-cell" aria-label="Cellule vide dans le PDF"></td>';
+      }
+      return '<td class="financial-framework-post-code"><code>&lt;' + esc(posting.code) + '&gt;</code></td>' +
+        '<td class="financial-framework-post-label" data-post-side="' + side + '">' + esc(posting.label) + '</td>';
+    }
+
+    var rows = records.map(function (record) {
+      return '<tr data-financial-framework-row data-account-code="' + esc(record.code) + '" title="Source PDF · page ' + record.page + '">' +
+        '<th scope="row" class="financial-framework-account-code">' + esc(record.code) + '</th>' +
+        '<td class="financial-framework-account-label">' + esc(record.label) + '</td>' +
+        mappingCells(record.debit, 'debit') + mappingCells(record.credit, 'credit') +
+      '</tr>';
+    }).join('');
+    var query = esc(ui.financialFramework.q || '');
+
+    return '<div class="financial-framework-workspace">' +
+      '<div class="alert info financial-framework-note"><div><strong>Référentiel SYSCOHADA révisé · consultation seule.</strong> Les codes et libellés des postes Débit/Crédit sont repris du document fourni. Les cases vides restent vides ; ce référentiel n’active aucun calcul ni aucune écriture comptable.</div></div>' +
+      '<div class="financial-framework-summary" aria-label="Contenu du référentiel">' +
+        '<div><small>Lignes du PDF</small><strong>' + metadata.rowCount + '</strong></div>' +
+        '<div><small>Avec rattachement</small><strong>' + metadata.mappedRowCount + '</strong></div>' +
+        '<div><small>Sans rattachement</small><strong>' + metadata.unmappedRowCount + '</strong></div>' +
+        '<div><small>Pages source</small><strong>' + metadata.sourcePages + '</strong></div>' +
+      '</div>' +
+      '<section class="exchange-card financial-framework-card"><div class="supplier-directory-head"><div><h4>Comptes et postes des tableaux financiers</h4><p>Chaque compte garde sa ligne source et ses deux colonnes de rattachement, Débit et Crédit.</p></div><span id="financial-framework-result-count" class="financial-framework-result-count" aria-live="polite">' + records.length + ' / ' + records.length + ' lignes</span></div>' +
+        '<div class="financial-framework-search"><label class="field" for="financial-framework-search"><span>Rechercher un compte ou un poste</span><input id="financial-framework-search" type="search" value="' + query + '" placeholder="Code, intitulé ou poste · ex. 401, client, DA" autocomplete="off"></label></div>' +
+        '<div id="financial-framework-table-wrap" class="financial-framework-table-wrap" role="region" aria-label="Référentiel comptable SYSCOHADA révisé" tabindex="0">' +
+          '<table class="financial-framework-table"><caption class="sr-only">' + esc(metadata.standard) + ' · comptes, intitulés et rattachements Débit/Crédit</caption>' +
+            '<colgroup span="1"></colgroup><colgroup span="1"></colgroup><colgroup span="2"></colgroup><colgroup span="2"></colgroup>' +
+            '<thead><tr><th scope="col" rowspan="2">Compte</th><th scope="col" rowspan="2">Intitulé</th><th scope="colgroup" colspan="2">Débit</th><th scope="colgroup" colspan="2">Crédit</th></tr>' +
+              '<tr><th scope="col">Code du poste</th><th scope="col">Libellé du poste</th><th scope="col">Code du poste</th><th scope="col">Libellé du poste</th></tr></thead>' +
+            '<tbody id="financial-framework-rows">' + rows + '</tbody>' +
+          '</table>' +
+        '</div>' +
+        '<div id="financial-framework-empty" class="empty-state financial-framework-empty" hidden><strong>Aucun compte ni poste correspondant</strong><span>Essayez un autre code, un intitulé ou un code/libellé de poste.</span></div>' +
+        '<p class="small muted financial-framework-source-note">Source : « ' + esc(metadata.sourceFile) + ' » · ' + metadata.sourcePages + ' pages. Certains libellés sont tronqués dans la source ; ils sont conservés tels quels, sans compléter les lettres manquantes.</p>' +
+      '</section>' +
+    '</div>';
   }
 
   function viewGeneralAccountNatures() {
@@ -8611,6 +8659,8 @@
       exchangeFeature = viewOrderNatures();
     } else if (group.id === 'parametres' && tab.id === 'account-controls') {
       exchangeFeature = viewAccountControls();
+    } else if (group.id === 'parametres' && tab.id === 'financial-framework') {
+      exchangeFeature = viewFinancialFramework();
     } else if (group.id === 'parametres' && tab.id === 'general-account-natures') {
       exchangeFeature = viewGeneralAccountNatures();
     }
@@ -9374,6 +9424,32 @@
     if (dossier && accountControlsSelectedDossierId !== dossier.id) setActiveField('payableAccounts');
   }
 
+  function bindFinancialFramework() {
+    var input = $('#financial-framework-search');
+    var tableWrap = $('#financial-framework-table-wrap');
+    var tableBody = $('#financial-framework-rows');
+    var count = $('#financial-framework-result-count');
+    var empty = $('#financial-framework-empty');
+    if (!input || !tableWrap || !tableBody) return;
+
+    var rowElements = $$('[data-financial-framework-row]', tableBody);
+    function applyFilter() {
+      ui.financialFramework.q = input.value;
+      var matches = AccountingFramework.search(input.value);
+      var visibleCodes = Object.create(null);
+      matches.forEach(function (record) { visibleCodes[record.code] = true; });
+      rowElements.forEach(function (row) {
+        row.hidden = !visibleCodes[row.getAttribute('data-account-code')];
+      });
+      tableWrap.hidden = matches.length === 0;
+      if (empty) empty.hidden = matches.length > 0;
+      if (count) count.textContent = matches.length + ' / ' + rowElements.length + ' lignes';
+    }
+
+    input.addEventListener('input', applyFilter);
+    applyFilter();
+  }
+
   function bindAnalyticalNatures() {
     var workspace = $('.analytical-natures-workspace');
     if (!workspace) return;
@@ -9535,6 +9611,7 @@
       if (menuParams.g === 'parametres' && menuParams.t === 'orders-accounts') bindOrderAccounts();
       if (menuParams.g === 'parametres' && menuParams.t === 'order-natures') bindOrderNatures();
       if (menuParams.g === 'parametres' && menuParams.t === 'account-controls') bindAccountControls();
+      if (menuParams.g === 'parametres' && menuParams.t === 'financial-framework') bindFinancialFramework();
       if (menuParams.g === 'parametres' && menuParams.t === 'general-account-natures') bindGeneralAccountNatures();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'suppliers') bindSupplierView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'clients') bindClientView();
