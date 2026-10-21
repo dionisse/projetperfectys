@@ -1261,6 +1261,24 @@
     return { rows: defaultOrderNaturesRows(), additionalRows: [], updatedAt: '' };
   }
 
+  function defaultAccountControlsConfiguration() {
+    return { payableAccounts: '', lettrableAccounts: '', receivableAccounts: '', pointableAccounts: '', updatedAt: '' };
+  }
+
+  function normalizeAccountControlsConfiguration(value) {
+    var source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    function text(key) {
+      return String(source[key] == null ? '' : source[key]).replace(/\r\n?/g, '\n').slice(0, 5000);
+    }
+    return {
+      payableAccounts: text('payableAccounts'),
+      lettrableAccounts: text('lettrableAccounts'),
+      receivableAccounts: text('receivableAccounts'),
+      pointableAccounts: text('pointableAccounts'),
+      updatedAt: String(source.updatedAt || '').slice(0, 40)
+    };
+  }
+
   function defaultGeneralAccountNaturesRows() {
     return [
       { id: 'stable-resources', nature: 'Ressources stables', accounts: '1', level: 0 },
@@ -1379,6 +1397,7 @@
       fixedAssetAccountsConfiguration: defaultFixedAssetAccountsConfiguration(),
       orderAccountsConfiguration: defaultOrderAccountsConfiguration(),
       orderNaturesConfiguration: defaultOrderNaturesConfiguration(),
+      accountControlsConfiguration: defaultAccountControlsConfiguration(),
       reference: 'COR-DEM2026',
       seeded: true
     };
@@ -1421,6 +1440,7 @@
       fixedAssetAccountsConfiguration: normalizeFixedAssetAccountsConfiguration(record && record.fixedAssetAccountsConfiguration),
       orderAccountsConfiguration: normalizeOrderAccountsConfiguration(record && record.orderAccountsConfiguration),
       orderNaturesConfiguration: normalizeOrderNaturesConfiguration(record && record.orderNaturesConfiguration),
+      accountControlsConfiguration: normalizeAccountControlsConfiguration(record && record.accountControlsConfiguration),
       generalAccountNaturesConfiguration: normalizeGeneralAccountNaturesConfiguration(record && record.generalAccountNaturesConfiguration),
       reference: String(record && record.reference || referenceFor(accountingTypeCode, clientCode, exerciseYear)),
       seeded: record && record.seeded !== false
@@ -1521,6 +1541,11 @@
     return clone(dossier && dossier.orderNaturesConfiguration || defaultOrderNaturesConfiguration());
   }
 
+  function accountControlsConfiguration() {
+    var dossier = currentDossier();
+    return clone(dossier && dossier.accountControlsConfiguration || defaultAccountControlsConfiguration());
+  }
+
   function generalAccountNaturesConfiguration() {
     var dossier = currentDossier();
     return clone(dossier && dossier.generalAccountNaturesConfiguration || defaultGeneralAccountNaturesConfiguration());
@@ -1589,6 +1614,7 @@
       fixedAssetAccountsConfiguration: defaultFixedAssetAccountsConfiguration(),
       orderAccountsConfiguration: defaultOrderAccountsConfiguration(),
       orderNaturesConfiguration: defaultOrderNaturesConfiguration(),
+      accountControlsConfiguration: defaultAccountControlsConfiguration(),
       reference: reference,
       seeded: false
     };
@@ -2219,6 +2245,38 @@
     if (!saveFolderCatalog()) {
       folderCatalog = previousCatalog;
       return { ok: false, errors: ['Impossible d’enregistrer les natures des commandes dans ce navigateur. Les valeurs précédentes sont conservées.'] };
+    }
+    return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
+  }
+
+  function saveAccountControlsConfiguration(input) {
+    ensureFolderCatalog();
+    var dossier = folderById(activeFolderId);
+    if (!dossier) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    var source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    var existing = normalizeAccountControlsConfiguration(dossier.accountControlsConfiguration);
+    var fields = ['payableAccounts', 'lettrableAccounts', 'receivableAccounts', 'pointableAccounts'];
+    var configuration = {};
+    var errors = [];
+    fields.forEach(function (field) {
+      var raw = Object.prototype.hasOwnProperty.call(source, field) ? source[field] : existing[field];
+      if (typeof raw !== 'string') {
+        errors.push('La liste « ' + field + ' » doit être du texte.');
+        return;
+      }
+      var value = raw.replace(/\r\n?/g, '\n');
+      if (value.length > 5000) errors.push('Chaque liste de comptes doit rester sous 5 000 caractères.');
+      configuration[field] = value.slice(0, 5000);
+    });
+    if (errors.length) return { ok: false, errors: errors };
+    configuration.updatedAt = new Date().toISOString();
+    var previousCatalog = clone(folderCatalog);
+    var dossierIndex = folderCatalog.findIndex(function (record) { return record.id === dossier.id; });
+    if (dossierIndex < 0) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    folderCatalog[dossierIndex] = Object.assign({}, dossier, { accountControlsConfiguration: configuration });
+    if (!saveFolderCatalog()) {
+      folderCatalog = previousCatalog;
+      return { ok: false, errors: ['Impossible d’enregistrer les paramètres de suivi des comptes dans ce navigateur. Les valeurs précédentes sont conservées.'] };
     }
     return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
   }
@@ -5954,6 +6012,8 @@
     saveOrderAccountsConfiguration: saveOrderAccountsConfiguration,
     orderNaturesConfiguration: orderNaturesConfiguration,
     saveOrderNaturesConfiguration: saveOrderNaturesConfiguration,
+    accountControlsConfiguration: accountControlsConfiguration,
+    saveAccountControlsConfiguration: saveAccountControlsConfiguration,
     saveAnalyticalAllocationKeysConfiguration: saveAnalyticalAllocationKeysConfiguration,
     generalAccountNaturesConfiguration: generalAccountNaturesConfiguration,
     saveGeneralAccountNaturesConfiguration: saveGeneralAccountNaturesConfiguration,

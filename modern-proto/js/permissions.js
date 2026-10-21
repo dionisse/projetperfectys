@@ -66,6 +66,7 @@
     { id: 'fixedAssetAccounts.configure', label: 'Configurer les comptes associés aux immobilisations' },
     { id: 'orderAccounts.configure', label: 'Configurer les comptes de suivi des commandes et marchés accordés' },
     { id: 'orderNatures.configure', label: 'Configurer les natures des commandes' },
+    { id: 'accountControls.configure', label: 'Configurer les comptes lettrables, pointables, à payer et à recevoir' },
     { id: 'period.close', label: 'Clôturer une période' },
     { id: 'period.reopen', label: 'Rouvrir une période' },
     { id: 'data.import', label: 'Importer des données' },

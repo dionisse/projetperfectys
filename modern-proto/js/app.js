@@ -102,6 +102,8 @@
   var orderAccountsSelectedDossierId = '';
   var orderNaturesSelectedId = 'order-nature-1';
   var orderNaturesSelectedDossierId = '';
+  var accountControlsSelectedField = 'payableAccounts';
+  var accountControlsSelectedDossierId = '';
   var generalAccountNatureSelectedId = 'stable-grants';
   var deferredInstallPrompt = null;
   var exchangeImportSession = null;
@@ -2956,6 +2958,45 @@
         '<button type="button" class="btn btn-ghost" data-order-natures-action="close">Fermer</button>' +
       '</div>' +
     '</div>';
+  }
+
+  function viewAccountControls() {
+    var dossier = S.currentDossier();
+    if (accountControlsSelectedDossierId !== dossier.id) {
+      accountControlsSelectedField = 'payableAccounts';
+      accountControlsSelectedDossierId = dossier.id;
+    }
+    var configuration = S.accountControlsConfiguration();
+    var canConfigure = hasDemoPermission(getActiveDemoMember(), 'accounting', 'accountControls.configure', accountingAccessContext(dossier));
+    var editable = canConfigure && !isPhoneViewport();
+    var readonly = editable ? '' : ' readonly';
+    var fields = [
+      { key: 'payableAccounts', id: 'account-controls-payable', label: 'Comptes à payer (fournisseurs, organismes sociaux, état ...)' },
+      { key: 'lettrableAccounts', id: 'account-controls-matchable', label: 'Comptes lettrables (autres que dettes ou créances)' },
+      { key: 'receivableAccounts', id: 'account-controls-receivable', label: 'Comptes à recevoir (clients, débiteurs divers ...)' },
+      { key: 'pointableAccounts', id: 'account-controls-pointable', label: 'Comptes pointables (banques)' }
+    ];
+    var accessNote = !canConfigure
+      ? '<div class="alert warning account-controls-access-note">Consultation seule : le droit « Configurer les comptes lettrables, pointables, à payer et à recevoir » est requis pour modifier ces listes.</div>'
+      : (isPhoneViewport() ? '<div class="alert info account-controls-access-note">Consultation sur téléphone ; les modifications sont réservées à un ordinateur ou une tablette.</div>' : '');
+    var fieldHtml = fields.map(function (field) {
+      var active = accountControlsSelectedField === field.key;
+      return '<fieldset class="account-controls-fieldset' + (active ? ' is-active' : '') + '"><legend>' + esc(field.label) + '</legend>' +
+        '<textarea id="' + field.id + '" data-account-controls-field="' + field.key + '" rows="4" maxlength="5000" spellcheck="false" aria-label="' + esc(field.label) + '"' + readonly + '>' + esc(configuration[field.key] || '') + '</textarea>' +
+      '</fieldset>';
+    }).join('');
+
+    return '<form id="account-controls-form" class="account-controls-workspace" novalidate>' + accessNote +
+      '<div class="account-controls-grid">' + fieldHtml + '</div>' +
+      '<div class="account-controls-actions">' +
+        '<button type="button" class="btn btn-ghost account-controls-picker-button" data-account-controls-action="accounts"' + (!editable ? ' disabled' : '') + '>Comptes généraux...</button>' +
+        '<div class="account-controls-actions-end">' +
+          '<button type="submit" class="btn btn-ghost" data-account-controls-action="validate"' + (!editable ? ' disabled' : '') + '>Valider</button>' +
+          '<button type="button" class="btn btn-ghost" data-account-controls-action="cancel"' + (!editable ? ' disabled' : '') + '>Annuler</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="account-controls-status" role="status" aria-live="polite"></div>' +
+    '</form>';
   }
 
   function viewGeneralAccountNatures() {
@@ -8568,6 +8609,8 @@
       exchangeFeature = viewOrderAccounts();
     } else if (group.id === 'parametres' && tab.id === 'order-natures') {
       exchangeFeature = viewOrderNatures();
+    } else if (group.id === 'parametres' && tab.id === 'account-controls') {
+      exchangeFeature = viewAccountControls();
     } else if (group.id === 'parametres' && tab.id === 'general-account-natures') {
       exchangeFeature = viewGeneralAccountNatures();
     }
@@ -8599,7 +8642,7 @@
         '<div class="accounting-menu-detail">' +
           statusLegend +
           '<section class="accounting-menu-panel" id="accounting-menu-tabpanel" role="tabpanel" aria-labelledby="accounting-tab-' + esc(tab.id) + '">' +
-            '<div class="accounting-menu-panel-head"><div><p class="page-kicker">' + (selectedChild ? 'ÉLÉMENT DU SOUS-MENU' : 'SOUS-MENU') + '</p><h3>' + esc(selectedChild ? selectedChild.label : (tab.id === 'orders-accounts' ? 'Comptes de suivi des marchés accordés' : (tab.id === 'order-natures' ? 'Natures des marchés accordés' : tab.label))) + '</h3></div>' + menuStatusBadge(selectedChild ? selectedChild.status : tab.status) + '</div>' +
+            '<div class="accounting-menu-panel-head"><div><p class="page-kicker">' + (selectedChild ? 'ÉLÉMENT DU SOUS-MENU' : 'SOUS-MENU') + '</p><h3>' + esc(selectedChild ? selectedChild.label : (tab.id === 'orders-accounts' ? 'Comptes de suivi des marchés accordés' : (tab.id === 'order-natures' ? 'Natures des marchés accordés' : (tab.id === 'account-controls' ? 'Suivi des comptes' : tab.label)))) + '</h3></div>' + menuStatusBadge(selectedChild ? selectedChild.status : tab.status) + '</div>' +
             details + irreversible +
             (childList ? '<div class="menu-children-wrap"><h4>Éléments de ce sous-menu</h4>' + childList + '</div>' : '') +
             exchangeFeature +
@@ -9190,6 +9233,147 @@
     });
   }
 
+  function bindAccountControls() {
+    var form = $('#account-controls-form');
+    if (!form) return;
+    var dossier = S.currentDossier();
+    var status = $('.account-controls-status', form);
+
+    function isAllowed() {
+      return !isPhoneViewport() && hasDemoPermission(getActiveDemoMember(), 'accounting', 'accountControls.configure', accountingAccessContext(S.currentDossier()));
+    }
+
+    function setActiveField(key) {
+      accountControlsSelectedField = key;
+      $$('.account-controls-fieldset', form).forEach(function (fieldset) {
+        var input = $('textarea[data-account-controls-field]', fieldset);
+        fieldset.classList.toggle('is-active', !!input && input.getAttribute('data-account-controls-field') === key);
+      });
+    }
+
+    function updateStatus(message, kind) {
+      if (!status) return;
+      status.textContent = message || '';
+      status.className = 'account-controls-status' + (kind ? ' is-' + kind : '');
+    }
+
+    $$('textarea[data-account-controls-field]', form).forEach(function (textarea) {
+      textarea.addEventListener('focus', function () { setActiveField(textarea.getAttribute('data-account-controls-field')); });
+      textarea.addEventListener('click', function () { setActiveField(textarea.getAttribute('data-account-controls-field')); });
+    });
+
+    function openGeneralAccountPicker() {
+      if (!isAllowed()) {
+        toast('Sélection refusée : le droit de configuration de ce dossier n’est pas accordé.', 'warning');
+        return;
+      }
+      var textarea = $('textarea[data-account-controls-field="' + accountControlsSelectedField + '"]', form);
+      if (!textarea) return;
+      var descriptor = {
+        payableAccounts: 'Comptes à payer',
+        lettrableAccounts: 'Comptes lettrables',
+        receivableAccounts: 'Comptes à recevoir',
+        pointableAccounts: 'Comptes pointables'
+      }[accountControlsSelectedField] || 'la liste sélectionnée';
+      var existingCodes = String(textarea.value || '').split(/[\s,;]+/).filter(Boolean);
+      var existingLookup = Object.create(null);
+      existingCodes.forEach(function (code) { existingLookup[code] = true; });
+      var accounts = S.accounts().slice().sort(function (left, right) { return String(left.code).localeCompare(String(right.code), 'fr', { numeric: true }); });
+      var rows = accounts.map(function (account, index) {
+        var checked = existingLookup[account.code] ? ' checked' : '';
+        return '<label class="account-controls-picker-row" data-picker-text="' + esc(account.code + ' ' + (account.label || '')) + '">' +
+          '<input type="checkbox" data-account-controls-picker-account value="' + esc(account.code) + '" id="account-controls-picker-' + index + '"' + checked + '>' +
+          '<span class="account-controls-picker-code">' + esc(account.code) + '</span><span>' + esc(account.label || '') + '</span>' +
+        '</label>';
+      }).join('');
+      var body = '<div class="account-controls-picker">' +
+        '<div class="field"><label for="account-controls-picker-search">Rechercher un compte général</label><input id="account-controls-picker-search" type="search" placeholder="Numéro ou libellé"></div>' +
+        '<p class="small muted">Sélectionnez les comptes à ajouter à « ' + esc(descriptor) + ' ». Les valeurs libres déjà saisies restent inchangées.</p>' +
+        '<div class="account-controls-picker-list" role="group" aria-label="Comptes généraux">' + (rows || '<div class="empty-state">Aucun compte général disponible.</div>') + '</div>' +
+      '</div>';
+      var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button>' +
+        '<button type="button" class="btn btn-primary" data-account-controls-picker-apply>Ajouter la sélection</button>';
+      openModal('Comptes généraux', esc('Ajout à ' + descriptor), body, footer, true);
+      var modalRoot = $('#modal-root');
+      var search = $('#account-controls-picker-search', modalRoot);
+      var pickerRows = $$('.account-controls-picker-row', modalRoot);
+      if (search) search.addEventListener('input', function () {
+        var query = search.value.trim().toLocaleLowerCase();
+        pickerRows.forEach(function (row) { row.hidden = !!query && row.getAttribute('data-picker-text').toLocaleLowerCase().indexOf(query) === -1; });
+      });
+      modalRoot.addEventListener('click', function (event) {
+        var applyButton = event.target.closest ? event.target.closest('[data-account-controls-picker-apply]') : null;
+        if (!applyButton) return;
+        if (!isAllowed()) {
+          toast('Sélection refusée : le droit de configuration de ce dossier n’est plus accordé.', 'warning');
+          return;
+        }
+        var selectedCodes = $$('[data-account-controls-picker-account]:checked', modalRoot).map(function (input) { return input.value; });
+        var present = Object.create(null);
+        String(textarea.value || '').split(/[\s,;]+/).filter(Boolean).forEach(function (code) { present[code] = true; });
+        var additions = selectedCodes.filter(function (code) {
+          if (present[code]) return false;
+          present[code] = true;
+          return true;
+        });
+        if (additions.length) {
+          var currentText = String(textarea.value || '');
+          var separator = currentText && !/[\r\n]$/.test(currentText) ? '\n' : '';
+          textarea.value = currentText + separator + additions.join('\n');
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+          setActiveField(accountControlsSelectedField);
+          updateStatus(additions.length + ' compte(s) ajouté(s) à la liste ; cliquez sur Valider pour enregistrer.', 'info');
+        } else {
+          updateStatus('Aucun nouveau compte n’a été ajouté.', 'info');
+        }
+        closeModal(true);
+        textarea.focus();
+      });
+    }
+
+    form.addEventListener('click', function (event) {
+      var button = event.target.closest ? event.target.closest('[data-account-controls-action]') : null;
+      if (!button) return;
+      var action = button.getAttribute('data-account-controls-action');
+      if (action === 'accounts') {
+        openGeneralAccountPicker();
+      } else if (action === 'cancel') {
+        if (!isAllowed()) {
+          toast('Annulation refusée : le droit de configuration de ce dossier n’est pas accordé.', 'warning');
+          return;
+        }
+        var saved = S.accountControlsConfiguration();
+        $$('textarea[data-account-controls-field]', form).forEach(function (textarea) {
+          textarea.value = saved[textarea.getAttribute('data-account-controls-field')] || '';
+        });
+        setActiveField('payableAccounts');
+        updateStatus('Modifications annulées ; les dernières valeurs enregistrées sont restaurées.', 'info');
+      }
+    });
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!isAllowed()) {
+        toast('Validation refusée : un droit explicite sur ce dossier et un écran ordinateur ou tablette sont requis.', 'warning');
+        return;
+      }
+      var input = {};
+      $$('textarea[data-account-controls-field]', form).forEach(function (textarea) {
+        input[textarea.getAttribute('data-account-controls-field')] = textarea.value;
+      });
+      var result = S.saveAccountControlsConfiguration(input);
+      if (!result.ok) {
+        updateStatus((result.errors || ['Enregistrement impossible.']).join(' '), 'error');
+        toast('Enregistrement des paramètres refusé.', 'warning');
+        return;
+      }
+      updateStatus('Paramètres de suivi des comptes enregistrés pour ce dossier.', 'success');
+      toast('Paramètres de suivi des comptes enregistrés dans le dossier.', 'success');
+    });
+
+    if (dossier && accountControlsSelectedDossierId !== dossier.id) setActiveField('payableAccounts');
+  }
+
   function bindAnalyticalNatures() {
     var workspace = $('.analytical-natures-workspace');
     if (!workspace) return;
@@ -9350,6 +9534,7 @@
       if (menuParams.g === 'parametres' && menuParams.t === 'fixed-asset-accounts') bindFixedAssetAccounts();
       if (menuParams.g === 'parametres' && menuParams.t === 'orders-accounts') bindOrderAccounts();
       if (menuParams.g === 'parametres' && menuParams.t === 'order-natures') bindOrderNatures();
+      if (menuParams.g === 'parametres' && menuParams.t === 'account-controls') bindAccountControls();
       if (menuParams.g === 'parametres' && menuParams.t === 'general-account-natures') bindGeneralAccountNatures();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'suppliers') bindSupplierView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'clients') bindClientView();

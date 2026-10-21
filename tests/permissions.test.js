@@ -464,6 +464,19 @@ test('la configuration des natures des commandes exige un droit par dossier', ()
   assert.ok(Permissions.actionsForModule('accounting').some(action => action.id === 'orderNatures.configure'));
 });
 
+test('la configuration des comptes lettrables, pointables, à payer et à recevoir exige un droit par dossier', () => {
+  const member = {
+    role: 'manager', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view'] }] }
+  };
+  const context = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'accountControls.configure', context), false);
+  member.grants.accounting[0].actions.push('accountControls.configure');
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'accountControls.configure', context), true);
+  assert.strictEqual(Permissions.hasPermission(member, 'accounting', 'accountControls.configure', { ...context, dossierId: 'dossier-2' }), false);
+  assert.ok(Permissions.actionsForModule('accounting').some(action => action.id === 'accountControls.configure'));
+});
+
 test('les droits des centres analytiques sont distincts et limités au dossier', () => {
   const member = {
     role: 'manager', organizationId: 'org-1',

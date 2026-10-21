@@ -86,6 +86,7 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Comptes associés aux immobilisations',
   'Compte de suivi des commandes et marchés accordés',
   'Natures des commandes',
+  'Comptes lettrables, pointables, à payer, à recevoir',
   'Postes du bilan',
   'Plan comptable',
   'Postes associés aux comptes',
@@ -392,6 +393,14 @@ assert.match(appSource, /tab\.id === 'order-natures' \? 'Natures des marchés ac
 assert.match(appSource, /function bindOrderNatures\(\)[\s\S]*orderNatures\.configure[\s\S]*openOrderNatureEditor/);
 assert.match(appSource, /function openOrderNatureEditor\(natureRow, isNewRow\)[\s\S]*saveOrderNaturesConfiguration/);
 assert.match(configurationCss, /\.order-natures-list-wrap[\s\S]*\.order-natures-table[\s\S]*\.order-natures-table tbody tr\.is-selected/);
+assert.equal(findTab('parametres', 'account-controls').status, 'partial');
+assert.ok(findTab('parametres', 'account-controls').reason.includes('ni lettrage'));
+assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'account-controls'[\s\S]*viewAccountControls\(\)/);
+assert.match(appSource, /function viewAccountControls\(\)[\s\S]*Comptes à payer[\s\S]*Comptes lettrables[\s\S]*Comptes à recevoir[\s\S]*Comptes pointables[\s\S]*Comptes généraux\.\.\.[\s\S]*Valider[\s\S]*Annuler/);
+assert.match(appSource, /tab\.id === 'account-controls' \? 'Suivi des comptes'/, 'le titre de la fenêtre reprend celui de la capture');
+assert.match(appSource, /function bindAccountControls\(\)[\s\S]*accountControls\.configure[\s\S]*openGeneralAccountPicker[\s\S]*saveAccountControlsConfiguration/);
+assert.match(appSource, /data-account-controls-picker-apply/);
+assert.match(configurationCss, /\.account-controls-grid[\s\S]*\.account-controls-fieldset\.is-active textarea[\s\S]*\.account-controls-actions/);
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'dossier-configuration'[\s\S]*viewAccountingConfiguration\(\)/);
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'sections-accounts'[\s\S]*viewAnalyticalSectionsConfiguration\(\)/);
 assert.match(appSource, /function viewAccountingConfiguration\(\)[\s\S]*accounting\.configure[\s\S]*Exercice en cours/);
