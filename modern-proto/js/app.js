@@ -2542,7 +2542,8 @@
       phase: 'selection',
       filters: {
         accounts: '*', from: dossier.cycleStart, to: dossier.cycleEnd,
-        collectivesOnly: false, beforeInventory: false, beforeResult: false, groupMode: 'none'
+        collectivesOnly: false, beforeInventory: false, beforeResult: false,
+        intermediateTotal: false, includeClass8InManagement: true, groupMode: 'none'
       },
       columns: columns,
       layout: {
@@ -2642,7 +2643,8 @@
         '<section class="card journal-lines-card"><div class="panel">' +
           '<div class="journal-lines-section-heading"><div><p class="page-kicker">OPTIONS DE RESTITUTION</p><h3>Comptes et montants</h3></div></div>' +
           '<div class="general-balance-option-grid">' +
-            '<label class="journal-lines-check-option"><input id="general-balance-intermediate-total" type="checkbox" disabled aria-describedby="general-balance-unconfirmed-options"><span>Total intermédiaire des comptes de bilan et de gestion <small>À confirmer · aucune formule n’est appliquée</small></span></label>' +
+            '<label class="journal-lines-check-option"><input id="general-balance-intermediate-total" type="checkbox"' + (session.filters.intermediateTotal ? ' checked' : '') + '><span>Total intermédiaire des comptes de bilan et de gestion <small>Deux lignes : classes 1–5 (bilan), puis classes 6–7 et classe 8 au choix (gestion)</small></span></label>' +
+            '<label class="journal-lines-check-option"><input id="general-balance-include-class8" type="checkbox"' + (session.filters.includeClass8InManagement !== false ? ' checked' : '') + '><span>Inclure la classe 8 dans le sous-total de gestion <small>Activée par défaut · rubriques 81/83/85/87/89 : charges H.A.O. ; 82/84/86/88 : produits H.A.O.</small></span></label>' +
             '<label class="journal-lines-check-option"><input id="general-balance-collectives-only" type="checkbox"' + (session.filters.collectivesOnly ? ' checked' : '') + '><span>Comptes collectifs uniquement <small>Comptes de classe 4 marqués auxiliaires dans le dossier</small></span></label>' +
             '<label class="journal-lines-check-option"><input id="general-balance-before-inventory" type="checkbox"' + (session.filters.beforeInventory ? ' checked' : '') + '><span>Avant inventaire <small>Exclut les écritures d’un journal dont la nature est « Inventaire »</small></span></label>' +
             '<label class="journal-lines-check-option"><input id="general-balance-before-result" type="checkbox"' + (session.filters.beforeResult ? ' checked' : '') + '><span>Avant résultat <small>Exclut les écritures d’un journal dont la nature est « Résultat de l’exercice »</small></span></label>' +
@@ -2686,7 +2688,12 @@
     return columns;
   }
 
-  function generalBalanceReportValue(row, column, forSpreadsheet) {
+  function generalBalanceReportValue(row, column, forSpreadsheet, columns) {
+    if (row.rowType === 'intermediate-total' && (column.key === 'code' || column.key === 'label')) {
+      var hasLabelColumn = (columns || []).some(function (item) { return item.key === 'label'; });
+      if (column.key === 'label') return hasLabelColumn ? String(row.label || '') : '';
+      return hasLabelColumn ? '' : String(row.label || '');
+    }
     var value = row[column.key];
     if (column.key === 'code' || column.key === 'label') return String(value == null ? '' : value);
     if (column.balance) {
@@ -2740,11 +2747,14 @@
     if (session.filters.collectivesOnly) filterNames.push('comptes collectifs uniquement');
     if (session.filters.beforeInventory) filterNames.push('avant inventaire');
     if (session.filters.beforeResult) filterNames.push('avant résultat');
+    if (session.filters.intermediateTotal) filterNames.push('sous-totaux intermédiaires bilan/gestion' + (session.filters.includeClass8InManagement === false ? ' · classe 8 exclue' : ' · classe 8 incluse'));
     var displayRows = report.displayRows || report.rows;
     var bodyRows = displayRows.map(function (row) {
-      var rowClass = row.rowType === 'group' ? ' class="general-balance-group-row"' : (row.rowType === 'subtotal' ? ' class="general-balance-subtotal-row"' : '');
+      var rowClass = row.rowType === 'group' ? ' class="general-balance-group-row"' :
+        (row.rowType === 'subtotal' ? ' class="general-balance-subtotal-row"' :
+          (row.rowType === 'intermediate-total' ? ' class="general-balance-intermediate-total-row"' : ''));
       return '<tr' + rowClass + '>' + columns.map(function (column) {
-        var value = generalBalanceReportValue(row, column, false);
+        var value = generalBalanceReportValue(row, column, false, columns);
         return '<td' + (!column.text ? ' class="num"' : '') + '>' + esc(value) + '</td>';
       }).join('') + '</tr>';
     }).join('');
@@ -2759,7 +2769,8 @@
         '<p>Période : ' + esc(dateLabel(report.from)) + ' — ' + esc(dateLabel(report.to)) + '</p></header>' +
       '<div class="general-balance-print-context"><span><strong>Comptes :</strong> ' + esc(session.filters.accounts === '*' ? 'Tous les comptes' : session.filters.accounts) + '</span>' +
         '<span><strong>Présentation :</strong> ' + esc(grouping) + '</span><span><strong>Options :</strong> ' + esc(options) + '</span></div>' +
-      '<p class="general-balance-print-basis">Montants en XOF · lecture seule · pièces validées du cycle uniquement, brouillons exclus. Les soldes sont ventilés au débit et au crédit. Si les colonnes de cumul sont sélectionnées, le cumul début additionne les reports à nouveau et les mouvements retenus antérieurs à la période ; le cumul fin ajoute les mouvements retenus de la période, séparément pour chaque côté. Les regroupements et sous-totaux totalisent les comptes restitués sous chaque rubrique du plan.</p>' +
+      '<p class="general-balance-print-basis">Montants en XOF · lecture seule · pièces validées du cycle uniquement, brouillons exclus. Les soldes sont ventilés au débit et au crédit. Si les colonnes de cumul sont sélectionnées, le cumul début additionne les reports à nouveau et les mouvements retenus antérieurs à la période ; le cumul fin ajoute les mouvements retenus de la période, séparément pour chaque côté. Les regroupements et sous-totaux totalisent les comptes restitués sous chaque rubrique du plan.' +
+        (session.filters.intermediateTotal ? ' Les sous-totaux intermédiaires répartissent les classes 1 à 5 au bilan et les classes 6 et 7 en gestion' + (session.filters.includeClass8InManagement === false ? ', classe 8 exclue.' : ', classe 8 incluse ; les rubriques 81/83/85/87/89 sont des charges H.A.O. et 82/84/86/88 des produits H.A.O.') : '') + '</p>' +
       (report.invalidLineCount ? '<p class="alert warning">' + report.invalidLineCount + ' ligne(s) contenant un montant invalide ont été ignorées.</p>' : '') +
       '<div class="table-wrap general-balance-table-wrap"><table class="data-table general-balance-table"><caption>' + esc(report.rows.length + (report.rows.length === 1 ? ' compte' : ' comptes') + ' · ' + report.movementEntryCount + (report.movementEntryCount === 1 ? ' pièce validée' : ' pièces validées')) + '</caption>' +
         generalBalanceReportTableHead(columns) + '<tbody>' + (bodyRows || emptyRow) + '</tbody>' + (report.rows.length ? generalBalanceReportTotalsHtml(columns, report) : '') +
@@ -2895,6 +2906,8 @@
     session.filters.collectivesOnly = !!($('#general-balance-collectives-only', form) && $('#general-balance-collectives-only', form).checked);
     session.filters.beforeInventory = !!($('#general-balance-before-inventory', form) && $('#general-balance-before-inventory', form).checked);
     session.filters.beforeResult = !!($('#general-balance-before-result', form) && $('#general-balance-before-result', form).checked);
+    session.filters.intermediateTotal = !!($('#general-balance-intermediate-total', form) && $('#general-balance-intermediate-total', form).checked);
+    session.filters.includeClass8InManagement = !!($('#general-balance-include-class8', form) && $('#general-balance-include-class8', form).checked);
     var groupMode = $('input[name="general-balance-group-mode"]:checked', form);
     session.filters.groupMode = groupMode && (groupMode.value === 'chart' || groupMode.value === 'subtotals') ? groupMode.value : 'none';
     session.columns = Object.create(null);
@@ -2912,7 +2925,7 @@
     var headings = columns.map(function (column) { return column.exportLabel; });
     var displayRows = report.displayRows || report.rows;
     var rows = displayRows.map(function (row) {
-      return columns.map(function (column) { return generalBalanceReportValue(row, column, !!forSpreadsheet); });
+      return columns.map(function (column) { return generalBalanceReportValue(row, column, !!forSpreadsheet, columns); });
     });
     if (report.rows.length) {
       var labelIndex = columns.findIndex(function (column) { return column.key === 'code' || column.key === 'label'; });

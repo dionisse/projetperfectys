@@ -236,16 +236,16 @@
     }
 
     /* Les soldes signés de `rows` restent l’API compte par compte ; la hiérarchie ne modifie que la présentation. */
+    var aggregateFields = [
+      'openingDebit', 'openingCredit', 'openingBalance', 'openingBalanceDebit', 'openingBalanceCredit',
+      'cumulativeStartDebit', 'cumulativeStartCredit', 'movementDebit', 'movementCredit',
+      'movementBalance', 'movementBalanceDebit', 'movementBalanceCredit', 'cumulativeEndDebit',
+      'cumulativeEndCredit', 'closingBalance', 'closingBalanceDebit', 'closingBalanceCredit'
+    ];
     var displayRows = rows.map(function (row) { return Object.assign({}, row, { rowType: 'account' }); });
     if (filters.groupMode === 'chart' || filters.groupMode === 'subtotals') {
       var hierarchyNodes = Object.create(null);
       var hierarchyRoots = [];
-      var aggregateFields = [
-        'openingDebit', 'openingCredit', 'openingBalance', 'openingBalanceDebit', 'openingBalanceCredit',
-        'cumulativeStartDebit', 'cumulativeStartCredit', 'movementDebit', 'movementCredit',
-        'movementBalance', 'movementBalanceDebit', 'movementBalanceCredit', 'cumulativeEndDebit',
-        'cumulativeEndCredit', 'closingBalance', 'closingBalanceDebit', 'closingBalanceCredit'
-      ];
 
       function orderIndex(code) {
         return Object.prototype.hasOwnProperty.call(accountOrder, String(code)) ? accountOrder[String(code)] : Number.MAX_SAFE_INTEGER;
@@ -290,18 +290,18 @@
         if (classCode && classCode !== String(row.code)) {
           var classAccount = accountByCode[classCode];
           var classLabel = classAccount ? classAccount.label : metadataHierarchyLabel(account.classLabel, 'Classe ' + classCode);
-          path.push({ code: classCode, kind: 'class', label: classLabel, account: classAccount });
+          path.push({ code: classCode, kind: 'class', cls: cls, label: classLabel, account: classAccount });
         }
         if (subclassCode && subclassCode !== classCode && subclassCode !== String(row.code)) {
           var subclassAccount = accountByCode[subclassCode];
           var subclassLabel = subclassAccount ? subclassAccount.label : metadataHierarchyLabel(account.subclassLabel, '');
-          path.push({ code: subclassCode, kind: 'subclass', label: subclassLabel, account: subclassAccount });
+          path.push({ code: subclassCode, kind: 'subclass', cls: cls, label: subclassLabel, account: subclassAccount });
         }
         Object.keys(accountByCode).forEach(function (candidate) {
           if (candidate === String(row.code) || candidate.length <= 2 || candidate.length >= String(row.code).length) return;
           if (String(row.code).toLocaleUpperCase().indexOf(candidate.toLocaleUpperCase()) !== 0) return;
           if (path.some(function (item) { return item.code === candidate; })) return;
-          path.push({ code: candidate, kind: 'account-group', label: accountByCode[candidate].label || '', account: accountByCode[candidate] });
+          path.push({ code: candidate, kind: 'account-group', cls: cls, label: accountByCode[candidate].label || '', account: accountByCode[candidate] });
         });
         path.sort(function (left, right) {
           return left.code.length - right.code.length || orderIndex(left.code) - orderIndex(right.code) || left.code.localeCompare(right.code, 'fr', { numeric: true });
@@ -309,6 +309,7 @@
         var parent = null;
         path.forEach(function (item) {
           parent = ensureHierarchyNode(item.code, parent, item.kind, item.label, item.account);
+          parent.cls = Number(item.cls) || parent.cls;
         });
         var leaf = ensureHierarchyNode(row.code, parent, 'account', row.label, account);
         leaf.label = String(row.label || leaf.label || row.code);
@@ -371,6 +372,69 @@
       else hierarchyRoots.forEach(emitSubtotalRows);
     }
 
+    var includeClass8InManagement = filters.includeClass8InManagement !== false;
+    if (filters.intermediateTotal === true) {
+      var intermediateSums = {
+        balance: { hasRows: false, values: Object.create(null) },
+        management: { hasRows: false, values: Object.create(null) }
+      };
+      Object.keys(intermediateSums).forEach(function (category) {
+        aggregateFields.forEach(function (field) { intermediateSums[category].values[field] = 0; });
+      });
+
+      function intermediateCategory(cls) {
+        if (cls >= 1 && cls <= 5) return 'balance';
+        if (cls === 6 || cls === 7 || (cls === 8 && includeClass8InManagement)) return 'management';
+        return '';
+      }
+
+      rows.forEach(function (row) {
+        var account = accountByCode[row.code] || row;
+        var category = intermediateCategory(classNumber(account));
+        if (!category) return;
+        intermediateSums[category].hasRows = true;
+        aggregateFields.forEach(function (field) {
+          intermediateSums[category].values[field] += Math.round((Number(row[field]) || 0) * factor);
+        });
+      });
+
+      function lastDisplayIndexForClassRange(firstClass, lastClass) {
+        var lastIndex = -1;
+        displayRows.forEach(function (row, index) {
+          var cls = Number(row.cls) || classNumber(accountByCode[row.code] || row);
+          if (cls >= firstClass && cls <= lastClass) lastIndex = index;
+        });
+        return lastIndex;
+      }
+
+      function intermediateTotalRow(category, label) {
+        var row = { code: '', label: label, cls: 0, aux: false, rowType: 'intermediate-total', intermediateCategory: category };
+        aggregateFields.forEach(function (field) {
+          row[field] = intermediateSums[category].values[field] / factor;
+        });
+        return row;
+      }
+
+      var intermediateInsertions = [];
+      if (intermediateSums.balance.hasRows) {
+        intermediateInsertions.push({
+          index: lastDisplayIndexForClassRange(1, 5) + 1,
+          row: intermediateTotalRow('balance', 'Total des comptes de bilan')
+        });
+      }
+      var managementLastClass = includeClass8InManagement ? 8 : 7;
+      if (intermediateSums.management.hasRows) {
+        intermediateInsertions.push({
+          index: lastDisplayIndexForClassRange(6, managementLastClass) + 1,
+          row: intermediateTotalRow('management', 'Total des comptes de gestion')
+        });
+      }
+      intermediateInsertions.sort(function (left, right) { return right.index - left.index; });
+      intermediateInsertions.forEach(function (insertion) {
+        displayRows.splice(Math.max(0, insertion.index), 0, insertion.row);
+      });
+    }
+
     function sumRows(key) {
       return rows.reduce(function (sum, row) { return sum + Math.round((Number(row[key]) || 0) * factor); }, 0) / factor;
     }
@@ -418,6 +482,8 @@
         collectivesOnly: filters.collectivesOnly === true,
         beforeInventory: filters.beforeInventory === true,
         beforeResult: filters.beforeResult === true,
+        intermediateTotal: filters.intermediateTotal === true,
+        includeClass8InManagement: includeClass8InManagement,
         groupMode: filters.groupMode === 'chart' || filters.groupMode === 'subtotals' ? filters.groupMode : 'none'
       },
       basis: {

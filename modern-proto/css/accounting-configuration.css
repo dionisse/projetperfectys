@@ -1008,3 +1008,8 @@ body.report-preview-printing .report-preview-content .general-balance-report-pri
   border-top: 1px solid #aebbb3;
   background: #f1f5f2 !important;
 }
+.general-balance-table tbody > tr.general-balance-intermediate-total-row > td {
+  font-weight: 700 !important;
+  border-top: 2px solid #899b91;
+  background: #e7eeea !important;
+}

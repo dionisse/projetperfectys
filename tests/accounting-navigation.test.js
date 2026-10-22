@@ -603,7 +603,7 @@ assert.match(appSource, /function bindAnalyticalSectionsConfiguration\(\)[\s\S]*
 assert.match(appSource, /data-action="export-json"/);
 assert.match(appSource, /child\.id === 'general-balance'[\s\S]*viewGeneralBalanceReport\(backLink\)/);
 assert.match(appSource, /menuParams\.g === 'editions' && menuParams\.t === 'general-accounts' && menuParams\.c === 'general-balance'\) bindGeneralBalanceReport\(\)/);
-assert.match(appSource, /function createGeneralBalanceReportSession\(dossier\)[\s\S]*from: dossier\.cycleStart, to: dossier\.cycleEnd[\s\S]*orientation: 'landscape'[\s\S]*destination: 'preview'/);
+assert.match(appSource, /function createGeneralBalanceReportSession\(dossier\)[\s\S]*from: dossier\.cycleStart, to: dossier\.cycleEnd[\s\S]*intermediateTotal: false, includeClass8InManagement: true[\s\S]*orientation: 'landscape'[\s\S]*destination: 'preview'/);
 assert.match(appSource, /function buildGeneralBalanceReport\(session\)[\s\S]*GeneralBalanceReport\.build\(\{[\s\S]*entries: S\.postedEntries\(\)[\s\S]*openingBalances: S\.openingBalances\(\)/);
 assert.match(generalBalanceSource, /beforeInventory: filters\.beforeInventory === true[\s\S]*beforeResult: filters\.beforeResult === true/);
 assert.match(generalBalanceSource, /openingBalancesIncludedBeforePeriod: true/);
@@ -614,9 +614,14 @@ assert.match(appSource, /aucun libellé de rubrique absent du plan n’est inven
 assert.match(generalBalanceSource, /groupMode === 'chart' \|\| filters\.groupMode === 'subtotals'[\s\S]*displayRows/);
 assert.match(appSource, /'subtotals'[\s\S]*Sous-totaux \(imprimés après les comptes individuels\)/);
 assert.match(appSource, /openingBalanceDebit[\s\S]*movementBalanceDebit[\s\S]*closingBalanceDebit/);
+assert.match(generalBalanceSource, /intermediateTotal: filters\.intermediateTotal === true[\s\S]*includeClass8InManagement: includeClass8InManagement/);
+assert.match(appSource, /general-balance-intermediate-total[\s\S]*classes 1–5 \(bilan\)[\s\S]*general-balance-include-class8[\s\S]*classe 8 dans le sous-total de gestion/);
+assert.match(appSource, /session\.filters\.intermediateTotal = !![\s\S]*session\.filters\.includeClass8InManagement = !!/);
+assert.match(appSource, /general-balance-intermediate-total-row/);
 assert.match(appSource, /var displayRows = report\.displayRows \|\| report\.rows;[\s\S]*var bodyRows = displayRows\.map/);
 assert.match(appSource, /function generalBalanceReportExportMatrix\(session, report, forSpreadsheet\)[\s\S]*var displayRows = report\.displayRows \|\| report\.rows;[\s\S]*var rows = displayRows\.map/);
 assert.match(configurationCss, /general-balance-group-row > td \{[\s\S]*font-weight: 700[\s\S]*general-balance-subtotal-row > td \{[\s\S]*background/);
+assert.match(configurationCss, /general-balance-intermediate-total-row > td \{[\s\S]*font-weight: 700[\s\S]*background/);
 assert.match(appSource, /function generalBalancePrintOptions\(session\)[\s\S]*@page \{ size: A4/);
 assert.match(appSource, /openReportPreview\('Aperçu — Balance générale des comptes'[\s\S]*generalBalanceReportPrintableHtml/);
 assert.match(appSource, /child\.id === 'general-ledger'[\s\S]*viewLedger\(\)/);
@@ -655,7 +660,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v99/);
+assert.match(serviceWorkerSource, /perfecto-static-v100/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

@@ -215,6 +215,52 @@ test('les regroupements suivent les niveaux du plan et les sous-totaux ferment c
   assert.deepEqual(customPlan.displayRows.slice(0, 2).map(row => [row.code, row.label]), [['9', ''], ['98', '']]);
 });
 
+test('les totaux intermédiaires séparent bilan et gestion et la classe 8 reste au choix', () => {
+  const totalAccounts = [
+    { code: '101000', label: 'Capital', cls: 1, classLabel: 'Ressources durables', subclass: '10', subclassLabel: 'Capital', postable: true },
+    { code: '401100', label: 'Fournisseurs', cls: 4, classLabel: 'Tiers', subclass: '40', subclassLabel: 'Fournisseurs', postable: true },
+    { code: '601000', label: 'Achats', cls: 6, classLabel: 'Charges', subclass: '60', subclassLabel: 'Achats', postable: true },
+    { code: '701000', label: 'Ventes', cls: 7, classLabel: 'Produits', subclass: '70', subclassLabel: 'Ventes', postable: true },
+    { code: '811000', label: 'Charge H.A.O.', cls: 8, classLabel: 'SIG et comptes spéciaux', subclass: '81', subclassLabel: 'Charges H.A.O.', postable: true },
+    { code: '821000', label: 'Produit H.A.O.', cls: 8, classLabel: 'SIG et comptes spéciaux', subclass: '82', subclassLabel: 'Produits H.A.O.', postable: true }
+  ];
+  const totalEntries = [
+    { id: 'BALANCE', date: '2026-01-06', status: 'posted', journal: 'OD', lines: [
+      { account: '101000', debit: 100, credit: 0 }, { account: '401100', debit: 0, credit: 100 }
+    ] },
+    { id: 'MANAGEMENT', date: '2026-01-07', status: 'posted', journal: 'OD', lines: [
+      { account: '601000', debit: 30, credit: 0 }, { account: '701000', debit: 0, credit: 30 }
+    ] },
+    { id: 'HAO', date: '2026-01-08', status: 'posted', journal: 'OD', lines: [
+      { account: '811000', debit: 10, credit: 0 }, { account: '821000', debit: 0, credit: 10 }
+    ] }
+  ];
+  const common = {
+    accounts: totalAccounts,
+    entries: totalEntries,
+    openingBalances: [],
+    filters: { accounts: '*', from: '2026-01-05', to: '2026-01-10', intermediateTotal: true, groupMode: 'none' }
+  };
+  const report = build(common);
+  assert.deepEqual(report.displayRows.filter(row => row.rowType === 'intermediate-total').map(row => [row.label, row.movementDebit, row.movementCredit]), [
+    ['Total des comptes de bilan', 100, 100],
+    ['Total des comptes de gestion', 40, 40]
+  ]);
+  assert.equal(report.displayRows.find(row => row.rowType === 'intermediate-total' && row.intermediateCategory === 'balance').movementBalanceDebit, 100);
+  assert.equal(report.displayRows.find(row => row.rowType === 'intermediate-total' && row.intermediateCategory === 'balance').movementBalanceCredit, 100);
+  assert.ok(report.displayRows.findIndex(row => row.rowType === 'intermediate-total' && row.intermediateCategory === 'balance') < report.displayRows.findIndex(row => row.code === '601000'));
+  assert.ok(report.displayRows.findIndex(row => row.rowType === 'intermediate-total' && row.intermediateCategory === 'management') > report.displayRows.findIndex(row => row.code === '821000'));
+
+  const grouped = build(Object.assign({}, common, { filters: Object.assign({}, common.filters, { groupMode: 'chart' }) }));
+  assert.ok(grouped.displayRows.findIndex(row => row.intermediateCategory === 'balance') < grouped.displayRows.findIndex(row => row.rowType === 'group' && row.code === '6'));
+  assert.ok(grouped.displayRows.findIndex(row => row.intermediateCategory === 'management') > grouped.displayRows.findIndex(row => row.code === '821000'));
+
+  const withoutClass8 = build(Object.assign({}, common, { filters: Object.assign({}, common.filters, { includeClass8InManagement: false, groupMode: 'subtotals' }) }));
+  const managementTotal = withoutClass8.displayRows.find(row => row.rowType === 'intermediate-total' && row.intermediateCategory === 'management');
+  assert.deepEqual([managementTotal.movementDebit, managementTotal.movementCredit], [30, 30]);
+  assert.ok(withoutClass8.displayRows.findIndex(row => row.intermediateCategory === 'management') < withoutClass8.displayRows.findIndex(row => row.code === 'Total 81'));
+});
+
 test('les filtres de nature s’appliquent aussi aux mouvements qui alimentent les cumuls', () => {
   const filteredEntries = [
     { id: 'PRE-ORDINARY', date: '2026-01-02', status: 'posted', journal: 'OD', lines: [
