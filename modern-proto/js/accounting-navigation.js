@@ -94,9 +94,9 @@
           ]
         },
         {
-          id: 'general-accounts', label: 'Comptes généraux', status: 'mixed', reason: 'Balances générale et grand livre ouvrent les vues existantes. Les autres éditions restent à préciser à partir de vos captures ; les états analytiques sont désactivés dans ce parcours.',
+          id: 'general-accounts', label: 'Comptes généraux', status: 'mixed', reason: 'La balance générale propose la sélection, la mise en page, les destinations, l’aperçu et l’impression après aperçu. Les autres éditions restent à préciser à partir de vos captures ; les états analytiques sont désactivés dans ce parcours.',
           children: [
-            { id: 'general-balance', label: 'Balance générale des comptes', section: 'balances', status: 'partial', reason: 'Ouvre la balance générale existante, calculée à partir des pièces validées du cycle. Sa présentation définitive sera ajustée après votre capture.' },
+            { id: 'general-balance', label: 'Balance générale des comptes', section: 'balances', status: 'active', reason: 'Sélection des comptes et du cycle, colonnes disponibles, comptes collectifs, filtres explicites par nature de journal, mise en page, export Excel/TXT, aperçu et impression après aperçu. Les cumuls et sous-totaux dont la règle reste à confirmer sont désactivés ; les reports à nouveau restent un registre distinct.' },
             { id: 'general-summary-balance', label: 'Balance de synthèse', section: 'balances', status: 'planned', reason: 'Niveau de regroupement, colonnes et paramètres à confirmer par capture ; aucun regroupement de comptes n’est présumé.' },
             { id: 'general-aged-balance', label: 'Balance âgée', section: 'balances', status: 'planned', reason: 'Le prototype ne possède pas de registre de factures et d’échéances soldées ; les critères d’ancienneté et le rendu attendent votre capture.' },
             { id: 'general-opening-balance', label: 'Balance d’ouverture', section: 'balances', status: 'planned', reason: 'Le registre Reports à nouveau existe séparément ; le format d’édition et ses filtres seront définis à partir de votre capture.' },

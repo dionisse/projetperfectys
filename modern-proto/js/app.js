@@ -15,6 +15,7 @@
   var AccountMovements = window.PerfectoAccountMovements;
   var AccountingExchange = window.PerfectoAccountingExchange;
   var JournalLinesReport = window.PerfectoJournalLinesReport;
+  var GeneralBalanceReport = window.PerfectoGeneralBalanceReport;
   var FecImport = window.PerfectoFecImport;
   var BankStatement = window.PerfectoBankStatement;
   var BankStatementStorage = window.PerfectoBankStatementStorage;
@@ -142,6 +143,7 @@
   var openingBalanceAuditResult = null;
   var journalLinesReportSession = null;
   var journalLinesReportMode = 'standard';
+  var generalBalanceReportSession = null;
   var launcherUi = { filter: 'all', query: '' };
   var DEMO_ORGANIZATION_ID = 'demo-org';
   var ACCOUNTING_ROUTES = ['dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings', 'menu'];
@@ -711,6 +713,8 @@
     if (S.setConfidentialAccountAccess) S.setConfidentialAccountAccess(isConfidentialAccountsSupervisor());
     var parsed = parseHash();
     var route = parsed.route;
+    var isGeneralBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-balance';
+    if (!isGeneralBalanceReportRoute) generalBalanceReportSession = null;
     var isJournalLinesReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'journals' &&
       (parsed.params.c === 'journal-lines' || parsed.params.c === 'journal-modified-pieces' || parsed.params.c === 'journal-unbalanced-pieces' || parsed.params.c === 'journal-entry-totals' || parsed.params.c === 'journal-individual-account-totals' || parsed.params.c === 'journal-summary-account-totals' || parsed.params.c === 'journal-third-party-totals' || parsed.params.c === 'journal-analytic-center-totals' || parsed.params.c === 'journal-currency-totals');
     if (!isJournalLinesReportRoute) {
@@ -1032,13 +1036,22 @@
     if (returnFocus && typeof returnFocus.focus === 'function' && document.documentElement.contains(returnFocus)) returnFocus.focus();
   }
 
-  function printReportPreview(overlay) {
+  function printReportPreview(overlay, printOptions) {
     if (!overlay) return;
-    var cleanup = function () { document.body.classList.remove('report-preview-printing'); };
-    document.body.classList.add('report-preview-printing');
-    window.addEventListener('afterprint', cleanup, { once: true });
+    printOptions = printOptions || {};
+    var cleaned = false;
+    var cleanup = function () {
+      if (cleaned) return;
+      cleaned = true;
+      document.body.classList.remove('report-preview-printing');
+      if (typeof printOptions.afterPrint === 'function') printOptions.afterPrint();
+    };
     try {
+      if (typeof printOptions.beforePrint === 'function') printOptions.beforePrint();
+      document.body.classList.add('report-preview-printing');
+      window.addEventListener('afterprint', cleanup, { once: true });
       window.print();
+      window.setTimeout(cleanup, 30000);
     } catch (error) {
       window.removeEventListener('afterprint', cleanup);
       cleanup();
@@ -1046,7 +1059,7 @@
     }
   }
 
-  function openReportPreview(title, contentHtml) {
+  function openReportPreview(title, contentHtml, printOptions) {
     var existing = document.querySelector('.report-preview-overlay:not(.journal-lines-preview-overlay)');
     if (existing) closeReportPreview(existing);
     var overlay = document.createElement('div');
@@ -1071,7 +1084,7 @@
     var closeButton = $('[data-report-preview-close]', overlay);
     var printButton = $('[data-report-preview-print]', overlay);
     if (closeButton) closeButton.addEventListener('click', function () { closeReportPreview(overlay); });
-    if (printButton) printButton.addEventListener('click', function () { printReportPreview(overlay); });
+    if (printButton) printButton.addEventListener('click', function () { printReportPreview(overlay, printOptions); });
     var content = $('.report-preview-content', overlay);
     if (content) content.addEventListener('click', function (event) { event.stopPropagation(); });
     overlay._reportPreviewKeyHandler = function (event) {
@@ -2516,6 +2529,512 @@
     '</div></div>';
 
     return html;
+  }
+
+  /* ---------------------- Balance générale des comptes -------------------- */
+  function createGeneralBalanceReportSession(dossier) {
+    var columns = Object.create(null);
+    GeneralBalanceReport.COLUMN_DEFINITIONS.forEach(function (column) {
+      columns[column.key] = !!column.defaultSelected;
+    });
+    return {
+      dossierId: dossier.id,
+      phase: 'selection',
+      filters: {
+        accounts: '*', from: dossier.cycleStart, to: dossier.cycleEnd,
+        collectivesOnly: false, beforeInventory: false, beforeResult: false, groupMode: 'none'
+      },
+      columns: columns,
+      layout: {
+        printer: 'system', style: 'plain8', orientation: 'landscape', margins: 'standard',
+        pageFirst: '', pageLast: '', parity: 'none', destination: 'preview'
+      },
+      report: null,
+      previewOpened: false,
+      exportFilename: '',
+      exportMessage: ''
+    };
+  }
+
+  function ensureGeneralBalanceReportSession() {
+    var dossier = S.currentDossier();
+    if (!generalBalanceReportSession || generalBalanceReportSession.dossierId !== dossier.id) {
+      generalBalanceReportSession = createGeneralBalanceReportSession(dossier);
+    }
+    return generalBalanceReportSession;
+  }
+
+  function buildGeneralBalanceReport(session) {
+    var dossier = S.currentDossier();
+    var configuration = S.accountingConfiguration();
+    return GeneralBalanceReport.build({
+      accounts: S.accounts(),
+      entries: S.postedEntries(),
+      openingBalances: S.openingBalances(),
+      journals: S.journals(),
+      filters: session.filters,
+      columns: session.columns,
+      cycleStart: dossier.cycleStart,
+      cycleEnd: dossier.cycleEnd,
+      decimalPlaces: configuration.decimalPlaces
+    });
+  }
+
+  function generalBalanceReportSteps(activeStep) {
+    var selectionState = activeStep === 'selection' ? 'is-active' : 'is-complete';
+    var layoutState = activeStep === 'layout' ? 'is-active' : (activeStep === 'selection' ? '' : 'is-complete');
+    return '<ol class="journal-lines-steps general-balance-report-steps" aria-label="Étapes de préparation de la balance générale">' +
+      '<li class="' + selectionState + '"><span>1</span><strong>Sélection</strong></li>' +
+      '<li class="' + layoutState + '"><span>2</span><strong>Mise en page</strong></li>' +
+    '</ol>';
+  }
+
+  function generalBalanceColumnOption(column, session) {
+    var locked = !column.supported;
+    return '<label class="journal-lines-column-option general-balance-column-option' + (locked ? ' is-locked' : '') + '">' +
+      '<input type="checkbox" data-general-balance-column="' + esc(column.key) + '"' +
+        (session.columns[column.key] ? ' checked' : '') + (locked ? ' disabled aria-describedby="general-balance-unconfirmed-options"' : '') + '>' +
+      '<span><strong>' + esc(column.label) + '</strong>' +
+        (column.key === 'movements' ? '<small>Deux sous-colonnes : débit et crédit</small>' : '') +
+        (column.key === 'openingBalance' || column.key === 'closingBalance' || column.key === 'movementBalance' ? '<small>Montant net affiché avec son sens D ou C</small>' : '') +
+        (locked ? '<small>À confirmer</small>' : '') +
+      '</span></label>';
+  }
+
+  function generalBalanceReportRadio(name, value, label, checked, disabled) {
+    return '<label class="journal-lines-radio-option' + (disabled ? ' is-disabled' : '') + '"><input type="radio" name="' + esc(name) + '" value="' + esc(value) + '"' +
+      (checked ? ' checked' : '') + (disabled ? ' disabled' : '') + '><span>' + label + '</span></label>';
+  }
+
+  function generalBalanceReportSelectionView(session, dossier) {
+    var columns = GeneralBalanceReport.COLUMN_DEFINITIONS.map(function (column) {
+      return generalBalanceColumnOption(column, session);
+    }).join('');
+    var errorsId = 'general-balance-selection-errors';
+    return generalBalanceReportSteps('selection') +
+      pageHeader('Balance générale des comptes', 'Sélectionnez les comptes, la période et les colonnes à restituer avant de choisir la mise en page.', '') +
+      '<div class="alert info general-balance-source-note"><div><strong>Lecture seule.</strong> Les mouvements proviennent des pièces validées du cycle ; les brouillons sont exclus. Les reports à nouveau restent dans leur registre distinct et sont repris uniquement dans les soldes d’ouverture et de clôture.</div></div>' +
+      '<form id="general-balance-selection-form" novalidate>' +
+        '<section class="card journal-lines-card"><div class="panel">' +
+          '<div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div><span class="journal-lines-cycle-badge">Cycle ' + esc(dateLabel(dossier.cycleStart)) + ' — ' + esc(dateLabel(dossier.cycleEnd)) + '</span></div>' +
+          '<div class="general-balance-filter-grid">' +
+            '<div class="field general-balance-account-filter"><label for="general-balance-accounts">Comptes</label><div class="journal-lines-picker-control"><input id="general-balance-accounts" name="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou 401*; 411100" autocomplete="off" required><button type="button" class="btn btn-ghost" data-general-balance-picker aria-label="Choisir les comptes">…</button></div><span class="hint">« * » sélectionne tous les comptes ; vous pouvez aussi saisir un code ou un préfixe avec *.</span></div>' +
+            '<div class="field"><label for="general-balance-from">Début</label><input id="general-balance-from" name="from" type="date" value="' + esc(session.filters.from) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required></div>' +
+            '<div class="field"><label for="general-balance-to">Fin</label><input id="general-balance-to" name="to" type="date" value="' + esc(session.filters.to) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required></div>' +
+          '</div>' +
+        '</div></section>' +
+        '<section class="card journal-lines-card"><div class="panel">' +
+          '<div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
+          '<div class="journal-lines-column-grid general-balance-column-grid">' + columns + '</div>' +
+          '<p class="hint journal-lines-columns-hint">Les colonnes « Cumul début/fin » sont visibles mais désactivées jusqu’à confirmation de leur règle de calcul. Les colonnes de solde distinguent le sens débiteur (D) et créditeur (C).</p>' +
+        '</div></section>' +
+        '<section class="card journal-lines-card"><div class="panel">' +
+          '<div class="journal-lines-section-heading"><div><p class="page-kicker">PRÉSENTATION DES COMPTES</p><h3>Regroupements ou sous-totaux</h3></div></div>' +
+          '<div class="general-balance-option-grid general-balance-radio-grid">' +
+            generalBalanceReportRadio('general-balance-group-mode', 'chart', 'Regroupements (comptes dans l’ordre du plan comptable)', session.filters.groupMode === 'chart', false) +
+            generalBalanceReportRadio('general-balance-group-mode', 'subtotals', 'Sous-totaux (imprimés après les comptes individuels) · à confirmer', false, true) +
+            generalBalanceReportRadio('general-balance-group-mode', 'none', 'Ni regroupements ni sous-totaux', session.filters.groupMode === 'none', false) +
+          '</div>' +
+          '<p class="hint">Le mode « Regroupements » suit l’ordre du plan du dossier. Les seuils de sous-total ne sont pas précisés ; aucun sous-total par classe n’est supposé.</p>' +
+        '</div></section>' +
+        '<section class="card journal-lines-card"><div class="panel">' +
+          '<div class="journal-lines-section-heading"><div><p class="page-kicker">OPTIONS DE RESTITUTION</p><h3>Comptes et montants</h3></div></div>' +
+          '<div class="general-balance-option-grid">' +
+            '<label class="journal-lines-check-option"><input id="general-balance-intermediate-total" type="checkbox" disabled aria-describedby="general-balance-unconfirmed-options"><span>Total intermédiaire des comptes de bilan et de gestion <small>À confirmer · aucune formule n’est appliquée</small></span></label>' +
+            '<label class="journal-lines-check-option"><input id="general-balance-collectives-only" type="checkbox"' + (session.filters.collectivesOnly ? ' checked' : '') + '><span>Comptes collectifs uniquement <small>Comptes de classe 4 marqués auxiliaires dans le dossier</small></span></label>' +
+            '<label class="journal-lines-check-option"><input id="general-balance-before-inventory" type="checkbox"' + (session.filters.beforeInventory ? ' checked' : '') + '><span>Avant inventaire <small>Exclut les écritures d’un journal dont la nature est « Inventaire »</small></span></label>' +
+            '<label class="journal-lines-check-option"><input id="general-balance-before-result" type="checkbox"' + (session.filters.beforeResult ? ' checked' : '') + '><span>Avant résultat <small>Exclut les écritures d’un journal dont la nature est « Résultat de l’exercice »</small></span></label>' +
+          '</div>' +
+          '<p class="hint" id="general-balance-unconfirmed-options">Les filtres avant inventaire/résultat s’appuient uniquement sur la nature effectivement enregistrée dans le journal ; ils ne déduisent pas une nature à partir du libellé d’une pièce.</p>' +
+        '</div></section>' +
+        '<div class="journal-lines-form-errors" id="' + errorsId + '" role="alert" aria-live="polite"></div>' +
+        '<div class="journal-lines-form-actions"><button type="submit" class="btn btn-primary">Mise en page <span aria-hidden="true">→</span></button></div>' +
+      '</form>';
+  }
+
+  function generalBalanceReportLeafColumns(session) {
+    var selected = session.columns || {};
+    var columns = [];
+    if (selected.code) columns.push({ key: 'code', label: 'Code du compte', exportLabel: 'Code du compte', text: true });
+    if (selected.label) columns.push({ key: 'label', label: 'Intitulé du compte', exportLabel: 'Intitulé du compte', text: true });
+    if (selected.openingBalance) columns.push({ key: 'openingBalance', label: 'Solde début de période', exportLabel: 'Solde début (débit + / crédit −)', balance: true });
+    if (selected.movements) {
+      columns.push({ key: 'movementDebit', label: 'Débit', exportLabel: 'Mouvements période · débit', group: 'Mouvements période' });
+      columns.push({ key: 'movementCredit', label: 'Crédit', exportLabel: 'Mouvements période · crédit', group: 'Mouvements période' });
+    }
+    if (selected.movementBalance) columns.push({ key: 'movementBalance', label: 'Solde mouvements période', exportLabel: 'Solde mouvements (débit + / crédit −)', balance: true });
+    if (selected.closingBalance) columns.push({ key: 'closingBalance', label: 'Solde fin de période', exportLabel: 'Solde fin (débit + / crédit −)', balance: true });
+    return columns;
+  }
+
+  function generalBalanceReportValue(row, column, forSpreadsheet) {
+    var value = row[column.key];
+    if (column.key === 'code' || column.key === 'label') return String(value == null ? '' : value);
+    if (column.balance) {
+      if (forSpreadsheet) return Number(value) || 0;
+      var amountValue = Number(value) || 0;
+      return amountValue ? amount(Math.abs(amountValue)) + (amountValue > 0 ? ' D' : ' C') : '—';
+    }
+    return Number(value) || 0;
+  }
+
+  function generalBalanceReportTableHead(columns) {
+    var hasGroups = columns.some(function (column) { return !!column.group; });
+    if (!hasGroups) return '<thead><tr>' + columns.map(function (column) { return '<th scope="col"' + (column.balance || column.key.indexOf('movement') === 0 ? ' class="num"' : '') + '>' + esc(column.label) + '</th>'; }).join('') + '</tr></thead>';
+    var top = [];
+    var sub = [];
+    var index = 0;
+    while (index < columns.length) {
+      var column = columns[index];
+      if (!column.group) {
+        top.push('<th scope="col" rowspan="2"' + (column.balance ? ' class="num"' : '') + '>' + esc(column.label) + '</th>');
+        index += 1;
+        continue;
+      }
+      var end = index + 1;
+      while (end < columns.length && columns[end].group === column.group) end += 1;
+      top.push('<th scope="colgroup" colspan="' + (end - index) + '">' + esc(column.group) + '</th>');
+      for (var child = index; child < end; child += 1) sub.push('<th scope="col" class="num">' + esc(columns[child].label) + '</th>');
+      index = end;
+    }
+    return '<thead><tr>' + top.join('') + '</tr><tr>' + sub.join('') + '</tr></thead>';
+  }
+
+  function generalBalanceReportTotalsHtml(columns, report) {
+    var labelIndex = columns.findIndex(function (column) { return column.key === 'code' || column.key === 'label'; });
+    return '<tfoot><tr>' + columns.map(function (column, index) {
+      if (index === labelIndex) return '<th scope="row">Totaux</th>';
+      if (column.key === 'code' || column.key === 'label') return '<td></td>';
+      if (column.balance) {
+        var value = Number(report.totals[column.key]) || 0;
+        return '<td class="num">' + (value ? esc(amount(Math.abs(value)) + (value > 0 ? ' D' : ' C')) : '—') + '</td>';
+      }
+      return '<td class="num">' + (report.totals[column.key] ? esc(amount(report.totals[column.key])) : '—') + '</td>';
+    }).join('') + '</tr></tfoot>';
+  }
+
+  function generalBalanceReportPrintableHtml(session, report) {
+    report = report || session.report || buildGeneralBalanceReport(session);
+    var columns = generalBalanceReportLeafColumns(session);
+    var filterNames = [];
+    if (session.filters.collectivesOnly) filterNames.push('comptes collectifs uniquement');
+    if (session.filters.beforeInventory) filterNames.push('avant inventaire');
+    if (session.filters.beforeResult) filterNames.push('avant résultat');
+    var bodyRows = report.rows.map(function (row) {
+      return '<tr>' + columns.map(function (column) {
+        var value = generalBalanceReportValue(row, column, false);
+        return '<td' + (column.balance || column.key.indexOf('movement') === 0 ? ' class="num"' : '') + '>' + esc(value) + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    var emptyRow = report.rows.length ? '' : '<tr class="general-balance-empty-row"><td colspan="' + Math.max(columns.length, 1) + '"><strong>Aucun compte à restituer.</strong> Vérifiez la période et les filtres de comptes.</td></tr>';
+    var grouping = session.filters.groupMode === 'chart' ? 'Ordre du plan comptable du dossier' : 'Aucun regroupement ni sous-total';
+    var options = filterNames.length ? filterNames.join(' · ') : 'Aucun filtre avant inventaire/résultat';
+    var styleClass = session.layout.style === 'color10' ? 'is-color-style' : 'is-mono-style';
+    return '<article class="general-balance-report-print ' + styleClass + '">' +
+      '<header class="general-balance-print-heading"><p class="page-kicker">ÉDITIONS · COMPTES GÉNÉRAUX</p><h2>Balance générale des comptes</h2>' +
+        '<p>Période : ' + esc(dateLabel(report.from)) + ' — ' + esc(dateLabel(report.to)) + '</p></header>' +
+      '<div class="general-balance-print-context"><span><strong>Comptes :</strong> ' + esc(session.filters.accounts === '*' ? 'Tous les comptes' : session.filters.accounts) + '</span>' +
+        '<span><strong>Présentation :</strong> ' + esc(grouping) + '</span><span><strong>Options :</strong> ' + esc(options) + '</span></div>' +
+      '<p class="general-balance-print-basis">Montants en XOF · lecture seule · pièces validées du cycle uniquement, brouillons exclus. Les reports à nouveau distincts sont inclus dans les soldes d’ouverture/clôture, pas dans les mouvements de période. Un solde positif est débiteur (D), un solde négatif créditeur (C).</p>' +
+      (report.invalidLineCount ? '<p class="alert warning">' + report.invalidLineCount + ' ligne(s) contenant un montant invalide ont été ignorées.</p>' : '') +
+      '<div class="table-wrap general-balance-table-wrap"><table class="data-table general-balance-table"><caption>' + esc(report.rows.length + (report.rows.length === 1 ? ' compte' : ' comptes') + ' · ' + report.movementEntryCount + (report.movementEntryCount === 1 ? ' pièce validée' : ' pièces validées')) + '</caption>' +
+        generalBalanceReportTableHead(columns) + '<tbody>' + (bodyRows || emptyRow) + '</tbody>' + (report.rows.length ? generalBalanceReportTotalsHtml(columns, report) : '') +
+      '</table></div>' +
+    '</article>';
+  }
+
+  function generalBalanceReportLayoutView(session) {
+    var report = session.report || buildGeneralBalanceReport(session);
+    var resultSummary = report.rows.length + (report.rows.length === 1 ? ' compte' : ' comptes') + ' · ' + report.movementEntryCount + (report.movementEntryCount === 1 ? ' pièce validée' : ' pièces validées');
+    return generalBalanceReportSteps('layout') +
+      pageHeader('Mise en page', 'Choisissez le style, l’orientation, les marges, les pages et la destination.', '') +
+      '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(resultSummary) + '. Aucune écriture ne sera modifiée.</div></div>' +
+      '<form id="general-balance-layout-form" novalidate><div class="journal-lines-settings-grid general-balance-settings-grid">' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="general-balance-printer">Imprimante</label><select id="general-balance-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select><span class="hint">PERFECTO ouvre la boîte d’impression ; le navigateur garde le choix final du périphérique ou du PDF.</span></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="general-balance-style">Style du rapport</label><select id="general-balance-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('general-balance-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('general-balance-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('general-balance-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('general-balance-margins', 'binding', 'Reliure à gauche', session.layout.margins === 'binding', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Pages</h3></div><div class="journal-lines-page-range"><div class="field"><label for="general-balance-page-first">Première</label><input id="general-balance-page-first" type="number" min="1" step="1" value="' + esc(session.layout.pageFirst) + '" placeholder="1"></div><span aria-hidden="true">à</span><div class="field"><label for="general-balance-page-last">Dernière</label><input id="general-balance-page-last" type="number" min="1" step="1" value="' + esc(session.layout.pageLast) + '" placeholder="Fin"></div></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Parité</h3></div><div class="field"><label for="general-balance-parity">Pages</label><select id="general-balance-parity"><option value="none"' + (session.layout.parity === 'none' ? ' selected' : '') + '>Aucune</option><option value="odd"' + (session.layout.parity === 'odd' ? ' selected' : '') + '>Impaire</option><option value="even"' + (session.layout.parity === 'even' ? ' selected' : '') + '>Paire</option></select></div></div></section>' +
+        '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
+          generalBalanceReportRadio('general-balance-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
+          generalBalanceReportRadio('general-balance-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
+          generalBalanceReportRadio('general-balance-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('general-balance-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
+        '</div></div></section>' +
+      '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire.</strong> PERFECTO ne peut pas préconfigurer la plage de pages ni la parité dans la boîte du navigateur : réglez-les là si votre navigateur le propose. Le choix final de l’imprimante ou du PDF reste également dans le navigateur.</div></div>' +
+      '<div class="journal-lines-form-errors" id="general-balance-layout-errors" role="alert" aria-live="polite"></div>' +
+      '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-general-balance-back-selection>Retour à la sélection</button><button type="submit" class="btn btn-primary">Valider</button></div></form>';
+  }
+
+  function generalBalanceReportPreviewView(session) {
+    var report = session.report || buildGeneralBalanceReport(session);
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans PERFECTO';
+    return generalBalanceReportSteps('preview') +
+      pageHeader('Aperçu de la balance générale', 'Vérifiez le résultat avant l’impression ou l’enregistrement PDF.',
+        '<button type="button" class="btn btn-primary" data-general-balance-open-preview>Ouvrir l’aperçu avant impression</button>') +
+      '<div class="alert info"><div><strong>Destination choisie :</strong> ' + esc(destination) + '. La boîte d’impression du navigateur s’ouvrira uniquement après votre action depuis l’aperçu.</div></div>' +
+      (report.rows.length ? '' : '<div class="alert warning"><div>Aucun compte ne correspond à la sélection ou à la période. Vous pouvez revenir aux paramètres pour modifier les filtres.</div></div>') +
+      '<section class="card general-balance-preview-page"><div class="panel">' + generalBalanceReportPrintableHtml(session, report) + '</div></section>' +
+      '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-general-balance-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-ghost" data-general-balance-back-selection>Modifier la sélection</button></div>';
+  }
+
+  function generalBalanceReportSavedView(session) {
+    return generalBalanceReportSteps('preview') +
+      pageHeader('Export prêt', 'Le fichier a été préparé sans modifier les écritures comptables.', '') +
+      '<section class="card journal-lines-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
+        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-general-balance-open-preview>Afficher l’aperçu</button><button type="button" class="btn btn-ghost" data-general-balance-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-general-balance-new-report>Nouvelle sélection</button></div></div></section>';
+  }
+
+  function viewGeneralBalanceReport(backLink) {
+    var session = ensureGeneralBalanceReportSession();
+    var dossier = S.currentDossier();
+    if (session.phase !== 'selection') session.report = buildGeneralBalanceReport(session);
+    var content = session.phase === 'layout'
+      ? generalBalanceReportLayoutView(session)
+      : (session.phase === 'preview'
+        ? generalBalanceReportPreviewView(session)
+        : (session.phase === 'saved'
+          ? generalBalanceReportSavedView(session)
+          : generalBalanceReportSelectionView(session, dossier)));
+    return '<div class="edition-report-detail-view general-balance-report-detail">' + backLink + content + '</div>';
+  }
+
+  function showGeneralBalanceReportErrors(region, errors) {
+    if (!region) return;
+    region.innerHTML = errors && errors.length
+      ? '<div class="alert error"><ul>' + errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>'
+      : '';
+  }
+
+  function openGeneralBalanceAccountPicker(input) {
+    var accounts = S.accounts().slice().sort(function (left, right) {
+      return String(left.code).localeCompare(String(right.code), 'fr', { numeric: true });
+    });
+    var currentFilter = GeneralBalanceReport.parseAccountFilter(input.value);
+    var selectAll = currentFilter.valid && currentFilter.all;
+    var rows = accounts.map(function (account, index) {
+      var checked = selectAll || (currentFilter.valid && GeneralBalanceReport.accountMatches(account.code, currentFilter));
+      return '<label class="journal-lines-picker-option general-balance-picker-option" data-picker-text="' + esc(account.code + ' ' + (account.label || '')) + '"><input type="checkbox" data-general-balance-picker-account value="' + esc(account.code) + '" id="general-balance-picker-' + index + '"' + (checked ? ' checked' : '') + '><strong>' + esc(account.code) + '</strong><span>' + esc(account.label || '') + '</span></label>';
+    }).join('');
+    var body = '<div class="journal-lines-picker"><div class="field"><label for="general-balance-picker-search">Rechercher un compte</label><input id="general-balance-picker-search" type="search" placeholder="Numéro ou intitulé"></div>' +
+      '<label class="journal-lines-picker-all"><input id="general-balance-picker-all" type="checkbox"' + (selectAll ? ' checked' : '') + '>Tous les comptes</label>' +
+      '<div class="journal-lines-picker-list" role="group" aria-label="Comptes du dossier">' + (rows || '<div class="empty-state">Aucun compte disponible.</div>') + '</div></div>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="button" class="btn btn-primary" data-general-balance-picker-apply>Appliquer</button>';
+    openModal('Choisir les comptes', 'La liste respecte les comptes visibles du dossier actif.', body, footer, true);
+    var modalRoot = $('#modal-root');
+    var search = $('#general-balance-picker-search', modalRoot);
+    var pickerRows = $$('.general-balance-picker-option', modalRoot);
+    var allToggle = $('#general-balance-picker-all', modalRoot);
+    if (search) search.addEventListener('input', function () {
+      var query = search.value.trim().toLocaleLowerCase();
+      pickerRows.forEach(function (row) { row.hidden = !!query && row.getAttribute('data-picker-text').toLocaleLowerCase().indexOf(query) === -1; });
+    });
+    var accountCheckboxes = $$('[data-general-balance-picker-account]', modalRoot);
+    if (allToggle) allToggle.addEventListener('change', function () {
+      accountCheckboxes.forEach(function (checkbox) { checkbox.checked = allToggle.checked; });
+    });
+    accountCheckboxes.forEach(function (checkbox) {
+      checkbox.addEventListener('change', function () {
+        if (allToggle) allToggle.checked = !!accountCheckboxes.length && accountCheckboxes.every(function (item) { return item.checked; });
+      });
+    });
+    modalRoot.addEventListener('click', function (event) {
+      var apply = event.target.closest ? event.target.closest('[data-general-balance-picker-apply]') : null;
+      if (!apply) return;
+      var selected = $$('[data-general-balance-picker-account]:checked', modalRoot).map(function (checkbox) { return checkbox.value; });
+      input.value = allToggle && allToggle.checked ? '*' : selected.join(', ');
+      closeModal();
+      input.focus();
+    });
+  }
+
+  function submitGeneralBalanceSelection(form, session) {
+    var errors = [];
+    var dossier = S.currentDossier();
+    var accountsInput = $('#general-balance-accounts', form);
+    var fromInput = $('#general-balance-from', form);
+    var toInput = $('#general-balance-to', form);
+    var accountFilter = GeneralBalanceReport.parseAccountFilter(accountsInput ? accountsInput.value : '');
+    var selectedColumns = $$('[data-general-balance-column]:checked', form).map(function (input) { return input.getAttribute('data-general-balance-column'); });
+    if (!accountFilter.valid) errors.push(accountFilter.error);
+    if (!fromInput || !toInput || !fromInput.value || !toInput.value) errors.push('Renseignez les deux dates de la période.');
+    else if (fromInput.value > toInput.value) errors.push('La date de début doit précéder ou égaler la date de fin.');
+    else if (fromInput.value < dossier.cycleStart || toInput.value > dossier.cycleEnd) errors.push('Les dates doivent rester dans le cycle du dossier.');
+    if (!selectedColumns.length) errors.push('Sélectionnez au moins une colonne disponible.');
+    if (!selectedColumns.some(function (key) { return key === 'code' || key === 'label'; })) errors.push('Conservez au moins une colonne d’identification du compte.');
+    showGeneralBalanceReportErrors($('#general-balance-selection-errors', form), errors);
+    if (errors.length) return;
+    session.filters.accounts = String(accountsInput.value || '*').trim();
+    session.filters.from = fromInput.value;
+    session.filters.to = toInput.value;
+    session.filters.collectivesOnly = !!($('#general-balance-collectives-only', form) && $('#general-balance-collectives-only', form).checked);
+    session.filters.beforeInventory = !!($('#general-balance-before-inventory', form) && $('#general-balance-before-inventory', form).checked);
+    session.filters.beforeResult = !!($('#general-balance-before-result', form) && $('#general-balance-before-result', form).checked);
+    var groupMode = $('input[name="general-balance-group-mode"]:checked', form);
+    session.filters.groupMode = groupMode && groupMode.value === 'chart' ? 'chart' : 'none';
+    session.columns = Object.create(null);
+    GeneralBalanceReport.COLUMN_DEFINITIONS.forEach(function (column) {
+      session.columns[column.key] = column.supported && selectedColumns.indexOf(column.key) !== -1;
+    });
+    session.report = buildGeneralBalanceReport(session);
+    session.phase = 'layout';
+    session.previewOpened = false;
+    render();
+  }
+
+  function generalBalanceReportExportMatrix(session, report, forSpreadsheet) {
+    var columns = generalBalanceReportLeafColumns(session);
+    var headings = columns.map(function (column) { return forSpreadsheet ? column.exportLabel : column.label; });
+    var rows = report.rows.map(function (row) {
+      return columns.map(function (column) { return generalBalanceReportValue(row, column, !!forSpreadsheet); });
+    });
+    if (report.rows.length) {
+      var labelIndex = columns.findIndex(function (column) { return column.key === 'code' || column.key === 'label'; });
+      rows.push(columns.map(function (column, index) {
+        if (index === labelIndex) return 'Totaux';
+        if (column.key === 'code' || column.key === 'label') return '';
+        var value = Number(report.totals[column.key]) || 0;
+        if (column.balance && !forSpreadsheet) return value ? amount(Math.abs(value)) + (value > 0 ? ' D' : ' C') : '—';
+        return value;
+      }));
+    }
+    return [headings].concat(rows);
+  }
+
+  function generalBalanceReportTsv(matrix) {
+    return '\uFEFF' + matrix.map(function (row) {
+      return row.map(function (cell) { return String(cell == null ? '' : cell).replace(/[\t\r\n]+/g, ' '); }).join('\t');
+    }).join('\r\n');
+  }
+
+  function generateGeneralBalanceReportFile(session, destination) {
+    var report = buildGeneralBalanceReport(session);
+    session.report = report;
+    var spreadsheet = destination === 'table';
+    var matrix = generalBalanceReportExportMatrix(session, report, spreadsheet);
+    var extension = spreadsheet ? 'xlsx' : 'txt';
+    var filename = 'Balance-generale-' + safeFilePart(S.currentDossier().name) + '-' + report.from + '-' + report.to + '.' + extension;
+    var content = spreadsheet
+      ? AccountingExchange.exportTabularWorkbook('Balance générale', matrix[0], matrix.slice(1))
+      : generalBalanceReportTsv(generalBalanceReportExportMatrix(session, report, false));
+    downloadFile(filename, content, spreadsheet ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/plain;charset=utf-8');
+    session.exportFilename = filename;
+    session.exportMessage = spreadsheet ? 'Téléchargement du classeur Excel lancé dans le navigateur.' : 'Téléchargement du fichier texte tabulé lancé dans le navigateur.';
+    session.phase = 'saved';
+    render();
+  }
+
+  function submitGeneralBalanceLayout(form, session) {
+    var errors = [];
+    var destination = $('input[name="general-balance-destination"]:checked', form);
+    var orientation = $('input[name="general-balance-orientation"]:checked', form);
+    var margins = $('input[name="general-balance-margins"]:checked', form);
+    var first = $('#general-balance-page-first', form).value;
+    var last = $('#general-balance-page-last', form).value;
+    if (first && (!Number.isInteger(Number(first)) || Number(first) < 1)) errors.push('La première page doit être un entier supérieur ou égal à 1.');
+    if (last && (!Number.isInteger(Number(last)) || Number(last) < 1)) errors.push('La dernière page doit être un entier supérieur ou égal à 1.');
+    if (first && last && Number(first) > Number(last)) errors.push('La première page doit précéder ou égaler la dernière page.');
+    showGeneralBalanceReportErrors($('#general-balance-layout-errors', form), errors);
+    if (errors.length) return;
+    session.layout.printer = $('#general-balance-printer', form).value;
+    session.layout.style = $('#general-balance-style', form).value;
+    session.layout.orientation = orientation ? orientation.value : 'landscape';
+    session.layout.margins = margins ? margins.value : 'standard';
+    session.layout.pageFirst = first;
+    session.layout.pageLast = last;
+    session.layout.parity = $('#general-balance-parity', form).value;
+    session.layout.destination = destination ? destination.value : 'preview';
+    session.report = buildGeneralBalanceReport(session);
+    if (session.layout.destination === 'table' || session.layout.destination === 'file') {
+      try {
+        generateGeneralBalanceReportFile(session, session.layout.destination);
+      } catch (error) {
+        session.phase = 'layout';
+        render();
+        toast('Export impossible : ' + (error && error.message || 'erreur inconnue.'), 'error');
+      }
+      return;
+    }
+    session.previewOpened = false;
+    session.phase = 'preview';
+    render();
+  }
+
+  function generalBalancePrintOptions(session) {
+    var styleNode = null;
+    var previousStyleText = '';
+    var createdStyle = false;
+    var previousTitle = '';
+    return {
+      beforePrint: function () {
+        styleNode = $('#general-balance-print-page-style');
+        createdStyle = !styleNode;
+        if (!styleNode) {
+          styleNode = document.createElement('style');
+          styleNode.id = 'general-balance-print-page-style';
+          document.head.appendChild(styleNode);
+        } else previousStyleText = styleNode.textContent;
+        var orientation = session.layout.orientation === 'portrait' ? 'portrait' : 'landscape';
+        var left = session.layout.margins === 'binding' ? '18mm' : '12mm';
+        styleNode.textContent = '@page { size: A4 ' + orientation + '; margin: 12mm 12mm 12mm ' + left + '; }';
+        previousTitle = document.title;
+        document.title = 'Balance-generale-' + safeFilePart(S.currentDossier().name) + '-' + session.filters.from + '-' + session.filters.to;
+      },
+      afterPrint: function () {
+        document.title = previousTitle || document.title;
+        if (!styleNode) return;
+        if (createdStyle && styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+        else styleNode.textContent = previousStyleText;
+      }
+    };
+  }
+
+  function openGeneralBalanceReportPreview(session) {
+    var report = session.report || buildGeneralBalanceReport(session);
+    session.report = report;
+    openReportPreview('Aperçu — Balance générale des comptes', generalBalanceReportPrintableHtml(session, report), generalBalancePrintOptions(session));
+  }
+
+  function bindGeneralBalanceReport() {
+    var session = ensureGeneralBalanceReportSession();
+    if (session.phase === 'selection') {
+      var selectionForm = $('#general-balance-selection-form');
+      if (!selectionForm) return;
+      selectionForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitGeneralBalanceSelection(selectionForm, session);
+      });
+      var pickerButton = $('[data-general-balance-picker]', selectionForm);
+      if (pickerButton) pickerButton.addEventListener('click', function () { openGeneralBalanceAccountPicker($('#general-balance-accounts', selectionForm)); });
+      return;
+    }
+    if (session.phase === 'layout') {
+      var layoutForm = $('#general-balance-layout-form');
+      if (!layoutForm) return;
+      layoutForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitGeneralBalanceLayout(layoutForm, session);
+      });
+      var backSelection = $('[data-general-balance-back-selection]');
+      if (backSelection) backSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+      return;
+    }
+    var openPreviewButtons = $$('[data-general-balance-open-preview]');
+    openPreviewButtons.forEach(function (button) { button.addEventListener('click', function () { openGeneralBalanceReportPreview(session); }); });
+    var backLayoutButtons = $$('[data-general-balance-back-layout]');
+    backLayoutButtons.forEach(function (button) { button.addEventListener('click', function () { session.phase = 'layout'; render(); }); });
+    var backSelectionButtons = $$('[data-general-balance-back-selection]');
+    backSelectionButtons.forEach(function (button) { button.addEventListener('click', function () { session.phase = 'selection'; render(); }); });
+    var newReportButton = $('[data-general-balance-new-report]');
+    if (newReportButton) newReportButton.addEventListener('click', function () {
+      generalBalanceReportSession = createGeneralBalanceReportSession(S.currentDossier());
+      render();
+    });
+    if (session.phase === 'preview' && !session.previewOpened) {
+      session.previewOpened = true;
+      openGeneralBalanceReportPreview(session);
+    }
   }
 
   /* ---------------------------- Journal des écritures ---------------------- */
@@ -12026,7 +12545,7 @@
     var backLink = '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(accountingMenuHash(groupId, tabId)) + '">← ' + esc(backLabel) + '</a>';
     if (child.id === 'journal-allocation-sheet') return viewJournalAllocationSheet(backLink);
     if (child.id === 'journal-lines' || child.id === 'journal-modified-pieces' || child.id === 'journal-unbalanced-pieces' || child.id === 'journal-entry-totals' || child.id === 'journal-individual-account-totals' || child.id === 'journal-summary-account-totals' || child.id === 'journal-third-party-totals' || child.id === 'journal-analytic-center-totals' || child.id === 'journal-currency-totals') return viewJournalLinesReport(backLink);
-    if (child.id === 'general-balance') return '<div class="edition-report-detail-view">' + backLink + viewBalance() + '</div>';
+    if (child.id === 'general-balance') return viewGeneralBalanceReport(backLink);
     if (child.id === 'general-ledger') return '<div class="edition-report-detail-view">' + backLink + viewLedger() + '</div>';
     var inactive = child.status === 'inactive';
     var analytic = inactive && (child.section === 'analysis' || child.section === 'situations' || child.section === 'definitionsAnalytics' || child.id.indexOf('analytic-') === 0 || child.id === 'general-analytic-balance' || child.id === 'journal-analytic-center-totals');
@@ -13456,6 +13975,7 @@
       var menuParams = parseHash().params;
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && (menuParams.c === 'journal-lines' || menuParams.c === 'journal-modified-pieces' || menuParams.c === 'journal-unbalanced-pieces' || menuParams.c === 'journal-entry-totals' || menuParams.c === 'journal-individual-account-totals' || menuParams.c === 'journal-summary-account-totals' || menuParams.c === 'journal-third-party-totals' || menuParams.c === 'journal-analytic-center-totals' || menuParams.c === 'journal-currency-totals')) bindJournalLinesReport();
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && menuParams.c === 'journal-allocation-sheet') bindJournalAllocationSheet();
+      if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-balance') bindGeneralBalanceReport();
       if (menuParams.g === 'parametres' && menuParams.t === 'dossier-configuration') bindAccountingConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'sections-accounts') bindAnalyticalSectionsConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'allocation-keys') bindAnalyticalAllocationKeys();

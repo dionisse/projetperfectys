@@ -7,6 +7,7 @@ const path = require('node:path');
 const nav = require('../modern-proto/js/accounting-navigation.js');
 const appSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'app.js'), 'utf8');
 const journalLinesSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'journal-lines-report.js'), 'utf8');
+const generalBalanceSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'accounting-balance-report.js'), 'utf8');
 const configurationCss = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'css', 'accounting-configuration.css'), 'utf8');
 const htmlSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'index.html'), 'utf8');
 const serviceWorkerSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'service-worker.js'), 'utf8');
@@ -371,7 +372,7 @@ assert.match(configurationCss, /\.journal-lines-preview-overlay\s*\{[^}]*positio
 assert.match(configurationCss, /\.journal-lines-preview-scroll\s*\{[^}]*overflow:\s*auto/);
 assert.match(configurationCss, /body\.journal-lines-printing \.journal-lines-preview-overlay\s*\{[^}]*position:\s*static/,
   'la fenêtre plein écran est retirée du flux au moment d’imprimer');
-assert.match(appSource, /function openReportPreview\(title, contentHtml\)[\s\S]*report-preview-generic-overlay[\s\S]*report-preview-toolbar-actions/,
+assert.match(appSource, /function openReportPreview\(title, contentHtml, printOptions\)[\s\S]*report-preview-generic-overlay[\s\S]*report-preview-toolbar-actions/,
   'un composant commun ouvre les futurs aperçus de rapport en plein écran');
 assert.match(appSource, /function openCurrentReportPreview\(title\)[\s\S]*reportPreviewSnapshotHtml\(view\)/,
   'les écrans d’édition existants sont capturés en aperçu avant impression');
@@ -391,6 +392,9 @@ assert.match(journalLinesSource, /(?=[\s\S]*subtotalByPiece)(?=[\s\S]*subtotalBy
 assert.ok(htmlSource.indexOf('js/journal-lines-report.js') < htmlSource.indexOf('js/app.js'),
   'les fonctions pures du rapport sont chargées avant l’application');
 assert.match(serviceWorkerSource, /\.\/js\/journal-lines-report\.js/);
+assert.ok(htmlSource.indexOf('js/accounting-balance-report.js') < htmlSource.indexOf('js/app.js'),
+  'le calcul pur de balance est chargé avant les vues de l’application');
+assert.match(serviceWorkerSource, /\.\/js\/accounting-balance-report\.js/);
 assert.equal(findTab('editions', 'journals').children.find(child => child.id === 'journal-unbalanced-pieces').status, 'active');
 assert.ok(findTab('editions', 'journals').children.find(child => child.id === 'journal-unbalanced-pieces').reason.includes('huit colonnes'));
 assert.equal(findTab('editions', 'journals').children.find(child => child.id === 'journal-entry-totals').status, 'active');
@@ -477,7 +481,9 @@ assert.deepEqual(findTab('editions', 'general-accounts').children.map(child => c
   'Grand livre des comptes', 'Historique des comptes sur plusieurs exercices', 'Journal des reports',
   'Balance détaillée analytiquement', 'Détail des contreparties d’un compte', 'Cumul des contreparties d’un compte'
 ]);
-assert.equal(findTab('editions', 'general-accounts').children.find(child => child.id === 'general-balance').status, 'partial');
+assert.equal(findTab('editions', 'general-accounts').children.find(child => child.id === 'general-balance').status, 'active');
+assert.ok(findTab('editions', 'general-accounts').children.find(child => child.id === 'general-balance').reason.includes('cumul'));
+assert.ok(findTab('editions', 'general-accounts').children.find(child => child.id === 'general-balance').reason.includes('aperçu'));
 assert.equal(findTab('editions', 'general-accounts').children.find(child => child.id === 'general-ledger').status, 'partial');
 assert.equal(findTab('editions', 'general-accounts').children.find(child => child.id === 'general-analytic-balance').status, 'inactive');
 assert.equal(findTab('editions', 'third-parties').children.length, 7);
@@ -595,7 +601,16 @@ assert.match(appSource, /function viewAnalyticalSectionsConfiguration\(\)[\s\S]*
 assert.match(appSource, /Les listes sont conservées et grisées pour le moment/);
 assert.match(appSource, /function bindAnalyticalSectionsConfiguration\(\)[\s\S]*saveAnalyticalSectionsConfiguration/);
 assert.match(appSource, /data-action="export-json"/);
-assert.match(appSource, /child\.id === 'general-balance'[\s\S]*viewBalance\(\)/);
+assert.match(appSource, /child\.id === 'general-balance'[\s\S]*viewGeneralBalanceReport\(backLink\)/);
+assert.match(appSource, /menuParams\.g === 'editions' && menuParams\.t === 'general-accounts' && menuParams\.c === 'general-balance'\) bindGeneralBalanceReport\(\)/);
+assert.match(appSource, /function createGeneralBalanceReportSession\(dossier\)[\s\S]*from: dossier\.cycleStart, to: dossier\.cycleEnd[\s\S]*orientation: 'landscape'[\s\S]*destination: 'preview'/);
+assert.match(appSource, /function buildGeneralBalanceReport\(session\)[\s\S]*GeneralBalanceReport\.build\(\{[\s\S]*entries: S\.postedEntries\(\)[\s\S]*openingBalances: S\.openingBalances\(\)/);
+assert.match(generalBalanceSource, /beforeInventory: filters\.beforeInventory === true[\s\S]*beforeResult: filters\.beforeResult === true/);
+assert.match(generalBalanceSource, /openingBalancesIncludedBeforePeriod: true/);
+assert.match(generalBalanceSource, /Cumul Début Période[\s\S]*supported: false[\s\S]*Cumul Fin Période/);
+assert.match(appSource, /À confirmer[\s\S]*aucun sous-total par classe n’est supposé/);
+assert.match(appSource, /function generalBalancePrintOptions\(session\)[\s\S]*@page \{ size: A4/);
+assert.match(appSource, /openReportPreview\('Aperçu — Balance générale des comptes'[\s\S]*generalBalanceReportPrintableHtml/);
 assert.match(appSource, /child\.id === 'general-ledger'[\s\S]*viewLedger\(\)/);
 
 assert.match(appSource, /function accountingMenuHash\(groupId, tabId, childId\)[\s\S]*return childId \? hash \+ '&c='/,
@@ -632,7 +647,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v96/);
+assert.match(serviceWorkerSource, /perfecto-static-v97/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

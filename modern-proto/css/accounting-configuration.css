@@ -916,3 +916,85 @@ body.report-preview-open { overflow: hidden; }
   }
   body.journal-allocation-sheet-printing .journal-allocation-sheet-table { min-width: 0 !important; }
 }
+
+/* Balance générale des comptes : sélection, mise en page et état imprimable. */
+.general-balance-report-detail { min-width: 0; }
+.general-balance-report-detail > .edition-report-back { margin-bottom: 15px; }
+.general-balance-source-note { margin: 0 0 14px; line-height: 1.55; }
+.general-balance-filter-grid { display: grid; grid-template-columns: minmax(0, 2fr) repeat(2, minmax(150px, .8fr)); gap: 14px; }
+.general-balance-filter-grid .field { min-width: 0; }
+.general-balance-account-filter .journal-lines-picker-control { grid-template-columns: minmax(0, 1fr) auto; }
+.general-balance-column-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.general-balance-column-option small,
+.general-balance-option-grid small { color: #718078; font-size: .66rem; line-height: 1.4; }
+.general-balance-column-option.is-locked { color: #7d8882; cursor: not-allowed; }
+.general-balance-column-option.is-locked strong { color: #77847d; }
+.general-balance-option-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 22px; }
+.general-balance-radio-grid { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.general-balance-radio-grid .journal-lines-radio-option { align-items: center; }
+.general-balance-radio-grid .journal-lines-radio-option.is-disabled { color: #89938d; cursor: not-allowed; }
+.general-balance-settings-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.general-balance-preview-page { margin-top: 14px; }
+.general-balance-preview-page > .panel { padding: 20px; }
+.general-balance-preview-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 9px; margin-top: 16px; }
+.general-balance-preview-actions > .edition-report-back { margin: 0; }
+.general-balance-report-print { width: 100%; color: #1d2823; background: #fff; }
+.general-balance-print-heading { margin: 0 0 12px; padding-bottom: 9px; border-bottom: 1px solid #b9c4bd; }
+.general-balance-print-heading .page-kicker { margin: 0 0 5px; font-size: .62rem; }
+.general-balance-print-heading h2 { margin: 0 0 5px; color: #18251f; font-size: 1.35rem; }
+.general-balance-print-heading p:last-child { margin: 0; color: #44544b; font-size: .8rem; }
+.general-balance-print-context { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-bottom: 8px; color: #44544b; font-size: .7rem; }
+.general-balance-print-basis { margin: 0 0 12px; color: #65736b; font-size: .66rem; line-height: 1.45; }
+.general-balance-table-wrap { max-width: 100%; overflow-x: auto; }
+.general-balance-table { width: 100%; min-width: 0 !important; table-layout: auto; font-size: .75rem !important; }
+.general-balance-table th,
+.general-balance-table td { padding: 6px 8px !important; }
+.general-balance-table th { white-space: normal !important; }
+.general-balance-table .num { text-align: right !important; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.general-balance-table caption { padding: 0 0 6px; color: #64746b; text-align: left; font-size: .67rem; }
+.general-balance-table .general-balance-empty-row td { padding: 18px 12px !important; color: #68776f; text-align: center; }
+.general-balance-report-print.is-mono-style .general-balance-table,
+.general-balance-report-print.is-mono-style .general-balance-table thead th,
+.general-balance-report-print.is-mono-style .general-balance-table tfoot th,
+.general-balance-report-print.is-mono-style .general-balance-table tfoot td { color: #111 !important; background: #fff !important; }
+.general-balance-report-print.is-color-style .general-balance-table { font-size: .86rem !important; }
+.general-balance-report-print.is-color-style .general-balance-table thead th { color: #1d4c3d !important; background: #edf5f0 !important; }
+.general-balance-report-print.is-color-style .general-balance-table tfoot th,
+.general-balance-report-print.is-color-style .general-balance-table tfoot td { background: #f1f5f2 !important; }
+.general-balance-picker-option { display: grid; grid-template-columns: 18px minmax(88px, auto) minmax(0, 1fr); }
+.general-balance-picker-option[hidden] { display: none; }
+
+@media (max-width: 980px) {
+  .general-balance-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .general-balance-settings-grid .journal-lines-destination-card { grid-column: 1 / -1; }
+}
+
+@media (max-width: 640px) {
+  .general-balance-filter-grid { grid-template-columns: minmax(0, 1fr); }
+  .general-balance-option-grid,
+  .general-balance-column-grid { grid-template-columns: minmax(0, 1fr); }
+  .general-balance-settings-grid { grid-template-columns: minmax(0, 1fr); }
+  .general-balance-settings-grid .journal-lines-destination-card { grid-column: auto; }
+  .general-balance-report-detail .journal-lines-section-heading { align-items: flex-start; flex-direction: column; }
+  .general-balance-report-detail .journal-lines-cycle-badge { white-space: normal; }
+  .general-balance-preview-page > .panel { padding: 11px; }
+  .general-balance-print-context { flex-direction: column; gap: 5px; }
+  .general-balance-preview-actions { align-items: stretch; }
+  .general-balance-preview-actions .btn { flex: 1 1 100%; }
+}
+
+@media print {
+  body.report-preview-printing .report-preview-content .general-balance-report-print { width: 100%; max-width: none; margin: 0; padding: 0; color: #111 !important; background: #fff !important; }
+  body.report-preview-printing .report-preview-content .general-balance-print-heading h2 { color: #111 !important; font-size: 14pt !important; }
+  body.report-preview-printing .report-preview-content .general-balance-print-context,
+  body.report-preview-printing .report-preview-content .general-balance-print-basis { color: #222 !important; }
+  body.report-preview-printing .report-preview-content .general-balance-table { width: 100%; min-width: 0 !important; font-size: 8pt !important; }
+  body.report-preview-printing .report-preview-content .general-balance-table thead { display: table-header-group; }
+  body.report-preview-printing .report-preview-content .general-balance-table tr { break-inside: avoid; page-break-inside: avoid; }
+  body.report-preview-printing .report-preview-content .general-balance-report-print.is-mono-style .general-balance-table th { color: #111 !important; background: #fff !important; }
+}
+.general-balance-report-print.is-mono-style .general-balance-table tbody > tr,
+body.report-preview-printing .report-preview-content .general-balance-report-print.is-mono-style .general-balance-table tbody > tr { background: #fff !important; }
+@media print {
+  body.report-preview-printing .report-preview-content .general-balance-report-print.is-color-style .general-balance-table { font-size: 10pt !important; }
+}
