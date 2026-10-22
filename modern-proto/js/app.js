@@ -961,6 +961,145 @@
     return '<span class="badge ' + esc(cls) + '">' + esc(nature) + '</span>';
   }
 
+  function reportPreviewIdentityHtml() {
+    var identity = journalLinesReportIdentity(S.currentDossier());
+    return '<div class="report-preview-identity">' +
+      '<div class="report-preview-identity-owner"><span>Titulaire de licence</span><strong>' + esc(identity.licenseOwner) + '</strong></div>' +
+      '<div class="report-preview-identity-dossier"><span>Dossier concerné</span><strong>' + esc(identity.dossierName) + '</strong>' +
+        (identity.reference ? '<small>Référence : ' + esc(identity.reference) + '</small>' : '') +
+      '</div>' +
+      (!identity.ownerConfigured ? '<p class="alert warning report-preview-identity-warning">Le titulaire de la licence n’est pas renseigné dans les informations communes du dossier.</p>' : '') +
+    '</div>';
+  }
+
+  function reportPreviewSnapshotHtml(view) {
+    var sourceControls = Array.prototype.slice.call(view.querySelectorAll('input, select, textarea'));
+    var snapshot = view.cloneNode(true);
+    var previewControls = Array.prototype.slice.call(snapshot.querySelectorAll('input, select, textarea'));
+    previewControls.forEach(function (control, index) {
+      var source = sourceControls[index];
+      var type = String(control.type || '').toLowerCase();
+      if (type === 'hidden' || type === 'button' || type === 'submit' || type === 'reset') {
+        control.parentNode.removeChild(control);
+        return;
+      }
+      var value = '';
+      if (source && source.tagName === 'SELECT') {
+        var selectedOption = source.options[source.selectedIndex];
+        value = selectedOption ? selectedOption.textContent : '';
+      } else if (source && (type === 'checkbox' || type === 'radio')) {
+        value = source.checked ? 'Oui' : 'Non';
+      } else if (source && type === 'file') {
+        value = source.files && source.files.length ? 'Fichier sélectionné' : '';
+      } else if (source && type !== 'password') {
+        value = source.value;
+      } else if (type === 'password') {
+        value = '••••••';
+      }
+      var staticValue = document.createElement('span');
+      staticValue.className = 'report-preview-field-value';
+      staticValue.textContent = String(value || '—');
+      control.parentNode.replaceChild(staticValue, control);
+    });
+    Array.prototype.slice.call(snapshot.querySelectorAll('.page-header-actions, .exchange-preview-footer, .opening-balances-toolbar, .opening-balance-position-row, [data-report-preview-exclude]')).forEach(function (element) {
+      if (element.parentNode) element.parentNode.removeChild(element);
+    });
+    Array.prototype.slice.call(snapshot.querySelectorAll('button, a[href], [role="button"]')).forEach(function (element) {
+      if (element.parentNode) element.parentNode.removeChild(element);
+    });
+    Array.prototype.slice.call(snapshot.querySelectorAll('[data-action]')).forEach(function (element) {
+      element.removeAttribute('data-action');
+    });
+    return snapshot.innerHTML;
+  }
+
+  function closeReportPreview(overlay) {
+    if (!overlay || !overlay.parentNode) return;
+    document.body.classList.remove('report-preview-open', 'report-preview-printing');
+    if (overlay._reportPreviewKeyHandler) document.removeEventListener('keydown', overlay._reportPreviewKeyHandler);
+    var returnFocus = overlay._reportPreviewReturnFocus;
+    overlay.parentNode.removeChild(overlay);
+    if (returnFocus && typeof returnFocus.focus === 'function' && document.documentElement.contains(returnFocus)) returnFocus.focus();
+  }
+
+  function printReportPreview(overlay) {
+    if (!overlay) return;
+    var cleanup = function () { document.body.classList.remove('report-preview-printing'); };
+    document.body.classList.add('report-preview-printing');
+    window.addEventListener('afterprint', cleanup, { once: true });
+    try {
+      window.print();
+    } catch (error) {
+      window.removeEventListener('afterprint', cleanup);
+      cleanup();
+      toast('Impossible d’ouvrir la boîte de dialogue d’impression : ' + (error && error.message || 'erreur inconnue.'), 'warning');
+    }
+  }
+
+  function openReportPreview(title, contentHtml) {
+    var existing = document.querySelector('.report-preview-overlay:not(.journal-lines-preview-overlay)');
+    if (existing) closeReportPreview(existing);
+    var overlay = document.createElement('div');
+    overlay.className = 'report-preview-overlay report-preview-generic-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', title || 'Aperçu du rapport');
+    overlay.tabIndex = -1;
+    overlay._reportPreviewReturnFocus = document.activeElement;
+    overlay.innerHTML = '<div class="report-preview-window">' +
+      '<div class="report-preview-toolbar"><span class="report-preview-toolbar-title">' + esc(title || 'Aperçu du rapport') + '</span>' +
+        '<div class="report-preview-toolbar-actions"><button type="button" class="btn btn-ghost btn-sm" data-report-preview-close>Fermer l’aperçu</button><button type="button" class="btn btn-primary btn-sm" data-report-preview-print>Imprimer</button></div>' +
+      '</div>' +
+      '<div class="report-preview-scroll"><div class="report-preview-sheet">' + reportPreviewIdentityHtml() +
+        '<div class="report-preview-content">' + (contentHtml || '') + '</div>' +
+      '</div></div>' +
+    '</div>';
+    overlay.addEventListener('click', function (event) {
+      event.stopPropagation();
+      if (event.target === overlay) closeReportPreview(overlay);
+    });
+    var closeButton = $('[data-report-preview-close]', overlay);
+    var printButton = $('[data-report-preview-print]', overlay);
+    if (closeButton) closeButton.addEventListener('click', function () { closeReportPreview(overlay); });
+    if (printButton) printButton.addEventListener('click', function () { printReportPreview(overlay); });
+    var content = $('.report-preview-content', overlay);
+    if (content) content.addEventListener('click', function (event) { event.stopPropagation(); });
+    overlay._reportPreviewKeyHandler = function (event) {
+      if (event.key === 'Escape') {
+        closeReportPreview(overlay);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      var focusable = Array.prototype.slice.call(overlay.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+      if (!focusable.length) return;
+      var first = focusable[0];
+      var last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', overlay._reportPreviewKeyHandler);
+    document.body.classList.add('report-preview-open');
+    document.body.appendChild(overlay);
+    if (closeButton) closeButton.focus();
+    return overlay;
+  }
+
+  function openCurrentReportPreview(title) {
+    var view = $('#view');
+    if (!view) {
+      window.print();
+      return null;
+    }
+    var heading = $('.page-header h2', view);
+    var reportTitle = String(title || (heading && heading.textContent) || 'Rapport').trim();
+    return openReportPreview('Aperçu — ' + reportTitle, reportPreviewSnapshotHtml(view));
+  }
+
   function pageHeader(title, subtitle, actions, variant) {
     var variantClass = variant ? ' ' + esc(variant) : '';
     return '<div class="page-header' + variantClass + '">' +
@@ -11370,10 +11509,10 @@
     else if (session.phase === 'saved') content = journalLinesReportSavedView(session);
     else content = journalLinesReportSelectionView(session, dossier);
     if (session.phase === 'preview') {
-      return '<div class="journal-lines-preview-overlay" role="dialog" aria-modal="true" aria-label="Aperçu du rapport" tabindex="-1">' +
-        '<div class="journal-lines-preview-popup">' +
-          '<div class="journal-lines-preview-windowbar journal-lines-no-print"><span class="journal-lines-preview-windowbar-title">Aperçu du rapport</span><button type="button" class="btn btn-ghost btn-sm" data-journal-lines-close-preview>Fermer l’aperçu</button></div>' +
-          '<div class="journal-lines-preview-scroll"><div class="edition-report-detail-view journal-lines-report-detail">' + content + '</div></div>' +
+      return '<div class="report-preview-overlay journal-lines-preview-overlay" role="dialog" aria-modal="true" aria-label="Aperçu du rapport" tabindex="-1">' +
+        '<div class="report-preview-window journal-lines-preview-popup">' +
+          '<div class="report-preview-toolbar journal-lines-preview-windowbar journal-lines-no-print"><span class="report-preview-toolbar-title journal-lines-preview-windowbar-title">Aperçu du rapport</span><button type="button" class="btn btn-ghost btn-sm" data-journal-lines-close-preview>Fermer l’aperçu</button></div>' +
+          '<div class="report-preview-scroll journal-lines-preview-scroll"><div class="edition-report-detail-view journal-lines-report-detail">' + content + '</div></div>' +
         '</div>' +
       '</div>';
     }
@@ -13192,6 +13331,7 @@
   });
 
   document.addEventListener('click', function (event) {
+    if (event.target.closest && event.target.closest('.report-preview-content')) return;
     var trigger = event.target.closest('[data-action]');
     if (!trigger) return;
     var action = trigger.getAttribute('data-action');
@@ -13342,7 +13482,7 @@
         break;
       }
       case 'print-opening-balances':
-        window.print();
+        openCurrentReportPreview('Reports à nouveau');
         break;
       case 'toggle-matching-line': {
         var matchingLineKey = trigger.getAttribute('data-line-key') || '';
@@ -14042,8 +14182,9 @@
         toast('Balance exportée.', 'success');
         break;
       }
+      // Les anciens écrans d’état et les futurs boutons data-action="print" réutilisent cet aperçu commun.
       case 'print':
-        window.print();
+        openCurrentReportPreview();
         break;
       case 'install-app':
         if (deferredInstallPrompt) {

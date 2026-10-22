@@ -293,6 +293,18 @@ assert.match(configurationCss, /\.journal-lines-preview-overlay\s*\{[^}]*positio
 assert.match(configurationCss, /\.journal-lines-preview-scroll\s*\{[^}]*overflow:\s*auto/);
 assert.match(configurationCss, /body\.journal-lines-printing \.journal-lines-preview-overlay\s*\{[^}]*position:\s*static/,
   'la fenêtre plein écran est retirée du flux au moment d’imprimer');
+assert.match(appSource, /function openReportPreview\(title, contentHtml\)[\s\S]*report-preview-generic-overlay[\s\S]*report-preview-toolbar-actions/,
+  'un composant commun ouvre les futurs aperçus de rapport en plein écran');
+assert.match(appSource, /function openCurrentReportPreview\(title\)[\s\S]*reportPreviewSnapshotHtml\(view\)/,
+  'les écrans d’édition existants sont capturés en aperçu avant impression');
+assert.match(appSource, /case 'print-opening-balances':[\s\S]*openCurrentReportPreview\('Reports à nouveau'\)/,
+  'les reports à nouveau utilisent aussi la fenêtre d’aperçu commune');
+assert.match(appSource, /case 'print':[\s\S]*openCurrentReportPreview\(\)/,
+  'les anciens et futurs boutons data-action="print" passent par l’aperçu commun');
+assert.match(configurationCss, /\.report-preview-overlay,[\s\S]*position:\s*fixed[\s\S]*inset:\s*0/,
+  'la fenêtre générique occupe tout l’écran avec une zone de rapport défilable');
+assert.match(configurationCss, /body\.report-preview-printing \.report-preview-sheet[\s\S]*position:\s*absolute/,
+  'l’impression de l’aperçu commun isole le document du reste de l’application');
 assert.match(appSource, /function journalLinesReportIdentity[\s\S]*id === 'company-name'[\s\S]*Dossier concerné/,
   'l’aperçu reprend le titulaire de licence puis le dossier concerné');
 assert.match(appSource, /Organisation · propriétaire de la licence[\s\S]*Dossier concerné/,
@@ -539,7 +551,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v89/);
+assert.match(serviceWorkerSource, /perfecto-static-v90/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);
