@@ -546,6 +546,109 @@ const noAnalyticalNature = Report.build({
 });
 assert.deepEqual(noAnalyticalNature.groups, [], 'sans nature analytique sélectionnée, aucun cumul n’est produit');
 
+const currencyRecords = [
+  { code: 'EUR', label: 'Euro', lastRate: '999' },
+  { code: 'USD', label: 'Dollar des États-Unis' },
+  { code: 'XOF', label: 'Franc CFA', lastRate: '1.000' }
+];
+const currencyEntries = [
+  {
+    id: 'currency-eur', date: '2026-01-12', journal: 'OD', status: 'posted', reference: 'OD-EUR-1',
+    sourceMetadata: { lines: [{ currencyCode: 'eur', foreignAmount: '12,50' }, { currencyCode: 'EUR', foreignAmount: '12,50' }] },
+    lines: [{ account: '601100', debit: 8000, credit: 0 }, { account: '401100', debit: 0, credit: 8000 }]
+  },
+  {
+    id: 'currency-usd', date: '2026-02-01', journal: 'OD', status: 'posted', reference: 'OD-USD-1',
+    lines: [
+      { account: '601100', currencyCode: 'USD', foreignDebit: 50, debit: 45000, credit: 0 },
+      { account: '401100', currencyCode: 'USD', foreignCredit: 50, debit: 0, credit: 45000 }
+    ]
+  },
+  {
+    id: 'currency-xof', date: '2026-02-10', journal: 'OD', status: 'posted', reference: 'OD-XOF-1',
+    lines: [{ account: '601100', debit: 75, credit: 0 }, { account: '401100', debit: 0, credit: 75 }]
+  },
+  {
+    id: 'currency-unknown', date: '2026-02-11', journal: 'OD', status: 'posted',
+    lines: [{ account: '601100', currencyCode: 'JPY', foreignDebit: 90, debit: 1000, credit: 0 }]
+  },
+  {
+    id: 'currency-missing-amount', date: '2026-02-12', journal: 'OD', status: 'posted',
+    sourceMetadata: { lines: [{ currencyCode: 'EUR' }] },
+    lines: [{ account: '601100', debit: 1200, credit: 0 }]
+  },
+  {
+    id: 'currency-negative-amount', date: '2026-02-13', journal: 'OD', status: 'posted',
+    sourceMetadata: { lines: [{ currencyCode: 'EUR', foreignAmount: '-20,00' }] },
+    lines: [{ account: '601100', debit: 1300, credit: 0 }]
+  },
+  {
+    id: 'currency-ambiguous', date: '2026-02-14', journal: 'OD', status: 'posted',
+    sourceMetadata: { lines: [{ currencyCode: 'EUR', foreignAmount: '25,00' }] },
+    lines: [{ account: '601100', currencyCode: 'USD', debit: 1400, credit: 0 }]
+  },
+  {
+    id: 'currency-entry-code-conflict', date: '2026-02-14', journal: 'OD', status: 'posted', currencyCode: 'USD',
+    sourceMetadata: { lines: [{ currencyCode: 'EUR', foreignAmount: '10,00' }] },
+    lines: [{ account: '601100', debit: 1500, credit: 0 }]
+  },
+  {
+    id: 'currency-other-journal', date: '2026-02-15', journal: 'AC', status: 'posted',
+    lines: [{ account: '601100', debit: 1500, credit: 0 }]
+  },
+  {
+    id: 'currency-draft', date: '2026-02-16', journal: 'OD', status: 'draft',
+    lines: [{ account: '601100', debit: 1600, credit: 0 }]
+  },
+  {
+    id: 'currency-outside-period', date: '2026-03-01', journal: 'OD', status: 'posted',
+    lines: [{ account: '601100', debit: 1700, credit: 0 }]
+  }
+];
+assert.deepEqual(Report.columnsForReport('currency-totals').map(column => column.key),
+  ['currencyCode', 'currencyTitle', 'pieceCount', 'lineCount', 'debit', 'credit']);
+assert.deepEqual(Report.columnsForReport('currency-totals').map(column => column.label),
+  ['Code devise', 'Intitulé de la devise', 'Nombre de pièces', 'Nombre de lignes', 'Total des débits', 'Total des crédits']);
+assert.deepEqual(Report.columnsForReport('currency-totals').map(column => column.defaultSelected), [true, true, true, false, true, true],
+  'les colonnes et leur sélection initiale suivent la capture ; le nombre de lignes reste facultatif');
+assert.ok(Report.columnsForReport('currency-totals').every(column => column.selectable));
+const currencyRecordsBefore = JSON.parse(JSON.stringify(currencyRecords));
+const currencyEntriesBefore = JSON.parse(JSON.stringify(currencyEntries));
+const currencyTotals = Report.build({
+  reportType: 'currency-totals', entries: currencyEntries, currencyRecords, baseCurrencyCode: 'XOF',
+  filters: { journals: ['OD'], from: '2026-01-01', to: '2026-02-28' }
+});
+assert.equal(currencyTotals.currencyCount, 3);
+assert.equal(currencyTotals.entryCount, 3);
+assert.equal(currencyTotals.lineCount, 6);
+assert.equal(currencyTotals.omittedLineCount, 5, 'les codes inconnus/contradictoires, les montants d’origine absents/négatifs et les références ambiguës sont signalés puis exclus');
+assert.equal(currencyTotals.groups[0].title, 'Cumul des journaux par devises');
+assert.deepEqual(currencyTotals.groups[0].rows.map(row => row.currencyCode), ['EUR', 'USD', 'XOF']);
+assert.deepEqual(currencyTotals.groups[0].rows.map(row => row.cells), [
+  { currencyCode: 'EUR', currencyTitle: 'Euro', pieceCount: 1, debit: 12.5, credit: 12.5 },
+  { currencyCode: 'USD', currencyTitle: 'Dollar des États-Unis', pieceCount: 1, debit: 50, credit: 50 },
+  { currencyCode: 'XOF', currencyTitle: 'Franc CFA', pieceCount: 1, debit: 75, credit: 75 }
+], 'les montants étrangers explicites restent dans leur devise, sans conversion avec le dernier cours configuré');
+assert.deepEqual(currencyRecords, currencyRecordsBefore, 'le rapport ne modifie pas le référentiel des devises');
+assert.deepEqual(currencyEntries, currencyEntriesBefore, 'le rapport ne modifie aucune écriture');
+const currencyMatrix = Report.toMatrix(currencyTotals);
+assert.deepEqual(currencyMatrix[0], ['Code devise', 'Intitulé de la devise', 'Nombre de pièces', 'Total des débits', 'Total des crédits']);
+assert.ok(currencyMatrix.some(row => row[0] === 'EUR' && row[3] === 12.5 && row[4] === 12.5));
+const currencyLineCountReport = Report.build({
+  reportType: 'currency-totals', currencyRecords, entries: [currencyEntries[0]],
+  columns: ['currencyCode', 'lineCount'], filters: { journals: ['OD'], from: '2026-01-01', to: '2026-12-31' }
+});
+assert.deepEqual(currencyLineCountReport.groups[0].rows[0].cells, { currencyCode: 'EUR', lineCount: 2 },
+  'la colonne facultative du nombre de lignes est calculée et exportable quand elle est activée');
+const noForeignCurrencyAmount = Report.build({
+  reportType: 'currency-totals', currencyRecords, entries: [{
+    id: 'currency-no-source-amount', status: 'posted', journal: 'OD', date: '2026-01-01',
+    lines: [{ currencyCode: 'EUR', debit: 100, credit: 0 }]
+  }], filters: { journals: ['OD'], from: '2026-01-01', to: '2026-12-31' }
+});
+assert.deepEqual(noForeignCurrencyAmount.groups, [], 'un montant XOF n’est jamais repris comme montant d’une devise étrangère');
+assert.equal(noForeignCurrencyAmount.omittedLineCount, 1);
+
 const matrix = Report.toMatrix(report);
 assert.deepEqual(matrix[0], ['Date', 'N° pièce', 'Compte', 'Débit', 'Crédit', 'Libellé', '1ère saisie']);
 assert.equal(matrix[1][0], 'Journal OD · Opérations diverses');
@@ -598,4 +701,4 @@ assert.deepEqual(twoJournals.groups.map(group => group.code), ['AC', 'OD']);
 assert.equal(twoJournals.groups[0].pageBreakBefore, false);
 assert.equal(twoJournals.groups[1].pageBreakBefore, true);
 
-console.log('Rapports de journaux : cumuls par journal, comptes individuels, synthèse, tiers et centres analytiques, filtres et exports — OK');
+console.log('Rapports de journaux : cumuls par journal, comptes individuels, synthèse, tiers, centres analytiques et devises, filtres et exports — OK');

@@ -282,10 +282,10 @@ assert.equal(findTab('editions', 'journals').children[6].status, 'active');
 assert.ok(findTab('editions', 'journals').children[6].reason.includes('nature'));
 assert.ok(findTab('editions', 'journals').children[6].reason.includes('référence explicite'));
 assert.ok(findTab('editions', 'journals').children[6].reason.includes('ne sont pas ventilés'));
-assert.match(appSource, /child\.id === 'journal-lines' \|\| child\.id === 'journal-modified-pieces' \|\| child\.id === 'journal-unbalanced-pieces' \|\| child\.id === 'journal-entry-totals' \|\| child\.id === 'journal-individual-account-totals' \|\| child\.id === 'journal-summary-account-totals' \|\| child\.id === 'journal-third-party-totals' \|\| child\.id === 'journal-analytic-center-totals'\) return viewJournalLinesReport\(backLink\)/,
-  'les rapports et les cumuls par tiers et centre analytique ouvrent le parcours partagé en deux étapes');
-assert.match(appSource, /parsed\.params\.c === 'journal-individual-account-totals'[\s\S]*'account-totals'[\s\S]*parsed\.params\.c === 'journal-summary-account-totals'[\s\S]*'summary-account-totals'[\s\S]*parsed\.params\.c === 'journal-third-party-totals'[\s\S]*'third-party-totals'[\s\S]*parsed\.params\.c === 'journal-analytic-center-totals' \? 'analytic-center-totals'/,
-  'les sous-menus ouvrent les modes dédiés aux cumuls par compte, tiers et centre analytique');
+assert.match(appSource, /child\.id === 'journal-lines' \|\| child\.id === 'journal-modified-pieces' \|\| child\.id === 'journal-unbalanced-pieces' \|\| child\.id === 'journal-entry-totals' \|\| child\.id === 'journal-individual-account-totals' \|\| child\.id === 'journal-summary-account-totals' \|\| child\.id === 'journal-third-party-totals' \|\| child\.id === 'journal-analytic-center-totals' \|\| child\.id === 'journal-currency-totals'\) return viewJournalLinesReport\(backLink\)/,
+  'les rapports et les cumuls passent par le parcours partagé en deux étapes');
+assert.match(appSource, /parsed\.params\.c === 'journal-individual-account-totals'[\s\S]*'account-totals'[\s\S]*parsed\.params\.c === 'journal-summary-account-totals'[\s\S]*'summary-account-totals'[\s\S]*parsed\.params\.c === 'journal-third-party-totals'[\s\S]*'third-party-totals'[\s\S]*parsed\.params\.c === 'journal-analytic-center-totals'[\s\S]*'analytic-center-totals'[\s\S]*parsed\.params\.c === 'journal-currency-totals' \? 'currency-totals'/,
+  'les sous-menus ouvrent les modes dédiés aux cumuls par compte, tiers, centre et devise');
 assert.match(journalLinesSource, /ACCOUNT_TOTALS_COLUMNS = \[[\s\S]*Code du compte[\s\S]*Intitulé du compte[\s\S]*Nombre de lignes[\s\S]*reportType === 'account-totals'/,
   'le calcul du cumul individuel expose les colonnes de la capture');
 assert.match(journalLinesSource, /SUMMARY_ACCOUNT_TOTALS_COLUMNS = \[[\s\S]*Code du compte[\s\S]*Intitulé du compte[\s\S]*Nombre de lignes[\s\S]*Total des débits[\s\S]*defaultSelected: false[\s\S]*Total des crédits[\s\S]*summary-account-totals/,
@@ -296,7 +296,7 @@ assert.match(journalLinesSource, /THIRD_PARTY_TOTALS_COLUMNS = \[[\s\S]*Code du 
 assert.match(appSource, /function journalLinesThirdPartyNatureOptions\(\)[\s\S]*value: 'clients', label: 'Clients'/);
 assert.match(appSource, /id="journal-lines-third-party-nature" name="thirdPartyNature"/,
   'le cumul par tiers propose une nature de tiers initialement réglée sur Clients');
-assert.match(appSource, /thirdPartyNature: isThirdPartyTotalsReport \? 'clients' : undefined[\s\S]*orientation: [\s\S]*isThirdPartyTotalsReport \|\| isAnalyticCenterTotalsReport \? 'landscape'/,
+assert.match(appSource, /thirdPartyNature: isThirdPartyTotalsReport \? 'clients' : undefined[\s\S]*orientation: [\s\S]*isThirdPartyTotalsReport \|\| isAnalyticCenterTotalsReport \|\| isCurrencyTotalsReport \? 'landscape'/,
   'le rapport par tiers démarre sur Clients et les cumuls associés reprennent le paysage');
 assert.match(appSource, /référence explicite correspondant à une fiche du dossier[\s\S]*ne sont jamais ventilés par supposition/,
   'les cumuls par tiers ne répartissent jamais les mouvements collectifs sans identifiant');
@@ -313,10 +313,28 @@ assert.match(journalLinesSource, /function analyticalCenterReferences\([\s\S]*fu
 assert.match(appSource, /function journalLinesAnalyticalNatureOptions\([\s\S]*row\.id === 'responsibility-centers'[\s\S]*S\.analyticalCenters\(\)/);
 assert.match(appSource, /id="journal-lines-analytic-nature" name="analyticalNature"[\s\S]*id="journal-lines-analytic-centers-summary"[\s\S]*data-journal-lines-picker="analytic-centers"/,
   'la sélection reprend la nature analytique et les codes de centres de la capture');
-assert.match(appSource, /printer: isAnalyticCenterTotalsReport \? 'system' : 'pdf'[\s\S]*orientation: [\s\S]*isAnalyticCenterTotalsReport \? 'landscape'/,
+assert.match(appSource, /printer: isAnalyticCenterTotalsReport \|\| isCurrencyTotalsReport \? 'system' : 'pdf'[\s\S]*orientation: [\s\S]*isAnalyticCenterTotalsReport \|\| isCurrencyTotalsReport \? 'landscape'/,
   'la mise en page analytique démarre sur l’imprimante système et le paysage de la capture');
 assert.match(appSource, /lignes validées portant une référence analytique explicite et non ambiguë[\s\S]*Aucune imputation n’est créée/,
   'le rapport analytique ne crée aucune imputation et n’attribue pas les lignes sans référence');
+assert.equal(findTab('editions', 'journals').children.find(child => child.id === 'journal-currency-totals').status, 'active');
+assert.ok(findTab('editions', 'journals').children.find(child => child.id === 'journal-currency-totals').reason.includes('montant d’origine explicites'));
+assert.ok(findTab('editions', 'journals').children.find(child => child.id === 'journal-currency-totals').reason.includes('Aucun taux ni conversion'));
+assert.match(journalLinesSource, /CURRENCY_TOTALS_COLUMNS = \[[\s\S]*Code devise[\s\S]*Intitulé de la devise[\s\S]*Nombre de pièces[\s\S]*Nombre de lignes[^\n]*defaultSelected: false[\s\S]*Total des débits[\s\S]*Total des crédits[\s\S]*buildCurrencyTotals/,
+  'le cumul par devise reprend les six colonnes de la capture et laisse le nombre de lignes facultatif');
+assert.match(appSource, /currencyRecords: currencyConfiguration\.rows[\s\S]*baseCurrencyCode: currencyConfiguration\.defaultCurrencyCode[\s\S]*reportType: session\.mode/,
+  'le rapport utilise les devises configurées par dossier sans appliquer leur cours');
+assert.match(appSource, /Les montants XOF reprennent les débits et crédits comptabilisés ; les autres devises exigent un code et un montant d’origine explicites\. Aucun cours de change ni conversion n’est appliqué/);
+assert.ok(appSource.indexOf('class="alert info journal-lines-layout-summary"') < appSource.indexOf("session.mode === 'currency-totals' && report.omittedLineCount ?"),
+  'l’avertissement sur les lignes omises suit immédiatement le résumé de mise en page');
+assert.match(appSource, /devise absente ou ambiguë dans le référentiel[\s\S]*montant comptabilisé invalide ou montant d’origine absent\/illisible[\s\S]*Aucun cours ni conversion n’a été appliqué/);
+assert.match(appSource, /printerHint \+\s*currencyWarning \+/,
+  'l’avertissement sur les lignes omises est également repris dans l’aperçu');
+assert.match(appSource, /printer: isAnalyticCenterTotalsReport \|\| isCurrencyTotalsReport \? 'system' : 'pdf'[\s\S]*isAnalyticCenterTotalsReport \|\| isCurrencyTotalsReport \? 'landscape'/,
+  'la mise en page devise reprend l’imprimante système, le paysage et l’aperçu de la capture');
+assert.match(appSource, /'PERFECTO-cumul-devises-'[\s\S]*'Cumul par devises'/,
+  'les exports du cumul par devises utilisent un nom de fichier et un onglet dédiés');
+assert.match(configurationCss, /journal-lines-filter-grid\.journal-currency-total-filters[\s\S]*journal-lines-column-grid\.journal-currency-total-columns/);
 assert.match(appSource, /includeDrafts: isModifiedReport[\s\S]*modifiedOnly: isModifiedReport[\s\S]*filterByModificationDate: isModifiedReport/,
   'le rapport modifié filtre la date de modification et accepte les brouillons modifiés');
 assert.match(appSource, /Lignes générées[\s\S]*data-jlr-generated-count[\s\S]*updateJournalLinesGeneratedCount/,
@@ -428,13 +446,13 @@ assert.match(appSource, /child.section === 'definitionsAnalytics'/);
 assert.match(appSource, /var disabled = child\.status === 'inactive';[\s\S]*return disabled[\s\S]*edition-report-card is-disabled/);
 assert.match(journalLinesSource, /options\.unbalancedOnly[\s\S]*entryDebit[\s\S]*entryCredit/,
   'le rapport ne conserve que les pièces dont les totaux diffèrent');
-assert.match(appSource, /function createJournalLinesReportSession[\s\S]*var isAnalyticCenterTotalsReport = mode === 'analytic-center-totals'[\s\S]*orientation: isUnbalancedReport \|\| isTotalsReport \|\| isAccountTotalsReport \|\| isSummaryAccountTotalsReport \|\| isThirdPartyTotalsReport \|\| isAnalyticCenterTotalsReport \? 'landscape'/,
-  'les cumuls par journal, compte, tiers et centre analytique reprennent l’orientation paysage');
+assert.match(appSource, /function createJournalLinesReportSession[\s\S]*var isCurrencyTotalsReport = mode === 'currency-totals'[\s\S]*orientation: isUnbalancedReport \|\| isTotalsReport \|\| isAccountTotalsReport \|\| isSummaryAccountTotalsReport \|\| isThirdPartyTotalsReport \|\| isAnalyticCenterTotalsReport \|\| isCurrencyTotalsReport \? 'landscape'/,
+  'les cumuls par journal, compte, tiers, centre et devise reprennent l’orientation paysage');
 assert.match(appSource, /reportType: session\.mode[\s\S]*unbalancedOnly: isUnbalancedReport/);
-assert.match(appSource, /if \(child\.id === 'journal-lines'[\s\S]*child\.id === 'journal-entry-totals' \|\| child\.id === 'journal-individual-account-totals' \|\| child\.id === 'journal-summary-account-totals' \|\| child\.id === 'journal-third-party-totals' \|\| child\.id === 'journal-analytic-center-totals'\) return viewJournalLinesReport\(backLink\)/,
-  'les rapports et les quatre cumuls passent par le même parcours à deux étapes');
-assert.match(appSource, /menuParams\.c === 'journal-lines'[\s\S]*menuParams\.c === 'journal-entry-totals' \|\| menuParams\.c === 'journal-individual-account-totals' \|\| menuParams\.c === 'journal-summary-account-totals' \|\| menuParams\.c === 'journal-third-party-totals' \|\| menuParams\.c === 'journal-analytic-center-totals'\)\) bindJournalLinesReport\(\)/,
-  'les quatre cumuls sont reliés aux interactions de sélection, mise en page, aperçu et impression');
+assert.match(appSource, /if \(child\.id === 'journal-lines'[\s\S]*child\.id === 'journal-entry-totals' \|\| child\.id === 'journal-individual-account-totals' \|\| child\.id === 'journal-summary-account-totals' \|\| child\.id === 'journal-third-party-totals' \|\| child\.id === 'journal-analytic-center-totals' \|\| child\.id === 'journal-currency-totals'\) return viewJournalLinesReport\(backLink\)/,
+  'les rapports et les cinq cumuls passent par le même parcours à deux étapes');
+assert.match(appSource, /menuParams\.c === 'journal-lines'[\s\S]*menuParams\.c === 'journal-entry-totals' \|\| menuParams\.c === 'journal-individual-account-totals' \|\| menuParams\.c === 'journal-summary-account-totals' \|\| menuParams\.c === 'journal-third-party-totals' \|\| menuParams\.c === 'journal-analytic-center-totals' \|\| menuParams\.c === 'journal-currency-totals'\)\) bindJournalLinesReport\(\)/,
+  'les cinq cumuls sont reliés aux interactions de sélection, mise en page, aperçu et impression');
 assert.match(appSource, /function editionReportCatalog\([\s\S]*Balances, ouvertures et situations[\s\S]*Grands livres et historiques[\s\S]*Disponibilités budgétaires/);
 assert.match(menuRenderer, /isEditionReportsMenu[\s\S]*editionReportChildView\(selectedChild/);
 assert.equal(findTab('editions', 'general-accounts').status, 'mixed');
@@ -598,7 +616,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v94/);
+assert.match(serviceWorkerSource, /perfecto-static-v95/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

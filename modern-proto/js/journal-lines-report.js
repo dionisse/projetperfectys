@@ -120,6 +120,21 @@
     [ANALYTICAL_CENTER_TOTALS_COLUMNS[3], ANALYTICAL_CENTER_TOTALS_COLUMNS[4]]
   ];
 
+  var CURRENCY_TOTALS_COLUMNS = [
+    { key: 'currencyCode', label: 'Code devise', group: 0, selectable: true, defaultSelected: true },
+    { key: 'currencyTitle', label: 'Intitulé de la devise', group: 0, selectable: true, defaultSelected: true },
+    { key: 'pieceCount', label: 'Nombre de pièces', group: 1, selectable: true, defaultSelected: true },
+    { key: 'lineCount', label: 'Nombre de lignes', group: 1, selectable: true, defaultSelected: false },
+    { key: 'debit', label: 'Total des débits', group: 2, selectable: true, defaultSelected: true },
+    { key: 'credit', label: 'Total des crédits', group: 2, selectable: true, defaultSelected: true }
+  ];
+
+  var CURRENCY_TOTALS_COLUMN_GROUPS = [
+    [CURRENCY_TOTALS_COLUMNS[0], CURRENCY_TOTALS_COLUMNS[1]],
+    [CURRENCY_TOTALS_COLUMNS[2], CURRENCY_TOTALS_COLUMNS[3]],
+    [CURRENCY_TOTALS_COLUMNS[4], CURRENCY_TOTALS_COLUMNS[5]]
+  ];
+
   function columnsForReport(reportType) {
     var columns = reportType === 'unbalanced'
       ? UNBALANCED_COLUMNS
@@ -131,7 +146,9 @@
             ? SUMMARY_ACCOUNT_TOTALS_COLUMNS
             : (reportType === 'third-party-totals'
               ? THIRD_PARTY_TOTALS_COLUMNS
-              : (reportType === 'analytic-center-totals' ? ANALYTICAL_CENTER_TOTALS_COLUMNS : COLUMNS)))));
+              : (reportType === 'analytic-center-totals'
+                ? ANALYTICAL_CENTER_TOTALS_COLUMNS
+                : (reportType === 'currency-totals' ? CURRENCY_TOTALS_COLUMNS : COLUMNS))))));
     return columns.map(function (column) { return Object.assign({}, column); });
   }
 
@@ -146,7 +163,9 @@
             ? SUMMARY_ACCOUNT_TOTALS_COLUMN_GROUPS
             : (reportType === 'third-party-totals'
               ? THIRD_PARTY_TOTALS_COLUMN_GROUPS
-              : (reportType === 'analytic-center-totals' ? ANALYTICAL_CENTER_TOTALS_COLUMN_GROUPS : COLUMN_GROUPS)))));
+              : (reportType === 'analytic-center-totals'
+                ? ANALYTICAL_CENTER_TOTALS_COLUMN_GROUPS
+                : (reportType === 'currency-totals' ? CURRENCY_TOTALS_COLUMN_GROUPS : COLUMN_GROUPS))))));
     return groups.map(function (group) {
       return group.map(function (column) { return column ? Object.assign({}, column) : null; });
     });
@@ -607,6 +626,245 @@
     };
   }
 
+  function normalizeCurrencyCode(value) {
+    return String(value == null ? '' : value).trim().toLocaleUpperCase();
+  }
+
+  function parseCurrencyUnits(value) {
+    if (value == null || value === '') return null;
+    var numeric;
+    if (typeof value === 'number') {
+      numeric = value;
+    } else {
+      var match = /^\+?(\d+)(?:[.,](\d{1,4}))?$/.exec(String(value).trim());
+      if (!match) return null;
+      numeric = Number(match[1] + (match[2] ? '.' + match[2] : ''));
+    }
+    if (!Number.isFinite(numeric) || numeric < 0) return null;
+    var units = Math.round(numeric * 10000);
+    return Number.isSafeInteger(units) && Math.abs(numeric - units / 10000) < 1e-8 ? units : null;
+  }
+
+  function explicitCurrencyCodes(line, sourceLine) {
+    var values = [];
+    var invalid = false;
+    [line, sourceLine].forEach(function (source) {
+      if (!source || typeof source !== 'object' || Array.isArray(source) || !Object.prototype.hasOwnProperty.call(source, 'currencyCode')) return;
+      var value = source.currencyCode;
+      if (value == null || value === '') return;
+      if (typeof value !== 'string' && typeof value !== 'number') {
+        invalid = true;
+        return;
+      }
+      var code = normalizeCurrencyCode(value);
+      if (!/^[A-Z]{3}$/.test(code)) invalid = true;
+      else if (values.indexOf(code) === -1) values.push(code);
+    });
+    return { values: values, invalid: invalid };
+  }
+
+  function explicitCurrencySideAmounts(line, sourceLine) {
+    var aliases = {
+      debit: ['foreignDebit', 'currencyDebit'],
+      credit: ['foreignCredit', 'currencyCredit']
+    };
+    var records = [line, sourceLine];
+    var resolved = null;
+    var invalid = false;
+    var present = false;
+    records.forEach(function (record) {
+      if (!record || typeof record !== 'object' || Array.isArray(record)) return;
+      var hasFields = aliases.debit.concat(aliases.credit).some(function (key) {
+        return Object.prototype.hasOwnProperty.call(record, key);
+      });
+      if (!hasFields) return;
+      present = true;
+      function readSide(keys) {
+        var values = keys.filter(function (key) {
+          return Object.prototype.hasOwnProperty.call(record, key) && record[key] != null && record[key] !== '';
+        }).map(function (key) { return parseCurrencyUnits(record[key]); });
+        if (values.some(function (value) { return value == null; })) return { valid: false, units: 0 };
+        if (values.some(function (value) { return value !== values[0]; })) return { valid: false, units: 0 };
+        return { valid: true, units: values.length ? values[0] : 0 };
+      }
+      var debit = readSide(aliases.debit);
+      var credit = readSide(aliases.credit);
+      if (!debit.valid || !credit.valid || (debit.units > 0 && credit.units > 0) || (!debit.units && !credit.units)) {
+        invalid = true;
+        return;
+      }
+      if (resolved && (resolved.debitUnits !== debit.units || resolved.creditUnits !== credit.units)) {
+        invalid = true;
+        return;
+      }
+      resolved = { debitUnits: debit.units, creditUnits: credit.units };
+    });
+    return { present: present, invalid: invalid, value: resolved };
+  }
+
+  function explicitCurrencyAmount(line, sourceLine, baseDebitUnits, baseCreditUnits) {
+    var sideAmounts = explicitCurrencySideAmounts(line, sourceLine);
+    if (sideAmounts.present) return sideAmounts.invalid ? null : sideAmounts.value;
+    var values = [line, sourceLine].filter(function (source) {
+      return source && typeof source === 'object' && !Array.isArray(source) &&
+        Object.prototype.hasOwnProperty.call(source, 'foreignAmount') && source.foreignAmount != null && source.foreignAmount !== '';
+    }).map(function (source) { return parseCurrencyUnits(source.foreignAmount); });
+    if (!values.length || values.some(function (value) { return value == null; }) || values.some(function (value) { return value !== values[0]; })) return null;
+    if (!values[0]) return null;
+    if (baseDebitUnits > 0 && baseCreditUnits === 0) return { debitUnits: values[0], creditUnits: 0 };
+    if (baseCreditUnits > 0 && baseDebitUnits === 0) return { debitUnits: 0, creditUnits: values[0] };
+    return null;
+  }
+
+  function buildCurrencyTotals(options) {
+    var filters = options.filters || {};
+    var selectedJournals = asSet(filters.journals);
+    var from = String(filters.from || '');
+    var to = String(filters.to || '');
+    var baseCurrencyCode = normalizeCurrencyCode(options.baseCurrencyCode || 'XOF');
+    var currencies = Array.isArray(options.currencyRecords) ? options.currencyRecords : [];
+    var entries = Array.isArray(options.entries) ? options.entries : [];
+    var currencyByCode = new Map();
+    var selectedKeys = Array.isArray(options.columns) ? options.columns : CURRENCY_TOTALS_COLUMNS.filter(function (column) {
+      return column.selectable && column.defaultSelected;
+    }).map(function (column) { return column.key; });
+    var columns = CURRENCY_TOTALS_COLUMNS.filter(function (column) {
+      return column.selectable && selectedKeys.indexOf(column.key) !== -1;
+    });
+    var totalsByCurrency = new Map();
+    var includedEntries = new Set();
+    var lineCount = 0;
+    var omittedLineCount = 0;
+
+    currencies.forEach(function (currency) {
+      if (!currency || typeof currency !== 'object') return;
+      var code = normalizeCurrencyCode(currency.code);
+      if (!/^[A-Z]{3}$/.test(code)) return;
+      if (currencyByCode.has(code)) currencyByCode.set(code, null);
+      else currencyByCode.set(code, currency);
+    });
+
+    entries.forEach(function (entry, entryIndex) {
+      if (!entry || entry.status !== 'posted') return;
+      var date = String(entry.date || '');
+      if (from && date < from) return;
+      if (to && date > to) return;
+      var journal = String(entry.journal || '');
+      if (selectedJournals.size && !selectedJournals.has(journal)) return;
+      var sourceLines = entry.sourceMetadata && Array.isArray(entry.sourceMetadata.lines) ? entry.sourceMetadata.lines : [];
+      (Array.isArray(entry.lines) ? entry.lines : []).forEach(function (line, lineIndex) {
+        if (!line || typeof line !== 'object' || Array.isArray(line)) return;
+        var sourceLine = sourceLines[lineIndex] && typeof sourceLines[lineIndex] === 'object' ? sourceLines[lineIndex] : {};
+        var codes = explicitCurrencyCodes(line, sourceLine);
+        var hasForeignAmount = [line, sourceLine].some(function (source) {
+          return source && Object.prototype.hasOwnProperty.call(source, 'foreignAmount') && source.foreignAmount != null && source.foreignAmount !== '';
+        });
+        var sideAmounts = explicitCurrencySideAmounts(line, sourceLine);
+        var hasExplicitSideAmount = sideAmounts.present;
+        if (codes.invalid || codes.values.length > 1) {
+          omittedLineCount += 1;
+          return;
+        }
+        var hasEntryCurrencyCode = entry.currencyCode != null && String(entry.currencyCode).trim() !== '';
+        var entryCurrencyCode = normalizeCurrencyCode(entry.currencyCode);
+        if (hasEntryCurrencyCode && (typeof entry.currencyCode !== 'string' || !/^[A-Z]{3}$/.test(entryCurrencyCode))) {
+          omittedLineCount += 1;
+          return;
+        }
+        if (codes.values.length && entryCurrencyCode && codes.values[0] !== entryCurrencyCode) {
+          omittedLineCount += 1;
+          return;
+        }
+        var currencyCode = codes.values[0] || entryCurrencyCode || baseCurrencyCode;
+        if (!codes.values.length && !entryCurrencyCode && (hasForeignAmount || hasExplicitSideAmount)) {
+          omittedLineCount += 1;
+          return;
+        }
+        var currency = currencyByCode.get(currencyCode);
+        if (!currency || currencyByCode.get(currencyCode) === null) {
+          omittedLineCount += 1;
+          return;
+        }
+        var baseDebit = Number(line.debit);
+        var baseCredit = Number(line.credit);
+        if (!Number.isFinite(baseDebit) || !Number.isFinite(baseCredit) || baseDebit < 0 || baseCredit < 0 ||
+            (baseDebit > 0 && baseCredit > 0) || (baseDebit === 0 && baseCredit === 0)) {
+          omittedLineCount += 1;
+          return;
+        }
+        var baseDebitUnits = Math.round(baseDebit * 10000);
+        var baseCreditUnits = Math.round(baseCredit * 10000);
+        if (!Number.isSafeInteger(baseDebitUnits) || !Number.isSafeInteger(baseCreditUnits)) {
+          omittedLineCount += 1;
+          return;
+        }
+        var amounts = currencyCode === baseCurrencyCode
+          ? { debitUnits: baseDebitUnits, creditUnits: baseCreditUnits }
+          : explicitCurrencyAmount(line, sourceLine, baseDebitUnits, baseCreditUnits);
+        if (!amounts || !Number.isSafeInteger(amounts.debitUnits) || !Number.isSafeInteger(amounts.creditUnits) ||
+            amounts.debitUnits < 0 || amounts.creditUnits < 0 ||
+            (amounts.debitUnits > 0 && amounts.creditUnits > 0) || (amounts.debitUnits === 0 && amounts.creditUnits === 0)) {
+          omittedLineCount += 1;
+          return;
+        }
+        var total = totalsByCurrency.get(currencyCode);
+        var nextDebitUnits = (total ? total.debitUnits : 0) + amounts.debitUnits;
+        var nextCreditUnits = (total ? total.creditUnits : 0) + amounts.creditUnits;
+        if (!Number.isSafeInteger(nextDebitUnits) || !Number.isSafeInteger(nextCreditUnits)) {
+          omittedLineCount += 1;
+          return;
+        }
+        if (!total) {
+          total = { currency: currency, entryIds: new Set(), lineCount: 0, debitUnits: 0, creditUnits: 0 };
+          totalsByCurrency.set(currencyCode, total);
+        }
+        var entryId = entry.id != null && String(entry.id).trim() !== '' ? 'id:' + String(entry.id) : 'entry:' + entryIndex;
+        total.entryIds.add(entryId);
+        includedEntries.add(entryId);
+        total.lineCount += 1;
+        total.debitUnits = nextDebitUnits;
+        total.creditUnits = nextCreditUnits;
+        lineCount += 1;
+      });
+    });
+
+    var rows = Array.from(totalsByCurrency.entries()).sort(function (a, b) {
+      return compare(a[0], b[0]);
+    }).map(function (item) {
+      var code = item[0];
+      var total = item[1];
+      var cells = {};
+      columns.forEach(function (column) {
+        switch (column.key) {
+          case 'currencyCode': cells[column.key] = code; break;
+          case 'currencyTitle': cells[column.key] = String(total.currency.label || ''); break;
+          case 'pieceCount': cells[column.key] = total.entryIds.size; break;
+          case 'lineCount': cells[column.key] = total.lineCount; break;
+          case 'debit': cells[column.key] = total.debitUnits / 10000; break;
+          case 'credit': cells[column.key] = total.creditUnits / 10000; break;
+        }
+      });
+      return { kind: 'line', currencyCode: code, cells: cells };
+    });
+    var currencyCount = totalsByCurrency.size;
+    var groups = rows.length ? [{
+      code: 'currency-totals',
+      title: 'Cumul des journaux par devises',
+      currencyCount: currencyCount,
+      entryCount: includedEntries.size,
+      lineCount: lineCount,
+      rows: rows
+    }] : [];
+    return {
+      columns: columns,
+      groups: groups,
+      currencyCount: currencyCount,
+      entryCount: includedEntries.size,
+      lineCount: lineCount,
+      omittedLineCount: omittedLineCount
+    };
+  }
+
   function thirdPartyNatureLabel(nature) {
     return {
       suppliers: 'Fournisseurs',
@@ -740,6 +998,7 @@
     if (options.reportType === 'summary-account-totals') return buildSummaryAccountTotals(options);
     if (options.reportType === 'third-party-totals') return buildThirdPartyTotals(options);
     if (options.reportType === 'analytic-center-totals') return buildAnalyticalCenterTotals(options);
+    if (options.reportType === 'currency-totals') return buildCurrencyTotals(options);
     var filters = options.filters || {};
     var selectedJournals = asSet(filters.journals);
     var selectedAccounts = asSet(filters.accounts);

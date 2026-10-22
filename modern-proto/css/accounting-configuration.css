@@ -563,6 +563,7 @@
 .journal-summary-account-filters,
 .journal-third-party-filters,
 .journal-analytic-center-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 820px; }
+.journal-lines-filter-grid.journal-currency-total-filters { grid-template-columns: minmax(0, 1fr); max-width: 820px; }
 .journal-lines-generated-count { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; padding: 10px 12px; border: 1px solid #dce6df; border-radius: 9px; color: #54665c; background: #f7faf7; font-size: .75rem; }
 .journal-lines-generated-count strong { color: #1d5e50; font-size: .9rem; font-variant-numeric: tabular-nums; }
 .journal-lines-picker-control { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; gap: 7px; }
@@ -574,6 +575,7 @@
 .journal-lines-column-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 .journal-individual-account-columns,
 .journal-summary-account-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 820px; }
+.journal-lines-column-grid.journal-currency-total-columns { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 1120px; }
 .journal-lines-column-list { display: grid; align-content: start; gap: 9px; }
 .journal-lines-column-option { display: flex; align-items: flex-start; gap: 8px; min-height: 27px; color: #34463e; font-size: .75rem; line-height: 1.35; cursor: pointer; }
 .journal-lines-column-option input,
@@ -730,6 +732,7 @@ body.report-preview-open { overflow: hidden; }
 @media (max-width: 1050px) {
   .journal-lines-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .journal-lines-column-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .journal-lines-column-grid.journal-currency-total-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .journal-lines-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .journal-lines-destination-card { grid-column: 1 / -1; }
 }
