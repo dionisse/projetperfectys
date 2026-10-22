@@ -271,8 +271,8 @@ assert.equal(findTab('editions', 'journals').children[0].status, 'active');
 assert.ok(findTab('editions', 'journals').children[0].reason.includes('export Excel/TXT'));
 assert.equal(findTab('editions', 'journals').children[1].status, 'active');
 assert.ok(findTab('editions', 'journals').children[1].reason.includes('compteur dynamique'));
-assert.match(appSource, /child\.id === 'journal-lines' \|\| child\.id === 'journal-modified-pieces' \|\| child\.id === 'journal-unbalanced-pieces'\) return viewJournalLinesReport\(backLink\)/,
-  'les trois rapports de lignes ouvrent le parcours partagé de sélection et mise en page');
+assert.match(appSource, /child\.id === 'journal-lines' \|\| child\.id === 'journal-modified-pieces' \|\| child\.id === 'journal-unbalanced-pieces' \|\| child\.id === 'journal-entry-totals'\) return viewJournalLinesReport\(backLink\)/,
+  'les rapports de lignes et le cumul ouvrent le parcours partagé de sélection et mise en page');
 assert.match(appSource, /includeDrafts: isModifiedReport[\s\S]*modifiedOnly: isModifiedReport[\s\S]*filterByModificationDate: isModifiedReport/,
   'le rapport modifié filtre la date de modification et accepte les brouillons modifiés');
 assert.match(appSource, /Lignes générées[\s\S]*data-jlr-generated-count[\s\S]*updateJournalLinesGeneratedCount/,
@@ -295,6 +295,9 @@ assert.ok(htmlSource.indexOf('js/journal-lines-report.js') < htmlSource.indexOf(
 assert.match(serviceWorkerSource, /\.\/js\/journal-lines-report\.js/);
 assert.equal(findTab('editions', 'journals').children.find(child => child.id === 'journal-unbalanced-pieces').status, 'active');
 assert.ok(findTab('editions', 'journals').children.find(child => child.id === 'journal-unbalanced-pieces').reason.includes('huit colonnes'));
+assert.equal(findTab('editions', 'journals').children.find(child => child.id === 'journal-entry-totals').status, 'active');
+assert.ok(findTab('editions', 'journals').children.find(child => child.id === 'journal-entry-totals').reason.includes('pièces validées'));
+assert.ok(findTab('editions', 'journals').children.find(child => child.id === 'journal-entry-totals').reason.includes('aperçu, export Excel/TXT'));
 assert.equal(findTab('editions', 'journals').children.find(child => child.id === 'journal-analytic-center-totals').status, 'inactive');
 assert.equal(findTab('editions', 'matching').status, 'planned');
 assert.deepEqual(findTab('editions', 'matching').children.map(child => child.label), [
@@ -358,13 +361,13 @@ assert.match(appSource, /child.section === 'definitionsAnalytics'/);
 assert.match(appSource, /var disabled = child\.status === 'inactive';[\s\S]*return disabled[\s\S]*edition-report-card is-disabled/);
 assert.match(journalLinesSource, /options\.unbalancedOnly[\s\S]*entryDebit[\s\S]*entryCredit/,
   'le rapport ne conserve que les pièces dont les totaux diffèrent');
-assert.match(appSource, /function createJournalLinesReportSession[\s\S]*var isUnbalancedReport = mode === 'unbalanced'[\s\S]*orientation: isUnbalancedReport \? 'landscape'/,
-  'le rapport déséquilibré reprend l’orientation paysage de la capture');
+assert.match(appSource, /function createJournalLinesReportSession[\s\S]*var isTotalsReport = mode === 'totals'[\s\S]*orientation: isUnbalancedReport \|\| isTotalsReport \? 'landscape'/,
+  'les rapports dont les colonnes sont larges reprennent l’orientation paysage des captures');
 assert.match(appSource, /reportType: session\.mode[\s\S]*unbalancedOnly: isUnbalancedReport/);
-assert.match(appSource, /if \(child\.id === 'journal-lines'[\s\S]*child\.id === 'journal-unbalanced-pieces'\) return viewJournalLinesReport\(backLink\)/,
-  'les pièces déséquilibrées passent par le même parcours à deux étapes');
-assert.match(appSource, /menuParams\.c === 'journal-lines'[\s\S]*menuParams\.c === 'journal-unbalanced-pieces'\)\) bindJournalLinesReport\(\)/,
-  'le rapport est relié aux interactions de sélection, mise en page, aperçu et impression');
+assert.match(appSource, /if \(child\.id === 'journal-lines'[\s\S]*child\.id === 'journal-unbalanced-pieces' \|\| child\.id === 'journal-entry-totals'\) return viewJournalLinesReport\(backLink\)/,
+  'les pièces déséquilibrées et le cumul passent par le même parcours à deux étapes');
+assert.match(appSource, /menuParams\.c === 'journal-lines'[\s\S]*menuParams\.c === 'journal-entry-totals'\)\) bindJournalLinesReport\(\)/,
+  'le rapport de cumul est relié aux interactions de sélection, mise en page, aperçu et impression');
 assert.match(appSource, /function editionReportCatalog\([\s\S]*Balances, ouvertures et situations[\s\S]*Grands livres et historiques[\s\S]*Disponibilités budgétaires/);
 assert.match(menuRenderer, /isEditionReportsMenu[\s\S]*editionReportChildView\(selectedChild/);
 assert.equal(findTab('editions', 'general-accounts').status, 'mixed');
@@ -528,7 +531,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v87/);
+assert.match(serviceWorkerSource, /perfecto-static-v88/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

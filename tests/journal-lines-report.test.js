@@ -1,4 +1,4 @@
-/* Vérifie le filtrage en lecture seule et les regroupements du détail des journaux. */
+/* Vérifie les cumuls de journaux, les rapports de lignes et leurs exports en lecture seule. */
 'use strict';
 
 const assert = require('node:assert/strict');
@@ -222,6 +222,60 @@ const unbalancedWithoutInternalNumber = Report.build({
 });
 assert.equal(unbalancedWithoutInternalNumber.groups[0].rows[0].cells.internalNumber, '', 'un numéro interne absent dans la source reste vide');
 
+const journalTotals = Report.build({
+  reportType: 'totals',
+  entries: [
+    {
+      reference: 'OD-TOT-1', journal: 'OD', date: '2026-01-10', status: 'posted',
+      lines: [{ account: '601100', debit: 0.1, credit: 0 }, { account: '401100', debit: 0, credit: 0.1 }]
+    },
+    {
+      reference: 'OD-TOT-2', journal: 'OD', date: '2026-02-10', status: 'posted',
+      lines: [{ account: '601100', debit: 0.2, credit: 0 }, { account: '401100', debit: 0, credit: 0.2 }]
+    },
+    {
+      reference: 'OD-TOT-DRAFT', journal: 'OD', date: '2026-02-12', status: 'draft',
+      lines: [{ account: '601100', debit: 90, credit: 90 }]
+    },
+    {
+      reference: 'AC-TOT', journal: 'AC', date: '2026-02-13', status: 'posted',
+      lines: [{ account: '601100', debit: 40, credit: 40 }]
+    },
+    {
+      reference: 'OD-TOT-OUT', journal: 'OD', date: '2025-12-31', status: 'posted',
+      lines: [{ account: '601100', debit: 70, credit: 70 }]
+    }
+  ],
+  journals,
+  decimalPlaces: 2,
+  filters: { journals: ['OD'], from: '2026-01-01', to: '2026-12-31' }
+});
+assert.deepEqual(Report.columnsForReport('totals').map(column => column.key),
+  ['journalCode', 'journalLabel', 'pieceCount', 'lineCount', 'debit', 'credit']);
+assert.deepEqual(Report.columnsForReport('totals').map(column => column.label),
+  ['Code journal', 'Intitulé', 'Nombre de pièces', 'Nombre de lignes', 'Total des débits', 'Total des crédits']);
+assert.deepEqual(Report.columnsForReport('totals').map(column => column.defaultSelected), [true, true, true, false, true, true],
+  'le nombre de lignes est la seule colonne décochée par défaut, comme sur la capture');
+assert.ok(Report.columnsForReport('totals').every(column => column.selectable));
+assert.deepEqual(Report.columnGroupsForReport('totals').map(group => group.map(column => column.label)), [
+  ['Code journal', 'Intitulé'], ['Nombre de pièces', 'Nombre de lignes'], ['Total des débits', 'Total des crédits']
+]);
+assert.equal(journalTotals.journalCount, 1);
+assert.equal(journalTotals.entryCount, 2, 'le cumul inclut les pièces validées de la période et du journal choisi seulement');
+assert.equal(journalTotals.lineCount, 4);
+assert.deepEqual(journalTotals.groups[0].rows[0].cells, {
+  journalCode: 'OD', journalLabel: 'Opérations diverses', pieceCount: 2, debit: 0.3, credit: 0.3
+});
+const journalTotalsWithLineCount = Report.build({
+  reportType: 'totals',
+  entries: [{
+    status: 'posted', journal: 'OD', date: '2026-01-10', lines: [{ debit: 1, credit: 0 }, { debit: 0, credit: 1 }]
+  }],
+  journals, columns: ['journalCode', 'lineCount'], filters: { from: '2026-01-01', to: '2026-12-31' }
+});
+assert.deepEqual(journalTotalsWithLineCount.columns.map(column => column.key), ['journalCode', 'lineCount']);
+assert.equal(journalTotalsWithLineCount.groups[0].rows[0].cells.lineCount, 2);
+
 const matrix = Report.toMatrix(report);
 assert.deepEqual(matrix[0], ['Date', 'N° pièce', 'Compte', 'Débit', 'Crédit', 'Libellé', '1ère saisie']);
 assert.equal(matrix[1][0], 'Journal OD · Opérations diverses');
@@ -274,4 +328,4 @@ assert.deepEqual(twoJournals.groups.map(group => group.code), ['AC', 'OD']);
 assert.equal(twoJournals.groups[0].pageBreakBefore, false);
 assert.equal(twoJournals.groups[1].pageBreakBefore, true);
 
-console.log('Rapports de lignes de journaux : filtres, colonnes, déséquilibres, sous-totaux, TXT et Excel — OK');
+console.log('Rapports de journaux : filtres, cumul par journal, colonnes, déséquilibres, TXT et Excel — OK');

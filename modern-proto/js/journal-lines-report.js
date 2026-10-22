@@ -1,5 +1,5 @@
 /*
- * PERFECTO · Construction des états de lignes de journal.
+ * PERFECTO · Construction des états de journaux et de lignes comptables.
  * Fonctions pures : filtrage en lecture seule, regroupements et sérialisation.
  */
 (function (root, factory) {
@@ -53,13 +53,32 @@
     [UNBALANCED_COLUMNS[3], UNBALANCED_COLUMNS[7]]
   ];
 
+  var JOURNAL_TOTALS_COLUMNS = [
+    { key: 'journalCode', label: 'Code journal', group: 0, selectable: true, defaultSelected: true },
+    { key: 'journalLabel', label: 'Intitulé', group: 0, selectable: true, defaultSelected: true },
+    { key: 'pieceCount', label: 'Nombre de pièces', group: 1, selectable: true, defaultSelected: true },
+    { key: 'lineCount', label: 'Nombre de lignes', group: 1, selectable: true, defaultSelected: false },
+    { key: 'debit', label: 'Total des débits', group: 2, selectable: true, defaultSelected: true },
+    { key: 'credit', label: 'Total des crédits', group: 2, selectable: true, defaultSelected: true }
+  ];
+
+  var JOURNAL_TOTALS_COLUMN_GROUPS = [
+    [JOURNAL_TOTALS_COLUMNS[0], JOURNAL_TOTALS_COLUMNS[1]],
+    [JOURNAL_TOTALS_COLUMNS[2], JOURNAL_TOTALS_COLUMNS[3]],
+    [JOURNAL_TOTALS_COLUMNS[4], JOURNAL_TOTALS_COLUMNS[5]]
+  ];
+
   function columnsForReport(reportType) {
-    var columns = reportType === 'unbalanced' ? UNBALANCED_COLUMNS : COLUMNS;
+    var columns = reportType === 'unbalanced'
+      ? UNBALANCED_COLUMNS
+      : (reportType === 'totals' ? JOURNAL_TOTALS_COLUMNS : COLUMNS);
     return columns.map(function (column) { return Object.assign({}, column); });
   }
 
   function columnGroupsForReport(reportType) {
-    var groups = reportType === 'unbalanced' ? UNBALANCED_COLUMN_GROUPS : COLUMN_GROUPS;
+    var groups = reportType === 'unbalanced'
+      ? UNBALANCED_COLUMN_GROUPS
+      : (reportType === 'totals' ? JOURNAL_TOTALS_COLUMN_GROUPS : COLUMN_GROUPS);
     return groups.map(function (group) {
       return group.map(function (column) { return column ? Object.assign({}, column) : null; });
     });
@@ -122,8 +141,81 @@
     return { kind: kind, label: label, reference: reference || '', date: date || '', debit: debit, credit: credit, cells: cells };
   }
 
+  function buildJournalTotals(options) {
+    var filters = options.filters || {};
+    var selectedJournals = asSet(filters.journals);
+    var from = String(filters.from || '');
+    var to = String(filters.to || '');
+    var decimalPlaces = Number(options.decimalPlaces);
+    if (!Number.isInteger(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 4) decimalPlaces = 0;
+    var precision = Math.pow(10, decimalPlaces);
+    var journals = Array.isArray(options.journals) ? options.journals : [];
+    var entries = Array.isArray(options.entries) ? options.entries : [];
+    var journalByCode = new Map(journals.map(function (journal) { return [String(journal.code), journal]; }));
+    var selectedKeys = Array.isArray(options.columns) ? options.columns : JOURNAL_TOTALS_COLUMNS.filter(function (column) {
+      return column.selectable && column.defaultSelected;
+    }).map(function (column) { return column.key; });
+    var columns = JOURNAL_TOTALS_COLUMNS.filter(function (column) {
+      return column.selectable && selectedKeys.indexOf(column.key) !== -1;
+    });
+    var totalsByJournal = new Map();
+
+    entries.forEach(function (entry) {
+      if (!entry || entry.status !== 'posted') return;
+      var entryDate = String(entry.date || '');
+      if (from && entryDate < from) return;
+      if (to && entryDate > to) return;
+      var code = String(entry.journal || '');
+      if (selectedJournals.size && !selectedJournals.has(code)) return;
+      var lines = (Array.isArray(entry.lines) ? entry.lines : []).filter(Boolean);
+      var journalTotal = totalsByJournal.get(code);
+      if (!journalTotal) {
+        journalTotal = { code: code, pieceCount: 0, lineCount: 0, debitUnits: 0, creditUnits: 0 };
+        totalsByJournal.set(code, journalTotal);
+      }
+      journalTotal.pieceCount += 1;
+      journalTotal.lineCount += lines.length;
+      lines.forEach(function (line) {
+        journalTotal.debitUnits += Math.round(safeAmount(line.debit) * precision);
+        journalTotal.creditUnits += Math.round(safeAmount(line.credit) * precision);
+      });
+    });
+
+    var entryCount = 0;
+    var lineCount = 0;
+    var rows = Array.from(totalsByJournal.values()).sort(function (a, b) {
+      return compare(a.code, b.code);
+    }).map(function (journalTotal) {
+      var journal = journalByCode.get(journalTotal.code);
+      var journalLabel = journal && journal.label ? String(journal.label) : '';
+      var cells = {};
+      columns.forEach(function (column) {
+        switch (column.key) {
+          case 'journalCode': cells[column.key] = journalTotal.code; break;
+          case 'journalLabel': cells[column.key] = journalLabel; break;
+          case 'pieceCount': cells[column.key] = journalTotal.pieceCount; break;
+          case 'lineCount': cells[column.key] = journalTotal.lineCount; break;
+          case 'debit': cells[column.key] = journalTotal.debitUnits / precision; break;
+          case 'credit': cells[column.key] = journalTotal.creditUnits / precision; break;
+        }
+      });
+      entryCount += journalTotal.pieceCount;
+      lineCount += journalTotal.lineCount;
+      return { kind: 'line', cells: cells };
+    });
+    var groups = rows.length ? [{
+      code: '',
+      title: 'Cumul par journal',
+      entryCount: entryCount,
+      lineCount: lineCount,
+      rows: rows
+    }] : [];
+    return { columns: columns, groups: groups, entryCount: entryCount, lineCount: lineCount, journalCount: totalsByJournal.size };
+  }
+
   function build(options) {
     options = options || {};
+    if (options.reportType === 'totals') return buildJournalTotals(options);
     var filters = options.filters || {};
     var selectedJournals = asSet(filters.journals);
     var selectedAccounts = asSet(filters.accounts);
