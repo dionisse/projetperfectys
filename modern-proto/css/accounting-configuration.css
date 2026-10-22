@@ -569,6 +569,7 @@
 .journal-lines-filter-grid .hint,
 .journal-lines-columns-hint { line-height: 1.5; }
 .journal-lines-column-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.journal-individual-account-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 820px; }
 .journal-lines-column-list { display: grid; align-content: start; gap: 9px; }
 .journal-lines-column-option { display: flex; align-items: flex-start; gap: 8px; min-height: 27px; color: #34463e; font-size: .75rem; line-height: 1.35; cursor: pointer; }
 .journal-lines-column-option input,

@@ -271,8 +271,15 @@ assert.equal(findTab('editions', 'journals').children[0].status, 'active');
 assert.ok(findTab('editions', 'journals').children[0].reason.includes('export Excel/TXT'));
 assert.equal(findTab('editions', 'journals').children[1].status, 'active');
 assert.ok(findTab('editions', 'journals').children[1].reason.includes('compteur dynamique'));
-assert.match(appSource, /child\.id === 'journal-lines' \|\| child\.id === 'journal-modified-pieces' \|\| child\.id === 'journal-unbalanced-pieces' \|\| child\.id === 'journal-entry-totals'\) return viewJournalLinesReport\(backLink\)/,
-  'les rapports de lignes et le cumul ouvrent le parcours partagé de sélection et mise en page');
+assert.equal(findTab('editions', 'journals').children[4].status, 'active');
+assert.ok(findTab('editions', 'journals').children[4].reason.includes('par compte individuel'));
+assert.ok(findTab('editions', 'journals').children[4].reason.includes('export Excel/TXT'));
+assert.match(appSource, /child\.id === 'journal-lines' \|\| child\.id === 'journal-modified-pieces' \|\| child\.id === 'journal-unbalanced-pieces' \|\| child\.id === 'journal-entry-totals' \|\| child\.id === 'journal-individual-account-totals'\) return viewJournalLinesReport\(backLink\)/,
+  'les rapports de lignes et les cumuls ouvrent le parcours partagé de sélection et mise en page');
+assert.match(appSource, /parsed\.params\.c === 'journal-individual-account-totals' \? 'account-totals'/,
+  'le sous-menu ouvre le mode dédié au cumul par comptes individuels');
+assert.match(journalLinesSource, /ACCOUNT_TOTALS_COLUMNS = \[[\s\S]*Code du compte[\s\S]*Intitulé du compte[\s\S]*Nombre de lignes[\s\S]*reportType === 'account-totals'/,
+  'le calcul du cumul individuel expose les colonnes de la capture');
 assert.match(appSource, /includeDrafts: isModifiedReport[\s\S]*modifiedOnly: isModifiedReport[\s\S]*filterByModificationDate: isModifiedReport/,
   'le rapport modifié filtre la date de modification et accepte les brouillons modifiés');
 assert.match(appSource, /Lignes générées[\s\S]*data-jlr-generated-count[\s\S]*updateJournalLinesGeneratedCount/,
@@ -381,13 +388,13 @@ assert.match(appSource, /child.section === 'definitionsAnalytics'/);
 assert.match(appSource, /var disabled = child\.status === 'inactive';[\s\S]*return disabled[\s\S]*edition-report-card is-disabled/);
 assert.match(journalLinesSource, /options\.unbalancedOnly[\s\S]*entryDebit[\s\S]*entryCredit/,
   'le rapport ne conserve que les pièces dont les totaux diffèrent');
-assert.match(appSource, /function createJournalLinesReportSession[\s\S]*var isTotalsReport = mode === 'totals'[\s\S]*orientation: isUnbalancedReport \|\| isTotalsReport \? 'landscape'/,
-  'les rapports dont les colonnes sont larges reprennent l’orientation paysage des captures');
+assert.match(appSource, /function createJournalLinesReportSession[\s\S]*var isAccountTotalsReport = mode === 'account-totals'[\s\S]*orientation: isUnbalancedReport \|\| isTotalsReport \|\| isAccountTotalsReport \? 'landscape'/,
+  'les cumuls par journal et par compte reprennent l’orientation paysage de la capture');
 assert.match(appSource, /reportType: session\.mode[\s\S]*unbalancedOnly: isUnbalancedReport/);
-assert.match(appSource, /if \(child\.id === 'journal-lines'[\s\S]*child\.id === 'journal-unbalanced-pieces' \|\| child\.id === 'journal-entry-totals'\) return viewJournalLinesReport\(backLink\)/,
-  'les pièces déséquilibrées et le cumul passent par le même parcours à deux étapes');
-assert.match(appSource, /menuParams\.c === 'journal-lines'[\s\S]*menuParams\.c === 'journal-entry-totals'\)\) bindJournalLinesReport\(\)/,
-  'le rapport de cumul est relié aux interactions de sélection, mise en page, aperçu et impression');
+assert.match(appSource, /if \(child\.id === 'journal-lines'[\s\S]*child\.id === 'journal-entry-totals' \|\| child\.id === 'journal-individual-account-totals'\) return viewJournalLinesReport\(backLink\)/,
+  'les pièces déséquilibrées et les deux cumuls passent par le même parcours à deux étapes');
+assert.match(appSource, /menuParams\.c === 'journal-lines'[\s\S]*menuParams\.c === 'journal-entry-totals' \|\| menuParams\.c === 'journal-individual-account-totals'\)\) bindJournalLinesReport\(\)/,
+  'le cumul individuel est relié aux interactions de sélection, mise en page, aperçu et impression');
 assert.match(appSource, /function editionReportCatalog\([\s\S]*Balances, ouvertures et situations[\s\S]*Grands livres et historiques[\s\S]*Disponibilités budgétaires/);
 assert.match(menuRenderer, /isEditionReportsMenu[\s\S]*editionReportChildView\(selectedChild/);
 assert.equal(findTab('editions', 'general-accounts').status, 'mixed');
@@ -551,7 +558,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v90/);
+assert.match(serviceWorkerSource, /perfecto-static-v91/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

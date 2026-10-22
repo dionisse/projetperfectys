@@ -68,17 +68,34 @@
     [JOURNAL_TOTALS_COLUMNS[4], JOURNAL_TOTALS_COLUMNS[5]]
   ];
 
+  var ACCOUNT_TOTALS_COLUMNS = [
+    { key: 'accountCode', label: 'Code du compte', group: 0, selectable: true, defaultSelected: true },
+    { key: 'accountTitle', label: 'Intitulé du compte', group: 0, selectable: true, defaultSelected: true },
+    { key: 'lineCount', label: 'Nombre de lignes', group: 0, selectable: true, defaultSelected: true },
+    { key: 'debit', label: 'Total des débits', group: 1, selectable: true, defaultSelected: true },
+    { key: 'credit', label: 'Total des crédits', group: 1, selectable: true, defaultSelected: true }
+  ];
+
+  var ACCOUNT_TOTALS_COLUMN_GROUPS = [
+    [ACCOUNT_TOTALS_COLUMNS[0], ACCOUNT_TOTALS_COLUMNS[1], ACCOUNT_TOTALS_COLUMNS[2]],
+    [ACCOUNT_TOTALS_COLUMNS[3], ACCOUNT_TOTALS_COLUMNS[4]]
+  ];
+
   function columnsForReport(reportType) {
     var columns = reportType === 'unbalanced'
       ? UNBALANCED_COLUMNS
-      : (reportType === 'totals' ? JOURNAL_TOTALS_COLUMNS : COLUMNS);
+      : (reportType === 'totals'
+        ? JOURNAL_TOTALS_COLUMNS
+        : (reportType === 'account-totals' ? ACCOUNT_TOTALS_COLUMNS : COLUMNS));
     return columns.map(function (column) { return Object.assign({}, column); });
   }
 
   function columnGroupsForReport(reportType) {
     var groups = reportType === 'unbalanced'
       ? UNBALANCED_COLUMN_GROUPS
-      : (reportType === 'totals' ? JOURNAL_TOTALS_COLUMN_GROUPS : COLUMN_GROUPS);
+      : (reportType === 'totals'
+        ? JOURNAL_TOTALS_COLUMN_GROUPS
+        : (reportType === 'account-totals' ? ACCOUNT_TOTALS_COLUMN_GROUPS : COLUMN_GROUPS));
     return groups.map(function (group) {
       return group.map(function (column) { return column ? Object.assign({}, column) : null; });
     });
@@ -213,9 +230,93 @@
     return { columns: columns, groups: groups, entryCount: entryCount, lineCount: lineCount, journalCount: totalsByJournal.size };
   }
 
+  function buildAccountTotals(options) {
+    var filters = options.filters || {};
+    var selectedJournals = asSet(filters.journals);
+    var selectedAccounts = asSet(filters.accounts);
+    var from = String(filters.from || '');
+    var to = String(filters.to || '');
+    var decimalPlaces = Number(options.decimalPlaces);
+    if (!Number.isInteger(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 4) decimalPlaces = 0;
+    var precision = Math.pow(10, decimalPlaces);
+    var accounts = Array.isArray(options.accounts) ? options.accounts : [];
+    var entries = Array.isArray(options.entries) ? options.entries : [];
+    var accountByCode = new Map(accounts.map(function (account) { return [String(account.code), account]; }));
+    var selectedKeys = Array.isArray(options.columns) ? options.columns : ACCOUNT_TOTALS_COLUMNS.filter(function (column) {
+      return column.selectable && column.defaultSelected;
+    }).map(function (column) { return column.key; });
+    var columns = ACCOUNT_TOTALS_COLUMNS.filter(function (column) {
+      return column.selectable && selectedKeys.indexOf(column.key) !== -1;
+    });
+    var totalsByAccount = new Map();
+
+    entries.forEach(function (entry) {
+      if (!entry || entry.status !== 'posted') return;
+      var entryDate = String(entry.date || '');
+      if (from && entryDate < from) return;
+      if (to && entryDate > to) return;
+      if (selectedJournals.size && !selectedJournals.has(String(entry.journal || ''))) return;
+      (Array.isArray(entry.lines) ? entry.lines : []).forEach(function (line) {
+        if (!line) return;
+        var code = String(line.account || '').trim();
+        if (!code || (selectedAccounts.size && !selectedAccounts.has(code))) return;
+        var accountTotal = totalsByAccount.get(code);
+        if (!accountTotal) {
+          accountTotal = { code: code, lineCount: 0, debitUnits: 0, creditUnits: 0 };
+          totalsByAccount.set(code, accountTotal);
+        }
+        accountTotal.lineCount += 1;
+        accountTotal.debitUnits += Math.round(safeAmount(line.debit) * precision);
+        accountTotal.creditUnits += Math.round(safeAmount(line.credit) * precision);
+      });
+    });
+
+    var lineCount = 0;
+    var totalDebitUnits = 0;
+    var totalCreditUnits = 0;
+    var rows = Array.from(totalsByAccount.values()).sort(function (a, b) {
+      return compare(a.code, b.code);
+    }).map(function (accountTotal) {
+      var account = accountByCode.get(accountTotal.code) || null;
+      var debit = accountTotal.debitUnits / precision;
+      var credit = accountTotal.creditUnits / precision;
+      var cells = {};
+      columns.forEach(function (column) {
+        switch (column.key) {
+          case 'accountCode': cells[column.key] = accountTotal.code; break;
+          case 'accountTitle': cells[column.key] = account && account.label || ''; break;
+          case 'lineCount': cells[column.key] = accountTotal.lineCount; break;
+          case 'debit': cells[column.key] = debit; break;
+          case 'credit': cells[column.key] = credit; break;
+        }
+      });
+      lineCount += accountTotal.lineCount;
+      totalDebitUnits += accountTotal.debitUnits;
+      totalCreditUnits += accountTotal.creditUnits;
+      return { kind: 'line', cells: cells };
+    });
+    var accountCount = totalsByAccount.size;
+    var groups = rows.length ? [{
+      code: 'accounts',
+      title: 'Cumul par comptes individuels',
+      accountCount: accountCount,
+      lineCount: lineCount,
+      rows: rows
+    }] : [];
+    return {
+      columns: columns,
+      groups: groups,
+      accountCount: accountCount,
+      lineCount: lineCount,
+      totalDebit: totalDebitUnits / precision,
+      totalCredit: totalCreditUnits / precision
+    };
+  }
+
   function build(options) {
     options = options || {};
     if (options.reportType === 'totals') return buildJournalTotals(options);
+    if (options.reportType === 'account-totals') return buildAccountTotals(options);
     var filters = options.filters || {};
     var selectedJournals = asSet(filters.journals);
     var selectedAccounts = asSet(filters.accounts);

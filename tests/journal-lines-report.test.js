@@ -1,4 +1,4 @@
-/* Vérifie les cumuls de journaux, les rapports de lignes et leurs exports en lecture seule. */
+/* Vérifie les cumuls de journaux et de comptes, les rapports de lignes et leurs exports en lecture seule. */
 'use strict';
 
 const assert = require('node:assert/strict');
@@ -276,6 +276,57 @@ const journalTotalsWithLineCount = Report.build({
 assert.deepEqual(journalTotalsWithLineCount.columns.map(column => column.key), ['journalCode', 'lineCount']);
 assert.equal(journalTotalsWithLineCount.groups[0].rows[0].cells.lineCount, 2);
 
+const accountTotals = Report.build({
+  reportType: 'account-totals',
+  entries,
+  accounts,
+  journals,
+  decimalPlaces: 2,
+  filters: { journals: ['OD'], accounts: ['601100', '401100'], from: '2026-01-01', to: '2026-02-28' }
+});
+assert.deepEqual(Report.columnsForReport('account-totals').map(column => column.key),
+  ['accountCode', 'accountTitle', 'lineCount', 'debit', 'credit']);
+assert.deepEqual(Report.columnsForReport('account-totals').map(column => column.label),
+  ['Code du compte', 'Intitulé du compte', 'Nombre de lignes', 'Total des débits', 'Total des crédits']);
+assert.ok(Report.columnsForReport('account-totals').every(column => column.selectable && column.defaultSelected),
+  'les cinq colonnes de la capture sont activables et cochées par défaut');
+assert.deepEqual(Report.columnGroupsForReport('account-totals').map(group => group.map(column => column.label)), [
+  ['Code du compte', 'Intitulé du compte', 'Nombre de lignes'], ['Total des débits', 'Total des crédits']
+]);
+assert.equal(accountTotals.accountCount, 2);
+assert.equal(accountTotals.lineCount, 4);
+assert.equal(accountTotals.totalDebit, 1550);
+assert.equal(accountTotals.totalCredit, 1550);
+assert.deepEqual(accountTotals.groups[0].rows.map(row => row.cells), [
+  { accountCode: '401100', accountTitle: 'Fournisseurs', lineCount: 2, debit: 0, credit: 1550 },
+  { accountCode: '601100', accountTitle: 'Achats', lineCount: 2, debit: 1550, credit: 0 }
+], 'les lignes validées sont regroupées par compte, avec les filtres de journal, compte et période');
+const accountTotalsMatrix = Report.toMatrix(accountTotals);
+assert.deepEqual(accountTotalsMatrix[0], ['Code du compte', 'Intitulé du compte', 'Nombre de lignes', 'Total des débits', 'Total des crédits']);
+assert.deepEqual(accountTotalsMatrix[1], ['Cumul par comptes individuels', '', '', '', '']);
+const accountTotalsSelectedColumns = Report.build({
+  reportType: 'account-totals', entries, accounts, journals,
+  columns: ['accountCode', 'lineCount'],
+  filters: { journals: ['OD'], accounts: ['601100'], from: '2026-01-01', to: '2026-02-28' }
+});
+assert.deepEqual(accountTotalsSelectedColumns.columns.map(column => column.key), ['accountCode', 'lineCount']);
+assert.deepEqual(accountTotalsSelectedColumns.groups[0].rows[0].cells, { accountCode: '601100', lineCount: 2 });
+const decimalAccountTotals = Report.build({
+  reportType: 'account-totals', decimalPlaces: 2, accounts, journals,
+  entries: [{ status: 'posted', journal: 'OD', date: '2026-03-01', lines: [
+    { account: '601100', debit: 0.1, credit: 0 }, { account: '601100', debit: 0.2, credit: 0 }
+  ] }],
+  filters: { journals: ['OD'], from: '2026-03-01', to: '2026-03-31' }
+});
+assert.equal(decimalAccountTotals.groups[0].rows[0].cells.debit, 0.3,
+  'les cumuls individuels respectent la précision du dossier sans dérive IEEE-754');
+const emptyAccountTotals = Report.build({
+  reportType: 'account-totals', entries: [], accounts, journals,
+  filters: { from: '2026-01-01', to: '2026-12-31' }
+});
+assert.equal(emptyAccountTotals.accountCount, 0);
+assert.deepEqual(emptyAccountTotals.groups, [], 'aucun compte sans mouvement n’est ajouté au rapport');
+
 const matrix = Report.toMatrix(report);
 assert.deepEqual(matrix[0], ['Date', 'N° pièce', 'Compte', 'Débit', 'Crédit', 'Libellé', '1ère saisie']);
 assert.equal(matrix[1][0], 'Journal OD · Opérations diverses');
@@ -328,4 +379,4 @@ assert.deepEqual(twoJournals.groups.map(group => group.code), ['AC', 'OD']);
 assert.equal(twoJournals.groups[0].pageBreakBefore, false);
 assert.equal(twoJournals.groups[1].pageBreakBefore, true);
 
-console.log('Rapports de journaux : filtres, cumul par journal, colonnes, déséquilibres, TXT et Excel — OK');
+console.log('Rapports de journaux : cumul par journal et par compte, filtres, colonnes, déséquilibres, TXT et Excel — OK');
