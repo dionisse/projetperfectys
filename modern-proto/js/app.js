@@ -2596,6 +2596,8 @@
         (session.columns[column.key] ? ' checked' : '') + (locked ? ' disabled aria-describedby="general-balance-unconfirmed-options"' : '') + '>' +
       '<span><strong>' + esc(column.label) + '</strong>' +
         (column.key === 'movements' ? '<small>Deux sous-colonnes : débit et crédit</small>' : '') +
+        (column.key === 'cumulativeStart' ? '<small>Report d’ouverture + mouvements antérieurs à la période, débits et crédits séparés</small>' : '') +
+        (column.key === 'cumulativeEnd' ? '<small>Cumul de début + mouvements de la période, débits et crédits séparés</small>' : '') +
         (column.key === 'openingBalance' || column.key === 'closingBalance' || column.key === 'movementBalance' ? '<small>Montant net affiché avec son sens D ou C</small>' : '') +
         (locked ? '<small>À confirmer</small>' : '') +
       '</span></label>';
@@ -2626,7 +2628,7 @@
         '<section class="card journal-lines-card"><div class="panel">' +
           '<div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
           '<div class="journal-lines-column-grid general-balance-column-grid">' + columns + '</div>' +
-          '<p class="hint journal-lines-columns-hint">Les colonnes « Cumul début/fin » sont visibles mais désactivées jusqu’à confirmation de leur règle de calcul. Les colonnes de solde distinguent le sens débiteur (D) et créditeur (C).</p>' +
+          '<p class="hint journal-lines-columns-hint">Les cumuls affichent séparément les débits et crédits : début = report à nouveau + mouvements antérieurs à la période ; fin = cumul de début + mouvements de la période. Les colonnes de solde restent nettes, avec le sens débiteur (D) ou créditeur (C).</p>' +
         '</div></section>' +
         '<section class="card journal-lines-card"><div class="panel">' +
           '<div class="journal-lines-section-heading"><div><p class="page-kicker">PRÉSENTATION DES COMPTES</p><h3>Regroupements ou sous-totaux</h3></div></div>' +
@@ -2657,12 +2659,20 @@
     var columns = [];
     if (selected.code) columns.push({ key: 'code', label: 'Code du compte', exportLabel: 'Code du compte', text: true });
     if (selected.label) columns.push({ key: 'label', label: 'Intitulé du compte', exportLabel: 'Intitulé du compte', text: true });
+    if (selected.cumulativeStart) {
+      columns.push({ key: 'cumulativeStartDebit', label: 'Débit', exportLabel: 'Cumul début période · débit', group: 'Cumul début période' });
+      columns.push({ key: 'cumulativeStartCredit', label: 'Crédit', exportLabel: 'Cumul début période · crédit', group: 'Cumul début période' });
+    }
     if (selected.openingBalance) columns.push({ key: 'openingBalance', label: 'Solde début de période', exportLabel: 'Solde début (débit + / crédit −)', balance: true });
     if (selected.movements) {
       columns.push({ key: 'movementDebit', label: 'Débit', exportLabel: 'Mouvements période · débit', group: 'Mouvements période' });
       columns.push({ key: 'movementCredit', label: 'Crédit', exportLabel: 'Mouvements période · crédit', group: 'Mouvements période' });
     }
     if (selected.movementBalance) columns.push({ key: 'movementBalance', label: 'Solde mouvements période', exportLabel: 'Solde mouvements (débit + / crédit −)', balance: true });
+    if (selected.cumulativeEnd) {
+      columns.push({ key: 'cumulativeEndDebit', label: 'Débit', exportLabel: 'Cumul fin période · débit', group: 'Cumul fin période' });
+      columns.push({ key: 'cumulativeEndCredit', label: 'Crédit', exportLabel: 'Cumul fin période · crédit', group: 'Cumul fin période' });
+    }
     if (selected.closingBalance) columns.push({ key: 'closingBalance', label: 'Solde fin de période', exportLabel: 'Solde fin (débit + / crédit −)', balance: true });
     return columns;
   }
@@ -2675,19 +2685,20 @@
       var amountValue = Number(value) || 0;
       return amountValue ? amount(Math.abs(amountValue)) + (amountValue > 0 ? ' D' : ' C') : '—';
     }
-    return Number(value) || 0;
+    var numericValue = Number(value) || 0;
+    return forSpreadsheet ? numericValue : (numericValue ? amount(numericValue) : '');
   }
 
   function generalBalanceReportTableHead(columns) {
     var hasGroups = columns.some(function (column) { return !!column.group; });
-    if (!hasGroups) return '<thead><tr>' + columns.map(function (column) { return '<th scope="col"' + (column.balance || column.key.indexOf('movement') === 0 ? ' class="num"' : '') + '>' + esc(column.label) + '</th>'; }).join('') + '</tr></thead>';
+    if (!hasGroups) return '<thead><tr>' + columns.map(function (column) { return '<th scope="col"' + (!column.text ? ' class="num"' : '') + '>' + esc(column.label) + '</th>'; }).join('') + '</tr></thead>';
     var top = [];
     var sub = [];
     var index = 0;
     while (index < columns.length) {
       var column = columns[index];
       if (!column.group) {
-        top.push('<th scope="col" rowspan="2"' + (column.balance ? ' class="num"' : '') + '>' + esc(column.label) + '</th>');
+        top.push('<th scope="col" rowspan="2"' + (!column.text ? ' class="num"' : '') + '>' + esc(column.label) + '</th>');
         index += 1;
         continue;
       }
@@ -2723,7 +2734,7 @@
     var bodyRows = report.rows.map(function (row) {
       return '<tr>' + columns.map(function (column) {
         var value = generalBalanceReportValue(row, column, false);
-        return '<td' + (column.balance || column.key.indexOf('movement') === 0 ? ' class="num"' : '') + '>' + esc(value) + '</td>';
+        return '<td' + (!column.text ? ' class="num"' : '') + '>' + esc(value) + '</td>';
       }).join('') + '</tr>';
     }).join('');
     var emptyRow = report.rows.length ? '' : '<tr class="general-balance-empty-row"><td colspan="' + Math.max(columns.length, 1) + '"><strong>Aucun compte à restituer.</strong> Vérifiez la période et les filtres de comptes.</td></tr>';
@@ -2735,7 +2746,7 @@
         '<p>Période : ' + esc(dateLabel(report.from)) + ' — ' + esc(dateLabel(report.to)) + '</p></header>' +
       '<div class="general-balance-print-context"><span><strong>Comptes :</strong> ' + esc(session.filters.accounts === '*' ? 'Tous les comptes' : session.filters.accounts) + '</span>' +
         '<span><strong>Présentation :</strong> ' + esc(grouping) + '</span><span><strong>Options :</strong> ' + esc(options) + '</span></div>' +
-      '<p class="general-balance-print-basis">Montants en XOF · lecture seule · pièces validées du cycle uniquement, brouillons exclus. Les reports à nouveau distincts sont inclus dans les soldes d’ouverture/clôture, pas dans les mouvements de période. Un solde positif est débiteur (D), un solde négatif créditeur (C).</p>' +
+      '<p class="general-balance-print-basis">Montants en XOF · lecture seule · pièces validées du cycle uniquement, brouillons exclus. Les reports à nouveau restent distincts des mouvements de période. Si les colonnes de cumul sont sélectionnées, le cumul début additionne les reports à nouveau et les mouvements retenus antérieurs à la période, séparément au débit et au crédit ; le cumul fin ajoute les mouvements retenus de la période à chacun de ces côtés. Un solde positif est débiteur (D), un solde négatif créditeur (C).</p>' +
       (report.invalidLineCount ? '<p class="alert warning">' + report.invalidLineCount + ' ligne(s) contenant un montant invalide ont été ignorées.</p>' : '') +
       '<div class="table-wrap general-balance-table-wrap"><table class="data-table general-balance-table"><caption>' + esc(report.rows.length + (report.rows.length === 1 ? ' compte' : ' comptes') + ' · ' + report.movementEntryCount + (report.movementEntryCount === 1 ? ' pièce validée' : ' pièces validées')) + '</caption>' +
         generalBalanceReportTableHead(columns) + '<tbody>' + (bodyRows || emptyRow) + '</tbody>' + (report.rows.length ? generalBalanceReportTotalsHtml(columns, report) : '') +
@@ -2885,7 +2896,7 @@
 
   function generalBalanceReportExportMatrix(session, report, forSpreadsheet) {
     var columns = generalBalanceReportLeafColumns(session);
-    var headings = columns.map(function (column) { return forSpreadsheet ? column.exportLabel : column.label; });
+    var headings = columns.map(function (column) { return column.exportLabel; });
     var rows = report.rows.map(function (row) {
       return columns.map(function (column) { return generalBalanceReportValue(row, column, !!forSpreadsheet); });
     });
@@ -2896,7 +2907,7 @@
         if (column.key === 'code' || column.key === 'label') return '';
         var value = Number(report.totals[column.key]) || 0;
         if (column.balance && !forSpreadsheet) return value ? amount(Math.abs(value)) + (value > 0 ? ' D' : ' C') : '—';
-        return value;
+        return forSpreadsheet ? value : (value ? amount(value) : '');
       }));
     }
     return [headings].concat(rows);

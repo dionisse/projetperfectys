@@ -1,7 +1,7 @@
 /*
  * PERFECTO · Calcul de la Balance générale des comptes.
  * Lecture seule : pièces validées du cycle et registre distinct des reports à nouveau.
- * Les cumuls et sous-totaux non définis par le référentiel restent hors calcul.
+ * Les cumuls débit/crédit suivent les exemples de balance fournis ; les sous-totaux non définis restent hors calcul.
  */
 (function (root, factory) {
   'use strict';
@@ -14,11 +14,11 @@
   var COLUMN_DEFINITIONS = [
     { key: 'code', label: 'Code du compte', defaultSelected: true, supported: true },
     { key: 'label', label: 'Intitulé du compte', defaultSelected: true, supported: true },
-    { key: 'cumulativeStart', label: 'Cumul Début Période', defaultSelected: false, supported: false, reason: 'Définition du cumul à confirmer.' },
+    { key: 'cumulativeStart', label: 'Cumul Début Période', defaultSelected: false, supported: true },
     { key: 'openingBalance', label: 'Solde Début Période', defaultSelected: false, supported: true },
     { key: 'movements', label: 'Mouvements Période', defaultSelected: true, supported: true },
     { key: 'movementBalance', label: 'Solde Mouvements Période', defaultSelected: true, supported: true },
-    { key: 'cumulativeEnd', label: 'Cumul Fin Période', defaultSelected: false, supported: false, reason: 'Définition du cumul à confirmer.' },
+    { key: 'cumulativeEnd', label: 'Cumul Fin Période', defaultSelected: false, supported: true },
     { key: 'closingBalance', label: 'Solde Fin Période', defaultSelected: false, supported: true }
   ];
 
@@ -141,9 +141,10 @@
     }
 
     /*
-     * Les reports à nouveau sont une base de solde distincte du journal.
-     * Pour une période située dans le cycle, ils entrent dans le solde d’ouverture
-     * (et non dans les mouvements de la période).
+     * Les reports à nouveau sont une base distincte du journal. Avec les pièces
+     * validées antérieures à la période, ils forment les cumuls de début en
+     * conservant séparément débits et crédits. Les cumuls de fin additionnent
+     * ensuite les mouvements de la période à chacun de ces deux côtés.
      */
     openingBalances.forEach(function (record) {
       if (!record || !record.accountCode || !record.date || record.date >= from) return;
@@ -190,9 +191,9 @@
       var openingCredit = row.openingCreditMinor / factor;
       var movementDebit = row.movementDebitMinor / factor;
       var movementCredit = row.movementCreditMinor / factor;
-      var openingBalance = openingDebit - openingCredit;
-      var movementBalance = movementDebit - movementCredit;
-      var closingBalance = openingBalance + movementBalance;
+      var openingBalance = (row.openingDebitMinor - row.openingCreditMinor) / factor;
+      var movementBalance = (row.movementDebitMinor - row.movementCreditMinor) / factor;
+      var closingBalance = (row.openingDebitMinor - row.openingCreditMinor + row.movementDebitMinor - row.movementCreditMinor) / factor;
       var hasActivity = row.openingDebitMinor !== 0 || row.openingCreditMinor !== 0 ||
         row.movementDebitMinor !== 0 || row.movementCreditMinor !== 0;
       if (!hasActivity && parsedFilter.all) return null;
@@ -204,9 +205,13 @@
         openingDebit: openingDebit,
         openingCredit: openingCredit,
         openingBalance: openingBalance,
+        cumulativeStartDebit: openingDebit,
+        cumulativeStartCredit: openingCredit,
         movementDebit: movementDebit,
         movementCredit: movementCredit,
         movementBalance: movementBalance,
+        cumulativeEndDebit: (row.openingDebitMinor + row.movementDebitMinor) / factor,
+        cumulativeEndCredit: (row.openingCreditMinor + row.movementCreditMinor) / factor,
         closingBalance: closingBalance
       };
     }).filter(Boolean);
@@ -227,9 +232,13 @@
 
     var totals = {
       openingBalance: sumRows('openingBalance'),
+      cumulativeStartDebit: sumRows('cumulativeStartDebit'),
+      cumulativeStartCredit: sumRows('cumulativeStartCredit'),
       movementDebit: sumRows('movementDebit'),
       movementCredit: sumRows('movementCredit'),
       movementBalance: sumRows('movementBalance'),
+      cumulativeEndDebit: sumRows('cumulativeEndDebit'),
+      cumulativeEndCredit: sumRows('cumulativeEndCredit'),
       closingBalance: sumRows('closingBalance')
     };
     var visibleColumns = COLUMN_DEFINITIONS.filter(function (column) {

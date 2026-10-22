@@ -140,9 +140,58 @@ test('les montants respectent la précision du dossier et les données source re
   assert.equal(JSON.stringify(decimalEntries), before);
 });
 
-test('le cumul non confirmé ne devient pas une colonne calculée', () => {
+test('les cumuls début et fin conservent séparément les débits et crédits', () => {
   const report = build({ columns: { code: true, cumulativeStart: true, cumulativeEnd: true } });
-  assert.deepEqual(report.columns, ['code']);
-  assert.equal(Report.COLUMN_DEFINITIONS.find(column => column.key === 'cumulativeStart').supported, false);
-  assert.equal(Report.COLUMN_DEFINITIONS.find(column => column.key === 'cumulativeEnd').supported, false);
+  assert.deepEqual(report.columns, ['code', 'cumulativeStart', 'cumulativeEnd']);
+  const capital = report.rows.find(row => row.code === '101000');
+  const suppliers = report.rows.find(row => row.code === '401100');
+  assert.deepEqual(
+    [capital.cumulativeStartDebit, capital.cumulativeStartCredit, capital.cumulativeEndDebit, capital.cumulativeEndCredit],
+    [150, 0, 170, 35],
+    'début = report + mouvements antérieurs ; fin = début + mouvements débit/crédit de période'
+  );
+  assert.deepEqual(
+    [suppliers.cumulativeStartDebit, suppliers.cumulativeStartCredit, suppliers.cumulativeEndDebit, suppliers.cumulativeEndCredit],
+    [0, 150, 35, 170]
+  );
+  assert.equal(report.totals.cumulativeStartDebit, 150);
+  assert.equal(report.totals.cumulativeStartCredit, 150);
+  assert.equal(report.totals.cumulativeEndDebit, 205);
+  assert.equal(report.totals.cumulativeEndCredit, 205);
+  assert.equal(capital.closingBalance, capital.cumulativeEndDebit - capital.cumulativeEndCredit);
+  assert.equal(suppliers.closingBalance, suppliers.cumulativeEndDebit - suppliers.cumulativeEndCredit);
+  assert.equal(Report.COLUMN_DEFINITIONS.find(column => column.key === 'cumulativeStart').supported, true);
+  assert.equal(Report.COLUMN_DEFINITIONS.find(column => column.key === 'cumulativeEnd').supported, true);
+  assert.equal(Report.COLUMN_DEFINITIONS.find(column => column.key === 'cumulativeStart').defaultSelected, false);
+  assert.equal(Report.COLUMN_DEFINITIONS.find(column => column.key === 'cumulativeEnd').defaultSelected, false);
+});
+
+test('les filtres de nature s’appliquent aussi aux mouvements qui alimentent les cumuls', () => {
+  const filteredEntries = [
+    { id: 'PRE-ORDINARY', date: '2026-01-02', status: 'posted', journal: 'OD', lines: [
+      { account: '101000', debit: 10, credit: 0 }, { account: '401100', debit: 0, credit: 10 }
+    ] },
+    { id: 'PRE-INVENTORY', date: '2026-01-03', status: 'posted', journal: 'INV', lines: [
+      { account: '101000', debit: 5, credit: 0 }, { account: '401100', debit: 0, credit: 5 }
+    ] },
+    { id: 'PERIOD-ORDINARY', date: '2026-01-06', status: 'posted', journal: 'OD', lines: [
+      { account: '101000', debit: 3, credit: 0 }, { account: '401100', debit: 0, credit: 3 }
+    ] },
+    { id: 'PERIOD-INVENTORY', date: '2026-01-08', status: 'posted', journal: 'INV', lines: [
+      { account: '101000', debit: 7, credit: 0 }, { account: '401100', debit: 0, credit: 7 }
+    ] }
+  ];
+  const report = build({
+    entries: filteredEntries,
+    openingBalances: [],
+    filters: { accounts: '*', from: '2026-01-05', to: '2026-01-10', beforeInventory: true, groupMode: 'none' },
+    columns: { code: true, cumulativeStart: true, cumulativeEnd: true }
+  });
+  const capital = report.rows.find(row => row.code === '101000');
+  const suppliers = report.rows.find(row => row.code === '401100');
+  assert.equal(capital.cumulativeStartDebit, 10);
+  assert.equal(capital.cumulativeEndDebit, 13);
+  assert.equal(suppliers.cumulativeStartCredit, 10);
+  assert.equal(suppliers.cumulativeEndCredit, 13);
+  assert.equal(report.movementEntryCount, 1);
 });

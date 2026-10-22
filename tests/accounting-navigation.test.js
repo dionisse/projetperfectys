@@ -607,7 +607,9 @@ assert.match(appSource, /function createGeneralBalanceReportSession\(dossier\)[\
 assert.match(appSource, /function buildGeneralBalanceReport\(session\)[\s\S]*GeneralBalanceReport\.build\(\{[\s\S]*entries: S\.postedEntries\(\)[\s\S]*openingBalances: S\.openingBalances\(\)/);
 assert.match(generalBalanceSource, /beforeInventory: filters\.beforeInventory === true[\s\S]*beforeResult: filters\.beforeResult === true/);
 assert.match(generalBalanceSource, /openingBalancesIncludedBeforePeriod: true/);
-assert.match(generalBalanceSource, /Cumul Début Période[\s\S]*supported: false[\s\S]*Cumul Fin Période/);
+assert.match(generalBalanceSource, /Cumul Début Période[\s\S]*supported: true[\s\S]*Cumul Fin Période[\s\S]*supported: true/);
+assert.match(generalBalanceSource, /cumulativeStartDebit: openingDebit[\s\S]*cumulativeEndDebit: \(row\.openingDebitMinor \+ row\.movementDebitMinor\) \/ factor/);
+assert.match(appSource, /selected\.cumulativeStart[\s\S]*Cumul début période[\s\S]*selected\.cumulativeEnd[\s\S]*Cumul fin période/);
 assert.match(appSource, /À confirmer[\s\S]*aucun sous-total par classe n’est supposé/);
 assert.match(appSource, /function generalBalancePrintOptions\(session\)[\s\S]*@page \{ size: A4/);
 assert.match(appSource, /openReportPreview\('Aperçu — Balance générale des comptes'[\s\S]*generalBalanceReportPrintableHtml/);
@@ -647,7 +649,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v97/);
+assert.match(serviceWorkerSource, /perfecto-static-v98/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);
