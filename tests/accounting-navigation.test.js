@@ -285,6 +285,14 @@ assert.match(appSource, /async function generateJournalLinesReportFile[\s\S]*exp
   'les destinations Table et Fichier produisent les formats attendus');
 assert.match(appSource, /function printJournalLinesReport[\s\S]*window\.print\(\)/,
   'l’impression n’est lancée qu’à partir de l’écran d’aperçu');
+assert.match(appSource, /session\.phase === 'preview'[\s\S]*journal-lines-preview-overlay[\s\S]*aria-modal="true"[\s\S]*data-journal-lines-close-preview/,
+  'l’aperçu s’ouvre dans une fenêtre plein écran accessible');
+assert.match(appSource, /data-journal-lines-close-preview[\s\S]*session\.phase = 'layout'/,
+  'la fermeture de la fenêtre ramène à la mise en page');
+assert.match(configurationCss, /\.journal-lines-preview-overlay\s*\{[^}]*position:\s*fixed[^}]*inset:\s*0/);
+assert.match(configurationCss, /\.journal-lines-preview-scroll\s*\{[^}]*overflow:\s*auto/);
+assert.match(configurationCss, /body\.journal-lines-printing \.journal-lines-preview-overlay\s*\{[^}]*position:\s*static/,
+  'la fenêtre plein écran est retirée du flux au moment d’imprimer');
 assert.match(appSource, /function journalLinesReportIdentity[\s\S]*id === 'company-name'[\s\S]*Dossier concerné/,
   'l’aperçu reprend le titulaire de licence puis le dossier concerné');
 assert.match(appSource, /Organisation · propriétaire de la licence[\s\S]*Dossier concerné/,
@@ -531,7 +539,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v88/);
+assert.match(serviceWorkerSource, /perfecto-static-v89/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

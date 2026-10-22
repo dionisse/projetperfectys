@@ -11118,7 +11118,6 @@
     return pageHeader(previewTitle, resultSummary + pageRange + parityLabel, '') +
       '<div class="journal-lines-report-print' + orientationClass + styleClass + '">' +
         '<div class="journal-lines-preview-actions journal-lines-no-print"><span>' + esc(resultSummary) + '</span><div>' +
-          '<button type="button" class="btn btn-ghost" data-journal-lines-back-layout>Retour à la mise en Page</button>' +
           '<button type="button" class="btn btn-primary" data-journal-lines-print>' + printButtonLabel + '</button>' +
         '</div></div>' +
         printerHint +
@@ -11370,6 +11369,14 @@
     else if (session.phase === 'preview') content = journalLinesReportPreviewView(session);
     else if (session.phase === 'saved') content = journalLinesReportSavedView(session);
     else content = journalLinesReportSelectionView(session, dossier);
+    if (session.phase === 'preview') {
+      return '<div class="journal-lines-preview-overlay" role="dialog" aria-modal="true" aria-label="Aperçu du rapport" tabindex="-1">' +
+        '<div class="journal-lines-preview-popup">' +
+          '<div class="journal-lines-preview-windowbar journal-lines-no-print"><span class="journal-lines-preview-windowbar-title">Aperçu du rapport</span><button type="button" class="btn btn-ghost btn-sm" data-journal-lines-close-preview>Fermer l’aperçu</button></div>' +
+          '<div class="journal-lines-preview-scroll"><div class="edition-report-detail-view journal-lines-report-detail">' + content + '</div></div>' +
+        '</div>' +
+      '</div>';
+    }
     return '<div class="edition-report-detail-view journal-lines-report-detail">' + backLink + content + '</div>';
   }
 
@@ -11412,10 +11419,19 @@
       return;
     }
     if (session.phase === 'preview') {
-      var backLayout = $('[data-journal-lines-back-layout]');
-      if (backLayout) backLayout.addEventListener('click', function () {
+      var closePreview = function () {
         session.phase = 'layout';
+        session.previewForPrinter = false;
         render();
+      };
+      var closePreviewButton = $('[data-journal-lines-close-preview]');
+      if (closePreviewButton) {
+        closePreviewButton.addEventListener('click', closePreview);
+        closePreviewButton.focus();
+      }
+      var previewOverlay = $('.journal-lines-preview-overlay');
+      if (previewOverlay) previewOverlay.addEventListener('click', function (event) {
+        if (event.target === previewOverlay) closePreview();
       });
       var printButton = $('[data-journal-lines-print]');
       if (printButton) printButton.addEventListener('click', function () { printJournalLinesReport(session); });
