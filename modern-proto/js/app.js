@@ -712,12 +712,14 @@
     var parsed = parseHash();
     var route = parsed.route;
     var isJournalLinesReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'journals' &&
-      (parsed.params.c === 'journal-lines' || parsed.params.c === 'journal-modified-pieces');
+      (parsed.params.c === 'journal-lines' || parsed.params.c === 'journal-modified-pieces' || parsed.params.c === 'journal-unbalanced-pieces');
     if (!isJournalLinesReportRoute) {
       journalLinesReportSession = null;
       journalLinesReportMode = 'standard';
     } else {
-      var requestedJournalReportMode = parsed.params.c === 'journal-modified-pieces' ? 'modified' : 'standard';
+      var requestedJournalReportMode = parsed.params.c === 'journal-modified-pieces'
+        ? 'modified'
+        : (parsed.params.c === 'journal-unbalanced-pieces' ? 'unbalanced' : 'standard');
       if (journalLinesReportMode !== requestedJournalReportMode) journalLinesReportSession = null;
       journalLinesReportMode = requestedJournalReportMode;
     }
@@ -10735,52 +10737,14 @@
     return '<div class="edition-report-catalog"><div class="edition-report-catalog-intro"><span class="page-kicker">ÉDITIONS · ' + esc(String(tabLabel || '').toLocaleUpperCase('fr')) + '</span><strong>Choisissez un état ou un contrôle</strong><p>' + esc(intro) + '</p></div>' + cards + '</div>';
   }
 
-  function viewUnbalancedJournalPieces() {
-    var dossier = S.currentDossier();
-    var filter = ui.journal;
-    var entries = sortedEntries(S.entries()).filter(function (entry) {
-      if (entry.date < dossier.cycleStart || entry.date > dossier.cycleEnd) return false;
-      if (filter.journal && entry.journal !== filter.journal) return false;
-      var total = S.totals(entry.lines || []);
-      return total.debit !== total.credit;
-    });
-    var draftCount = entries.filter(function (entry) { return entry.status === 'draft'; }).length;
-    var postedCount = entries.filter(function (entry) { return entry.status === 'posted'; }).length;
-    var totalDebit = entries.reduce(function (sum, entry) { return sum + S.totals(entry.lines || []).debit; }, 0);
-    var totalCredit = entries.reduce(function (sum, entry) { return sum + S.totals(entry.lines || []).credit; }, 0);
-    var absoluteDifference = entries.reduce(function (sum, entry) {
-      var total = S.totals(entry.lines || []);
-      return sum + Math.abs(total.debit - total.credit);
-    }, 0);
-    var rows = entries.map(function (entry) {
-      var total = S.totals(entry.lines || []);
-      var difference = total.debit - total.credit;
-      return '<tr><td>' + esc(dateLabel(entry.date)) + '</td><td><strong>' + esc(entry.reference || '—') + '</strong></td><td>' + esc(journalDisplayName(S.journal(entry.journal)) || entry.journal) + '</td><td class="edition-report-description-cell">' + esc(entry.description || '—') + '</td><td>' + (entry.lines || []).length + '</td><td class="num">' + esc(amount(total.debit)) + '</td><td class="num">' + esc(amount(total.credit)) + '</td><td class="num edition-report-difference">' + esc(amount(Math.abs(difference))) + (difference > 0 ? ' D' : ' C') + '<small>' + (entry.status === 'posted' ? 'Validée · à vérifier' : 'Brouillon') + '</small></td></tr>';
-    }).join('');
-    var alert = postedCount
-      ? '<div class="alert error journal-unbalanced-posted-warning"><div><strong>' + postedCount + ' pièce(s) validée(s) apparaissent déséquilibrées.</strong> Les pièces validées sont normalement immuables ; ce signalement ne les corrige pas. Vérifiez la base et les justificatifs.</div></div>'
-      : '<div class="alert info journal-unbalanced-posted-warning"><div>Contrôle en lecture seule : les débits et crédits sont comparés pièce par pièce dans le cycle du dossier. Les brouillons sont signalés sans être validés ni modifiés.</div></div>';
-    return '<div class="edition-report-detail-view journal-unbalanced-view">' +
-      '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(accountingMenuHash('editions', 'journals')) + '">← Tous les éléments Journaux</a>' +
-      pageHeader('Pièces déséquilibrées', 'Pièces du cycle dont les débits et crédits diffèrent, filtrées par journal.', '<button type="button" class="btn btn-ghost" data-action="print">⎙ Imprimer</button>') +
-      '<div class="card"><div class="panel">' +
-        '<div class="filter-row journal-unbalanced-filter-row"><div class="field"><label for="journal-unbalanced-filter">Journal</label><select id="journal-unbalanced-filter" data-filter="journal:journal">' + journalOptions(filter.journal, true, true, true) + '</select></div><div class="field grow journal-unbalanced-cycle"><span>Cycle du dossier</span><strong>' + esc(dateLabel(dossier.cycleStart)) + ' — ' + esc(dateLabel(dossier.cycleEnd)) + '</strong></div></div>' +
-        '<div class="exchange-summary-grid journal-unbalanced-summary"><div><small>Pièces signalées</small><strong>' + entries.length + '</strong></div><div><small>Brouillons</small><strong>' + draftCount + '</strong></div><div><small>Validées à vérifier</small><strong>' + postedCount + '</strong></div><div><small>Somme des écarts absolus</small><strong>' + esc(money(absoluteDifference)) + '</strong></div></div>' +
-        alert +
-        (entries.length
-          ? '<div class="table-wrap"><table class="data-table journal-unbalanced-table"><thead><tr><th>Date</th><th>Référence</th><th>Journal</th><th>Libellé</th><th>Lignes</th><th class="num">Débit</th><th class="num">Crédit</th><th class="num">Écart</th></tr></thead><tbody>' + rows + '</tbody><tfoot><tr><td colspan="5"><strong>Total des pièces listées</strong></td><td class="num">' + esc(amount(totalDebit)) + '</td><td class="num">' + esc(amount(totalCredit)) + '</td><td class="num">' + esc(amount(totalDebit - totalCredit)) + '</td></tr></tfoot></table></div>'
-          : '<div class="empty-state"><strong>Aucune pièce déséquilibrée détectée</strong>Le filtre sélectionné ne contient pas de pièce dont le débit diffère du crédit.</div>') +
-        '<p class="exchange-footnote">Cette première vue compare uniquement les totaux débit/crédit des pièces enregistrées. Elle ne valide, ne modifie et ne supprime aucune pièce ; la restitution définitive sera ajustée après votre capture.</p>' +
-      '</div></div></div>';
-  }
-
   function createJournalLinesReportSession(dossier, mode) {
     mode = mode || 'standard';
     var isModifiedReport = mode === 'modified';
+    var isUnbalancedReport = mode === 'unbalanced';
     var modifiedReportColumns = ['date', 'piece', 'account', 'accountTitle', 'reference', 'debit', 'credit', 'label', 'firstEntry', 'lastEntry'];
     var today = new Date().toISOString().slice(0, 10);
     var columns = {};
-    JournalLinesReport.columns.forEach(function (column) {
+    JournalLinesReport.columnsForReport(mode).forEach(function (column) {
       columns[column.key] = !!(column.selectable && (isModifiedReport
         ? modifiedReportColumns.indexOf(column.key) !== -1
         : column.defaultSelected));
@@ -10797,7 +10761,7 @@
       columns: columns,
       printOptions: { newPageEachJournal: false, subtotalByPiece: false, subtotalByMonth: false },
       layout: {
-        printer: 'pdf', style: 'plain8', orientation: 'portrait', margins: 'standard',
+        printer: 'pdf', style: 'plain8', orientation: isUnbalancedReport ? 'landscape' : 'portrait', margins: 'standard',
         pageFirst: '', pageLast: '', parity: 'none', destination: 'preview'
       },
       directoryHandle: null,
@@ -10902,33 +10866,40 @@
   }
 
   function journalLinesReportSelectionView(session, dossier) {
-    var columns = JournalLinesReport.columnGroups.map(function (group, index) {
+    var columns = JournalLinesReport.columnGroupsForReport(session.mode).map(function (group, index) {
       return '<div class="journal-lines-column-list" aria-label="Groupe de colonnes ' + (index + 1) + '">' +
         group.map(function (column) { return journalLinesReportColumnControl(column, session); }).join('') +
         '</div>';
     }).join('');
     var isModifiedReport = session.mode === 'modified';
+    var isUnbalancedReport = session.mode === 'unbalanced';
     var initialReport = isModifiedReport ? buildJournalLinesReport(session) : null;
     var directoryValue = session.directoryName || '';
     var filterFields = isModifiedReport
       ? '<div class="field span-2"><label for="journal-lines-journals-summary">Journaux</label><div class="journal-lines-picker-control"><input id="journal-lines-journals-summary" type="text" readonly value="' + esc(journalLinesReportFilterSummary('journals', session)) + '"><button type="button" class="btn btn-ghost" data-journal-lines-picker="journals" aria-label="Choisir les journaux">…</button></div></div>' +
         '<div class="field"><label for="journal-lines-from">Modifications du</label><input id="journal-lines-from" name="from" type="date" value="' + esc(session.filters.from) + '" required></div>' +
         '<div class="field"><label for="journal-lines-to">au</label><input id="journal-lines-to" name="to" type="date" value="' + esc(session.filters.to) + '" required></div>'
-      : '<div class="field span-2"><label for="journal-lines-journals-summary">Journaux</label><div class="journal-lines-picker-control"><input id="journal-lines-journals-summary" type="text" readonly value="' + esc(journalLinesReportFilterSummary('journals', session)) + '"><button type="button" class="btn btn-ghost" data-journal-lines-picker="journals" aria-label="Choisir les journaux">…</button></div></div>' +
-        '<div class="field span-2"><label for="journal-lines-accounts-summary">Comptes</label><div class="journal-lines-picker-control"><input id="journal-lines-accounts-summary" type="text" readonly value="' + esc(journalLinesReportFilterSummary('accounts', session)) + '"><button type="button" class="btn btn-ghost" data-journal-lines-picker="accounts" aria-label="Choisir les comptes">…</button></div></div>' +
-        '<div class="field"><label for="journal-lines-from">Date de début</label><input id="journal-lines-from" name="from" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(session.filters.from) + '" required></div>' +
-        '<div class="field"><label for="journal-lines-to">Date de fin</label><input id="journal-lines-to" name="to" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(session.filters.to) + '" required></div>' +
-        '<div class="field span-2"><label for="journal-lines-directory">Répertoire FEC</label><div class="journal-lines-picker-control"><input id="journal-lines-directory" type="text" readonly placeholder="Aucun répertoire local sélectionné" value="' + esc(directoryValue) + '" title="Le choix du dossier reste dans ce navigateur."><button type="button" class="btn btn-ghost" data-journal-lines-directory aria-label="Choisir un répertoire de sortie">Générer</button></div><span class="hint">Dossier local de sortie Excel ou TXT ; l’export ne crée pas un fichier FEC normalisé.</span></div>';
+      : isUnbalancedReport
+        ? '<div class="field span-2"><label for="journal-lines-journals-summary">Journaux</label><div class="journal-lines-picker-control"><input id="journal-lines-journals-summary" type="text" readonly value="' + esc(journalLinesReportFilterSummary('journals', session)) + '"><button type="button" class="btn btn-ghost" data-journal-lines-picker="journals" aria-label="Choisir les journaux">…</button></div></div>' +
+          '<div class="field"><label for="journal-lines-from">Début</label><input id="journal-lines-from" name="from" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(session.filters.from) + '" required></div>' +
+          '<div class="field"><label for="journal-lines-to">Fin</label><input id="journal-lines-to" name="to" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(session.filters.to) + '" required></div>'
+        : '<div class="field span-2"><label for="journal-lines-journals-summary">Journaux</label><div class="journal-lines-picker-control"><input id="journal-lines-journals-summary" type="text" readonly value="' + esc(journalLinesReportFilterSummary('journals', session)) + '"><button type="button" class="btn btn-ghost" data-journal-lines-picker="journals" aria-label="Choisir les journaux">…</button></div></div>' +
+          '<div class="field span-2"><label for="journal-lines-accounts-summary">Comptes</label><div class="journal-lines-picker-control"><input id="journal-lines-accounts-summary" type="text" readonly value="' + esc(journalLinesReportFilterSummary('accounts', session)) + '"><button type="button" class="btn btn-ghost" data-journal-lines-picker="accounts" aria-label="Choisir les comptes">…</button></div></div>' +
+          '<div class="field"><label for="journal-lines-from">Date de début</label><input id="journal-lines-from" name="from" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(session.filters.from) + '" required></div>' +
+          '<div class="field"><label for="journal-lines-to">Date de fin</label><input id="journal-lines-to" name="to" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(session.filters.to) + '" required></div>' +
+          '<div class="field span-2"><label for="journal-lines-directory">Répertoire FEC</label><div class="journal-lines-picker-control"><input id="journal-lines-directory" type="text" readonly placeholder="Aucun répertoire local sélectionné" value="' + esc(directoryValue) + '" title="Le choix du dossier reste dans ce navigateur."><button type="button" class="btn btn-ghost" data-journal-lines-directory aria-label="Choisir un répertoire de sortie">Générer</button></div><span class="hint">Dossier local de sortie Excel ou TXT ; l’export ne crée pas un fichier FEC normalisé.</span></div>';
     var selectionNote = isModifiedReport
       ? '<div class="alert info journal-lines-readonly-note"><div><strong>Consultation seule.</strong> La période filtre la date de dernière modification, indépendamment de la date comptable de la pièce. Les changements antérieurs sans horodatage ne peuvent pas être reconstitués ; le rapport n’altère aucune écriture.</div></div>'
-      : '<div class="alert info journal-lines-readonly-note"><div><strong>Consultation seule.</strong> Le rapport lit uniquement les écritures validées du cycle courant ; il ne modifie aucune écriture. Le répertoire est choisi localement : le fichier généré n’est pas un FEC réglementaire et ce choix ne crée aucune synchronisation Google Drive.</div></div>';
+      : isUnbalancedReport
+        ? '<div class="alert info journal-lines-readonly-note"><div><strong>Consultation seule.</strong> Le rapport retient les pièces dont les totaux débit/crédit sont déséquilibrés au niveau de précision du dossier, sans valider ni modifier les écritures.</div></div>'
+        : '<div class="alert info journal-lines-readonly-note"><div><strong>Consultation seule.</strong> Le rapport lit uniquement les écritures validées du cycle courant ; il ne modifie aucune écriture. Le répertoire est choisi localement : le fichier généré n’est pas un FEC réglementaire et ce choix ne crée aucune synchronisation Google Drive.</div></div>';
     var generatedLines = isModifiedReport
       ? '<div class="journal-lines-generated-count" role="status" aria-live="polite"><span>Lignes générées</span><strong data-jlr-generated-count>' + new Intl.NumberFormat('fr-FR').format(initialReport.lineCount) + '</strong></div>'
       : '';
     var selectionActions =
       '<div class="journal-lines-form-errors" id="journal-lines-selection-errors" role="alert" aria-live="polite"></div>' +
       '<div class="journal-lines-form-actions"><a class="btn btn-ghost" href="' + esc(accountingMenuHash('editions', 'journals')) + '">Annuler</a><button type="submit" class="btn btn-primary">Valider</button></div>';
-    var presentationOptions = isModifiedReport ? '' :
+    var presentationOptions = isModifiedReport || isUnbalancedReport ? '' :
       '<section class="card journal-lines-card"><div class="panel">' +
         '<div class="journal-lines-section-heading"><div><p class="page-kicker">PRÉSENTATION DES LIGNES</p><h3>À imprimer</h3></div></div>' +
         '<div class="journal-lines-print-options">' +
@@ -10937,11 +10908,19 @@
           '<label class="journal-lines-check-option"><input type="checkbox" id="journal-lines-subtotal-month"' + (session.printOptions.subtotalByMonth ? ' checked' : '') + '><span>Sous-total par mois</span></label>' +
         '</div>' + selectionActions +
       '</div></section>';
-    var modifiedActions = isModifiedReport
+    var compactSelectionActions = isModifiedReport || isUnbalancedReport
       ? '<section class="card journal-lines-card"><div class="panel">' + selectionActions + '</div></section>'
       : '';
     return journalLinesReportSteps('selection') +
-      pageHeader(isModifiedReport ? 'Pièces modifiées après première saisie' : 'Détail des lignes saisies', isModifiedReport ? 'Sélectionnez les journaux et la période de modification avant de définir la mise en page.' : 'Sélectionnez les journaux, les comptes et la période avant de définir la mise en page.', '') +
+      pageHeader(
+        isModifiedReport ? 'Pièces modifiées après première saisie' : (isUnbalancedReport ? 'Pièces déséquilibrées' : 'Détail des lignes saisies'),
+        isModifiedReport
+          ? 'Sélectionnez les journaux et la période de modification avant de définir la mise en page.'
+          : (isUnbalancedReport
+            ? 'Sélectionnez les journaux et la période comptable des pièces à contrôler.'
+            : 'Sélectionnez les journaux, les comptes et la période avant de définir la mise en page.'),
+        ''
+      ) +
       selectionNote +
       '<form id="journal-lines-selection-form" novalidate>' +
         '<section class="card journal-lines-card"><div class="panel">' +
@@ -10955,7 +10934,7 @@
           '<p class="hint journal-lines-columns-hint">Toutes les colonnes peuvent être choisies. Si une écriture ne porte aucune valeur pour une colonne sélectionnée, la cellule reste vide ; aucune donnée n’est calculée ou inventée.</p>' +
         '</div></section>' +
         presentationOptions +
-        modifiedActions +
+        compactSelectionActions +
       '</form>';
   }
 
@@ -10967,7 +10946,9 @@
     var report = session.report || buildJournalLinesReport(session);
     var summary = session.mode === 'modified'
       ? report.lineCount + ' ligne(s) générée(s) · ' + report.entryCount + ' pièce(s) modifiée(s)'
-      : report.entryCount + ' pièce(s) · ' + report.lineCount + ' ligne(s) retenue(s)';
+      : (session.mode === 'unbalanced'
+        ? report.entryCount + ' pièce(s) déséquilibrée(s) · ' + report.lineCount + ' ligne(s) retenue(s)'
+        : report.entryCount + ' pièce(s) · ' + report.lineCount + ' ligne(s) retenue(s)');
     return journalLinesReportSteps('layout') +
       pageHeader('Mise en Page', 'Choisissez le format, la présentation et la destination du rapport.', '') +
       '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(summary) + '. Les pièces sont consultées en lecture seule.</div></div>' +
@@ -11086,9 +11067,11 @@
     }).join('');
     var empty = report.groups.length
       ? ''
-      : '<div class="empty-state"><strong>Aucune ligne ne correspond à la sélection.</strong>' + (session.mode === 'modified'
+      : '<div class="empty-state"><strong>' + (session.mode === 'unbalanced' ? 'Aucune pièce déséquilibrée détectée.' : 'Aucune ligne ne correspond à la sélection.') + '</strong>' + (session.mode === 'modified'
         ? 'Vérifiez les journaux et la période de dernière modification ; aucune écriture n’a été modifiée.'
-        : 'Vérifiez les journaux, comptes et dates ; aucune écriture n’a été modifiée.') + '</div>';
+        : (session.mode === 'unbalanced'
+          ? 'Le filtre sélectionné ne contient aucune pièce dont les totaux débit et crédit diffèrent.'
+          : 'Vérifiez les journaux, comptes et dates ; aucune écriture n’a été modifiée.')) + '</div>';
     var printerPreference = session.layout.printer === 'system' ? 'imprimante système' : 'PDF';
     var printerHint = session.previewForPrinter
       ? '<div class="alert info journal-lines-printer-preview"><div><strong>Aperçu obligatoire avant impression.</strong> Le formulaire indique la préférence « ' + esc(printerPreference) + ' », mais le navigateur conserve le choix final. La plage et la parité sont à confirmer dans sa boîte d’impression.</div></div>'
@@ -11100,8 +11083,10 @@
     var parityLabel = session.layout.parity === 'odd' ? ' · pages impaires' : (session.layout.parity === 'even' ? ' · pages paires' : '');
     var orientationClass = session.layout.orientation === 'landscape' ? ' is-landscape' : '';
     var styleClass = session.layout.style === 'color10' ? ' is-color-style' : ' is-mono-style';
-    var previewTitle = session.mode === 'modified' ? 'Aperçu — Pièces modifiées après première saisie' : 'Aperçu — Détail des lignes saisies';
-    var periodLabel = session.mode === 'modified' ? 'Modifications du' : 'Période';
+    var previewTitle = session.mode === 'modified'
+      ? 'Aperçu — Pièces modifiées après première saisie'
+      : (session.mode === 'unbalanced' ? 'Aperçu — Pièces déséquilibrées' : 'Aperçu — Détail des lignes saisies');
+    var periodLabel = session.mode === 'modified' ? 'Modifications du' : (session.mode === 'unbalanced' ? 'Période comptable' : 'Période');
     return pageHeader(previewTitle, report.entryCount + ' pièce(s) · ' + report.lineCount + ' ligne(s)' + pageRange + parityLabel, '') +
       '<div class="journal-lines-report-print' + orientationClass + styleClass + '">' +
         '<div class="journal-lines-preview-actions journal-lines-no-print"><span>' + esc(report.entryCount + ' pièce(s) · ' + report.lineCount + ' ligne(s)') + '</span><div>' +
@@ -11130,8 +11115,10 @@
 
   function buildJournalLinesReport(session) {
     var isModifiedReport = session.mode === 'modified';
+    var isUnbalancedReport = session.mode === 'unbalanced';
     var report = JournalLinesReport.build({
-      entries: isModifiedReport ? S.entries() : S.postedEntries(),
+      reportType: session.mode,
+      entries: isModifiedReport || isUnbalancedReport ? S.entries() : S.postedEntries(),
       accounts: S.accounts(),
       journals: S.journals(),
       filters: session.filters,
@@ -11140,9 +11127,10 @@
       newPageEachJournal: session.printOptions.newPageEachJournal,
       subtotalByPiece: session.printOptions.subtotalByPiece,
       subtotalByMonth: session.printOptions.subtotalByMonth,
-      includeDrafts: isModifiedReport,
+      includeDrafts: isModifiedReport || isUnbalancedReport,
       modifiedOnly: isModifiedReport,
-      filterByModificationDate: isModifiedReport
+      filterByModificationDate: isModifiedReport,
+      unbalancedOnly: isUnbalancedReport
     });
     if (isModifiedReport) {
       report.columns = report.columns.map(function (column) {
@@ -11180,7 +11168,9 @@
   function journalLinesReportFileName(session, extension) {
     var start = String(session.filters.from || '').replace(/-/g, '');
     var end = String(session.filters.to || '').replace(/-/g, '');
-    var prefix = session.mode === 'modified' ? 'PERFECTO-pieces-modifiees-apres-premiere-saisie-' : 'PERFECTO-detail-lignes-journaux-';
+    var prefix = session.mode === 'modified'
+      ? 'PERFECTO-pieces-modifiees-apres-premiere-saisie-'
+      : (session.mode === 'unbalanced' ? 'PERFECTO-pieces-desequilibrees-' : 'PERFECTO-detail-lignes-journaux-');
     return prefix + start + '-' + end + '.' + extension;
   }
 
@@ -11217,8 +11207,9 @@
     var mime;
     if (destination === 'table') {
       var matrix = JournalLinesReport.toMatrix(report);
+      var sheetName = session.mode === 'unbalanced' ? 'Pièces déséquilibrées' : 'Détail des lignes';
       filename = journalLinesReportFileName(session, 'xlsx');
-      content = AccountingExchange.exportTabularWorkbook('Détail des lignes', matrix[0], matrix.slice(1));
+      content = AccountingExchange.exportTabularWorkbook(sheetName, matrix[0], matrix.slice(1));
       mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     } else {
       filename = journalLinesReportFileName(session, 'txt');
@@ -11257,7 +11248,7 @@
     session.filters.from = from.value;
     session.filters.to = to.value;
     session.columns = {};
-    JournalLinesReport.columns.forEach(function (column) { session.columns[column.key] = selectedColumns.indexOf(column.key) !== -1; });
+    JournalLinesReport.columnsForReport(session.mode).forEach(function (column) { session.columns[column.key] = selectedColumns.indexOf(column.key) !== -1; });
     session.printOptions.newPageEachJournal = !!($('#journal-lines-new-page', form) && $('#journal-lines-new-page', form).checked);
     session.printOptions.subtotalByPiece = !!($('#journal-lines-subtotal-piece', form) && $('#journal-lines-subtotal-piece', form).checked);
     session.printOptions.subtotalByMonth = !!($('#journal-lines-subtotal-month', form) && $('#journal-lines-subtotal-month', form).checked);
@@ -11416,8 +11407,7 @@
   function editionReportChildView(child, groupId, tabId) {
     var backLabel = groupId === 'editions' && tabId === 'journals' ? 'Tous les éléments Journaux' : 'Tous les états';
     var backLink = '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(accountingMenuHash(groupId, tabId)) + '">← ' + esc(backLabel) + '</a>';
-    if (child.id === 'journal-lines' || child.id === 'journal-modified-pieces') return viewJournalLinesReport(backLink);
-    if (child.id === 'journal-unbalanced-pieces') return viewUnbalancedJournalPieces();
+    if (child.id === 'journal-lines' || child.id === 'journal-modified-pieces' || child.id === 'journal-unbalanced-pieces') return viewJournalLinesReport(backLink);
     if (child.id === 'general-balance') return '<div class="edition-report-detail-view">' + backLink + viewBalance() + '</div>';
     if (child.id === 'general-ledger') return '<div class="edition-report-detail-view">' + backLink + viewLedger() + '</div>';
     var inactive = child.status === 'inactive';
@@ -12846,7 +12836,7 @@
     }
     if (route === 'menu') {
       var menuParams = parseHash().params;
-      if (menuParams.g === 'editions' && menuParams.t === 'journals' && (menuParams.c === 'journal-lines' || menuParams.c === 'journal-modified-pieces')) bindJournalLinesReport();
+      if (menuParams.g === 'editions' && menuParams.t === 'journals' && (menuParams.c === 'journal-lines' || menuParams.c === 'journal-modified-pieces' || menuParams.c === 'journal-unbalanced-pieces')) bindJournalLinesReport();
       if (menuParams.g === 'parametres' && menuParams.t === 'dossier-configuration') bindAccountingConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'sections-accounts') bindAnalyticalSectionsConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'allocation-keys') bindAnalyticalAllocationKeys();

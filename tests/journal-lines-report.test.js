@@ -159,6 +159,69 @@ assert.equal(legacyModifiedReport.groups[0].rows[0].cells.lastEntry, '2026-02-12
 assert.deepEqual(Report.build({ entries, accounts, journals }).columns.map(column => column.key),
   Report.columns.filter(column => column.defaultSelected).map(column => column.key));
 
+const unbalancedReport = Report.build({
+  entries: [
+    {
+      id: 'unbalanced-draft', reference: 'OD-DES-1', journal: 'OD', date: '2025-06-10', status: 'draft',
+      internalNumber: 'INT-007', description: 'Écriture à contrôler',
+      lines: [{ account: '601100', debit: 100, credit: 0 }, { account: '401100', debit: 0, credit: 80 }]
+    },
+    {
+      id: 'balanced-posted', reference: 'OD-BAL', journal: 'OD', date: '2025-06-11', status: 'posted',
+      lines: [{ account: '601100', debit: 50, credit: 0 }, { account: '401100', debit: 0, credit: 50 }]
+    },
+    {
+      id: 'zero-total-draft', reference: 'OD-ZERO', journal: 'OD', date: '2025-06-11', status: 'draft',
+      lines: [{ account: '601100', debit: 0, credit: 0 }]
+    },
+    {
+      id: 'unbalanced-posted', reference: 'OD-DES-POSTED', journal: 'OD', date: '2025-06-14', status: 'posted',
+      lines: [{ account: '601100', debit: 12, credit: 0 }]
+    },
+    {
+      id: 'unbalanced-outside', reference: 'OD-OUTSIDE', journal: 'OD', date: '2026-01-01', status: 'posted',
+      lines: [{ account: '601100', debit: 9, credit: 0 }]
+    },
+    {
+      id: 'unbalanced-other-journal', reference: 'AC-DES', journal: 'AC', date: '2025-06-12', status: 'posted',
+      lines: [{ account: '601100', debit: 9, credit: 0 }]
+    },
+    {
+      id: 'decimal-balanced', reference: 'OD-DEC-BAL', journal: 'OD', date: '2025-06-13', status: 'posted',
+      lines: [{ account: '601100', debit: 0.304, credit: 0 }, { account: '401100', debit: 0, credit: 0.3 }]
+    }
+  ],
+  accounts,
+  journals,
+  reportType: 'unbalanced',
+  includeDrafts: true,
+  unbalancedOnly: true,
+  decimalPlaces: 2,
+  filters: { journals: ['OD'], from: '2025-01-01', to: '2025-12-31' }
+});
+assert.deepEqual(Report.columnsForReport('unbalanced').map(column => column.key),
+  ['date', 'line', 'debit', 'label', 'piece', 'account', 'credit', 'internalNumber']);
+assert.deepEqual(Report.columnsForReport('unbalanced').map(column => column.label),
+  ['Date', 'Ligne', 'Débit', 'Libellé', 'N° pièce', 'Compte', 'Crédit', 'N° interne']);
+assert.ok(Report.columnsForReport('unbalanced').every(column => column.selectable && column.defaultSelected),
+  'les huit colonnes de la capture sont sélectionnables et cochées par défaut');
+assert.deepEqual(Report.columnGroupsForReport('unbalanced').map(group => group.map(column => column && column.label)), [
+  ['Date', 'N° pièce'], ['Ligne', 'Compte'], ['Débit', 'Crédit'], ['Libellé', 'N° interne']
+]);
+assert.equal(unbalancedReport.entryCount, 2, 'seules les pièces déséquilibrées du journal et de la période sont conservées');
+assert.equal(unbalancedReport.lineCount, 3);
+const unbalancedLines = unbalancedReport.groups[0].rows.filter(row => row.kind === 'line');
+assert.equal(unbalancedLines[0].cells.line, 1, 'le numéro de ligne reprend l’ordre réel des lignes de la pièce');
+assert.equal(unbalancedLines[1].cells.line, 2);
+assert.equal(unbalancedLines[2].entry.status, 'posted', 'les pièces déséquilibrées validées restent dans le périmètre du rapport');
+assert.equal(unbalancedLines[0].cells.internalNumber, 'INT-007');
+assert.equal(unbalancedLines[0].cells.label, 'Écriture à contrôler');
+const unbalancedWithoutInternalNumber = Report.build({
+  entries: [{ reference: 'OD-DES-2', journal: 'OD', date: '2025-06-15', status: 'posted', lines: [{ account: '601100', debit: 7, credit: 0 }] }],
+  accounts, journals, reportType: 'unbalanced', unbalancedOnly: true, filters: { from: '2025-01-01', to: '2025-12-31' }
+});
+assert.equal(unbalancedWithoutInternalNumber.groups[0].rows[0].cells.internalNumber, '', 'un numéro interne absent dans la source reste vide');
+
 const matrix = Report.toMatrix(report);
 assert.deepEqual(matrix[0], ['Date', 'N° pièce', 'Compte', 'Débit', 'Crédit', 'Libellé', '1ère saisie']);
 assert.equal(matrix[1][0], 'Journal OD · Opérations diverses');
@@ -211,4 +274,4 @@ assert.deepEqual(twoJournals.groups.map(group => group.code), ['AC', 'OD']);
 assert.equal(twoJournals.groups[0].pageBreakBefore, false);
 assert.equal(twoJournals.groups[1].pageBreakBefore, true);
 
-console.log('Détail des lignes saisies : filtres, sous-totaux, TXT et classeur Excel tabulaire — OK');
+console.log('Rapports de lignes de journaux : filtres, colonnes, déséquilibres, sous-totaux, TXT et Excel — OK');

@@ -35,6 +35,36 @@
     [null, COLUMNS[11], COLUMNS[12], COLUMNS[13], COLUMNS[14]]
   ];
 
+  var UNBALANCED_COLUMNS = [
+    { key: 'date', label: 'Date', group: 0, selectable: true, defaultSelected: true },
+    { key: 'line', label: 'Ligne', group: 0, selectable: true, defaultSelected: true },
+    { key: 'debit', label: 'Débit', group: 0, selectable: true, defaultSelected: true },
+    { key: 'label', label: 'Libellé', group: 0, selectable: true, defaultSelected: true },
+    { key: 'piece', label: 'N° pièce', group: 1, selectable: true, defaultSelected: true },
+    { key: 'account', label: 'Compte', group: 1, selectable: true, defaultSelected: true },
+    { key: 'credit', label: 'Crédit', group: 1, selectable: true, defaultSelected: true },
+    { key: 'internalNumber', label: 'N° interne', group: 1, selectable: true, defaultSelected: true }
+  ];
+
+  var UNBALANCED_COLUMN_GROUPS = [
+    [UNBALANCED_COLUMNS[0], UNBALANCED_COLUMNS[4]],
+    [UNBALANCED_COLUMNS[1], UNBALANCED_COLUMNS[5]],
+    [UNBALANCED_COLUMNS[2], UNBALANCED_COLUMNS[6]],
+    [UNBALANCED_COLUMNS[3], UNBALANCED_COLUMNS[7]]
+  ];
+
+  function columnsForReport(reportType) {
+    var columns = reportType === 'unbalanced' ? UNBALANCED_COLUMNS : COLUMNS;
+    return columns.map(function (column) { return Object.assign({}, column); });
+  }
+
+  function columnGroupsForReport(reportType) {
+    var groups = reportType === 'unbalanced' ? UNBALANCED_COLUMN_GROUPS : COLUMN_GROUPS;
+    return groups.map(function (group) {
+      return group.map(function (column) { return column ? Object.assign({}, column) : null; });
+    });
+  }
+
   function asSet(values) {
     return new Set((Array.isArray(values) ? values : []).map(function (value) { return String(value); }));
   }
@@ -48,10 +78,11 @@
     return Number.isFinite(number) ? number : 0;
   }
 
-  function lineValue(key, entry, line, account) {
+  function lineValue(key, entry, line, account, lineIndex) {
     switch (key) {
       case 'date': return entry.date || '';
       case 'piece': return entry.reference || '';
+      case 'line': return lineIndex + 1;
       case 'account': return line.account || '';
       case 'accountTitle': return account && account.label || line.account || '';
       case 'reference': return line.reference || entry.sourceReference || '';
@@ -63,16 +94,18 @@
       case 'market': return line.market || entry.market || '';
       case 'analysis': return line.analyticCode || line.analysis || entry.analysis || '';
       case 'label': return line.description || entry.description || '';
+      case 'internalNumber':
+        return line.internalNumber != null ? line.internalNumber : (entry.internalNumber != null ? entry.internalNumber : '');
       case 'firstEntry': return entry.createdAt || '';
       case 'lastEntry': return entry.updatedAt || '';
       default: return '';
     }
   }
 
-  function makeCells(columns, entry, line, account) {
+  function makeCells(columns, entry, line, account, lineIndex) {
     var cells = {};
     columns.forEach(function (column) {
-      cells[column.key] = lineValue(column.key, entry, line, account);
+      cells[column.key] = lineValue(column.key, entry, line, account, lineIndex);
     });
     return cells;
   }
@@ -102,12 +135,14 @@
     var accounts = Array.isArray(options.accounts) ? options.accounts : [];
     var journals = Array.isArray(options.journals) ? options.journals : [];
     var entries = Array.isArray(options.entries) ? options.entries : [];
+    var reportType = options.reportType === 'unbalanced' ? 'unbalanced' : 'standard';
+    var availableColumns = reportType === 'unbalanced' ? UNBALANCED_COLUMNS : COLUMNS;
     var accountByCode = new Map(accounts.map(function (account) { return [String(account.code), account]; }));
     var journalByCode = new Map(journals.map(function (journal) { return [String(journal.code), journal]; }));
-    var selectedKeys = Array.isArray(options.columns) ? options.columns : COLUMNS.filter(function (column) {
+    var selectedKeys = Array.isArray(options.columns) ? options.columns : availableColumns.filter(function (column) {
       return column.selectable && column.defaultSelected;
     }).map(function (column) { return column.key; });
-    var columns = COLUMNS.filter(function (column) {
+    var columns = availableColumns.filter(function (column) {
       return column.selectable && selectedKeys.indexOf(column.key) !== -1;
     });
     var jobs = [];
@@ -116,6 +151,17 @@
       if (!entry) return;
       var isDraft = entry.status === 'draft';
       if (entry.status !== 'posted' && !(options.includeDrafts && isDraft)) return;
+      if (options.unbalancedOnly) {
+        var entryDebit = 0;
+        var entryCredit = 0;
+        (Array.isArray(entry.lines) ? entry.lines : []).forEach(function (line) {
+          entryDebit += safeAmount(line && line.debit);
+          entryCredit += safeAmount(line && line.credit);
+        });
+        var debitUnits = Math.round(entryDebit * precision);
+        var creditUnits = Math.round(entryCredit * precision);
+        if (debitUnits === creditUnits) return;
+      }
       var updatedAt = String(entry.updatedAt || '');
       if (options.modifiedOnly && (!updatedAt || !Number.isFinite(Date.parse(updatedAt)))) return;
       var filterDate = options.filterByModificationDate ? updatedAt.slice(0, 10) : String(entry.date || '');
@@ -206,7 +252,7 @@
             entry: entry,
             line: record.line,
             account: record.account,
-            cells: makeCells(columns, entry, record.line, record.account)
+            cells: makeCells(columns, entry, record.line, record.account, record.lineIndex)
           });
         });
         if (options.subtotalByPiece) {
@@ -266,6 +312,8 @@
   return {
     columns: COLUMNS.map(function (column) { return Object.assign({}, column); }),
     columnGroups: COLUMN_GROUPS.map(function (group) { return group.slice(); }),
+    columnsForReport: columnsForReport,
+    columnGroupsForReport: columnGroupsForReport,
     build: build,
     toMatrix: toMatrix,
     toTsv: toTsv
