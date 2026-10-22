@@ -261,6 +261,71 @@ test('les totaux intermédiaires séparent bilan et gestion et la classe 8 reste
   assert.ok(withoutClass8.displayRows.findIndex(row => row.intermediateCategory === 'management') < withoutClass8.displayRows.findIndex(row => row.code === 'Total 81'));
 });
 
+test('la Balance de synthèse regroupe aux niveaux 01 à 05 et développe les niveaux inférieurs à la demande', () => {
+  const summaryAccounts = [
+    { code: '10', label: 'Capital', cls: 1, classLabel: 'Ressources durables', subclass: '10', subclassLabel: 'Capital', postable: false },
+    { code: '101', label: 'Capital social', cls: 1, classLabel: 'Ressources durables', subclass: '10', subclassLabel: 'Capital', postable: false },
+    { code: '101000', label: 'Capital social A', cls: 1, classLabel: 'Ressources durables', subclass: '10', subclassLabel: 'Capital', postable: true },
+    { code: '101100', label: 'Capital social B', cls: 1, classLabel: 'Ressources durables', subclass: '10', subclassLabel: 'Capital', postable: true },
+    { code: '40', label: 'Fournisseurs et comptes rattachés', cls: 4, classLabel: 'Tiers', subclass: '40', subclassLabel: 'Fournisseurs et comptes rattachés', postable: false },
+    { code: '401', label: 'Fournisseurs, dettes en compte', cls: 4, classLabel: 'Tiers', subclass: '40', subclassLabel: 'Fournisseurs et comptes rattachés', postable: false },
+    { code: '401100', label: 'Fournisseurs', cls: 4, classLabel: 'Tiers', subclass: '40', subclassLabel: 'Fournisseurs et comptes rattachés', postable: true }
+  ];
+  const summaryOptions = {
+    accounts: summaryAccounts,
+    entries: [
+      { id: 'S1', date: '2026-01-06', status: 'posted', journal: 'OD', lines: [{ account: '101000', debit: 100, credit: 0 }] },
+      { id: 'S2', date: '2026-01-07', status: 'posted', journal: 'OD', lines: [{ account: '101100', debit: 0, credit: 20 }] },
+      { id: 'S3', date: '2026-01-08', status: 'posted', journal: 'OD', lines: [{ account: '401100', debit: 15, credit: 0 }] }
+    ],
+    openingBalances: [
+      { id: 'R1', date: '2025-12-31', accountCode: '101000', debit: 40, credit: 0 },
+      { id: 'R2', date: '2025-12-31', accountCode: '101100', debit: 0, credit: 5 }
+    ],
+    journals,
+    cycleStart: '2026-01-01',
+    cycleEnd: '2026-12-31',
+    decimalPlaces: 0,
+    filters: { accounts: '*', from: '2026-01-05', to: '2026-01-10', summaryLevel: 1, includeLowerLevels: false },
+    columns: { code: true, label: true, openingBalance: true, movements: true, closingBalance: true }
+  };
+  const byClass = Report.buildSummary(summaryOptions);
+  assert.deepEqual(byClass.rows.map(row => [row.code, row.label]), [['1', 'Ressources durables'], ['4', 'Tiers']]);
+  assert.deepEqual(byClass.displayRows.map(row => row.code), ['1', '4'], 'sans niveaux inférieurs, seul le niveau choisi est affiché');
+  const capitalClass = byClass.rows[0];
+  assert.deepEqual([capitalClass.openingBalanceDebit, capitalClass.openingBalanceCredit, capitalClass.movementDebit, capitalClass.movementCredit, capitalClass.closingBalanceDebit, capitalClass.closingBalanceCredit], [40, 5, 100, 20, 140, 25]);
+  assert.equal(byClass.totals.movementDebit, 115);
+  assert.equal(byClass.totals.movementCredit, 20);
+
+  const levelTwo = Report.buildSummary(Object.assign({}, summaryOptions, { filters: Object.assign({}, summaryOptions.filters, { summaryLevel: 2 }) }));
+  assert.deepEqual(levelTwo.rows.map(row => [row.code, row.label]), [['10', 'Capital'], ['40', 'Fournisseurs et comptes rattachés']]);
+  const levelThree = Report.buildSummary(Object.assign({}, summaryOptions, { filters: Object.assign({}, summaryOptions.filters, { summaryLevel: 3, includeLowerLevels: true }) }));
+  assert.deepEqual(levelThree.rows.map(row => row.code), ['101', '401']);
+  assert.deepEqual(levelThree.displayRows.map(row => row.code), ['101', '1010', '10100', '1011', '10110', '401', '4011', '40110']);
+  assert.equal(levelThree.displayRows.find(row => row.code === '1010').label, '', 'aucun libellé n’est fabriqué pour un préfixe absent du plan');
+  const levelFour = Report.buildSummary(Object.assign({}, summaryOptions, { filters: Object.assign({}, summaryOptions.filters, { summaryLevel: 4 }) }));
+  assert.deepEqual(levelFour.rows.map(row => row.code), ['1010', '1011', '4011']);
+  const levelFive = Report.buildSummary(Object.assign({}, summaryOptions, { filters: Object.assign({}, summaryOptions.filters, { summaryLevel: 5 }) }));
+  assert.deepEqual(levelFive.rows.map(row => row.code), ['10100', '10110', '40110']);
+  assert.deepEqual([levelFive.rows[0].movementDebit, levelFive.rows[0].movementCredit], [100, 0]);
+  assert.deepEqual([levelFive.rows[1].movementDebit, levelFive.rows[1].movementCredit], [0, 20]);
+
+  const specialNatureEntries = summaryOptions.entries.concat([
+    { id: 'SUMMARY-INV', date: '2026-01-09', status: 'posted', journal: 'INV', lines: [{ account: '101000', debit: 7, credit: 0 }] },
+    { id: 'SUMMARY-RESULT', date: '2026-01-09', status: 'posted', journal: 'RPE', lines: [{ account: '101000', debit: 0, credit: 3 }] }
+  ]);
+  const beforeInventory = Report.buildSummary(Object.assign({}, summaryOptions, {
+    entries: specialNatureEntries,
+    filters: Object.assign({}, summaryOptions.filters, { beforeInventory: true })
+  }));
+  const beforeResult = Report.buildSummary(Object.assign({}, summaryOptions, {
+    entries: specialNatureEntries,
+    filters: Object.assign({}, summaryOptions.filters, { beforeResult: true })
+  }));
+  assert.equal(beforeInventory.totals.movementDebit, 115, 'l’option est transmise au calcul de base');
+  assert.equal(beforeResult.totals.movementCredit, 20, 'la nature Résultat de l’exercice reste distincte');
+});
+
 test('les filtres de nature s’appliquent aussi aux mouvements qui alimentent les cumuls', () => {
   const filteredEntries = [
     { id: 'PRE-ORDINARY', date: '2026-01-02', status: 'posted', journal: 'OD', lines: [

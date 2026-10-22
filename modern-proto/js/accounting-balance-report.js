@@ -1,5 +1,5 @@
 /*
- * PERFECTO · Calcul de la Balance générale des comptes.
+ * PERFECTO · Calcul des balances générale et de synthèse.
  * Lecture seule : pièces validées du cycle et registre distinct des reports à nouveau.
  * Les cumuls débit/crédit et les regroupements suivent les balances de référence ; seules les rubriques connues du plan sont affichées.
  */
@@ -494,10 +494,142 @@
     };
   }
 
+  function buildSummary(options) {
+    options = options || {};
+    var filters = options.filters || {};
+    var summaryLevel = Number(filters.summaryLevel);
+    if (!Number.isInteger(summaryLevel) || summaryLevel < 1 || summaryLevel > 5) summaryLevel = 1;
+    var includeLowerLevels = filters.includeLowerLevels === true;
+    var baseFilters = Object.assign({}, filters, { groupMode: 'none', intermediateTotal: false });
+    var detailReport = build(Object.assign({}, options, { filters: baseFilters }));
+    var accounts = Array.isArray(options.accounts) ? options.accounts : [];
+    var accountByCode = Object.create(null);
+    var accountOrder = Object.create(null);
+    var fields = [
+      'openingDebit', 'openingCredit', 'openingBalance', 'openingBalanceDebit', 'openingBalanceCredit',
+      'cumulativeStartDebit', 'cumulativeStartCredit', 'movementDebit', 'movementCredit',
+      'movementBalance', 'movementBalanceDebit', 'movementBalanceCredit', 'cumulativeEndDebit',
+      'cumulativeEndCredit', 'closingBalance', 'closingBalanceDebit', 'closingBalanceCredit'
+    ];
+    var decimalPlaces = Number(options.decimalPlaces);
+    if (!Number.isInteger(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 4) decimalPlaces = 0;
+    var factor = Math.pow(10, decimalPlaces);
+    var nodes = Object.create(null);
+    var roots = [];
+    var rootMap = Object.create(null);
+
+    accounts.forEach(function (account, index) {
+      if (!account || account.code == null) return;
+      var code = String(account.code);
+      accountByCode[code] = account;
+      accountOrder[code] = index;
+    });
+
+    function metadataLabel(value, genericFallback) {
+      var label = String(value || '').trim();
+      if (!label || label === genericFallback || /^(autres comptes|compte historique|comptes personnalisés)$/i.test(label)) return '';
+      return label;
+    }
+
+    function ensureNode(code, level, parent) {
+      var key = level + ':' + code;
+      var node = nodes[key];
+      if (!node) {
+        node = nodes[key] = {
+          code: code, level: level, label: '', cls: 0, parent: null, children: [], childMap: Object.create(null),
+          orderIndex: Number.MAX_SAFE_INTEGER, values: Object.create(null), accountCount: 0
+        };
+        fields.forEach(function (field) { node.values[field] = 0; });
+      }
+      if (parent) {
+        if (!Object.prototype.hasOwnProperty.call(parent.childMap, key)) {
+          parent.childMap[key] = true;
+          parent.children.push(node);
+        }
+        node.parent = parent;
+      } else if (!Object.prototype.hasOwnProperty.call(rootMap, key)) {
+        rootMap[key] = true;
+        roots.push(node);
+      }
+      var exactAccount = accountByCode[code];
+      if (exactAccount && exactAccount.label) node.label = String(exactAccount.label);
+      if (Object.prototype.hasOwnProperty.call(accountOrder, code)) node.orderIndex = Math.min(node.orderIndex, accountOrder[code]);
+      return node;
+    }
+
+    detailReport.rows.forEach(function (row) {
+      var code = String(row.code || '');
+      if (!code) return;
+      var account = accountByCode[code] || row;
+      var classValue = classNumber(account);
+      var maxLevel = Math.min(5, code.length);
+      var firstLevel = Math.min(summaryLevel, maxLevel);
+      var parent = null;
+      for (var level = firstLevel; level <= maxLevel; level += 1) {
+        var prefix = code.slice(0, level);
+        var node = ensureNode(prefix, level, parent);
+        node.cls = classValue || node.cls;
+        if (Object.prototype.hasOwnProperty.call(accountOrder, code)) node.orderIndex = Math.min(node.orderIndex, accountOrder[code]);
+        if (!node.label) {
+          if (level === 1) node.label = metadataLabel(account.classLabel, 'Classe ' + prefix);
+          else if (level === 2) node.label = metadataLabel(account.subclassLabel, '');
+        }
+        fields.forEach(function (field) {
+          node.values[field] += Math.round((Number(row[field]) || 0) * factor);
+        });
+        node.accountCount += 1;
+        parent = node;
+      }
+    });
+
+    function compareNodes(left, right) {
+      return left.orderIndex - right.orderIndex || left.code.localeCompare(right.code, 'fr', { numeric: true });
+    }
+
+    function toRow(node) {
+      var row = {
+        code: node.code,
+        label: node.label || '',
+        cls: node.cls,
+        aux: false,
+        rowType: 'summary',
+        summaryLevel: node.level,
+        accountCount: node.accountCount
+      };
+      fields.forEach(function (field) { row[field] = node.values[field] / factor; });
+      return row;
+    }
+
+    function flatten(node, target) {
+      target.push(toRow(node));
+      node.children.sort(compareNodes).forEach(function (child) { flatten(child, target); });
+    }
+
+    roots.sort(compareNodes);
+    var summaryRows = roots.map(toRow);
+    var displayRows = [];
+    if (includeLowerLevels) roots.forEach(function (node) { flatten(node, displayRows); });
+    else displayRows = summaryRows.slice();
+    return Object.assign({}, detailReport, {
+      rows: summaryRows,
+      displayRows: displayRows,
+      detailRows: detailReport.rows,
+      accountCount: summaryRows.length,
+      detailAccountCount: detailReport.rows.length,
+      summaryLevel: summaryLevel,
+      includeLowerLevels: includeLowerLevels,
+      filters: Object.assign({}, detailReport.filters, {
+        summaryLevel: summaryLevel,
+        includeLowerLevels: includeLowerLevels
+      })
+    });
+  }
+
   return {
     COLUMN_DEFINITIONS: COLUMN_DEFINITIONS.slice(),
     parseAccountFilter: parseAccountFilter,
     accountMatches: accountMatches,
-    build: build
+    build: build,
+    buildSummary: buildSummary
   };
 });
