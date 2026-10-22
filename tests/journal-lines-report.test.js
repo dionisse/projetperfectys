@@ -8,8 +8,10 @@ const Report = require('../modern-proto/js/journal-lines-report.js');
 const Exchange = require('../modern-proto/js/accounting-exchange.js');
 
 const accounts = [
-  { code: '401100', label: 'Fournisseurs' },
-  { code: '601100', label: 'Achats' }
+  { code: '401', label: 'Fournisseurs, dettes en compte', classLabel: 'Tiers', subclassLabel: 'Fournisseurs et comptes rattachés' },
+  { code: '601', label: 'Achats de marchandises', classLabel: 'Charges', subclassLabel: 'Achats et variations de stocks' },
+  { code: '401100', label: 'Fournisseurs', classLabel: 'Tiers', subclassLabel: 'Fournisseurs et comptes rattachés' },
+  { code: '601100', label: 'Achats', classLabel: 'Charges', subclassLabel: 'Achats et variations de stocks' }
 ];
 const journals = [
   { code: 'OD', label: 'Opérations diverses' },
@@ -327,6 +329,71 @@ const emptyAccountTotals = Report.build({
 assert.equal(emptyAccountTotals.accountCount, 0);
 assert.deepEqual(emptyAccountTotals.groups, [], 'aucun compte sans mouvement n’est ajouté au rapport');
 
+assert.deepEqual(Report.columnsForReport('summary-account-totals').map(column => column.key),
+  ['accountCode', 'accountTitle', 'lineCount', 'debit', 'credit']);
+assert.deepEqual(Report.columnsForReport('summary-account-totals').map(column => column.label),
+  ['Code du compte', 'Intitulé du compte', 'Nombre de lignes', 'Total des débits', 'Total des crédits']);
+assert.deepEqual(Report.columnsForReport('summary-account-totals').map(column => column.defaultSelected), [true, true, true, false, true],
+  'les colonnes code, intitulé, nombre de lignes et crédits sont cochées par défaut, pas les débits');
+assert.ok(Report.columnsForReport('summary-account-totals').every(column => column.selectable));
+assert.deepEqual(Report.columnGroupsForReport('summary-account-totals').map(group => group.map(column => column.label)), [
+  ['Code du compte', 'Intitulé du compte', 'Nombre de lignes'], ['Total des débits', 'Total des crédits']
+]);
+const summaryAccountTotals = Report.build({
+  reportType: 'summary-account-totals', entries, accounts, journals, decimalPlaces: 2,
+  filters: { journals: ['OD'], from: '2026-01-01', to: '2026-02-28', summaryLevel: 1 }
+});
+assert.equal(summaryAccountTotals.summaryLevel, 1);
+assert.equal(summaryAccountTotals.accountCount, 2);
+assert.equal(summaryAccountTotals.lineCount, 4);
+assert.equal(summaryAccountTotals.totalDebit, 1550);
+assert.equal(summaryAccountTotals.totalCredit, 1550);
+assert.deepEqual(summaryAccountTotals.groups[0].rows.map(row => row.cells), [
+  { accountCode: '4', accountTitle: 'Tiers', lineCount: 2, credit: 1550 },
+  { accountCode: '6', accountTitle: 'Charges', lineCount: 2, credit: 0 }
+], 'le niveau 1 regroupe sur le premier chiffre et utilise les intitulés de classes présents dans le référentiel');
+const summaryAccountTotalsMatrix = Report.toMatrix(summaryAccountTotals);
+assert.deepEqual(summaryAccountTotalsMatrix[0], ['Code du compte', 'Intitulé du compte', 'Nombre de lignes', 'Total des crédits']);
+assert.deepEqual(summaryAccountTotalsMatrix[1], ['Cumul par comptes de synthèse · niveau 1', '', '', '']);
+const subclassTotals = Report.build({
+  reportType: 'summary-account-totals', entries, accounts, journals,
+  filters: { journals: ['OD'], from: '2026-01-01', to: '2026-02-28', summaryLevel: 2 }
+});
+assert.deepEqual(subclassTotals.groups[0].rows.map(row => row.cells), [
+  { accountCode: '40', accountTitle: 'Fournisseurs et comptes rattachés', lineCount: 2, credit: 1550 },
+  { accountCode: '60', accountTitle: 'Achats et variations de stocks', lineCount: 2, credit: 0 }
+], 'le niveau 2 reprend les intitulés de sous-classe du référentiel');
+const accountGroupTotals = Report.build({
+  reportType: 'summary-account-totals', entries, accounts, journals,
+  columns: ['accountCode', 'accountTitle', 'lineCount', 'debit', 'credit'],
+  filters: { journals: ['OD'], from: '2026-01-01', to: '2026-02-28', summaryLevel: 3 }
+});
+assert.deepEqual(accountGroupTotals.groups[0].rows.map(row => row.cells), [
+  { accountCode: '401', accountTitle: 'Fournisseurs, dettes en compte', lineCount: 2, debit: 0, credit: 1550 },
+  { accountCode: '601', accountTitle: 'Achats de marchandises', lineCount: 2, debit: 1550, credit: 0 }
+], 'le niveau 3 utilise les codes et libellés exacts du référentiel');
+const unknownSummaryTitle = Report.build({
+  reportType: 'summary-account-totals', entries, accounts, journals, columns: ['accountCode', 'accountTitle'],
+  filters: { journals: ['OD'], from: '2026-01-01', to: '2026-02-28', summaryLevel: 4 }
+});
+assert.deepEqual(unknownSummaryTitle.groups[0].rows.map(row => row.cells), [
+  { accountCode: '4011', accountTitle: '' }, { accountCode: '6011', accountTitle: '' }
+], 'un intitulé absent du référentiel reste vide au lieu d’être fabriqué');
+const customSubclassTitle = Report.build({
+  reportType: 'summary-account-totals',
+  accounts: [{ code: '499900', label: 'Compte personnalisé', classLabel: 'Tiers', subclassLabel: 'Comptes personnalisés' }],
+  entries: [{ status: 'posted', journal: 'OD', date: '2026-01-01', lines: [{ account: '499900', debit: 10, credit: 0 }] }],
+  columns: ['accountCode', 'accountTitle'],
+  filters: { summaryLevel: 2 }
+});
+assert.deepEqual(customSubclassTitle.groups[0].rows[0].cells, { accountCode: '49', accountTitle: '' },
+  'un libellé générique de sous-classe ne remplace pas un libellé absent du référentiel');
+const invalidSummaryLevel = Report.build({
+  reportType: 'summary-account-totals', entries, accounts, journals,
+  filters: { journals: ['OD'], from: '2026-01-01', to: '2026-02-28', summaryLevel: 9 }
+});
+assert.equal(invalidSummaryLevel.summaryLevel, 1, 'le calcul pur revient au niveau valide par défaut si un niveau hors plage lui est transmis');
+
 const matrix = Report.toMatrix(report);
 assert.deepEqual(matrix[0], ['Date', 'N° pièce', 'Compte', 'Débit', 'Crédit', 'Libellé', '1ère saisie']);
 assert.equal(matrix[1][0], 'Journal OD · Opérations diverses');
@@ -379,4 +446,4 @@ assert.deepEqual(twoJournals.groups.map(group => group.code), ['AC', 'OD']);
 assert.equal(twoJournals.groups[0].pageBreakBefore, false);
 assert.equal(twoJournals.groups[1].pageBreakBefore, true);
 
-console.log('Rapports de journaux : cumul par journal et par compte, filtres, colonnes, déséquilibres, TXT et Excel — OK');
+console.log('Rapports de journaux : cumuls par journal, comptes individuels et comptes de synthèse, filtres et exports — OK');

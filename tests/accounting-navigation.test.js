@@ -274,12 +274,20 @@ assert.ok(findTab('editions', 'journals').children[1].reason.includes('compteur 
 assert.equal(findTab('editions', 'journals').children[4].status, 'active');
 assert.ok(findTab('editions', 'journals').children[4].reason.includes('par compte individuel'));
 assert.ok(findTab('editions', 'journals').children[4].reason.includes('export Excel/TXT'));
-assert.match(appSource, /child\.id === 'journal-lines' \|\| child\.id === 'journal-modified-pieces' \|\| child\.id === 'journal-unbalanced-pieces' \|\| child\.id === 'journal-entry-totals' \|\| child\.id === 'journal-individual-account-totals'\) return viewJournalLinesReport\(backLink\)/,
+assert.equal(findTab('editions', 'journals').children[5].status, 'active');
+assert.ok(findTab('editions', 'journals').children[5].reason.includes('niveau de synthèse'));
+assert.ok(findTab('editions', 'journals').children[5].reason.includes('premiers chiffres du code'));
+assert.ok(findTab('editions', 'journals').children[5].reason.includes('export Excel/TXT'));
+assert.match(appSource, /child\.id === 'journal-lines' \|\| child\.id === 'journal-modified-pieces' \|\| child\.id === 'journal-unbalanced-pieces' \|\| child\.id === 'journal-entry-totals' \|\| child\.id === 'journal-individual-account-totals' \|\| child\.id === 'journal-summary-account-totals'\) return viewJournalLinesReport\(backLink\)/,
   'les rapports de lignes et les cumuls ouvrent le parcours partagé de sélection et mise en page');
-assert.match(appSource, /parsed\.params\.c === 'journal-individual-account-totals' \? 'account-totals'/,
-  'le sous-menu ouvre le mode dédié au cumul par comptes individuels');
+assert.match(appSource, /parsed\.params\.c === 'journal-individual-account-totals'[\s\S]*'account-totals'[\s\S]*parsed\.params\.c === 'journal-summary-account-totals' \? 'summary-account-totals'/,
+  'les sous-menus ouvrent les modes dédiés aux cumuls individuel et de synthèse');
 assert.match(journalLinesSource, /ACCOUNT_TOTALS_COLUMNS = \[[\s\S]*Code du compte[\s\S]*Intitulé du compte[\s\S]*Nombre de lignes[\s\S]*reportType === 'account-totals'/,
   'le calcul du cumul individuel expose les colonnes de la capture');
+assert.match(journalLinesSource, /SUMMARY_ACCOUNT_TOTALS_COLUMNS = \[[\s\S]*Code du compte[\s\S]*Intitulé du compte[\s\S]*Nombre de lignes[\s\S]*Total des débits[\s\S]*defaultSelected: false[\s\S]*Total des crédits[\s\S]*summary-account-totals/,
+  'le cumul de synthèse propose les cinq colonnes attendues avec les débits décochés par défaut');
+assert.match(appSource, /id="journal-lines-summary-level"[\s\S]*min="1" max="8" step="1"[\s\S]*value="' \+ esc\(session\.filters\.summaryLevel \|\| 1\)/,
+  'le niveau de synthèse est numérique, limité aux codes du plan et initialisé à 1');
 assert.match(appSource, /includeDrafts: isModifiedReport[\s\S]*modifiedOnly: isModifiedReport[\s\S]*filterByModificationDate: isModifiedReport/,
   'le rapport modifié filtre la date de modification et accepte les brouillons modifiés');
 assert.match(appSource, /Lignes générées[\s\S]*data-jlr-generated-count[\s\S]*updateJournalLinesGeneratedCount/,
@@ -388,13 +396,13 @@ assert.match(appSource, /child.section === 'definitionsAnalytics'/);
 assert.match(appSource, /var disabled = child\.status === 'inactive';[\s\S]*return disabled[\s\S]*edition-report-card is-disabled/);
 assert.match(journalLinesSource, /options\.unbalancedOnly[\s\S]*entryDebit[\s\S]*entryCredit/,
   'le rapport ne conserve que les pièces dont les totaux diffèrent');
-assert.match(appSource, /function createJournalLinesReportSession[\s\S]*var isAccountTotalsReport = mode === 'account-totals'[\s\S]*orientation: isUnbalancedReport \|\| isTotalsReport \|\| isAccountTotalsReport \? 'landscape'/,
+assert.match(appSource, /function createJournalLinesReportSession[\s\S]*var isSummaryAccountTotalsReport = mode === 'summary-account-totals'[\s\S]*orientation: isUnbalancedReport \|\| isTotalsReport \|\| isAccountTotalsReport \|\| isSummaryAccountTotalsReport \? 'landscape'/,
   'les cumuls par journal et par compte reprennent l’orientation paysage de la capture');
 assert.match(appSource, /reportType: session\.mode[\s\S]*unbalancedOnly: isUnbalancedReport/);
-assert.match(appSource, /if \(child\.id === 'journal-lines'[\s\S]*child\.id === 'journal-entry-totals' \|\| child\.id === 'journal-individual-account-totals'\) return viewJournalLinesReport\(backLink\)/,
+assert.match(appSource, /if \(child\.id === 'journal-lines'[\s\S]*child\.id === 'journal-entry-totals' \|\| child\.id === 'journal-individual-account-totals' \|\| child\.id === 'journal-summary-account-totals'\) return viewJournalLinesReport\(backLink\)/,
   'les pièces déséquilibrées et les deux cumuls passent par le même parcours à deux étapes');
-assert.match(appSource, /menuParams\.c === 'journal-lines'[\s\S]*menuParams\.c === 'journal-entry-totals' \|\| menuParams\.c === 'journal-individual-account-totals'\)\) bindJournalLinesReport\(\)/,
-  'le cumul individuel est relié aux interactions de sélection, mise en page, aperçu et impression');
+assert.match(appSource, /menuParams\.c === 'journal-lines'[\s\S]*menuParams\.c === 'journal-entry-totals' \|\| menuParams\.c === 'journal-individual-account-totals' \|\| menuParams\.c === 'journal-summary-account-totals'\)\) bindJournalLinesReport\(\)/,
+  'les deux cumuls sont reliés aux interactions de sélection, mise en page, aperçu et impression');
 assert.match(appSource, /function editionReportCatalog\([\s\S]*Balances, ouvertures et situations[\s\S]*Grands livres et historiques[\s\S]*Disponibilités budgétaires/);
 assert.match(menuRenderer, /isEditionReportsMenu[\s\S]*editionReportChildView\(selectedChild/);
 assert.equal(findTab('editions', 'general-accounts').status, 'mixed');
@@ -558,7 +566,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v91/);
+assert.match(serviceWorkerSource, /perfecto-static-v92/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

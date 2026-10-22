@@ -81,12 +81,27 @@
     [ACCOUNT_TOTALS_COLUMNS[3], ACCOUNT_TOTALS_COLUMNS[4]]
   ];
 
+  var SUMMARY_ACCOUNT_TOTALS_COLUMNS = [
+    { key: 'accountCode', label: 'Code du compte', group: 0, selectable: true, defaultSelected: true },
+    { key: 'accountTitle', label: 'Intitulé du compte', group: 0, selectable: true, defaultSelected: true },
+    { key: 'lineCount', label: 'Nombre de lignes', group: 0, selectable: true, defaultSelected: true },
+    { key: 'debit', label: 'Total des débits', group: 1, selectable: true, defaultSelected: false },
+    { key: 'credit', label: 'Total des crédits', group: 1, selectable: true, defaultSelected: true }
+  ];
+
+  var SUMMARY_ACCOUNT_TOTALS_COLUMN_GROUPS = [
+    [SUMMARY_ACCOUNT_TOTALS_COLUMNS[0], SUMMARY_ACCOUNT_TOTALS_COLUMNS[1], SUMMARY_ACCOUNT_TOTALS_COLUMNS[2]],
+    [SUMMARY_ACCOUNT_TOTALS_COLUMNS[3], SUMMARY_ACCOUNT_TOTALS_COLUMNS[4]]
+  ];
+
   function columnsForReport(reportType) {
     var columns = reportType === 'unbalanced'
       ? UNBALANCED_COLUMNS
       : (reportType === 'totals'
         ? JOURNAL_TOTALS_COLUMNS
-        : (reportType === 'account-totals' ? ACCOUNT_TOTALS_COLUMNS : COLUMNS));
+        : (reportType === 'account-totals'
+          ? ACCOUNT_TOTALS_COLUMNS
+          : (reportType === 'summary-account-totals' ? SUMMARY_ACCOUNT_TOTALS_COLUMNS : COLUMNS)));
     return columns.map(function (column) { return Object.assign({}, column); });
   }
 
@@ -95,7 +110,9 @@
       ? UNBALANCED_COLUMN_GROUPS
       : (reportType === 'totals'
         ? JOURNAL_TOTALS_COLUMN_GROUPS
-        : (reportType === 'account-totals' ? ACCOUNT_TOTALS_COLUMN_GROUPS : COLUMN_GROUPS));
+        : (reportType === 'account-totals'
+          ? ACCOUNT_TOTALS_COLUMN_GROUPS
+          : (reportType === 'summary-account-totals' ? SUMMARY_ACCOUNT_TOTALS_COLUMN_GROUPS : COLUMN_GROUPS)));
     return groups.map(function (group) {
       return group.map(function (column) { return column ? Object.assign({}, column) : null; });
     });
@@ -313,10 +330,107 @@
     };
   }
 
+  function summaryAccountTitle(code, level, accountByCode, sourceAccount) {
+    var exactAccount = accountByCode.get(code);
+    if (exactAccount && exactAccount.label) return String(exactAccount.label);
+    if (level === 1) return String(sourceAccount && sourceAccount.classLabel || '');
+    if (level === 2) {
+      var subclassLabel = String(sourceAccount && sourceAccount.subclassLabel || '');
+      return subclassLabel === 'Comptes personnalisés' ? '' : subclassLabel;
+    }
+    return '';
+  }
+
+  function buildSummaryAccountTotals(options) {
+    var filters = options.filters || {};
+    var selectedJournals = asSet(filters.journals);
+    var from = String(filters.from || '');
+    var to = String(filters.to || '');
+    var level = Number(filters.summaryLevel);
+    if (!Number.isInteger(level) || level < 1 || level > 8) level = 1;
+    var decimalPlaces = Number(options.decimalPlaces);
+    if (!Number.isInteger(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 4) decimalPlaces = 0;
+    var precision = Math.pow(10, decimalPlaces);
+    var accounts = Array.isArray(options.accounts) ? options.accounts : [];
+    var entries = Array.isArray(options.entries) ? options.entries : [];
+    var accountByCode = new Map(accounts.map(function (account) { return [String(account.code), account]; }));
+    var selectedKeys = Array.isArray(options.columns) ? options.columns : SUMMARY_ACCOUNT_TOTALS_COLUMNS.filter(function (column) {
+      return column.selectable && column.defaultSelected;
+    }).map(function (column) { return column.key; });
+    var columns = SUMMARY_ACCOUNT_TOTALS_COLUMNS.filter(function (column) {
+      return column.selectable && selectedKeys.indexOf(column.key) !== -1;
+    });
+    var totalsByAccount = new Map();
+
+    entries.forEach(function (entry) {
+      if (!entry || entry.status !== 'posted') return;
+      var entryDate = String(entry.date || '');
+      if (from && entryDate < from) return;
+      if (to && entryDate > to) return;
+      if (selectedJournals.size && !selectedJournals.has(String(entry.journal || ''))) return;
+      (Array.isArray(entry.lines) ? entry.lines : []).forEach(function (line) {
+        if (!line) return;
+        var sourceCode = String(line.account || '').trim();
+        if (!sourceCode) return;
+        var summaryCode = sourceCode.slice(0, Math.min(level, sourceCode.length));
+        var summary = totalsByAccount.get(summaryCode);
+        if (!summary) {
+          summary = { code: summaryCode, lineCount: 0, debitUnits: 0, creditUnits: 0, sourceAccount: accountByCode.get(sourceCode) || null };
+          totalsByAccount.set(summaryCode, summary);
+        }
+        summary.lineCount += 1;
+        summary.debitUnits += Math.round(safeAmount(line.debit) * precision);
+        summary.creditUnits += Math.round(safeAmount(line.credit) * precision);
+      });
+    });
+
+    var lineCount = 0;
+    var totalDebitUnits = 0;
+    var totalCreditUnits = 0;
+    var rows = Array.from(totalsByAccount.values()).sort(function (a, b) {
+      return compare(a.code, b.code);
+    }).map(function (summary) {
+      var debit = summary.debitUnits / precision;
+      var credit = summary.creditUnits / precision;
+      var cells = {};
+      columns.forEach(function (column) {
+        switch (column.key) {
+          case 'accountCode': cells[column.key] = summary.code; break;
+          case 'accountTitle': cells[column.key] = summaryAccountTitle(summary.code, level, accountByCode, summary.sourceAccount); break;
+          case 'lineCount': cells[column.key] = summary.lineCount; break;
+          case 'debit': cells[column.key] = debit; break;
+          case 'credit': cells[column.key] = credit; break;
+        }
+      });
+      lineCount += summary.lineCount;
+      totalDebitUnits += summary.debitUnits;
+      totalCreditUnits += summary.creditUnits;
+      return { kind: 'line', cells: cells };
+    });
+    var accountCount = totalsByAccount.size;
+    var groups = rows.length ? [{
+      code: 'summary-accounts',
+      title: 'Cumul par comptes de synthèse · niveau ' + level,
+      accountCount: accountCount,
+      lineCount: lineCount,
+      rows: rows
+    }] : [];
+    return {
+      columns: columns,
+      groups: groups,
+      accountCount: accountCount,
+      lineCount: lineCount,
+      summaryLevel: level,
+      totalDebit: totalDebitUnits / precision,
+      totalCredit: totalCreditUnits / precision
+    };
+  }
+
   function build(options) {
     options = options || {};
     if (options.reportType === 'totals') return buildJournalTotals(options);
     if (options.reportType === 'account-totals') return buildAccountTotals(options);
+    if (options.reportType === 'summary-account-totals') return buildSummaryAccountTotals(options);
     var filters = options.filters || {};
     var selectedJournals = asSet(filters.journals);
     var selectedAccounts = asSet(filters.accounts);
