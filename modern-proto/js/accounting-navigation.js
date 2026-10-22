@@ -1,5 +1,5 @@
-/* Menu de la comptabilité générale. Les fonctions analytiques et non implémentées
-   restent visibles, mais n'exécutent aucun traitement. */
+/* Menu de la comptabilité générale. Les imputations analytiques restent inactives ;
+   les états explicitement actifs sont consultatifs et utilisent les références existantes. */
 (function (root) {
   'use strict';
 
@@ -79,7 +79,7 @@
     {
       id: 'editions', label: 'Éditions', icon: '▤', defaultTab: 'journals', tabs: [
         {
-          id: 'journals', label: 'Journaux', status: 'partial', reason: 'Choisissez un état ou un contrôle. Les dix sous-éléments sont organisés en trois groupes ; les rapports de lignes et les cumuls par journal, par compte (individuel ou de synthèse) et par tiers partagent un parcours de sélection, mise en page, aperçu et export. Les autres états restent à préciser à partir de vos captures.',
+          id: 'journals', label: 'Journaux', status: 'partial', reason: 'Choisissez un état ou un contrôle. Les dix sous-éléments sont organisés en trois groupes ; les rapports de lignes et les cumuls par journal, par compte (individuel ou de synthèse), par tiers et par centre analytique partagent un parcours de sélection, mise en page, aperçu et export. Les autres états restent à préciser à partir de vos captures.',
           children: [
             { id: 'journal-lines', label: 'Détail des lignes saisies', section: 'pieces', status: 'active', reason: 'Sélection des journaux, comptes, périodes et colonnes, mise en page, aperçu, export Excel/TXT et impression après aperçu. Toutes les colonnes sont sélectionnables ; les cellules sans valeur source restent vides.' },
             { id: 'journal-modified-pieces', label: 'Pièces modifiées après première saisie', section: 'pieces', status: 'active', reason: 'Sélection des journaux et de la période de modification, colonnes sélectionnables, compteur dynamique, mise en page, aperçu, export Excel/TXT et impression après aperçu. Les changements antérieurs non horodatés ne sont pas reconstitués.' },
@@ -88,7 +88,7 @@
             { id: 'journal-individual-account-totals', label: 'Cumul par comptes individuels', section: 'cumuls', status: 'active', reason: 'Sélection des journaux, comptes et période du cycle. Le rapport regroupe les lignes validées par compte individuel, avec code, intitulé, nombre de lignes, débits et crédits sélectionnables. Mise en page, aperçu obligatoire avant impression, export Excel/TXT, en lecture seule.' },
             { id: 'journal-summary-account-totals', label: 'Cumul par comptes de synthèse', section: 'cumuls', status: 'active', reason: 'Sélection des journaux, du niveau de synthèse et de la période du cycle. Les lignes validées sont regroupées selon les premiers chiffres du code de compte ; code, intitulé, nombre de lignes, débits et crédits sont sélectionnables. Mise en page, aperçu obligatoire avant impression, export Excel/TXT, en lecture seule.' },
             { id: 'journal-third-party-totals', label: 'Cumul par tiers', section: 'cumuls', status: 'active', reason: 'Sélection des journaux, de la nature (clients, fournisseurs, personnel, débiteurs ou créditeurs), des tiers et du cycle. Le cumul ne retient que les lignes validées de comptes auxiliaires portant une référence explicite reliée à une fiche du dossier ; les comptes collectifs sans identifiant ne sont pas ventilés. Colonnes configurables, mise en page, aperçu obligatoire avant impression et export Excel/TXT, en lecture seule.' },
-            { id: 'journal-analytic-center-totals', label: 'Cumul par centres analytiques', section: 'cumuls', status: 'inactive', reason: 'La comptabilité analytique reste un module séparé et inactive dans le parcours général.' },
+            { id: 'journal-analytic-center-totals', label: 'Cumul par centres analytiques', section: 'cumuls', status: 'active', reason: 'Sélection des journaux, de la nature analytique, des codes de centres et de la période du cycle. Le calcul est consultatif : seules les lignes validées portant une référence explicite et non ambiguë vers un centre du dossier sont cumulées ; aucune imputation ni ventilation n’est créée. Cinq colonnes configurables, mise en page, aperçu obligatoire avant impression et export Excel/TXT.' },
             { id: 'journal-currency-totals', label: 'Cumul par devises', section: 'cumuls', status: 'planned', reason: 'Le modèle général ne gère pas encore les devises ni les conversions ; aucun taux ou montant n’est inventé.' },
             { id: 'journal-allocation-sheet', label: 'Fiche d’imputation', section: 'imputation', status: 'planned', reason: 'Le rôle de la fiche, son paramétrage et son rendu seront définis à partir de vos captures.' }
           ]

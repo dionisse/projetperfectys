@@ -107,6 +107,19 @@
     [THIRD_PARTY_TOTALS_COLUMNS[3], THIRD_PARTY_TOTALS_COLUMNS[4]]
   ];
 
+  var ANALYTICAL_CENTER_TOTALS_COLUMNS = [
+    { key: 'analyticCode', label: 'Code analytique', group: 0, selectable: true, defaultSelected: true },
+    { key: 'analyticTitle', label: 'Intitulé', group: 0, selectable: true, defaultSelected: true },
+    { key: 'lineCount', label: 'Nombre de lignes', group: 0, selectable: true, defaultSelected: true },
+    { key: 'debit', label: 'Total des débits', group: 1, selectable: true, defaultSelected: true },
+    { key: 'credit', label: 'Total des crédits', group: 1, selectable: true, defaultSelected: true }
+  ];
+
+  var ANALYTICAL_CENTER_TOTALS_COLUMN_GROUPS = [
+    [ANALYTICAL_CENTER_TOTALS_COLUMNS[0], ANALYTICAL_CENTER_TOTALS_COLUMNS[1], ANALYTICAL_CENTER_TOTALS_COLUMNS[2]],
+    [ANALYTICAL_CENTER_TOTALS_COLUMNS[3], ANALYTICAL_CENTER_TOTALS_COLUMNS[4]]
+  ];
+
   function columnsForReport(reportType) {
     var columns = reportType === 'unbalanced'
       ? UNBALANCED_COLUMNS
@@ -116,7 +129,9 @@
           ? ACCOUNT_TOTALS_COLUMNS
           : (reportType === 'summary-account-totals'
             ? SUMMARY_ACCOUNT_TOTALS_COLUMNS
-            : (reportType === 'third-party-totals' ? THIRD_PARTY_TOTALS_COLUMNS : COLUMNS))));
+            : (reportType === 'third-party-totals'
+              ? THIRD_PARTY_TOTALS_COLUMNS
+              : (reportType === 'analytic-center-totals' ? ANALYTICAL_CENTER_TOTALS_COLUMNS : COLUMNS)))));
     return columns.map(function (column) { return Object.assign({}, column); });
   }
 
@@ -129,7 +144,9 @@
           ? ACCOUNT_TOTALS_COLUMN_GROUPS
           : (reportType === 'summary-account-totals'
             ? SUMMARY_ACCOUNT_TOTALS_COLUMN_GROUPS
-            : (reportType === 'third-party-totals' ? THIRD_PARTY_TOTALS_COLUMN_GROUPS : COLUMN_GROUPS))));
+            : (reportType === 'third-party-totals'
+              ? THIRD_PARTY_TOTALS_COLUMN_GROUPS
+              : (reportType === 'analytic-center-totals' ? ANALYTICAL_CENTER_TOTALS_COLUMN_GROUPS : COLUMN_GROUPS)))));
     return groups.map(function (group) {
       return group.map(function (column) { return column ? Object.assign({}, column) : null; });
     });
@@ -443,6 +460,153 @@
     };
   }
 
+  function normalizeAnalyticalCenterReference(value) {
+    return String(value == null ? '' : value).trim().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').toLocaleUpperCase();
+  }
+
+  function analyticalCenterReferences(line, sourceLine) {
+    var referenceKey = /^(?:analyticalCenter|analytical_center|analyticCenter|analytic_center|analysisCenter|analysis_center)(?:\w*(?:id|code))?$/i;
+    var references = [];
+    var invalid = false;
+    [line, sourceLine].forEach(function (source) {
+      if (!source || typeof source !== 'object' || Array.isArray(source)) return;
+      Object.keys(source).forEach(function (key) {
+        if (!referenceKey.test(key)) return;
+        var value = source[key];
+        if (value == null || value === '') return;
+        if (typeof value !== 'string' && typeof value !== 'number') {
+          invalid = true;
+          return;
+        }
+        var normalized = normalizeAnalyticalCenterReference(value);
+        if (normalized && references.indexOf(normalized) === -1) references.push(normalized);
+      });
+    });
+    return { values: references, invalid: invalid };
+  }
+
+  function buildAnalyticalCenterTotals(options) {
+    var filters = options.filters || {};
+    var selectedJournals = asSet(filters.journals);
+    var selectedCenters = new Set((Array.isArray(filters.analyticalCenters) ? filters.analyticalCenters : []).map(normalizeAnalyticalCenterReference));
+    var from = String(filters.from || '');
+    var to = String(filters.to || '');
+    var natureId = String(filters.analyticalNature || '');
+    var natureLabel = String(filters.analyticalNatureLabel || 'Centres de responsabilité');
+    var decimalPlaces = Number(options.decimalPlaces);
+    if (!Number.isInteger(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 4) decimalPlaces = 0;
+    var precision = Math.pow(10, decimalPlaces);
+    var centers = Array.isArray(options.analyticalCenters) ? options.analyticalCenters : [];
+    var entries = Array.isArray(options.entries) ? options.entries : [];
+    var centerByReference = new Map();
+    var selectedKeys = Array.isArray(options.columns) ? options.columns : ANALYTICAL_CENTER_TOTALS_COLUMNS.filter(function (column) {
+      return column.selectable && column.defaultSelected;
+    }).map(function (column) { return column.key; });
+    var columns = ANALYTICAL_CENTER_TOTALS_COLUMNS.filter(function (column) {
+      return column.selectable && selectedKeys.indexOf(column.key) !== -1;
+    });
+    var totalsByCenter = new Map();
+
+    function registerReference(reference, center) {
+      var normalized = normalizeAnalyticalCenterReference(reference);
+      if (!normalized) return;
+      if (centerByReference.has(normalized) && centerByReference.get(normalized) !== center) {
+        centerByReference.set(normalized, null);
+        return;
+      }
+      if (centerByReference.get(normalized) !== null) centerByReference.set(normalized, center);
+    }
+
+    centers.forEach(function (center) {
+      if (!center) return;
+      registerReference(center.id, center);
+      registerReference(center.code, center);
+    });
+
+    if (natureId === 'responsibility-centers') {
+      entries.forEach(function (entry) {
+        if (!entry || entry.status !== 'posted') return;
+        var date = String(entry.date || '');
+        if (from && date < from) return;
+        if (to && date > to) return;
+        var journal = String(entry.journal || '');
+        if (selectedJournals.size && !selectedJournals.has(journal)) return;
+        var sourceLines = entry.sourceMetadata && Array.isArray(entry.sourceMetadata.lines) ? entry.sourceMetadata.lines : [];
+        (Array.isArray(entry.lines) ? entry.lines : []).forEach(function (line, lineIndex) {
+          if (!line || typeof line !== 'object') return;
+          var references = analyticalCenterReferences(line, sourceLines[lineIndex] || {});
+          if (references.invalid || !references.values.length) return;
+          var center = null;
+          for (var refIndex = 0; refIndex < references.values.length; refIndex += 1) {
+            var reference = references.values[refIndex];
+            if (!centerByReference.has(reference)) return;
+            var matched = centerByReference.get(reference);
+            if (!matched || (center && center !== matched)) return;
+            center = matched;
+          }
+          if (!center || !center.code) return;
+          var centerCode = String(center.code).trim();
+          if (!centerCode || (selectedCenters.size && !selectedCenters.has(normalizeAnalyticalCenterReference(centerCode)))) return;
+          var debit = Number(line.debit);
+          var credit = Number(line.credit);
+          if (!Number.isFinite(debit) || !Number.isFinite(credit) || debit < 0 || credit < 0 ||
+              (debit > 0 && credit > 0) || (debit === 0 && credit === 0)) return;
+          var total = totalsByCenter.get(centerCode);
+          if (!total) {
+            total = { center: center, lineCount: 0, debitUnits: 0, creditUnits: 0 };
+            totalsByCenter.set(centerCode, total);
+          }
+          total.lineCount += 1;
+          total.debitUnits += Math.round(debit * precision);
+          total.creditUnits += Math.round(credit * precision);
+        });
+      });
+    }
+
+    var lineCount = 0;
+    var totalDebitUnits = 0;
+    var totalCreditUnits = 0;
+    var rows = Array.from(totalsByCenter.values()).sort(function (a, b) {
+      return compare(a.center.code, b.center.code);
+    }).map(function (total) {
+      var debit = total.debitUnits / precision;
+      var credit = total.creditUnits / precision;
+      var cells = {};
+      columns.forEach(function (column) {
+        switch (column.key) {
+          case 'analyticCode': cells[column.key] = String(total.center.code || ''); break;
+          case 'analyticTitle': cells[column.key] = String(total.center.name || ''); break;
+          case 'lineCount': cells[column.key] = total.lineCount; break;
+          case 'debit': cells[column.key] = debit; break;
+          case 'credit': cells[column.key] = credit; break;
+        }
+      });
+      lineCount += total.lineCount;
+      totalDebitUnits += total.debitUnits;
+      totalCreditUnits += total.creditUnits;
+      return { kind: 'line', cells: cells };
+    });
+    var centerCount = totalsByCenter.size;
+    var groups = rows.length ? [{
+      code: 'analytical-centers',
+      title: 'Cumul des saisies · ' + natureLabel,
+      centerCount: centerCount,
+      lineCount: lineCount,
+      rows: rows
+    }] : [];
+    return {
+      columns: columns,
+      groups: groups,
+      centerCount: centerCount,
+      lineCount: lineCount,
+      analyticalNature: natureId,
+      analyticalNatureLabel: natureLabel,
+      totalDebit: totalDebitUnits / precision,
+      totalCredit: totalCreditUnits / precision
+    };
+  }
+
   function thirdPartyNatureLabel(nature) {
     return {
       suppliers: 'Fournisseurs',
@@ -575,6 +739,7 @@
     if (options.reportType === 'account-totals') return buildAccountTotals(options);
     if (options.reportType === 'summary-account-totals') return buildSummaryAccountTotals(options);
     if (options.reportType === 'third-party-totals') return buildThirdPartyTotals(options);
+    if (options.reportType === 'analytic-center-totals') return buildAnalyticalCenterTotals(options);
     var filters = options.filters || {};
     var selectedJournals = asSet(filters.journals);
     var selectedAccounts = asSet(filters.accounts);

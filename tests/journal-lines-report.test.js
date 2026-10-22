@@ -458,6 +458,94 @@ assert.deepEqual(invalidAuxiliarySource.sourceErrors, ['Source auxiliaire invali
 assert.deepEqual(invalidAuxiliarySource.groups, [], 'aucun montant partiel n’est affiché si la source auxiliaire échoue à ses contrôles');
 assert.equal(invalidAuxiliarySource.lineCount, 0);
 
+const analyticalCenterRecords = [
+  { id: 'center-1', code: 'ANA-0001', name: 'Atelier Nord', active: true },
+  { id: 'center-2', code: 'ANA-0002', name: 'Atelier Sud', active: false }
+];
+const analyticalEntries = [
+  {
+    id: 'analytic-posted-1', date: '2026-01-20', journal: 'OD', status: 'posted',
+    sourceMetadata: { lines: [{ analytical_center_id: 'center-1' }] },
+    lines: [{ account: '601100', debit: 100, credit: 0 }]
+  },
+  {
+    id: 'analytic-posted-2', date: '2026-02-10', journal: 'OD', status: 'posted',
+    lines: [{ account: '401100', analyticalCenterCode: 'ANA-0001', analyticalCenterId: 'center-1', debit: 0, credit: 30 }]
+  },
+  {
+    id: 'analytic-posted-3', date: '2026-02-20', journal: 'VTE', status: 'posted',
+    lines: [{ account: '411000', analysisCenter: 'ANA-0001', debit: 0, credit: 70 }]
+  },
+  {
+    id: 'analytic-posted-4', date: '2026-02-28', journal: 'OD', status: 'posted',
+    lines: [{ account: '601100', analytic_center_code: 'ANA-0002', debit: 25, credit: 0 }]
+  },
+  {
+    id: 'analytic-unknown', date: '2026-02-15', journal: 'OD', status: 'posted',
+    lines: [{ account: '601100', analyticalCenterCode: 'ANA-UNKNOWN', debit: 900, credit: 0 }]
+  },
+  {
+    id: 'analytic-ambiguous', date: '2026-02-16', journal: 'OD', status: 'posted',
+    sourceMetadata: { lines: [{ analyticCenter: 'ANA-0002' }] },
+    lines: [{ account: '601100', analyticalCenterCode: 'ANA-0001', debit: 800, credit: 0 }]
+  },
+  {
+    id: 'analytic-unassigned', date: '2026-02-17', journal: 'OD', status: 'posted',
+    lines: [{ account: '601100', debit: 700, credit: 0 }]
+  },
+  {
+    id: 'analytic-draft', date: '2026-02-18', journal: 'OD', status: 'draft',
+    lines: [{ account: '601100', analyticalCenterCode: 'ANA-0001', debit: 600, credit: 0 }]
+  },
+  {
+    id: 'analytic-outside-period', date: '2026-03-01', journal: 'OD', status: 'posted',
+    lines: [{ account: '601100', analyticalCenterCode: 'ANA-0001', debit: 500, credit: 0 }]
+  }
+];
+assert.deepEqual(Report.columnsForReport('analytic-center-totals').map(column => column.key),
+  ['analyticCode', 'analyticTitle', 'lineCount', 'debit', 'credit']);
+assert.deepEqual(Report.columnsForReport('analytic-center-totals').map(column => column.label),
+  ['Code analytique', 'Intitulé', 'Nombre de lignes', 'Total des débits', 'Total des crédits']);
+assert.deepEqual(Report.columnsForReport('analytic-center-totals').map(column => column.defaultSelected), [true, true, true, true, true]);
+assert.ok(Report.columnsForReport('analytic-center-totals').every(column => column.selectable));
+const analyticalCentersBefore = JSON.parse(JSON.stringify(analyticalCenterRecords));
+const analyticalEntriesBefore = JSON.parse(JSON.stringify(analyticalEntries));
+const analyticTotals = Report.build({
+  reportType: 'analytic-center-totals', analyticalCenters: analyticalCenterRecords, entries: analyticalEntries,
+  decimalPlaces: 2,
+  filters: {
+    analyticalNature: 'responsibility-centers', analyticalNatureLabel: 'Centres de responsabilité',
+    analyticalCenters: ['ANA-0001'], journals: ['OD'], from: '2026-01-01', to: '2026-02-28'
+  }
+});
+assert.equal(analyticTotals.centerCount, 1);
+assert.equal(analyticTotals.lineCount, 2);
+assert.equal(analyticTotals.totalDebit, 100);
+assert.equal(analyticTotals.totalCredit, 30);
+assert.deepEqual(analyticTotals.groups[0].rows[0].cells, {
+  analyticCode: 'ANA-0001', analyticTitle: 'Atelier Nord', lineCount: 2, debit: 100, credit: 30
+}, 'le cumul analytique applique période, journaux et code ; il accepte une référence unique présente sur la ligne ou sa métadonnée source');
+assert.equal(analyticTotals.groups[0].title, 'Cumul des saisies · Centres de responsabilité');
+assert.deepEqual(analyticalCenterRecords, analyticalCentersBefore, 'le cumul ne modifie pas le référentiel des centres');
+assert.deepEqual(analyticalEntries, analyticalEntriesBefore, 'le cumul ne modifie aucune pièce comptable');
+const analyticMatrix = Report.toMatrix(analyticTotals);
+assert.deepEqual(analyticMatrix[0], ['Code analytique', 'Intitulé', 'Nombre de lignes', 'Total des débits', 'Total des crédits']);
+assert.ok(analyticMatrix.some(row => row[0] === 'ANA-0001' && row[1] === 'Atelier Nord' && row[2] === 2 && row[3] === 100 && row[4] === 30),
+  'l’export tabulaire contient le cumul analytique sans ventilation inventée');
+const allAnalyticCenters = Report.build({
+  reportType: 'analytic-center-totals', analyticalCenters: analyticalCenterRecords, entries: analyticalEntries,
+  filters: { analyticalNature: 'responsibility-centers', from: '2026-01-01', to: '2026-02-28' }
+});
+assert.deepEqual(allAnalyticCenters.groups[0].rows.map(row => row.cells.analyticCode), ['ANA-0001', 'ANA-0002']);
+assert.equal(allAnalyticCenters.lineCount, 4, 'les brouillons, références inconnues ou ambiguës, lignes non affectées et dates hors période sont exclus');
+assert.equal(allAnalyticCenters.totalDebit, 125);
+assert.equal(allAnalyticCenters.totalCredit, 100);
+const noAnalyticalNature = Report.build({
+  reportType: 'analytic-center-totals', analyticalCenters: analyticalCenterRecords, entries: analyticalEntries,
+  filters: { from: '2026-01-01', to: '2026-02-28' }
+});
+assert.deepEqual(noAnalyticalNature.groups, [], 'sans nature analytique sélectionnée, aucun cumul n’est produit');
+
 const matrix = Report.toMatrix(report);
 assert.deepEqual(matrix[0], ['Date', 'N° pièce', 'Compte', 'Débit', 'Crédit', 'Libellé', '1ère saisie']);
 assert.equal(matrix[1][0], 'Journal OD · Opérations diverses');
@@ -510,4 +598,4 @@ assert.deepEqual(twoJournals.groups.map(group => group.code), ['AC', 'OD']);
 assert.equal(twoJournals.groups[0].pageBreakBefore, false);
 assert.equal(twoJournals.groups[1].pageBreakBefore, true);
 
-console.log('Rapports de journaux : cumuls par journal, comptes individuels, synthèse et tiers, filtres et exports — OK');
+console.log('Rapports de journaux : cumuls par journal, comptes individuels, synthèse, tiers et centres analytiques, filtres et exports — OK');
