@@ -1,7 +1,7 @@
 /*
  * PERFECTO · Calcul de la Balance générale des comptes.
  * Lecture seule : pièces validées du cycle et registre distinct des reports à nouveau.
- * Les cumuls débit/crédit suivent les exemples de balance fournis ; les sous-totaux non définis restent hors calcul.
+ * Les cumuls débit/crédit et les regroupements suivent les balances de référence ; seules les rubriques connues du plan sont affichées.
  */
 (function (root, factory) {
   'use strict';
@@ -191,9 +191,12 @@
       var openingCredit = row.openingCreditMinor / factor;
       var movementDebit = row.movementDebitMinor / factor;
       var movementCredit = row.movementCreditMinor / factor;
-      var openingBalance = (row.openingDebitMinor - row.openingCreditMinor) / factor;
-      var movementBalance = (row.movementDebitMinor - row.movementCreditMinor) / factor;
-      var closingBalance = (row.openingDebitMinor - row.openingCreditMinor + row.movementDebitMinor - row.movementCreditMinor) / factor;
+      var openingBalanceMinor = row.openingDebitMinor - row.openingCreditMinor;
+      var movementBalanceMinor = row.movementDebitMinor - row.movementCreditMinor;
+      var closingBalanceMinor = openingBalanceMinor + movementBalanceMinor;
+      var openingBalance = openingBalanceMinor / factor;
+      var movementBalance = movementBalanceMinor / factor;
+      var closingBalance = closingBalanceMinor / factor;
       var hasActivity = row.openingDebitMinor !== 0 || row.openingCreditMinor !== 0 ||
         row.movementDebitMinor !== 0 || row.movementCreditMinor !== 0;
       if (!hasActivity && parsedFilter.all) return null;
@@ -205,18 +208,24 @@
         openingDebit: openingDebit,
         openingCredit: openingCredit,
         openingBalance: openingBalance,
+        openingBalanceDebit: Math.max(openingBalanceMinor, 0) / factor,
+        openingBalanceCredit: Math.max(-openingBalanceMinor, 0) / factor,
         cumulativeStartDebit: openingDebit,
         cumulativeStartCredit: openingCredit,
         movementDebit: movementDebit,
         movementCredit: movementCredit,
         movementBalance: movementBalance,
+        movementBalanceDebit: Math.max(movementBalanceMinor, 0) / factor,
+        movementBalanceCredit: Math.max(-movementBalanceMinor, 0) / factor,
         cumulativeEndDebit: (row.openingDebitMinor + row.movementDebitMinor) / factor,
         cumulativeEndCredit: (row.openingCreditMinor + row.movementCreditMinor) / factor,
-        closingBalance: closingBalance
+        closingBalance: closingBalance,
+        closingBalanceDebit: Math.max(closingBalanceMinor, 0) / factor,
+        closingBalanceCredit: Math.max(-closingBalanceMinor, 0) / factor
       };
     }).filter(Boolean);
 
-    if (filters.groupMode === 'chart') {
+    if (filters.groupMode === 'chart' || filters.groupMode === 'subtotals') {
       rows.sort(function (left, right) {
         var leftIndex = Object.prototype.hasOwnProperty.call(accountOrder, left.code) ? accountOrder[left.code] : Number.MAX_SAFE_INTEGER;
         var rightIndex = Object.prototype.hasOwnProperty.call(accountOrder, right.code) ? accountOrder[right.code] : Number.MAX_SAFE_INTEGER;
@@ -226,20 +235,162 @@
       rows.sort(function (left, right) { return left.code.localeCompare(right.code, 'fr', { numeric: true }); });
     }
 
+    /* Les soldes signés de `rows` restent l’API compte par compte ; la hiérarchie ne modifie que la présentation. */
+    var displayRows = rows.map(function (row) { return Object.assign({}, row, { rowType: 'account' }); });
+    if (filters.groupMode === 'chart' || filters.groupMode === 'subtotals') {
+      var hierarchyNodes = Object.create(null);
+      var hierarchyRoots = [];
+      var aggregateFields = [
+        'openingDebit', 'openingCredit', 'openingBalance', 'openingBalanceDebit', 'openingBalanceCredit',
+        'cumulativeStartDebit', 'cumulativeStartCredit', 'movementDebit', 'movementCredit',
+        'movementBalance', 'movementBalanceDebit', 'movementBalanceCredit', 'cumulativeEndDebit',
+        'cumulativeEndCredit', 'closingBalance', 'closingBalanceDebit', 'closingBalanceCredit'
+      ];
+
+      function orderIndex(code) {
+        return Object.prototype.hasOwnProperty.call(accountOrder, String(code)) ? accountOrder[String(code)] : Number.MAX_SAFE_INTEGER;
+      }
+
+      function metadataHierarchyLabel(label, generatedFallback) {
+        var value = String(label || '').trim();
+        if (!value || value === generatedFallback || /^(autres comptes|compte historique|comptes personnalisés)$/i.test(value)) return '';
+        return value;
+      }
+
+      function ensureHierarchyNode(code, parent, kind, label, account) {
+        code = String(code);
+        var node = hierarchyNodes[code];
+        if (!node) {
+          node = hierarchyNodes[code] = {
+            code: code, label: '', kind: kind, cls: 0, postable: null, directRow: null, children: [], childMap: Object.create(null),
+            parent: null, orderIndex: Number.MAX_SAFE_INTEGER, aggregateMinor: null, hasActivity: false
+          };
+        }
+        if (account && account.label) node.label = String(account.label);
+        else if (!node.label && label) node.label = String(label);
+        if (account && Number.isInteger(Number(account.cls))) node.cls = Number(account.cls);
+        if (account && typeof account.postable === 'boolean') node.postable = account.postable;
+        if (parent) {
+          if (!Object.prototype.hasOwnProperty.call(parent.childMap, code)) {
+            parent.childMap[code] = true;
+            parent.children.push(node);
+          }
+          node.parent = parent;
+        } else if (!node.parent && hierarchyRoots.indexOf(node) === -1) hierarchyRoots.push(node);
+        node.orderIndex = Math.min(node.orderIndex, orderIndex(code));
+        return node;
+      }
+
+      rows.forEach(function (row) {
+        var account = accountByCode[row.code] || { code: row.code, cls: row.cls, label: row.label };
+        var cls = classNumber(account);
+        var classCode = cls ? String(cls) : '';
+        var subclassCode = String(account.subclass || (String(row.code).length > 1 ? String(row.code).slice(0, 2) : ''));
+        var path = [];
+        if (classCode && classCode !== String(row.code)) {
+          var classAccount = accountByCode[classCode];
+          var classLabel = classAccount ? classAccount.label : metadataHierarchyLabel(account.classLabel, 'Classe ' + classCode);
+          path.push({ code: classCode, kind: 'class', label: classLabel, account: classAccount });
+        }
+        if (subclassCode && subclassCode !== classCode && subclassCode !== String(row.code)) {
+          var subclassAccount = accountByCode[subclassCode];
+          var subclassLabel = subclassAccount ? subclassAccount.label : metadataHierarchyLabel(account.subclassLabel, '');
+          path.push({ code: subclassCode, kind: 'subclass', label: subclassLabel, account: subclassAccount });
+        }
+        Object.keys(accountByCode).forEach(function (candidate) {
+          if (candidate === String(row.code) || candidate.length <= 2 || candidate.length >= String(row.code).length) return;
+          if (String(row.code).toLocaleUpperCase().indexOf(candidate.toLocaleUpperCase()) !== 0) return;
+          if (path.some(function (item) { return item.code === candidate; })) return;
+          path.push({ code: candidate, kind: 'account-group', label: accountByCode[candidate].label || '', account: accountByCode[candidate] });
+        });
+        path.sort(function (left, right) {
+          return left.code.length - right.code.length || orderIndex(left.code) - orderIndex(right.code) || left.code.localeCompare(right.code, 'fr', { numeric: true });
+        });
+        var parent = null;
+        path.forEach(function (item) {
+          parent = ensureHierarchyNode(item.code, parent, item.kind, item.label, item.account);
+        });
+        var leaf = ensureHierarchyNode(row.code, parent, 'account', row.label, account);
+        leaf.label = String(row.label || leaf.label || row.code);
+        leaf.cls = Number(row.cls) || leaf.cls;
+        leaf.directRow = row;
+        leaf.orderIndex = Math.min(leaf.orderIndex, orderIndex(row.code));
+      });
+
+      function compareHierarchyNodes(left, right) {
+        return left.orderIndex - right.orderIndex || left.code.length - right.code.length || left.code.localeCompare(right.code, 'fr', { numeric: true });
+      }
+
+      function aggregateNode(node) {
+        var childValues = [];
+        node.children.forEach(function (child) {
+          childValues.push({ node: child, values: aggregateNode(child) });
+          node.orderIndex = Math.min(node.orderIndex, child.orderIndex);
+        });
+        node.children.sort(compareHierarchyNodes);
+        var sums = Object.create(null);
+        aggregateFields.forEach(function (field) { sums[field] = 0; });
+        function addValues(source) {
+          aggregateFields.forEach(function (field) { sums[field] += Math.round((Number(source[field]) || 0) * factor); });
+        }
+        if (node.directRow) addValues(node.directRow);
+        childValues.forEach(function (child) {
+          aggregateFields.forEach(function (field) { sums[field] += child.values[field]; });
+        });
+        node.aggregateMinor = sums;
+        node.hasActivity = aggregateFields.some(function (field) { return sums[field] !== 0; });
+        return sums;
+      }
+
+      function aggregateRow(node, rowType, code) {
+        var row = { code: code || node.code, label: node.label || '', cls: node.cls || 0, aux: false, rowType: rowType };
+        aggregateFields.forEach(function (field) { row[field] = node.aggregateMinor[field] / factor; });
+        return row;
+      }
+
+      function emitChartRows(node) {
+        if (node.children.length) {
+          if (node.directRow && node.postable !== false) displayRows.push(Object.assign({}, node.directRow, { rowType: 'account' }));
+          else if (node.hasActivity) displayRows.push(aggregateRow(node, 'group'));
+          node.children.forEach(emitChartRows);
+        } else if (node.directRow) {
+          displayRows.push(Object.assign({}, node.directRow, { rowType: 'account' }));
+        }
+      }
+
+      function emitSubtotalRows(node) {
+        if (node.directRow) displayRows.push(Object.assign({}, node.directRow, { rowType: 'account' }));
+        node.children.forEach(emitSubtotalRows);
+        if (node.children.length && node.hasActivity) displayRows.push(aggregateRow(node, 'subtotal', 'Total ' + node.code));
+      }
+
+      hierarchyRoots.sort(compareHierarchyNodes);
+      hierarchyRoots.forEach(aggregateNode);
+      displayRows = [];
+      if (filters.groupMode === 'chart') hierarchyRoots.forEach(emitChartRows);
+      else hierarchyRoots.forEach(emitSubtotalRows);
+    }
+
     function sumRows(key) {
       return rows.reduce(function (sum, row) { return sum + Math.round((Number(row[key]) || 0) * factor); }, 0) / factor;
     }
 
     var totals = {
       openingBalance: sumRows('openingBalance'),
+      openingBalanceDebit: sumRows('openingBalanceDebit'),
+      openingBalanceCredit: sumRows('openingBalanceCredit'),
       cumulativeStartDebit: sumRows('cumulativeStartDebit'),
       cumulativeStartCredit: sumRows('cumulativeStartCredit'),
       movementDebit: sumRows('movementDebit'),
       movementCredit: sumRows('movementCredit'),
       movementBalance: sumRows('movementBalance'),
+      movementBalanceDebit: sumRows('movementBalanceDebit'),
+      movementBalanceCredit: sumRows('movementBalanceCredit'),
       cumulativeEndDebit: sumRows('cumulativeEndDebit'),
       cumulativeEndCredit: sumRows('cumulativeEndCredit'),
-      closingBalance: sumRows('closingBalance')
+      closingBalance: sumRows('closingBalance'),
+      closingBalanceDebit: sumRows('closingBalanceDebit'),
+      closingBalanceCredit: sumRows('closingBalanceCredit')
     };
     var visibleColumns = COLUMN_DEFINITIONS.filter(function (column) {
       return column.supported && selectedColumns[column.key] === true;
@@ -255,6 +406,7 @@
       from: from,
       to: to,
       rows: rows,
+      displayRows: displayRows,
       columns: visibleColumns,
       totals: totals,
       movementEntryCount: Object.keys(movementEntryIds).length,
@@ -266,7 +418,7 @@
         collectivesOnly: filters.collectivesOnly === true,
         beforeInventory: filters.beforeInventory === true,
         beforeResult: filters.beforeResult === true,
-        groupMode: filters.groupMode === 'chart' ? 'chart' : 'none'
+        groupMode: filters.groupMode === 'chart' || filters.groupMode === 'subtotals' ? filters.groupMode : 'none'
       },
       basis: {
         postedEntriesOnly: true,

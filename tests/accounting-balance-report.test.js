@@ -166,6 +166,55 @@ test('les cumuls début et fin conservent séparément les débits et crédits',
   assert.equal(Report.COLUMN_DEFINITIONS.find(column => column.key === 'cumulativeEnd').defaultSelected, false);
 });
 
+test('les regroupements suivent les niveaux du plan et les sous-totaux ferment chaque branche', () => {
+  const hierarchyAccounts = [
+    { code: '12', label: 'Report à nouveau', cls: 1, classLabel: 'Ressources durables', subclass: '12', subclassLabel: 'Report à nouveau', postable: false },
+    { code: '129', label: 'Report à nouveau débiteur', cls: 1, classLabel: 'Ressources durables', subclass: '12', subclassLabel: 'Report à nouveau', postable: true },
+    { code: '129000', label: 'RAN débiteur', cls: 1, classLabel: 'Ressources durables', subclass: '12', subclassLabel: 'Report à nouveau', postable: true },
+    { code: '13', label: 'Résultat net de l’exercice', cls: 1, classLabel: 'Ressources durables', subclass: '13', subclassLabel: 'Résultat net', postable: false },
+    { code: '130', label: 'Résultat en instance', cls: 1, classLabel: 'Ressources durables', subclass: '13', subclassLabel: 'Résultat net', postable: true },
+    { code: '1309', label: 'Perte en instance', cls: 1, classLabel: 'Ressources durables', subclass: '13', subclassLabel: 'Résultat net', postable: true },
+    { code: '130900', label: 'Perte en instance détaillée', cls: 1, classLabel: 'Ressources durables', subclass: '13', subclassLabel: 'Résultat net', postable: true },
+    { code: '139', label: 'Résultat net : perte', cls: 1, classLabel: 'Ressources durables', subclass: '13', subclassLabel: 'Résultat net', postable: true }
+  ];
+  const groupedEntries = [{ id: 'GROUPED', date: '2026-01-06', status: 'posted', journal: 'OD', lines: [
+    { account: '129000', debit: 100, credit: 0 },
+    { account: '130900', debit: 50, credit: 20 },
+    { account: '139', debit: 0, credit: 40 }
+  ] }];
+  const common = {
+    accounts: hierarchyAccounts,
+    entries: groupedEntries,
+    openingBalances: [],
+    filters: { accounts: '*', from: '2026-01-05', to: '2026-01-10', groupMode: 'chart' },
+    columns: { code: true, label: true, movements: true, movementBalance: true }
+  };
+  const chart = build(common);
+  assert.deepEqual(chart.displayRows.map(row => `${row.rowType}:${row.code}`), [
+    'group:1', 'group:12', 'group:129', 'account:129000',
+    'group:13', 'group:130', 'group:1309', 'account:130900', 'account:139'
+  ]);
+  const classTotal = chart.displayRows.find(row => row.rowType === 'group' && row.code === '1');
+  assert.deepEqual([classTotal.movementDebit, classTotal.movementCredit, classTotal.movementBalanceDebit, classTotal.movementBalanceCredit], [150, 60, 130, 40]);
+
+  const subtotals = build(Object.assign({}, common, { filters: Object.assign({}, common.filters, { groupMode: 'subtotals' }) }));
+  assert.deepEqual(subtotals.displayRows.map(row => `${row.rowType}:${row.code}`), [
+    'account:129000', 'subtotal:Total 129', 'subtotal:Total 12',
+    'account:130900', 'subtotal:Total 1309', 'subtotal:Total 130',
+    'account:139', 'subtotal:Total 13', 'subtotal:Total 1'
+  ]);
+  const resultSubtotal = subtotals.displayRows.find(row => row.code === 'Total 13');
+  assert.deepEqual([resultSubtotal.movementDebit, resultSubtotal.movementCredit, resultSubtotal.movementBalanceDebit, resultSubtotal.movementBalanceCredit], [50, 60, 30, 40]);
+
+  const customPlan = build({
+    accounts: [{ code: '987654', label: 'Compte personnalisé', cls: 9, classLabel: 'Classe 9', subclass: '98', subclassLabel: 'Comptes personnalisés', postable: true }],
+    entries: [{ id: 'CUSTOM', date: '2026-01-06', status: 'posted', journal: 'OD', lines: [{ account: '987654', debit: 1, credit: 0 }] }],
+    openingBalances: [],
+    filters: { accounts: '*', from: '2026-01-05', to: '2026-01-10', groupMode: 'chart' }
+  });
+  assert.deepEqual(customPlan.displayRows.slice(0, 2).map(row => [row.code, row.label]), [['9', ''], ['98', '']]);
+});
+
 test('les filtres de nature s’appliquent aussi aux mouvements qui alimentent les cumuls', () => {
   const filteredEntries = [
     { id: 'PRE-ORDINARY', date: '2026-01-02', status: 'posted', journal: 'OD', lines: [

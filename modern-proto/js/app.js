@@ -2598,7 +2598,7 @@
         (column.key === 'movements' ? '<small>Deux sous-colonnes : débit et crédit</small>' : '') +
         (column.key === 'cumulativeStart' ? '<small>Report d’ouverture + mouvements antérieurs à la période, débits et crédits séparés</small>' : '') +
         (column.key === 'cumulativeEnd' ? '<small>Cumul de début + mouvements de la période, débits et crédits séparés</small>' : '') +
-        (column.key === 'openingBalance' || column.key === 'closingBalance' || column.key === 'movementBalance' ? '<small>Montant net affiché avec son sens D ou C</small>' : '') +
+        (column.key === 'openingBalance' || column.key === 'closingBalance' || column.key === 'movementBalance' ? '<small>Solde net ventilé dans la sous-colonne Débit ou Crédit</small>' : '') +
         (locked ? '<small>À confirmer</small>' : '') +
       '</span></label>';
   }
@@ -2628,16 +2628,16 @@
         '<section class="card journal-lines-card"><div class="panel">' +
           '<div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
           '<div class="journal-lines-column-grid general-balance-column-grid">' + columns + '</div>' +
-          '<p class="hint journal-lines-columns-hint">Les cumuls affichent séparément les débits et crédits : début = report à nouveau + mouvements antérieurs à la période ; fin = cumul de début + mouvements de la période. Les colonnes de solde restent nettes, avec le sens débiteur (D) ou créditeur (C).</p>' +
+          '<p class="hint journal-lines-columns-hint">Cumul début = report à nouveau + mouvements antérieurs à la période ; cumul fin = cumul début + mouvements de période, chacun en Débit/Crédit. Les soldes nets sont ventilés en sous-colonnes Débit et Crédit.</p>' +
         '</div></section>' +
         '<section class="card journal-lines-card"><div class="panel">' +
           '<div class="journal-lines-section-heading"><div><p class="page-kicker">PRÉSENTATION DES COMPTES</p><h3>Regroupements ou sous-totaux</h3></div></div>' +
           '<div class="general-balance-option-grid general-balance-radio-grid">' +
             generalBalanceReportRadio('general-balance-group-mode', 'chart', 'Regroupements (comptes dans l’ordre du plan comptable)', session.filters.groupMode === 'chart', false) +
-            generalBalanceReportRadio('general-balance-group-mode', 'subtotals', 'Sous-totaux (imprimés après les comptes individuels) · à confirmer', false, true) +
+            generalBalanceReportRadio('general-balance-group-mode', 'subtotals', 'Sous-totaux (imprimés après les comptes individuels)', session.filters.groupMode === 'subtotals', false) +
             generalBalanceReportRadio('general-balance-group-mode', 'none', 'Ni regroupements ni sous-totaux', session.filters.groupMode === 'none', false) +
           '</div>' +
-          '<p class="hint">Le mode « Regroupements » suit l’ordre du plan du dossier. Les seuils de sous-total ne sont pas précisés ; aucun sous-total par classe n’est supposé.</p>' +
+          '<p class="hint">Les regroupements et sous-totaux utilisent les rubriques présentes dans le plan du dossier. Les totaux sont recalculés à partir des comptes filtrés ; aucun libellé de rubrique absent du plan n’est inventé.</p>' +
         '</div></section>' +
         '<section class="card journal-lines-card"><div class="panel">' +
           '<div class="journal-lines-section-heading"><div><p class="page-kicker">OPTIONS DE RESTITUTION</p><h3>Comptes et montants</h3></div></div>' +
@@ -2663,17 +2663,26 @@
       columns.push({ key: 'cumulativeStartDebit', label: 'Débit', exportLabel: 'Cumul début période · débit', group: 'Cumul début période' });
       columns.push({ key: 'cumulativeStartCredit', label: 'Crédit', exportLabel: 'Cumul début période · crédit', group: 'Cumul début période' });
     }
-    if (selected.openingBalance) columns.push({ key: 'openingBalance', label: 'Solde début de période', exportLabel: 'Solde début (débit + / crédit −)', balance: true });
+    if (selected.openingBalance) {
+      columns.push({ key: 'openingBalanceDebit', label: 'Débits', exportLabel: 'Solde début période · débit', group: 'Solde début période' });
+      columns.push({ key: 'openingBalanceCredit', label: 'Crédits', exportLabel: 'Solde début période · crédit', group: 'Solde début période' });
+    }
     if (selected.movements) {
       columns.push({ key: 'movementDebit', label: 'Débit', exportLabel: 'Mouvements période · débit', group: 'Mouvements période' });
       columns.push({ key: 'movementCredit', label: 'Crédit', exportLabel: 'Mouvements période · crédit', group: 'Mouvements période' });
     }
-    if (selected.movementBalance) columns.push({ key: 'movementBalance', label: 'Solde mouvements période', exportLabel: 'Solde mouvements (débit + / crédit −)', balance: true });
+    if (selected.movementBalance) {
+      columns.push({ key: 'movementBalanceDebit', label: 'Débits', exportLabel: 'Solde période · débit', group: 'Solde période' });
+      columns.push({ key: 'movementBalanceCredit', label: 'Crédits', exportLabel: 'Solde période · crédit', group: 'Solde période' });
+    }
     if (selected.cumulativeEnd) {
       columns.push({ key: 'cumulativeEndDebit', label: 'Débit', exportLabel: 'Cumul fin période · débit', group: 'Cumul fin période' });
       columns.push({ key: 'cumulativeEndCredit', label: 'Crédit', exportLabel: 'Cumul fin période · crédit', group: 'Cumul fin période' });
     }
-    if (selected.closingBalance) columns.push({ key: 'closingBalance', label: 'Solde fin de période', exportLabel: 'Solde fin (débit + / crédit −)', balance: true });
+    if (selected.closingBalance) {
+      columns.push({ key: 'closingBalanceDebit', label: 'Débits', exportLabel: 'Solde fin période · débit', group: 'Solde fin période' });
+      columns.push({ key: 'closingBalanceCredit', label: 'Crédits', exportLabel: 'Solde fin période · crédit', group: 'Solde fin période' });
+    }
     return columns;
   }
 
@@ -2731,14 +2740,18 @@
     if (session.filters.collectivesOnly) filterNames.push('comptes collectifs uniquement');
     if (session.filters.beforeInventory) filterNames.push('avant inventaire');
     if (session.filters.beforeResult) filterNames.push('avant résultat');
-    var bodyRows = report.rows.map(function (row) {
-      return '<tr>' + columns.map(function (column) {
+    var displayRows = report.displayRows || report.rows;
+    var bodyRows = displayRows.map(function (row) {
+      var rowClass = row.rowType === 'group' ? ' class="general-balance-group-row"' : (row.rowType === 'subtotal' ? ' class="general-balance-subtotal-row"' : '');
+      return '<tr' + rowClass + '>' + columns.map(function (column) {
         var value = generalBalanceReportValue(row, column, false);
         return '<td' + (!column.text ? ' class="num"' : '') + '>' + esc(value) + '</td>';
       }).join('') + '</tr>';
     }).join('');
     var emptyRow = report.rows.length ? '' : '<tr class="general-balance-empty-row"><td colspan="' + Math.max(columns.length, 1) + '"><strong>Aucun compte à restituer.</strong> Vérifiez la période et les filtres de comptes.</td></tr>';
-    var grouping = session.filters.groupMode === 'chart' ? 'Ordre du plan comptable du dossier' : 'Aucun regroupement ni sous-total';
+    var grouping = session.filters.groupMode === 'chart'
+      ? 'Regroupements dans l’ordre du plan comptable'
+      : (session.filters.groupMode === 'subtotals' ? 'Sous-totaux après les comptes individuels' : 'Aucun regroupement ni sous-total');
     var options = filterNames.length ? filterNames.join(' · ') : 'Aucun filtre avant inventaire/résultat';
     var styleClass = session.layout.style === 'color10' ? 'is-color-style' : 'is-mono-style';
     return '<article class="general-balance-report-print ' + styleClass + '">' +
@@ -2746,7 +2759,7 @@
         '<p>Période : ' + esc(dateLabel(report.from)) + ' — ' + esc(dateLabel(report.to)) + '</p></header>' +
       '<div class="general-balance-print-context"><span><strong>Comptes :</strong> ' + esc(session.filters.accounts === '*' ? 'Tous les comptes' : session.filters.accounts) + '</span>' +
         '<span><strong>Présentation :</strong> ' + esc(grouping) + '</span><span><strong>Options :</strong> ' + esc(options) + '</span></div>' +
-      '<p class="general-balance-print-basis">Montants en XOF · lecture seule · pièces validées du cycle uniquement, brouillons exclus. Les reports à nouveau restent distincts des mouvements de période. Si les colonnes de cumul sont sélectionnées, le cumul début additionne les reports à nouveau et les mouvements retenus antérieurs à la période, séparément au débit et au crédit ; le cumul fin ajoute les mouvements retenus de la période à chacun de ces côtés. Un solde positif est débiteur (D), un solde négatif créditeur (C).</p>' +
+      '<p class="general-balance-print-basis">Montants en XOF · lecture seule · pièces validées du cycle uniquement, brouillons exclus. Les soldes sont ventilés au débit et au crédit. Si les colonnes de cumul sont sélectionnées, le cumul début additionne les reports à nouveau et les mouvements retenus antérieurs à la période ; le cumul fin ajoute les mouvements retenus de la période, séparément pour chaque côté. Les regroupements et sous-totaux totalisent les comptes restitués sous chaque rubrique du plan.</p>' +
       (report.invalidLineCount ? '<p class="alert warning">' + report.invalidLineCount + ' ligne(s) contenant un montant invalide ont été ignorées.</p>' : '') +
       '<div class="table-wrap general-balance-table-wrap"><table class="data-table general-balance-table"><caption>' + esc(report.rows.length + (report.rows.length === 1 ? ' compte' : ' comptes') + ' · ' + report.movementEntryCount + (report.movementEntryCount === 1 ? ' pièce validée' : ' pièces validées')) + '</caption>' +
         generalBalanceReportTableHead(columns) + '<tbody>' + (bodyRows || emptyRow) + '</tbody>' + (report.rows.length ? generalBalanceReportTotalsHtml(columns, report) : '') +
@@ -2883,7 +2896,7 @@
     session.filters.beforeInventory = !!($('#general-balance-before-inventory', form) && $('#general-balance-before-inventory', form).checked);
     session.filters.beforeResult = !!($('#general-balance-before-result', form) && $('#general-balance-before-result', form).checked);
     var groupMode = $('input[name="general-balance-group-mode"]:checked', form);
-    session.filters.groupMode = groupMode && groupMode.value === 'chart' ? 'chart' : 'none';
+    session.filters.groupMode = groupMode && (groupMode.value === 'chart' || groupMode.value === 'subtotals') ? groupMode.value : 'none';
     session.columns = Object.create(null);
     GeneralBalanceReport.COLUMN_DEFINITIONS.forEach(function (column) {
       session.columns[column.key] = column.supported && selectedColumns.indexOf(column.key) !== -1;
@@ -2897,7 +2910,8 @@
   function generalBalanceReportExportMatrix(session, report, forSpreadsheet) {
     var columns = generalBalanceReportLeafColumns(session);
     var headings = columns.map(function (column) { return column.exportLabel; });
-    var rows = report.rows.map(function (row) {
+    var displayRows = report.displayRows || report.rows;
+    var rows = displayRows.map(function (row) {
       return columns.map(function (column) { return generalBalanceReportValue(row, column, !!forSpreadsheet); });
     });
     if (report.rows.length) {
