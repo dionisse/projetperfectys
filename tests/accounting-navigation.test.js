@@ -278,16 +278,34 @@ assert.equal(findTab('editions', 'journals').children[5].status, 'active');
 assert.ok(findTab('editions', 'journals').children[5].reason.includes('niveau de synthèse'));
 assert.ok(findTab('editions', 'journals').children[5].reason.includes('premiers chiffres du code'));
 assert.ok(findTab('editions', 'journals').children[5].reason.includes('export Excel/TXT'));
-assert.match(appSource, /child\.id === 'journal-lines' \|\| child\.id === 'journal-modified-pieces' \|\| child\.id === 'journal-unbalanced-pieces' \|\| child\.id === 'journal-entry-totals' \|\| child\.id === 'journal-individual-account-totals' \|\| child\.id === 'journal-summary-account-totals'\) return viewJournalLinesReport\(backLink\)/,
+assert.equal(findTab('editions', 'journals').children[6].status, 'active');
+assert.ok(findTab('editions', 'journals').children[6].reason.includes('nature'));
+assert.ok(findTab('editions', 'journals').children[6].reason.includes('référence explicite'));
+assert.ok(findTab('editions', 'journals').children[6].reason.includes('ne sont pas ventilés'));
+assert.match(appSource, /child\.id === 'journal-lines' \|\| child\.id === 'journal-modified-pieces' \|\| child\.id === 'journal-unbalanced-pieces' \|\| child\.id === 'journal-entry-totals' \|\| child\.id === 'journal-individual-account-totals' \|\| child\.id === 'journal-summary-account-totals' \|\| child\.id === 'journal-third-party-totals'\) return viewJournalLinesReport\(backLink\)/,
   'les rapports de lignes et les cumuls ouvrent le parcours partagé de sélection et mise en page');
-assert.match(appSource, /parsed\.params\.c === 'journal-individual-account-totals'[\s\S]*'account-totals'[\s\S]*parsed\.params\.c === 'journal-summary-account-totals' \? 'summary-account-totals'/,
-  'les sous-menus ouvrent les modes dédiés aux cumuls individuel et de synthèse');
+assert.match(appSource, /parsed\.params\.c === 'journal-individual-account-totals'[\s\S]*'account-totals'[\s\S]*parsed\.params\.c === 'journal-summary-account-totals'[\s\S]*'summary-account-totals'[\s\S]*parsed\.params\.c === 'journal-third-party-totals' \? 'third-party-totals'/,
+  'les sous-menus ouvrent les modes dédiés aux cumuls individuel, de synthèse et par tiers');
 assert.match(journalLinesSource, /ACCOUNT_TOTALS_COLUMNS = \[[\s\S]*Code du compte[\s\S]*Intitulé du compte[\s\S]*Nombre de lignes[\s\S]*reportType === 'account-totals'/,
   'le calcul du cumul individuel expose les colonnes de la capture');
 assert.match(journalLinesSource, /SUMMARY_ACCOUNT_TOTALS_COLUMNS = \[[\s\S]*Code du compte[\s\S]*Intitulé du compte[\s\S]*Nombre de lignes[\s\S]*Total des débits[\s\S]*defaultSelected: false[\s\S]*Total des crédits[\s\S]*summary-account-totals/,
   'le cumul de synthèse propose les cinq colonnes attendues avec les débits décochés par défaut');
 assert.match(appSource, /id="journal-lines-summary-level"[\s\S]*min="1" max="8" step="1"[\s\S]*value="' \+ esc\(session\.filters\.summaryLevel \|\| 1\)/,
   'le niveau de synthèse est numérique, limité aux codes du plan et initialisé à 1');
+assert.match(journalLinesSource, /THIRD_PARTY_TOTALS_COLUMNS = \[[\s\S]*Code du compte[\s\S]*Intitulé du compte[\s\S]*Nombre de lignes[\s\S]*Total des débits[\s\S]*Total des crédits/);
+assert.match(appSource, /function journalLinesThirdPartyNatureOptions\(\)[\s\S]*value: 'clients', label: 'Clients'/);
+assert.match(appSource, /id="journal-lines-third-party-nature" name="thirdPartyNature"/,
+  'le cumul par tiers propose une nature de tiers initialement réglée sur Clients');
+assert.match(appSource, /thirdPartyNature: isThirdPartyTotalsReport \? 'clients' : undefined[\s\S]*orientation: [\s\S]*isThirdPartyTotalsReport \? 'landscape'/,
+  'le rapport par tiers démarre sur Clients et reprend le paysage');
+assert.match(appSource, /référence explicite correspondant à une fiche du dossier[\s\S]*ne sont jamais ventilés par supposition/,
+  'les cumuls par tiers ne répartissent jamais les mouvements collectifs sans identifiant');
+assert.match(appSource, /AccountingCentralization\.extractValidatedAuxiliaryMovements\([\s\S]*S\.entries\(\), S\.accounts\(\), dossier/);
+assert.match(appSource, /thirdPartyMovements: auxiliaryExtraction\.ok \? auxiliaryExtraction\.movements : \[\][\s\S]*sourceErrors: auxiliaryExtraction\.errors/,
+  'une extraction auxiliaire en erreur n’envoie aucun mouvement partiel au rapport');
+assert.match(appSource, /session\.mode === 'third-party-totals' && session\.report\.sourceErrors[\s\S]*showJournalLinesErrors\(\$\('#journal-lines-selection-errors'/);
+assert.match(appSource, /session\.mode === 'third-party-totals' && session\.report\.sourceErrors[\s\S]*showJournalLinesErrors\(\$\('#journal-lines-layout-errors'/,
+  'les erreurs d’extraction bloquent la sélection et la mise en page du rapport');
 assert.match(appSource, /includeDrafts: isModifiedReport[\s\S]*modifiedOnly: isModifiedReport[\s\S]*filterByModificationDate: isModifiedReport/,
   'le rapport modifié filtre la date de modification et accepte les brouillons modifiés');
 assert.match(appSource, /Lignes générées[\s\S]*data-jlr-generated-count[\s\S]*updateJournalLinesGeneratedCount/,
@@ -396,13 +414,13 @@ assert.match(appSource, /child.section === 'definitionsAnalytics'/);
 assert.match(appSource, /var disabled = child\.status === 'inactive';[\s\S]*return disabled[\s\S]*edition-report-card is-disabled/);
 assert.match(journalLinesSource, /options\.unbalancedOnly[\s\S]*entryDebit[\s\S]*entryCredit/,
   'le rapport ne conserve que les pièces dont les totaux diffèrent');
-assert.match(appSource, /function createJournalLinesReportSession[\s\S]*var isSummaryAccountTotalsReport = mode === 'summary-account-totals'[\s\S]*orientation: isUnbalancedReport \|\| isTotalsReport \|\| isAccountTotalsReport \|\| isSummaryAccountTotalsReport \? 'landscape'/,
-  'les cumuls par journal et par compte reprennent l’orientation paysage de la capture');
+assert.match(appSource, /function createJournalLinesReportSession[\s\S]*var isThirdPartyTotalsReport = mode === 'third-party-totals'[\s\S]*orientation: isUnbalancedReport \|\| isTotalsReport \|\| isAccountTotalsReport \|\| isSummaryAccountTotalsReport \|\| isThirdPartyTotalsReport \? 'landscape'/,
+  'les cumuls par journal, compte et tiers reprennent l’orientation paysage de la capture');
 assert.match(appSource, /reportType: session\.mode[\s\S]*unbalancedOnly: isUnbalancedReport/);
-assert.match(appSource, /if \(child\.id === 'journal-lines'[\s\S]*child\.id === 'journal-entry-totals' \|\| child\.id === 'journal-individual-account-totals' \|\| child\.id === 'journal-summary-account-totals'\) return viewJournalLinesReport\(backLink\)/,
-  'les pièces déséquilibrées et les deux cumuls passent par le même parcours à deux étapes');
-assert.match(appSource, /menuParams\.c === 'journal-lines'[\s\S]*menuParams\.c === 'journal-entry-totals' \|\| menuParams\.c === 'journal-individual-account-totals' \|\| menuParams\.c === 'journal-summary-account-totals'\)\) bindJournalLinesReport\(\)/,
-  'les deux cumuls sont reliés aux interactions de sélection, mise en page, aperçu et impression');
+assert.match(appSource, /if \(child\.id === 'journal-lines'[\s\S]*child\.id === 'journal-entry-totals' \|\| child\.id === 'journal-individual-account-totals' \|\| child\.id === 'journal-summary-account-totals' \|\| child\.id === 'journal-third-party-totals'\) return viewJournalLinesReport\(backLink\)/,
+  'les rapports et les trois cumuls passent par le même parcours à deux étapes');
+assert.match(appSource, /menuParams\.c === 'journal-lines'[\s\S]*menuParams\.c === 'journal-entry-totals' \|\| menuParams\.c === 'journal-individual-account-totals' \|\| menuParams\.c === 'journal-summary-account-totals' \|\| menuParams\.c === 'journal-third-party-totals'\)\) bindJournalLinesReport\(\)/,
+  'les trois cumuls sont reliés aux interactions de sélection, mise en page, aperçu et impression');
 assert.match(appSource, /function editionReportCatalog\([\s\S]*Balances, ouvertures et situations[\s\S]*Grands livres et historiques[\s\S]*Disponibilités budgétaires/);
 assert.match(menuRenderer, /isEditionReportsMenu[\s\S]*editionReportChildView\(selectedChild/);
 assert.equal(findTab('editions', 'general-accounts').status, 'mixed');
@@ -566,7 +584,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v92/);
+assert.match(serviceWorkerSource, /perfecto-static-v93/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

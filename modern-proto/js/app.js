@@ -712,7 +712,7 @@
     var parsed = parseHash();
     var route = parsed.route;
     var isJournalLinesReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'journals' &&
-      (parsed.params.c === 'journal-lines' || parsed.params.c === 'journal-modified-pieces' || parsed.params.c === 'journal-unbalanced-pieces' || parsed.params.c === 'journal-entry-totals' || parsed.params.c === 'journal-individual-account-totals' || parsed.params.c === 'journal-summary-account-totals');
+      (parsed.params.c === 'journal-lines' || parsed.params.c === 'journal-modified-pieces' || parsed.params.c === 'journal-unbalanced-pieces' || parsed.params.c === 'journal-entry-totals' || parsed.params.c === 'journal-individual-account-totals' || parsed.params.c === 'journal-summary-account-totals' || parsed.params.c === 'journal-third-party-totals');
     if (!isJournalLinesReportRoute) {
       journalLinesReportSession = null;
       journalLinesReportMode = 'standard';
@@ -725,7 +725,9 @@
             ? 'totals'
             : (parsed.params.c === 'journal-individual-account-totals'
               ? 'account-totals'
-              : (parsed.params.c === 'journal-summary-account-totals' ? 'summary-account-totals' : 'standard'))));
+              : (parsed.params.c === 'journal-summary-account-totals'
+                ? 'summary-account-totals'
+                : (parsed.params.c === 'journal-third-party-totals' ? 'third-party-totals' : 'standard')))));
       if (journalLinesReportMode !== requestedJournalReportMode) journalLinesReportSession = null;
       journalLinesReportMode = requestedJournalReportMode;
     }
@@ -10889,6 +10891,7 @@
     var isTotalsReport = mode === 'totals';
     var isAccountTotalsReport = mode === 'account-totals';
     var isSummaryAccountTotalsReport = mode === 'summary-account-totals';
+    var isThirdPartyTotalsReport = mode === 'third-party-totals';
     var modifiedReportColumns = ['date', 'piece', 'account', 'accountTitle', 'reference', 'debit', 'credit', 'label', 'firstEntry', 'lastEntry'];
     var today = new Date().toISOString().slice(0, 10);
     var columns = {};
@@ -10905,12 +10908,14 @@
         journals: [], accounts: [],
         from: dossier.cycleStart,
         to: isModifiedReport && today > dossier.cycleStart ? today : dossier.cycleEnd,
-        summaryLevel: isSummaryAccountTotalsReport ? 1 : undefined
+        summaryLevel: isSummaryAccountTotalsReport ? 1 : undefined,
+        thirdPartyNature: isThirdPartyTotalsReport ? 'clients' : undefined,
+        thirdParties: []
       },
       columns: columns,
       printOptions: { newPageEachJournal: false, subtotalByPiece: false, subtotalByMonth: false },
       layout: {
-        printer: 'pdf', style: 'plain8', orientation: isUnbalancedReport || isTotalsReport || isAccountTotalsReport || isSummaryAccountTotalsReport ? 'landscape' : 'portrait', margins: 'standard',
+        printer: 'pdf', style: 'plain8', orientation: isUnbalancedReport || isTotalsReport || isAccountTotalsReport || isSummaryAccountTotalsReport || isThirdPartyTotalsReport ? 'landscape' : 'portrait', margins: 'standard',
         pageFirst: '', pageLast: '', parity: 'none', destination: 'preview'
       },
       directoryHandle: null,
@@ -10937,8 +10942,51 @@
       '</ol>';
   }
 
-  function journalLinesReportRecords(kind) {
-    var records = kind === 'journals' ? S.journals() : S.accounts();
+  function journalLinesThirdPartyNatureOptions() {
+    return [
+      { value: 'suppliers', label: 'Fournisseurs' },
+      { value: 'clients', label: 'Clients' },
+      { value: 'personnel', label: 'Personnel' },
+      { value: 'debtors', label: 'Débiteurs divers' },
+      { value: 'creditors', label: 'Créditeurs divers' }
+    ];
+  }
+
+  function journalLinesThirdPartyNatureLabel(nature) {
+    var option = journalLinesThirdPartyNatureOptions().find(function (item) { return item.value === String(nature || '').toLowerCase(); });
+    return option ? option.label : 'Clients';
+  }
+
+  function journalLinesThirdPartyCountLabel(nature, count) {
+    var value = Number(count) || 0;
+    var singular = value === 1;
+    switch (String(nature || '').toLowerCase()) {
+      case 'suppliers': return value + (singular ? ' fournisseur' : ' fournisseurs');
+      case 'personnel': return value + (singular ? ' membre du personnel' : ' membres du personnel');
+      case 'debtors': return value + (singular ? ' débiteur divers' : ' débiteurs divers');
+      case 'creditors': return value + (singular ? ' créditeur divers' : ' créditeurs divers');
+      case 'clients':
+      default: return value + (singular ? ' client' : ' clients');
+    }
+  }
+
+  function journalLinesThirdPartyRecords(nature) {
+    switch (String(nature || 'clients').toLowerCase()) {
+      case 'suppliers': return S.suppliers();
+      case 'personnel': return S.personnel();
+      case 'debtors': return S.otherParties('debtor');
+      case 'creditors': return S.otherParties('creditor');
+      case 'clients':
+      default: return S.clients();
+    }
+  }
+
+  function journalLinesReportRecords(kind, session) {
+    var records = kind === 'journals'
+      ? S.journals()
+      : (kind === 'third-parties'
+        ? journalLinesThirdPartyRecords(session && session.filters.thirdPartyNature)
+        : S.accounts());
     return (Array.isArray(records) ? records : []).slice().sort(function (a, b) {
       return String(a.code || '').localeCompare(String(b.code || ''), 'fr', { numeric: true, sensitivity: 'base' });
     });
@@ -10946,8 +10994,12 @@
 
   function journalLinesReportFilterSummary(kind, session) {
     var isJournal = kind === 'journals';
-    var property = isJournal ? 'journals' : 'accounts';
-    var noun = isJournal ? 'journaux' : 'comptes';
+    var isThirdParty = kind === 'third-parties';
+    var property = isJournal ? 'journals' : (isThirdParty ? 'thirdParties' : 'accounts');
+    var thirdPartyNoun = String(session.filters.thirdPartyNature || 'clients').toLowerCase() === 'personnel'
+      ? 'membres du personnel'
+      : journalLinesThirdPartyNatureLabel(session.filters.thirdPartyNature).toLocaleLowerCase('fr');
+    var noun = isJournal ? 'journaux' : (isThirdParty ? thirdPartyNoun : 'comptes');
     var selected = session.filters[property] || [];
     if (!selected.length) return 'Tous les ' + noun + ' (*)';
     return selected.join(', ');
@@ -10955,18 +11007,30 @@
 
   function journalLinesReportPicker(kind) {
     var session = ensureJournalLinesReportSession();
-    var records = journalLinesReportRecords(kind);
-    var property = kind === 'journals' ? 'journals' : 'accounts';
+    var isJournal = kind === 'journals';
+    var isThirdParty = kind === 'third-parties';
+    var records = journalLinesReportRecords(kind, session);
+    var property = isJournal ? 'journals' : (isThirdParty ? 'thirdParties' : 'accounts');
     var selected = session.filters[property] || [];
     var selectedSet = new Set(selected);
     var allSelected = !selected.length || (records.length > 0 && selected.length === records.length);
-    var title = kind === 'journals' ? 'Choix des journaux' : 'Choix des comptes';
-    var allLabel = kind === 'journals' ? 'Tous les journaux' : 'Tous les comptes';
-    var rows = records.map(function (record, index) {
+    var thirdPartyLabel = journalLinesThirdPartyNatureLabel(session.filters.thirdPartyNature);
+    var thirdPartyNoun = String(session.filters.thirdPartyNature || '').toLowerCase() === 'personnel'
+      ? 'membres du personnel'
+      : thirdPartyLabel.toLocaleLowerCase('fr');
+    var title = isJournal
+      ? 'Choix des journaux'
+      : (isThirdParty
+        ? (session.filters.thirdPartyNature === 'personnel' ? 'Choix du personnel' : 'Choix des ' + thirdPartyNoun)
+        : 'Choix des comptes');
+    var allLabel = isJournal ? 'Tous les journaux' : (isThirdParty ? (session.filters.thirdPartyNature === 'personnel' ? 'Tout le personnel' : 'Tous les ' + thirdPartyNoun) : 'Tous les comptes');
+    var rows = records.map(function (record) {
       var checked = allSelected || selectedSet.has(String(record.code));
       var label = record.label || record.name || '';
+      var auxiliaryAccountCode = record.auxiliaryAccountCode || (record.accountCode && record.code ? record.accountCode + '-' + record.code : '');
+      var detail = isThirdParty && auxiliaryAccountCode ? ' · ' + auxiliaryAccountCode : '';
       return '<label class="journal-lines-picker-option"><input type="checkbox" data-jlr-picker-option value="' + esc(record.code) + '"' + (checked ? ' checked' : '') + '>' +
-        '<span><strong>' + esc(record.code) + '</strong>' + (label ? ' · ' + esc(label) : '') + '</span></label>';
+        '<span><strong>' + esc(record.code) + '</strong>' + (label ? ' · ' + esc(label) : '') + esc(detail) + '</span></label>';
     }).join('');
     var body = '<form id="journal-lines-picker-form" data-jlr-picker-form="' + esc(kind) + '">' +
       '<label class="journal-lines-picker-all"><input type="checkbox" id="journal-lines-picker-all"' + (allSelected ? ' checked' : '') + '><strong>' + esc(allLabel) + '</strong></label>' +
@@ -11025,18 +11089,31 @@
     var isTotalsReport = session.mode === 'totals';
     var isAccountTotalsReport = session.mode === 'account-totals';
     var isSummaryAccountTotalsReport = session.mode === 'summary-account-totals';
+    var isThirdPartyTotalsReport = session.mode === 'third-party-totals';
     var initialReport = isModifiedReport ? buildJournalLinesReport(session) : null;
     var directoryValue = session.directoryName || '';
     var columnGridClass = isAccountTotalsReport
       ? ' journal-individual-account-columns'
-      : (isSummaryAccountTotalsReport ? ' journal-summary-account-columns' : '');
-    var filterGridClass = isSummaryAccountTotalsReport ? ' journal-summary-account-filters' : '';
+      : (isSummaryAccountTotalsReport || isThirdPartyTotalsReport ? ' journal-summary-account-columns' : '');
+    var filterGridClass = isSummaryAccountTotalsReport
+      ? ' journal-summary-account-filters'
+      : (isThirdPartyTotalsReport ? ' journal-third-party-filters' : '');
+    var thirdPartyNatureOptions = journalLinesThirdPartyNatureOptions().map(function (option) {
+      return '<option value="' + esc(option.value) + '"' + (session.filters.thirdPartyNature === option.value ? ' selected' : '') + '>' + esc(option.label) + '</option>';
+    }).join('');
+    var thirdPartyNatureLabel = journalLinesThirdPartyNatureLabel(session.filters.thirdPartyNature);
     var filterFields = isModifiedReport
       ? '<div class="field span-2"><label for="journal-lines-journals-summary">Journaux</label><div class="journal-lines-picker-control"><input id="journal-lines-journals-summary" type="text" readonly value="' + esc(journalLinesReportFilterSummary('journals', session)) + '"><button type="button" class="btn btn-ghost" data-journal-lines-picker="journals" aria-label="Choisir les journaux">…</button></div></div>' +
         '<div class="field"><label for="journal-lines-from">Modifications du</label><input id="journal-lines-from" name="from" type="date" value="' + esc(session.filters.from) + '" required></div>' +
         '<div class="field"><label for="journal-lines-to">au</label><input id="journal-lines-to" name="to" type="date" value="' + esc(session.filters.to) + '" required></div>'
-      : isSummaryAccountTotalsReport
+      : isThirdPartyTotalsReport
         ? '<div class="field span-2"><label for="journal-lines-journals-summary">Journaux</label><div class="journal-lines-picker-control"><input id="journal-lines-journals-summary" type="text" readonly value="' + esc(journalLinesReportFilterSummary('journals', session)) + '"><button type="button" class="btn btn-ghost" data-journal-lines-picker="journals" aria-label="Choisir les journaux">…</button></div></div>' +
+          '<div class="field span-2"><label for="journal-lines-third-party-nature">Nature des tiers</label><select id="journal-lines-third-party-nature" name="thirdPartyNature">' + thirdPartyNatureOptions + '</select></div>' +
+          '<div class="field span-2"><label id="journal-lines-third-parties-label" for="journal-lines-third-parties-summary">' + esc(thirdPartyNatureLabel) + '</label><div class="journal-lines-picker-control"><input id="journal-lines-third-parties-summary" type="text" readonly value="' + esc(journalLinesReportFilterSummary('third-parties', session)) + '"><button type="button" class="btn btn-ghost" data-journal-lines-picker="third-parties" aria-label="Choisir les tiers">…</button></div></div>' +
+          '<div class="field"><label for="journal-lines-from">Début</label><input id="journal-lines-from" name="from" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(session.filters.from) + '" required></div>' +
+          '<div class="field"><label for="journal-lines-to">Fin</label><input id="journal-lines-to" name="to" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(session.filters.to) + '" required></div>'
+        : isSummaryAccountTotalsReport
+          ? '<div class="field span-2"><label for="journal-lines-journals-summary">Journaux</label><div class="journal-lines-picker-control"><input id="journal-lines-journals-summary" type="text" readonly value="' + esc(journalLinesReportFilterSummary('journals', session)) + '"><button type="button" class="btn btn-ghost" data-journal-lines-picker="journals" aria-label="Choisir les journaux">…</button></div></div>' +
           '<div class="field span-2"><label for="journal-lines-summary-level">Niveau de synthèse</label><input id="journal-lines-summary-level" name="summaryLevel" type="number" min="1" max="8" step="1" inputmode="numeric" value="' + esc(session.filters.summaryLevel || 1) + '" required><span class="hint">1 = classe comptable ; le niveau N regroupe sur les N premiers chiffres du compte.</span></div>' +
           '<div class="field"><label for="journal-lines-from">Début</label><input id="journal-lines-from" name="from" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(session.filters.from) + '" required></div>' +
           '<div class="field"><label for="journal-lines-to">Fin</label><input id="journal-lines-to" name="to" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(session.filters.to) + '" required></div>'
@@ -11057,16 +11134,18 @@
           ? '<div class="alert info journal-lines-readonly-note"><div><strong>Consultation seule.</strong> Le cumul regroupe par journal les pièces validées du cycle, compte leurs lignes et totalise les débits et crédits, sans modifier les écritures.</div></div>'
           : (isAccountTotalsReport
             ? '<div class="alert info journal-lines-readonly-note"><div><strong>Consultation seule.</strong> Le cumul regroupe les lignes validées par compte individuel, selon les journaux et la période choisis ; aucune écriture n’est modifiée.</div></div>'
-            : (isSummaryAccountTotalsReport
-              ? '<div class="alert info journal-lines-readonly-note"><div><strong>Consultation seule.</strong> Les lignes validées sont regroupées par préfixe de compte au niveau choisi ; code et intitulé proviennent du référentiel du dossier. Aucune écriture n’est modifiée.</div></div>'
-              : '<div class="alert info journal-lines-readonly-note"><div><strong>Consultation seule.</strong> Le rapport lit uniquement les écritures validées du cycle courant ; il ne modifie aucune écriture. Le répertoire est choisi localement : le fichier généré n’est pas un FEC réglementaire et ce choix ne crée aucune synchronisation Google Drive.</div></div>')));
+            : (isThirdPartyTotalsReport
+              ? '<div class="alert info journal-lines-readonly-note"><div><strong>Consultation seule.</strong> Le rapport ne retient que les mouvements validés sur un compte auxiliaire portant une référence explicite correspondant à une fiche du dossier. Les comptes collectifs sans identifiant de tiers ne sont jamais ventilés par supposition.</div></div>'
+              : (isSummaryAccountTotalsReport
+                ? '<div class="alert info journal-lines-readonly-note"><div><strong>Consultation seule.</strong> Les lignes validées sont regroupées par préfixe de compte au niveau choisi ; code et intitulé proviennent du référentiel du dossier. Aucune écriture n’est modifiée.</div></div>'
+                : '<div class="alert info journal-lines-readonly-note"><div><strong>Consultation seule.</strong> Le rapport lit uniquement les écritures validées du cycle courant ; il ne modifie aucune écriture. Le répertoire est choisi localement : le fichier généré n’est pas un FEC réglementaire et ce choix ne crée aucune synchronisation Google Drive.</div></div>'))));
     var generatedLines = isModifiedReport
       ? '<div class="journal-lines-generated-count" role="status" aria-live="polite"><span>Lignes générées</span><strong data-jlr-generated-count>' + new Intl.NumberFormat('fr-FR').format(initialReport.lineCount) + '</strong></div>'
       : '';
     var selectionActions =
       '<div class="journal-lines-form-errors" id="journal-lines-selection-errors" role="alert" aria-live="polite"></div>' +
       '<div class="journal-lines-form-actions"><a class="btn btn-ghost" href="' + esc(accountingMenuHash('editions', 'journals')) + '">Annuler</a><button type="submit" class="btn btn-primary">Valider</button></div>';
-    var presentationOptions = isModifiedReport || isUnbalancedReport || isTotalsReport || isAccountTotalsReport || isSummaryAccountTotalsReport ? '' :
+    var presentationOptions = isModifiedReport || isUnbalancedReport || isTotalsReport || isAccountTotalsReport || isSummaryAccountTotalsReport || isThirdPartyTotalsReport ? '' :
       '<section class="card journal-lines-card"><div class="panel">' +
         '<div class="journal-lines-section-heading"><div><p class="page-kicker">PRÉSENTATION DES LIGNES</p><h3>À imprimer</h3></div></div>' +
         '<div class="journal-lines-print-options">' +
@@ -11075,7 +11154,7 @@
           '<label class="journal-lines-check-option"><input type="checkbox" id="journal-lines-subtotal-month"' + (session.printOptions.subtotalByMonth ? ' checked' : '') + '><span>Sous-total par mois</span></label>' +
         '</div>' + selectionActions +
       '</div></section>';
-    var compactSelectionActions = isModifiedReport || isUnbalancedReport || isTotalsReport || isAccountTotalsReport || isSummaryAccountTotalsReport
+    var compactSelectionActions = isModifiedReport || isUnbalancedReport || isTotalsReport || isAccountTotalsReport || isSummaryAccountTotalsReport || isThirdPartyTotalsReport
       ? '<section class="card journal-lines-card"><div class="panel">' + selectionActions + '</div></section>'
       : '';
     return journalLinesReportSteps('selection') +
@@ -11088,7 +11167,9 @@
               ? 'Cumul des pièces saisies dans les journaux'
               : (isAccountTotalsReport
                 ? 'Cumul par comptes individuels'
-                : (isSummaryAccountTotalsReport ? 'Cumul par comptes de synthèse' : 'Détail des lignes saisies')))),
+                : (isSummaryAccountTotalsReport
+                  ? 'Cumul par comptes de synthèse'
+                  : (isThirdPartyTotalsReport ? 'Cumul par tiers' : 'Détail des lignes saisies'))))),
         isModifiedReport
           ? 'Sélectionnez les journaux et la période de modification avant de définir la mise en page.'
           : (isUnbalancedReport
@@ -11097,9 +11178,11 @@
               ? 'Sélectionnez les journaux et la période comptable des pièces dont vous souhaitez le cumul.'
               : (isAccountTotalsReport
                 ? 'Sélectionnez les journaux, les comptes individuels et la période à cumuler.'
-                : (isSummaryAccountTotalsReport
-                  ? 'Sélectionnez les journaux, le niveau de synthèse et la période à cumuler.'
-                  : 'Sélectionnez les journaux, les comptes et la période avant de définir la mise en page.')))),
+                : (isThirdPartyTotalsReport
+                  ? 'Sélectionnez les journaux, la nature et les tiers, puis la période à cumuler.'
+                  : (isSummaryAccountTotalsReport
+                    ? 'Sélectionnez les journaux, le niveau de synthèse et la période à cumuler.'
+                    : 'Sélectionnez les journaux, les comptes et la période avant de définir la mise en page.'))))),
         ''
       ) +
       selectionNote +
@@ -11133,9 +11216,11 @@
           ? report.journalCount + (report.journalCount === 1 ? ' journal' : ' journaux') + ' · ' + report.entryCount + ' pièce(s) · ' + report.lineCount + ' ligne(s)'
           : (session.mode === 'account-totals'
             ? report.accountCount + (report.accountCount === 1 ? ' compte individuel' : ' comptes individuels') + ' · ' + report.lineCount + ' ligne(s)'
-            : (session.mode === 'summary-account-totals'
-              ? report.accountCount + (report.accountCount === 1 ? ' compte de synthèse' : ' comptes de synthèse') + ' · niveau ' + report.summaryLevel + ' · ' + report.lineCount + ' ligne(s)'
-              : report.entryCount + ' pièce(s) · ' + report.lineCount + ' ligne(s) retenue(s)'))));
+            : (session.mode === 'third-party-totals'
+              ? journalLinesThirdPartyCountLabel(report.thirdPartyNature, report.thirdPartyCount) + ' · ' + report.lineCount + ' ligne(s)'
+              : (session.mode === 'summary-account-totals'
+                ? report.accountCount + (report.accountCount === 1 ? ' compte de synthèse' : ' comptes de synthèse') + ' · niveau ' + report.summaryLevel + ' · ' + report.lineCount + ' ligne(s)'
+                : report.entryCount + ' pièce(s) · ' + report.lineCount + ' ligne(s) retenue(s)')))));
     return journalLinesReportSteps('layout') +
       pageHeader('Mise en Page', 'Choisissez le format, la présentation et la destination du rapport.', '') +
       '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(summary) + '. Les pièces sont consultées en lecture seule.</div></div>' +
@@ -11250,9 +11335,11 @@
         ? group.entryCount + ' pièce(s)'
         : (session.mode === 'account-totals'
           ? group.accountCount + (group.accountCount === 1 ? ' compte' : ' comptes')
-          : (session.mode === 'summary-account-totals'
-            ? group.accountCount + (group.accountCount === 1 ? ' compte de synthèse' : ' comptes de synthèse')
-            : group.rows.filter(function (row) { return row.kind === 'line'; }).length + ' ligne(s)'));
+          : (session.mode === 'third-party-totals'
+            ? journalLinesThirdPartyCountLabel(report.thirdPartyNature, group.thirdPartyCount)
+            : (session.mode === 'summary-account-totals'
+              ? group.accountCount + (group.accountCount === 1 ? ' compte de synthèse' : ' comptes de synthèse')
+              : group.rows.filter(function (row) { return row.kind === 'line'; }).length + ' ligne(s)')));
       var heading = '<div class="journal-lines-group-heading"><h3>' + esc(group.title) + '</h3><span>' + esc(groupCount) + '</span></div>';
       var table = '<div class="table-wrap journal-lines-table-wrap"><table class="data-table journal-lines-table"><thead><tr>' +
         columns.map(function (column) { return '<th' + (column.key === 'debit' || column.key === 'credit' || column.key === 'pieceCount' || column.key === 'lineCount' ? ' class="num"' : '') + '>' + esc(column.label) + '</th>'; }).join('') +
@@ -11265,7 +11352,9 @@
         ? 'Aucun cumul de pièces saisies.'
         : (session.mode === 'account-totals'
           ? 'Aucun mouvement de compte à cumuler.'
-          : (session.mode === 'summary-account-totals' ? 'Aucun mouvement de compte à cumuler à ce niveau.' : 'Aucune ligne ne correspond à la sélection.')));
+          : (session.mode === 'third-party-totals'
+            ? 'Aucun mouvement individuel de tiers à cumuler.'
+            : (session.mode === 'summary-account-totals' ? 'Aucun mouvement de compte à cumuler à ce niveau.' : 'Aucune ligne ne correspond à la sélection.'))));
     var emptyMessage = session.mode === 'modified'
       ? 'Vérifiez les journaux et la période de dernière modification ; aucune écriture n’a été modifiée.'
       : (session.mode === 'unbalanced'
@@ -11274,9 +11363,11 @@
           ? 'Aucune pièce validée ne correspond aux journaux et aux dates sélectionnés.'
           : (session.mode === 'account-totals'
             ? 'Aucune ligne validée ne correspond aux journaux, comptes et dates sélectionnés.'
-            : (session.mode === 'summary-account-totals'
-              ? 'Aucune ligne validée ne correspond aux journaux, au niveau de synthèse et aux dates sélectionnés.'
-              : 'Vérifiez les journaux, comptes et dates ; aucune écriture n’a été modifiée.'))));
+            : (session.mode === 'third-party-totals'
+              ? 'Aucune ligne validée sur compte auxiliaire ne porte une référence explicite correspondant aux tiers sélectionnés ; les mouvements collectifs ne sont pas attribués par supposition.'
+              : (session.mode === 'summary-account-totals'
+                ? 'Aucune ligne validée ne correspond aux journaux, au niveau de synthèse et aux dates sélectionnés.'
+                : 'Vérifiez les journaux, comptes et dates ; aucune écriture n’a été modifiée.')))));
     var empty = report.groups.length ? '' : '<div class="empty-state"><strong>' + emptyTitle + '</strong>' + emptyMessage + '</div>';
     var printerPreference = session.layout.printer === 'system' ? 'imprimante système' : 'PDF';
     var printerHint = session.previewForPrinter
@@ -11297,17 +11388,21 @@
           ? 'Aperçu — Cumul des pièces saisies dans les journaux'
           : (session.mode === 'account-totals'
             ? 'Aperçu — Cumul par comptes individuels'
-            : (session.mode === 'summary-account-totals' ? 'Aperçu — Cumul par comptes de synthèse' : 'Aperçu — Détail des lignes saisies'))));
+            : (session.mode === 'third-party-totals'
+              ? 'Aperçu — Cumul par tiers'
+              : (session.mode === 'summary-account-totals' ? 'Aperçu — Cumul par comptes de synthèse' : 'Aperçu — Détail des lignes saisies')))));
     var periodLabel = session.mode === 'modified'
       ? 'Modifications du'
-      : (session.mode === 'unbalanced' || session.mode === 'totals' || session.mode === 'account-totals' || session.mode === 'summary-account-totals' ? 'Période comptable' : 'Période');
+      : (session.mode === 'unbalanced' || session.mode === 'totals' || session.mode === 'account-totals' || session.mode === 'summary-account-totals' || session.mode === 'third-party-totals' ? 'Période comptable' : 'Période');
     var resultSummary = session.mode === 'totals'
       ? report.journalCount + (report.journalCount === 1 ? ' journal' : ' journaux') + ' · ' + report.entryCount + ' pièce(s) · ' + report.lineCount + ' ligne(s)'
       : (session.mode === 'account-totals'
         ? report.accountCount + (report.accountCount === 1 ? ' compte individuel' : ' comptes individuels') + ' · ' + report.lineCount + ' ligne(s)'
-        : (session.mode === 'summary-account-totals'
-          ? report.accountCount + (report.accountCount === 1 ? ' compte de synthèse' : ' comptes de synthèse') + ' · niveau ' + report.summaryLevel + ' · ' + report.lineCount + ' ligne(s)'
-          : report.entryCount + ' pièce(s) · ' + report.lineCount + ' ligne(s)'));
+        : (session.mode === 'third-party-totals'
+          ? journalLinesThirdPartyCountLabel(report.thirdPartyNature, report.thirdPartyCount) + ' · ' + report.lineCount + ' ligne(s)'
+          : (session.mode === 'summary-account-totals'
+            ? report.accountCount + (report.accountCount === 1 ? ' compte de synthèse' : ' comptes de synthèse') + ' · niveau ' + report.summaryLevel + ' · ' + report.lineCount + ' ligne(s)'
+            : report.entryCount + ' pièce(s) · ' + report.lineCount + ' ligne(s)')));
     return pageHeader(previewTitle, resultSummary + pageRange + parityLabel, '') +
       '<div class="journal-lines-report-print' + orientationClass + styleClass + '">' +
         '<div class="journal-lines-preview-actions journal-lines-no-print"><span>' + esc(resultSummary) + '</span><div>' +
@@ -11336,6 +11431,21 @@
   function buildJournalLinesReport(session) {
     var isModifiedReport = session.mode === 'modified';
     var isUnbalancedReport = session.mode === 'unbalanced';
+    if (session.mode === 'third-party-totals') {
+      var dossier = S.currentDossier();
+      var auxiliaryExtraction = AccountingCentralization.extractValidatedAuxiliaryMovements(
+        S.entries(), S.accounts(), dossier, { decimalPlaces: S.accountingConfiguration().decimalPlaces }
+      );
+      return JournalLinesReport.build({
+        reportType: session.mode,
+        thirdPartyRecords: journalLinesThirdPartyRecords(session.filters.thirdPartyNature),
+        thirdPartyMovements: auxiliaryExtraction.ok ? auxiliaryExtraction.movements : [],
+        sourceErrors: auxiliaryExtraction.errors,
+        filters: session.filters,
+        columns: Object.keys(session.columns).filter(function (key) { return session.columns[key]; }),
+        decimalPlaces: S.accountingConfiguration().decimalPlaces
+      });
+    }
     var report = JournalLinesReport.build({
       reportType: session.mode,
       entries: isModifiedReport || isUnbalancedReport ? S.entries() : S.postedEntries(),
@@ -11366,9 +11476,11 @@
     var from = $('#journal-lines-from', form);
     var to = $('#journal-lines-to', form);
     var summaryLevel = $('#journal-lines-summary-level', form);
+    var thirdPartyNature = $('#journal-lines-third-party-nature', form);
     if (from) session.filters.from = from.value;
     if (to) session.filters.to = to.value;
     if (summaryLevel && summaryLevel.value) session.filters.summaryLevel = Number(summaryLevel.value);
+    if (thirdPartyNature) session.filters.thirdPartyNature = thirdPartyNature.value;
     $$('[data-jlr-column]', form).forEach(function (input) { session.columns[input.getAttribute('data-jlr-column')] = input.checked; });
     var newPage = $('#journal-lines-new-page', form);
     var subtotalPiece = $('#journal-lines-subtotal-piece', form);
@@ -11397,8 +11509,10 @@
         : (session.mode === 'totals'
           ? 'PERFECTO-cumul-pieces-saisies-'
           : (session.mode === 'account-totals'
-          ? 'PERFECTO-cumul-comptes-individuels-'
-          : (session.mode === 'summary-account-totals' ? 'PERFECTO-cumul-comptes-synthese-' : 'PERFECTO-detail-lignes-journaux-'))));
+            ? 'PERFECTO-cumul-comptes-individuels-'
+            : (session.mode === 'summary-account-totals'
+              ? 'PERFECTO-cumul-comptes-synthese-'
+              : (session.mode === 'third-party-totals' ? 'PERFECTO-cumul-tiers-' : 'PERFECTO-detail-lignes-journaux-')))));
     return prefix + start + '-' + end + '.' + extension;
   }
 
@@ -11441,7 +11555,9 @@
           ? 'Cumul des pièces saisies'
           : (session.mode === 'account-totals'
             ? 'Cumul par comptes individuels'
-            : (session.mode === 'summary-account-totals' ? 'Cumul comptes de synthèse' : 'Détail des lignes')));
+            : (session.mode === 'summary-account-totals'
+              ? 'Cumul comptes de synthèse'
+              : (session.mode === 'third-party-totals' ? 'Cumul par tiers' : 'Détail des lignes'))));
       filename = journalLinesReportFileName(session, 'xlsx');
       content = AccountingExchange.exportTabularWorkbook(sheetName, matrix[0], matrix.slice(1));
       mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -11474,8 +11590,11 @@
     var to = $('#journal-lines-to', form);
     var summaryLevelInput = $('#journal-lines-summary-level', form);
     var summaryLevel = summaryLevelInput ? Number(summaryLevelInput.value) : 1;
+    var thirdPartyNatureInput = $('#journal-lines-third-party-nature', form);
+    var thirdPartyNature = thirdPartyNatureInput ? thirdPartyNatureInput.value : 'clients';
     var selectedColumns = $$('[data-jlr-column]:checked', form).map(function (input) { return input.getAttribute('data-jlr-column'); });
     if (session.mode === 'summary-account-totals' && (!Number.isInteger(summaryLevel) || summaryLevel < 1 || summaryLevel > 8)) errors.push('Le niveau de synthèse doit être un nombre entier compris entre 1 et 8.');
+    if (session.mode === 'third-party-totals' && !journalLinesThirdPartyNatureOptions().some(function (option) { return option.value === thirdPartyNature; })) errors.push('Choisissez une nature de tiers disponible.');
     if (!from || !from.value || !to || !to.value) errors.push('Renseignez les deux dates de la période.');
     else if (from.value > to.value) errors.push('La date de début doit précéder ou égaler la date de fin.');
     else if (session.mode !== 'modified' && (from.value < S.currentDossier().cycleStart || to.value > S.currentDossier().cycleEnd)) errors.push('Les dates doivent rester dans le cycle du dossier.');
@@ -11485,12 +11604,17 @@
     session.filters.from = from.value;
     session.filters.to = to.value;
     if (session.mode === 'summary-account-totals') session.filters.summaryLevel = summaryLevel;
+    if (session.mode === 'third-party-totals') session.filters.thirdPartyNature = thirdPartyNature;
     session.columns = {};
     JournalLinesReport.columnsForReport(session.mode).forEach(function (column) { session.columns[column.key] = selectedColumns.indexOf(column.key) !== -1; });
     session.printOptions.newPageEachJournal = !!($('#journal-lines-new-page', form) && $('#journal-lines-new-page', form).checked);
     session.printOptions.subtotalByPiece = !!($('#journal-lines-subtotal-piece', form) && $('#journal-lines-subtotal-piece', form).checked);
     session.printOptions.subtotalByMonth = !!($('#journal-lines-subtotal-month', form) && $('#journal-lines-subtotal-month', form).checked);
     session.report = buildJournalLinesReport(session);
+    if (session.mode === 'third-party-totals' && session.report.sourceErrors && session.report.sourceErrors.length) {
+      showJournalLinesErrors($('#journal-lines-selection-errors', form), session.report.sourceErrors);
+      return;
+    }
     session.phase = 'layout';
     render();
   }
@@ -11516,6 +11640,10 @@
     session.layout.parity = $('#journal-lines-parity', form).value;
     session.layout.destination = destination ? destination.value : 'preview';
     session.report = buildJournalLinesReport(session);
+    if (session.mode === 'third-party-totals' && session.report.sourceErrors && session.report.sourceErrors.length) {
+      showJournalLinesErrors($('#journal-lines-layout-errors', form), session.report.sourceErrors);
+      return;
+    }
     if (session.layout.destination === 'table' || session.layout.destination === 'file') {
       generateJournalLinesReportFile(session, session.layout.destination).catch(function (error) {
         session.phase = 'layout';
@@ -11602,6 +11730,15 @@
           input.addEventListener('change', function () { updateJournalLinesGeneratedCount(selectionForm, session); });
         });
       }
+      var thirdPartyNature = $('#journal-lines-third-party-nature', selectionForm);
+      if (thirdPartyNature) thirdPartyNature.addEventListener('change', function () {
+        session.filters.thirdPartyNature = thirdPartyNature.value;
+        session.filters.thirdParties = [];
+        var partiesSummary = $('#journal-lines-third-parties-summary', selectionForm);
+        if (partiesSummary) partiesSummary.value = journalLinesReportFilterSummary('third-parties', session);
+        var partiesLabel = $('#journal-lines-third-parties-label', selectionForm);
+        if (partiesLabel) partiesLabel.textContent = journalLinesThirdPartyNatureLabel(thirdPartyNature.value);
+      });
       $$('[data-journal-lines-picker]', selectionForm).forEach(function (button) {
         button.addEventListener('click', function () {
           captureJournalLinesSelectionDraft(session);
@@ -11662,7 +11799,7 @@
   function editionReportChildView(child, groupId, tabId) {
     var backLabel = groupId === 'editions' && tabId === 'journals' ? 'Tous les éléments Journaux' : 'Tous les états';
     var backLink = '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(accountingMenuHash(groupId, tabId)) + '">← ' + esc(backLabel) + '</a>';
-    if (child.id === 'journal-lines' || child.id === 'journal-modified-pieces' || child.id === 'journal-unbalanced-pieces' || child.id === 'journal-entry-totals' || child.id === 'journal-individual-account-totals' || child.id === 'journal-summary-account-totals') return viewJournalLinesReport(backLink);
+    if (child.id === 'journal-lines' || child.id === 'journal-modified-pieces' || child.id === 'journal-unbalanced-pieces' || child.id === 'journal-entry-totals' || child.id === 'journal-individual-account-totals' || child.id === 'journal-summary-account-totals' || child.id === 'journal-third-party-totals') return viewJournalLinesReport(backLink);
     if (child.id === 'general-balance') return '<div class="edition-report-detail-view">' + backLink + viewBalance() + '</div>';
     if (child.id === 'general-ledger') return '<div class="edition-report-detail-view">' + backLink + viewLedger() + '</div>';
     var inactive = child.status === 'inactive';
@@ -13091,7 +13228,7 @@
     }
     if (route === 'menu') {
       var menuParams = parseHash().params;
-      if (menuParams.g === 'editions' && menuParams.t === 'journals' && (menuParams.c === 'journal-lines' || menuParams.c === 'journal-modified-pieces' || menuParams.c === 'journal-unbalanced-pieces' || menuParams.c === 'journal-entry-totals' || menuParams.c === 'journal-individual-account-totals' || menuParams.c === 'journal-summary-account-totals')) bindJournalLinesReport();
+      if (menuParams.g === 'editions' && menuParams.t === 'journals' && (menuParams.c === 'journal-lines' || menuParams.c === 'journal-modified-pieces' || menuParams.c === 'journal-unbalanced-pieces' || menuParams.c === 'journal-entry-totals' || menuParams.c === 'journal-individual-account-totals' || menuParams.c === 'journal-summary-account-totals' || menuParams.c === 'journal-third-party-totals')) bindJournalLinesReport();
       if (menuParams.g === 'parametres' && menuParams.t === 'dossier-configuration') bindAccountingConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'sections-accounts') bindAnalyticalSectionsConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'allocation-keys') bindAnalyticalAllocationKeys();

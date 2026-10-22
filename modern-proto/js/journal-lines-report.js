@@ -94,6 +94,19 @@
     [SUMMARY_ACCOUNT_TOTALS_COLUMNS[3], SUMMARY_ACCOUNT_TOTALS_COLUMNS[4]]
   ];
 
+  var THIRD_PARTY_TOTALS_COLUMNS = [
+    { key: 'accountCode', label: 'Code du compte', group: 0, selectable: true, defaultSelected: true },
+    { key: 'accountTitle', label: 'Intitulé du compte', group: 0, selectable: true, defaultSelected: true },
+    { key: 'lineCount', label: 'Nombre de lignes', group: 0, selectable: true, defaultSelected: true },
+    { key: 'debit', label: 'Total des débits', group: 1, selectable: true, defaultSelected: true },
+    { key: 'credit', label: 'Total des crédits', group: 1, selectable: true, defaultSelected: true }
+  ];
+
+  var THIRD_PARTY_TOTALS_COLUMN_GROUPS = [
+    [THIRD_PARTY_TOTALS_COLUMNS[0], THIRD_PARTY_TOTALS_COLUMNS[1], THIRD_PARTY_TOTALS_COLUMNS[2]],
+    [THIRD_PARTY_TOTALS_COLUMNS[3], THIRD_PARTY_TOTALS_COLUMNS[4]]
+  ];
+
   function columnsForReport(reportType) {
     var columns = reportType === 'unbalanced'
       ? UNBALANCED_COLUMNS
@@ -101,7 +114,9 @@
         ? JOURNAL_TOTALS_COLUMNS
         : (reportType === 'account-totals'
           ? ACCOUNT_TOTALS_COLUMNS
-          : (reportType === 'summary-account-totals' ? SUMMARY_ACCOUNT_TOTALS_COLUMNS : COLUMNS)));
+          : (reportType === 'summary-account-totals'
+            ? SUMMARY_ACCOUNT_TOTALS_COLUMNS
+            : (reportType === 'third-party-totals' ? THIRD_PARTY_TOTALS_COLUMNS : COLUMNS))));
     return columns.map(function (column) { return Object.assign({}, column); });
   }
 
@@ -112,7 +127,9 @@
         ? JOURNAL_TOTALS_COLUMN_GROUPS
         : (reportType === 'account-totals'
           ? ACCOUNT_TOTALS_COLUMN_GROUPS
-          : (reportType === 'summary-account-totals' ? SUMMARY_ACCOUNT_TOTALS_COLUMN_GROUPS : COLUMN_GROUPS)));
+          : (reportType === 'summary-account-totals'
+            ? SUMMARY_ACCOUNT_TOTALS_COLUMN_GROUPS
+            : (reportType === 'third-party-totals' ? THIRD_PARTY_TOTALS_COLUMN_GROUPS : COLUMN_GROUPS))));
     return groups.map(function (group) {
       return group.map(function (column) { return column ? Object.assign({}, column) : null; });
     });
@@ -426,11 +443,138 @@
     };
   }
 
+  function thirdPartyNatureLabel(nature) {
+    return {
+      suppliers: 'Fournisseurs',
+      clients: 'Clients',
+      personnel: 'Personnel',
+      debtors: 'Débiteurs divers',
+      creditors: 'Créditeurs divers'
+    }[String(nature || '').toLowerCase()] || 'Clients';
+  }
+
+  function normalizeThirdPartyReference(value) {
+    return String(value == null ? '' : value).trim().toLocaleUpperCase();
+  }
+
+  function thirdPartyAuxiliaryAccountCode(record) {
+    return String(record && (record.auxiliaryAccountCode || (record.accountCode && record.code ? record.accountCode + '-' + record.code : '')) || '');
+  }
+
+  function buildThirdPartyTotals(options) {
+    var filters = options.filters || {};
+    var selectedJournals = asSet(filters.journals);
+    var selectedThirdParties = new Set((Array.isArray(filters.thirdParties) ? filters.thirdParties : []).map(normalizeThirdPartyReference));
+    var from = String(filters.from || '');
+    var to = String(filters.to || '');
+    var decimalPlaces = Number(options.decimalPlaces);
+    if (!Number.isInteger(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 4) decimalPlaces = 0;
+    var precision = Math.pow(10, decimalPlaces);
+    var records = Array.isArray(options.thirdPartyRecords) ? options.thirdPartyRecords : [];
+    var sourceErrors = Array.isArray(options.sourceErrors) ? options.sourceErrors.slice() : [];
+    var movements = sourceErrors.length || !Array.isArray(options.thirdPartyMovements) ? [] : options.thirdPartyMovements;
+    var recordByAuxiliaryReference = new Map();
+    var selectedKeys = Array.isArray(options.columns) ? options.columns : THIRD_PARTY_TOTALS_COLUMNS.filter(function (column) {
+      return column.selectable && column.defaultSelected;
+    }).map(function (column) { return column.key; });
+    var columns = THIRD_PARTY_TOTALS_COLUMNS.filter(function (column) {
+      return column.selectable && selectedKeys.indexOf(column.key) !== -1;
+    });
+    var totalsByThirdParty = new Map();
+
+    function registerReference(reference, record) {
+      var normalized = normalizeThirdPartyReference(reference);
+      if (!normalized) return;
+      if (recordByAuxiliaryReference.has(normalized) && recordByAuxiliaryReference.get(normalized) !== record) {
+        recordByAuxiliaryReference.set(normalized, null);
+        return;
+      }
+      if (recordByAuxiliaryReference.get(normalized) !== null) recordByAuxiliaryReference.set(normalized, record);
+    }
+
+    records.forEach(function (record) {
+      if (!record) return;
+      registerReference(record.id, record);
+      registerReference(record.code, record);
+      registerReference(thirdPartyAuxiliaryAccountCode(record), record);
+    });
+
+    movements.forEach(function (movement) {
+      if (!movement) return;
+      var date = String(movement.date || '');
+      if (from && date < from) return;
+      if (to && date > to) return;
+      if (selectedJournals.size && !selectedJournals.has(String(movement.journal || ''))) return;
+      var reference = normalizeThirdPartyReference(movement.auxiliaryCode);
+      if (!reference || !recordByAuxiliaryReference.has(reference)) return;
+      var record = recordByAuxiliaryReference.get(reference);
+      if (!record) return;
+      var recordCode = String(record.code || '');
+      if (!recordCode) return;
+      if (selectedThirdParties.size && !selectedThirdParties.has(normalizeThirdPartyReference(recordCode))) return;
+      var collectiveAccountCode = String(record.accountCode || '');
+      if (collectiveAccountCode && String(movement.account || '') !== collectiveAccountCode) return;
+      var total = totalsByThirdParty.get(recordCode);
+      if (!total) {
+        total = { record: record, lineCount: 0, debitUnits: 0, creditUnits: 0 };
+        totalsByThirdParty.set(recordCode, total);
+      }
+      total.lineCount += 1;
+      total.debitUnits += Math.round(safeAmount(movement.debit) * precision);
+      total.creditUnits += Math.round(safeAmount(movement.credit) * precision);
+    });
+
+    var lineCount = 0;
+    var totalDebitUnits = 0;
+    var totalCreditUnits = 0;
+    var rows = Array.from(totalsByThirdParty.values()).sort(function (a, b) {
+      return compare(thirdPartyAuxiliaryAccountCode(a.record) || a.record.code, thirdPartyAuxiliaryAccountCode(b.record) || b.record.code);
+    }).map(function (total) {
+      var debit = total.debitUnits / precision;
+      var credit = total.creditUnits / precision;
+      var cells = {};
+      columns.forEach(function (column) {
+        switch (column.key) {
+          case 'accountCode': cells[column.key] = thirdPartyAuxiliaryAccountCode(total.record); break;
+          case 'accountTitle': cells[column.key] = String(total.record.name || ''); break;
+          case 'lineCount': cells[column.key] = total.lineCount; break;
+          case 'debit': cells[column.key] = debit; break;
+          case 'credit': cells[column.key] = credit; break;
+        }
+      });
+      lineCount += total.lineCount;
+      totalDebitUnits += total.debitUnits;
+      totalCreditUnits += total.creditUnits;
+      return { kind: 'line', cells: cells };
+    });
+    var thirdPartyCount = totalsByThirdParty.size;
+    var natureLabel = thirdPartyNatureLabel(filters.thirdPartyNature);
+    var groups = rows.length ? [{
+      code: 'third-parties',
+      title: 'Cumul par tiers · ' + natureLabel,
+      thirdPartyCount: thirdPartyCount,
+      lineCount: lineCount,
+      rows: rows
+    }] : [];
+    return {
+      columns: columns,
+      groups: groups,
+      thirdPartyCount: thirdPartyCount,
+      thirdPartyNature: String(filters.thirdPartyNature || 'clients'),
+      thirdPartyNatureLabel: natureLabel,
+      lineCount: lineCount,
+      totalDebit: totalDebitUnits / precision,
+      totalCredit: totalCreditUnits / precision,
+      sourceErrors: sourceErrors
+    };
+  }
+
   function build(options) {
     options = options || {};
     if (options.reportType === 'totals') return buildJournalTotals(options);
     if (options.reportType === 'account-totals') return buildAccountTotals(options);
     if (options.reportType === 'summary-account-totals') return buildSummaryAccountTotals(options);
+    if (options.reportType === 'third-party-totals') return buildThirdPartyTotals(options);
     var filters = options.filters || {};
     var selectedJournals = asSet(filters.journals);
     var selectedAccounts = asSet(filters.accounts);

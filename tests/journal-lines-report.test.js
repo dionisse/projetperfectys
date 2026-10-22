@@ -394,6 +394,70 @@ const invalidSummaryLevel = Report.build({
 });
 assert.equal(invalidSummaryLevel.summaryLevel, 1, 'le calcul pur revient au niveau valide par défaut si un niveau hors plage lui est transmis');
 
+const clientRecords = [
+  { id: 'client-1', code: 'CLI-0001', name: 'Client Alpha', accountCode: '411', auxiliaryAccountCode: '411-CLI-0001' },
+  { id: 'client-2', code: 'CLI-0002', name: 'Client Beta', accountCode: '411', auxiliaryAccountCode: '411-CLI-0002' }
+];
+const explicitThirdPartyMovements = [
+  { date: '2026-01-15', journal: 'VTE', account: '411', auxiliaryCode: 'CLI-0001', debit: 100, credit: 0 },
+  { date: '2026-01-16', journal: 'VTE', account: '411', auxiliaryCode: '411-CLI-0001', debit: 0, credit: 100 },
+  { date: '2026-01-20', journal: 'OD', account: '411', auxiliaryCode: 'CLI-0001', debit: 10, credit: 0 },
+  { date: '2026-02-01', journal: 'VTE', account: '411', auxiliaryCode: 'CLI-0002', debit: 0, credit: 40 },
+  { date: '2026-02-28', journal: 'VTE', account: '411', auxiliaryCode: 'CLI-0001', debit: 0.1, credit: 0 },
+  { date: '2026-03-01', journal: 'VTE', account: '411', auxiliaryCode: 'CLI-0001', debit: 50, credit: 0 },
+  { date: '2026-01-15', journal: 'VTE', account: '401', auxiliaryCode: 'CLI-0001', debit: 900, credit: 0 },
+  { date: '2026-01-15', journal: 'VTE', account: '411', auxiliaryCode: 'CLI-INCONNU', debit: 700, credit: 0 },
+  { date: '2026-01-15', journal: 'VTE', account: '411', auxiliaryCode: '', debit: 500, credit: 0 }
+];
+assert.deepEqual(Report.columnsForReport('third-party-totals').map(column => column.key),
+  ['accountCode', 'accountTitle', 'lineCount', 'debit', 'credit']);
+assert.deepEqual(Report.columnsForReport('third-party-totals').map(column => column.label),
+  ['Code du compte', 'Intitulé du compte', 'Nombre de lignes', 'Total des débits', 'Total des crédits']);
+assert.deepEqual(Report.columnsForReport('third-party-totals').map(column => column.defaultSelected), [true, true, true, true, true],
+  'les cinq colonnes du cumul par tiers sont cochées par défaut');
+assert.ok(Report.columnsForReport('third-party-totals').every(column => column.selectable));
+assert.deepEqual(Report.columnGroupsForReport('third-party-totals').map(group => group.map(column => column.label)), [
+  ['Code du compte', 'Intitulé du compte', 'Nombre de lignes'], ['Total des débits', 'Total des crédits']
+]);
+const clientTotals = Report.build({
+  reportType: 'third-party-totals',
+  thirdPartyRecords: clientRecords,
+  thirdPartyMovements: explicitThirdPartyMovements,
+  decimalPlaces: 2,
+  filters: { thirdPartyNature: 'clients', thirdParties: ['CLI-0001'], journals: ['VTE'], from: '2026-01-01', to: '2026-02-28' }
+});
+assert.equal(clientTotals.thirdPartyCount, 1);
+assert.equal(clientTotals.thirdPartyNatureLabel, 'Clients');
+assert.equal(clientTotals.lineCount, 3);
+assert.equal(clientTotals.totalDebit, 100.1);
+assert.equal(clientTotals.totalCredit, 100);
+assert.deepEqual(clientTotals.groups[0].rows[0].cells, {
+  accountCode: '411-CLI-0001', accountTitle: 'Client Alpha', lineCount: 3, debit: 100.1, credit: 100
+}, 'le cumul tiers filtre les journaux, le code de tiers, le cycle et le compte collectif rattaché');
+assert.equal(clientTotals.groups[0].title, 'Cumul par tiers · Clients');
+const explicitTierFilter = Report.build({
+  reportType: 'third-party-totals',
+  thirdPartyRecords: clientRecords,
+  thirdPartyMovements: explicitThirdPartyMovements,
+  filters: { thirdPartyNature: 'clients', journals: ['VTE'], from: '2026-01-01', to: '2026-02-28' }
+});
+assert.deepEqual(explicitTierFilter.groups[0].rows.map(row => row.cells.accountTitle), ['Client Alpha', 'Client Beta'],
+  'sans code de tiers choisi, le cumul couvre les fiches auxquelles un mouvement explicite correspond');
+const ambiguousClientTotals = Report.build({
+  reportType: 'third-party-totals',
+  thirdPartyRecords: [clientRecords[0], Object.assign({}, clientRecords[1], { code: 'CLI-0001', auxiliaryAccountCode: '411-CLI-0001' })],
+  thirdPartyMovements: [explicitThirdPartyMovements[0]],
+  filters: { thirdPartyNature: 'clients' }
+});
+assert.equal(ambiguousClientTotals.lineCount, 0, 'une référence correspondant à plusieurs fiches est exclue plutôt que devinée');
+const invalidAuxiliarySource = Report.build({
+  reportType: 'third-party-totals', thirdPartyRecords: clientRecords, thirdPartyMovements: explicitThirdPartyMovements,
+  sourceErrors: ['Source auxiliaire invalide.'], filters: { thirdPartyNature: 'clients' }
+});
+assert.deepEqual(invalidAuxiliarySource.sourceErrors, ['Source auxiliaire invalide.']);
+assert.deepEqual(invalidAuxiliarySource.groups, [], 'aucun montant partiel n’est affiché si la source auxiliaire échoue à ses contrôles');
+assert.equal(invalidAuxiliarySource.lineCount, 0);
+
 const matrix = Report.toMatrix(report);
 assert.deepEqual(matrix[0], ['Date', 'N° pièce', 'Compte', 'Débit', 'Crédit', 'Libellé', '1ère saisie']);
 assert.equal(matrix[1][0], 'Journal OD · Opérations diverses');
@@ -446,4 +510,4 @@ assert.deepEqual(twoJournals.groups.map(group => group.code), ['AC', 'OD']);
 assert.equal(twoJournals.groups[0].pageBreakBefore, false);
 assert.equal(twoJournals.groups[1].pageBreakBefore, true);
 
-console.log('Rapports de journaux : cumuls par journal, comptes individuels et comptes de synthèse, filtres et exports — OK');
+console.log('Rapports de journaux : cumuls par journal, comptes individuels, synthèse et tiers, filtres et exports — OK');
