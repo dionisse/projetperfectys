@@ -320,6 +320,22 @@ assert.match(appSource, /lignes validées portant une référence analytique exp
 assert.equal(findTab('editions', 'journals').children.find(child => child.id === 'journal-currency-totals').status, 'active');
 assert.ok(findTab('editions', 'journals').children.find(child => child.id === 'journal-currency-totals').reason.includes('montant d’origine explicites'));
 assert.ok(findTab('editions', 'journals').children.find(child => child.id === 'journal-currency-totals').reason.includes('Aucun taux ni conversion'));
+const allocationSheetChild = findTab('editions', 'journals').children.find(child => child.id === 'journal-allocation-sheet');
+assert.equal(allocationSheetChild.status, 'active');
+assert.ok(allocationSheetChild.reason.includes('trois fiches par page'));
+assert.ok(allocationSheetChild.reason.includes('six lignes'));
+assert.match(appSource, /function journalAllocationSheetMarkup\(identity, index\)[\s\S]*Array\.from\(\{ length: 6 \}[\s\S]*N° PIÈCE[\s\S]*DATE[\s\S]*JOURNAL[\s\S]*NUMÉRO DE COMPTE[\s\S]*LIBELLÉ[\s\S]*MONTANT/,
+  'la fiche reprend les champs de la capture et limite chaque formulaire à six lignes vierges');
+assert.match(appSource, /function viewJournalAllocationSheet\(backLink\)[\s\S]*Array\.from\(\{ length: 3 \}[\s\S]*A4/,
+  'l’aperçu rassemble trois fiches sur une page A4');
+assert.match(appSource, /journal-allocation-sheet-identity[\s\S]*identity\.licenseOwner[\s\S]*identity\.dossierName/,
+  'le titulaire et le nom du dossier figurent à gauche, le dossier sous le titulaire');
+assert.match(appSource, /function printJournalAllocationSheet\(\)[\s\S]*size: A4 portrait[\s\S]*window\.print\(\)/,
+  'la fiche est imprimable ou enregistrable en PDF par le dialogue du navigateur');
+assert.match(appSource, /child\.id === 'journal-allocation-sheet'\) return viewJournalAllocationSheet\(backLink\)/);
+assert.match(appSource, /menuParams\.c === 'journal-allocation-sheet'\) bindJournalAllocationSheet\(\)/);
+assert.match(configurationCss, /journal-allocation-sheet-page[\s\S]*88mm[\s\S]*journal-allocation-sheet-table[\s\S]*tbody tr/);
+assert.match(configurationCss, /journal-allocation-sheet-printing \* \{ visibility: hidden !important; \}[\s\S]*journal-allocation-sheet-page \*/);
 assert.match(journalLinesSource, /CURRENCY_TOTALS_COLUMNS = \[[\s\S]*Code devise[\s\S]*Intitulé de la devise[\s\S]*Nombre de pièces[\s\S]*Nombre de lignes[^\n]*defaultSelected: false[\s\S]*Total des débits[\s\S]*Total des crédits[\s\S]*buildCurrencyTotals/,
   'le cumul par devise reprend les six colonnes de la capture et laisse le nombre de lignes facultatif');
 assert.match(appSource, /currencyRecords: currencyConfiguration\.rows[\s\S]*baseCurrencyCode: currencyConfiguration\.defaultCurrencyCode[\s\S]*reportType: session\.mode/,
@@ -616,7 +632,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v95/);
+assert.match(serviceWorkerSource, /perfecto-static-v96/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

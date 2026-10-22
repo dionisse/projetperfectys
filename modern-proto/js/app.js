@@ -11943,9 +11943,88 @@
     }
   }
 
+  function journalAllocationSheetMarkup(identity, index) {
+    var rows = Array.from({ length: 6 }, function (_, lineIndex) {
+      return '<tr class="journal-allocation-sheet-entry-row" aria-label="Ligne d’imputation ' + (lineIndex + 1) + '"><td></td><td></td><td></td><td></td><td></td></tr>';
+    }).join('');
+    var rightFields = ['N° PIÈCE', 'DATE', 'JOURNAL'].map(function (label) {
+      return '<div class="journal-allocation-sheet-meta-field"><strong>' + label + '</strong><span aria-hidden="true"></span></div>';
+    }).join('');
+    return '<article class="journal-allocation-sheet" aria-label="Fiche d’imputation ' + (index + 1) + '">' +
+      '<header class="journal-allocation-sheet-header">' +
+        '<div class="journal-allocation-sheet-identity"><strong>' + esc(identity.licenseOwner) + '</strong><span>Dossier : ' + esc(identity.dossierName) + '</span></div>' +
+        '<h3>FICHE D’IMPUTATION</h3>' +
+        '<div class="journal-allocation-sheet-meta">' + rightFields + '</div>' +
+      '</header>' +
+      '<table class="journal-allocation-sheet-table" aria-label="Lignes d’imputation vierges">' +
+        '<colgroup><col class="allocation-account-debit"><col class="allocation-account-credit"><col class="allocation-label"><col class="allocation-amount-debit"><col class="allocation-amount-credit"></colgroup>' +
+        '<thead>' +
+          '<tr><th colspan="2" scope="colgroup">NUMÉRO DE COMPTE</th><th rowspan="2" scope="col">LIBELLÉ</th><th colspan="2" scope="colgroup">MONTANT</th></tr>' +
+          '<tr><th scope="col">DÉBIT</th><th scope="col">CRÉDIT</th><th scope="col">DÉBIT</th><th scope="col">CRÉDIT</th></tr>' +
+        '</thead>' +
+        '<tbody>' + rows + '</tbody>' +
+        '<tfoot><tr><th colspan="3" scope="row">TOTAL</th><td></td><td></td></tr></tfoot>' +
+      '</table>' +
+    '</article>';
+  }
+
+  function viewJournalAllocationSheet(backLink) {
+    var identity = journalLinesReportIdentity(S.currentDossier());
+    var forms = Array.from({ length: 3 }, function (_, index) {
+      return journalAllocationSheetMarkup(identity, index);
+    }).join('');
+    var printAction = '<button type="button" class="btn btn-primary" data-journal-allocation-sheet-print>Imprimer / Enregistrer en PDF</button>';
+    return '<div class="journal-allocation-sheet-view">' + backLink +
+      pageHeader('Fiche d’imputation', 'Modèle vierge au format A4 : trois fiches par page, avec six lignes d’imputation au maximum par fiche.', printAction) +
+      (!identity.ownerConfigured ? '<div class="alert warning journal-allocation-sheet-owner-warning"><div>Le titulaire de licence n’est pas renseigné. Complétez « Raison sociale (nom de la licence) » dans Paramètres → Informations communes aux états imprimés.</div></div>' : '') +
+      '<div class="alert info journal-allocation-sheet-print-note"><div>Les champs de pièce, date et journal ainsi que les lignes restent vierges ; cette fiche ne crée aucune écriture dans le dossier. Cliquez sur <strong>Imprimer / Enregistrer en PDF</strong> ; dans la boîte du navigateur, choisissez l’imprimante ou « Enregistrer au format PDF ». L’aperçu ci-dessous correspond aux trois fiches qui seront imprimées sur une page A4.</div></div>' +
+      '<div class="journal-allocation-sheet-page" aria-label="Aperçu de trois fiches d’imputation sur une page A4">' + forms + '</div>' +
+    '</div>';
+  }
+
+  function printJournalAllocationSheet() {
+    var page = $('.journal-allocation-sheet-page');
+    if (!page) return;
+    var style = $('#journal-allocation-sheet-print-style');
+    var previousStyleText = style ? style.textContent : '';
+    if (!style) {
+      style = document.createElement('style');
+      style.id = 'journal-allocation-sheet-print-style';
+      document.head.appendChild(style);
+    }
+    style.textContent = '@page { size: A4 portrait; margin: 6mm; }';
+    var previousTitle = document.title;
+    document.title = 'Fiche-imputation-' + safeFilePart(S.currentDossier().name);
+    document.body.classList.add('journal-allocation-sheet-printing');
+    var cleaned = false;
+    var cleanup = function () {
+      if (cleaned) return;
+      cleaned = true;
+      document.body.classList.remove('journal-allocation-sheet-printing');
+      document.title = previousTitle;
+      if (previousStyleText) style.textContent = previousStyleText;
+      else if (style.parentNode) style.parentNode.removeChild(style);
+    };
+    window.addEventListener('afterprint', cleanup, { once: true });
+    try {
+      window.print();
+    } catch (error) {
+      window.removeEventListener('afterprint', cleanup);
+      cleanup();
+      toast('Impossible d’ouvrir la boîte d’impression : ' + (error && error.message || 'erreur inconnue.'), 'warning');
+    }
+    window.setTimeout(cleanup, 30000);
+  }
+
+  function bindJournalAllocationSheet() {
+    var printButton = $('[data-journal-allocation-sheet-print]');
+    if (printButton) printButton.addEventListener('click', printJournalAllocationSheet);
+  }
+
   function editionReportChildView(child, groupId, tabId) {
     var backLabel = groupId === 'editions' && tabId === 'journals' ? 'Tous les éléments Journaux' : 'Tous les états';
     var backLink = '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(accountingMenuHash(groupId, tabId)) + '">← ' + esc(backLabel) + '</a>';
+    if (child.id === 'journal-allocation-sheet') return viewJournalAllocationSheet(backLink);
     if (child.id === 'journal-lines' || child.id === 'journal-modified-pieces' || child.id === 'journal-unbalanced-pieces' || child.id === 'journal-entry-totals' || child.id === 'journal-individual-account-totals' || child.id === 'journal-summary-account-totals' || child.id === 'journal-third-party-totals' || child.id === 'journal-analytic-center-totals' || child.id === 'journal-currency-totals') return viewJournalLinesReport(backLink);
     if (child.id === 'general-balance') return '<div class="edition-report-detail-view">' + backLink + viewBalance() + '</div>';
     if (child.id === 'general-ledger') return '<div class="edition-report-detail-view">' + backLink + viewLedger() + '</div>';
@@ -13376,6 +13455,7 @@
     if (route === 'menu') {
       var menuParams = parseHash().params;
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && (menuParams.c === 'journal-lines' || menuParams.c === 'journal-modified-pieces' || menuParams.c === 'journal-unbalanced-pieces' || menuParams.c === 'journal-entry-totals' || menuParams.c === 'journal-individual-account-totals' || menuParams.c === 'journal-summary-account-totals' || menuParams.c === 'journal-third-party-totals' || menuParams.c === 'journal-analytic-center-totals' || menuParams.c === 'journal-currency-totals')) bindJournalLinesReport();
+      if (menuParams.g === 'editions' && menuParams.t === 'journals' && menuParams.c === 'journal-allocation-sheet') bindJournalAllocationSheet();
       if (menuParams.g === 'parametres' && menuParams.t === 'dossier-configuration') bindAccountingConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'sections-accounts') bindAnalyticalSectionsConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'allocation-keys') bindAnalyticalAllocationKeys();
