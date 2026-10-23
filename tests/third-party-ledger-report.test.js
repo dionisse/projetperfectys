@@ -231,4 +231,17 @@ test('refuse les filtres, périodes et correspondances de lignes sources invalid
   assert.ok(badOpeningDate.errors.some(message => /veille du cycle/i.test(message)));
 });
 
+test('peut conserver un tiers sans mouvement comme en-tête vide sans générer de ligne', () => {
+  const report = build({
+    thirdPartyFilter: 'CLI-A',
+    thirdPartyMovements: [],
+    openingBalances: [],
+    includeNonMoved: true
+  });
+  assert.equal(report.ok, true, report.errors.join(' '));
+  assert.equal(report.tierCount, 1);
+  assert.equal(report.lineCount, 0);
+  assert.deepEqual(report.groups[0].rows, []);
+});
+
 console.log('Grand livre des tiers : tests de calcul terminés.');

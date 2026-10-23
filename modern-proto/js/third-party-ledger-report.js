@@ -564,7 +564,7 @@
         flatRows.push(row);
         movementEntryIds[movement.sourceEntryId] = true;
       });
-      if (!rows.length) return;
+      if (!rows.length && options.includeNonMoved !== true) return;
       groups.push({
         key: descriptor.key,
         thirdPartyId: String(descriptor.record.id || ''),

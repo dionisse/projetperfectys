@@ -32,6 +32,7 @@ const APP_SHELL = [
   './js/aged-balance-report.js',
   './js/third-party-balance-report.js',
   './js/third-party-ledger-report.js',
+  './js/third-party-statement-report.js',
   './js/third-party-account-situation-report.js',
   './js/third-party-nature-breakdown-report.js',
   './js/third-party-opening-balance-report.js',
