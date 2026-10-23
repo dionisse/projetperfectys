@@ -10,6 +10,7 @@ const journalLinesSource = fs.readFileSync(path.join(__dirname, '..', 'modern-pr
 const generalBalanceSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'accounting-balance-report.js'), 'utf8');
 const agedBalanceSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'aged-balance-report.js'), 'utf8');
 const openingBalanceReportSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'opening-balance-report.js'), 'utf8');
+const accountSituationReportSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'account-situation-report.js'), 'utf8');
 const configurationCss = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'css', 'accounting-configuration.css'), 'utf8');
 const htmlSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'index.html'), 'utf8');
 const serviceWorkerSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'service-worker.js'), 'utf8');
@@ -493,6 +494,10 @@ const openingBalanceNavigation = findTab('editions', 'general-accounts').childre
 assert.equal(openingBalanceNavigation.status, 'active');
 assert.ok(openingBalanceNavigation.reason.includes('registre Reports à nouveau'));
 assert.ok(openingBalanceNavigation.reason.includes('En devise'));
+const accountSituationNavigation = findTab('editions', 'general-accounts').children.find(child => child.id === 'general-account-situation');
+assert.equal(accountSituationNavigation.status, 'active');
+assert.ok(accountSituationNavigation.reason.includes('date du cycle'));
+assert.ok(accountSituationNavigation.reason.includes('regroupement'));
 assert.match(agedBalanceSource, /balanceEqualsTotalDueLessAdvances: true[\s\S]*postedJournalEntriesAreNotUsed: true/);
 assert.match(agedBalanceSource, /itemsAreGrossAmounts: true[\s\S]*advancesAreDatedSettlements: true/);
 assert.match(appSource, /var AGED_BALANCE_AGE_COLUMN_DEFINITIONS = AgedBalanceReport\.AGE_BUCKETS\.map\([\s\S]*defaultSelected: false/);
@@ -510,8 +515,11 @@ assert.match(appSource, /function printAgedBalanceReport\([\s\S]*agedBalance\.pr
 assert.match(appSource, /function bindAgedBalanceReport\([\s\S]*aged-balance-preview-open[\s\S]*data-aged-balance-close-preview[\s\S]*event\.key === 'Escape'/);
 assert.match(configurationCss, /body\.aged-balance-preview-open\s*\{\s*overflow:\s*hidden[\s\S]*\.aged-balance-preview-overlay\s*\{\s*padding:\s*0[\s\S]*\.report-preview-sheet\.aged-balance-preview-sheet\s*\{[^}]*max-width:\s*none/);
 assert.ok(htmlSource.indexOf('js/aged-balance-report.js') < htmlSource.indexOf('js/app.js'));
+assert.ok(htmlSource.indexOf('js/accounting-balance-report.js') < htmlSource.indexOf('js/account-situation-report.js'));
+assert.ok(htmlSource.indexOf('js/account-situation-report.js') < htmlSource.indexOf('js/app.js'));
 assert.ok(htmlSource.indexOf('js/accounting-balance-report.js') < htmlSource.indexOf('js/opening-balance-report.js'));
 assert.ok(htmlSource.indexOf('js/opening-balance-report.js') < htmlSource.indexOf('js/app.js'));
+assert.match(serviceWorkerSource, /\.\/js\/account-situation-report\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/aged-balance-report\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/opening-balance-report\.js/);
 assert.match(configurationCss, /\.aged-balance-register-table[\s\S]*\.aged-balance-report-table/);
@@ -665,7 +673,15 @@ assert.match(appSource, /function openingBalanceReportPrintableHtml\([\s\S]*Bala
 assert.match(appSource, /function openingBalanceReportLayoutView\([\s\S]*opening-balance-orientation[\s\S]*opening-balance-margins[\s\S]*opening-balance-page-first[\s\S]*opening-balance-parity[\s\S]*opening-balance-destination/);
 assert.match(appSource, /function openOpeningBalanceReportPreview\([\s\S]*openReportPreview\('Aperçu — Balance d’ouverture'/);
 assert.match(appSource, /function generateOpeningBalanceReportFile\([\s\S]*exportTabularWorkbook\('Balance d’ouverture'[\s\S]*generalBalanceReportTsv/);
-assert.match(serviceWorkerSource, /perfecto-static-v104/);
+assert.match(appSource, /child\.id === 'general-account-situation'\) return viewAccountSituationReport\(backLink\)/);
+assert.match(appSource, /menuParams\.g === 'editions' && menuParams\.t === 'general-accounts' && menuParams\.c === 'general-account-situation'\) bindAccountSituationReport\(\)/);
+assert.match(appSource, /function buildAccountSituationReport\(session\)[\s\S]*entries: S\.postedEntries\(\)[\s\S]*openingBalances: S\.openingBalances\(\)[\s\S]*asOfDate: session\.filters\.asOfDate/);
+assert.match(appSource, /function accountSituationReportSelectionView\([\s\S]*account-situation-date[\s\S]*Avec les comptes de regroupement[\s\S]*Lignes générées/);
+assert.match(appSource, /function accountSituationReportPrintableHtml\([\s\S]*POSITION DES COMPTES[\s\S]*date incluse[\s\S]*solde net/);
+assert.match(appSource, /function accountSituationReportLayoutView\([\s\S]*account-situation-orientation[\s\S]*account-situation-margins[\s\S]*account-situation-page-first[\s\S]*account-situation-parity[\s\S]*account-situation-destination/);
+assert.match(appSource, /function openAccountSituationReportPreview\([\s\S]*openReportPreview\('Aperçu — Position des comptes'/);
+assert.match(accountSituationReportSource, /closingNetBalances: true[\s\S]*draftEntriesExcluded: true/);
+assert.match(serviceWorkerSource, /perfecto-static-v105/);
 assert.match(appSource, /child\.id === 'general-ledger'[\s\S]*viewLedger\(\)/);
 
 assert.match(appSource, /function accountingMenuHash\(groupId, tabId, childId\)[\s\S]*return childId \? hash \+ '&c='/,
@@ -702,7 +718,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v104/);
+assert.match(serviceWorkerSource, /perfecto-static-v105/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

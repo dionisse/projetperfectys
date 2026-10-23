@@ -16,6 +16,7 @@
   var AccountingExchange = window.PerfectoAccountingExchange;
   var JournalLinesReport = window.PerfectoJournalLinesReport;
   var GeneralBalanceReport = window.PerfectoGeneralBalanceReport;
+  var AccountSituationReport = window.PerfectoAccountSituationReport;
   var OpeningBalanceReport = window.PerfectoOpeningBalanceReport;
   var AgedBalanceReport = window.PerfectoAgedBalanceReport;
   var FecImport = window.PerfectoFecImport;
@@ -148,8 +149,10 @@
   var generalBalanceReportSession = null;
   var generalSummaryBalanceReportSession = null;
   var openingBalanceReportSession = null;
+  var accountSituationReportSession = null;
   var agedBalanceReportSession = null;
   var OPENING_BALANCE_COLUMN_DEFINITIONS = OpeningBalanceReport.COLUMN_DEFINITIONS.map(function (column) { return Object.assign({}, column); });
+  var ACCOUNT_SITUATION_COLUMN_DEFINITIONS = AccountSituationReport.COLUMN_DEFINITIONS.map(function (column) { return Object.assign({}, column); });
   var AGED_BALANCE_AGE_COLUMN_DEFINITIONS = AgedBalanceReport.AGE_BUCKETS.map(function (bucket) {
     return { key: 'age:' + bucket.key, label: bucket.label, defaultSelected: false, ageBucket: true };
   });
@@ -757,10 +760,12 @@
     var isGeneralBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-balance';
     var isGeneralSummaryBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-summary-balance';
     var isOpeningBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-opening-balance';
+    var isAccountSituationReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-account-situation';
     var isAgedBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-aged-balance';
     if (!isGeneralBalanceReportRoute) generalBalanceReportSession = null;
     if (!isGeneralSummaryBalanceReportRoute) generalSummaryBalanceReportSession = null;
     if (!isOpeningBalanceReportRoute) openingBalanceReportSession = null;
+    if (!isAccountSituationReportRoute) accountSituationReportSession = null;
     if (!isAgedBalanceReportRoute) {
       agedBalanceReportSession = null;
       if (document.body) document.body.classList.remove('aged-balance-preview-open');
@@ -3608,6 +3613,11 @@
       if (!apply) return;
       var selected = $$('[data-general-balance-picker-account]:checked', modalRoot).map(function (checkbox) { return checkbox.value; });
       input.value = allToggle && allToggle.checked ? '*' : selected.join(', ');
+      try {
+        var inputEvent = document.createEvent('Event');
+        inputEvent.initEvent('input', true, false);
+        input.dispatchEvent(inputEvent);
+      } catch (error) { /* La valeur est déjà mise à jour ; le navigateur peut ne pas supporter l’événement synthétique. */ }
       closeModal();
       input.focus();
     });
@@ -4200,6 +4210,422 @@
     if (session.phase === 'preview' && !session.previewOpened) {
       session.previewOpened = true;
       openOpeningBalanceReportPreview(session);
+    }
+  }
+
+  /* ----------------------- Situation des comptes ------------------------- */
+  function createAccountSituationReportSession(dossier) {
+    var columns = Object.create(null);
+    ACCOUNT_SITUATION_COLUMN_DEFINITIONS.forEach(function (column) { columns[column.key] = !!column.defaultSelected; });
+    return {
+      dossierId: dossier.id,
+      phase: 'selection',
+      filters: { accounts: '*', asOfDate: dossier.cycleEnd, includeGrouping: false },
+      columns: columns,
+      layout: {
+        printer: 'system', style: 'plain8', orientation: 'landscape', margins: 'standard',
+        pageFirst: '', pageLast: '', parity: 'none', destination: 'preview'
+      },
+      report: null,
+      previewOpened: false,
+      exportFilename: '',
+      exportMessage: ''
+    };
+  }
+
+  function ensureAccountSituationReportSession() {
+    var dossier = S.currentDossier();
+    if (!accountSituationReportSession || accountSituationReportSession.dossierId !== dossier.id) {
+      accountSituationReportSession = createAccountSituationReportSession(dossier);
+    }
+    return accountSituationReportSession;
+  }
+
+  function buildAccountSituationReport(session) {
+    var dossier = S.currentDossier();
+    var configuration = S.accountingConfiguration();
+    return AccountSituationReport.build({
+      accounts: S.accounts(),
+      entries: S.postedEntries(),
+      openingBalances: S.openingBalances(),
+      journals: S.journals(),
+      cycleStart: dossier.cycleStart,
+      cycleEnd: dossier.cycleEnd,
+      asOfDate: session.filters.asOfDate,
+      accountFilter: session.filters.accounts,
+      includeGrouping: session.filters.includeGrouping,
+      decimalPlaces: configuration.decimalPlaces
+    });
+  }
+
+  function accountSituationReportColumnOption(column, session) {
+    return '<label class="journal-lines-column-option general-balance-column-option account-situation-column-option">' +
+      '<input type="checkbox" data-account-situation-column="' + esc(column.key) + '"' + (session.columns[column.key] ? ' checked' : '') + '>' +
+      '<span><strong>' + esc(column.label) + '</strong></span></label>';
+  }
+
+  function updateAccountSituationGeneratedLineCount(form) {
+    var region = $('[data-account-situation-generated-lines]', form);
+    if (!region) return;
+    var draft = { filters: {
+      accounts: $('#account-situation-accounts', form).value,
+      asOfDate: $('#account-situation-date', form).value,
+      includeGrouping: !!($('#account-situation-grouping', form) && $('#account-situation-grouping', form).checked)
+    } };
+    var report = buildAccountSituationReport(draft);
+    region.textContent = report.ok ? 'Lignes générées : ' + report.generatedLineCount : 'Lignes générées : —';
+    region.setAttribute('aria-label', report.ok ? report.generatedLineCount + ' lignes générées' : 'Nombre de lignes indisponible');
+  }
+
+  function accountSituationReportSelectionView(session, dossier) {
+    var report = buildAccountSituationReport(session);
+    var generatedLineCount = report.ok ? report.generatedLineCount : '—';
+    var leftColumns = ACCOUNT_SITUATION_COLUMN_DEFINITIONS.slice(0, 2).map(function (column) { return accountSituationReportColumnOption(column, session); }).join('');
+    var rightColumns = ACCOUNT_SITUATION_COLUMN_DEFINITIONS.slice(2).map(function (column) { return accountSituationReportColumnOption(column, session); }).join('');
+    return generalBalanceReportSteps('selection', 'Étapes de préparation de la Situation des comptes') +
+      pageHeader('Situation des comptes', 'Choisissez les comptes, la date d’arrêté et les colonnes à restituer.', '') +
+      '<div class="alert info account-situation-source-note"><div><strong>Lecture seule.</strong> La position à la date choisie reprend les reports à nouveau du dossier et les écritures validées du cycle jusqu’à cette date ; les brouillons sont exclus.</div></div>' +
+      '<form id="account-situation-selection-form" novalidate>' +
+        '<section class="card journal-lines-card"><div class="panel">' +
+          '<div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div><span class="journal-lines-cycle-badge">Cycle ' + esc(dateLabel(dossier.cycleStart)) + ' — ' + esc(dateLabel(dossier.cycleEnd)) + '</span></div>' +
+          '<div class="account-situation-filter-grid">' +
+            '<div class="field"><label for="account-situation-accounts">Comptes</label><div class="journal-lines-picker-control"><input id="account-situation-accounts" name="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou 401*; 411100" autocomplete="off" required><button type="button" class="btn btn-ghost" data-account-situation-picker aria-label="Choisir les comptes">…</button></div><span class="hint">« * » sélectionne tous les comptes ; vous pouvez saisir un code ou un préfixe avec *.</span></div>' +
+            '<div class="field"><label for="account-situation-date">Date</label><input id="account-situation-date" name="asOfDate" type="date" value="' + esc(session.filters.asOfDate) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required><span class="hint">Date incluse dans la situation.</span></div>' +
+          '</div>' +
+        '</div></section>' +
+        '<section class="card journal-lines-card"><div class="panel">' +
+          '<div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
+          '<div class="account-situation-column-grid"><div class="account-situation-column-stack">' + leftColumns + '</div><div class="account-situation-column-stack">' + rightColumns + '</div></div>' +
+          '<label class="journal-lines-check-option account-situation-grouping-option"><input id="account-situation-grouping" type="checkbox"' + (session.filters.includeGrouping ? ' checked' : '') + '><span>Avec les comptes de regroupement <small>Ajoute les rubriques du plan comptable et leurs positions cumulées, sans les recomptabiliser dans le total général.</small></span></label>' +
+        '</div></section>' +
+        '<div class="account-situation-generated-lines" data-account-situation-generated-lines role="status" aria-live="polite" aria-label="' + esc(generatedLineCount === '—' ? 'Nombre de lignes indisponible' : generatedLineCount + ' lignes générées') + '">Lignes générées : ' + esc(generatedLineCount) + '</div>' +
+        '<div class="journal-lines-form-errors" id="account-situation-selection-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="journal-lines-form-actions"><button type="submit" class="btn btn-primary">Mise en page <span aria-hidden="true">→</span></button></div>' +
+      '</form>';
+  }
+
+  function submitAccountSituationReportSelection(form, session) {
+    var errors = [];
+    var accountsInput = $('#account-situation-accounts', form);
+    var dateInput = $('#account-situation-date', form);
+    var accountFilter = GeneralBalanceReport.parseAccountFilter(accountsInput ? accountsInput.value : '');
+    var selectedColumns = $$('[data-account-situation-column]:checked', form).map(function (input) { return input.getAttribute('data-account-situation-column'); });
+    if (!accountFilter.valid) errors.push(accountFilter.error);
+    if (!dateInput || !dateInput.value) errors.push('Renseignez la date de la situation.');
+    if (!selectedColumns.length) errors.push('Sélectionnez au moins une colonne à imprimer.');
+    if (selectedColumns.indexOf('code') === -1 && selectedColumns.indexOf('label') === -1) errors.push('Conservez au moins une colonne d’identification du compte (code ou intitulé).');
+    showGeneralBalanceReportErrors($('#account-situation-selection-errors', form), errors);
+    if (errors.length) return;
+    session.filters.accounts = String(accountsInput.value || '*').trim();
+    session.filters.asOfDate = dateInput.value;
+    session.filters.includeGrouping = !!($('#account-situation-grouping', form) && $('#account-situation-grouping', form).checked);
+    session.columns = Object.create(null);
+    ACCOUNT_SITUATION_COLUMN_DEFINITIONS.forEach(function (column) {
+      session.columns[column.key] = selectedColumns.indexOf(column.key) !== -1;
+    });
+    session.report = buildAccountSituationReport(session);
+    if (!session.report.ok) {
+      showGeneralBalanceReportErrors($('#account-situation-selection-errors', form), session.report.errors);
+      return;
+    }
+    session.phase = 'layout';
+    session.previewOpened = false;
+    render();
+  }
+
+  function accountSituationReportLeafColumns(session) {
+    return ACCOUNT_SITUATION_COLUMN_DEFINITIONS.filter(function (column) { return session.columns[column.key]; }).map(function (column) {
+      return { key: column.key, label: column.reportLabel || column.label, exportLabel: column.exportLabel, text: column.text };
+    });
+  }
+
+  function accountSituationReportValue(row, column, forSpreadsheet, columns) {
+    if (column.key === 'code' || column.key === 'label') {
+      var value = String(row[column.key] == null ? '' : row[column.key]);
+      if (column.key === 'label' && row.rowType === 'group' && !(columns || []).some(function (item) { return item.key === 'code'; })) {
+        value = String(row.code || '') + (value ? ' · ' + value : '');
+      }
+      return value;
+    }
+    var numeric = Number(row[column.key]) || 0;
+    return forSpreadsheet ? numeric : (numeric ? amount(numeric) : '');
+  }
+
+  function accountSituationReportTotalsRow(columns, report, forSpreadsheet) {
+    var hasCode = columns.some(function (column) { return column.key === 'code'; });
+    var hasLabel = columns.some(function (column) { return column.key === 'label'; });
+    var labelIndex = columns.findIndex(function (column) { return column.key === 'code' || column.key === 'label'; });
+    var labelByKey = Object.create(null);
+    if (hasCode) labelByKey.code = 'TOTAL';
+    else if (hasLabel) labelByKey.label = 'TOTAL';
+    else if (labelIndex >= 0) labelByKey[columns[labelIndex].key] = 'TOTAL';
+    return columns.map(function (column, index) {
+      if (column.key === 'code' || column.key === 'label') {
+        var textValue = labelByKey[column.key] || '';
+        return forSpreadsheet ? textValue : { value: textValue, header: index === labelIndex };
+      }
+      var number = Number(report.totals[column.key]) || 0;
+      if (forSpreadsheet) return number;
+      return { value: number ? amount(number) : '', header: index === labelIndex };
+    });
+  }
+
+  function accountSituationReportExportMatrix(session, report, forSpreadsheet) {
+    var columns = accountSituationReportLeafColumns(session);
+    var matrix = [columns.map(function (column) { return column.exportLabel; })];
+    (report.displayRows || report.rows).forEach(function (row) {
+      matrix.push(columns.map(function (column) { return accountSituationReportValue(row, column, !!forSpreadsheet, columns); }));
+    });
+    if (report.rows.length) matrix.push(accountSituationReportTotalsRow(columns, report, !!forSpreadsheet).map(function (cell) {
+      return cell && typeof cell === 'object' ? cell.value : cell;
+    }));
+    return matrix;
+  }
+
+  function accountSituationReportTotalsHtml(columns, report) {
+    var cells = accountSituationReportTotalsRow(columns, report, false);
+    return '<tfoot><tr>' + cells.map(function (cell, index) {
+      var column = columns[index];
+      var className = column && !column.text ? ' class="num"' : '';
+      if (cell && typeof cell === 'object' && cell.header) return '<th scope="row"' + className + '>' + esc(cell.value) + '</th>';
+      return '<td' + className + '>' + esc(cell && typeof cell === 'object' ? cell.value : cell) + '</td>';
+    }).join('') + '</tr></tfoot>';
+  }
+
+  function accountSituationReportWarningsHtml(report) {
+    if (!report.warnings || !report.warnings.length) return '';
+    return '<div class="alert warning account-situation-report-warnings"><div><ul>' + report.warnings.map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('') + '</ul></div></div>';
+  }
+
+  function accountSituationReportPrintableHtml(session, report) {
+    report = report || session.report || buildAccountSituationReport(session);
+    var columns = accountSituationReportLeafColumns(session);
+    var displayRows = report.displayRows || report.rows;
+    var bodyRows = displayRows.map(function (row) {
+      var rowClass = row.rowType === 'group' ? ' class="general-balance-group-row"' : '';
+      return '<tr' + rowClass + '>' + columns.map(function (column) {
+        var value = accountSituationReportValue(row, column, false, columns);
+        return '<td' + (!column.text ? ' class="num"' : '') + '>' + esc(value) + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    var emptyRow = report.rows.length ? '' : '<tr class="general-balance-empty-row"><td colspan="' + Math.max(columns.length, 1) + '"><strong>Aucun compte à restituer.</strong> Vérifiez la date et les comptes sélectionnés.</td></tr>';
+    var grouping = session.filters.includeGrouping ? 'Avec les comptes de regroupement du plan' : 'Sans les comptes de regroupement';
+    var styleClass = session.layout.style === 'color10' ? 'is-color-style' : 'is-mono-style';
+    return '<article class="general-balance-report-print account-situation-report-print ' + styleClass + '">' +
+      '<header class="general-balance-print-heading"><p class="page-kicker">ÉDITIONS · COMPTES GÉNÉRAUX</p><h2>POSITION DES COMPTES</h2>' +
+        '<p>AU ' + esc(dateLabel(report.asOfDate)) + '</p></header>' +
+      '<div class="general-balance-print-context"><span><strong>Comptes :</strong> ' + esc(session.filters.accounts === '*' ? 'Tous les comptes' : session.filters.accounts) + '</span>' +
+        '<span><strong>Présentation :</strong> ' + esc(grouping) + '</span></div>' +
+      '<p class="general-balance-print-basis">Situation calculée à la date indiquée dans le dossier actif à partir des reports à nouveau et des écritures validées du cycle jusqu’à cette date incluse. Les brouillons sont exclus. Les montants débit/crédit correspondent au solde net de chaque compte ; avec regroupement, les rubriques et leurs intitulés proviennent du plan comptable du dossier.</p>' +
+      accountSituationReportWarningsHtml(report) +
+      '<div class="table-wrap general-balance-table-wrap"><table class="data-table general-balance-table account-situation-report-table"><caption>' + esc(report.generatedLineCount + (report.generatedLineCount === 1 ? ' ligne générée' : ' lignes générées')) + '</caption>' +
+        generalBalanceReportTableHead(columns) + '<tbody>' + (bodyRows || emptyRow) + '</tbody>' + (report.rows.length ? accountSituationReportTotalsHtml(columns, report) : '') +
+      '</table></div>' +
+    '</article>';
+  }
+
+  function accountSituationReportLayoutView(session) {
+    var report = session.report || buildAccountSituationReport(session);
+    var resultSummary = report.totals.accountCount + (report.totals.accountCount === 1 ? ' compte' : ' comptes') +
+      ' · ' + report.generatedLineCount + (report.generatedLineCount === 1 ? ' ligne générée' : ' lignes générées') +
+      ' · débit ' + amount(report.totals.debit) + ' · crédit ' + amount(report.totals.credit);
+    return generalBalanceReportSteps('layout', 'Étapes de préparation de la Situation des comptes') +
+      pageHeader('Mise en page', 'Choisissez le style, l’orientation, les marges, les pages et la destination.', '') +
+      '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(resultSummary) + '. Aucune écriture ne sera modifiée.</div></div>' +
+      accountSituationReportWarningsHtml(report) +
+      '<form id="account-situation-layout-form" novalidate><div class="journal-lines-settings-grid general-balance-settings-grid">' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="account-situation-printer">Imprimante</label><select id="account-situation-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select><span class="hint">PERFECTO ouvre la boîte d’impression ; le navigateur garde le choix final du périphérique ou du PDF.</span></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="account-situation-style">Style du rapport</label><select id="account-situation-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('account-situation-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('account-situation-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('account-situation-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('account-situation-margins', 'binding', 'Reliure à gauche', session.layout.margins === 'binding', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Pages</h3></div><div class="journal-lines-page-range"><div class="field"><label for="account-situation-page-first">Première</label><input id="account-situation-page-first" type="number" min="1" step="1" value="' + esc(session.layout.pageFirst) + '" placeholder="1"></div><span aria-hidden="true">à</span><div class="field"><label for="account-situation-page-last">Dernière</label><input id="account-situation-page-last" type="number" min="1" step="1" value="' + esc(session.layout.pageLast) + '" placeholder="Fin"></div></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Parité</h3></div><div class="field"><label for="account-situation-parity">Pages</label><select id="account-situation-parity"><option value="none"' + (session.layout.parity === 'none' ? ' selected' : '') + '>Aucune</option><option value="odd"' + (session.layout.parity === 'odd' ? ' selected' : '') + '>Impaire</option><option value="even"' + (session.layout.parity === 'even' ? ' selected' : '') + '>Paire</option></select></div></div></section>' +
+        '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
+          generalBalanceReportRadio('account-situation-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
+          generalBalanceReportRadio('account-situation-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
+          generalBalanceReportRadio('account-situation-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('account-situation-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
+        '</div></div></section>' +
+      '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire.</strong> La plage de pages et la parité ne peuvent pas être préconfigurées dans la boîte d’impression du navigateur ; réglez-les là si le navigateur le propose.</div></div>' +
+      '<div class="journal-lines-form-errors" id="account-situation-layout-errors" role="alert" aria-live="polite"></div>' +
+      '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-account-situation-back-selection>Retour à la sélection</button><button type="submit" class="btn btn-primary">Valider</button></div></form>';
+  }
+
+  function accountSituationReportPreviewView(session) {
+    var report = session.report || buildAccountSituationReport(session);
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans PERFECTO';
+    return generalBalanceReportSteps('preview', 'Étapes de préparation de la Situation des comptes') +
+      pageHeader('Aperçu de la Situation des comptes', 'Vérifiez la position à date avant l’impression ou l’enregistrement PDF.',
+        '<button type="button" class="btn btn-primary" data-account-situation-open-preview>Ouvrir l’aperçu avant impression</button>') +
+      '<div class="alert info"><div><strong>Destination choisie :</strong> ' + esc(destination) + '. La boîte d’impression ne s’ouvrira qu’après votre action depuis l’aperçu.</div></div>' +
+      accountSituationReportWarningsHtml(report) +
+      (report.rows.length ? '' : '<div class="alert warning"><div>Aucun compte ne correspond à la sélection à cette date.</div></div>') +
+      '<section class="card general-balance-preview-page"><div class="panel">' + accountSituationReportPrintableHtml(session, report) + '</div></section>' +
+      '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-account-situation-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-ghost" data-account-situation-back-selection>Modifier la sélection</button></div>';
+  }
+
+  function accountSituationReportSavedView(session) {
+    return generalBalanceReportSteps('preview', 'Étapes de préparation de la Situation des comptes') +
+      pageHeader('Export prêt', 'Le fichier a été préparé sans modifier les reports ni les écritures.', '') +
+      '<section class="card journal-lines-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
+        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-account-situation-open-preview>Afficher l’aperçu</button><button type="button" class="btn btn-ghost" data-account-situation-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-account-situation-new-report>Nouvelle sélection</button></div></div></section>';
+  }
+
+  function generateAccountSituationReportFile(session, destination) {
+    var report = buildAccountSituationReport(session);
+    if (!report.ok) throw new Error((report.errors || ['La situation des comptes est invalide.']).join(' '));
+    session.report = report;
+    var spreadsheet = destination === 'table';
+    var matrix = accountSituationReportExportMatrix(session, report, spreadsheet);
+    var extension = spreadsheet ? 'xlsx' : 'txt';
+    var filename = 'Situation-comptes-' + safeFilePart(S.currentDossier().name) + '-' + report.asOfDate + '.' + extension;
+    var content = spreadsheet
+      ? AccountingExchange.exportTabularWorkbook('Position des comptes', matrix[0], matrix.slice(1))
+      : generalBalanceReportTsv(matrix);
+    downloadFile(filename, content, spreadsheet ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/plain;charset=utf-8');
+    session.exportFilename = filename;
+    session.exportMessage = spreadsheet ? 'Téléchargement du classeur Excel lancé dans le navigateur.' : 'Téléchargement du fichier texte tabulé lancé dans le navigateur.';
+    session.phase = 'saved';
+    render();
+  }
+
+  function submitAccountSituationReportLayout(form, session) {
+    var errors = [];
+    var destination = $('input[name="account-situation-destination"]:checked', form);
+    var orientation = $('input[name="account-situation-orientation"]:checked', form);
+    var margins = $('input[name="account-situation-margins"]:checked', form);
+    var first = $('#account-situation-page-first', form).value;
+    var last = $('#account-situation-page-last', form).value;
+    if (first && (!Number.isInteger(Number(first)) || Number(first) < 1)) errors.push('La première page doit être un entier supérieur ou égal à 1.');
+    if (last && (!Number.isInteger(Number(last)) || Number(last) < 1)) errors.push('La dernière page doit être un entier supérieur ou égal à 1.');
+    if (first && last && Number(first) > Number(last)) errors.push('La première page doit précéder ou égaler la dernière page.');
+    showGeneralBalanceReportErrors($('#account-situation-layout-errors', form), errors);
+    if (errors.length) return;
+    session.layout.printer = $('#account-situation-printer', form).value;
+    session.layout.style = $('#account-situation-style', form).value;
+    session.layout.orientation = orientation ? orientation.value : 'landscape';
+    session.layout.margins = margins ? margins.value : 'standard';
+    session.layout.pageFirst = first;
+    session.layout.pageLast = last;
+    session.layout.parity = $('#account-situation-parity', form).value;
+    session.layout.destination = destination ? destination.value : 'preview';
+    session.report = buildAccountSituationReport(session);
+    if (!session.report.ok) {
+      showGeneralBalanceReportErrors($('#account-situation-layout-errors', form), session.report.errors);
+      return;
+    }
+    if (session.layout.destination === 'table' || session.layout.destination === 'file') {
+      try {
+        generateAccountSituationReportFile(session, session.layout.destination);
+      } catch (error) {
+        session.phase = 'layout';
+        render();
+        toast('Export impossible : ' + (error && error.message || 'erreur inconnue.'), 'error');
+      }
+      return;
+    }
+    session.previewOpened = false;
+    session.phase = 'preview';
+    render();
+  }
+
+  function accountSituationReportPrintOptions(session) {
+    var styleNode = null;
+    var previousStyleText = '';
+    var createdStyle = false;
+    var previousTitle = '';
+    return {
+      beforePrint: function () {
+        styleNode = $('#account-situation-print-page-style');
+        createdStyle = !styleNode;
+        if (!styleNode) {
+          styleNode = document.createElement('style');
+          styleNode.id = 'account-situation-print-page-style';
+          document.head.appendChild(styleNode);
+        } else previousStyleText = styleNode.textContent;
+        var orientation = session.layout.orientation === 'portrait' ? 'portrait' : 'landscape';
+        var left = session.layout.margins === 'binding' ? '18mm' : '12mm';
+        styleNode.textContent = '@page { size: A4 ' + orientation + '; margin: 12mm 12mm 12mm ' + left + '; }';
+        previousTitle = document.title;
+        document.title = 'Position-des-comptes-' + safeFilePart(S.currentDossier().name) + '-' + session.report.asOfDate;
+      },
+      afterPrint: function () {
+        document.title = previousTitle || document.title;
+        if (!styleNode) return;
+        if (createdStyle && styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+        else styleNode.textContent = previousStyleText;
+      }
+    };
+  }
+
+  function openAccountSituationReportPreview(session) {
+    var report = session.report || buildAccountSituationReport(session);
+    session.report = report;
+    openReportPreview('Aperçu — Position des comptes', accountSituationReportPrintableHtml(session, report), accountSituationReportPrintOptions(session));
+  }
+
+  function viewAccountSituationReport(backLink) {
+    var session = ensureAccountSituationReportSession();
+    if (session.phase !== 'selection') session.report = buildAccountSituationReport(session);
+    var content = session.phase === 'layout'
+      ? accountSituationReportLayoutView(session)
+      : (session.phase === 'preview'
+        ? accountSituationReportPreviewView(session)
+        : (session.phase === 'saved'
+          ? accountSituationReportSavedView(session)
+          : accountSituationReportSelectionView(session, S.currentDossier())));
+    return '<div class="edition-report-detail-view general-balance-report-detail account-situation-report-detail">' + backLink + content + '</div>';
+  }
+
+  function bindAccountSituationReport() {
+    var session = ensureAccountSituationReportSession();
+    if (session.phase === 'selection') {
+      var selectionForm = $('#account-situation-selection-form');
+      if (!selectionForm) return;
+      selectionForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitAccountSituationReportSelection(selectionForm, session);
+      });
+      ['#account-situation-accounts', '#account-situation-date', '#account-situation-grouping'].forEach(function (selector) {
+        var input = $(selector, selectionForm);
+        if (!input) return;
+        input.addEventListener('input', function () { updateAccountSituationGeneratedLineCount(selectionForm); });
+        input.addEventListener('change', function () { updateAccountSituationGeneratedLineCount(selectionForm); });
+      });
+      var pickerButton = $('[data-account-situation-picker]', selectionForm);
+      if (pickerButton) pickerButton.addEventListener('click', function () {
+        openGeneralBalanceAccountPicker($('#account-situation-accounts', selectionForm));
+      });
+      return;
+    }
+    if (session.phase === 'layout') {
+      var layoutForm = $('#account-situation-layout-form');
+      if (!layoutForm) return;
+      layoutForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitAccountSituationReportLayout(layoutForm, session);
+      });
+      var backSelection = $('[data-account-situation-back-selection]');
+      if (backSelection) backSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+      return;
+    }
+    $$('[data-account-situation-open-preview]').forEach(function (button) {
+      button.addEventListener('click', function () { openAccountSituationReportPreview(session); });
+    });
+    $$('[data-account-situation-back-layout]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'layout'; render(); });
+    });
+    $$('[data-account-situation-back-selection]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'selection'; render(); });
+    });
+    var newReportButton = $('[data-account-situation-new-report]');
+    if (newReportButton) newReportButton.addEventListener('click', function () {
+      accountSituationReportSession = createAccountSituationReportSession(S.currentDossier());
+      render();
+    });
+    if (session.phase === 'preview' && !session.previewOpened) {
+      session.previewOpened = true;
+      openAccountSituationReportPreview(session);
     }
   }
 
@@ -14113,6 +14539,7 @@
     if (child.id === 'general-summary-balance') return viewGeneralSummaryBalanceReport(backLink);
     if (child.id === 'general-aged-balance') return viewAgedBalanceReport(backLink);
     if (child.id === 'general-opening-balance') return viewOpeningBalanceReport(backLink);
+    if (child.id === 'general-account-situation') return viewAccountSituationReport(backLink);
     if (child.id === 'general-ledger') return '<div class="edition-report-detail-view">' + backLink + viewLedger() + '</div>';
     var inactive = child.status === 'inactive';
     var analytic = inactive && (child.section === 'analysis' || child.section === 'situations' || child.section === 'definitionsAnalytics' || child.id.indexOf('analytic-') === 0 || child.id === 'general-analytic-balance' || child.id === 'journal-analytic-center-totals');
@@ -15546,6 +15973,7 @@
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-summary-balance') bindGeneralSummaryBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-aged-balance') bindAgedBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-opening-balance') bindOpeningBalanceReport();
+      if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-account-situation') bindAccountSituationReport();
       if (menuParams.g === 'parametres' && menuParams.t === 'dossier-configuration') bindAccountingConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'sections-accounts') bindAnalyticalSectionsConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'allocation-keys') bindAnalyticalAllocationKeys();

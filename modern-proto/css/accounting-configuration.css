@@ -929,6 +929,14 @@ body.report-preview-open { overflow: hidden; }
 .opening-balance-subtotal-option { max-width: 720px; }
 .opening-balance-report-warnings { margin: 12px 0; }
 .opening-balance-report-warnings ul { margin: 0 0 0 18px; }
+.account-situation-source-note { margin: 0 0 14px; line-height: 1.55; }
+.account-situation-filter-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(180px, .8fr); gap: 14px; align-items: start; }
+.account-situation-column-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 28px; }
+.account-situation-column-stack { display: grid; align-content: start; gap: 9px; }
+.account-situation-grouping-option { margin-top: 16px; }
+.account-situation-generated-lines { margin: 6px 0 10px; color: #65736b; font-size: .78rem; font-weight: 650; }
+.account-situation-report-warnings { margin: 12px 0; }
+.account-situation-report-warnings ul { margin: 0 0 0 18px; }
 .general-balance-filter-grid { display: grid; grid-template-columns: minmax(0, 2fr) repeat(2, minmax(150px, .8fr)); gap: 14px; }
 .general-balance-filter-grid .field { min-width: 0; }
 .general-balance-account-filter .journal-lines-picker-control { grid-template-columns: minmax(0, 1fr) auto; }
@@ -978,10 +986,12 @@ body.report-preview-open { overflow: hidden; }
 }
 
 @media (max-width: 640px) {
-  .general-balance-filter-grid { grid-template-columns: minmax(0, 1fr); }
+  .general-balance-filter-grid,
+  .account-situation-filter-grid { grid-template-columns: minmax(0, 1fr); }
   .general-balance-option-grid,
   .general-balance-column-grid,
-  .opening-balance-column-grid { grid-template-columns: minmax(0, 1fr); }
+  .opening-balance-column-grid,
+  .account-situation-column-grid { grid-template-columns: minmax(0, 1fr); }
   .general-balance-settings-grid { grid-template-columns: minmax(0, 1fr); }
   .general-balance-settings-grid .journal-lines-destination-card { grid-column: auto; }
   .general-balance-report-detail .journal-lines-section-heading { align-items: flex-start; flex-direction: column; }
