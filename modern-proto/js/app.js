@@ -18,6 +18,7 @@
   var GeneralBalanceReport = window.PerfectoGeneralBalanceReport;
   var AccountSituationReport = window.PerfectoAccountSituationReport;
   var GeneralLedgerReport = window.PerfectoGeneralLedgerReport;
+  var MultiYearHistoryReport = window.PerfectoMultiYearHistoryReport;
   var OpeningBalanceReport = window.PerfectoOpeningBalanceReport;
   var AgedBalanceReport = window.PerfectoAgedBalanceReport;
   var FecImport = window.PerfectoFecImport;
@@ -149,6 +150,7 @@
   var journalLinesReportMode = 'standard';
   var generalBalanceReportSession = null;
   var generalLedgerReportSession = null;
+  var multiYearHistoryReportSession = null;
   var generalSummaryBalanceReportSession = null;
   var openingBalanceReportSession = null;
   var accountSituationReportSession = null;
@@ -761,12 +763,14 @@
     var route = parsed.route;
     var isGeneralBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-balance';
     var isGeneralLedgerReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-ledger';
+    var isMultiYearHistoryReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-multiyear-history';
     var isGeneralSummaryBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-summary-balance';
     var isOpeningBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-opening-balance';
     var isAccountSituationReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-account-situation';
     var isAgedBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-aged-balance';
     if (!isGeneralBalanceReportRoute) generalBalanceReportSession = null;
     if (!isGeneralLedgerReportRoute) generalLedgerReportSession = null;
+    if (!isMultiYearHistoryReportRoute) multiYearHistoryReportSession = null;
     if (!isGeneralSummaryBalanceReportRoute) generalSummaryBalanceReportSession = null;
     if (!isOpeningBalanceReportRoute) openingBalanceReportSession = null;
     if (!isAccountSituationReportRoute) accountSituationReportSession = null;
@@ -5076,6 +5080,471 @@
     if (session.phase === 'preview' && !session.previewOpened) {
       session.previewOpened = true;
       openGeneralLedgerReportPreview(session);
+    }
+  }
+
+  /* ---------------- Historique des comptes sur plusieurs exercices -------- */
+  function multiYearHistorySourceContext(dossier) {
+    var member = getActiveDemoMember();
+    var visibleDossiers = permittedDemoDossiers(member);
+    if (!visibleDossiers.some(function (item) { return item.id === dossier.id; })) visibleDossiers.push(dossier);
+    var candidates = visibleDossiers.filter(function (item) {
+      return item.clientCode === dossier.clientCode &&
+        item.accountingTypeCode === dossier.accountingTypeCode &&
+        String(item.cycleStart || '') <= String(dossier.cycleEnd || '');
+    }).sort(function (left, right) {
+      return String(left.cycleStart).localeCompare(String(right.cycleStart)) ||
+        String(left.cycleEnd).localeCompare(String(right.cycleEnd)) ||
+        String(left.id).localeCompare(String(right.id));
+    });
+    var currentState = S.visibleState();
+    var sources = candidates.map(function (sourceDossier) {
+      if (sourceDossier.id === dossier.id) {
+        return { dossier: sourceDossier, ok: true, state: currentState, errors: [] };
+      }
+      try {
+        var snapshot = S.readDossierStateSnapshot(sourceDossier.id);
+        return {
+          dossier: sourceDossier,
+          ok: !!(snapshot && snapshot.ok),
+          state: snapshot && snapshot.ok ? snapshot.state : null,
+          errors: snapshot && Array.isArray(snapshot.errors) ? snapshot.errors.slice() : ['Lecture du dossier historique impossible.']
+        };
+      } catch (error) {
+        return {
+          dossier: sourceDossier,
+          ok: false,
+          state: null,
+          errors: ['Lecture du dossier historique impossible : ' + (error && error.message || 'erreur inconnue.')]
+        };
+      }
+    });
+    return {
+      currentDossier: dossier,
+      dossiers: candidates,
+      sources: sources,
+      currentState: currentState,
+      accounts: S.accounts(),
+      journals: S.journals(),
+      decimalPlaces: S.accountingConfiguration().decimalPlaces
+    };
+  }
+
+  function createMultiYearHistoryReportSession(dossier) {
+    var columns = Object.create(null);
+    MultiYearHistoryReport.COLUMN_DEFINITIONS.forEach(function (column) {
+      columns[column.key] = !!column.defaultSelected;
+    });
+    var context = multiYearHistorySourceContext(dossier);
+    var startYears = MultiYearHistoryReport.availableStartYears(context);
+    var defaultYear = startYears.length ? startYears[0] : Number(dossier.exerciseYear) || Number(String(dossier.cycleStart).slice(0, 4));
+    return {
+      dossierId: dossier.id,
+      context: context,
+      startYears: startYears.length ? startYears : [defaultYear],
+      phase: 'selection',
+      filters: { accounts: '*', startExercise: defaultYear },
+      columns: columns,
+      layout: {
+        printer: 'system', style: 'plain8', orientation: 'landscape', margins: 'standard',
+        pageFirst: '', pageLast: '', parity: 'none', destination: 'preview'
+      },
+      report: null,
+      previewOpened: false,
+      exportFilename: '',
+      exportMessage: ''
+    };
+  }
+
+  function ensureMultiYearHistoryReportSession() {
+    var dossier = S.currentDossier();
+    if (!multiYearHistoryReportSession || multiYearHistoryReportSession.dossierId !== dossier.id) {
+      multiYearHistoryReportSession = createMultiYearHistoryReportSession(dossier);
+    }
+    return multiYearHistoryReportSession;
+  }
+
+  function buildMultiYearHistoryReport(session) {
+    var context = session.context;
+    return MultiYearHistoryReport.build({
+      currentDossier: context.currentDossier,
+      dossiers: context.dossiers,
+      sources: context.sources,
+      currentState: context.currentState,
+      accounts: context.accounts,
+      journals: context.journals,
+      decimalPlaces: context.decimalPlaces,
+      startExercise: session.filters.startExercise,
+      accountFilter: session.filters.accounts
+    });
+  }
+
+  function multiYearHistoryReportColumns(session) {
+    return MultiYearHistoryReport.COLUMN_DEFINITIONS.filter(function (column) {
+      return session.columns[column.key] === true;
+    });
+  }
+
+  function multiYearHistoryColumnOption(column, session) {
+    return '<label class="journal-lines-column-option multi-year-history-column-option">' +
+      '<input type="checkbox" data-multi-year-history-column="' + esc(column.key) + '"' +
+        (session.columns[column.key] ? ' checked' : '') + '>' +
+      '<span><strong>' + esc(column.label) + '</strong></span></label>';
+  }
+
+  function updateMultiYearHistoryGeneratedLineCount(form) {
+    var region = $('[data-multi-year-history-generated-lines]', form);
+    if (!region) return;
+    var year = $('#multi-year-history-start-exercise', form);
+    var accountsInput = $('#multi-year-history-accounts', form);
+    var draft = Object.assign({}, session, {
+      filters: {
+        accounts: accountsInput ? accountsInput.value : '*',
+        startExercise: year ? Number(year.value) : 0
+      }
+    });
+    var report = buildMultiYearHistoryReport(draft);
+    region.textContent = report.ok ? 'Lignes générées : ' + report.generatedLineCount : 'Lignes générées : —';
+    region.setAttribute('aria-label', report.ok ? report.generatedLineCount + ' lignes générées' : 'Nombre de lignes indisponible');
+  }
+
+  function multiYearHistorySourceWarnings(session) {
+    return (session.context.sources || []).filter(function (source) {
+      return source && source.ok === false && source.dossier && source.dossier.id !== session.dossierId;
+    });
+  }
+
+  function multiYearHistoryReportSelectionView(session, dossier) {
+    var report = buildMultiYearHistoryReport(session);
+    var yearOptions = session.startYears.map(function (year) {
+      return '<option value="' + esc(year) + '"' + (Number(session.filters.startExercise) === Number(year) ? ' selected' : '') + '>' + esc(year) + '</option>';
+    }).join('');
+    var columns = MultiYearHistoryReport.COLUMN_DEFINITIONS.map(function (column) {
+      return multiYearHistoryColumnOption(column, session);
+    }).join('');
+    var sourceWarnings = multiYearHistorySourceWarnings(session);
+    var sourceWarningHtml = sourceWarnings.length
+      ? '<div class="alert warning multi-year-history-source-warning"><div><strong>Certains dossiers historiques ne sont pas lisibles.</strong><ul>' + sourceWarnings.map(function (source) {
+          return '<li>' + esc(source.dossier.reference || source.dossier.name || source.dossier.id) + ' : ' + esc((source.errors || ['Lecture impossible.']).join(' ')) + '</li>';
+        }).join('') + '</ul>Les exercices concernés ne sont pas proposés comme début d’historique ; aucun mouvement partiel n’est ajouté.</div></div>'
+      : '';
+    return generalBalanceReportSteps('selection', 'Étapes de préparation de l’Historique des comptes sur plusieurs exercices') +
+      pageHeader('Historique des comptes sur plusieurs exercices', 'Choisissez les comptes, l’exercice de début et les colonnes à imprimer.', '') +
+      '<div class="alert info multi-year-history-source-note"><div><strong>Lecture seule, sans basculer de dossier.</strong> PERFECTO lit les dossiers accessibles du même client et du même type comptable. Seules les écritures validées sont reprises. Le report à nouveau enregistré dans chaque exercice initialise le solde progressif de cet exercice ; il n’est pas ajouté comme mouvement.</div></div>' +
+      sourceWarningHtml +
+      '<form id="multi-year-history-selection-form" novalidate>' +
+        '<section class="card journal-lines-card"><div class="panel">' +
+          '<div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div><span class="journal-lines-cycle-badge">Exercice actif : ' + esc(dossier.exerciseYear) + '</span></div>' +
+          '<div class="multi-year-history-filter-grid">' +
+            '<div class="field multi-year-history-accounts-field"><label for="multi-year-history-accounts">Comptes</label><div class="journal-lines-picker-control"><input id="multi-year-history-accounts" name="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou 401*; 411100" autocomplete="off" required><button type="button" class="btn btn-ghost" data-multi-year-history-picker aria-label="Choisir les comptes">…</button></div><span class="hint">« * » sélectionne tous les comptes ; un code ou préfixe avec * peut être saisi.</span></div>' +
+            '<div class="field"><label for="multi-year-history-start-exercise">Exercice de début</label><select id="multi-year-history-start-exercise" name="startExercise" required>' + yearOptions + '</select><span class="hint">Seuls les exercices présents et lisibles dans cette série de dossiers sont proposés.</span></div>' +
+          '</div>' +
+          '<div class="journal-lines-section-heading general-ledger-columns-heading"><h3>Colonnes à imprimer</h3></div>' +
+          '<div class="multi-year-history-column-grid">' + columns + '</div>' +
+        '</div></section>' +
+        '<div class="multi-year-history-generated-lines" data-multi-year-history-generated-lines role="status" aria-live="polite" aria-label="' + esc(report.ok ? report.generatedLineCount + ' lignes générées' : 'Nombre de lignes indisponible') + '">Lignes générées : ' + esc(report.ok ? report.generatedLineCount : '—') + '</div>' +
+        '<div class="journal-lines-form-errors" id="multi-year-history-selection-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="journal-lines-form-actions"><button type="submit" class="btn btn-primary">Mise en page <span aria-hidden="true">→</span></button></div>' +
+      '</form>';
+  }
+
+  function submitMultiYearHistorySelection(form, session) {
+    var errors = [];
+    var accountsInput = $('#multi-year-history-accounts', form);
+    var yearInput = $('#multi-year-history-start-exercise', form);
+    var accountFilter = GeneralBalanceReport.parseAccountFilter(accountsInput ? accountsInput.value : '');
+    var selectedColumns = $$('[data-multi-year-history-column]:checked', form).map(function (input) {
+      return input.getAttribute('data-multi-year-history-column');
+    });
+    if (!accountFilter.valid) errors.push(accountFilter.error);
+    if (!yearInput || !session.startYears.some(function (year) { return Number(year) === Number(yearInput.value); })) errors.push('Choisissez un exercice de début présent dans la série de dossiers accessible.');
+    if (!selectedColumns.length) errors.push('Sélectionnez au moins une colonne à imprimer.');
+    showGeneralBalanceReportErrors($('#multi-year-history-selection-errors', form), errors);
+    if (errors.length) return;
+    session.filters.accounts = String(accountsInput.value || '*').trim();
+    session.filters.startExercise = Number(yearInput.value);
+    session.columns = Object.create(null);
+    MultiYearHistoryReport.COLUMN_DEFINITIONS.forEach(function (column) {
+      session.columns[column.key] = selectedColumns.indexOf(column.key) !== -1;
+    });
+    session.report = buildMultiYearHistoryReport(session);
+    if (!session.report.ok) {
+      showGeneralBalanceReportErrors($('#multi-year-history-selection-errors', form), session.report.errors);
+      return;
+    }
+    session.phase = 'layout';
+    render();
+  }
+
+  function multiYearHistoryReportValue(row, column, forSpreadsheet) {
+    if (column.key === 'date') return row.date ? dateLabel(row.date) : '';
+    if (column.key === 'debit' || column.key === 'credit') {
+      var amountValue = Number(row[column.key]) || 0;
+      return forSpreadsheet ? amountValue : (amountValue ? amount(amountValue) : '');
+    }
+    if (column.key === 'balance') {
+      var balance = Number(row.balance) || 0;
+      return forSpreadsheet ? balance : (balance ? amount(Math.abs(balance)) + (balance > 0 ? ' D' : ' C') : '0');
+    }
+    return String(row[column.key] == null ? '' : row[column.key]);
+  }
+
+  function multiYearHistoryReportTable(session, section) {
+    var columns = multiYearHistoryReportColumns(session);
+    var rows = section.displayRows || section.rows || [];
+    var header = '<thead><tr>' + columns.map(function (column) {
+      return '<th scope="col"' + (!column.text ? ' class="num"' : '') + '>' + esc(column.reportLabel || column.label) + '</th>';
+    }).join('') + '</tr></thead>';
+    var body = rows.map(function (row) {
+      return '<tr>' + columns.map(function (column) {
+        return '<td' + (!column.text ? ' class="num"' : '') + '>' + esc(multiYearHistoryReportValue(row, column, false)) + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    if (!body) body = '<tr class="multi-year-history-empty-row"><td colspan="' + Math.max(columns.length, 1) + '">Aucun mouvement sur la période sélectionnée.</td></tr>';
+    return '<div class="table-wrap multi-year-history-table-wrap"><table class="data-table multi-year-history-table">' +
+      '<caption>' + esc(section.lineCount + (section.lineCount === 1 ? ' mouvement' : ' mouvements')) + '</caption>' + header + '<tbody>' + body + '</tbody></table></div>';
+  }
+
+  function multiYearHistoryPrintableHtml(session, report) {
+    report = report || session.report || buildMultiYearHistoryReport(session);
+    var styleClass = session.layout.style === 'color10' ? 'is-color-style' : 'is-mono-style';
+    var accountSections = report.accounts.map(function (section) {
+      return '<section class="multi-year-history-account-section">' +
+        '<header class="multi-year-history-account-heading"><h3>' + esc(section.code) + ' · ' + esc(section.label) + '</h3>' +
+          '<span>' + esc(section.lineCount + (section.lineCount === 1 ? ' mouvement' : ' mouvements')) + '</span></header>' +
+        multiYearHistoryReportTable(session, section) +
+      '</section>';
+    }).join('');
+    var sourceDossiers = (report.sourceDossiers || []).map(function (source) {
+      return source.exerciseYear + ' · ' + (source.reference || source.name);
+    }).join(' ; ');
+    return '<article class="general-balance-report-print multi-year-history-report-print ' + styleClass + '">' +
+      '<header class="general-balance-print-heading"><p class="page-kicker">ÉDITIONS · COMPTES GÉNÉRAUX</p><h2>HISTORIQUE DES COMPTES SUR PLUSIEURS EXERCICES</h2>' +
+        '<p>EXERCICES ' + esc(report.startExercise) + ' À ' + esc(report.endExercise) + ' · DU ' + esc(dateLabel(report.from)) + ' AU ' + esc(dateLabel(report.to)) + '</p></header>' +
+      '<div class="general-balance-print-context"><span><strong>Comptes :</strong> ' + esc(session.filters.accounts === '*' ? 'Tous les comptes' : session.filters.accounts) + '</span>' +
+        '<span><strong>Dossiers lus :</strong> ' + esc(sourceDossiers || '—') + '</span></div>' +
+      '<p class="general-balance-print-basis">Dans chaque exercice, le solde progressif part du report à nouveau enregistré dans son dossier puis intègre les écritures validées de ce même exercice. Le report n’est pas traité comme un mouvement et n’est pas additionné entre exercices. Les montants reprennent le registre comptabilisé en XOF ; aucune conversion ni donnée en devise n’est simulée. Les brouillons et les données absentes restent exclus ; aucune écriture n’est créée ou modifiée.</p>' +
+      (report.errors && report.errors.length ? '<div class="alert error"><div><ul>' + report.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div></div>' : '') +
+      (report.warnings.length ? '<div class="alert warning multi-year-history-report-warnings"><div><ul>' + report.warnings.map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('') + '</ul></div></div>' : '') +
+      (accountSections || (report.ok ? '<div class="alert info"><div>Aucun mouvement ne correspond aux critères de sélection.</div></div>' : '')) +
+    '</article>';
+  }
+
+  function multiYearHistoryExportMatrix(session, report, forSpreadsheet) {
+    var columns = multiYearHistoryReportColumns(session);
+    var matrix = [columns.map(function (column) { return column.exportLabel || column.label; })];
+    report.accounts.forEach(function (section) {
+      var headingRow = columns.map(function () { return ''; });
+      var labelIndex = columns.findIndex(function (column) { return column.text; });
+      if (labelIndex < 0) labelIndex = 0;
+      headingRow[labelIndex] = section.code + ' · ' + section.label;
+      matrix.push(headingRow);
+      (section.displayRows || section.rows || []).forEach(function (row) {
+        matrix.push(columns.map(function (column) { return multiYearHistoryReportValue(row, column, !!forSpreadsheet); }));
+      });
+    });
+    return matrix;
+  }
+
+  function generateMultiYearHistoryReportFile(session, destination) {
+    var report = buildMultiYearHistoryReport(session);
+    if (!report.ok) throw new Error((report.errors || ['L’historique n’est pas valide.']).join(' '));
+    session.report = report;
+    var spreadsheet = destination === 'table';
+    var matrix = multiYearHistoryExportMatrix(session, report, spreadsheet);
+    var extension = spreadsheet ? 'xlsx' : 'txt';
+    var filename = 'Historique-comptes-' + safeFilePart(S.currentDossier().name) + '-' + report.startExercise + '-' + report.endExercise + '.' + extension;
+    var content = spreadsheet
+      ? AccountingExchange.exportTabularWorkbook('Historique des comptes', matrix[0], matrix.slice(1))
+      : generalLedgerReportTsv(matrix);
+    downloadFile(filename, content, spreadsheet ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/plain;charset=utf-8');
+    session.exportFilename = filename;
+    session.exportMessage = spreadsheet ? 'Téléchargement du classeur Excel lancé dans le navigateur.' : 'Téléchargement du fichier texte tabulé lancé dans le navigateur.';
+    session.phase = 'saved';
+    render();
+  }
+
+  function multiYearHistoryLayoutView(session) {
+    var report = session.report || buildMultiYearHistoryReport(session);
+    var summary = report.accountCount + (report.accountCount === 1 ? ' compte' : ' comptes') +
+      ' · ' + report.lineCount + (report.lineCount === 1 ? ' mouvement' : ' mouvements') +
+      ' · débit ' + amount(report.totals.debit) + ' · crédit ' + amount(report.totals.credit);
+    return generalBalanceReportSteps('layout', 'Étapes de préparation de l’Historique des comptes sur plusieurs exercices') +
+      pageHeader('Mise en page', 'Choisissez l’imprimante, le style, l’orientation, les marges, les pages et la destination.', '') +
+      '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(summary) + ' · exercices ' + esc(report.startExercise) + ' à ' + esc(report.endExercise) + '. Historique calculé en lecture seule.</div></div>' +
+      (report.warnings.length ? '<div class="alert warning multi-year-history-report-warnings"><div><ul>' + report.warnings.map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('') + '</ul></div></div>' : '') +
+      '<form id="multi-year-history-layout-form" novalidate><div class="journal-lines-settings-grid general-balance-settings-grid">' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="multi-year-history-printer">Imprimante</label><select id="multi-year-history-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante par défaut (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select><span class="hint">Le navigateur conserve le choix final du périphérique ou du PDF.</span></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="multi-year-history-style">Style du rapport</label><select id="multi-year-history-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('multi-year-history-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('multi-year-history-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('multi-year-history-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('multi-year-history-margins', 'binding', 'Reliure', session.layout.margins === 'binding', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Pages</h3></div><div class="journal-lines-page-range"><div class="field"><label for="multi-year-history-page-first">Première</label><input id="multi-year-history-page-first" type="number" min="1" step="1" value="' + esc(session.layout.pageFirst) + '" placeholder="1"></div><span aria-hidden="true">à</span><div class="field"><label for="multi-year-history-page-last">Dernière</label><input id="multi-year-history-page-last" type="number" min="1" step="1" value="' + esc(session.layout.pageLast) + '" placeholder="Fin"></div></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Parité</h3></div><div class="field"><label for="multi-year-history-parity">Pages</label><select id="multi-year-history-parity"><option value="none"' + (session.layout.parity === 'none' ? ' selected' : '') + '>Aucune</option><option value="odd"' + (session.layout.parity === 'odd' ? ' selected' : '') + '>Impaire</option><option value="even"' + (session.layout.parity === 'even' ? ' selected' : '') + '>Paire</option></select></div></div></section>' +
+        '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
+          generalBalanceReportRadio('multi-year-history-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
+          generalBalanceReportRadio('multi-year-history-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
+          generalBalanceReportRadio('multi-year-history-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('multi-year-history-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
+        '</div></div></section>' +
+      '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire.</strong> La plage de pages et la parité se règlent dans la boîte d’impression du navigateur si celui-ci les propose.</div></div>' +
+      '<div class="journal-lines-form-errors" id="multi-year-history-layout-errors" role="alert" aria-live="polite"></div>' +
+      '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-multi-year-history-back-selection>Retour à la sélection</button><button type="submit" class="btn btn-primary">Valider</button></div></form>';
+  }
+
+  function submitMultiYearHistoryLayout(form, session) {
+    var errors = [];
+    var destination = $('input[name="multi-year-history-destination"]:checked', form);
+    var orientation = $('input[name="multi-year-history-orientation"]:checked', form);
+    var margins = $('input[name="multi-year-history-margins"]:checked', form);
+    var first = $('#multi-year-history-page-first', form).value;
+    var last = $('#multi-year-history-page-last', form).value;
+    if (first && (!Number.isInteger(Number(first)) || Number(first) < 1)) errors.push('La première page doit être un entier supérieur ou égal à 1.');
+    if (last && (!Number.isInteger(Number(last)) || Number(last) < 1)) errors.push('La dernière page doit être un entier supérieur ou égal à 1.');
+    if (first && last && Number(first) > Number(last)) errors.push('La première page doit précéder ou égaler la dernière page.');
+    showGeneralBalanceReportErrors($('#multi-year-history-layout-errors', form), errors);
+    if (errors.length) return;
+    session.layout.printer = $('#multi-year-history-printer', form).value;
+    session.layout.style = $('#multi-year-history-style', form).value;
+    session.layout.orientation = orientation ? orientation.value : 'landscape';
+    session.layout.margins = margins ? margins.value : 'standard';
+    session.layout.pageFirst = first;
+    session.layout.pageLast = last;
+    session.layout.parity = $('#multi-year-history-parity', form).value;
+    session.layout.destination = destination ? destination.value : 'preview';
+    session.report = buildMultiYearHistoryReport(session);
+    if (!session.report.ok) {
+      showGeneralBalanceReportErrors($('#multi-year-history-layout-errors', form), session.report.errors);
+      return;
+    }
+    if (session.layout.destination === 'table' || session.layout.destination === 'file') {
+      try {
+        generateMultiYearHistoryReportFile(session, session.layout.destination);
+      } catch (error) {
+        session.phase = 'layout';
+        render();
+        toast('Export impossible : ' + (error && error.message || 'erreur inconnue.'), 'error');
+      }
+      return;
+    }
+    session.previewOpened = false;
+    session.phase = 'preview';
+    render();
+  }
+
+  function multiYearHistoryPrintOptions(session) {
+    var styleNode = null;
+    var previousStyleText = '';
+    var createdStyle = false;
+    var previousTitle = '';
+    return {
+      beforePrint: function () {
+        styleNode = $('#multi-year-history-print-page-style');
+        createdStyle = !styleNode;
+        if (!styleNode) {
+          styleNode = document.createElement('style');
+          styleNode.id = 'multi-year-history-print-page-style';
+          document.head.appendChild(styleNode);
+        } else previousStyleText = styleNode.textContent;
+        var orientation = session.layout.orientation === 'portrait' ? 'portrait' : 'landscape';
+        var left = session.layout.margins === 'binding' ? '18mm' : '12mm';
+        styleNode.textContent = '@page { size: A4 ' + orientation + '; margin: 12mm 12mm 12mm ' + left + '; }';
+        previousTitle = document.title;
+        document.title = 'Historique-comptes-' + safeFilePart(S.currentDossier().name) + '-' + session.report.startExercise + '-' + session.report.endExercise;
+      },
+      afterPrint: function () {
+        document.title = previousTitle || document.title;
+        if (!styleNode) return;
+        if (createdStyle && styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+        else styleNode.textContent = previousStyleText;
+      }
+    };
+  }
+
+  function openMultiYearHistoryPreview(session) {
+    var report = session.report || buildMultiYearHistoryReport(session);
+    session.report = report;
+    openReportPreview('Aperçu — Historique des comptes sur plusieurs exercices', multiYearHistoryPrintableHtml(session, report), multiYearHistoryPrintOptions(session));
+  }
+
+  function multiYearHistoryPreviewView(session) {
+    var report = session.report || buildMultiYearHistoryReport(session);
+    return generalBalanceReportSteps('preview', 'Étapes de préparation de l’Historique des comptes sur plusieurs exercices') +
+      pageHeader('Aperçu de l’Historique des comptes', 'Vérifiez les mouvements et les soldes progressifs avant impression.',
+        '<button type="button" class="btn btn-primary" data-multi-year-history-open-preview>Ouvrir l’aperçu avant impression</button>') +
+      '<div class="alert info"><div>Les colonnes sélectionnées sont reprises à l’écran et dans les exports. Impression après aperçu ; le style et les marges s’appliquent à la sortie imprimée.</div></div>' +
+      multiYearHistoryPrintableHtml(session, report) +
+      '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-multi-year-history-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-ghost" data-multi-year-history-back-selection>Modifier la sélection</button></div>';
+  }
+
+  function multiYearHistorySavedView(session) {
+    return generalBalanceReportSteps('preview', 'Étapes de préparation de l’Historique des comptes sur plusieurs exercices') +
+      pageHeader('Export prêt', 'Le fichier reprend les comptes, exercices et colonnes sélectionnés sans modifier les dossiers.', '') +
+      '<section class="card journal-lines-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
+        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-multi-year-history-open-preview>Aperçu</button><button type="button" class="btn btn-ghost" data-multi-year-history-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-multi-year-history-new-report>Nouvelle sélection</button></div></div></section>';
+  }
+
+  function viewMultiYearHistoryReport(backLink) {
+    var session = ensureMultiYearHistoryReportSession();
+    if (session.phase !== 'selection') session.report = buildMultiYearHistoryReport(session);
+    var content = session.phase === 'layout'
+      ? multiYearHistoryLayoutView(session)
+      : (session.phase === 'preview'
+        ? multiYearHistoryPreviewView(session)
+        : (session.phase === 'saved'
+          ? multiYearHistorySavedView(session)
+          : multiYearHistoryReportSelectionView(session, S.currentDossier())));
+    return '<div class="edition-report-detail-view general-balance-report-detail multi-year-history-report-detail">' + backLink + content + '</div>';
+  }
+
+  function bindMultiYearHistoryReport() {
+    var session = ensureMultiYearHistoryReportSession();
+    if (session.phase === 'selection') {
+      var selectionForm = $('#multi-year-history-selection-form');
+      if (!selectionForm) return;
+      selectionForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitMultiYearHistorySelection(selectionForm, session);
+      });
+      ['#multi-year-history-accounts', '#multi-year-history-start-exercise'].forEach(function (selector) {
+        var input = $(selector, selectionForm);
+        if (!input) return;
+        input.addEventListener('input', function () { updateMultiYearHistoryGeneratedLineCount(selectionForm); });
+        input.addEventListener('change', function () { updateMultiYearHistoryGeneratedLineCount(selectionForm); });
+      });
+      var pickerButton = $('[data-multi-year-history-picker]', selectionForm);
+      if (pickerButton) pickerButton.addEventListener('click', function () {
+        openGeneralBalanceAccountPicker($('#multi-year-history-accounts', selectionForm));
+      });
+      return;
+    }
+    if (session.phase === 'layout') {
+      var layoutForm = $('#multi-year-history-layout-form');
+      if (!layoutForm) return;
+      layoutForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitMultiYearHistoryLayout(layoutForm, session);
+      });
+      var backSelection = $('[data-multi-year-history-back-selection]');
+      if (backSelection) backSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+      return;
+    }
+    $$('[data-multi-year-history-open-preview]').forEach(function (button) {
+      button.addEventListener('click', function () { openMultiYearHistoryPreview(session); });
+    });
+    $$('[data-multi-year-history-back-layout]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'layout'; render(); });
+    });
+    $$('[data-multi-year-history-back-selection]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'selection'; render(); });
+    });
+    var newReportButton = $('[data-multi-year-history-new-report]');
+    if (newReportButton) newReportButton.addEventListener('click', function () {
+      multiYearHistoryReportSession = createMultiYearHistoryReportSession(S.currentDossier());
+      render();
+    });
+    if (session.phase === 'preview' && !session.previewOpened) {
+      session.previewOpened = true;
+      openMultiYearHistoryPreview(session);
     }
   }
 
@@ -14991,6 +15460,7 @@
     if (child.id === 'general-opening-balance') return viewOpeningBalanceReport(backLink);
     if (child.id === 'general-account-situation') return viewAccountSituationReport(backLink);
     if (child.id === 'general-ledger') return viewGeneralLedgerReport(backLink);
+    if (child.id === 'general-multiyear-history') return viewMultiYearHistoryReport(backLink);
     var inactive = child.status === 'inactive';
     var analytic = inactive && (child.section === 'analysis' || child.section === 'situations' || child.section === 'definitionsAnalytics' || child.id.indexOf('analytic-') === 0 || child.id === 'general-analytic-balance' || child.id === 'journal-analytic-center-totals');
     var noticeTitle = analytic ? 'Comptabilité analytique séparée' : (inactive ? 'Élément désactivé' : 'Sous-élément créé · écran à préciser');
@@ -15008,8 +15478,6 @@
       extra = 'Aucun registre de budget, de commande engagée ou de réalisation rapprochée n’est enregistré ; aucun disponible ni taux d’exécution n’est simulé.';
     } else if (child.id === 'general-aged-balance') {
       extra = 'Aucun registre de factures/règlements avec échéances et soldes ouverts n’est disponible pour calculer une ancienneté fiable.';
-    } else if (child.id === 'general-multiyear-history') {
-      extra = 'Les exercices sont stockés dans des dossiers distincts ; aucune série pluriannuelle n’est agrégée automatiquement.';
     } else if (child.id === 'general-opening-balance' || child.id === 'general-opening-journal' || child.id.indexOf('third-party-opening') === 0 || child.id.indexOf('currency-opening') === 0) {
       extra = 'Les reports restent dans le registre Reports à nouveau, séparé des écritures de journal ; cette carte ne les modifie pas.';
     } else if (child.id.indexOf('general-counterpart-') === 0) {
@@ -16421,6 +16889,7 @@
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && menuParams.c === 'journal-allocation-sheet') bindJournalAllocationSheet();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-balance') bindGeneralBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-ledger') bindGeneralLedgerReport();
+      if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-multiyear-history') bindMultiYearHistoryReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-summary-balance') bindGeneralSummaryBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-aged-balance') bindAgedBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-opening-balance') bindOpeningBalanceReport();
