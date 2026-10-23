@@ -1031,6 +1031,9 @@ body.report-preview-printing .report-preview-content .general-balance-report-pri
 .aged-balance-column-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .aged-balance-column-option { min-height: 40px; }
 .aged-balance-column-option input { flex: 0 0 auto; }
+.aged-balance-age-column-picker { min-width: 0; margin: 14px 0 0; padding: 12px; border: 1px solid #dce4df; border-radius: 8px; background: #fbfcfa; }
+.aged-balance-age-column-picker legend { padding: 0 6px; color: #354e47; font-size: .76rem; font-weight: 700; }
+.aged-balance-age-column-picker > .hint { display: block; margin: 0 0 8px; }
 .aged-balance-register-card { margin-top: 20px; }
 .aged-balance-register-card > .supplier-directory-head { align-items: center; }
 .aged-balance-register-card .supplier-directory-head h3 { margin: 2px 0 5px; color: #263f46; font-size: 1.02rem; }

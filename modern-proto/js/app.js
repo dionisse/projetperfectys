@@ -147,15 +147,18 @@
   var generalBalanceReportSession = null;
   var generalSummaryBalanceReportSession = null;
   var agedBalanceReportSession = null;
+  var AGED_BALANCE_AGE_COLUMN_DEFINITIONS = AgedBalanceReport.AGE_BUCKETS.map(function (bucket) {
+    return { key: 'age:' + bucket.key, label: bucket.label, defaultSelected: false, ageBucket: true };
+  });
   var AGED_BALANCE_COLUMN_DEFINITIONS = [
     { key: 'accountCode', label: 'Code du compte', defaultSelected: true },
     { key: 'accountTitle', label: 'Intitulé du compte', defaultSelected: true },
-    { key: 'thirdParty', label: 'Tiers', defaultSelected: true },
-    { key: 'ageAmounts', label: 'Montants dus · tranches d’ancienneté', defaultSelected: true },
+    { key: 'thirdParty', label: 'Tiers', defaultSelected: true }
+  ].concat(AGED_BALANCE_AGE_COLUMN_DEFINITIONS, [
     { key: 'totalDue', label: 'Total dû', defaultSelected: true },
     { key: 'advances', label: 'Avances', defaultSelected: true },
     { key: 'balance', label: 'Solde', defaultSelected: true }
-  ];
+  ]);
   var GENERAL_SUMMARY_BALANCE_COLUMN_DEFINITIONS = [
     { key: 'code', label: 'Code du compte', defaultSelected: true },
     { key: 'label', label: 'Intitulé', defaultSelected: true },
@@ -3003,6 +3006,7 @@
     });
     var accountHints = accounts.map(function (account) { return '<option value="' + esc(account.code) + '">' + esc(account.label) + '</option>'; }).join('');
     var registerCount = S.agedBalanceItems().length;
+    var standardColumns = AGED_BALANCE_COLUMN_DEFINITIONS.filter(function (column) { return !column.ageBucket; });
     return agedBalanceReportSteps('selection') +
       pageHeader('Balance âgée', 'Sélectionnez les comptes, la date d’arrêté, l’étendue de l’historique et les colonnes à éditer.', '') +
       '<div class="alert info aged-balance-source-note"><div><strong>Source de l’état :</strong> registre dédié de pièces ouvertes et règlements du dossier. Les montants par tranche sont bruts (montants initiaux des pièces) ; les règlements ne réduisent pas les tranches. La colonne « Solde » est calculée comme « Total dû − Avances ». Les écritures validées ne sont pas utilisées pour reconstituer des factures.</div></div>' +
@@ -3018,8 +3022,10 @@
             '</div><span class="hint">Les échéances antérieures à l’étendue choisie restent incluses sous « Antérieur ».</span></fieldset>' +
           '</div>' +
           '<div class="aged-balance-column-picker"><div class="journal-lines-section-heading"><h3>Colonnes</h3><span class="small muted">Cochez les informations à afficher</span></div><div class="aged-balance-column-grid">' +
-            AGED_BALANCE_COLUMN_DEFINITIONS.map(function (column) { return agedBalanceColumnOption(column, session); }).join('') +
-          '</div></div>' +
+            standardColumns.map(function (column) { return agedBalanceColumnOption(column, session); }).join('') +
+          '</div><fieldset class="aged-balance-age-column-picker"><legend>Montants dus · tranches d’ancienneté</legend><span class="hint">Choisissez les tranches à afficher avant l’édition. Aucune tranche n’est cochée par défaut.</span><div class="aged-balance-column-grid">' +
+            AGED_BALANCE_AGE_COLUMN_DEFINITIONS.map(function (column) { return agedBalanceColumnOption(column, session); }).join('') +
+          '</div></fieldset></div>' +
           '<div class="journal-lines-form-errors" id="aged-balance-selection-errors" role="alert" aria-live="polite"></div>' +
           '<div class="journal-lines-form-actions"><span class="small muted">' + registerCount + ' pièce(s) ouverte(s) dans le registre</span><button type="submit" class="btn btn-primary">Continuer vers la mise en page →</button></div>' +
         '</div></section>' +
@@ -3031,8 +3037,8 @@
     if (session.columns.accountCode) columns.push({ key: 'accountCode', label: 'Code du compte', text: true });
     if (session.columns.accountTitle) columns.push({ key: 'accountTitle', label: 'Intitulé du compte', text: true });
     if (session.columns.thirdParty) columns.push({ key: 'thirdParty', label: 'Tiers', text: true });
-    if (session.columns.ageAmounts) AgedBalanceReport.AGE_BUCKETS.forEach(function (bucket) {
-      columns.push({ key: 'age:' + bucket.key, label: bucket.label, text: false });
+    AGED_BALANCE_AGE_COLUMN_DEFINITIONS.forEach(function (column) {
+      if (session.columns[column.key]) columns.push({ key: column.key, label: column.label, text: false });
     });
     if (session.columns.totalDue) columns.push({ key: 'totalDue', label: 'Total dû', text: false });
     if (session.columns.advances) columns.push({ key: 'advances', label: 'Avances', text: false });
@@ -3244,7 +3250,7 @@
     if (!range || !AgedBalanceReport.RANGE_MONTHS[range.value]) errors.push('Choisissez une étendue de 1 à 6 mois ou de 1 à 5 ans.');
     if (!selectedColumns.length) errors.push('Sélectionnez au moins une colonne à éditer.');
     if (!selectedColumns.some(function (key) { return key === 'accountCode' || key === 'accountTitle' || key === 'thirdParty'; })) errors.push('Conservez au moins une colonne d’identification du compte ou du tiers.');
-    if (!selectedColumns.some(function (key) { return key === 'ageAmounts' || key === 'totalDue' || key === 'advances' || key === 'balance'; })) errors.push('Conservez au moins une colonne de montants.');
+    if (!selectedColumns.some(function (key) { return key.indexOf('age:') === 0 || key === 'totalDue' || key === 'advances' || key === 'balance'; })) errors.push('Conservez au moins une colonne de montants.');
     showGeneralBalanceReportErrors($('#aged-balance-selection-errors', form), errors);
     if (errors.length) return;
     session.filters.nature = nature.value;
