@@ -27,6 +27,7 @@
   var ThirdPartyBalanceReport = window.PerfectoThirdPartyBalanceReport;
   var ThirdPartyOpeningBalanceReport = window.PerfectoThirdPartyOpeningBalanceReport;
   var ThirdPartyAccountSituationReport = window.PerfectoThirdPartyAccountSituationReport;
+  var ThirdPartyNatureBreakdownReport = window.PerfectoThirdPartyNatureBreakdownReport;
   var FecImport = window.PerfectoFecImport;
   var BankStatement = window.PerfectoBankStatement;
   var BankStatementStorage = window.PerfectoBankStatementStorage;
@@ -167,9 +168,11 @@
   var thirdPartyBalanceReportSession = null;
   var thirdPartyOpeningBalanceReportSession = null;
   var thirdPartyAccountSituationReportSession = null;
+  var thirdPartyNatureBreakdownReportSession = null;
   var THIRD_PARTY_BALANCE_COLUMN_DEFINITIONS = ThirdPartyBalanceReport.COLUMN_DEFINITIONS.map(function (column) { return Object.assign({}, column); });
   var THIRD_PARTY_OPENING_BALANCE_COLUMN_DEFINITIONS = ThirdPartyOpeningBalanceReport.COLUMN_DEFINITIONS.map(function (column) { return Object.assign({}, column); });
   var THIRD_PARTY_ACCOUNT_SITUATION_COLUMN_DEFINITIONS = ThirdPartyAccountSituationReport.COLUMN_DEFINITIONS.map(function (column) { return Object.assign({}, column); });
+  var THIRD_PARTY_NATURE_BREAKDOWN_COLUMN_DEFINITIONS = ThirdPartyNatureBreakdownReport.COLUMN_DEFINITIONS.map(function (column) { return Object.assign({}, column); });
   var OPENING_BALANCE_COLUMN_DEFINITIONS = OpeningBalanceReport.COLUMN_DEFINITIONS.map(function (column) { return Object.assign({}, column); });
   var OPENING_BALANCE_JOURNAL_COLUMN_DEFINITIONS = OpeningBalanceJournalReport.COLUMN_DEFINITIONS.map(function (column) { return Object.assign({}, column); });
   var GENERAL_COUNTERPART_DETAIL_COLUMN_DEFINITIONS = GeneralCounterpartDetailReport.COLUMN_DEFINITIONS.map(function (column) { return Object.assign({}, column); });
@@ -792,6 +795,7 @@
     var isThirdPartyBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'third-parties' && parsed.params.c === 'third-party-balance';
     var isThirdPartyOpeningBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'third-parties' && parsed.params.c === 'third-party-opening-balance';
     var isThirdPartyAccountSituationReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'third-parties' && parsed.params.c === 'third-party-situation';
+    var isThirdPartyNatureBreakdownReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'third-parties' && parsed.params.c === 'third-party-nature-breakdown';
     if (!isGeneralBalanceReportRoute) generalBalanceReportSession = null;
     if (!isGeneralLedgerReportRoute) generalLedgerReportSession = null;
     if (!isGeneralCounterpartDetailReportRoute) generalCounterpartDetailReportSession = null;
@@ -808,6 +812,7 @@
     if (!isThirdPartyBalanceReportRoute) thirdPartyBalanceReportSession = null;
     if (!isThirdPartyOpeningBalanceReportRoute) thirdPartyOpeningBalanceReportSession = null;
     if (!isThirdPartyAccountSituationReportRoute) thirdPartyAccountSituationReportSession = null;
+    if (!isThirdPartyNatureBreakdownReportRoute) thirdPartyNatureBreakdownReportSession = null;
     var isJournalLinesReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'journals' &&
       (parsed.params.c === 'journal-lines' || parsed.params.c === 'journal-modified-pieces' || parsed.params.c === 'journal-unbalanced-pieces' || parsed.params.c === 'journal-entry-totals' || parsed.params.c === 'journal-individual-account-totals' || parsed.params.c === 'journal-summary-account-totals' || parsed.params.c === 'journal-third-party-totals' || parsed.params.c === 'journal-analytic-center-totals' || parsed.params.c === 'journal-currency-totals');
     if (!isJournalLinesReportRoute) {
@@ -5184,6 +5189,451 @@
     if (session.phase === 'preview' && !session.previewOpened) {
       session.previewOpened = true;
       openThirdPartyAccountSituationPreview(session);
+    }
+  }
+
+  /* ----------- Décomposition des soldes des tiers par nature ------------- */
+  function createThirdPartyNatureBreakdownReportSession(dossier) {
+    var columns = Object.create(null);
+    THIRD_PARTY_NATURE_BREAKDOWN_COLUMN_DEFINITIONS.forEach(function (column) { columns[column.key] = !!column.defaultSelected; });
+    return {
+      dossierId: dossier.id,
+      phase: 'selection',
+      filters: { nature: 'suppliers', thirdParties: '*', asOfDate: dossier.cycleEnd },
+      columns: columns,
+      layout: {
+        printer: 'system', style: 'plain8', orientation: 'landscape', margins: 'standard',
+        pageFirst: '', pageLast: '', parity: 'none', destination: 'preview'
+      },
+      report: null,
+      previewOpened: false,
+      exportFilename: '',
+      exportMessage: ''
+    };
+  }
+
+  function ensureThirdPartyNatureBreakdownReportSession() {
+    var dossier = S.currentDossier();
+    if (!thirdPartyNatureBreakdownReportSession || thirdPartyNatureBreakdownReportSession.dossierId !== dossier.id) {
+      thirdPartyNatureBreakdownReportSession = createThirdPartyNatureBreakdownReportSession(dossier);
+    }
+    return thirdPartyNatureBreakdownReportSession;
+  }
+
+  function buildThirdPartyNatureBreakdownReport(session) {
+    var dossier = S.currentDossier();
+    var extraction = AccountingCentralization.extractValidatedAuxiliaryMovements(
+      S.entries(), S.accounts(), dossier, { decimalPlaces: S.accountingConfiguration().decimalPlaces }
+    );
+    var accountNatures = S.generalAccountNaturesConfiguration();
+    return ThirdPartyNatureBreakdownReport.build({
+      nature: session.filters.nature,
+      thirdPartyRecords: journalLinesThirdPartyRecords(session.filters.nature),
+      thirdPartyMovements: extraction.ok ? extraction.movements : [],
+      openingBalances: S.openingBalances(),
+      accountNatureRows: accountNatures && accountNatures.rows,
+      sourceErrors: extraction.errors,
+      sourceWarnings: thirdPartyBalanceSourceWarnings(extraction),
+      thirdPartyFilter: session.filters.thirdParties,
+      cycleStart: dossier.cycleStart,
+      cycleEnd: dossier.cycleEnd,
+      asOfDate: session.filters.asOfDate,
+      decimalPlaces: S.accountingConfiguration().decimalPlaces
+    });
+  }
+
+  function thirdPartyNatureBreakdownColumnOption(column, session) {
+    return '<label class="journal-lines-column-option third-party-nature-breakdown-column-option">' +
+      '<input type="checkbox" data-third-party-nature-breakdown-column="' + esc(column.key) + '"' +
+        (session.columns[column.key] ? ' checked' : '') + '>' +
+      '<span><strong>' + esc(column.label) + '</strong></span></label>';
+  }
+
+  function thirdPartyNatureBreakdownNatureOption(nature, selectedNature) {
+    return '<label class="journal-lines-check-option third-party-nature-breakdown-nature-option">' +
+      '<input type="checkbox" data-third-party-nature-breakdown-nature value="' + esc(nature.key) + '"' +
+        (selectedNature === nature.key ? ' checked' : '') + '>' +
+      '<span><strong>' + esc(nature.partyLabel) + '</strong></span></label>';
+  }
+
+  function thirdPartyNatureBreakdownSelectionView(session, dossier) {
+    var nature = ThirdPartyNatureBreakdownReport.NATURES.find(function (item) { return item.key === session.filters.nature; }) || ThirdPartyNatureBreakdownReport.NATURES[1];
+    var columnGroups = [
+      ['thirdPartyCode', 'thirdPartyTitle', 'advancesAndCredits', 'unpaidInvoices'],
+      ['guaranteeRetentions', 'provisionedClaims', 'balance']
+    ];
+    var columnByKey = Object.create(null);
+    THIRD_PARTY_NATURE_BREAKDOWN_COLUMN_DEFINITIONS.forEach(function (column) { columnByKey[column.key] = column; });
+    var columnsHtml = columnGroups.map(function (group, index) {
+      return '<div class="third-party-nature-breakdown-column-stack" aria-label="Groupe de colonnes ' + (index + 1) + '">' +
+        group.map(function (key) { return thirdPartyNatureBreakdownColumnOption(columnByKey[key], session); }).join('') +
+      '</div>';
+    }).join('');
+    var natureOptions = ThirdPartyNatureBreakdownReport.NATURES.map(function (item) {
+      return thirdPartyNatureBreakdownNatureOption(item, nature.key);
+    }).join('');
+    var generatedLines = session.report && session.report.ok ? session.report.tierCount : 0;
+    return generalBalanceReportSteps('selection', 'Étapes de préparation de la Décomposition des soldes des tiers') +
+      pageHeader('Décomposition des soldes de tiers par nature', 'Choisissez le compte client ou fournisseur, les tiers, la date et les colonnes à imprimer.', '') +
+      '<div class="alert info third-party-nature-breakdown-source-note"><div><strong>Consultation seule.</strong> Les montants proviennent des reports explicitement liés et des mouvements auxiliaires des écritures validées. Les colonnes de détail suivent les rubriques de comptes paramétrées dans le dossier ; une rubrique sans comptes configurés reste vide. Les soldes affichés sont signés (Débit − Crédit) et le solde total inclut les comptes de tiers non classés dans les quatre rubriques. Aucun libellé libre n’est interprété comme une référence de tiers.</div></div>' +
+      '<form id="third-party-nature-breakdown-selection-form" novalidate>' +
+        '<section class="card journal-lines-card"><div class="panel">' +
+          '<div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div><span class="journal-lines-cycle-badge">Cycle ' + esc(dateLabel(dossier.cycleStart)) + ' — ' + esc(dateLabel(dossier.cycleEnd)) + '</span></div>' +
+          '<div class="third-party-nature-breakdown-filter-grid">' +
+            '<fieldset class="third-party-nature-breakdown-kind"><legend>Compte à décomposer</legend><div class="third-party-nature-breakdown-kind-options">' + natureOptions + '</div><p class="hint third-party-nature-breakdown-kind-hint">Sélectionnez un seul compte à la fois.</p></fieldset>' +
+            '<div class="field"><label for="third-party-nature-breakdown-parties" data-third-party-nature-breakdown-parties-label>' + esc(nature.label) + '</label><div class="journal-lines-picker-control"><input id="third-party-nature-breakdown-parties" name="thirdParties" type="text" value="' + esc(session.filters.thirdParties) + '" placeholder="*" autocomplete="off" required><button type="button" class="btn btn-ghost" data-third-party-nature-breakdown-picker aria-label="Parcourir les ' + esc(nature.label.toLocaleLowerCase('fr')) + '">Parcourir…</button></div><span class="hint">« * » sélectionne tous les tiers ; saisissez un ou plusieurs codes séparés par des virgules, ou utilisez Parcourir.</span></div>' +
+            '<div class="field"><label for="third-party-nature-breakdown-date">Date</label><input id="third-party-nature-breakdown-date" name="asOfDate" type="date" value="' + esc(session.filters.asOfDate) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required><span class="hint">Position arrêtée à la date incluse.</span></div>' +
+          '</div>' +
+        '</div></section>' +
+        '<section class="card journal-lines-card"><div class="panel">' +
+          '<div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
+          '<div class="third-party-nature-breakdown-column-grid">' + columnsHtml + '</div>' +
+        '</div></section>' +
+        '<div class="alert info third-party-nature-breakdown-line-count"><div>Lignes générées : <strong>' + openingBalanceReportCount(generatedLines) + '</strong></div></div>' +
+        '<div class="journal-lines-form-errors" id="third-party-nature-breakdown-selection-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="journal-lines-form-actions"><button type="submit" class="btn btn-primary">Mise en page <span aria-hidden="true">→</span></button></div>' +
+      '</form>';
+  }
+
+  function submitThirdPartyNatureBreakdownSelection(form, session) {
+    var errors = [];
+    var natureInputs = $$('[data-third-party-nature-breakdown-nature]', form);
+    var selectedNatures = natureInputs.filter(function (input) { return input.checked; });
+    var selectedNature = selectedNatures.length === 1 ? selectedNatures[0].value : '';
+    var partiesInput = $('#third-party-nature-breakdown-parties', form);
+    var dateInput = $('#third-party-nature-breakdown-date', form);
+    var selectedColumns = $$('[data-third-party-nature-breakdown-column]:checked', form).map(function (input) {
+      return input.getAttribute('data-third-party-nature-breakdown-column');
+    });
+    if (selectedNatures.length !== 1 || !ThirdPartyNatureBreakdownReport.NATURES.some(function (item) { return item.key === selectedNature; })) errors.push('Cochez une seule case : compte client ou compte fournisseur.');
+    if (!partiesInput || !String(partiesInput.value || '').trim()) errors.push('Indiquez un code de tiers ou * pour sélectionner tous les tiers.');
+    if (!dateInput || !dateInput.value) errors.push('Indiquez la date de la situation.');
+    if (!selectedColumns.length) errors.push('Sélectionnez au moins une colonne à imprimer.');
+    if (selectedColumns.indexOf('thirdPartyCode') === -1 && selectedColumns.indexOf('thirdPartyTitle') === -1) errors.push('Conservez au moins une colonne d’identification du tiers (code ou intitulé).');
+    if (!selectedColumns.some(function (key) { return key !== 'thirdPartyCode' && key !== 'thirdPartyTitle'; })) errors.push('Sélectionnez au moins une colonne de montant.');
+    showGeneralBalanceReportErrors($('#third-party-nature-breakdown-selection-errors', form), errors);
+    if (errors.length) return;
+    session.filters.nature = selectedNature;
+    session.filters.thirdParties = String(partiesInput.value || '*').trim();
+    session.filters.asOfDate = dateInput.value;
+    session.columns = Object.create(null);
+    THIRD_PARTY_NATURE_BREAKDOWN_COLUMN_DEFINITIONS.forEach(function (column) {
+      session.columns[column.key] = selectedColumns.indexOf(column.key) !== -1;
+    });
+    session.report = buildThirdPartyNatureBreakdownReport(session);
+    if (!session.report.ok) {
+      showGeneralBalanceReportErrors($('#third-party-nature-breakdown-selection-errors', form), session.report.errors);
+      return;
+    }
+    session.phase = 'layout';
+    session.previewOpened = false;
+    render();
+  }
+
+  function thirdPartyNatureBreakdownLeafColumns(session) {
+    return THIRD_PARTY_NATURE_BREAKDOWN_COLUMN_DEFINITIONS.filter(function (column) {
+      return !!session.columns[column.key];
+    }).map(function (column) {
+      return { key: column.key, label: column.label, exportLabel: column.exportLabel, text: column.text, balance: column.balance };
+    });
+  }
+
+  function thirdPartyNatureBreakdownValue(row, column, forSpreadsheet) {
+    if (column.text) return String(row[column.key] == null ? '' : row[column.key]);
+    if (row[column.key] == null) return '';
+    var value = Number(row[column.key]);
+    if (!Number.isFinite(value)) return '';
+    if (forSpreadsheet) return value;
+    return value ? amount(Math.abs(value)) + (value > 0 ? ' D' : ' C') : '—';
+  }
+
+  function thirdPartyNatureBreakdownExportMatrix(session, report, forSpreadsheet) {
+    var columns = thirdPartyNatureBreakdownLeafColumns(session);
+    var rows = (report.rows || []).map(function (row) {
+      return columns.map(function (column) { return thirdPartyNatureBreakdownValue(row, column, !!forSpreadsheet); });
+    });
+    if (report.rows && report.rows.length) {
+      var labelIndex = columns.findIndex(function (column) { return column.text; });
+      rows.push(columns.map(function (column, index) {
+        if (index === labelIndex) return 'Totaux';
+        if (column.text) return '';
+        var value = report.totals[column.key];
+        if (value == null) return '';
+        return forSpreadsheet ? Number(value) || 0 : (value ? amount(Math.abs(value)) + (value > 0 ? ' D' : ' C') : '—');
+      }));
+    }
+    return [columns.map(function (column) { return column.exportLabel; })].concat(rows);
+  }
+
+  function thirdPartyNatureBreakdownWarningsHtml(report) {
+    var warnings = Array.isArray(report.warnings) ? report.warnings : [];
+    if (!warnings.length) return '';
+    return '<div class="alert warning third-party-nature-breakdown-warnings"><div><strong>Limites des sources et du classement</strong><ul>' +
+      warnings.map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('') +
+    '</ul></div></div>';
+  }
+
+  function thirdPartyNatureBreakdownErrorsHtml(report) {
+    if (!report || report.ok || !Array.isArray(report.errors) || !report.errors.length) return '';
+    return '<div class="alert danger"><div><strong>Rapport indisponible</strong><ul>' +
+      report.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') +
+    '</ul></div></div>';
+  }
+
+  function thirdPartyNatureBreakdownTotalsHtml(columns, report) {
+    return '<tfoot><tr>' + columns.map(function (column, index) {
+      if (index === columns.findIndex(function (item) { return item.text; })) return '<th scope="row">Totaux</th>';
+      if (column.text) return '<td></td>';
+      var value = report.totals[column.key];
+      return '<td class="num">' + (value == null ? '' : (value ? esc(amount(Math.abs(value)) + (value > 0 ? ' D' : ' C')) : '—')) + '</td>';
+    }).join('') + '</tr></tfoot>';
+  }
+
+  function thirdPartyNatureBreakdownPrintableHtml(session, report) {
+    var columns = thirdPartyNatureBreakdownLeafColumns(session);
+    var bodyRows = (report.rows || []).map(function (row) {
+      return '<tr>' + columns.map(function (column) {
+        return '<td' + (column.text ? '' : ' class="num"') + '>' + esc(thirdPartyNatureBreakdownValue(row, column, false)) + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    var emptyRow = report.rows.length ? '' : '<tr><td colspan="' + Math.max(columns.length, 1) + '"><strong>Aucun tiers à restituer.</strong> Vérifiez la nature, la date et les références auxiliaires disponibles.</td></tr>';
+    var styleClass = session.layout.style === 'color10' ? 'is-color-style' : 'is-mono-style';
+    var caption = openingBalanceReportCount(report.tierCount) + (report.tierCount === 1 ? ' fiche de tiers' : ' fiches de tiers') +
+      ' · ' + openingBalanceReportCount(report.sourceMovementCount) + (report.sourceMovementCount === 1 ? ' mouvement source' : ' mouvements sources');
+    var accountLabel = report.nature === 'clients' ? 'Compte client' : 'Compte fournisseur';
+    return '<article class="general-balance-report-print third-party-nature-breakdown-print ' + styleClass + '">' +
+      '<header class="general-balance-print-heading"><p class="page-kicker">ÉDITIONS · TIERS</p><h2>Décomposition des soldes de tiers par nature</h2>' +
+        '<p>' + esc(S.currentDossier().name) + ' · Cycle ' + esc(dateLabel(report.cycleStart)) + ' — ' + esc(dateLabel(report.cycleEnd)) + '</p></header>' +
+      '<div class="general-balance-print-context"><span><strong>' + esc(accountLabel) + ' :</strong> ' + esc(report.natureLabel) + '</span>' +
+        '<span><strong>Tiers :</strong> ' + esc(session.filters.thirdParties === '*' ? 'Tous (*)' : session.filters.thirdParties) + '</span>' +
+        '<span><strong>Date :</strong> ' + esc(dateLabel(report.asOfDate)) + '</span></div>' +
+      '<p class="general-balance-print-basis">Montants nets en XOF (Débit − Crédit) · lecture seule · écritures validées et reports explicitement attribués. Les colonnes de détail utilisent les plages de comptes des rubriques du dossier ; le solde inclut le total de la fiche de tiers même si son compte n’est pas classé dans ces rubriques.</p>' +
+      thirdPartyNatureBreakdownWarningsHtml(report) +
+      '<div class="table-wrap general-balance-table-wrap"><table class="data-table general-balance-table third-party-nature-breakdown-table"><caption>' + esc(caption) + '</caption>' +
+        generalBalanceReportTableHead(columns) + '<tbody>' + (bodyRows || emptyRow) + '</tbody>' + (report.rows.length ? thirdPartyNatureBreakdownTotalsHtml(columns, report) : '') +
+      '</table></div></article>';
+  }
+
+  function thirdPartyNatureBreakdownLayoutView(session) {
+    var report = session.report || buildThirdPartyNatureBreakdownReport(session);
+    var resultSummary = openingBalanceReportCount(report.tierCount) + (report.tierCount === 1 ? ' fiche de tiers' : ' fiches de tiers') +
+      ' · ' + openingBalanceReportCount(report.sourceMovementCount) + (report.sourceMovementCount === 1 ? ' mouvement source' : ' mouvements sources') +
+      ' · position au ' + dateLabel(report.asOfDate);
+    return generalBalanceReportSteps('layout', 'Étapes de préparation de la Décomposition des soldes des tiers') +
+      pageHeader('Mise en page', 'Choisissez l’imprimante, le style, l’orientation, les marges, les pages et la destination.', '') +
+      '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(resultSummary) + '. Aucune fiche ni écriture ne sera modifiée.</div></div>' +
+      thirdPartyNatureBreakdownErrorsHtml(report) + thirdPartyNatureBreakdownWarningsHtml(report) +
+      '<form id="third-party-nature-breakdown-layout-form" novalidate><div class="journal-lines-settings-grid general-balance-settings-grid">' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="third-party-nature-breakdown-printer">Imprimante</label><select id="third-party-nature-breakdown-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante par défaut de Windows</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select><span class="hint">Le navigateur garde le choix final du périphérique ou du PDF.</span></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="third-party-nature-breakdown-style">Style du rapport</label><select id="third-party-nature-breakdown-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('third-party-nature-breakdown-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('third-party-nature-breakdown-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('third-party-nature-breakdown-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('third-party-nature-breakdown-margins', 'binding', 'Reliure', session.layout.margins === 'binding', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Pages</h3></div><div class="journal-lines-page-range"><div class="field"><label for="third-party-nature-breakdown-page-first">Première</label><input id="third-party-nature-breakdown-page-first" type="number" min="1" step="1" value="' + esc(session.layout.pageFirst) + '" placeholder="1"></div><span aria-hidden="true">à</span><div class="field"><label for="third-party-nature-breakdown-page-last">Dernière</label><input id="third-party-nature-breakdown-page-last" type="number" min="1" step="1" value="' + esc(session.layout.pageLast) + '" placeholder="Fin"></div></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Parité</h3></div><div class="field"><label for="third-party-nature-breakdown-parity">Pages</label><select id="third-party-nature-breakdown-parity"><option value="none"' + (session.layout.parity === 'none' ? ' selected' : '') + '>Aucune</option><option value="odd"' + (session.layout.parity === 'odd' ? ' selected' : '') + '>Impaire</option><option value="even"' + (session.layout.parity === 'even' ? ' selected' : '') + '>Paire</option></select></div></div></section>' +
+        '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
+          generalBalanceReportRadio('third-party-nature-breakdown-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
+          generalBalanceReportRadio('third-party-nature-breakdown-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
+          generalBalanceReportRadio('third-party-nature-breakdown-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('third-party-nature-breakdown-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
+        '</div></div></section>' +
+      '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire et en plein écran.</strong> La plage de pages et la parité sont à régler dans la boîte d’impression du navigateur si elles y sont proposées. Le choix final de l’imprimante ou du PDF reste dans le navigateur.</div></div>' +
+      '<div class="journal-lines-form-errors" id="third-party-nature-breakdown-layout-errors" role="alert" aria-live="polite"></div>' +
+      '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-third-party-nature-breakdown-back-selection>Retour à la sélection</button><button type="submit" class="btn btn-primary">Valider</button></div></form>';
+  }
+
+  function thirdPartyNatureBreakdownPreviewView(session) {
+    var report = session.report || buildThirdPartyNatureBreakdownReport(session);
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans PERFECTO';
+    return generalBalanceReportSteps('preview', 'Étapes de préparation de la Décomposition des soldes des tiers') +
+      pageHeader('Décomposition des soldes de tiers par nature', 'Vérifiez le classement et les montants avant impression ou export PDF.',
+        '<button type="button" class="btn btn-primary" data-third-party-nature-breakdown-open-preview>Ouvrir l’aperçu plein écran</button>') +
+      '<div class="alert info"><div><strong>Destination choisie :</strong> ' + esc(destination) + '. La position est arrêtée au ' + esc(dateLabel(report.asOfDate)) + ' ; la boîte d’impression ne s’ouvrira qu’après votre action depuis l’aperçu.</div></div>' +
+      thirdPartyNatureBreakdownErrorsHtml(report) + thirdPartyNatureBreakdownWarningsHtml(report) +
+      (report.rows.length ? '' : '<div class="alert warning"><div>Aucun tiers avec solde source attribuable ne correspond à la sélection et à la date.</div></div>') +
+      '<section class="card general-balance-preview-page third-party-nature-breakdown-preview-page"><div class="panel">' + thirdPartyNatureBreakdownPrintableHtml(session, report) + '</div></section>' +
+      '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-third-party-nature-breakdown-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-ghost" data-third-party-nature-breakdown-back-selection>Modifier la sélection</button></div>';
+  }
+
+  function thirdPartyNatureBreakdownSavedView(session) {
+    return generalBalanceReportSteps('preview', 'Étapes de préparation de la Décomposition des soldes des tiers') +
+      pageHeader('Export prêt', 'Le fichier a été préparé sans modifier les fiches ni les écritures comptables.', '') +
+      '<section class="card journal-lines-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
+        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-third-party-nature-breakdown-open-preview>Afficher l’aperçu plein écran</button><button type="button" class="btn btn-ghost" data-third-party-nature-breakdown-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-third-party-nature-breakdown-new-report>Nouvelle sélection</button></div></div></section>';
+  }
+
+  function generateThirdPartyNatureBreakdownFile(session, destination) {
+    var report = buildThirdPartyNatureBreakdownReport(session);
+    if (!report.ok) throw new Error((report.errors || ['La décomposition des soldes des tiers est invalide.']).join(' '));
+    session.report = report;
+    var spreadsheet = destination === 'table';
+    var matrix = thirdPartyNatureBreakdownExportMatrix(session, report, spreadsheet);
+    var extension = spreadsheet ? 'xlsx' : 'txt';
+    var filename = 'Decomposition-soldes-tiers-' + report.nature + '-' + safeFilePart(S.currentDossier().name) + '-' + report.asOfDate + '.' + extension;
+    var content = spreadsheet
+      ? AccountingExchange.exportTabularWorkbook('Décomposition des tiers', matrix[0], matrix.slice(1))
+      : generalBalanceReportTsv(matrix);
+    downloadFile(filename, content, spreadsheet ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/plain;charset=utf-8');
+    session.exportFilename = filename;
+    session.exportMessage = spreadsheet ? 'Téléchargement du classeur Excel lancé dans le navigateur.' : 'Téléchargement du fichier texte tabulé lancé dans le navigateur.';
+    session.phase = 'saved';
+    render();
+  }
+
+  function submitThirdPartyNatureBreakdownLayout(form, session) {
+    var errors = [];
+    var destination = $('input[name="third-party-nature-breakdown-destination"]:checked', form);
+    var orientation = $('input[name="third-party-nature-breakdown-orientation"]:checked', form);
+    var margins = $('input[name="third-party-nature-breakdown-margins"]:checked', form);
+    var first = $('#third-party-nature-breakdown-page-first', form).value;
+    var last = $('#third-party-nature-breakdown-page-last', form).value;
+    if (first && (!Number.isInteger(Number(first)) || Number(first) < 1)) errors.push('La première page doit être un entier supérieur ou égal à 1.');
+    if (last && (!Number.isInteger(Number(last)) || Number(last) < 1)) errors.push('La dernière page doit être un entier supérieur ou égal à 1.');
+    if (first && last && Number(first) > Number(last)) errors.push('La première page doit précéder ou égaler la dernière page.');
+    showGeneralBalanceReportErrors($('#third-party-nature-breakdown-layout-errors', form), errors);
+    if (errors.length) return;
+    session.layout.printer = $('#third-party-nature-breakdown-printer', form).value;
+    session.layout.style = $('#third-party-nature-breakdown-style', form).value;
+    session.layout.orientation = orientation ? orientation.value : 'landscape';
+    session.layout.margins = margins ? margins.value : 'standard';
+    session.layout.pageFirst = first;
+    session.layout.pageLast = last;
+    session.layout.parity = $('#third-party-nature-breakdown-parity', form).value;
+    session.layout.destination = destination ? destination.value : 'preview';
+    session.report = buildThirdPartyNatureBreakdownReport(session);
+    if (!session.report.ok) {
+      showGeneralBalanceReportErrors($('#third-party-nature-breakdown-layout-errors', form), session.report.errors);
+      return;
+    }
+    if (session.layout.destination === 'table' || session.layout.destination === 'file') {
+      try { generateThirdPartyNatureBreakdownFile(session, session.layout.destination); }
+      catch (error) {
+        session.phase = 'layout';
+        render();
+        toast('Export impossible : ' + (error && error.message || 'erreur inconnue.'), 'error');
+      }
+      return;
+    }
+    session.previewOpened = false;
+    session.phase = 'preview';
+    render();
+  }
+
+  function thirdPartyNatureBreakdownPrintOptions(session) {
+    var styleNode = null;
+    var previousStyleText = '';
+    var createdStyle = false;
+    var previousTitle = '';
+    return {
+      beforePrint: function () {
+        styleNode = $('#third-party-nature-breakdown-print-page-style');
+        createdStyle = !styleNode;
+        if (!styleNode) {
+          styleNode = document.createElement('style');
+          styleNode.id = 'third-party-nature-breakdown-print-page-style';
+          document.head.appendChild(styleNode);
+        } else previousStyleText = styleNode.textContent;
+        var orientation = session.layout.orientation === 'portrait' ? 'portrait' : 'landscape';
+        var left = session.layout.margins === 'binding' ? '18mm' : '12mm';
+        styleNode.textContent = '@page { size: A4 ' + orientation + '; margin: 12mm 12mm 12mm ' + left + '; }';
+        previousTitle = document.title;
+        document.title = 'Decomposition-soldes-tiers-' + session.report.nature + '-' + safeFilePart(S.currentDossier().name) + '-' + session.report.asOfDate;
+      },
+      afterPrint: function () {
+        document.title = previousTitle || document.title;
+        if (!styleNode) return;
+        if (createdStyle && styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+        else styleNode.textContent = previousStyleText;
+      }
+    };
+  }
+
+  function openThirdPartyNatureBreakdownPreview(session) {
+    var report = session.report || buildThirdPartyNatureBreakdownReport(session);
+    if (!report.ok) {
+      toast((report.errors || ['La décomposition des soldes des tiers est indisponible.']).join(' '), 'error');
+      return;
+    }
+    session.report = report;
+    openReportPreview('Aperçu — Décomposition des soldes des tiers', thirdPartyNatureBreakdownPrintableHtml(session, report), thirdPartyNatureBreakdownPrintOptions(session));
+  }
+
+  function viewThirdPartyNatureBreakdownReport(backLink) {
+    var session = ensureThirdPartyNatureBreakdownReportSession();
+    if (session.phase !== 'selection') session.report = buildThirdPartyNatureBreakdownReport(session);
+    var content = session.phase === 'layout'
+      ? thirdPartyNatureBreakdownLayoutView(session)
+      : (session.phase === 'preview'
+        ? thirdPartyNatureBreakdownPreviewView(session)
+        : (session.phase === 'saved'
+          ? thirdPartyNatureBreakdownSavedView(session)
+          : thirdPartyNatureBreakdownSelectionView(session, S.currentDossier())));
+    return '<div class="edition-report-detail-view general-balance-report-detail third-party-nature-breakdown-report-detail">' + backLink + content + '</div>';
+  }
+
+  function bindThirdPartyNatureBreakdownReport() {
+    var session = ensureThirdPartyNatureBreakdownReportSession();
+    if (session.phase === 'selection') {
+      var selectionForm = $('#third-party-nature-breakdown-selection-form');
+      if (!selectionForm) return;
+      var natureInputs = $$('[data-third-party-nature-breakdown-nature]', selectionForm);
+      var partiesInput = $('#third-party-nature-breakdown-parties', selectionForm);
+      natureInputs.forEach(function (input) {
+        input.addEventListener('change', function () {
+          if (!input.checked) {
+            input.checked = true;
+            return;
+          }
+          natureInputs.forEach(function (other) { if (other !== input) other.checked = false; });
+          session.filters.nature = input.value;
+          session.filters.thirdParties = '*';
+          if (partiesInput) partiesInput.value = '*';
+          var nature = ThirdPartyNatureBreakdownReport.NATURES.find(function (item) { return item.key === input.value; });
+          var label = $('[data-third-party-nature-breakdown-parties-label]', selectionForm);
+          if (label && nature) label.textContent = nature.label;
+          var picker = $('[data-third-party-nature-breakdown-picker]', selectionForm);
+          if (picker && nature) picker.setAttribute('aria-label', 'Parcourir les ' + nature.label.toLocaleLowerCase('fr'));
+        });
+      });
+      selectionForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitThirdPartyNatureBreakdownSelection(selectionForm, session);
+      });
+      var pickerButton = $('[data-third-party-nature-breakdown-picker]', selectionForm);
+      if (pickerButton) pickerButton.addEventListener('click', function () {
+        var checkedNature = $('[data-third-party-nature-breakdown-nature]:checked', selectionForm);
+        if (checkedNature) session.filters.nature = checkedNature.value;
+        if (partiesInput) thirdPartyBalanceReportPicker(partiesInput, session);
+      });
+      return;
+    }
+    if (session.phase === 'layout') {
+      var layoutForm = $('#third-party-nature-breakdown-layout-form');
+      if (!layoutForm) return;
+      layoutForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitThirdPartyNatureBreakdownLayout(layoutForm, session);
+      });
+      var backSelection = $('[data-third-party-nature-breakdown-back-selection]');
+      if (backSelection) backSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+      return;
+    }
+    $$('[data-third-party-nature-breakdown-open-preview]').forEach(function (button) {
+      button.addEventListener('click', function () { openThirdPartyNatureBreakdownPreview(session); });
+    });
+    $$('[data-third-party-nature-breakdown-back-layout]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'layout'; render(); });
+    });
+    $$('[data-third-party-nature-breakdown-back-selection]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'selection'; render(); });
+    });
+    var newReportButton = $('[data-third-party-nature-breakdown-new-report]');
+    if (newReportButton) newReportButton.addEventListener('click', function () {
+      thirdPartyNatureBreakdownReportSession = createThirdPartyNatureBreakdownReportSession(S.currentDossier());
+      render();
+    });
+    if (session.phase === 'preview' && !session.previewOpened) {
+      session.previewOpened = true;
+      openThirdPartyNatureBreakdownPreview(session);
     }
   }
 
@@ -18004,6 +18454,7 @@
     if (child.id === 'third-party-balance') return viewThirdPartyBalanceReport(backLink);
     if (child.id === 'third-party-opening-balance') return viewThirdPartyOpeningBalanceReport(backLink);
     if (child.id === 'third-party-situation') return viewThirdPartyAccountSituationReport(backLink);
+    if (child.id === 'third-party-nature-breakdown') return viewThirdPartyNatureBreakdownReport(backLink);
     var inactive = child.status === 'inactive';
     var analytic = inactive && (child.section === 'analysis' || child.section === 'situations' || child.section === 'definitionsAnalytics' || child.id.indexOf('analytic-') === 0 || child.id === 'general-analytic-balance' || child.id === 'journal-analytic-center-totals');
     var noticeTitle = analytic ? 'Comptabilité analytique séparée' : (inactive ? 'Élément désactivé' : 'Sous-élément créé · écran à préciser');
@@ -19443,6 +19894,7 @@
       if (menuParams.g === 'editions' && menuParams.t === 'third-parties' && menuParams.c === 'third-party-balance') bindThirdPartyBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'third-parties' && menuParams.c === 'third-party-opening-balance') bindThirdPartyOpeningBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'third-parties' && menuParams.c === 'third-party-situation') bindThirdPartyAccountSituationReport();
+      if (menuParams.g === 'editions' && menuParams.t === 'third-parties' && menuParams.c === 'third-party-nature-breakdown') bindThirdPartyNatureBreakdownReport();
       if (menuParams.g === 'parametres' && menuParams.t === 'dossier-configuration') bindAccountingConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'sections-accounts') bindAnalyticalSectionsConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'allocation-keys') bindAnalyticalAllocationKeys();
