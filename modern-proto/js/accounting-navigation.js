@@ -110,9 +110,9 @@
           ]
         },
         {
-          id: 'third-parties', label: 'Tiers', status: 'planned', reason: 'Les éditions sont structurées ci-dessous, mais les mouvements des pièces ne sont pas encore attribués aux fiches individuelles ; les paramètres et le rendu attendent vos captures.',
+          id: 'third-parties', label: 'Tiers', status: 'mixed', reason: 'La Balance des tiers est disponible pour les mouvements auxiliaires validés portant une référence explicite et non ambiguë ; les autres éditions restent en attente de données individualisées.',
           children: [
-            { id: 'third-party-balance', label: 'Balance des tiers', section: 'balances', status: 'planned', reason: 'Aucun solde individuel ne sera calculé avant que les pièces portent l’identifiant du tiers.' },
+            { id: 'third-party-balance', label: 'Balance des tiers', section: 'balances', status: 'active', reason: 'Sélection de la nature et des tiers, période, colonnes, mise en page, aperçu, export Excel/TXT et impression. Les mouvements proviennent uniquement des écritures validées portant une référence auxiliaire explicite non ambiguë ; les reports d’ouverture ne sont repris que s’ils portent un identifiant/code tiers explicite.' },
             { id: 'third-party-opening-balance', label: 'Balance d’ouverture', section: 'balances', status: 'planned', reason: 'Le registre Reports à nouveau ne contient pas encore une balance auxiliaire individualisée ; format à définir après capture.' },
             { id: 'third-party-situation', label: 'Situation des comptes', section: 'balances', status: 'planned', reason: 'La période, les colonnes et le niveau de détail seront définis à partir de votre capture.' },
             { id: 'third-party-nature-breakdown', label: 'Décomposition des soldes par nature (clients/fournisseurs)', section: 'balances', status: 'planned', reason: 'Les comptes collectifs existants sont consultables ; la décomposition auxiliaire clients/fournisseurs attend des mouvements identifiés par tiers.' },

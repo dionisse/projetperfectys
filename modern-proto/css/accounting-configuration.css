@@ -979,6 +979,22 @@ body.report-preview-open { overflow: hidden; }
 .general-counterpart-total-print.is-mono-style .general-counterpart-total-table,
 .general-counterpart-total-print.is-mono-style .general-counterpart-total-table thead th { color: #111 !important; background: #fff !important; }
 .general-counterpart-total-print.is-color-style .general-counterpart-total-table thead th { color: #1d4c3d !important; background: #edf5f0 !important; }
+.third-party-balance-source-note { margin: 0 0 14px; line-height: 1.55; }
+.third-party-balance-filter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.third-party-balance-column-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 26px; }
+.third-party-balance-column-stack { display: grid; align-content: start; gap: 7px; min-width: 0; }
+.third-party-balance-column-option { min-height: 38px; }
+.third-party-balance-column-option small { display: block; margin-top: 2px; color: #748078; font-size: .68rem; line-height: 1.35; }
+.third-party-balance-warnings { margin: 12px 0; }
+.third-party-balance-warnings ul { margin: 6px 0 4px 18px; }
+.third-party-balance-picker-option small { display: block; margin-top: 2px; color: #738078; font-size: .68rem; }
+.third-party-balance-table { width: 100%; min-width: 0 !important; table-layout: auto; }
+.third-party-balance-table th, .third-party-balance-table td { padding: 6px 8px !important; }
+.third-party-balance-table .num { text-align: right !important; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.third-party-balance-table thead th { white-space: normal !important; }
+.third-party-balance-print.is-mono-style .third-party-balance-table,
+.third-party-balance-print.is-mono-style .third-party-balance-table thead th { color: #111 !important; background: #fff !important; }
+.third-party-balance-print.is-color-style .third-party-balance-table thead th { color: #1d4c3d !important; background: #edf5f0 !important; }
 .multi-year-history-source-note { margin: 0 0 14px; line-height: 1.55; }
 .multi-year-history-source-warning { margin: 0 0 14px; line-height: 1.5; }
 .multi-year-history-source-warning ul,
@@ -1101,6 +1117,8 @@ body.report-preview-open { overflow: hidden; }
   .general-counterpart-detail-column-grid,
   .general-counterpart-total-filter-grid,
   .general-counterpart-total-column-grid,
+  .third-party-balance-filter-grid,
+  .third-party-balance-column-grid,
   .multi-year-history-filter-grid { grid-template-columns: minmax(0, 1fr); }
   .general-ledger-column-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .multi-year-history-column-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
