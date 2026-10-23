@@ -495,7 +495,11 @@ assert.match(appSource, /child\.id === 'general-aged-balance'\) return viewAgedB
 assert.match(appSource, /menuParams\.g === 'editions' && menuParams\.t === 'general-accounts' && menuParams\.c === 'general-aged-balance'\) bindAgedBalanceReport\(\)/);
 assert.match(appSource, /function submitAgedBalanceSelection\([\s\S]*session\.phase = 'layout'[\s\S]*function openAgedBalanceItemModal/);
 assert.match(appSource, /function openAgedBalanceItemModal\([\s\S]*agedBalance\.items\.create[\s\S]*S\.createAgedBalanceItem/);
-assert.match(appSource, /function openAgedBalanceReportPreview\([\s\S]*agedBalance\.print[\s\S]*openReportPreview\('Aperçu — Balance âgée'/);
+assert.match(appSource, /function agedBalanceReportPreviewView\([\s\S]*report-preview-overlay aged-balance-preview-overlay[\s\S]*aria-modal="true"[\s\S]*report-preview-sheet aged-balance-preview-sheet/);
+assert.match(appSource, /if \(session\.phase === 'preview'\) return agedBalanceReportPreviewView\(session\)/);
+assert.match(appSource, /function printAgedBalanceReport\([\s\S]*agedBalance\.print[\s\S]*printReportPreview\(overlay, agedBalancePrintOptions\(session\)\)/);
+assert.match(appSource, /function bindAgedBalanceReport\([\s\S]*aged-balance-preview-open[\s\S]*data-aged-balance-close-preview[\s\S]*event\.key === 'Escape'/);
+assert.match(configurationCss, /body\.aged-balance-preview-open\s*\{\s*overflow:\s*hidden[\s\S]*\.aged-balance-preview-overlay\s*\{\s*padding:\s*0[\s\S]*\.report-preview-sheet\.aged-balance-preview-sheet\s*\{[^}]*max-width:\s*none/);
 assert.ok(htmlSource.indexOf('js/aged-balance-report.js') < htmlSource.indexOf('js/app.js'));
 assert.match(serviceWorkerSource, /\.\/js\/aged-balance-report\.js/);
 assert.match(configurationCss, /\.aged-balance-register-table[\s\S]*\.aged-balance-report-table/);
@@ -676,7 +680,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v102/);
+assert.match(serviceWorkerSource, /perfecto-static-v103/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

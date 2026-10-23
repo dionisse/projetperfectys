@@ -753,7 +753,10 @@
     var isAgedBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-aged-balance';
     if (!isGeneralBalanceReportRoute) generalBalanceReportSession = null;
     if (!isGeneralSummaryBalanceReportRoute) generalSummaryBalanceReportSession = null;
-    if (!isAgedBalanceReportRoute) agedBalanceReportSession = null;
+    if (!isAgedBalanceReportRoute) {
+      agedBalanceReportSession = null;
+      if (document.body) document.body.classList.remove('aged-balance-preview-open');
+    }
     var isJournalLinesReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'journals' &&
       (parsed.params.c === 'journal-lines' || parsed.params.c === 'journal-modified-pieces' || parsed.params.c === 'journal-unbalanced-pieces' || parsed.params.c === 'journal-entry-totals' || parsed.params.c === 'journal-individual-account-totals' || parsed.params.c === 'journal-summary-account-totals' || parsed.params.c === 'journal-third-party-totals' || parsed.params.c === 'journal-analytic-center-totals' || parsed.params.c === 'journal-currency-totals');
     if (!isJournalLinesReportRoute) {
@@ -3153,30 +3156,35 @@
   function agedBalanceReportPreviewView(session) {
     var report = session.report || buildAgedBalanceReport(session);
     session.report = report;
-    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans PERFECTO';
-    return agedBalanceReportSteps('preview') +
-      pageHeader('Aperçu — Balance âgée', 'Relisez l’état. La boîte d’impression du navigateur ne s’ouvre qu’après votre action.',
-        '<button type="button" class="btn btn-primary" data-action="aged-balance-print">Ouvrir l’aperçu avant impression</button>') +
-      '<div class="alert info"><div><strong>Destination choisie :</strong> ' + esc(destination) + '. Aucune pièce ni écriture comptable n’est modifiée.</div></div>' +
-      (report.rows.length ? '' : '<div class="alert warning"><div>Aucune pièce ne correspond à la sélection. Vous pouvez revenir au registre pour saisir ou vérifier les pièces ouvertes.</div></div>') +
-      '<section class="card general-balance-preview-page aged-balance-preview-page"><div class="panel">' + agedBalancePrintableHtml(session, report) + '</div></section>' +
-      '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-aged-balance-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-ghost" data-aged-balance-back-selection>Modifier la sélection et le registre</button></div>';
+    return '<div class="report-preview-overlay aged-balance-preview-overlay" role="dialog" aria-modal="true" aria-label="Aperçu — Balance âgée" tabindex="-1">' +
+      '<div class="report-preview-window aged-balance-preview-window">' +
+        '<div class="report-preview-toolbar aged-balance-preview-toolbar"><span class="report-preview-toolbar-title">Aperçu — Balance âgée</span>' +
+          '<div class="report-preview-toolbar-actions"><button type="button" class="btn btn-ghost btn-sm" data-aged-balance-close-preview>Fermer l’aperçu</button><button type="button" class="btn btn-primary btn-sm" data-action="aged-balance-print">Imprimer</button></div>' +
+        '</div>' +
+        '<div class="report-preview-scroll aged-balance-preview-scroll"><div class="report-preview-sheet aged-balance-preview-sheet">' + reportPreviewIdentityHtml() +
+          '<div class="report-preview-content">' +
+            (report.rows.length ? '' : '<div class="alert warning"><div>Aucune pièce ne correspond à la sélection. Vous pouvez fermer l’aperçu et vérifier le registre des pièces ouvertes.</div></div>') +
+            agedBalancePrintableHtml(session, report) +
+          '</div>' +
+        '</div></div>' +
+      '</div>' +
+    '</div>';
   }
 
   function agedBalanceReportSavedView(session) {
     return agedBalanceReportSteps('saved') +
       pageHeader('Export prêt — Balance âgée', 'Le fichier a été préparé à partir du registre sans modifier les écritures comptables.', '') +
       '<section class="card journal-lines-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
-        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-primary" data-action="aged-balance-print">Afficher l’aperçu</button><button type="button" class="btn btn-ghost" data-aged-balance-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-aged-balance-new-report>Nouvelle sélection</button></div></div></section>';
+        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-primary" data-aged-balance-show-preview>Afficher l’aperçu</button><button type="button" class="btn btn-ghost" data-aged-balance-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-aged-balance-new-report>Nouvelle sélection</button></div></div></section>';
   }
 
   function viewAgedBalanceReport(backLink) {
     var session = ensureAgedBalanceReportSession();
     if (session.phase !== 'selection') session.report = buildAgedBalanceReport(session);
+    if (session.phase === 'preview') return agedBalanceReportPreviewView(session);
     var content = session.phase === 'layout'
       ? agedBalanceReportLayoutView(session)
-      : (session.phase === 'preview' ? agedBalanceReportPreviewView(session) :
-        (session.phase === 'saved' ? agedBalanceReportSavedView(session) : agedBalanceReportSelectionView(session)));
+      : (session.phase === 'saved' ? agedBalanceReportSavedView(session) : agedBalanceReportSelectionView(session));
     return '<div class="edition-report-detail-view aged-balance-report-detail">' + backLink + content + '</div>';
   }
 
@@ -3209,14 +3217,17 @@
     };
   }
 
-  function openAgedBalanceReportPreview(session) {
+  function printAgedBalanceReport(session) {
     if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'agedBalance.print', accountingAccessContext(S.currentDossier()))) {
       toast('Impression refusée : le droit « Imprimer la balance âgée » n’est pas accordé.', 'warning');
       return;
     }
-    var report = session.report || buildAgedBalanceReport(session);
-    session.report = report;
-    openReportPreview('Aperçu — Balance âgée', agedBalancePrintableHtml(session, report), agedBalancePrintOptions(session));
+    var overlay = $('.aged-balance-preview-overlay');
+    if (!overlay) {
+      toast('Ouvrez l’aperçu plein écran avant de lancer l’impression.', 'warning');
+      return;
+    }
+    printReportPreview(overlay, agedBalancePrintOptions(session));
   }
 
   function submitAgedBalanceSelection(form, session) {
@@ -3417,6 +3428,7 @@
 
   function bindAgedBalanceReport() {
     var session = ensureAgedBalanceReportSession();
+    if (document.body) document.body.classList.toggle('aged-balance-preview-open', session.phase === 'preview');
     if (session.phase === 'selection') {
       var selectionForm = $('#aged-balance-selection-form');
       if (selectionForm) {
@@ -3444,14 +3456,54 @@
       });
       var backToSelection = $('[data-aged-balance-back-selection]');
       if (backToSelection) backToSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
-    } else {
+    } else if (session.phase === 'preview') {
+      var previewOverlay = $('.aged-balance-preview-overlay');
+      var closePreview = function () {
+        if (document.body) document.body.classList.remove('aged-balance-preview-open');
+        session.phase = 'layout';
+        render();
+      };
+      var closePreviewButton = $('[data-aged-balance-close-preview]');
+      if (closePreviewButton) {
+        closePreviewButton.addEventListener('click', closePreview);
+        closePreviewButton.focus();
+      }
+      if (previewOverlay) {
+        previewOverlay.addEventListener('click', function (event) {
+          if (event.target === previewOverlay) closePreview();
+        });
+        previewOverlay.addEventListener('keydown', function (event) {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            closePreview();
+            return;
+          }
+          if (event.key !== 'Tab') return;
+          var focusable = Array.prototype.slice.call(previewOverlay.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+          if (!focusable.length) return;
+          var first = focusable[0];
+          var last = focusable[focusable.length - 1];
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+          }
+        });
+      }
+    } else if (session.phase === 'saved') {
       var backToLayout = $('[data-aged-balance-back-layout]');
       if (backToLayout) backToLayout.addEventListener('click', function () { session.phase = 'layout'; render(); });
-      var backToSelection = $('[data-aged-balance-back-selection]');
-      if (backToSelection) backToSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
       var newReport = $('[data-aged-balance-new-report]');
       if (newReport) newReport.addEventListener('click', function () {
         agedBalanceReportSession = createAgedBalanceReportSession(S.currentDossier());
+        render();
+      });
+      var showPreview = $('[data-aged-balance-show-preview]');
+      if (showPreview) showPreview.addEventListener('click', function () {
+        session.report = buildAgedBalanceReport(session);
+        session.phase = 'preview';
         render();
       });
     }
@@ -3476,7 +3528,7 @@
       toast('Règlement supprimé du registre dédié.', 'success');
       render();
     });
-    bindAgedBalanceAction('[data-action="aged-balance-print"]', 'aged-balance-print', function () { openAgedBalanceReportPreview(session); });
+    bindAgedBalanceAction('[data-action="aged-balance-print"]', 'aged-balance-print', function () { printAgedBalanceReport(session); });
     bindAgedBalanceAction('[data-action="aged-balance-export"]', 'aged-balance-export', function () {
       if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'agedBalance.export', accountingAccessContext(S.currentDossier()))) {
         toast('Export refusé : le droit « Exporter la balance âgée » n’est pas accordé.', 'warning');

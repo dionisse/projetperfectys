@@ -1053,6 +1053,12 @@ body.report-preview-printing .report-preview-content .general-balance-report-pri
 .aged-balance-layout-summary { margin-bottom: 16px; }
 .aged-balance-inline-preview { margin-top: 18px; }
 .aged-balance-preview-page > .panel { overflow: hidden; }
+body.aged-balance-preview-open { overflow: hidden; }
+.aged-balance-preview-overlay { padding: 0; background: #eef2ef; backdrop-filter: none; }
+.aged-balance-preview-window { border: 0; border-radius: 0; box-shadow: none; }
+.aged-balance-preview-toolbar { min-height: 56px; padding: 10px 18px; }
+.aged-balance-preview-scroll { padding: 0; }
+.report-preview-sheet.aged-balance-preview-sheet { width: 100%; max-width: none; min-height: calc(100vh - 56px); min-height: calc(100dvh - 56px); box-sizing: border-box; margin: 0; padding: clamp(18px, 2.4vw, 36px); border: 0; border-radius: 0; box-shadow: none; }
 .aged-balance-print-report { width: 100%; color: #22332c; background: #fff; font-family: Arial, sans-serif; }
 .aged-balance-print-heading { margin: 0 0 12px; }
 .aged-balance-print-heading .page-kicker { color: #587065; font-size: 8pt; font-weight: 700; letter-spacing: .08em; }
