@@ -81,6 +81,7 @@ test('filtre les dates inclusivement et calcule le solde depuis les reports et Ã
   assert.equal(supplierRows[0].balance, -55);
   assert.equal(supplierRows[1].balance, -65);
   assert.equal(supplierRows[0].counterpart, '521000 â€” Banque');
+  assert.deepEqual(supplierRows[0].counterpartCodes, ['521000']);
   assert.equal(supplierRows[0].reference, 'VIR-EXT-1');
   assert.equal(supplierRows[1].reference, 'FACT-REF-2');
   assert.equal(report.lineCount, 4);

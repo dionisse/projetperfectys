@@ -199,6 +199,7 @@
           credit: creditMinor / factor,
           debitMinor: debitMinor,
           creditMinor: creditMinor,
+          counterpartCodes: counterpartCodes.slice(),
           rowType: 'movement'
         });
         var entryKey = String(entry.id || entry.reference || ('entry-' + entryIndex));

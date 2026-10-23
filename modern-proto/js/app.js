@@ -18,6 +18,7 @@
   var GeneralBalanceReport = window.PerfectoGeneralBalanceReport;
   var AccountSituationReport = window.PerfectoAccountSituationReport;
   var GeneralLedgerReport = window.PerfectoGeneralLedgerReport;
+  var GeneralCounterpartDetailReport = window.PerfectoGeneralCounterpartDetailReport;
   var MultiYearHistoryReport = window.PerfectoMultiYearHistoryReport;
   var OpeningBalanceReport = window.PerfectoOpeningBalanceReport;
   var OpeningBalanceJournalReport = window.PerfectoOpeningBalanceJournalReport;
@@ -151,6 +152,7 @@
   var journalLinesReportMode = 'standard';
   var generalBalanceReportSession = null;
   var generalLedgerReportSession = null;
+  var generalCounterpartDetailReportSession = null;
   var multiYearHistoryReportSession = null;
   var generalSummaryBalanceReportSession = null;
   var openingBalanceReportSession = null;
@@ -159,6 +161,7 @@
   var agedBalanceReportSession = null;
   var OPENING_BALANCE_COLUMN_DEFINITIONS = OpeningBalanceReport.COLUMN_DEFINITIONS.map(function (column) { return Object.assign({}, column); });
   var OPENING_BALANCE_JOURNAL_COLUMN_DEFINITIONS = OpeningBalanceJournalReport.COLUMN_DEFINITIONS.map(function (column) { return Object.assign({}, column); });
+  var GENERAL_COUNTERPART_DETAIL_COLUMN_DEFINITIONS = GeneralCounterpartDetailReport.COLUMN_DEFINITIONS.map(function (column) { return Object.assign({}, column); });
   var ACCOUNT_SITUATION_COLUMN_DEFINITIONS = AccountSituationReport.COLUMN_DEFINITIONS.map(function (column) { return Object.assign({}, column); });
   var AGED_BALANCE_AGE_COLUMN_DEFINITIONS = AgedBalanceReport.AGE_BUCKETS.map(function (bucket) {
     return { key: 'age:' + bucket.key, label: bucket.label, defaultSelected: false, ageBucket: true };
@@ -766,6 +769,7 @@
     var route = parsed.route;
     var isGeneralBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-balance';
     var isGeneralLedgerReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-ledger';
+    var isGeneralCounterpartDetailReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-detail';
     var isMultiYearHistoryReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-multiyear-history';
     var isGeneralSummaryBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-summary-balance';
     var isOpeningBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-opening-balance';
@@ -774,6 +778,7 @@
     var isAgedBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-aged-balance';
     if (!isGeneralBalanceReportRoute) generalBalanceReportSession = null;
     if (!isGeneralLedgerReportRoute) generalLedgerReportSession = null;
+    if (!isGeneralCounterpartDetailReportRoute) generalCounterpartDetailReportSession = null;
     if (!isMultiYearHistoryReportRoute) multiYearHistoryReportSession = null;
     if (!isGeneralSummaryBalanceReportRoute) generalSummaryBalanceReportSession = null;
     if (!isOpeningBalanceReportRoute) openingBalanceReportSession = null;
@@ -5445,6 +5450,429 @@
     if (session.phase === 'preview' && !session.previewOpened) {
       session.previewOpened = true;
       openGeneralLedgerReportPreview(session);
+    }
+  }
+
+  /* --------------- Détail des contreparties d’un compte ------------------ */
+  function createGeneralCounterpartDetailReportSession(dossier) {
+    var columns = Object.create(null);
+    GENERAL_COUNTERPART_DETAIL_COLUMN_DEFINITIONS.forEach(function (column) {
+      columns[column.key] = !!column.defaultSelected;
+    });
+    return {
+      dossierId: dossier.id,
+      phase: 'selection',
+      filters: { accounts: '*', counterpartAccounts: '*', from: dossier.cycleStart, to: dossier.cycleEnd },
+      columns: columns,
+      layout: {
+        printer: 'system', style: 'plain8', orientation: 'landscape', margins: 'standard',
+        pageFirst: '', pageLast: '', parity: 'none', destination: 'preview'
+      },
+      report: null,
+      previewOpened: false,
+      exportFilename: '',
+      exportMessage: ''
+    };
+  }
+
+  function ensureGeneralCounterpartDetailReportSession() {
+    var dossier = S.currentDossier();
+    if (!generalCounterpartDetailReportSession || generalCounterpartDetailReportSession.dossierId !== dossier.id) {
+      generalCounterpartDetailReportSession = createGeneralCounterpartDetailReportSession(dossier);
+    }
+    return generalCounterpartDetailReportSession;
+  }
+
+  function buildGeneralCounterpartDetailReport(session) {
+    var dossier = S.currentDossier();
+    var configuration = S.accountingConfiguration();
+    return GeneralCounterpartDetailReport.build({
+      accounts: S.accounts(),
+      entries: S.postedEntries(),
+      openingBalances: [],
+      journals: S.journals(),
+      cycleStart: dossier.cycleStart,
+      cycleEnd: dossier.cycleEnd,
+      from: session.filters.from,
+      to: session.filters.to,
+      accountFilter: session.filters.accounts,
+      counterpartFilter: session.filters.counterpartAccounts,
+      decimalPlaces: configuration.decimalPlaces
+    });
+  }
+
+  function generalCounterpartDetailColumnOption(column, session) {
+    return '<label class="journal-lines-column-option general-counterpart-detail-column-option">' +
+      '<input type="checkbox" data-general-counterpart-detail-column="' + esc(column.key) + '"' +
+        (session.columns[column.key] ? ' checked' : '') + '>' +
+      '<span><strong>' + esc(column.label) + '</strong></span></label>';
+  }
+
+  function generalCounterpartDetailReportSelectionView(session, dossier) {
+    var groups = [
+      ['date', 'journal', 'piece'],
+      ['counterpart', 'debit', 'credit'],
+      ['label']
+    ];
+    var columnsByKey = Object.create(null);
+    GENERAL_COUNTERPART_DETAIL_COLUMN_DEFINITIONS.forEach(function (column) { columnsByKey[column.key] = column; });
+    var columnStacks = groups.map(function (group) {
+      return '<div class="general-counterpart-detail-column-stack">' + group.map(function (key) {
+        return generalCounterpartDetailColumnOption(columnsByKey[key], session);
+      }).join('') + '</div>';
+    }).join('');
+    var report = buildGeneralCounterpartDetailReport(session);
+    var generatedLineCount = report.ok ? openingBalanceReportCount(report.lineCount) : '—';
+    return generalBalanceReportSteps('selection', 'Étapes de préparation du Détail des contreparties d’un compte') +
+      pageHeader('Détail des contreparties d’un compte', 'Sélectionnez les comptes, les contreparties et la période, puis choisissez la mise en page.', '') +
+      '<div class="alert info general-counterpart-detail-source-note"><div><strong>Lecture seule.</strong> Les mouvements proviennent des écritures validées du dossier. Une contrepartie désigne un autre compte distinct présent dans la même pièce. Pour une pièce multiligne, le rapport liste les comptes associés sans répartir les montants ; Débit et Crédit restent ceux de la ligne du compte détaillé. Les brouillons sont exclus.</div></div>' +
+      '<form id="general-counterpart-detail-selection-form" novalidate>' +
+        '<section class="card journal-lines-card"><div class="panel">' +
+          '<div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div><span class="journal-lines-cycle-badge">Cycle ' + esc(dateLabel(dossier.cycleStart)) + ' — ' + esc(dateLabel(dossier.cycleEnd)) + '</span></div>' +
+          '<div class="general-counterpart-detail-filter-grid">' +
+            '<div class="field"><label for="general-counterpart-detail-accounts">Comptes à détailler</label><div class="journal-lines-picker-control"><input id="general-counterpart-detail-accounts" name="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou 401*; 411100" autocomplete="off" required><button type="button" class="btn btn-ghost" data-general-counterpart-detail-picker="accounts" aria-label="Choisir les comptes à détailler">…</button></div><span class="hint">« * » sélectionne tous les comptes ; un code ou préfixe avec * peut être saisi.</span></div>' +
+            '<div class="field"><label for="general-counterpart-detail-counterparts">Comptes de contrepartie</label><div class="journal-lines-picker-control"><input id="general-counterpart-detail-counterparts" name="counterparts" type="text" value="' + esc(session.filters.counterpartAccounts) + '" placeholder="* ou 512*; 401100" autocomplete="off" required><button type="button" class="btn btn-ghost" data-general-counterpart-detail-picker="counterparts" aria-label="Choisir les comptes de contrepartie">…</button></div><span class="hint">Le filtre porte sur les autres codes présents dans la même pièce.</span></div>' +
+            '<div class="field"><label for="general-counterpart-detail-from">Début</label><input id="general-counterpart-detail-from" name="from" type="date" value="' + esc(session.filters.from) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required></div>' +
+            '<div class="field"><label for="general-counterpart-detail-to">Fin</label><input id="general-counterpart-detail-to" name="to" type="date" value="' + esc(session.filters.to) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required></div>' +
+          '</div>' +
+          '<div class="journal-lines-section-heading general-counterpart-detail-columns-heading"><h3>Colonnes à imprimer</h3></div>' +
+          '<div class="general-counterpart-detail-column-grid">' + columnStacks + '</div>' +
+          '<div class="general-ledger-generated-lines general-counterpart-detail-generated-lines" data-general-counterpart-detail-generated-lines role="status" aria-live="polite" aria-label="' + esc(report.ok ? report.lineCount + ' lignes générées' : 'Nombre de lignes indisponible') + '">Lignes générées : ' + esc(generatedLineCount) + '</div>' +
+        '</div></section>' +
+        '<div class="journal-lines-form-errors" id="general-counterpart-detail-selection-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="journal-lines-form-actions"><button type="submit" class="btn btn-primary">Mise en page <span aria-hidden="true">→</span></button></div>' +
+      '</form>';
+  }
+
+  function updateGeneralCounterpartDetailGeneratedLineCount(form) {
+    var region = $('[data-general-counterpart-detail-generated-lines]', form);
+    if (!region) return;
+    var draft = { filters: {
+      accounts: $('#general-counterpart-detail-accounts', form).value,
+      counterpartAccounts: $('#general-counterpart-detail-counterparts', form).value,
+      from: $('#general-counterpart-detail-from', form).value,
+      to: $('#general-counterpart-detail-to', form).value
+    } };
+    var report = buildGeneralCounterpartDetailReport(draft);
+    region.textContent = 'Lignes générées : ' + (report.ok ? openingBalanceReportCount(report.lineCount) : '—');
+    region.setAttribute('aria-label', report.ok ? report.lineCount + ' lignes générées' : 'Nombre de lignes indisponible');
+  }
+
+  function submitGeneralCounterpartDetailSelection(form, session) {
+    var errors = [];
+    var accountsInput = $('#general-counterpart-detail-accounts', form);
+    var counterpartInput = $('#general-counterpart-detail-counterparts', form);
+    var fromInput = $('#general-counterpart-detail-from', form);
+    var toInput = $('#general-counterpart-detail-to', form);
+    var mainFilter = GeneralBalanceReport.parseAccountFilter(accountsInput ? accountsInput.value : '');
+    var counterpartFilter = GeneralBalanceReport.parseAccountFilter(counterpartInput ? counterpartInput.value : '');
+    var selectedColumns = $$('[data-general-counterpart-detail-column]:checked', form).map(function (input) {
+      return input.getAttribute('data-general-counterpart-detail-column');
+    });
+    if (!mainFilter.valid) errors.push('Comptes à détailler : ' + mainFilter.error);
+    if (!counterpartFilter.valid) errors.push('Comptes de contrepartie : ' + counterpartFilter.error);
+    if (!fromInput || !toInput || !fromInput.value || !toInput.value) errors.push('Renseignez les deux dates de la période.');
+    if (!selectedColumns.length) errors.push('Sélectionnez au moins une colonne à imprimer.');
+    showGeneralBalanceReportErrors($('#general-counterpart-detail-selection-errors', form), errors);
+    if (errors.length) return;
+    session.filters.accounts = String(accountsInput.value || '*').trim();
+    session.filters.counterpartAccounts = String(counterpartInput.value || '*').trim();
+    session.filters.from = fromInput.value;
+    session.filters.to = toInput.value;
+    session.columns = Object.create(null);
+    GENERAL_COUNTERPART_DETAIL_COLUMN_DEFINITIONS.forEach(function (column) {
+      session.columns[column.key] = selectedColumns.indexOf(column.key) !== -1;
+    });
+    session.report = buildGeneralCounterpartDetailReport(session);
+    if (!session.report.ok) {
+      showGeneralBalanceReportErrors($('#general-counterpart-detail-selection-errors', form), session.report.errors);
+      return;
+    }
+    session.phase = 'layout';
+    session.previewOpened = false;
+    render();
+  }
+
+  function generalCounterpartDetailLeafColumns(session) {
+    return GENERAL_COUNTERPART_DETAIL_COLUMN_DEFINITIONS.filter(function (column) {
+      return session.columns[column.key];
+    }).map(function (column) {
+      return { key: column.key, label: column.reportLabel || column.label, exportLabel: column.exportLabel, text: column.text };
+    });
+  }
+
+  function generalCounterpartDetailValue(row, column, forSpreadsheet) {
+    if (column.key === 'date') return forSpreadsheet ? String(row.date || '') : dateLabel(row.date);
+    if (column.key === 'debit' || column.key === 'credit') {
+      var numericValue = Number(row[column.key]) || 0;
+      return forSpreadsheet ? numericValue : (numericValue ? amount(numericValue) : '');
+    }
+    return String(row[column.key] == null ? '' : row[column.key]);
+  }
+
+  function generalCounterpartDetailExportMatrix(session, report, forSpreadsheet) {
+    var columns = generalCounterpartDetailLeafColumns(session);
+    var matrix = [columns.map(function (column) { return column.exportLabel; })];
+    (report.accounts || []).forEach(function (section) {
+      var groupRow = columns.map(function () { return ''; });
+      if (groupRow.length) groupRow[0] = 'Compte à détailler : ' + section.code + (section.label ? ' — ' + section.label : '');
+      matrix.push(groupRow);
+      (section.rows || []).forEach(function (row) {
+        matrix.push(columns.map(function (column) { return generalCounterpartDetailValue(row, column, !!forSpreadsheet); }));
+      });
+    });
+    return matrix;
+  }
+
+  function generalCounterpartDetailWarningsHtml(report) {
+    if (!report.warnings || !report.warnings.length) return '';
+    return '<div class="alert warning general-counterpart-detail-warnings"><div><ul>' + report.warnings.map(function (warning) {
+      return '<li>' + esc(warning) + '</li>';
+    }).join('') + '</ul></div></div>';
+  }
+
+  function generalCounterpartDetailTableHead(columns) {
+    return '<thead><tr>' + columns.map(function (column) {
+      return '<th scope="col"' + (!column.text ? ' class="num"' : '') + '>' + esc(column.label) + '</th>';
+    }).join('') + '</tr></thead>';
+  }
+
+  function generalCounterpartDetailReportPrintableHtml(session, report) {
+    report = report || session.report || buildGeneralCounterpartDetailReport(session);
+    var columns = generalCounterpartDetailLeafColumns(session);
+    var styleClass = session.layout.style === 'color10' ? 'is-color-style' : 'is-mono-style';
+    var accountSections = (report.accounts || []).map(function (section) {
+      var bodyRows = (section.rows || []).map(function (row) {
+        return '<tr>' + columns.map(function (column) {
+          var value = generalCounterpartDetailValue(row, column, false);
+          return '<td' + (!column.text ? ' class="num"' : '') + '>' + esc(value) + '</td>';
+        }).join('') + '</tr>';
+      }).join('');
+      return '<section class="general-counterpart-detail-account-section"><h3>Compte à détailler : ' + esc(section.code) +
+        (section.label ? ' — ' + esc(section.label) : '') + '</h3>' +
+        '<div class="table-wrap general-balance-table-wrap"><table class="data-table general-balance-table general-counterpart-detail-table"><caption>' +
+        esc(openingBalanceReportCount(section.lineCount) + (section.lineCount === 1 ? ' ligne' : ' lignes')) + '</caption>' +
+        generalCounterpartDetailTableHead(columns) + '<tbody>' + bodyRows + '</tbody></table></div></section>';
+    }).join('');
+    if (!accountSections) {
+      accountSections = '<div class="table-wrap general-balance-table-wrap"><table class="data-table general-balance-table general-counterpart-detail-table">' +
+        generalCounterpartDetailTableHead(columns) + '<tbody><tr class="general-balance-empty-row"><td colspan="' + Math.max(columns.length, 1) + '"><strong>Aucun mouvement correspondant.</strong> Vérifiez la période et les deux filtres de comptes.</td></tr></tbody></table></div>';
+    }
+    return '<article class="general-balance-report-print general-counterpart-detail-print ' + styleClass + '">' +
+      '<header class="general-balance-print-heading"><p class="page-kicker">ÉDITIONS · COMPTES GÉNÉRAUX</p><h2>Détail des contreparties d’un compte</h2>' +
+        '<p>Du ' + esc(dateLabel(report.from)) + ' au ' + esc(dateLabel(report.to)) + '</p></header>' +
+      '<div class="general-balance-print-context"><span><strong>Comptes à détailler :</strong> ' + esc(session.filters.accounts === '*' ? 'Tous les comptes' : session.filters.accounts) + '</span>' +
+        '<span><strong>Comptes de contrepartie :</strong> ' + esc(session.filters.counterpartAccounts === '*' ? 'Tous les comptes' : session.filters.counterpartAccounts) + '</span></div>' +
+      '<p class="general-balance-print-basis">Mouvements des écritures validées du dossier actif. Les contreparties sont les autres comptes distincts présents dans la même pièce. En pièce multiligne, la liste des comptes n’entraîne aucune ventilation : Débit et Crédit reprennent les montants de la ligne du compte détaillé.</p>' +
+      generalCounterpartDetailWarningsHtml(report) + accountSections + '</article>';
+  }
+
+  function generalCounterpartDetailReportLayoutView(session) {
+    var report = session.report || buildGeneralCounterpartDetailReport(session);
+    var resultSummary = openingBalanceReportCount(report.lineCount) + (report.lineCount === 1 ? ' ligne' : ' lignes') +
+      ' · ' + openingBalanceReportCount(report.accountCount) + (report.accountCount === 1 ? ' compte détaillé' : ' comptes détaillés');
+    return generalBalanceReportSteps('layout', 'Étapes de préparation du Détail des contreparties d’un compte') +
+      pageHeader('Mise en page', 'Choisissez le style, l’orientation, les marges, les pages et la destination.', '') +
+      '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(resultSummary) + '. Aucune écriture ne sera modifiée.</div></div>' +
+      generalCounterpartDetailWarningsHtml(report) +
+      '<form id="general-counterpart-detail-layout-form" novalidate><div class="journal-lines-settings-grid general-balance-settings-grid">' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="counterpart-detail-printer">Imprimante</label><select id="counterpart-detail-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante par défaut de Windows (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select><span class="hint">Le navigateur garde le choix final du périphérique ou du PDF.</span></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="counterpart-detail-style">Style du rapport</label><select id="counterpart-detail-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('counterpart-detail-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('counterpart-detail-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('counterpart-detail-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('counterpart-detail-margins', 'binding', 'Reliure', session.layout.margins === 'binding', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Pages</h3></div><div class="journal-lines-page-range"><div class="field"><label for="counterpart-detail-page-first">Première</label><input id="counterpart-detail-page-first" type="number" min="1" step="1" value="' + esc(session.layout.pageFirst) + '" placeholder="1"></div><span aria-hidden="true">à</span><div class="field"><label for="counterpart-detail-page-last">Dernière</label><input id="counterpart-detail-page-last" type="number" min="1" step="1" value="' + esc(session.layout.pageLast) + '" placeholder="Fin"></div></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Parité</h3></div><div class="field"><label for="counterpart-detail-parity">Pages</label><select id="counterpart-detail-parity"><option value="none"' + (session.layout.parity === 'none' ? ' selected' : '') + '>Aucune</option><option value="odd"' + (session.layout.parity === 'odd' ? ' selected' : '') + '>Impaire</option><option value="even"' + (session.layout.parity === 'even' ? ' selected' : '') + '>Paire</option></select></div></div></section>' +
+        '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
+          generalBalanceReportRadio('counterpart-detail-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
+          generalBalanceReportRadio('counterpart-detail-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
+          generalBalanceReportRadio('counterpart-detail-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('counterpart-detail-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
+        '</div></div></section>' +
+      '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire.</strong> La plage de pages et la parité sont à régler dans la boîte d’impression du navigateur si celui-ci les propose. Le choix final de l’imprimante reste dans le navigateur.</div></div>' +
+      '<div class="journal-lines-form-errors" id="general-counterpart-detail-layout-errors" role="alert" aria-live="polite"></div>' +
+      '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-general-counterpart-detail-back-selection>Retour à la sélection</button><button type="submit" class="btn btn-primary">Valider</button></div></form>';
+  }
+
+  function generalCounterpartDetailReportPreviewView(session) {
+    var report = session.report || buildGeneralCounterpartDetailReport(session);
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans PERFECTO';
+    return generalBalanceReportSteps('preview', 'Étapes de préparation du Détail des contreparties d’un compte') +
+      pageHeader('Aperçu du Détail des contreparties d’un compte', 'Vérifiez les mouvements et leurs comptes associés avant l’impression ou l’enregistrement PDF.',
+        '<button type="button" class="btn btn-primary" data-general-counterpart-detail-open-preview>Ouvrir l’aperçu avant impression</button>') +
+      '<div class="alert info"><div><strong>Destination choisie :</strong> ' + esc(destination) + '. La boîte d’impression ne s’ouvrira qu’après votre action depuis l’aperçu.</div></div>' +
+      generalCounterpartDetailWarningsHtml(report) +
+      (report.lineCount ? '' : '<div class="alert warning"><div>Aucun mouvement ne correspond aux comptes détaillés, aux contreparties et à la période sélectionnés.</div></div>') +
+      '<section class="card general-balance-preview-page"><div class="panel">' + generalCounterpartDetailReportPrintableHtml(session, report) + '</div></section>' +
+      '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-general-counterpart-detail-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-ghost" data-general-counterpart-detail-back-selection>Modifier la sélection</button></div>';
+  }
+
+  function generalCounterpartDetailReportSavedView(session) {
+    return generalBalanceReportSteps('preview', 'Étapes de préparation du Détail des contreparties d’un compte') +
+      pageHeader('Export prêt', 'Le fichier a été préparé sans modifier les écritures du dossier.', '') +
+      '<section class="card journal-lines-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
+        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-general-counterpart-detail-open-preview>Afficher l’aperçu</button><button type="button" class="btn btn-ghost" data-general-counterpart-detail-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-general-counterpart-detail-new-report>Nouvelle sélection</button></div></div></section>';
+  }
+
+  function generateGeneralCounterpartDetailReportFile(session, destination) {
+    var report = buildGeneralCounterpartDetailReport(session);
+    if (!report.ok) throw new Error((report.errors || ['Le détail des contreparties est invalide.']).join(' '));
+    session.report = report;
+    var spreadsheet = destination === 'table';
+    var matrix = generalCounterpartDetailExportMatrix(session, report, spreadsheet);
+    var extension = spreadsheet ? 'xlsx' : 'txt';
+    var filename = 'Detail-contreparties-' + safeFilePart(S.currentDossier().name) + '-' + report.from + '-' + report.to + '.' + extension;
+    var content = spreadsheet
+      ? AccountingExchange.exportTabularWorkbook('Contreparties', matrix[0], matrix.slice(1))
+      : generalBalanceReportTsv(matrix);
+    downloadFile(filename, content, spreadsheet ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/plain;charset=utf-8');
+    session.exportFilename = filename;
+    session.exportMessage = spreadsheet ? 'Téléchargement du classeur Excel lancé dans le navigateur.' : 'Téléchargement du fichier texte tabulé lancé dans le navigateur.';
+    session.phase = 'saved';
+    render();
+  }
+
+  function submitGeneralCounterpartDetailLayout(form, session) {
+    var errors = [];
+    var destination = $('input[name="counterpart-detail-destination"]:checked', form);
+    var orientation = $('input[name="counterpart-detail-orientation"]:checked', form);
+    var margins = $('input[name="counterpart-detail-margins"]:checked', form);
+    var first = $('#counterpart-detail-page-first', form).value;
+    var last = $('#counterpart-detail-page-last', form).value;
+    if (first && (!Number.isInteger(Number(first)) || Number(first) < 1)) errors.push('La première page doit être un entier supérieur ou égal à 1.');
+    if (last && (!Number.isInteger(Number(last)) || Number(last) < 1)) errors.push('La dernière page doit être un entier supérieur ou égal à 1.');
+    if (first && last && Number(first) > Number(last)) errors.push('La première page doit précéder ou égaler la dernière page.');
+    showGeneralBalanceReportErrors($('#general-counterpart-detail-layout-errors', form), errors);
+    if (errors.length) return;
+    session.layout.printer = $('#counterpart-detail-printer', form).value;
+    session.layout.style = $('#counterpart-detail-style', form).value;
+    session.layout.orientation = orientation ? orientation.value : 'landscape';
+    session.layout.margins = margins ? margins.value : 'standard';
+    session.layout.pageFirst = first;
+    session.layout.pageLast = last;
+    session.layout.parity = $('#counterpart-detail-parity', form).value;
+    session.layout.destination = destination ? destination.value : 'preview';
+    session.report = buildGeneralCounterpartDetailReport(session);
+    if (!session.report.ok) {
+      showGeneralBalanceReportErrors($('#general-counterpart-detail-layout-errors', form), session.report.errors);
+      return;
+    }
+    if (session.layout.destination === 'table' || session.layout.destination === 'file') {
+      try {
+        generateGeneralCounterpartDetailReportFile(session, session.layout.destination);
+      } catch (error) {
+        session.phase = 'layout';
+        render();
+        toast('Export impossible : ' + (error && error.message || 'erreur inconnue.'), 'error');
+      }
+      return;
+    }
+    session.previewOpened = false;
+    session.phase = 'preview';
+    render();
+  }
+
+  function generalCounterpartDetailReportPrintOptions(session) {
+    var styleNode = null;
+    var previousStyleText = '';
+    var createdStyle = false;
+    var previousTitle = '';
+    return {
+      beforePrint: function () {
+        styleNode = $('#general-counterpart-detail-print-page-style');
+        createdStyle = !styleNode;
+        if (!styleNode) {
+          styleNode = document.createElement('style');
+          styleNode.id = 'general-counterpart-detail-print-page-style';
+          document.head.appendChild(styleNode);
+        } else previousStyleText = styleNode.textContent;
+        var orientation = session.layout.orientation === 'portrait' ? 'portrait' : 'landscape';
+        var left = session.layout.margins === 'binding' ? '18mm' : '12mm';
+        styleNode.textContent = '@page { size: A4 ' + orientation + '; margin: 12mm 12mm 12mm ' + left + '; }';
+        previousTitle = document.title;
+        document.title = 'Detail-contreparties-' + safeFilePart(S.currentDossier().name) + '-' + session.report.from + '-' + session.report.to;
+      },
+      afterPrint: function () {
+        document.title = previousTitle || document.title;
+        if (!styleNode) return;
+        if (createdStyle && styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+        else styleNode.textContent = previousStyleText;
+      }
+    };
+  }
+
+  function openGeneralCounterpartDetailPreview(session) {
+    var report = session.report || buildGeneralCounterpartDetailReport(session);
+    session.report = report;
+    openReportPreview('Aperçu — Détail des contreparties d’un compte', generalCounterpartDetailReportPrintableHtml(session, report), generalCounterpartDetailReportPrintOptions(session));
+  }
+
+  function viewGeneralCounterpartDetailReport(backLink) {
+    var session = ensureGeneralCounterpartDetailReportSession();
+    if (session.phase !== 'selection') session.report = buildGeneralCounterpartDetailReport(session);
+    var content = session.phase === 'layout'
+      ? generalCounterpartDetailReportLayoutView(session)
+      : (session.phase === 'preview'
+        ? generalCounterpartDetailReportPreviewView(session)
+        : (session.phase === 'saved'
+          ? generalCounterpartDetailReportSavedView(session)
+          : generalCounterpartDetailReportSelectionView(session, S.currentDossier())));
+    return '<div class="edition-report-detail-view general-balance-report-detail general-counterpart-detail-report-detail">' + backLink + content + '</div>';
+  }
+
+  function bindGeneralCounterpartDetailReport() {
+    var session = ensureGeneralCounterpartDetailReportSession();
+    if (session.phase === 'selection') {
+      var selectionForm = $('#general-counterpart-detail-selection-form');
+      if (!selectionForm) return;
+      selectionForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitGeneralCounterpartDetailSelection(selectionForm, session);
+      });
+      ['#general-counterpart-detail-accounts', '#general-counterpart-detail-counterparts', '#general-counterpart-detail-from', '#general-counterpart-detail-to'].forEach(function (selector) {
+        var input = $(selector, selectionForm);
+        if (!input) return;
+        input.addEventListener('input', function () { updateGeneralCounterpartDetailGeneratedLineCount(selectionForm); });
+        input.addEventListener('change', function () { updateGeneralCounterpartDetailGeneratedLineCount(selectionForm); });
+      });
+      $$('[data-general-counterpart-detail-picker]', selectionForm).forEach(function (button) {
+        button.addEventListener('click', function () {
+          var type = button.getAttribute('data-general-counterpart-detail-picker');
+          var input = type === 'counterparts'
+            ? $('#general-counterpart-detail-counterparts', selectionForm)
+            : $('#general-counterpart-detail-accounts', selectionForm);
+          openGeneralBalanceAccountPicker(input);
+        });
+      });
+      return;
+    }
+    if (session.phase === 'layout') {
+      var layoutForm = $('#general-counterpart-detail-layout-form');
+      if (!layoutForm) return;
+      layoutForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitGeneralCounterpartDetailLayout(layoutForm, session);
+      });
+      var backSelection = $('[data-general-counterpart-detail-back-selection]');
+      if (backSelection) backSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+      return;
+    }
+    $$('[data-general-counterpart-detail-open-preview]').forEach(function (button) {
+      button.addEventListener('click', function () { openGeneralCounterpartDetailPreview(session); });
+    });
+    $$('[data-general-counterpart-detail-back-layout]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'layout'; render(); });
+    });
+    $$('[data-general-counterpart-detail-back-selection]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'selection'; render(); });
+    });
+    var newReportButton = $('[data-general-counterpart-detail-new-report]');
+    if (newReportButton) newReportButton.addEventListener('click', function () {
+      generalCounterpartDetailReportSession = createGeneralCounterpartDetailReportSession(S.currentDossier());
+      render();
+    });
+    if (session.phase === 'preview' && !session.previewOpened) {
+      session.previewOpened = true;
+      openGeneralCounterpartDetailPreview(session);
     }
   }
 
@@ -15826,6 +16254,7 @@
     if (child.id === 'general-opening-journal') return viewOpeningBalanceJournalReport(backLink);
     if (child.id === 'general-account-situation') return viewAccountSituationReport(backLink);
     if (child.id === 'general-ledger') return viewGeneralLedgerReport(backLink);
+    if (child.id === 'general-counterpart-detail') return viewGeneralCounterpartDetailReport(backLink);
     if (child.id === 'general-multiyear-history') return viewMultiYearHistoryReport(backLink);
     var inactive = child.status === 'inactive';
     var analytic = inactive && (child.section === 'analysis' || child.section === 'situations' || child.section === 'definitionsAnalytics' || child.id.indexOf('analytic-') === 0 || child.id === 'general-analytic-balance' || child.id === 'journal-analytic-center-totals');
@@ -17255,6 +17684,7 @@
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && menuParams.c === 'journal-allocation-sheet') bindJournalAllocationSheet();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-balance') bindGeneralBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-ledger') bindGeneralLedgerReport();
+      if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-detail') bindGeneralCounterpartDetailReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-multiyear-history') bindMultiYearHistoryReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-summary-balance') bindGeneralSummaryBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-aged-balance') bindAgedBalanceReport();

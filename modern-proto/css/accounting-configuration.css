@@ -946,6 +946,24 @@ body.report-preview-open { overflow: hidden; }
 .account-situation-report-warnings { margin: 12px 0; }
 .account-situation-report-warnings ul { margin: 0 0 0 18px; }
 .general-ledger-source-note { margin: 0 0 14px; line-height: 1.55; }
+.general-counterpart-detail-source-note { margin: 0 0 14px; line-height: 1.55; }
+.general-counterpart-detail-filter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.general-counterpart-detail-column-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 22px; }
+.general-counterpart-detail-column-stack { display: grid; align-content: start; gap: 7px; min-width: 0; }
+.general-counterpart-detail-column-option { min-height: 34px; }
+.general-counterpart-detail-columns-heading { margin-top: 18px; }
+.general-counterpart-detail-generated-lines { margin-top: 14px; }
+.general-counterpart-detail-warnings { margin: 12px 0; }
+.general-counterpart-detail-warnings ul { margin: 0 0 0 18px; }
+.general-counterpart-detail-account-section { margin: 18px 0 24px; }
+.general-counterpart-detail-account-section > h3 { margin: 0 0 6px; padding: 6px 8px; border-bottom: 1px solid #cbd4ce; color: #22372c; font-size: .92rem; break-after: avoid; page-break-after: avoid; }
+.general-counterpart-detail-table { width: 100%; min-width: 0 !important; table-layout: auto; font-size: .74rem !important; }
+.general-counterpart-detail-table th, .general-counterpart-detail-table td { padding: 5px 7px !important; }
+.general-counterpart-detail-table .num { text-align: right !important; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.general-counterpart-detail-table caption { padding: 0 0 5px; color: #64746b; text-align: left; font-size: .65rem; }
+.general-counterpart-detail-report-print.is-mono-style .general-counterpart-detail-table,
+.general-counterpart-detail-report-print.is-mono-style .general-counterpart-detail-table thead th { color: #111 !important; background: #fff !important; }
+.general-counterpart-detail-report-print.is-color-style .general-counterpart-detail-table thead th { color: #1d4c3d !important; background: #edf5f0 !important; }
 .multi-year-history-source-note { margin: 0 0 14px; line-height: 1.55; }
 .multi-year-history-source-warning { margin: 0 0 14px; line-height: 1.5; }
 .multi-year-history-source-warning ul,
@@ -1064,6 +1082,8 @@ body.report-preview-open { overflow: hidden; }
   .general-balance-filter-grid,
   .account-situation-filter-grid,
   .general-ledger-filter-grid,
+  .general-counterpart-detail-filter-grid,
+  .general-counterpart-detail-column-grid,
   .multi-year-history-filter-grid { grid-template-columns: minmax(0, 1fr); }
   .general-ledger-column-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .multi-year-history-column-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
