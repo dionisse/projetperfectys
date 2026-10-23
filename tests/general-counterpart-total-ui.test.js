@@ -42,7 +42,7 @@ assert.ok(ledgerSource.includes('entryKey: entryKey') && ledgerSource.includes('
 assert.ok(htmlSource.indexOf('js/general-counterpart-detail-report.js') < htmlSource.indexOf('js/general-counterpart-total-report.js'));
 assert.ok(htmlSource.indexOf('js/general-counterpart-total-report.js') < htmlSource.indexOf('js/app.js'));
 assert.match(serviceWorkerSource, /\.\/js\/general-counterpart-total-report\.js/);
-assert.match(serviceWorkerSource, /perfecto-static-v114/);
+assert.match(serviceWorkerSource, /perfecto-static-v115/);
 assert.match(configurationCss, /\.general-counterpart-total-filter-grid[\s\S]*\.general-counterpart-total-column-grid[\s\S]*\.general-counterpart-total-table/);
 
 console.log('Cumul des contreparties : intégration navigation, filtres, écrans et ressources vérifiée.');

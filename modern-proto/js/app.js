@@ -25,6 +25,7 @@
   var OpeningBalanceJournalReport = window.PerfectoOpeningBalanceJournalReport;
   var AgedBalanceReport = window.PerfectoAgedBalanceReport;
   var ThirdPartyBalanceReport = window.PerfectoThirdPartyBalanceReport;
+  var ThirdPartyLedgerReport = window.PerfectoThirdPartyLedgerReport;
   var ThirdPartyOpeningBalanceReport = window.PerfectoThirdPartyOpeningBalanceReport;
   var ThirdPartyAccountSituationReport = window.PerfectoThirdPartyAccountSituationReport;
   var ThirdPartyNatureBreakdownReport = window.PerfectoThirdPartyNatureBreakdownReport;
@@ -166,6 +167,7 @@
   var accountSituationReportSession = null;
   var agedBalanceReportSession = null;
   var thirdPartyBalanceReportSession = null;
+  var thirdPartyLedgerReportSession = null;
   var thirdPartyOpeningBalanceReportSession = null;
   var thirdPartyAccountSituationReportSession = null;
   var thirdPartyNatureBreakdownReportSession = null;
@@ -793,6 +795,7 @@
     var isAccountSituationReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-account-situation';
     var isAgedBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-aged-balance';
     var isThirdPartyBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'third-parties' && parsed.params.c === 'third-party-balance';
+    var isThirdPartyLedgerReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'third-parties' && parsed.params.c === 'third-party-ledger';
     var isThirdPartyOpeningBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'third-parties' && parsed.params.c === 'third-party-opening-balance';
     var isThirdPartyAccountSituationReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'third-parties' && parsed.params.c === 'third-party-situation';
     var isThirdPartyNatureBreakdownReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'third-parties' && parsed.params.c === 'third-party-nature-breakdown';
@@ -810,6 +813,7 @@
       if (document.body) document.body.classList.remove('aged-balance-preview-open');
     }
     if (!isThirdPartyBalanceReportRoute) thirdPartyBalanceReportSession = null;
+    if (!isThirdPartyLedgerReportRoute) thirdPartyLedgerReportSession = null;
     if (!isThirdPartyOpeningBalanceReportRoute) thirdPartyOpeningBalanceReportSession = null;
     if (!isThirdPartyAccountSituationReportRoute) thirdPartyAccountSituationReportSession = null;
     if (!isThirdPartyNatureBreakdownReportRoute) thirdPartyNatureBreakdownReportSession = null;
@@ -4363,6 +4367,561 @@
       thirdPartyBalanceReportSession = createThirdPartyBalanceReportSession(S.currentDossier());
       render();
     });
+  }
+
+  /* ------------------------- Grand livre des tiers ------------------------ */
+  function createThirdPartyLedgerReportSession(dossier) {
+    var columns = Object.create(null);
+    ThirdPartyLedgerReport.COLUMN_DEFINITIONS.forEach(function (column) { columns[column.key] = !!column.defaultSelected; });
+    return {
+      dossierId: dossier.id,
+      phase: 'selection',
+      filters: { nature: 'clients', thirdParties: '*', from: dossier.cycleStart, to: dossier.cycleEnd },
+      columns: columns,
+      layout: {
+        printer: 'system', style: 'plain8', orientation: 'landscape', margins: 'standard',
+        pageFirst: '', pageLast: '', parity: 'none', destination: 'preview'
+      },
+      report: null,
+      previewOpened: false,
+      exportFilename: '',
+      exportMessage: ''
+    };
+  }
+
+  function ensureThirdPartyLedgerReportSession() {
+    var dossier = S.currentDossier();
+    if (!thirdPartyLedgerReportSession || thirdPartyLedgerReportSession.dossierId !== dossier.id) {
+      thirdPartyLedgerReportSession = createThirdPartyLedgerReportSession(dossier);
+    }
+    return thirdPartyLedgerReportSession;
+  }
+
+  function thirdPartyLedgerAllRecords() {
+    var records = [];
+    function append(nature, items) {
+      (Array.isArray(items) ? items : []).forEach(function (record) {
+        if (!record) return;
+        var tagged = Object.assign({}, record);
+        tagged._thirdPartyNature = nature;
+        records.push(tagged);
+      });
+    }
+    append('suppliers', S.suppliers());
+    append('clients', S.clients());
+    append('personnel', S.personnel());
+    append('other-parties', S.otherParties());
+    return records;
+  }
+
+  function thirdPartyLedgerRecords(nature, allRecords) {
+    return (allRecords || thirdPartyLedgerAllRecords()).filter(function (record) {
+      return record && String(record._thirdPartyNature || '') === String(nature || '');
+    });
+  }
+
+  function thirdPartyLedgerSourceWarnings(extraction) {
+    var stats = extraction && extraction.stats || {};
+    var warnings = thirdPartyBalanceSourceWarnings(extraction);
+    if (stats.unattributedMovementCount) warnings.push(stats.unattributedMovementCount + ' ligne(s) sur comptes auxiliaires, toutes natures confondues, sans référence de tiers explicite ont été exclues.');
+    if (stats.unclassifiedAuxiliaryMovementCount) warnings.push(stats.unclassifiedAuxiliaryMovementCount + ' ligne(s) portant une référence auxiliaire mais non marquées comme compte auxiliaire ont été exclues.');
+    return warnings;
+  }
+
+  function buildThirdPartyLedgerReport(session) {
+    var dossier = S.currentDossier();
+    var configuration = S.accountingConfiguration();
+    var entries = S.entries();
+    var accounts = S.accounts();
+    var allRecords = thirdPartyLedgerAllRecords();
+    var extraction = AccountingCentralization.extractValidatedAuxiliaryMovements(
+      entries, accounts, dossier, { decimalPlaces: configuration.decimalPlaces }
+    );
+    return ThirdPartyLedgerReport.build({
+      nature: session.filters.nature,
+      thirdPartyRecords: thirdPartyLedgerRecords(session.filters.nature, allRecords),
+      allThirdPartyRecords: allRecords,
+      thirdPartyFilter: session.filters.thirdParties,
+      thirdPartyMovements: extraction.ok ? extraction.movements : [],
+      openingBalances: S.openingBalances(),
+      entries: entries,
+      accounts: accounts,
+      sourceErrors: extraction.errors,
+      sourceWarnings: thirdPartyLedgerSourceWarnings(extraction),
+      cycleStart: dossier.cycleStart,
+      cycleEnd: dossier.cycleEnd,
+      from: session.filters.from,
+      to: session.filters.to,
+      decimalPlaces: configuration.decimalPlaces
+    });
+  }
+
+  function thirdPartyLedgerColumnOption(column, session) {
+    var note = '';
+    if (column.key === 'balance') note = '<small>Solde progressif Débit moins Crédit par fiche.</small>';
+    if (column.key === 'reference' || column.key === 'market') note = '<small>Valeur source uniquement ; reste vide si non enregistrée.</small>';
+    if (column.key === 'counterpart') note = '<small>Autres comptes de la même pièce ; aucun montant ventilé.</small>';
+    return '<label class="journal-lines-column-option third-party-ledger-column-option">' +
+      '<input type="checkbox" data-third-party-ledger-column="' + esc(column.key) + '"' + (session.columns[column.key] ? ' checked' : '') + '>' +
+      '<span><strong>' + esc(column.label) + '</strong>' + note + '</span></label>';
+  }
+
+  function thirdPartyLedgerReportSelectionView(session, dossier) {
+    var natureOptions = ThirdPartyLedgerReport.NATURES.map(function (nature) {
+      return '<option value="' + esc(nature.key) + '"' + (session.filters.nature === nature.key ? ' selected' : '') + '>' + esc(nature.label) + '</option>';
+    }).join('');
+    var groups = [
+      ['date', 'journal', 'piece', 'accountCode'],
+      ['reference', 'debit', 'credit', 'balance'],
+      ['market', 'label', 'counterpart']
+    ];
+    var columnByKey = Object.create(null);
+    ThirdPartyLedgerReport.COLUMN_DEFINITIONS.forEach(function (column) { columnByKey[column.key] = column; });
+    var columnsHtml = groups.map(function (group, index) {
+      return '<div class="third-party-ledger-column-stack" aria-label="Groupe de colonnes ' + (index + 1) + '">' +
+        group.map(function (key) { return thirdPartyLedgerColumnOption(columnByKey[key], session); }).join('') +
+      '</div>';
+    }).join('');
+    var nature = ThirdPartyLedgerReport.NATURES.find(function (item) { return item.key === session.filters.nature; });
+    var natureLabel = nature ? nature.label : 'Tiers';
+    return generalBalanceReportSteps('selection', 'Étapes de préparation du Grand livre des tiers') +
+      pageHeader('Grand livre', 'Choisissez la nature, les tiers, la période et les colonnes à restituer.', '') +
+      '<div class="alert info third-party-ledger-source-note"><div><strong>Consultation seule.</strong> Le solde progresse séparément pour chaque fiche à partir des reports d’ouverture explicitement liés et des mouvements auxiliaires d’écritures validées. Une référence libre n’est pas une liaison ; Marché et Référence restent vides en l’absence d’une valeur source. La contrepartie reprend les autres comptes de la même pièce sans répartir les montants.</div></div>' +
+      '<form id="third-party-ledger-selection-form" novalidate>' +
+        '<section class="card journal-lines-card"><div class="panel">' +
+          '<div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div><span class="journal-lines-cycle-badge">Cycle ' + esc(dateLabel(dossier.cycleStart)) + ' — ' + esc(dateLabel(dossier.cycleEnd)) + '</span></div>' +
+          '<div class="third-party-ledger-filter-grid">' +
+            '<div class="field"><label for="third-party-ledger-nature">Nature des tiers</label><select id="third-party-ledger-nature" name="nature">' + natureOptions + '</select></div>' +
+            '<div class="field"><label for="third-party-ledger-parties" data-third-party-ledger-parties-label>' + esc(natureLabel) + '</label><div class="journal-lines-picker-control"><input id="third-party-ledger-parties" name="thirdParties" type="text" value="' + esc(session.filters.thirdParties) + '" placeholder="*" autocomplete="off" required><button type="button" class="btn btn-ghost" data-third-party-ledger-picker aria-label="Parcourir les ' + esc(natureLabel.toLocaleLowerCase('fr')) + '">Parcourir…</button></div><span class="hint">« * » sélectionne tous les tiers ; saisissez un ou plusieurs codes séparés par des virgules, ou utilisez Parcourir.</span></div>' +
+            '<div class="field"><label for="third-party-ledger-from">Début</label><input id="third-party-ledger-from" name="from" type="date" value="' + esc(session.filters.from) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required></div>' +
+            '<div class="field"><label for="third-party-ledger-to">Fin</label><input id="third-party-ledger-to" name="to" type="date" value="' + esc(session.filters.to) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required></div>' +
+          '</div>' +
+        '</div></section>' +
+        '<section class="card journal-lines-card"><div class="panel">' +
+          '<div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
+          '<div class="third-party-ledger-column-grid">' + columnsHtml + '</div>' +
+          '<p class="hint journal-lines-columns-hint">Les onze colonnes sont cochées par défaut, dans l’ordre du rapport. Le solde est progressif par tiers ; aucune donnée manquante n’est reconstituée.</p>' +
+        '</div></section>' +
+        '<div class="journal-lines-form-errors" id="third-party-ledger-selection-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="journal-lines-form-actions"><button type="submit" class="btn btn-primary">Mise en page <span aria-hidden="true">→</span></button></div>' +
+      '</form>';
+  }
+
+  function thirdPartyLedgerPickerToken(record, aliasCounts) {
+    var candidates = [record.code, record.id, ThirdPartyLedgerReport.auxiliaryAccountCode(record)];
+    for (var index = 0; index < candidates.length; index += 1) {
+      var candidate = String(candidates[index] || '').trim();
+      if (candidate && aliasCounts[candidate.toLocaleUpperCase()] === 1) return candidate;
+    }
+    return String(record.id || ThirdPartyLedgerReport.auxiliaryAccountCode(record) || record.code || '').trim();
+  }
+
+  function thirdPartyLedgerReportPicker(input, session) {
+    var records = thirdPartyLedgerRecords(session.filters.nature).slice().sort(function (left, right) {
+      return String(left.type || '').localeCompare(String(right.type || ''), 'fr', { sensitivity: 'base' }) ||
+        String(left.code || '').localeCompare(String(right.code || ''), 'fr', { numeric: true, sensitivity: 'base' });
+    });
+    var aliasCounts = Object.create(null);
+    records.forEach(function (record) {
+      [record.code, record.id, ThirdPartyLedgerReport.auxiliaryAccountCode(record)].forEach(function (value) {
+        var normalized = String(value || '').trim().toLocaleUpperCase();
+        if (normalized) aliasCounts[normalized] = (aliasCounts[normalized] || 0) + 1;
+      });
+    });
+    var selectedTokens = String(input.value || '').trim().split(/[\s,;]+/).filter(Boolean).map(function (value) { return value.toLocaleUpperCase(); });
+    var allSelected = selectedTokens.indexOf('*') !== -1 || (records.length > 0 && records.every(function (record) {
+      return [record.code, record.id, ThirdPartyLedgerReport.auxiliaryAccountCode(record)].some(function (value) {
+        return selectedTokens.indexOf(String(value || '').trim().toLocaleUpperCase()) !== -1;
+      });
+    }));
+    var rows = records.map(function (record, index) {
+      var auxiliary = ThirdPartyLedgerReport.auxiliaryAccountCode(record);
+      var aliases = [record.code, record.id, auxiliary].map(function (value) { return String(value || '').trim().toLocaleUpperCase(); }).filter(Boolean);
+      var checked = allSelected || aliases.some(function (value) { return selectedTokens.indexOf(value) !== -1; });
+      var subtype = record.type === 'debtor' ? 'Débiteur divers' : (record.type === 'creditor' ? 'Créditeur divers' : '');
+      var searchText = [record.code, record.name, record.id, auxiliary, subtype].join(' ');
+      var selectionToken = thirdPartyLedgerPickerToken(record, aliasCounts);
+      return '<label class="journal-lines-picker-option third-party-ledger-picker-option" data-third-party-ledger-picker-row data-search="' + esc(searchText) + '"><input type="checkbox" data-third-party-ledger-picker-option value="' + esc(selectionToken) + '" id="third-party-ledger-picker-' + index + '"' + (checked ? ' checked' : '') + '><span><strong>' + esc(record.code || '') + '</strong>' + (record.name ? ' · ' + esc(record.name) : '') + (subtype ? '<small>' + esc(subtype) + '</small>' : '') + (auxiliary ? '<small>Compte auxiliaire : ' + esc(auxiliary) + '</small>' : '') + '</span></label>';
+    }).join('');
+    var nature = ThirdPartyLedgerReport.NATURES.find(function (item) { return item.key === session.filters.nature; });
+    var natureLabel = nature ? nature.label : 'tiers';
+    var body = '<div class="journal-lines-picker"><div class="field"><label for="third-party-ledger-picker-search">Rechercher un tiers</label><input id="third-party-ledger-picker-search" type="search" placeholder="Code, nom ou compte auxiliaire"></div>' +
+      '<label class="journal-lines-picker-all"><input type="checkbox" id="third-party-ledger-picker-all"' + (allSelected ? ' checked' : '') + '>Tous les ' + esc(natureLabel.toLocaleLowerCase('fr')) + '</label>' +
+      '<div class="journal-lines-picker-list" role="group" aria-label="Fiches de ' + esc(natureLabel.toLocaleLowerCase('fr')) + '">' + (rows || '<div class="empty-state">Aucune fiche de cette nature n’est enregistrée.</div>') + '</div>' +
+      '<p class="journal-lines-picker-error" id="third-party-ledger-picker-error" role="alert" aria-live="polite"></p></div>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="button" class="btn btn-primary" data-third-party-ledger-picker-apply>Appliquer</button>';
+    openModal('Choix des ' + natureLabel.toLocaleLowerCase('fr'), 'Pour « Tiers divers », débiteurs et créditeurs sont réunis ; les références identiques restent distinguées par leur compte et leur identifiant.', body, footer, true);
+    var allCheckbox = $('#third-party-ledger-picker-all');
+    var options = $$('[data-third-party-ledger-picker-option]');
+    var search = $('#third-party-ledger-picker-search');
+    if (allCheckbox) allCheckbox.addEventListener('change', function () {
+      options.forEach(function (option) { option.checked = allCheckbox.checked; });
+    });
+    options.forEach(function (option) {
+      option.addEventListener('change', function () {
+        if (allCheckbox) allCheckbox.checked = options.length > 0 && options.every(function (item) { return item.checked; });
+      });
+    });
+    if (search) search.addEventListener('input', function () {
+      var needle = search.value.trim().toLocaleLowerCase('fr');
+      $$('[data-third-party-ledger-picker-row]').forEach(function (row) {
+        row.hidden = !!needle && row.getAttribute('data-search').toLocaleLowerCase('fr').indexOf(needle) === -1;
+      });
+    });
+    var apply = $('[data-third-party-ledger-picker-apply]');
+    if (apply) apply.addEventListener('click', function () {
+      var error = $('#third-party-ledger-picker-error');
+      var chosen = options.filter(function (option) { return option.checked; }).map(function (option) { return option.value; }).filter(Boolean);
+      if (!chosen.length && records.length) {
+        if (error) error.textContent = 'Sélectionnez au moins un tiers ou cochez la sélection complète.';
+        return;
+      }
+      input.value = !chosen.length || chosen.length === records.length ? '*' : chosen.join(', ');
+      closeModal(true);
+      input.focus();
+    });
+  }
+
+  function submitThirdPartyLedgerSelection(form, session) {
+    var errors = [];
+    var natureInput = $('#third-party-ledger-nature', form);
+    var partiesInput = $('#third-party-ledger-parties', form);
+    var fromInput = $('#third-party-ledger-from', form);
+    var toInput = $('#third-party-ledger-to', form);
+    var selectedColumns = $$('[data-third-party-ledger-column]:checked', form).map(function (input) {
+      return input.getAttribute('data-third-party-ledger-column');
+    });
+    if (!ThirdPartyLedgerReport.NATURES.some(function (nature) { return nature.key === (natureInput ? natureInput.value : ''); })) errors.push('Choisissez une nature de tiers disponible.');
+    if (!partiesInput || !String(partiesInput.value || '').trim()) errors.push('Indiquez un code de tiers ou * pour sélectionner tous les tiers.');
+    if (!fromInput || !toInput || !fromInput.value || !toInput.value) errors.push('Renseignez les deux dates de la période.');
+    if (!selectedColumns.length) errors.push('Sélectionnez au moins une colonne à imprimer.');
+    showGeneralBalanceReportErrors($('#third-party-ledger-selection-errors', form), errors);
+    if (errors.length) return;
+    session.filters.nature = natureInput.value;
+    session.filters.thirdParties = String(partiesInput.value || '*').trim();
+    session.filters.from = fromInput.value;
+    session.filters.to = toInput.value;
+    session.columns = Object.create(null);
+    ThirdPartyLedgerReport.COLUMN_DEFINITIONS.forEach(function (column) {
+      session.columns[column.key] = selectedColumns.indexOf(column.key) !== -1;
+    });
+    session.report = buildThirdPartyLedgerReport(session);
+    if (!session.report.ok) {
+      showGeneralBalanceReportErrors($('#third-party-ledger-selection-errors', form), session.report.errors);
+      return;
+    }
+    session.phase = 'layout';
+    session.previewOpened = false;
+    render();
+  }
+
+  function thirdPartyLedgerReportColumns(session) {
+    return ThirdPartyLedgerReport.COLUMN_DEFINITIONS.filter(function (column) { return session.columns[column.key] === true; });
+  }
+
+  function thirdPartyLedgerReportValue(row, column, forSpreadsheet, columns) {
+    if (column.key === 'date') return row.date ? dateLabel(row.date) : '';
+    if (column.key === 'journal') return journalDisplayName(S.journal(row.journal)) || row.journal || '';
+    if (column.key === 'debit' || column.key === 'credit') {
+      var amountValue = Number(row[column.key]) || 0;
+      return forSpreadsheet ? amountValue : (amountValue ? amount(amountValue) : '');
+    }
+    if (column.key === 'balance') {
+      var balance = Number(row.balance) || 0;
+      return forSpreadsheet ? balance : (balance ? amount(Math.abs(balance)) + (balance > 0 ? ' D' : ' C') : '0');
+    }
+    return String(row[column.key] == null ? '' : row[column.key]);
+  }
+
+  function thirdPartyLedgerWarningsHtml(report) {
+    if (!report.warnings || !report.warnings.length) return '';
+    return '<div class="alert warning third-party-ledger-warnings"><div><strong>Limites des sources</strong><ul>' + report.warnings.map(function (warning) {
+      return '<li>' + esc(warning) + '</li>';
+    }).join('') + '</ul></div></div>';
+  }
+
+  function thirdPartyLedgerErrorsHtml(report) {
+    if (!report.errors || !report.errors.length) return '';
+    return '<div class="alert error third-party-ledger-errors"><div><strong>Calcul indisponible</strong><ul>' + report.errors.map(function (error) {
+      return '<li>' + esc(error) + '</li>';
+    }).join('') + '</ul></div></div>';
+  }
+
+  function thirdPartyLedgerTable(session, group) {
+    var columns = thirdPartyLedgerReportColumns(session);
+    var tableHead = '<thead><tr>' + columns.map(function (column) {
+      return '<th scope="col"' + (!column.text ? ' class="num"' : '') + '>' + esc(column.label) + '</th>';
+    }).join('') + '</tr></thead>';
+    var body = group.rows.map(function (row) {
+      return '<tr>' + columns.map(function (column) {
+        return '<td' + (!column.text ? ' class="num"' : '') + '>' + esc(thirdPartyLedgerReportValue(row, column, false, columns)) + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    return '<div class="table-wrap third-party-ledger-table-wrap"><table class="data-table third-party-ledger-table">' +
+      '<caption>' + esc(group.lineCount + (group.lineCount === 1 ? ' mouvement' : ' mouvements')) + '</caption>' + tableHead + '<tbody>' + body + '</tbody></table></div>';
+  }
+
+  function thirdPartyLedgerSignedAmount(value) {
+    var amountValue = Number(value) || 0;
+    return amountValue ? amount(Math.abs(amountValue)) + (amountValue > 0 ? ' D' : ' C') : '0';
+  }
+
+  function thirdPartyLedgerPrintableHtml(session, report) {
+    report = report || session.report || buildThirdPartyLedgerReport(session);
+    var styleClass = session.layout.style === 'color10' ? 'is-color-style' : 'is-mono-style';
+    var groups = (report.groups || []).map(function (group) {
+      var subtype = group.thirdPartyType === 'debtor' ? ' · Débiteur divers' : (group.thirdPartyType === 'creditor' ? ' · Créditeur divers' : '');
+      var openingStatus = group.openingReportKnown ? 'Report d’ouverture explicitement lié' : 'Aucun report d’ouverture explicitement lié';
+      var openingLabel = group.openingReportKnown ? 'Solde au début de période' : 'Solde partiel au début de période';
+      return '<section class="third-party-ledger-group-section">' +
+        '<header class="third-party-ledger-group-heading"><div><h3>' + esc(group.thirdPartyCode) + (group.thirdPartyTitle ? ' · ' + esc(group.thirdPartyTitle) : '') + esc(subtype) + '</h3>' +
+          '<span>Compte : ' + esc(group.accountCode) + (group.accountLabel ? ' — ' + esc(group.accountLabel) : '') + ' · ' + esc(group.lineCount + (group.lineCount === 1 ? ' mouvement' : ' mouvements')) + '</span></div>' +
+          '<small>' + esc(openingStatus) + ' · ' + esc(openingLabel) + ' : ' + esc(thirdPartyLedgerSignedAmount(group.openingBalance)) + '</small></header>' +
+        thirdPartyLedgerTable(session, group) +
+      '</section>';
+    }).join('');
+    var empty = report.groups && report.groups.length ? '' : '<div class="alert info"><div>Aucun mouvement auxiliaire explicite ne correspond aux tiers et à la période sélectionnés.</div></div>';
+    var selectedLabel = session.filters.thirdParties === '*' ? 'Tous les tiers (*)' : session.filters.thirdParties;
+    return '<article class="general-balance-report-print third-party-ledger-print ' + styleClass + '">' +
+      '<header class="general-balance-print-heading"><p class="page-kicker">ÉDITIONS · TIERS</p><h2>GRAND LIVRE DES TIERS</h2>' +
+        '<p>' + esc(report.natureLabel) + ' · Du ' + esc(dateLabel(report.from)) + ' au ' + esc(dateLabel(report.to)) + '</p></header>' +
+      '<div class="general-balance-print-context"><span><strong>Nature des tiers :</strong> ' + esc(report.natureLabel) + '</span><span><strong>Sélection :</strong> ' + esc(selectedLabel) + '</span>' +
+        '<span><strong>Mouvements de la période :</strong> ' + esc(report.lineCount) + '</span></div>' +
+      '<p class="general-balance-print-basis">Le solde progressif est calculé fiche par fiche : report d’ouverture explicitement rattaché, mouvements auxiliaires validés antérieurs au début de période, puis mouvements affichés en Débit moins Crédit. Seules les références auxiliaires non ambiguës sont attribuées. Marché et Référence ne sont affichés que depuis la source ; la contrepartie désigne les autres comptes présents sur la même pièce et ne répartit aucun montant.</p>' +
+      thirdPartyLedgerWarningsHtml(report) + (groups || empty) +
+    '</article>';
+  }
+
+  function thirdPartyLedgerExportMatrix(session, report, forSpreadsheet) {
+    var columns = thirdPartyLedgerReportColumns(session);
+    var matrix = [columns.map(function (column) { return column.label; })];
+    (report.groups || []).forEach(function (group) {
+      var header = group.thirdPartyCode + (group.thirdPartyTitle ? ' · ' + group.thirdPartyTitle : '') + ' — Compte ' + group.accountCode;
+      matrix.push([header].concat(columns.slice(1).map(function () { return ''; })));
+      group.rows.forEach(function (row) {
+        matrix.push(columns.map(function (column) { return thirdPartyLedgerReportValue(row, column, !!forSpreadsheet, columns); }));
+      });
+    });
+    return matrix;
+  }
+
+  function generateThirdPartyLedgerReportFile(session, destination) {
+    var report = buildThirdPartyLedgerReport(session);
+    if (!report.ok) throw new Error((report.errors || ['Le Grand livre des tiers est invalide.']).join(' '));
+    session.report = report;
+    var spreadsheet = destination === 'table';
+    var matrix = thirdPartyLedgerExportMatrix(session, report, spreadsheet);
+    var extension = spreadsheet ? 'xlsx' : 'txt';
+    var filename = 'Grand-livre-tiers-' + safeFilePart(S.currentDossier().name) + '-' + report.from + '-' + report.to + '.' + extension;
+    var content = spreadsheet
+      ? AccountingExchange.exportTabularWorkbook('Grand livre des tiers', matrix[0], matrix.slice(1))
+      : generalLedgerReportTsv(matrix);
+    downloadFile(filename, content, spreadsheet ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/plain;charset=utf-8');
+    session.exportFilename = filename;
+    session.exportMessage = spreadsheet ? 'Téléchargement du classeur Excel lancé dans le navigateur.' : 'Téléchargement du fichier texte tabulé lancé dans le navigateur.';
+    session.phase = 'saved';
+    render();
+  }
+
+  function thirdPartyLedgerReportLayoutView(session) {
+    var report = session.report || buildThirdPartyLedgerReport(session);
+    var summary = report.tierCount + (report.tierCount === 1 ? ' fiche de tiers' : ' fiches de tiers') +
+      ' · ' + report.lineCount + (report.lineCount === 1 ? ' mouvement' : ' mouvements') +
+      ' · débit ' + amount(report.totals.debit) + ' · crédit ' + amount(report.totals.credit);
+    return generalBalanceReportSteps('layout', 'Étapes de préparation du Grand livre des tiers') +
+      pageHeader('Mise en page', 'Choisissez l’imprimante, le style, l’orientation, les marges, les pages et la destination.', '') +
+      '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(summary) + '. Le rapport reste en lecture seule.</div></div>' +
+      thirdPartyLedgerErrorsHtml(report) + thirdPartyLedgerWarningsHtml(report) +
+      '<form id="third-party-ledger-layout-form" novalidate><div class="journal-lines-settings-grid general-balance-settings-grid">' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="third-party-ledger-printer">Imprimante</label><select id="third-party-ledger-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante par défaut (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select><span class="hint">Le navigateur conserve le choix final du périphérique ou du PDF.</span></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="third-party-ledger-style">Style du rapport</label><select id="third-party-ledger-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('third-party-ledger-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('third-party-ledger-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('third-party-ledger-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('third-party-ledger-margins', 'binding', 'Reliure', session.layout.margins === 'binding', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Pages</h3></div><div class="journal-lines-page-range"><div class="field"><label for="third-party-ledger-page-first">Première</label><input id="third-party-ledger-page-first" type="number" min="1" step="1" value="' + esc(session.layout.pageFirst) + '" placeholder="1"></div><span aria-hidden="true">à</span><div class="field"><label for="third-party-ledger-page-last">Dernière</label><input id="third-party-ledger-page-last" type="number" min="1" step="1" value="' + esc(session.layout.pageLast) + '" placeholder="Fin"></div></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Parité</h3></div><div class="field"><label for="third-party-ledger-parity">Pages</label><select id="third-party-ledger-parity"><option value="none"' + (session.layout.parity === 'none' ? ' selected' : '') + '>Aucune</option><option value="odd"' + (session.layout.parity === 'odd' ? ' selected' : '') + '>Impaire</option><option value="even"' + (session.layout.parity === 'even' ? ' selected' : '') + '>Paire</option></select></div></div></section>' +
+        '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
+          generalBalanceReportRadio('third-party-ledger-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
+          generalBalanceReportRadio('third-party-ledger-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
+          generalBalanceReportRadio('third-party-ledger-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('third-party-ledger-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
+        '</div></div></section>' +
+      '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> La plage de pages et la parité se règlent dans la boîte d’impression du navigateur si celui-ci les propose ; le choix final de l’imprimante ou du PDF reste dans le navigateur.</div></div>' +
+      '<div class="journal-lines-form-errors" id="third-party-ledger-layout-errors" role="alert" aria-live="polite"></div>' +
+      '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-third-party-ledger-back-selection>Retour à la sélection</button><button type="submit" class="btn btn-primary">Valider</button></div></form>';
+  }
+
+  function submitThirdPartyLedgerLayout(form, session) {
+    var errors = [];
+    var destination = $('input[name="third-party-ledger-destination"]:checked', form);
+    var orientation = $('input[name="third-party-ledger-orientation"]:checked', form);
+    var margins = $('input[name="third-party-ledger-margins"]:checked', form);
+    var first = $('#third-party-ledger-page-first', form).value;
+    var last = $('#third-party-ledger-page-last', form).value;
+    if (first && (!Number.isInteger(Number(first)) || Number(first) < 1)) errors.push('La première page doit être un entier supérieur ou égal à 1.');
+    if (last && (!Number.isInteger(Number(last)) || Number(last) < 1)) errors.push('La dernière page doit être un entier supérieur ou égal à 1.');
+    if (first && last && Number(first) > Number(last)) errors.push('La première page doit précéder ou égaler la dernière page.');
+    showGeneralBalanceReportErrors($('#third-party-ledger-layout-errors', form), errors);
+    if (errors.length) return;
+    session.layout.printer = $('#third-party-ledger-printer', form).value;
+    session.layout.style = $('#third-party-ledger-style', form).value;
+    session.layout.orientation = orientation ? orientation.value : 'landscape';
+    session.layout.margins = margins ? margins.value : 'standard';
+    session.layout.pageFirst = first;
+    session.layout.pageLast = last;
+    session.layout.parity = $('#third-party-ledger-parity', form).value;
+    session.layout.destination = destination ? destination.value : 'preview';
+    session.report = buildThirdPartyLedgerReport(session);
+    if (!session.report.ok) {
+      showGeneralBalanceReportErrors($('#third-party-ledger-layout-errors', form), session.report.errors);
+      return;
+    }
+    if (session.layout.destination === 'table' || session.layout.destination === 'file') {
+      try { generateThirdPartyLedgerReportFile(session, session.layout.destination); }
+      catch (error) {
+        session.phase = 'layout';
+        render();
+        toast('Export impossible : ' + (error && error.message || 'erreur inconnue.'), 'error');
+      }
+      return;
+    }
+    session.previewOpened = false;
+    session.phase = 'preview';
+    render();
+  }
+
+  function thirdPartyLedgerReportPrintOptions(session) {
+    var styleNode = null;
+    var previousStyleText = '';
+    var createdStyle = false;
+    var previousTitle = '';
+    return {
+      beforePrint: function () {
+        styleNode = $('#third-party-ledger-print-page-style');
+        createdStyle = !styleNode;
+        if (!styleNode) {
+          styleNode = document.createElement('style');
+          styleNode.id = 'third-party-ledger-print-page-style';
+          document.head.appendChild(styleNode);
+        } else previousStyleText = styleNode.textContent;
+        var orientation = session.layout.orientation === 'portrait' ? 'portrait' : 'landscape';
+        var left = session.layout.margins === 'binding' ? '18mm' : '12mm';
+        styleNode.textContent = '@page { size: A4 ' + orientation + '; margin: 12mm 12mm 12mm ' + left + '; }';
+        previousTitle = document.title;
+        document.title = 'Grand-livre-tiers-' + safeFilePart(S.currentDossier().name) + '-' + session.report.from + '-' + session.report.to;
+      },
+      afterPrint: function () {
+        document.title = previousTitle || document.title;
+        if (!styleNode) return;
+        if (createdStyle && styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+        else styleNode.textContent = previousStyleText;
+      }
+    };
+  }
+
+  function openThirdPartyLedgerPreview(session) {
+    var report = session.report || buildThirdPartyLedgerReport(session);
+    if (!report.ok) {
+      toast((report.errors || ['Le Grand livre des tiers est indisponible.']).join(' '), 'error');
+      return;
+    }
+    session.report = report;
+    openReportPreview('Aperçu — Grand livre des tiers', thirdPartyLedgerPrintableHtml(session, report), thirdPartyLedgerReportPrintOptions(session));
+  }
+
+  function thirdPartyLedgerReportPreviewView(session) {
+    var report = session.report || buildThirdPartyLedgerReport(session);
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu plein écran obligatoire' : 'Aperçu dans PERFECTO';
+    var pageRange = session.layout.pageFirst || session.layout.pageLast
+      ? 'Plage demandée : ' + (session.layout.pageFirst || '1') + ' à ' + (session.layout.pageLast || 'fin')
+      : 'Toutes les pages';
+    var parity = session.layout.parity === 'odd' ? 'pages impaires' : (session.layout.parity === 'even' ? 'pages paires' : 'aucune parité');
+    return generalBalanceReportSteps('preview', 'Étapes de préparation du Grand livre des tiers') +
+      pageHeader('Aperçu du Grand livre des tiers', 'Vérifiez les mouvements et les soldes progressifs avant impression.',
+        '<button type="button" class="btn btn-primary" data-third-party-ledger-open-preview>Ouvrir l’aperçu plein écran</button>') +
+      '<div class="alert info"><div><strong>Destination choisie :</strong> ' + esc(destination) + '. La boîte d’impression ne s’ouvrira qu’après votre action depuis l’aperçu plein écran.<br><strong>Pages :</strong> ' + esc(pageRange) + ' · ' + esc(parity) + '.</div></div>' +
+      thirdPartyLedgerErrorsHtml(report) +
+      thirdPartyLedgerPrintableHtml(session, report) +
+      '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-third-party-ledger-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-ghost" data-third-party-ledger-back-selection>Modifier la sélection</button></div>';
+  }
+
+  function thirdPartyLedgerReportSavedView(session) {
+    return generalBalanceReportSteps('preview', 'Étapes de préparation du Grand livre des tiers') +
+      pageHeader('Export prêt', 'Le fichier a été préparé sans modifier les reports ni les écritures.', '') +
+      '<section class="card journal-lines-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
+        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-third-party-ledger-open-preview>Afficher l’aperçu plein écran</button><button type="button" class="btn btn-ghost" data-third-party-ledger-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-third-party-ledger-new-report>Nouvelle sélection</button></div></div></section>';
+  }
+
+  function viewThirdPartyLedgerReport(backLink) {
+    var session = ensureThirdPartyLedgerReportSession();
+    if (session.phase !== 'selection') session.report = buildThirdPartyLedgerReport(session);
+    var content = session.phase === 'layout'
+      ? thirdPartyLedgerReportLayoutView(session)
+      : (session.phase === 'preview'
+        ? thirdPartyLedgerReportPreviewView(session)
+        : (session.phase === 'saved'
+          ? thirdPartyLedgerReportSavedView(session)
+          : thirdPartyLedgerReportSelectionView(session, S.currentDossier())));
+    return '<div class="edition-report-detail-view general-balance-report-detail third-party-ledger-report-detail">' + backLink + content + '</div>';
+  }
+
+  function bindThirdPartyLedgerReport() {
+    var session = ensureThirdPartyLedgerReportSession();
+    if (session.phase === 'selection') {
+      var selectionForm = $('#third-party-ledger-selection-form');
+      if (!selectionForm) return;
+      var natureInput = $('#third-party-ledger-nature', selectionForm);
+      var partiesInput = $('#third-party-ledger-parties', selectionForm);
+      if (natureInput) natureInput.addEventListener('change', function () {
+        session.filters.nature = natureInput.value;
+        session.filters.thirdParties = '*';
+        if (partiesInput) partiesInput.value = '*';
+        var nature = ThirdPartyLedgerReport.NATURES.find(function (item) { return item.key === natureInput.value; });
+        var natureLabel = nature ? nature.label : 'Tiers';
+        var label = $('[data-third-party-ledger-parties-label]', selectionForm);
+        if (label) label.textContent = natureLabel;
+        var picker = $('[data-third-party-ledger-picker]', selectionForm);
+        if (picker) picker.setAttribute('aria-label', 'Parcourir les ' + natureLabel.toLocaleLowerCase('fr'));
+      });
+      selectionForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitThirdPartyLedgerSelection(selectionForm, session);
+      });
+      var pickerButton = $('[data-third-party-ledger-picker]', selectionForm);
+      if (pickerButton) pickerButton.addEventListener('click', function () {
+        if (natureInput) session.filters.nature = natureInput.value;
+        if (partiesInput) thirdPartyLedgerReportPicker(partiesInput, session);
+      });
+      return;
+    }
+    if (session.phase === 'layout') {
+      var layoutForm = $('#third-party-ledger-layout-form');
+      if (!layoutForm) return;
+      layoutForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitThirdPartyLedgerLayout(layoutForm, session);
+      });
+      var backToSelection = $('[data-third-party-ledger-back-selection]');
+      if (backToSelection) backToSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+      return;
+    }
+    $$('[data-third-party-ledger-open-preview]').forEach(function (button) {
+      button.addEventListener('click', function () { openThirdPartyLedgerPreview(session); });
+    });
+    $$('[data-third-party-ledger-back-layout]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'layout'; render(); });
+    });
+    $$('[data-third-party-ledger-back-selection]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'selection'; render(); });
+    });
+    var newReportButton = $('[data-third-party-ledger-new-report]');
+    if (newReportButton) newReportButton.addEventListener('click', function () {
+      thirdPartyLedgerReportSession = createThirdPartyLedgerReportSession(S.currentDossier());
+      render();
+    });
+    if (session.phase === 'preview' && !session.previewOpened) {
+      session.previewOpened = true;
+      openThirdPartyLedgerPreview(session);
+    }
   }
 
   /* ------------------- Balance d’ouverture des tiers --------------------- */
@@ -18452,6 +19011,7 @@
     if (child.id === 'general-counterpart-total') return viewGeneralCounterpartTotalReport(backLink);
     if (child.id === 'general-multiyear-history') return viewMultiYearHistoryReport(backLink);
     if (child.id === 'third-party-balance') return viewThirdPartyBalanceReport(backLink);
+    if (child.id === 'third-party-ledger') return viewThirdPartyLedgerReport(backLink);
     if (child.id === 'third-party-opening-balance') return viewThirdPartyOpeningBalanceReport(backLink);
     if (child.id === 'third-party-situation') return viewThirdPartyAccountSituationReport(backLink);
     if (child.id === 'third-party-nature-breakdown') return viewThirdPartyNatureBreakdownReport(backLink);
@@ -19892,6 +20452,7 @@
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-opening-journal') bindOpeningBalanceJournalReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-account-situation') bindAccountSituationReport();
       if (menuParams.g === 'editions' && menuParams.t === 'third-parties' && menuParams.c === 'third-party-balance') bindThirdPartyBalanceReport();
+      if (menuParams.g === 'editions' && menuParams.t === 'third-parties' && menuParams.c === 'third-party-ledger') bindThirdPartyLedgerReport();
       if (menuParams.g === 'editions' && menuParams.t === 'third-parties' && menuParams.c === 'third-party-opening-balance') bindThirdPartyOpeningBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'third-parties' && menuParams.c === 'third-party-situation') bindThirdPartyAccountSituationReport();
       if (menuParams.g === 'editions' && menuParams.t === 'third-parties' && menuParams.c === 'third-party-nature-breakdown') bindThirdPartyNatureBreakdownReport();
