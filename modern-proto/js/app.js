@@ -17,6 +17,7 @@
   var JournalLinesReport = window.PerfectoJournalLinesReport;
   var GeneralBalanceReport = window.PerfectoGeneralBalanceReport;
   var AccountSituationReport = window.PerfectoAccountSituationReport;
+  var GeneralLedgerReport = window.PerfectoGeneralLedgerReport;
   var OpeningBalanceReport = window.PerfectoOpeningBalanceReport;
   var AgedBalanceReport = window.PerfectoAgedBalanceReport;
   var FecImport = window.PerfectoFecImport;
@@ -147,6 +148,7 @@
   var journalLinesReportSession = null;
   var journalLinesReportMode = 'standard';
   var generalBalanceReportSession = null;
+  var generalLedgerReportSession = null;
   var generalSummaryBalanceReportSession = null;
   var openingBalanceReportSession = null;
   var accountSituationReportSession = null;
@@ -758,11 +760,13 @@
     var parsed = parseHash();
     var route = parsed.route;
     var isGeneralBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-balance';
+    var isGeneralLedgerReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-ledger';
     var isGeneralSummaryBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-summary-balance';
     var isOpeningBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-opening-balance';
     var isAccountSituationReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-account-situation';
     var isAgedBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-aged-balance';
     if (!isGeneralBalanceReportRoute) generalBalanceReportSession = null;
+    if (!isGeneralLedgerReportRoute) generalLedgerReportSession = null;
     if (!isGeneralSummaryBalanceReportRoute) generalSummaryBalanceReportSession = null;
     if (!isOpeningBalanceReportRoute) openingBalanceReportSession = null;
     if (!isAccountSituationReportRoute) accountSituationReportSession = null;
@@ -4626,6 +4630,452 @@
     if (session.phase === 'preview' && !session.previewOpened) {
       session.previewOpened = true;
       openAccountSituationReportPreview(session);
+    }
+  }
+
+  /* --------------------------- Grand livre général ----------------------- */
+  function createGeneralLedgerReportSession(dossier) {
+    var columns = Object.create(null);
+    GeneralLedgerReport.COLUMN_DEFINITIONS.forEach(function (column) {
+      columns[column.key] = column.enabled !== false && !!column.defaultSelected;
+    });
+    return {
+      dossierId: dossier.id,
+      phase: 'selection',
+      filters: {
+        accounts: '*', from: dossier.cycleStart, to: dossier.cycleEnd,
+        includeNonMoved: false, subtotalByMonth: false, pageBreakBetweenAccounts: true
+      },
+      columns: columns,
+      layout: {
+        printer: 'system', style: 'plain8', orientation: 'landscape', margins: 'standard',
+        pageFirst: '', pageLast: '', parity: 'none', destination: 'preview'
+      },
+      report: null,
+      previewOpened: false,
+      exportFilename: '',
+      exportMessage: ''
+    };
+  }
+
+  function ensureGeneralLedgerReportSession() {
+    var dossier = S.currentDossier();
+    if (!generalLedgerReportSession || generalLedgerReportSession.dossierId !== dossier.id) {
+      generalLedgerReportSession = createGeneralLedgerReportSession(dossier);
+    }
+    return generalLedgerReportSession;
+  }
+
+  function buildGeneralLedgerReport(session) {
+    var dossier = S.currentDossier();
+    var configuration = S.accountingConfiguration();
+    return GeneralLedgerReport.build({
+      accounts: S.accounts(),
+      entries: S.postedEntries(),
+      openingBalances: S.openingBalances(),
+      journals: S.journals(),
+      matchingGroups: S.matchingGroups(),
+      cycleStart: dossier.cycleStart,
+      cycleEnd: dossier.cycleEnd,
+      from: session.filters.from,
+      to: session.filters.to,
+      accountFilter: session.filters.accounts,
+      includeNonMoved: session.filters.includeNonMoved,
+      subtotalByMonth: session.filters.subtotalByMonth,
+      decimalPlaces: configuration.decimalPlaces
+    });
+  }
+
+  function generalLedgerReportColumnOption(column, session) {
+    var disabled = column.enabled === false;
+    return '<label class="journal-lines-column-option general-ledger-column-option' + (disabled ? ' is-locked' : '') + '">' +
+      '<input type="checkbox" data-general-ledger-column="' + esc(column.key) + '"' + (session.columns[column.key] ? ' checked' : '') +
+        (disabled ? ' disabled aria-describedby="general-ledger-source-note"' : '') + '>' +
+      '<span><strong>' + esc(column.label) + '</strong>' +
+        (column.key === 'reference' ? '<small>Reste vide en l’absence de référence source distincte.</small>' : '') +
+        (column.key === 'letteringDate' ? '<small>Reprise du registre de lettrage, sinon vide.</small>' : '') +
+        (disabled ? '<small>Indisponible dans le dossier</small>' : '') +
+      '</span></label>';
+  }
+
+  function updateGeneralLedgerGeneratedLineCount(form) {
+    var region = $('[data-general-ledger-generated-lines]', form);
+    if (!region) return;
+    var draft = { filters: {
+      accounts: $('#general-ledger-accounts', form).value,
+      from: $('#general-ledger-from', form).value,
+      to: $('#general-ledger-to', form).value,
+      includeNonMoved: !!($('#general-ledger-include-nonmoved', form) && $('#general-ledger-include-nonmoved', form).checked),
+      subtotalByMonth: !!($('#general-ledger-subtotal-month', form) && $('#general-ledger-subtotal-month', form).checked)
+    } };
+    var report = buildGeneralLedgerReport(draft);
+    region.textContent = report.ok ? 'Lignes générées : ' + report.generatedLineCount : 'Lignes générées : —';
+    region.setAttribute('aria-label', report.ok ? report.generatedLineCount + ' lignes générées' : 'Nombre de lignes indisponible');
+  }
+
+  function generalLedgerReportSelectionView(session, dossier) {
+    var report = buildGeneralLedgerReport(session);
+    var columnsByKey = Object.create(null);
+    GeneralLedgerReport.COLUMN_DEFINITIONS.forEach(function (column) { columnsByKey[column.key] = column; });
+    var columnStacks = GeneralLedgerReport.COLUMN_GROUPS.map(function (group, index) {
+      if (!group.length) {
+        return '<div class="general-ledger-column-stack general-ledger-column-placeholder" aria-hidden="true">' +
+          Array.from({ length: 5 }, function () { return '<span>—</span>'; }).join('') + '</div>';
+      }
+      return '<div class="general-ledger-column-stack">' + group.map(function (key) {
+        return generalLedgerReportColumnOption(columnsByKey[key], session);
+      }).join('') + '</div>';
+    }).join('');
+    return generalBalanceReportSteps('selection', 'Étapes de préparation du Grand livre des comptes') +
+      pageHeader('Grand livre des comptes', 'Choisissez les comptes, la période et les colonnes à imprimer.', '') +
+      '<div class="alert info general-ledger-source-note" id="general-ledger-source-note"><div><strong>Lecture seule.</strong> Les mouvements proviennent des écritures validées. Le solde progressif reprend les reports à nouveau et les mouvements antérieurs au début de période ; aucune écriture n’est créée ou modifiée. Les champs sans donnée source explicite restent vides.</div></div>' +
+      '<form id="general-ledger-selection-form" novalidate>' +
+        '<section class="card journal-lines-card"><div class="panel">' +
+          '<div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div><span class="journal-lines-cycle-badge">Cycle ' + esc(dateLabel(dossier.cycleStart)) + ' — ' + esc(dateLabel(dossier.cycleEnd)) + '</span></div>' +
+          '<div class="general-ledger-filter-grid">' +
+            '<div class="field general-ledger-accounts-field"><label for="general-ledger-accounts">Comptes</label><div class="journal-lines-picker-control"><input id="general-ledger-accounts" name="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou 401*; 411100" autocomplete="off" required><button type="button" class="btn btn-ghost" data-general-ledger-picker aria-label="Choisir les comptes">…</button></div><span class="hint">« * » sélectionne tous les comptes ; un code ou préfixe avec * peut être saisi.</span></div>' +
+            '<div class="field"><label for="general-ledger-from">Début</label><input id="general-ledger-from" name="from" type="date" value="' + esc(session.filters.from) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required></div>' +
+            '<div class="field"><label for="general-ledger-to">Fin</label><input id="general-ledger-to" name="to" type="date" value="' + esc(session.filters.to) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required></div>' +
+          '</div>' +
+          '<div class="journal-lines-section-heading general-ledger-columns-heading"><h3>Colonnes à imprimer</h3></div>' +
+          '<div class="general-ledger-column-grid">' + columnStacks + '</div>' +
+        '</div></section>' +
+        '<div class="general-ledger-selection-options">' +
+          '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Lignes à imprimer</h3></div>' +
+            '<label class="journal-lines-check-option"><input id="general-ledger-subtotal-month" type="checkbox"' + (session.filters.subtotalByMonth ? ' checked' : '') + '><span>Sous-total par mois</span></label>' +
+            '<label class="journal-lines-check-option"><input id="general-ledger-include-nonmoved" type="checkbox"' + (session.filters.includeNonMoved ? ' checked' : '') + '><span>Comptes non mouvementés</span></label>' +
+          '</div></section>' +
+          '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Pages</h3></div><div class="journal-lines-radio-list">' +
+            generalBalanceReportRadio('general-ledger-page-break', 'none', 'Pas de saut de page entre les comptes', !session.filters.pageBreakBetweenAccounts, false) +
+            generalBalanceReportRadio('general-ledger-page-break', 'account', 'Saut de page entre chaque compte', session.filters.pageBreakBetweenAccounts, false) +
+          '</div></div></section>' +
+        '</div>' +
+        '<div class="general-ledger-generated-lines" data-general-ledger-generated-lines role="status" aria-live="polite" aria-label="' + esc(report.ok ? report.generatedLineCount + ' lignes générées' : 'Nombre de lignes indisponible') + '">Lignes générées : ' + esc(report.ok ? report.generatedLineCount : '—') + '</div>' +
+        '<div class="journal-lines-form-errors" id="general-ledger-selection-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="journal-lines-form-actions"><button type="submit" class="btn btn-primary">Mise en page <span aria-hidden="true">→</span></button></div>' +
+      '</form>';
+  }
+
+  function submitGeneralLedgerReportSelection(form, session) {
+    var errors = [];
+    var accountsInput = $('#general-ledger-accounts', form);
+    var fromInput = $('#general-ledger-from', form);
+    var toInput = $('#general-ledger-to', form);
+    var accountFilter = GeneralBalanceReport.parseAccountFilter(accountsInput ? accountsInput.value : '');
+    var selectedColumns = $$('[data-general-ledger-column]:checked', form).map(function (input) { return input.getAttribute('data-general-ledger-column'); });
+    if (!accountFilter.valid) errors.push(accountFilter.error);
+    if (!fromInput || !toInput || !fromInput.value || !toInput.value) errors.push('Renseignez les deux dates de la période.');
+    if (!selectedColumns.length) errors.push('Sélectionnez au moins une colonne à imprimer.');
+    showGeneralBalanceReportErrors($('#general-ledger-selection-errors', form), errors);
+    if (errors.length) return;
+    session.filters.accounts = String(accountsInput.value || '*').trim();
+    session.filters.from = fromInput.value;
+    session.filters.to = toInput.value;
+    session.filters.includeNonMoved = !!$('#general-ledger-include-nonmoved', form).checked;
+    session.filters.subtotalByMonth = !!$('#general-ledger-subtotal-month', form).checked;
+    var pageBreak = $('input[name="general-ledger-page-break"]:checked', form);
+    session.filters.pageBreakBetweenAccounts = !!(pageBreak && pageBreak.value === 'account');
+    session.columns = Object.create(null);
+    GeneralLedgerReport.COLUMN_DEFINITIONS.forEach(function (column) {
+      session.columns[column.key] = column.enabled !== false && selectedColumns.indexOf(column.key) !== -1;
+    });
+    session.report = buildGeneralLedgerReport(session);
+    if (!session.report.ok) {
+      showGeneralBalanceReportErrors($('#general-ledger-selection-errors', form), session.report.errors);
+      return;
+    }
+    session.phase = 'layout';
+    session.previewOpened = false;
+    render();
+  }
+
+  function generalLedgerReportColumns(session) {
+    return GeneralLedgerReport.COLUMN_DEFINITIONS.filter(function (column) {
+      return column.enabled !== false && session.columns[column.key] === true;
+    });
+  }
+
+  function generalLedgerReportValue(row, column, forSpreadsheet, columns) {
+    if (row.rowType === 'monthly-subtotal') {
+      if (column.text) return columns.find(function (item) { return item.text; }) === column ? row.subtotalLabel : '';
+      var subtotalNumber = Number(row[column.key]) || 0;
+      if (forSpreadsheet) return subtotalNumber;
+      if (column.key === 'balance') return subtotalNumber ? amount(Math.abs(subtotalNumber)) + (subtotalNumber > 0 ? ' D' : ' C') : '';
+      return subtotalNumber ? amount(subtotalNumber) : '';
+    }
+    if (column.key === 'date') return row.date ? dateLabel(row.date) : '';
+    if (column.key === 'journal') return journalDisplayName(S.journal(row.journal)) || row.journal || '';
+    if (column.key === 'debit' || column.key === 'credit') {
+      var amountValue = Number(row[column.key]) || 0;
+      return forSpreadsheet ? amountValue : (amountValue ? amount(amountValue) : '');
+    }
+    if (column.key === 'balance') {
+      var balance = Number(row.balance) || 0;
+      return forSpreadsheet ? balance : (balance ? amount(Math.abs(balance)) + (balance > 0 ? ' D' : ' C') : '0');
+    }
+    return String(row[column.key] == null ? '' : row[column.key]);
+  }
+
+  function generalLedgerReportTable(session, section) {
+    var columns = generalLedgerReportColumns(session);
+    var rows = section.displayRows || section.rows;
+    var tableHead = '<thead><tr>' + columns.map(function (column) {
+      return '<th scope="col"' + (!column.text ? ' class="num"' : '') + '>' + esc(column.reportLabel || column.label) + '</th>';
+    }).join('') + '</tr></thead>';
+    var body = rows.map(function (row) {
+      var subtotal = row.rowType === 'monthly-subtotal';
+      return '<tr' + (subtotal ? ' class="general-ledger-month-subtotal-row"' : '') + '>' + columns.map(function (column) {
+        var value = generalLedgerReportValue(row, column, false, columns);
+        return '<td' + (!column.text ? ' class="num"' : '') + '>' + esc(value) + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    if (!body) body = '<tr class="general-ledger-empty-row"><td colspan="' + Math.max(columns.length, 1) + '">Aucun mouvement sur cette période.</td></tr>';
+    return '<div class="table-wrap general-ledger-table-wrap"><table class="data-table general-ledger-table">' +
+      '<caption>' + esc(section.lineCount + (section.lineCount === 1 ? ' mouvement' : ' mouvements')) + '</caption>' + tableHead + '<tbody>' + body + '</tbody></table></div>';
+  }
+
+  function generalLedgerReportPrintableHtml(session, report) {
+    report = report || session.report || buildGeneralLedgerReport(session);
+    var styleClass = session.layout.style === 'color10' ? 'is-color-style' : 'is-mono-style';
+    var accountSections = report.accounts.map(function (section, index) {
+      var pageBreak = session.filters.pageBreakBetweenAccounts && index > 0 ? ' is-page-break' : '';
+      return '<section class="general-ledger-account-section' + pageBreak + '">' +
+        '<header class="general-ledger-account-heading"><h3>' + esc(section.code) + ' · ' + esc(section.label) + '</h3>' +
+          '<span>' + esc(section.lineCount + (section.lineCount === 1 ? ' mouvement' : ' mouvements')) + '</span></header>' +
+        generalLedgerReportTable(session, section) +
+      '</section>';
+    }).join('');
+    return '<article class="general-balance-report-print general-ledger-report-print ' + styleClass + '">' +
+      '<header class="general-balance-print-heading"><p class="page-kicker">ÉDITIONS · COMPTES GÉNÉRAUX</p><h2>GRAND LIVRE DES COMPTES</h2>' +
+        '<p>DU ' + esc(dateLabel(report.from)) + ' AU ' + esc(dateLabel(report.to)) + '</p></header>' +
+      '<div class="general-balance-print-context"><span><strong>Comptes :</strong> ' + esc(session.filters.accounts === '*' ? 'Tous les comptes' : session.filters.accounts) + '</span>' +
+        '<span><strong>Comptes non mouvementés :</strong> ' + (session.filters.includeNonMoved ? 'Oui' : 'Non') + '</span></div>' +
+      '<p class="general-balance-print-basis">Les soldes progressifs partent des reports à nouveau et des écritures validées antérieures au début de la période, puis intègrent chaque mouvement affiché. Les brouillons sont exclus. La date de lettrage reprend la date de constitution enregistrée dans le registre de lettrage ; une référence, une immobilisation ou une analyse non présente dans la source reste vide.</p>' +
+      (report.warnings.length ? '<div class="alert warning general-ledger-report-warnings"><div><ul>' + report.warnings.map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('') + '</ul></div></div>' : '') +
+      (accountSections || '<div class="alert info"><div>Aucun compte ne correspond aux critères de sélection.</div></div>') +
+    '</article>';
+  }
+
+  function generalLedgerReportExportMatrix(session, report, forSpreadsheet) {
+    var columns = generalLedgerReportColumns(session);
+    var matrix = [columns.map(function (column) { return column.exportLabel || column.label; })];
+    report.accounts.forEach(function (section) {
+      matrix.push([section.code + ' · ' + section.label].concat(columns.slice(1).map(function () { return ''; })));
+      (section.displayRows || section.rows).forEach(function (row) {
+        matrix.push(columns.map(function (column) { return generalLedgerReportValue(row, column, !!forSpreadsheet, columns); }));
+      });
+    });
+    return matrix;
+  }
+
+  function generalLedgerReportTsv(matrix) {
+    return '\uFEFF' + matrix.map(function (row) {
+      return row.map(function (cell) {
+        var value = cell == null ? '' : String(cell);
+        if (typeof cell === 'string' && /^[=+\-@\t\r]/.test(value)) value = "'" + value;
+        return /[\t\r\n"]/.test(value) ? '"' + value.replace(/"/g, '""') + '"' : value;
+      }).join('\t');
+    }).join('\r\n') + '\r\n';
+  }
+
+  function generateGeneralLedgerReportFile(session, destination) {
+    var report = buildGeneralLedgerReport(session);
+    if (!report.ok) throw new Error((report.errors || ['Le grand livre est invalide.']).join(' '));
+    session.report = report;
+    var spreadsheet = destination === 'table';
+    var matrix = generalLedgerReportExportMatrix(session, report, spreadsheet);
+    var extension = spreadsheet ? 'xlsx' : 'txt';
+    var filename = 'Grand-livre-' + safeFilePart(S.currentDossier().name) + '-' + report.from + '-' + report.to + '.' + extension;
+    var content = spreadsheet
+      ? AccountingExchange.exportTabularWorkbook('Grand livre des comptes', matrix[0], matrix.slice(1))
+      : generalLedgerReportTsv(matrix);
+    downloadFile(filename, content, spreadsheet ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/plain;charset=utf-8');
+    session.exportFilename = filename;
+    session.exportMessage = spreadsheet ? 'Téléchargement du classeur Excel lancé dans le navigateur.' : 'Téléchargement du fichier texte tabulé lancé dans le navigateur.';
+    session.phase = 'saved';
+    render();
+  }
+
+  function generalLedgerReportLayoutView(session) {
+    var report = session.report || buildGeneralLedgerReport(session);
+    var summary = report.accountCount + (report.accountCount === 1 ? ' compte' : ' comptes') +
+      ' · ' + report.lineCount + (report.lineCount === 1 ? ' mouvement' : ' mouvements') +
+      ' · débit ' + amount(report.totals.debit) + ' · crédit ' + amount(report.totals.credit);
+    return generalBalanceReportSteps('layout', 'Étapes de préparation du Grand livre des comptes') +
+      pageHeader('Mise en page', 'Choisissez l’imprimante, le style, l’orientation, les marges, les pages et la destination.', '') +
+      '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(summary) + '. Le grand livre reste en lecture seule.</div></div>' +
+      '<form id="general-ledger-layout-form" novalidate><div class="journal-lines-settings-grid general-balance-settings-grid">' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="general-ledger-printer">Imprimante</label><select id="general-ledger-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante par défaut (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select><span class="hint">Le navigateur conserve le choix final du périphérique ou du PDF.</span></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="general-ledger-style">Style du rapport</label><select id="general-ledger-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('general-ledger-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('general-ledger-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('general-ledger-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('general-ledger-margins', 'binding', 'Reliure', session.layout.margins === 'binding', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Pages</h3></div><div class="journal-lines-page-range"><div class="field"><label for="general-ledger-page-first">Première</label><input id="general-ledger-page-first" type="number" min="1" step="1" value="' + esc(session.layout.pageFirst) + '" placeholder="1"></div><span aria-hidden="true">à</span><div class="field"><label for="general-ledger-page-last">Dernière</label><input id="general-ledger-page-last" type="number" min="1" step="1" value="' + esc(session.layout.pageLast) + '" placeholder="Fin"></div></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Parité</h3></div><div class="field"><label for="general-ledger-parity">Pages</label><select id="general-ledger-parity"><option value="none"' + (session.layout.parity === 'none' ? ' selected' : '') + '>Aucune</option><option value="odd"' + (session.layout.parity === 'odd' ? ' selected' : '') + '>Impaire</option><option value="even"' + (session.layout.parity === 'even' ? ' selected' : '') + '>Paire</option></select></div></div></section>' +
+        '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
+          generalBalanceReportRadio('general-ledger-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
+          generalBalanceReportRadio('general-ledger-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
+          generalBalanceReportRadio('general-ledger-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('general-ledger-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
+        '</div></div></section>' +
+      '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire.</strong> La plage de pages et la parité se règlent dans la boîte d’impression du navigateur si celui-ci les propose.</div></div>' +
+      '<div class="journal-lines-form-errors" id="general-ledger-layout-errors" role="alert" aria-live="polite"></div>' +
+      '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-general-ledger-back-selection>Retour à la sélection</button><button type="submit" class="btn btn-primary">Valider</button></div></form>';
+  }
+
+  function submitGeneralLedgerReportLayout(form, session) {
+    var errors = [];
+    var destination = $('input[name="general-ledger-destination"]:checked', form);
+    var orientation = $('input[name="general-ledger-orientation"]:checked', form);
+    var margins = $('input[name="general-ledger-margins"]:checked', form);
+    var first = $('#general-ledger-page-first', form).value;
+    var last = $('#general-ledger-page-last', form).value;
+    if (first && (!Number.isInteger(Number(first)) || Number(first) < 1)) errors.push('La première page doit être un entier supérieur ou égal à 1.');
+    if (last && (!Number.isInteger(Number(last)) || Number(last) < 1)) errors.push('La dernière page doit être un entier supérieur ou égal à 1.');
+    if (first && last && Number(first) > Number(last)) errors.push('La première page doit précéder ou égaler la dernière page.');
+    showGeneralBalanceReportErrors($('#general-ledger-layout-errors', form), errors);
+    if (errors.length) return;
+    session.layout.printer = $('#general-ledger-printer', form).value;
+    session.layout.style = $('#general-ledger-style', form).value;
+    session.layout.orientation = orientation ? orientation.value : 'landscape';
+    session.layout.margins = margins ? margins.value : 'standard';
+    session.layout.pageFirst = first;
+    session.layout.pageLast = last;
+    session.layout.parity = $('#general-ledger-parity', form).value;
+    session.layout.destination = destination ? destination.value : 'preview';
+    session.report = buildGeneralLedgerReport(session);
+    if (!session.report.ok) {
+      showGeneralBalanceReportErrors($('#general-ledger-layout-errors', form), session.report.errors);
+      return;
+    }
+    if (session.layout.destination === 'table' || session.layout.destination === 'file') {
+      try {
+        generateGeneralLedgerReportFile(session, session.layout.destination);
+      } catch (error) {
+        session.phase = 'layout';
+        render();
+        toast('Export impossible : ' + (error && error.message || 'erreur inconnue.'), 'error');
+      }
+      return;
+    }
+    session.previewOpened = false;
+    session.phase = 'preview';
+    render();
+  }
+
+  function generalLedgerReportPrintOptions(session) {
+    var styleNode = null;
+    var previousStyleText = '';
+    var createdStyle = false;
+    var previousTitle = '';
+    return {
+      beforePrint: function () {
+        styleNode = $('#general-ledger-print-page-style');
+        createdStyle = !styleNode;
+        if (!styleNode) {
+          styleNode = document.createElement('style');
+          styleNode.id = 'general-ledger-print-page-style';
+          document.head.appendChild(styleNode);
+        } else previousStyleText = styleNode.textContent;
+        var orientation = session.layout.orientation === 'portrait' ? 'portrait' : 'landscape';
+        var left = session.layout.margins === 'binding' ? '18mm' : '12mm';
+        styleNode.textContent = '@page { size: A4 ' + orientation + '; margin: 12mm 12mm 12mm ' + left + '; }';
+        previousTitle = document.title;
+        document.title = 'Grand-livre-' + safeFilePart(S.currentDossier().name) + '-' + session.filters.from + '-' + session.filters.to;
+      },
+      afterPrint: function () {
+        document.title = previousTitle || document.title;
+        if (!styleNode) return;
+        if (createdStyle && styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+        else styleNode.textContent = previousStyleText;
+      }
+    };
+  }
+
+  function openGeneralLedgerReportPreview(session) {
+    var report = session.report || buildGeneralLedgerReport(session);
+    session.report = report;
+    openReportPreview('Aperçu — Grand livre des comptes', generalLedgerReportPrintableHtml(session, report), generalLedgerReportPrintOptions(session));
+  }
+
+  function generalLedgerReportPreviewView(session) {
+    var report = session.report || buildGeneralLedgerReport(session);
+    return generalBalanceReportSteps('preview', 'Étapes de préparation du Grand livre des comptes') +
+      pageHeader('Aperçu du Grand livre des comptes', 'Vérifiez les mouvements et les soldes progressifs avant impression.',
+        '<button type="button" class="btn btn-primary" data-general-ledger-open-preview>Ouvrir l’aperçu avant impression</button>') +
+      '<div class="alert info"><div>Impression après aperçu. Les options « Solde » et les colonnes complémentaires ne remplacent pas les données source absentes.</div></div>' +
+      (report.accounts.length ? generalLedgerReportPrintableHtml(session, report) : '<div class="alert warning"><div>Aucun compte ne correspond aux critères de sélection.</div></div>') +
+      '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-general-ledger-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-ghost" data-general-ledger-back-selection>Modifier la sélection</button></div>';
+  }
+
+  function generalLedgerReportSavedView(session) {
+    return generalBalanceReportSteps('preview', 'Étapes de préparation du Grand livre des comptes') +
+      pageHeader('Export prêt', 'Le fichier a été préparé sans modifier les reports ni les écritures.', '') +
+      '<section class="card journal-lines-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
+        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-general-ledger-open-preview>Afficher l’aperçu</button><button type="button" class="btn btn-ghost" data-general-ledger-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-general-ledger-new-report>Nouvelle sélection</button></div></div></section>';
+  }
+
+  function viewGeneralLedgerReport(backLink) {
+    var session = ensureGeneralLedgerReportSession();
+    if (session.phase !== 'selection') session.report = buildGeneralLedgerReport(session);
+    var content = session.phase === 'layout'
+      ? generalLedgerReportLayoutView(session)
+      : (session.phase === 'preview'
+        ? generalLedgerReportPreviewView(session)
+        : (session.phase === 'saved'
+          ? generalLedgerReportSavedView(session)
+          : generalLedgerReportSelectionView(session, S.currentDossier())));
+    return '<div class="edition-report-detail-view general-balance-report-detail general-ledger-report-detail">' + backLink + content + '</div>';
+  }
+
+  function bindGeneralLedgerReport() {
+    var session = ensureGeneralLedgerReportSession();
+    if (session.phase === 'selection') {
+      var selectionForm = $('#general-ledger-selection-form');
+      if (!selectionForm) return;
+      selectionForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitGeneralLedgerReportSelection(selectionForm, session);
+      });
+      ['#general-ledger-accounts', '#general-ledger-from', '#general-ledger-to', '#general-ledger-subtotal-month', '#general-ledger-include-nonmoved'].forEach(function (selector) {
+        var input = $(selector, selectionForm);
+        if (!input) return;
+        input.addEventListener('input', function () { updateGeneralLedgerGeneratedLineCount(selectionForm); });
+        input.addEventListener('change', function () { updateGeneralLedgerGeneratedLineCount(selectionForm); });
+      });
+      var pickerButton = $('[data-general-ledger-picker]', selectionForm);
+      if (pickerButton) pickerButton.addEventListener('click', function () {
+        openGeneralBalanceAccountPicker($('#general-ledger-accounts', selectionForm));
+      });
+      return;
+    }
+    if (session.phase === 'layout') {
+      var layoutForm = $('#general-ledger-layout-form');
+      if (!layoutForm) return;
+      layoutForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitGeneralLedgerReportLayout(layoutForm, session);
+      });
+      var backSelection = $('[data-general-ledger-back-selection]');
+      if (backSelection) backSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+      return;
+    }
+    $$('[data-general-ledger-open-preview]').forEach(function (button) {
+      button.addEventListener('click', function () { openGeneralLedgerReportPreview(session); });
+    });
+    $$('[data-general-ledger-back-layout]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'layout'; render(); });
+    });
+    $$('[data-general-ledger-back-selection]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'selection'; render(); });
+    });
+    var newReportButton = $('[data-general-ledger-new-report]');
+    if (newReportButton) newReportButton.addEventListener('click', function () {
+      generalLedgerReportSession = createGeneralLedgerReportSession(S.currentDossier());
+      render();
+    });
+    if (session.phase === 'preview' && !session.previewOpened) {
+      session.previewOpened = true;
+      openGeneralLedgerReportPreview(session);
     }
   }
 
@@ -14540,7 +14990,7 @@
     if (child.id === 'general-aged-balance') return viewAgedBalanceReport(backLink);
     if (child.id === 'general-opening-balance') return viewOpeningBalanceReport(backLink);
     if (child.id === 'general-account-situation') return viewAccountSituationReport(backLink);
-    if (child.id === 'general-ledger') return '<div class="edition-report-detail-view">' + backLink + viewLedger() + '</div>';
+    if (child.id === 'general-ledger') return viewGeneralLedgerReport(backLink);
     var inactive = child.status === 'inactive';
     var analytic = inactive && (child.section === 'analysis' || child.section === 'situations' || child.section === 'definitionsAnalytics' || child.id.indexOf('analytic-') === 0 || child.id === 'general-analytic-balance' || child.id === 'journal-analytic-center-totals');
     var noticeTitle = analytic ? 'Comptabilité analytique séparée' : (inactive ? 'Élément désactivé' : 'Sous-élément créé · écran à préciser');
@@ -15970,6 +16420,7 @@
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && (menuParams.c === 'journal-lines' || menuParams.c === 'journal-modified-pieces' || menuParams.c === 'journal-unbalanced-pieces' || menuParams.c === 'journal-entry-totals' || menuParams.c === 'journal-individual-account-totals' || menuParams.c === 'journal-summary-account-totals' || menuParams.c === 'journal-third-party-totals' || menuParams.c === 'journal-analytic-center-totals' || menuParams.c === 'journal-currency-totals')) bindJournalLinesReport();
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && menuParams.c === 'journal-allocation-sheet') bindJournalAllocationSheet();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-balance') bindGeneralBalanceReport();
+      if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-ledger') bindGeneralLedgerReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-summary-balance') bindGeneralSummaryBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-aged-balance') bindAgedBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-opening-balance') bindOpeningBalanceReport();

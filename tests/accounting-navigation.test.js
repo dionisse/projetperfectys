@@ -8,6 +8,7 @@ const nav = require('../modern-proto/js/accounting-navigation.js');
 const appSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'app.js'), 'utf8');
 const journalLinesSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'journal-lines-report.js'), 'utf8');
 const generalBalanceSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'accounting-balance-report.js'), 'utf8');
+const generalLedgerSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'general-ledger-report.js'), 'utf8');
 const agedBalanceSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'aged-balance-report.js'), 'utf8');
 const openingBalanceReportSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'opening-balance-report.js'), 'utf8');
 const accountSituationReportSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'account-situation-report.js'), 'utf8');
@@ -515,6 +516,9 @@ assert.match(appSource, /function printAgedBalanceReport\([\s\S]*agedBalance\.pr
 assert.match(appSource, /function bindAgedBalanceReport\([\s\S]*aged-balance-preview-open[\s\S]*data-aged-balance-close-preview[\s\S]*event\.key === 'Escape'/);
 assert.match(configurationCss, /body\.aged-balance-preview-open\s*\{\s*overflow:\s*hidden[\s\S]*\.aged-balance-preview-overlay\s*\{\s*padding:\s*0[\s\S]*\.report-preview-sheet\.aged-balance-preview-sheet\s*\{[^}]*max-width:\s*none/);
 assert.ok(htmlSource.indexOf('js/aged-balance-report.js') < htmlSource.indexOf('js/app.js'));
+assert.ok(htmlSource.indexOf('js/accounting-balance-report.js') < htmlSource.indexOf('js/general-ledger-report.js'));
+assert.ok(htmlSource.indexOf('js/general-ledger-report.js') < htmlSource.indexOf('js/app.js'));
+assert.match(serviceWorkerSource, /\.\/js\/general-ledger-report\.js/);
 assert.ok(htmlSource.indexOf('js/accounting-balance-report.js') < htmlSource.indexOf('js/account-situation-report.js'));
 assert.ok(htmlSource.indexOf('js/account-situation-report.js') < htmlSource.indexOf('js/app.js'));
 assert.ok(htmlSource.indexOf('js/accounting-balance-report.js') < htmlSource.indexOf('js/opening-balance-report.js'));
@@ -524,7 +528,10 @@ assert.match(serviceWorkerSource, /\.\/js\/aged-balance-report\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/opening-balance-report\.js/);
 assert.match(configurationCss, /\.aged-balance-register-table[\s\S]*\.aged-balance-report-table/);
 assert.ok(findTab('editions', 'general-accounts').children.find(child => child.id === 'general-balance').reason.includes('aperçu'));
-assert.equal(findTab('editions', 'general-accounts').children.find(child => child.id === 'general-ledger').status, 'partial');
+const generalLedgerNavigation = findTab('editions', 'general-accounts').children.find(child => child.id === 'general-ledger');
+assert.equal(generalLedgerNavigation.status, 'active');
+assert.ok(generalLedgerNavigation.reason.includes('soldes progressifs'));
+assert.ok(generalLedgerNavigation.reason.includes('comptes non mouvementés'));
 assert.equal(findTab('editions', 'general-accounts').children.find(child => child.id === 'general-analytic-balance').status, 'inactive');
 assert.equal(findTab('editions', 'third-parties').children.length, 7);
 assert.equal(findTab('editions', 'foreign-currency').children.length, 5);
@@ -681,8 +688,15 @@ assert.match(appSource, /function accountSituationReportPrintableHtml\([\s\S]*PO
 assert.match(appSource, /function accountSituationReportLayoutView\([\s\S]*account-situation-orientation[\s\S]*account-situation-margins[\s\S]*account-situation-page-first[\s\S]*account-situation-parity[\s\S]*account-situation-destination/);
 assert.match(appSource, /function openAccountSituationReportPreview\([\s\S]*openReportPreview\('Aperçu — Position des comptes'/);
 assert.match(accountSituationReportSource, /closingNetBalances: true[\s\S]*draftEntriesExcluded: true/);
-assert.match(serviceWorkerSource, /perfecto-static-v105/);
-assert.match(appSource, /child\.id === 'general-ledger'[\s\S]*viewLedger\(\)/);
+assert.match(appSource, /child\.id === 'general-ledger'\) return viewGeneralLedgerReport\(backLink\)/);
+assert.match(appSource, /menuParams\.g === 'editions' && menuParams\.t === 'general-accounts' && menuParams\.c === 'general-ledger'\) bindGeneralLedgerReport\(\)/);
+assert.match(appSource, /function buildGeneralLedgerReport\(session\)[\s\S]*entries: S\.postedEntries\(\)[\s\S]*openingBalances: S\.openingBalances\(\)[\s\S]*from: session\.filters\.from[\s\S]*to: session\.filters\.to/);
+assert.match(appSource, /function generalLedgerReportSelectionView\([\s\S]*general-ledger-from[\s\S]*general-ledger-to[\s\S]*Sous-total par mois[\s\S]*Comptes non mouvementés[\s\S]*Lignes générées/);
+assert.match(appSource, /function generalLedgerReportLayoutView\([\s\S]*general-ledger-orientation[\s\S]*general-ledger-margins[\s\S]*general-ledger-page-first[\s\S]*general-ledger-parity[\s\S]*general-ledger-destination/);
+assert.match(appSource, /function generalLedgerReportPrintableHtml\([\s\S]*GRAND LIVRE DES COMPTES[\s\S]*reports à nouveau[\s\S]*page-break/);
+assert.match(generalLedgerSource, /priorEntriesIncludedInRunningBalance: true[\s\S]*sourceReferenceOnly: true[\s\S]*noAccountingMutation: true/);
+assert.match(configurationCss, /\.general-ledger-column-grid[\s\S]*\.general-ledger-account-section/);
+assert.match(serviceWorkerSource, /perfecto-static-v106/);
 
 assert.match(appSource, /function accountingMenuHash\(groupId, tabId, childId\)[\s\S]*return childId \? hash \+ '&c='/,
   'le lien d’un enfant conserve son identifiant dans la route');
@@ -718,7 +732,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v105/);
+assert.match(serviceWorkerSource, /perfecto-static-v106/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

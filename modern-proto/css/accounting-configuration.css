@@ -937,6 +937,35 @@ body.report-preview-open { overflow: hidden; }
 .account-situation-generated-lines { margin: 6px 0 10px; color: #65736b; font-size: .78rem; font-weight: 650; }
 .account-situation-report-warnings { margin: 12px 0; }
 .account-situation-report-warnings ul { margin: 0 0 0 18px; }
+.general-ledger-source-note { margin: 0 0 14px; line-height: 1.55; }
+.general-ledger-filter-grid { display: grid; grid-template-columns: minmax(0, 2fr) repeat(2, minmax(150px, .8fr)); gap: 14px; align-items: start; }
+.general-ledger-accounts-field { min-width: 0; }
+.general-ledger-columns-heading { margin-top: 18px; }
+.general-ledger-column-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 18px; }
+.general-ledger-column-stack { display: grid; align-content: start; gap: 7px; min-width: 0; }
+.general-ledger-column-option { min-height: 34px; }
+.general-ledger-column-option small { display: block; color: #718078; font-size: .64rem; line-height: 1.35; }
+.general-ledger-column-option.is-locked { color: #7d8882; cursor: not-allowed; }
+.general-ledger-column-option.is-locked strong { color: #77847d; }
+.general-ledger-column-placeholder { color: #a6afa9; text-align: center; }
+.general-ledger-column-placeholder span { min-height: 34px; }
+.general-ledger-selection-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.general-ledger-generated-lines { margin: 6px 0 10px; color: #65736b; font-size: .78rem; font-weight: 650; }
+.general-ledger-report-warnings { margin: 12px 0; }
+.general-ledger-report-warnings ul { margin: 0 0 0 18px; }
+.general-ledger-account-section { margin: 18px 0 24px; }
+.general-ledger-account-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 6px; padding: 6px 8px; border-bottom: 1px solid #cbd4ce; }
+.general-ledger-account-heading h3 { margin: 0; color: #22372c; font-size: .92rem; }
+.general-ledger-account-heading > span { color: #68776f; font-size: .68rem; }
+.general-ledger-table { width: 100%; min-width: 0 !important; table-layout: auto; font-size: .72rem !important; }
+.general-ledger-table th, .general-ledger-table td { padding: 5px 6px !important; }
+.general-ledger-table .num { text-align: right !important; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.general-ledger-table caption { padding: 0 0 5px; color: #64746b; text-align: left; font-size: .65rem; }
+.general-ledger-month-subtotal-row { font-weight: 700; border-top: 1px solid #abb7af; }
+.general-ledger-report-print.is-mono-style .general-ledger-table,
+.general-ledger-report-print.is-mono-style .general-ledger-table thead th { color: #111 !important; background: #fff !important; }
+.general-ledger-report-print.is-color-style .general-ledger-table thead th { color: #1d4c3d !important; background: #edf5f0 !important; }
+.general-ledger-empty-row td { padding: 12px !important; color: #68776f; font-style: italic; }
 .general-balance-filter-grid { display: grid; grid-template-columns: minmax(0, 2fr) repeat(2, minmax(150px, .8fr)); gap: 14px; }
 .general-balance-filter-grid .field { min-width: 0; }
 .general-balance-account-filter .journal-lines-picker-control { grid-template-columns: minmax(0, 1fr) auto; }
@@ -977,6 +1006,16 @@ body.report-preview-open { overflow: hidden; }
 .general-balance-report-print.is-color-style .general-balance-table thead th { color: #1d4c3d !important; background: #edf5f0 !important; }
 .general-balance-report-print.is-color-style .general-balance-table tfoot th,
 .general-balance-report-print.is-color-style .general-balance-table tfoot td { background: #f1f5f2 !important; }
+@media print {
+  body.report-preview-printing .report-preview-content .general-ledger-report-print { width: 100%; max-width: none; margin: 0; padding: 0; color: #111 !important; background: #fff !important; }
+  body.report-preview-printing .report-preview-content .general-ledger-report-print .general-ledger-table { width: 100%; min-width: 0 !important; font-size: 8pt !important; }
+  body.report-preview-printing .report-preview-content .general-ledger-report-print .general-ledger-table thead { display: table-header-group; }
+  body.report-preview-printing .report-preview-content .general-ledger-report-print .general-ledger-table tr { break-inside: avoid; page-break-inside: avoid; }
+  body.report-preview-printing .report-preview-content .general-ledger-report-print .general-ledger-account-section.is-page-break { break-before: page; page-break-before: always; }
+  body.report-preview-printing .report-preview-content .general-ledger-report-print .general-ledger-account-heading { break-after: avoid; page-break-after: avoid; }
+  body.report-preview-printing .report-preview-content .general-ledger-report-print.is-color-style .general-ledger-table { font-size: 10pt !important; }
+  body.report-preview-printing .report-preview-content .general-ledger-report-print.is-mono-style .general-ledger-table th { color: #111 !important; background: #fff !important; }
+}
 .general-balance-picker-option { display: grid; grid-template-columns: 18px minmax(88px, auto) minmax(0, 1fr); }
 .general-balance-picker-option[hidden] { display: none; }
 
@@ -987,7 +1026,10 @@ body.report-preview-open { overflow: hidden; }
 
 @media (max-width: 640px) {
   .general-balance-filter-grid,
-  .account-situation-filter-grid { grid-template-columns: minmax(0, 1fr); }
+  .account-situation-filter-grid,
+  .general-ledger-filter-grid { grid-template-columns: minmax(0, 1fr); }
+  .general-ledger-column-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .general-ledger-selection-options { grid-template-columns: minmax(0, 1fr); }
   .general-balance-option-grid,
   .general-balance-column-grid,
   .opening-balance-column-grid,
