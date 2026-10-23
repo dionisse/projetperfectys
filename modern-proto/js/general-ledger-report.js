@@ -169,11 +169,29 @@
         var debitMinor = finiteMinor(line.debit, factor);
         var creditMinor = finiteMinor(line.credit, factor);
         if (debitMinor === null || creditMinor === null) return;
+        var entryKey = String(entry.id || entry.reference || ('entry-' + entryIndex));
+        var rowKey = entryKey + ':' + lineIndex;
         var counterpartCodes = [];
+        var counterpartLines = [];
         lines.forEach(function (otherLine, otherIndex) {
           if (!otherLine || otherIndex === lineIndex) return;
           var otherCode = String(otherLine.account == null ? otherLine.accountCode || '' : otherLine.account);
-          if (otherCode && otherCode !== code && counterpartCodes.indexOf(otherCode) === -1) counterpartCodes.push(otherCode);
+          if (!otherCode || otherCode === code) return;
+          if (counterpartCodes.indexOf(otherCode) === -1) counterpartCodes.push(otherCode);
+          var otherDebitMinor = finiteMinor(otherLine.debit, factor);
+          var otherCreditMinor = finiteMinor(otherLine.credit, factor);
+          if (otherDebitMinor !== null && otherCreditMinor !== null) {
+            counterpartLines.push({
+              key: entryKey + ':' + otherIndex,
+              sourceKey: String(entryIndex) + ':' + otherIndex,
+              lineIndex: otherIndex,
+              accountCode: otherCode,
+              debit: otherDebitMinor / factor,
+              credit: otherCreditMinor / factor,
+              debitMinor: otherDebitMinor,
+              creditMinor: otherCreditMinor
+            });
+          }
         });
         counterpartCodes.sort(function (left, right) { return left.localeCompare(right, 'fr', { numeric: true }); });
         var counterpart = counterpartCodes.map(function (otherCode) {
@@ -181,9 +199,10 @@
           return otherCode + (account && account.label ? ' — ' + String(account.label) : '');
         }).join(' · ');
         var lineRows = ensureMovementList(code);
-        var rowKey = String(entry.id || entry.reference || ('entry-' + entryIndex)) + ':' + lineIndex;
         lineRows.push({
           key: rowKey,
+          entryKey: entryKey,
+          lineIndex: lineIndex,
           accountCode: code,
           date: date,
           journal: String(entry.journal || entry.journalCode || ''),
@@ -200,9 +219,9 @@
           debitMinor: debitMinor,
           creditMinor: creditMinor,
           counterpartCodes: counterpartCodes.slice(),
+          counterpartLines: counterpartLines,
           rowType: 'movement'
         });
-        var entryKey = String(entry.id || entry.reference || ('entry-' + entryIndex));
         movementEntryIds[entryKey] = true;
       });
     });

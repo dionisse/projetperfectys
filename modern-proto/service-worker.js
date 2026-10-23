@@ -3,7 +3,7 @@
  * Stratégie : réseau d'abord (contenu toujours à jour), cache en secours hors ligne.
  */
 
-const CACHE_NAME = 'perfecto-static-v109';
+const CACHE_NAME = 'perfecto-static-v110';
 const APP_SHELL = [
   './',
   './index.html',
@@ -24,6 +24,7 @@ const APP_SHELL = [
   './js/accounting-balance-report.js',
   './js/general-ledger-report.js',
   './js/general-counterpart-detail-report.js',
+  './js/general-counterpart-total-report.js',
   './js/multiyear-history-report.js',
   './js/account-situation-report.js',
   './js/opening-balance-report.js',

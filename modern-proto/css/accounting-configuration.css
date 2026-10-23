@@ -964,6 +964,21 @@ body.report-preview-open { overflow: hidden; }
 .general-counterpart-detail-report-print.is-mono-style .general-counterpart-detail-table,
 .general-counterpart-detail-report-print.is-mono-style .general-counterpart-detail-table thead th { color: #111 !important; background: #fff !important; }
 .general-counterpart-detail-report-print.is-color-style .general-counterpart-detail-table thead th { color: #1d4c3d !important; background: #edf5f0 !important; }
+.general-counterpart-total-source-note { margin: 0 0 14px; line-height: 1.55; }
+.general-counterpart-total-filter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.general-counterpart-total-column-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 22px; }
+.general-counterpart-total-column-stack { display: grid; align-content: start; gap: 7px; min-width: 0; }
+.general-counterpart-total-column-option { min-height: 34px; }
+.general-counterpart-total-columns-heading { margin-top: 18px; }
+.general-counterpart-total-warnings { margin: 12px 0; }
+.general-counterpart-total-warnings ul { margin: 0 0 0 18px; }
+.general-counterpart-total-table { width: 100%; min-width: 0 !important; table-layout: auto; font-size: .75rem !important; }
+.general-counterpart-total-table th, .general-counterpart-total-table td { padding: 6px 8px !important; }
+.general-counterpart-total-table .num { text-align: right !important; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.general-counterpart-total-table caption { padding: 0 0 6px; color: #64746b; text-align: left; font-size: .67rem; }
+.general-counterpart-total-print.is-mono-style .general-counterpart-total-table,
+.general-counterpart-total-print.is-mono-style .general-counterpart-total-table thead th { color: #111 !important; background: #fff !important; }
+.general-counterpart-total-print.is-color-style .general-counterpart-total-table thead th { color: #1d4c3d !important; background: #edf5f0 !important; }
 .multi-year-history-source-note { margin: 0 0 14px; line-height: 1.55; }
 .multi-year-history-source-warning { margin: 0 0 14px; line-height: 1.5; }
 .multi-year-history-source-warning ul,
@@ -1084,6 +1099,8 @@ body.report-preview-open { overflow: hidden; }
   .general-ledger-filter-grid,
   .general-counterpart-detail-filter-grid,
   .general-counterpart-detail-column-grid,
+  .general-counterpart-total-filter-grid,
+  .general-counterpart-total-column-grid,
   .multi-year-history-filter-grid { grid-template-columns: minmax(0, 1fr); }
   .general-ledger-column-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .multi-year-history-column-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

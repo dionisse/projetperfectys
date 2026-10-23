@@ -82,6 +82,11 @@ test('filtre les dates inclusivement et calcule le solde depuis les reports et Ã
   assert.equal(supplierRows[1].balance, -65);
   assert.equal(supplierRows[0].counterpart, '521000 â€” Banque');
   assert.deepEqual(supplierRows[0].counterpartCodes, ['521000']);
+  assert.deepEqual(supplierRows[0].counterpartLines, [{
+    key: 'FEB:1', sourceKey: '1:1', lineIndex: 1, accountCode: '521000', debit: 0, credit: 20, debitMinor: 0, creditMinor: 20
+  }]);
+  assert.equal(supplierRows[0].entryKey, 'FEB');
+  assert.equal(supplierRows[0].lineIndex, 0);
   assert.equal(supplierRows[0].reference, 'VIR-EXT-1');
   assert.equal(supplierRows[1].reference, 'FACT-REF-2');
   assert.equal(report.lineCount, 4);
