@@ -54,6 +54,7 @@
   var ANALYTICAL_CENTER_REGISTRY_VERSION = 1;
   var RECONCILIATION_REGISTRY_VERSION = 2;
   var OPENING_BALANCE_REGISTRY_VERSION = 1;
+  var AGED_BALANCE_REGISTRY_VERSION = 1;
   var LEGACY_COMPTES = [
     { code: '101200', label: 'Capital social', cls: 1, nature: 'Passif', aux: false },
     { code: '162100', label: 'Emprunt bancaire', cls: 1, nature: 'Passif', aux: false },
@@ -328,6 +329,45 @@
     });
   }
 
+  function normalizeAgedBalanceItems(value) {
+    return (Array.isArray(value) ? value : []).map(function (record) {
+      if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
+      var amount = Number(record.amount);
+      return {
+        id: String(record.id || '').trim().slice(0, 80),
+        nature: String(record.nature || '').trim().slice(0, 32),
+        accountCode: String(record.accountCode || '').trim().slice(0, 16),
+        thirdPartyId: String(record.thirdPartyId || '').trim().slice(0, 100),
+        thirdPartyCode: String(record.thirdPartyCode || '').trim().slice(0, 80),
+        thirdPartyName: String(record.thirdPartyName || '').trim().slice(0, 180),
+        reference: String(record.reference || '').trim().slice(0, 100),
+        documentDate: String(record.documentDate || '').trim().slice(0, 10),
+        dueDate: String(record.dueDate || '').trim().slice(0, 10),
+        amount: Number.isFinite(amount) ? amount : 0,
+        description: String(record.description || '').trim().slice(0, 240),
+        createdAt: String(record.createdAt || '').slice(0, 40),
+        updatedAt: String(record.updatedAt || '').slice(0, 40)
+      };
+    }).filter(function (record) { return !!(record && record.id); });
+  }
+
+  function normalizeAgedBalanceSettlements(value) {
+    return (Array.isArray(value) ? value : []).map(function (record) {
+      if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
+      var amount = Number(record.amount);
+      return {
+        id: String(record.id || '').trim().slice(0, 80),
+        itemId: String(record.itemId || '').trim().slice(0, 80),
+        date: String(record.date || '').trim().slice(0, 10),
+        reference: String(record.reference || '').trim().slice(0, 100),
+        amount: Number.isFinite(amount) ? amount : 0,
+        description: String(record.description || '').trim().slice(0, 240),
+        createdAt: String(record.createdAt || '').slice(0, 40),
+        updatedAt: String(record.updatedAt || '').slice(0, 40)
+      };
+    }).filter(function (record) { return !!(record && record.id && record.itemId); });
+  }
+
   function upgradeAuxiliaryRegistries(data) {
     var result = { data: data, changed: false };
     if (!data) return result;
@@ -389,6 +429,21 @@
       if (match) openingBalanceSequence = Math.max(openingBalanceSequence, Number(match[2]) + 1);
     });
     var currentOpeningBalanceVersion = Number(data.openingBalanceRegistryVersion);
+    var agedBalanceItems = normalizeAgedBalanceItems(data.agedBalanceItems);
+    var agedBalanceSettlements = normalizeAgedBalanceSettlements(data.agedBalanceSettlements);
+    var agedBalanceItemSequence = Number(data.agedBalanceItemSequence);
+    var agedBalanceSettlementSequence = Number(data.agedBalanceSettlementSequence);
+    if (!Number.isInteger(agedBalanceItemSequence) || agedBalanceItemSequence < 1) agedBalanceItemSequence = 1;
+    if (!Number.isInteger(agedBalanceSettlementSequence) || agedBalanceSettlementSequence < 1) agedBalanceSettlementSequence = 1;
+    agedBalanceItems.forEach(function (record) {
+      var match = /^BAL-(\d{4})-(\d+)$/.exec(record.id);
+      if (match) agedBalanceItemSequence = Math.max(agedBalanceItemSequence, Number(match[2]) + 1);
+    });
+    agedBalanceSettlements.forEach(function (record) {
+      var match = /^REG-(\d{4})-(\d+)$/.exec(record.id);
+      if (match) agedBalanceSettlementSequence = Math.max(agedBalanceSettlementSequence, Number(match[2]) + 1);
+    });
+    var currentAgedBalanceVersion = Number(data.agedBalanceRegistryVersion);
     var matchingSequence = Number(data.matchingSequence);
     var pointageSequence = Number(data.pointageSequence);
     if (!Number.isInteger(matchingSequence) || matchingSequence < 1) matchingSequence = 1;
@@ -447,6 +502,12 @@
       JSON.stringify(data.openingBalances || []) !== JSON.stringify(openingBalances) ||
       Number(data.openingBalanceSequence) !== openingBalanceSequence ||
       JSON.stringify(data.openingBalanceTransfers || []) !== JSON.stringify(openingBalanceTransfers) ||
+      !Array.isArray(data.agedBalanceItems) || !Array.isArray(data.agedBalanceSettlements) ||
+      !Number.isFinite(currentAgedBalanceVersion) || currentAgedBalanceVersion < AGED_BALANCE_REGISTRY_VERSION ||
+      JSON.stringify(data.agedBalanceItems || []) !== JSON.stringify(agedBalanceItems) ||
+      JSON.stringify(data.agedBalanceSettlements || []) !== JSON.stringify(agedBalanceSettlements) ||
+      Number(data.agedBalanceItemSequence) !== agedBalanceItemSequence ||
+      Number(data.agedBalanceSettlementSequence) !== agedBalanceSettlementSequence ||
       !Array.isArray(data.clients) || !Number.isFinite(currentClientVersion) || currentClientVersion < CLIENT_REGISTRY_VERSION ||
       !Array.isArray(data.otherParties) || !Number.isFinite(currentOtherPartyVersion) || currentOtherPartyVersion < OTHER_PARTY_REGISTRY_VERSION ||
       !Array.isArray(data.personnel) || !Number.isFinite(currentPersonnelVersion) || currentPersonnelVersion < PERSONNEL_REGISTRY_VERSION ||
@@ -477,6 +538,11 @@
         openingBalances: openingBalances,
         openingBalanceSequence: openingBalanceSequence,
         openingBalanceTransfers: openingBalanceTransfers,
+        agedBalanceRegistryVersion: Math.max(Number.isFinite(currentAgedBalanceVersion) ? currentAgedBalanceVersion : 0, AGED_BALANCE_REGISTRY_VERSION),
+        agedBalanceItems: agedBalanceItems,
+        agedBalanceSettlements: agedBalanceSettlements,
+        agedBalanceItemSequence: agedBalanceItemSequence,
+        agedBalanceSettlementSequence: agedBalanceSettlementSequence,
         serviceRegistryVersion: SERVICE_REGISTRY_VERSION,
         services: services,
         serviceCodeHistory: serviceCodeHistory,
@@ -928,6 +994,11 @@
       openingBalances: [],
       openingBalanceSequence: 1,
       openingBalanceTransfers: [],
+      agedBalanceRegistryVersion: AGED_BALANCE_REGISTRY_VERSION,
+      agedBalanceItems: [],
+      agedBalanceSettlements: [],
+      agedBalanceItemSequence: 1,
+      agedBalanceSettlementSequence: 1,
       suppliers: [],
       clients: [],
       otherParties: [],
@@ -5301,6 +5372,256 @@
     return { ok: true, errors: [], fixedAsset: clone(record) };
   }
 
+  function agedBalanceNatureInfo(nature) {
+    if (nature === 'clients') return { key: 'clients', label: 'Clients', partyType: 'client' };
+    if (nature === 'suppliers') return { key: 'suppliers', label: 'Fournisseurs', partyType: 'supplier' };
+    if (nature === 'salary-advances') return { key: 'salary-advances', label: 'Avances sur salaire', partyType: 'personnel' };
+    return null;
+  }
+
+  function agedBalanceAccountAllowed(nature, accountCode) {
+    var code = String(accountCode || '');
+    if (nature === 'clients') return (code.indexOf('411') === 0 && code.indexOf('4117') !== 0) || ['485', '486', '488'].some(function (prefix) { return code.indexOf(prefix) === 0; });
+    if (nature === 'suppliers') return (code.indexOf('401') === 0 && code.indexOf('4017') !== 0) || ['408', '481', '482', '483', '484'].some(function (prefix) { return code.indexOf(prefix) === 0; });
+    if (nature === 'salary-advances') return code.indexOf('421') === 0;
+    return false;
+  }
+
+  function agedBalancePartyRecords(st, nature) {
+    var info = agedBalanceNatureInfo(nature);
+    if (!info) return [];
+    if (info.partyType === 'client') return Array.isArray(st.clients) ? st.clients : [];
+    if (info.partyType === 'supplier') return Array.isArray(st.suppliers) ? st.suppliers : [];
+    return Array.isArray(st.personnel) ? st.personnel : [];
+  }
+
+  function validateAgedBalanceItemInput(input, st) {
+    input = input || {};
+    var errors = [];
+    var nature = String(input.nature || '');
+    var info = agedBalanceNatureInfo(nature);
+    var accountCode = String(input.accountCode || '').trim();
+    var thirdPartyId = String(input.thirdPartyId || '').trim();
+    var reference = String(input.reference || '').trim();
+    var documentDate = String(input.documentDate || '').trim();
+    var dueDate = String(input.dueDate || '').trim();
+    var amountValue = Number(input.amount);
+    var accountRecord = st.accounts.find(function (record) { return String(record.code) === accountCode; });
+    var party = agedBalancePartyRecords(st, nature).find(function (record) { return String(record.id) === thirdPartyId; });
+    var decimals = Number(accountingConfiguration().decimalPlaces) || 0;
+    var factor = Math.pow(10, decimals);
+    var normalizedAmount = Math.round(amountValue * factor) / factor;
+
+    if (!info) errors.push('Choisissez Clients, Fournisseurs ou Avances sur salaire.');
+    if (!accountRecord || accountRecord.active === false || accountRecord.postable === false) errors.push('Choisissez un compte général actif et imputable existant dans le plan comptable.');
+    else if (!agedBalanceAccountAllowed(nature, accountCode)) errors.push('Le compte choisi ne correspond pas à la nature sélectionnée selon les comptes de la Balance âgée.');
+    if (!thirdPartyId || !party) errors.push('Choisissez un tiers existant du référentiel correspondant à cette nature.');
+    if (!reference) errors.push('La référence de la pièce est obligatoire.');
+    else if (reference.length > 100) errors.push('La référence ne peut pas dépasser 100 caractères.');
+    if (!parseIsoDate(documentDate)) errors.push('Indiquez une date de pièce valide.');
+    if (!parseIsoDate(dueDate)) errors.push('Indiquez une échéance valide.');
+    if (!Number.isFinite(amountValue) || amountValue <= 0 || !Number.isFinite(normalizedAmount) || normalizedAmount <= 0) errors.push('Le montant initial doit être supérieur à zéro et respecter la précision du dossier.');
+    else if (Math.abs(normalizedAmount - amountValue) > 0.0000001) errors.push('Le montant dépasse la précision autorisée dans le dossier.');
+    if (String(input.description || '').trim().length > 240) errors.push('La description ne peut pas dépasser 240 caractères.');
+
+    return {
+      ok: errors.length === 0,
+      errors: errors,
+      value: {
+        nature: nature,
+        accountCode: accountCode,
+        thirdPartyId: thirdPartyId,
+        thirdPartyCode: String(party && party.code || '').trim().slice(0, 80),
+        thirdPartyName: String(party && party.name || '').trim().slice(0, 180),
+        reference: reference,
+        documentDate: documentDate,
+        dueDate: dueDate,
+        amount: normalizedAmount,
+        description: String(input.description || '').trim()
+      }
+    };
+  }
+
+  function agedBalanceItemRecordsForState(st) {
+    if (!Array.isArray(st.agedBalanceItems)) st.agedBalanceItems = [];
+    return st.agedBalanceItems;
+  }
+
+  function agedBalanceSettlementRecordsForState(st) {
+    if (!Array.isArray(st.agedBalanceSettlements)) st.agedBalanceSettlements = [];
+    return st.agedBalanceSettlements;
+  }
+
+  function agedBalanceItem(id) {
+    var key = String(id || '');
+    return agedBalanceItemRecordsForState(load()).find(function (record) { return record.id === key; }) || null;
+  }
+
+  function nextAgedBalanceId(st, kind, date) {
+    var isSettlement = kind === 'REG';
+    var sequenceKey = isSettlement ? 'agedBalanceSettlementSequence' : 'agedBalanceItemSequence';
+    var records = isSettlement ? agedBalanceSettlementRecordsForState(st) : agedBalanceItemRecordsForState(st);
+    var sequence = Number(st[sequenceKey]);
+    if (!Number.isInteger(sequence) || sequence < 1) sequence = 1;
+    var year = String(date || todayIso()).slice(0, 4);
+    var id;
+    do {
+      id = kind + '-' + year + '-' + String(sequence).padStart(5, '0');
+      sequence += 1;
+    } while (records.some(function (record) { return record.id === id; }));
+    st[sequenceKey] = sequence;
+    return id;
+  }
+
+  function createAgedBalanceItem(input) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Création bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var validation = validateAgedBalanceItemInput(input, st);
+    if (!validation.ok) return validation;
+    var previousState = clone(st);
+    var timestamp = new Date().toISOString();
+    var item = Object.assign({ id: nextAgedBalanceId(st, 'BAL', validation.value.documentDate), createdAt: timestamp, updatedAt: timestamp }, validation.value);
+    agedBalanceItemRecordsForState(st).push(item);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer cette pièce ouverte dans le stockage local du dossier.'] };
+    }
+    return { ok: true, errors: [], item: clone(item) };
+  }
+
+  function updateAgedBalanceItem(id, input) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Modification bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var records = agedBalanceItemRecordsForState(st);
+    var index = records.findIndex(function (record) { return record.id === String(id || ''); });
+    if (index < 0) return { ok: false, errors: ['Pièce ouverte introuvable dans le dossier actif.'] };
+    var validation = validateAgedBalanceItemInput(input, st);
+    if (!validation.ok) return validation;
+    var previousState = clone(st);
+    var previous = records[index];
+    var updated = Object.assign({}, previous, validation.value, { id: previous.id, createdAt: previous.createdAt, updatedAt: new Date().toISOString() });
+    records[index] = updated;
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer les modifications de cette pièce ouverte.'] };
+    }
+    return { ok: true, errors: [], item: clone(updated) };
+  }
+
+  function deleteAgedBalanceItem(id) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Suppression bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var records = agedBalanceItemRecordsForState(st);
+    var index = records.findIndex(function (record) { return record.id === String(id || ''); });
+    if (index < 0) return { ok: false, errors: ['Pièce ouverte introuvable dans le dossier actif.'] };
+    if (agedBalanceSettlementRecordsForState(st).some(function (record) { return record.itemId === records[index].id; })) {
+      return { ok: false, errors: ['Suppression refusée : supprimez d’abord les règlements rattachés ou conservez la pièce pour préserver la traçabilité.'] };
+    }
+    var previousState = clone(st);
+    var removed = records.splice(index, 1)[0];
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Suppression impossible : stockage local indisponible ou plein. La pièce est conservée.'] };
+    }
+    return { ok: true, errors: [], item: clone(removed) };
+  }
+
+  function agedBalanceSettlementAmount(value) {
+    var decimals = Number(accountingConfiguration().decimalPlaces) || 0;
+    var amountValue = Number(value);
+    var factor = Math.pow(10, decimals);
+    var normalizedAmount = Math.round(amountValue * factor) / factor;
+    if (!Number.isFinite(amountValue) || amountValue <= 0 || !Number.isFinite(normalizedAmount) || normalizedAmount <= 0 || Math.abs(normalizedAmount - amountValue) > 0.0000001) return null;
+    return normalizedAmount;
+  }
+
+  function validateAgedBalanceSettlementInput(input, st) {
+    input = input || {};
+    var errors = [];
+    var itemId = String(input.itemId || '').trim();
+    var date = String(input.date || '').trim();
+    var reference = String(input.reference || '').trim();
+    var amountValue = agedBalanceSettlementAmount(input.amount);
+    var item = agedBalanceItemRecordsForState(st).find(function (record) { return record.id === itemId; });
+    if (!itemId || !item) errors.push('Choisissez une pièce ouverte existante.');
+    if (!parseIsoDate(date)) errors.push('Indiquez une date de règlement valide.');
+    if (amountValue === null) errors.push('Le montant du règlement doit être supérieur à zéro et respecter la précision du dossier.');
+    if (reference.length > 100) errors.push('La référence du règlement ne peut pas dépasser 100 caractères.');
+    if (String(input.description || '').trim().length > 240) errors.push('La description ne peut pas dépasser 240 caractères.');
+    return {
+      ok: errors.length === 0,
+      errors: errors,
+      value: {
+        itemId: itemId,
+        date: date,
+        reference: reference,
+        amount: amountValue === null ? 0 : amountValue,
+        description: String(input.description || '').trim()
+      }
+    };
+  }
+
+  function createAgedBalanceSettlement(input) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Création bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var validation = validateAgedBalanceSettlementInput(input, st);
+    if (!validation.ok) return validation;
+    var previousState = clone(st);
+    var timestamp = new Date().toISOString();
+    var settlement = Object.assign({ id: nextAgedBalanceId(st, 'REG', validation.value.date), createdAt: timestamp, updatedAt: timestamp }, validation.value);
+    agedBalanceSettlementRecordsForState(st).push(settlement);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer ce règlement dans le stockage local du dossier.'] };
+    }
+    return { ok: true, errors: [], settlement: clone(settlement) };
+  }
+
+  function updateAgedBalanceSettlement(id, input) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Modification bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var records = agedBalanceSettlementRecordsForState(st);
+    var index = records.findIndex(function (record) { return record.id === String(id || ''); });
+    if (index < 0) return { ok: false, errors: ['Règlement introuvable dans le dossier actif.'] };
+    var validation = validateAgedBalanceSettlementInput(input, st);
+    if (!validation.ok) return validation;
+    var previousState = clone(st);
+    var previous = records[index];
+    var updated = Object.assign({}, previous, validation.value, { id: previous.id, createdAt: previous.createdAt, updatedAt: new Date().toISOString() });
+    records[index] = updated;
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer les modifications de ce règlement.'] };
+    }
+    return { ok: true, errors: [], settlement: clone(updated) };
+  }
+
+  function deleteAgedBalanceSettlement(id) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Suppression bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var records = agedBalanceSettlementRecordsForState(st);
+    var index = records.findIndex(function (record) { return record.id === String(id || ''); });
+    if (index < 0) return { ok: false, errors: ['Règlement introuvable dans le dossier actif.'] };
+    var previousState = clone(st);
+    var removed = records.splice(index, 1)[0];
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Suppression impossible : stockage local indisponible ou plein. Le règlement est conservé.'] };
+    }
+    return { ok: true, errors: [], settlement: clone(removed) };
+  }
+
+  function agedBalanceItems() {
+    var codeMap = hiddenConfidentialAccountCodes();
+    return clone(agedBalanceItemRecordsForState(load()).filter(function (record) { return !codeMap[String(record.accountCode)]; }));
+  }
+
+  function agedBalanceSettlements() {
+    var visibleIds = Object.create(null);
+    agedBalanceItems().forEach(function (item) { visibleIds[item.id] = true; });
+    return clone(agedBalanceSettlementRecordsForState(load()).filter(function (record) { return !!visibleIds[record.itemId]; }));
+  }
+
   function entries() { return load().entries; }
 
   function entry(id) {
@@ -6514,8 +6835,13 @@
       }
       return journalRecord;
     });
-    ['matchingGroups', 'pointageMarks', 'openingBalances', 'fixedAssets', 'suppliers', 'clients', 'otherParties', 'personnel'].forEach(function (key) {
+    ['matchingGroups', 'pointageMarks', 'openingBalances', 'agedBalanceItems', 'fixedAssets', 'suppliers', 'clients', 'otherParties', 'personnel'].forEach(function (key) {
       if (Array.isArray(result[key])) result[key] = result[key].filter(function (record) { return !recordReferencesConfidentialAccount(record, codeMap); });
+    });
+    var visibleAgedBalanceItemIds = Object.create(null);
+    (result.agedBalanceItems || []).forEach(function (item) { visibleAgedBalanceItemIds[item.id] = true; });
+    result.agedBalanceSettlements = (result.agedBalanceSettlements || []).filter(function (settlement) {
+      return !!visibleAgedBalanceItemIds[settlement.itemId];
     });
     result.openingBalanceTransfers = (result.openingBalanceTransfers || []).map(function (transfer) {
       var copy = clone(transfer);
@@ -7162,6 +7488,18 @@
     auditOpeningBalances: visibleAuditOpeningBalances,
     openingBalanceTransferPreview: visibleOpeningBalanceTransferPreview,
     applyOpeningBalanceTransfer: visibleApplyOpeningBalanceTransfer,
+    agedBalanceItems: agedBalanceItems,
+    agedBalanceSettlements: agedBalanceSettlements,
+    agedBalanceItem: function (id) {
+      var record = agedBalanceItem(id);
+      return record && !hiddenConfidentialAccountCodes()[String(record.accountCode)] ? clone(record) : null;
+    },
+    createAgedBalanceItem: createAgedBalanceItem,
+    updateAgedBalanceItem: updateAgedBalanceItem,
+    deleteAgedBalanceItem: deleteAgedBalanceItem,
+    createAgedBalanceSettlement: createAgedBalanceSettlement,
+    updateAgedBalanceSettlement: updateAgedBalanceSettlement,
+    deleteAgedBalanceSettlement: deleteAgedBalanceSettlement,
     pointEntryLine: visiblePointEntryLine,
     unpointEntryLine: visibleUnpointEntryLine,
     nextServiceCode: nextServiceCode,

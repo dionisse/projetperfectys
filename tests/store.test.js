@@ -578,6 +578,67 @@ test('point de restauration local avant remplacement et restauration', () => {
   assert.strictEqual(S.kpis().debit, beforeSummary.debit);
 });
 
+test('registre dédié Balance âgée : tiers, pièces ouvertes, règlements, permissions métier et isolation du grand livre', () => {
+  assert.deepStrictEqual(S.agedBalanceItems(), []);
+  assert.deepStrictEqual(S.agedBalanceSettlements(), []);
+  const entriesBefore = S.entries().length;
+  const clientResult = S.createClient({ code: 'CLI-AGED-1', name: 'Client Balance âgée', accountCode: '411100' });
+  assert.strictEqual(clientResult.ok, true, clientResult.errors.join(' '));
+  const supplierResult = S.createSupplier({ code: 'FOU-AGED-1', name: 'Fournisseur Balance âgée', accountCode: '401100' });
+  assert.strictEqual(supplierResult.ok, true, supplierResult.errors.join(' '));
+  const personnelResult = S.createPersonnel({ code: 'PER-AGED-1', name: 'Personnel Balance âgée', accountCode: '421' });
+  assert.strictEqual(personnelResult.ok, true, personnelResult.errors.join(' '));
+
+  const clientItem = S.createAgedBalanceItem({
+    nature: 'clients', accountCode: '411100', thirdPartyId: clientResult.client.id,
+    reference: 'AGE-CLIENT-001', documentDate: '2026-01-05', dueDate: '2026-02-04', amount: 10000
+  });
+  assert.strictEqual(clientItem.ok, true, clientItem.errors.join(' '));
+  assert.strictEqual(clientItem.item.thirdPartyName, 'Client Balance âgée');
+  const settlement = S.createAgedBalanceSettlement({
+    itemId: clientItem.item.id, date: '2026-01-20', reference: 'REG-AGE-001', amount: 2500
+  });
+  assert.strictEqual(settlement.ok, true, settlement.errors.join(' '));
+  assert.strictEqual(S.agedBalanceItem(clientItem.item.id).id, clientItem.item.id);
+  assert.strictEqual(S.agedBalanceSettlements().find(record => record.id === settlement.settlement.id).amount, 2500);
+  assert.strictEqual(S.deleteAgedBalanceItem(clientItem.item.id).ok, false, 'une pièce avec règlement rattaché reste traçable');
+
+  const revisedItem = S.updateAgedBalanceItem(clientItem.item.id, {
+    nature: 'clients', accountCode: '411100', thirdPartyId: clientResult.client.id,
+    reference: 'AGE-CLIENT-001-REV', documentDate: '2026-01-05', dueDate: '2026-02-04', amount: 12000
+  });
+  assert.strictEqual(revisedItem.ok, true, revisedItem.errors.join(' '));
+  const revisedSettlement = S.updateAgedBalanceSettlement(settlement.settlement.id, {
+    itemId: clientItem.item.id, date: '2026-01-21', reference: 'REG-AGE-001-REV', amount: 3000
+  });
+  assert.strictEqual(revisedSettlement.ok, true, revisedSettlement.errors.join(' '));
+
+  const supplierItem = S.createAgedBalanceItem({
+    nature: 'suppliers', accountCode: '401100', thirdPartyId: supplierResult.supplier.id,
+    reference: 'AGE-FOU-001', documentDate: '2026-01-06', dueDate: '2026-02-05', amount: 8000
+  });
+  const salaryAdvance = S.createAgedBalanceItem({
+    nature: 'salary-advances', accountCode: '421', thirdPartyId: personnelResult.personnel.id,
+    reference: 'AGE-PER-001', documentDate: '2026-01-07', dueDate: '2026-02-06', amount: 6000
+  });
+  assert.strictEqual(supplierItem.ok, true, supplierItem.errors.join(' '));
+  assert.strictEqual(salaryAdvance.ok, true, salaryAdvance.errors.join(' '));
+  const mismatch = S.createAgedBalanceItem({
+    nature: 'clients', accountCode: '401100', thirdPartyId: clientResult.client.id,
+    reference: 'AGE-INVALID-001', documentDate: '2026-01-01', dueDate: '2026-02-01', amount: 100
+  });
+  assert.strictEqual(mismatch.ok, false);
+  assert.ok(mismatch.errors.some(error => error.includes('ne correspond pas')));
+  assert.strictEqual(S.entries().length, entriesBefore, 'aucune ligne ni écriture n’est créée dans le grand livre');
+  const exportedData = JSON.parse(S.exportJson()).data;
+  assert.ok(exportedData.agedBalanceItems.some(record => record.id === clientItem.item.id));
+  assert.ok(exportedData.agedBalanceSettlements.some(record => record.id === settlement.settlement.id));
+
+  assert.strictEqual(S.deleteAgedBalanceSettlement(settlement.settlement.id).ok, true);
+  assert.strictEqual(S.deleteAgedBalanceItem(clientItem.item.id).ok, true);
+  assert.strictEqual(S.agedBalanceItems().some(record => record.id === clientItem.item.id), false);
+});
+
 console.log('');
 if (process.exitCode) {
   console.error('Échec des tests.');

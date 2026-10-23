@@ -16,6 +16,7 @@
   var AccountingExchange = window.PerfectoAccountingExchange;
   var JournalLinesReport = window.PerfectoJournalLinesReport;
   var GeneralBalanceReport = window.PerfectoGeneralBalanceReport;
+  var AgedBalanceReport = window.PerfectoAgedBalanceReport;
   var FecImport = window.PerfectoFecImport;
   var BankStatement = window.PerfectoBankStatement;
   var BankStatementStorage = window.PerfectoBankStatementStorage;
@@ -145,6 +146,16 @@
   var journalLinesReportMode = 'standard';
   var generalBalanceReportSession = null;
   var generalSummaryBalanceReportSession = null;
+  var agedBalanceReportSession = null;
+  var AGED_BALANCE_COLUMN_DEFINITIONS = [
+    { key: 'accountCode', label: 'Code du compte', defaultSelected: true },
+    { key: 'accountTitle', label: 'Intitulé du compte', defaultSelected: true },
+    { key: 'thirdParty', label: 'Tiers', defaultSelected: true },
+    { key: 'ageAmounts', label: 'Montants dus · tranches d’ancienneté', defaultSelected: true },
+    { key: 'totalDue', label: 'Total dû', defaultSelected: true },
+    { key: 'advances', label: 'Avances', defaultSelected: true },
+    { key: 'balance', label: 'Solde', defaultSelected: true }
+  ];
   var GENERAL_SUMMARY_BALANCE_COLUMN_DEFINITIONS = [
     { key: 'code', label: 'Code du compte', defaultSelected: true },
     { key: 'label', label: 'Intitulé', defaultSelected: true },
@@ -482,6 +493,22 @@
       case 'select-opening-balance':
       case 'position-opening-balance':
         return { moduleId: 'accounting', actionId: 'module.view' };
+      case 'new-aged-balance-item':
+        return { moduleId: 'accounting', actionId: 'agedBalance.items.create' };
+      case 'edit-aged-balance-item':
+        return { moduleId: 'accounting', actionId: 'agedBalance.items.edit' };
+      case 'delete-aged-balance-item':
+        return { moduleId: 'accounting', actionId: 'agedBalance.items.delete' };
+      case 'new-aged-balance-settlement':
+        return { moduleId: 'accounting', actionId: 'agedBalance.settlements.create' };
+      case 'edit-aged-balance-settlement':
+        return { moduleId: 'accounting', actionId: 'agedBalance.settlements.edit' };
+      case 'delete-aged-balance-settlement':
+        return { moduleId: 'accounting', actionId: 'agedBalance.settlements.delete' };
+      case 'aged-balance-print':
+        return { moduleId: 'accounting', actionId: 'agedBalance.print' };
+      case 'aged-balance-export':
+        return { moduleId: 'accounting', actionId: 'agedBalance.export' };
       case 'new-fixed-asset':
         return { moduleId: 'accounting', actionId: 'fixedAssets.create' };
       case 'edit-fixed-asset':
@@ -723,8 +750,10 @@
     var route = parsed.route;
     var isGeneralBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-balance';
     var isGeneralSummaryBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-summary-balance';
+    var isAgedBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-aged-balance';
     if (!isGeneralBalanceReportRoute) generalBalanceReportSession = null;
     if (!isGeneralSummaryBalanceReportRoute) generalSummaryBalanceReportSession = null;
+    if (!isAgedBalanceReportRoute) agedBalanceReportSession = null;
     var isJournalLinesReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'journals' &&
       (parsed.params.c === 'journal-lines' || parsed.params.c === 'journal-modified-pieces' || parsed.params.c === 'journal-unbalanced-pieces' || parsed.params.c === 'journal-entry-totals' || parsed.params.c === 'journal-individual-account-totals' || parsed.params.c === 'journal-summary-account-totals' || parsed.params.c === 'journal-third-party-totals' || parsed.params.c === 'journal-analytic-center-totals' || parsed.params.c === 'journal-currency-totals');
     if (!isJournalLinesReportRoute) {
@@ -2829,6 +2858,633 @@
       pageHeader('Export prêt', 'Le fichier a été préparé sans modifier les écritures comptables.', '') +
       '<section class="card journal-lines-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
         '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-general-balance-open-preview>Afficher l’aperçu</button><button type="button" class="btn btn-ghost" data-general-balance-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-general-balance-new-report>Nouvelle sélection</button></div></div></section>';
+  }
+
+  /* -------------------------- Balance âgée des comptes --------------------- */
+  function createAgedBalanceReportSession(dossier) {
+    var columns = Object.create(null);
+    AGED_BALANCE_COLUMN_DEFINITIONS.forEach(function (column) { columns[column.key] = !!column.defaultSelected; });
+    var defaultNature = AgedBalanceReport.natureDefinition('clients');
+    return {
+      dossierId: dossier.id,
+      phase: 'selection',
+      filters: { nature: defaultNature.key, accounts: defaultNature.defaultAccounts, asOfDate: S.todayIso(), range: 'six-months' },
+      columns: columns,
+      layout: { printer: 'system', style: 'plain8', orientation: 'landscape', margins: 'standard', pageFirst: '', pageLast: '', parity: 'none', destination: 'preview' },
+      report: null,
+      exportFilename: '',
+      exportMessage: ''
+    };
+  }
+
+  function ensureAgedBalanceReportSession() {
+    var dossier = S.currentDossier();
+    if (!agedBalanceReportSession || agedBalanceReportSession.dossierId !== dossier.id) {
+      agedBalanceReportSession = createAgedBalanceReportSession(dossier);
+    }
+    return agedBalanceReportSession;
+  }
+
+  function buildAgedBalanceReport(session) {
+    return AgedBalanceReport.build({
+      items: S.agedBalanceItems(),
+      settlements: S.agedBalanceSettlements(),
+      accounts: S.accounts(),
+      filters: session.filters,
+      decimalPlaces: S.accountingConfiguration().decimalPlaces
+    });
+  }
+
+  function agedBalanceReportSteps(activeStep) {
+    var states = {
+      selection: ['is-active', '', ''],
+      layout: ['is-complete', 'is-active', ''],
+      preview: ['is-complete', 'is-complete', 'is-active'],
+      saved: ['is-complete', 'is-complete', 'is-active']
+    }[activeStep] || ['', '', ''];
+    return '<ol class="journal-lines-steps aged-balance-report-steps" aria-label="Étapes de préparation de la Balance âgée">' +
+      '<li class="' + states[0] + '"><span>1</span><strong>Sélection</strong></li>' +
+      '<li class="' + states[1] + '"><span>2</span><strong>Mise en page</strong></li>' +
+      '<li class="' + states[2] + '"><span>3</span><strong>Aperçu et sortie</strong></li></ol>';
+  }
+
+  function agedBalanceDefaultNature(nature) {
+    return AgedBalanceReport.natureDefinition(nature) || AgedBalanceReport.natureDefinition('clients');
+  }
+
+  function agedBalancePartyRecords(nature) {
+    if (nature === 'clients') return S.clients();
+    if (nature === 'suppliers') return S.suppliers();
+    if (nature === 'salary-advances') return S.personnel();
+    return [];
+  }
+
+  function agedBalanceCompatibleAccounts(nature, selectedCode) {
+    var definition = agedBalanceDefaultNature(nature);
+    var filter = AgedBalanceReport.parseAccountFilter(definition.defaultAccounts);
+    var records = S.accounts().filter(function (account) {
+      return account.active !== false && account.postable !== false && AgedBalanceReport.accountMatches(account.code, filter);
+    });
+    if (selectedCode && !records.some(function (record) { return String(record.code) === String(selectedCode); })) {
+      var retained = S.account(selectedCode);
+      if (retained) records.push(retained);
+    }
+    records.sort(function (left, right) { return String(left.code).localeCompare(String(right.code), 'fr', { numeric: true }); });
+    return records;
+  }
+
+  function agedBalanceAccountOptionHtml(nature, selectedCode) {
+    var records = agedBalanceCompatibleAccounts(nature, selectedCode);
+    return '<option value="">— Sélectionner un compte —</option>' + records.map(function (record) {
+      return '<option value="' + esc(record.code) + '"' + (String(record.code) === String(selectedCode || '') ? ' selected' : '') + '>' + esc(record.code + ' — ' + record.label) + '</option>';
+    }).join('');
+  }
+
+  function agedBalancePartyOptionHtml(nature, selectedId) {
+    var records = agedBalancePartyRecords(nature).slice().sort(function (left, right) {
+      return String(left.name || left.code || '').localeCompare(String(right.name || right.code || ''), 'fr', { sensitivity: 'base' });
+    });
+    return '<option value="">— Sélectionner un tiers —</option>' + records.map(function (record) {
+      var name = String(record.name || record.code || 'Tiers sans nom');
+      return '<option value="' + esc(record.id) + '"' + (String(record.id) === String(selectedId || '') ? ' selected' : '') + '>' + esc(name + (record.code ? ' · ' + record.code : '')) + '</option>';
+    }).join('');
+  }
+
+  function agedBalanceRegisterHtml() {
+    var items = S.agedBalanceItems().slice().sort(function (left, right) {
+      return String(right.documentDate).localeCompare(String(left.documentDate)) || String(left.reference).localeCompare(String(right.reference), 'fr', { sensitivity: 'base' });
+    });
+    var settlements = S.agedBalanceSettlements();
+    var accountsByCode = Object.create(null);
+    S.accounts().forEach(function (account) { accountsByCode[String(account.code)] = account; });
+    var settlementRows = function (item) {
+      var attached = settlements.filter(function (record) { return record.itemId === item.id; }).sort(function (left, right) {
+        return String(left.date).localeCompare(String(right.date)) || String(left.id).localeCompare(String(right.id));
+      });
+      if (!attached.length) return '<p class="small muted aged-balance-no-settlements">Aucun règlement ou avance enregistré pour cette pièce.</p>';
+      return '<div class="table-wrap aged-balance-settlement-table-wrap"><table class="exchange-mapping-table aged-balance-settlement-table"><thead><tr><th>Date</th><th>Référence</th><th>Description</th><th class="num">Montant</th><th>Actions</th></tr></thead><tbody>' + attached.map(function (record) {
+        return '<tr><td>' + esc(dateLabel(record.date)) + '</td><td>' + esc(record.reference || '—') + '</td><td>' + esc(record.description || '—') + '</td><td class="num">' + esc(amount(record.amount)) + '</td><td class="aged-balance-row-actions">' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-action="edit-aged-balance-settlement" data-id="' + esc(record.id) + '">Modifier</button>' +
+          '<button type="button" class="btn btn-ghost btn-sm btn-danger-quiet" data-action="delete-aged-balance-settlement" data-id="' + esc(record.id) + '">Supprimer</button></td></tr>';
+      }).join('') + '</tbody></table></div>';
+    };
+    var rows = items.map(function (item) {
+      var account = accountsByCode[String(item.accountCode)];
+      var nature = agedBalanceDefaultNature(item.nature);
+      var attached = settlements.filter(function (record) { return record.itemId === item.id; });
+      var paid = attached.reduce(function (sum, record) { return sum + (Number(record.amount) || 0); }, 0);
+      return '<tr><td>' + esc(nature.label) + '</td><td><strong>' + esc(item.accountCode) + '</strong><br><small>' + esc(account ? account.label : 'Compte absent du plan') + '</small></td>' +
+        '<td><strong>' + esc(item.thirdPartyName || '—') + '</strong>' + (item.thirdPartyCode ? '<br><small>' + esc(item.thirdPartyCode) + '</small>' : '') + '</td>' +
+        '<td>' + esc(item.reference) + '</td><td>' + esc(dateLabel(item.documentDate)) + '</td><td>' + esc(dateLabel(item.dueDate)) + '</td>' +
+        '<td class="num">' + esc(amount(item.amount)) + '</td><td><details class="aged-balance-settlement-details"><summary>' + attached.length + ' règlement(s) · ' + esc(amount(paid)) + '</summary>' + settlementRows(item) + '</details></td>' +
+        '<td class="aged-balance-row-actions"><button type="button" class="btn btn-ghost btn-sm" data-action="edit-aged-balance-item" data-id="' + esc(item.id) + '">Modifier</button>' +
+        '<button type="button" class="btn btn-ghost btn-sm" data-action="new-aged-balance-settlement" data-id="' + esc(item.id) + '">＋ Règlement</button>' +
+        '<button type="button" class="btn btn-ghost btn-sm btn-danger-quiet" data-action="delete-aged-balance-item" data-id="' + esc(item.id) + '">Supprimer</button></td></tr>';
+    }).join('');
+    return '<section class="exchange-card aged-balance-register-card"><div class="supplier-directory-head"><div><p class="page-kicker">SOURCE DÉDIÉE · DONNÉES DU DOSSIER</p><h3>Pièces ouvertes et règlements</h3><p>Les lignes saisies ici servent à l’édition de la Balance âgée ; elles ne créent ni ne modifient une écriture du grand livre.</p></div>' +
+      '<button type="button" class="btn btn-primary" data-action="new-aged-balance-item">＋ Ajouter une pièce ouverte</button></div>' +
+      (items.length ? '<div class="table-wrap exchange-table-wrap aged-balance-register-table-wrap"><table class="exchange-mapping-table aged-balance-register-table"><caption class="sr-only">Pièces ouvertes et règlements enregistrés dans le dossier</caption><thead><tr><th>Nature</th><th>Compte</th><th>Tiers</th><th>Référence</th><th>Date pièce</th><th>Échéance</th><th class="num">Montant initial</th><th>Règlements / avances</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<div class="empty-state aged-balance-register-empty"><strong>Aucune pièce ouverte n’est enregistrée.</strong><span>Ajoutez des factures ou avances avec leur tiers, leur compte, leur référence, leurs dates et leur montant. Aucun état n’est fabriqué à partir des écritures générales.</span></div>') +
+      '</section>';
+  }
+
+  function agedBalanceColumnOption(column, session) {
+    return '<label class="journal-lines-column-option aged-balance-column-option"><input type="checkbox" data-aged-balance-column="' + esc(column.key) + '"' + (session.columns[column.key] ? ' checked' : '') + '><span>' + esc(column.label) + '</span></label>';
+  }
+
+  function agedBalanceReportSelectionView(session) {
+    var natureOptions = AgedBalanceReport.NATURES.map(function (nature) {
+      return '<option value="' + esc(nature.key) + '"' + (session.filters.nature === nature.key ? ' selected' : '') + '>' + esc(nature.label) + '</option>';
+    }).join('');
+    var accounts = S.accounts().filter(function (account) { return account.active !== false && account.postable !== false; }).slice().sort(function (left, right) {
+      return String(left.code).localeCompare(String(right.code), 'fr', { numeric: true });
+    });
+    var accountHints = accounts.map(function (account) { return '<option value="' + esc(account.code) + '">' + esc(account.label) + '</option>'; }).join('');
+    var registerCount = S.agedBalanceItems().length;
+    return agedBalanceReportSteps('selection') +
+      pageHeader('Balance âgée', 'Sélectionnez les comptes, la date d’arrêté, l’étendue de l’historique et les colonnes à éditer.', '') +
+      '<div class="alert info aged-balance-source-note"><div><strong>Source de l’état :</strong> registre dédié de pièces ouvertes et règlements du dossier. Les montants par tranche sont bruts (montants initiaux des pièces) ; les règlements ne réduisent pas les tranches. La colonne « Solde » est calculée comme « Total dû − Avances ». Les écritures validées ne sont pas utilisées pour reconstituer des factures.</div></div>' +
+      '<form id="aged-balance-selection-form" class="aged-balance-selection-form" novalidate>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Critères de sélection</h3></div>' +
+          '<div class="aged-balance-selection-grid">' +
+            '<div class="field"><label for="aged-balance-nature">Nature des comptes</label><select id="aged-balance-nature" required>' + natureOptions + '</select></div>' +
+            '<div class="field aged-balance-account-filter-field"><label for="aged-balance-accounts">Comptes</label><input id="aged-balance-accounts" type="text" list="aged-balance-account-suggestions" maxlength="500" value="' + esc(session.filters.accounts) + '" required><datalist id="aged-balance-account-suggestions">' + accountHints + '</datalist><span class="hint">Préfixes et exclusions séparés par un espace, par exemple « 411 -4117 ». Les options par nature reprennent la capture.</span></div>' +
+            '<div class="field"><label for="aged-balance-as-of">Date d’arrêté</label><input id="aged-balance-as-of" type="date" value="' + esc(session.filters.asOfDate) + '" required></div>' +
+            '<fieldset class="aged-balance-range-field"><legend>Étendue de l’historique</legend><div class="journal-lines-radio-list">' +
+              generalBalanceReportRadio('aged-balance-range', 'six-months', '1 – 6 mois', session.filters.range === 'six-months', false) +
+              generalBalanceReportRadio('aged-balance-range', 'five-years', '1 – 5 ans', session.filters.range === 'five-years', false) +
+            '</div><span class="hint">Les échéances antérieures à l’étendue choisie restent incluses sous « Antérieur ».</span></fieldset>' +
+          '</div>' +
+          '<div class="aged-balance-column-picker"><div class="journal-lines-section-heading"><h3>Colonnes</h3><span class="small muted">Cochez les informations à afficher</span></div><div class="aged-balance-column-grid">' +
+            AGED_BALANCE_COLUMN_DEFINITIONS.map(function (column) { return agedBalanceColumnOption(column, session); }).join('') +
+          '</div></div>' +
+          '<div class="journal-lines-form-errors" id="aged-balance-selection-errors" role="alert" aria-live="polite"></div>' +
+          '<div class="journal-lines-form-actions"><span class="small muted">' + registerCount + ' pièce(s) ouverte(s) dans le registre</span><button type="submit" class="btn btn-primary">Continuer vers la mise en page →</button></div>' +
+        '</div></section>' +
+      '</form>' + agedBalanceRegisterHtml();
+  }
+
+  function agedBalanceReportColumns(session) {
+    var columns = [];
+    if (session.columns.accountCode) columns.push({ key: 'accountCode', label: 'Code du compte', text: true });
+    if (session.columns.accountTitle) columns.push({ key: 'accountTitle', label: 'Intitulé du compte', text: true });
+    if (session.columns.thirdParty) columns.push({ key: 'thirdParty', label: 'Tiers', text: true });
+    if (session.columns.ageAmounts) AgedBalanceReport.AGE_BUCKETS.forEach(function (bucket) {
+      columns.push({ key: 'age:' + bucket.key, label: bucket.label, text: false });
+    });
+    if (session.columns.totalDue) columns.push({ key: 'totalDue', label: 'Total dû', text: false });
+    if (session.columns.advances) columns.push({ key: 'advances', label: 'Avances', text: false });
+    if (session.columns.balance) columns.push({ key: 'balance', label: 'Solde', text: false });
+    return columns;
+  }
+
+  function agedBalanceReportCell(row, column, spreadsheet) {
+    if (column.key === 'accountCode') return row.accountCode;
+    if (column.key === 'accountTitle') return row.accountTitle;
+    if (column.key === 'thirdParty') return row.thirdPartyName || row.thirdPartyCode || '';
+    if (column.key.indexOf('age:') === 0) {
+      var bucketKey = column.key.slice(4);
+      return Number(row.ageAmounts[bucketKey]) || 0;
+    }
+    var value = Number(row[column.key]) || 0;
+    if (spreadsheet) return value;
+    return amount(value);
+  }
+
+  function agedBalancePrintableHtml(session, report) {
+    var columns = agedBalanceReportColumns(session);
+    var nature = AgedBalanceReport.natureDefinition(session.filters.nature);
+    var header = '<thead><tr>' + columns.map(function (column) { return '<th' + (column.text ? '' : ' class="num"') + '>' + esc(column.label) + '</th>'; }).join('') + '</tr></thead>';
+    var body = report.rows.map(function (row) {
+      return '<tr>' + columns.map(function (column) {
+        var value = agedBalanceReportCell(row, column, false);
+        return '<td' + (column.text ? '' : ' class="num"') + '>' + esc(value) + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    var empty = '<tr><td colspan="' + Math.max(1, columns.length) + '"><div class="empty-state"><strong>Aucune pièce ne correspond à la sélection.</strong><span>Ajoutez ou vérifiez les pièces du registre dédié.</span></div></td></tr>';
+    var totals = '';
+    if (report.rows.length) {
+      var labelIndex = columns.findIndex(function (column) { return column.text; });
+      totals = '<tfoot><tr>' + columns.map(function (column, index) {
+        if (index === labelIndex) return '<td><strong>Totaux</strong></td>';
+        if (column.key === 'accountCode' || column.key === 'accountTitle' || column.key === 'thirdParty') return '<td></td>';
+        if (column.key.indexOf('age:') === 0) return '<td class="num"><strong>' + esc(amount(report.totals.ageAmounts[column.key.slice(4)])) + '</strong></td>';
+        return '<td class="num"><strong>' + esc(amount(report.totals[column.key])) + '</strong></td>';
+      }).join('') + '</tr></tfoot>';
+    }
+    var sourceCounts = report.itemCount + ' pièce(s) · ' + report.settlementCount + ' règlement(s) comptabilisé(s) à la date d’arrêté';
+    var reportStyle = session.layout.style === 'color10' ? 'aged-balance-style-color' : 'aged-balance-style-plain';
+    return '<div class="aged-balance-print-report ' + reportStyle + '">' +
+      '<header class="aged-balance-print-heading"><span class="page-kicker">COMPTABILITÉ GÉNÉRALE · ' + esc(nature ? nature.label.toLocaleUpperCase() : 'BALANCE ÂGÉE') + '</span><h2>Balance âgée</h2><p>Date d’arrêté : <strong>' + esc(dateLabel(session.filters.asOfDate)) + '</strong> · Étendue : <strong>' + (session.filters.range === 'five-years' ? '1 – 5 ans' : '1 – 6 mois') + '</strong></p></header>' +
+      '<p class="aged-balance-print-source">' + esc(sourceCounts) + '. Les tranches reprennent les montants initiaux ; les avances sont présentées séparément.</p>' +
+      (report.invalidItemCount || report.invalidSettlementCount ? '<div class="alert warning"><strong>Registre incomplet :</strong> ' + report.invalidItemCount + ' pièce(s) et ' + report.invalidSettlementCount + ' règlement(s) invalide(s) ignoré(s). Corrigez le registre avant utilisation.</div>' : '') +
+      '<div class="table-wrap aged-balance-report-table-wrap"><table class="aged-balance-report-table">' + header + '<tbody>' + (body || empty) + '</tbody>' + totals + '</table></div>' +
+      '<p class="aged-balance-report-formula">Solde = Total dû − Avances. « Antérieur » regroupe les échéances dépassant l’étendue sélectionnée.</p>' +
+    '</div>';
+  }
+
+  function agedBalanceReportTsv(matrix) {
+    return '\uFEFF' + matrix.map(function (row) {
+      return row.map(function (cell) { return String(cell == null ? '' : cell).replace(/[\t\r\n]+/g, ' '); }).join('\t');
+    }).join('\r\n');
+  }
+
+  function agedBalanceReportExportMatrix(session, report, spreadsheet) {
+    var columns = agedBalanceReportColumns(session);
+    var rows = report.rows.map(function (row) { return columns.map(function (column) { return agedBalanceReportCell(row, column, !!spreadsheet); }); });
+    if (report.rows.length) {
+      var labelIndex = columns.findIndex(function (column) { return column.text; });
+      rows.push(columns.map(function (column, index) {
+        if (index === labelIndex) return 'Totaux';
+        if (column.key === 'accountCode' || column.key === 'accountTitle' || column.key === 'thirdParty') return '';
+        if (column.key.indexOf('age:') === 0) return Number(report.totals.ageAmounts[column.key.slice(4)]) || 0;
+        return Number(report.totals[column.key]) || 0;
+      }));
+    }
+    return [columns.map(function (column) { return column.label; })].concat(rows);
+  }
+
+  function generateAgedBalanceReportFile(session, destination) {
+    var report = buildAgedBalanceReport(session);
+    session.report = report;
+    var spreadsheet = destination === 'table';
+    var matrix = agedBalanceReportExportMatrix(session, report, spreadsheet);
+    var extension = spreadsheet ? 'xlsx' : 'txt';
+    var nature = AgedBalanceReport.natureDefinition(session.filters.nature);
+    var filename = 'Balance-agee-' + safeFilePart(S.currentDossier().name) + '-' + safeFilePart(nature && nature.key || 'comptes') + '-' + session.filters.asOfDate + '.' + extension;
+    var content = spreadsheet
+      ? AccountingExchange.exportTabularWorkbook('Balance âgée', matrix[0], matrix.slice(1))
+      : agedBalanceReportTsv(agedBalanceReportExportMatrix(session, report, false));
+    downloadFile(filename, content, spreadsheet ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/plain;charset=utf-8');
+    session.exportFilename = filename;
+    session.exportMessage = spreadsheet ? 'Téléchargement du classeur Excel lancé dans le navigateur.' : 'Téléchargement du fichier texte tabulé lancé dans le navigateur.';
+    session.phase = 'saved';
+    render();
+  }
+
+  function agedBalanceReportLayoutView(session) {
+    var report = session.report || buildAgedBalanceReport(session);
+    session.report = report;
+    var summary = report.rows.length + ' ligne(s) de compte et de tiers · ' + report.itemCount + ' pièce(s) retenue(s) · arrêté au ' + dateLabel(session.filters.asOfDate);
+    var canExport = hasDemoPermission(getActiveDemoMember(), 'accounting', 'agedBalance.export', accountingAccessContext(S.currentDossier()));
+    return agedBalanceReportSteps('layout') +
+      pageHeader('Mise en page — Balance âgée', 'Choisissez le format et la destination. L’impression se fera après aperçu.', '') +
+      '<div class="alert info aged-balance-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(summary) + '. Le solde suit la règle confirmée : total dû moins avances enregistrées.</div></div>' +
+      (report.invalidItemCount || report.invalidSettlementCount ? '<div class="alert warning"><div><strong>Registre à contrôler :</strong> ' + report.invalidItemCount + ' pièce(s) et ' + report.invalidSettlementCount + ' règlement(s) invalide(s) sont ignorés. Corrigez ces données avant l’édition.</div></div>' : '') +
+      '<form id="aged-balance-layout-form" novalidate><div class="journal-lines-settings-grid aged-balance-settings-grid">' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="aged-balance-printer">Imprimante</label><select id="aged-balance-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select><span class="hint">PERFECTO ouvre l’aperçu ; le navigateur garde le choix final du périphérique ou du PDF.</span></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="aged-balance-style">Style du rapport</label><select id="aged-balance-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('aged-balance-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('aged-balance-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('aged-balance-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('aged-balance-margins', 'binding', 'Reliure à gauche', session.layout.margins === 'binding', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Pages</h3></div><div class="journal-lines-page-range"><div class="field"><label for="aged-balance-page-first">Première</label><input id="aged-balance-page-first" type="number" min="1" step="1" value="' + esc(session.layout.pageFirst) + '" placeholder="1"></div><span aria-hidden="true">à</span><div class="field"><label for="aged-balance-page-last">Dernière</label><input id="aged-balance-page-last" type="number" min="1" step="1" value="' + esc(session.layout.pageLast) + '" placeholder="Fin"></div></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Parité</h3></div><div class="field"><label for="aged-balance-parity">Pages</label><select id="aged-balance-parity"><option value="none"' + (session.layout.parity === 'none' ? ' selected' : '') + '>Aucune</option><option value="odd"' + (session.layout.parity === 'odd' ? ' selected' : '') + '>Impaire</option><option value="even"' + (session.layout.parity === 'even' ? ' selected' : '') + '>Paire</option></select></div></div></section>' +
+        '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
+          generalBalanceReportRadio('aged-balance-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', !canExport) +
+          generalBalanceReportRadio('aged-balance-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', !canExport) +
+          generalBalanceReportRadio('aged-balance-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('aged-balance-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
+        '</div></div></section>' +
+      '</div>' +
+      '<div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire.</strong> PERFECTO ne peut pas préconfigurer la plage de pages ni la parité dans la boîte du navigateur : réglez-les là si votre navigateur le propose. Le choix final de l’imprimante ou du PDF reste également dans le navigateur.</div></div>' +
+      '<section class="card aged-balance-inline-preview"><div class="panel"><div class="journal-lines-section-heading"><h3>Aperçu du résultat</h3></div>' + agedBalancePrintableHtml(session, report) + '</div></section>' +
+      '<div class="journal-lines-form-errors" id="aged-balance-layout-errors" role="alert" aria-live="polite"></div>' +
+      '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-aged-balance-back-selection>Retour à la sélection</button><button type="submit" class="btn btn-primary">Valider la destination</button></div></form>';
+  }
+
+  function agedBalanceReportPreviewView(session) {
+    var report = session.report || buildAgedBalanceReport(session);
+    session.report = report;
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans PERFECTO';
+    return agedBalanceReportSteps('preview') +
+      pageHeader('Aperçu — Balance âgée', 'Relisez l’état. La boîte d’impression du navigateur ne s’ouvre qu’après votre action.',
+        '<button type="button" class="btn btn-primary" data-action="aged-balance-print">Ouvrir l’aperçu avant impression</button>') +
+      '<div class="alert info"><div><strong>Destination choisie :</strong> ' + esc(destination) + '. Aucune pièce ni écriture comptable n’est modifiée.</div></div>' +
+      (report.rows.length ? '' : '<div class="alert warning"><div>Aucune pièce ne correspond à la sélection. Vous pouvez revenir au registre pour saisir ou vérifier les pièces ouvertes.</div></div>') +
+      '<section class="card general-balance-preview-page aged-balance-preview-page"><div class="panel">' + agedBalancePrintableHtml(session, report) + '</div></section>' +
+      '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-aged-balance-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-ghost" data-aged-balance-back-selection>Modifier la sélection et le registre</button></div>';
+  }
+
+  function agedBalanceReportSavedView(session) {
+    return agedBalanceReportSteps('saved') +
+      pageHeader('Export prêt — Balance âgée', 'Le fichier a été préparé à partir du registre sans modifier les écritures comptables.', '') +
+      '<section class="card journal-lines-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
+        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-primary" data-action="aged-balance-print">Afficher l’aperçu</button><button type="button" class="btn btn-ghost" data-aged-balance-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-aged-balance-new-report>Nouvelle sélection</button></div></div></section>';
+  }
+
+  function viewAgedBalanceReport(backLink) {
+    var session = ensureAgedBalanceReportSession();
+    if (session.phase !== 'selection') session.report = buildAgedBalanceReport(session);
+    var content = session.phase === 'layout'
+      ? agedBalanceReportLayoutView(session)
+      : (session.phase === 'preview' ? agedBalanceReportPreviewView(session) :
+        (session.phase === 'saved' ? agedBalanceReportSavedView(session) : agedBalanceReportSelectionView(session)));
+    return '<div class="edition-report-detail-view aged-balance-report-detail">' + backLink + content + '</div>';
+  }
+
+  function agedBalancePrintOptions(session) {
+    var styleNode = null;
+    var previousStyleText = '';
+    var createdStyle = false;
+    var previousTitle = '';
+    return {
+      beforePrint: function () {
+        styleNode = $('#aged-balance-print-page-style');
+        if (!styleNode) {
+          styleNode = document.createElement('style');
+          styleNode.id = 'aged-balance-print-page-style';
+          document.head.appendChild(styleNode);
+          createdStyle = true;
+        } else previousStyleText = styleNode.textContent;
+        var orientation = session.layout.orientation === 'portrait' ? 'portrait' : 'landscape';
+        var left = session.layout.margins === 'binding' ? '18mm' : '12mm';
+        styleNode.textContent = '@page { size: A4 ' + orientation + '; margin: 12mm 12mm 12mm ' + left + '; }';
+        previousTitle = document.title;
+        document.title = 'Balance-agee-' + safeFilePart(S.currentDossier().name) + '-' + session.filters.asOfDate;
+      },
+      afterPrint: function () {
+        document.title = previousTitle || document.title;
+        if (!styleNode) return;
+        if (createdStyle && styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+        else styleNode.textContent = previousStyleText;
+      }
+    };
+  }
+
+  function openAgedBalanceReportPreview(session) {
+    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'agedBalance.print', accountingAccessContext(S.currentDossier()))) {
+      toast('Impression refusée : le droit « Imprimer la balance âgée » n’est pas accordé.', 'warning');
+      return;
+    }
+    var report = session.report || buildAgedBalanceReport(session);
+    session.report = report;
+    openReportPreview('Aperçu — Balance âgée', agedBalancePrintableHtml(session, report), agedBalancePrintOptions(session));
+  }
+
+  function submitAgedBalanceSelection(form, session) {
+    var errors = [];
+    var nature = $('#aged-balance-nature', form);
+    var accountsInput = $('#aged-balance-accounts', form);
+    var asOf = $('#aged-balance-as-of', form);
+    var range = $('input[name="aged-balance-range"]:checked', form);
+    var selectedColumns = $$('[data-aged-balance-column]:checked', form).map(function (input) { return input.getAttribute('data-aged-balance-column'); });
+    var accountFilter = AgedBalanceReport.parseAccountFilter(accountsInput ? accountsInput.value : '');
+    if (!nature || !AgedBalanceReport.natureDefinition(nature.value)) errors.push('Choisissez une nature de comptes disponible.');
+    if (!accountFilter.valid) errors.push(accountFilter.error);
+    if (!asOf || !AgedBalanceReport.parseIsoDate(asOf.value)) errors.push('Indiquez une date d’arrêté valide.');
+    if (!range || !AgedBalanceReport.RANGE_MONTHS[range.value]) errors.push('Choisissez une étendue de 1 à 6 mois ou de 1 à 5 ans.');
+    if (!selectedColumns.length) errors.push('Sélectionnez au moins une colonne à éditer.');
+    if (!selectedColumns.some(function (key) { return key === 'accountCode' || key === 'accountTitle' || key === 'thirdParty'; })) errors.push('Conservez au moins une colonne d’identification du compte ou du tiers.');
+    if (!selectedColumns.some(function (key) { return key === 'ageAmounts' || key === 'totalDue' || key === 'advances' || key === 'balance'; })) errors.push('Conservez au moins une colonne de montants.');
+    showGeneralBalanceReportErrors($('#aged-balance-selection-errors', form), errors);
+    if (errors.length) return;
+    session.filters.nature = nature.value;
+    session.filters.accounts = String(accountsInput.value || '').trim();
+    session.filters.asOfDate = asOf.value;
+    session.filters.range = range.value;
+    session.columns = Object.create(null);
+    AGED_BALANCE_COLUMN_DEFINITIONS.forEach(function (column) { session.columns[column.key] = selectedColumns.indexOf(column.key) !== -1; });
+    session.report = buildAgedBalanceReport(session);
+    if (!session.report.ok) {
+      showGeneralBalanceReportErrors($('#aged-balance-selection-errors', form), session.report.errors);
+      return;
+    }
+    session.phase = 'layout';
+    render();
+  }
+
+  function submitAgedBalanceLayout(form, session) {
+    var errors = [];
+    var destination = $('input[name="aged-balance-destination"]:checked', form);
+    var orientation = $('input[name="aged-balance-orientation"]:checked', form);
+    var margins = $('input[name="aged-balance-margins"]:checked', form);
+    var first = $('#aged-balance-page-first', form).value;
+    var last = $('#aged-balance-page-last', form).value;
+    if (first && (!Number.isInteger(Number(first)) || Number(first) < 1)) errors.push('La première page doit être un entier supérieur ou égal à 1.');
+    if (last && (!Number.isInteger(Number(last)) || Number(last) < 1)) errors.push('La dernière page doit être un entier supérieur ou égal à 1.');
+    if (first && last && Number(first) > Number(last)) errors.push('La première page doit précéder ou égaler la dernière page.');
+    if ((destination && (destination.value === 'table' || destination.value === 'file')) && !hasDemoPermission(getActiveDemoMember(), 'accounting', 'agedBalance.export', accountingAccessContext(S.currentDossier()))) {
+      errors.push('Export refusé : le droit « Exporter la balance âgée » n’est pas accordé à ce profil.');
+    }
+    showGeneralBalanceReportErrors($('#aged-balance-layout-errors', form), errors);
+    if (errors.length) return;
+    session.layout.printer = $('#aged-balance-printer', form).value;
+    session.layout.style = $('#aged-balance-style', form).value;
+    session.layout.orientation = orientation ? orientation.value : 'landscape';
+    session.layout.margins = margins ? margins.value : 'standard';
+    session.layout.pageFirst = first;
+    session.layout.pageLast = last;
+    session.layout.parity = $('#aged-balance-parity', form).value;
+    session.layout.destination = destination ? destination.value : 'preview';
+    session.report = buildAgedBalanceReport(session);
+    if (session.layout.destination === 'table' || session.layout.destination === 'file') {
+      try {
+        generateAgedBalanceReportFile(session, session.layout.destination);
+      } catch (error) {
+        session.phase = 'layout';
+        render();
+        toast('Export impossible : ' + (error && error.message || 'erreur inconnue.'), 'error');
+      }
+      return;
+    }
+    session.phase = 'preview';
+    render();
+  }
+
+  function requireAgedBalancePermission(actionId) {
+    var allowed = hasDemoPermission(getActiveDemoMember(), 'accounting', actionId, accountingAccessContext(S.currentDossier()));
+    if (!allowed) toast('Action refusée par défaut : le droit « ' + actionId + ' » n’est pas accordé à ce profil.', 'warning');
+    return allowed;
+  }
+
+  function agedBalancePartyChoiceOptions(form, nature, selectedAccount, selectedParty) {
+    var accountSelect = $('#aged-balance-item-account', form);
+    var partySelect = $('#aged-balance-item-party', form);
+    if (accountSelect) accountSelect.innerHTML = agedBalanceAccountOptionHtml(nature, selectedAccount);
+    if (partySelect) partySelect.innerHTML = agedBalancePartyOptionHtml(nature, selectedParty);
+  }
+
+  function openAgedBalanceItemModal(id) {
+    var existing = id ? S.agedBalanceItem(id) : null;
+    if (id && !existing) { toast('Pièce ouverte introuvable dans le dossier actif.', 'error'); return; }
+    var mode = existing ? 'edit' : 'create';
+    var nature = existing && existing.nature || ensureAgedBalanceReportSession().filters.nature;
+    var selectedAccount = existing && existing.accountCode || '';
+    var selectedParty = existing && existing.thirdPartyId || '';
+    var natureOptions = AgedBalanceReport.NATURES.map(function (definition) {
+      return '<option value="' + esc(definition.key) + '"' + (nature === definition.key ? ' selected' : '') + '>' + esc(definition.label) + '</option>';
+    }).join('');
+    var decimals = Number(S.accountingConfiguration().decimalPlaces) || 0;
+    var amountStep = Math.pow(10, -decimals).toString();
+    var amountValue = existing ? String(existing.amount) : '';
+    var body = '<form id="aged-balance-item-form" novalidate><div id="aged-balance-item-errors" aria-live="assertive"></div>' +
+      '<div class="form-grid aged-balance-item-form-grid">' +
+        '<div class="field"><label for="aged-balance-item-nature">Nature</label><select id="aged-balance-item-nature" required>' + natureOptions + '</select></div>' +
+        '<div class="field"><label for="aged-balance-item-account">Compte général</label><select id="aged-balance-item-account" required>' + agedBalanceAccountOptionHtml(nature, selectedAccount) + '</select></div>' +
+        '<div class="field"><label for="aged-balance-item-party">Tiers</label><select id="aged-balance-item-party" required>' + agedBalancePartyOptionHtml(nature, selectedParty) + '</select><span class="hint">Le tiers doit déjà exister dans Définitions → Clients, Fournisseurs ou Personnel.</span></div>' +
+        '<div class="field"><label for="aged-balance-item-reference">Référence de la pièce</label><input id="aged-balance-item-reference" type="text" maxlength="100" required value="' + esc(existing && existing.reference || '') + '"></div>' +
+        '<div class="field"><label for="aged-balance-item-document-date">Date de pièce</label><input id="aged-balance-item-document-date" type="date" required value="' + esc(existing && existing.documentDate || S.todayIso()) + '"></div>' +
+        '<div class="field"><label for="aged-balance-item-due-date">Échéance</label><input id="aged-balance-item-due-date" type="date" required value="' + esc(existing && existing.dueDate || S.todayIso()) + '"></div>' +
+        '<div class="field"><label for="aged-balance-item-amount">Montant initial</label><input id="aged-balance-item-amount" type="number" min="' + amountStep + '" step="' + amountStep + '" inputmode="decimal" required value="' + esc(amountValue) + '"></div>' +
+        '<div class="field"><label for="aged-balance-item-description">Description (facultative)</label><input id="aged-balance-item-description" type="text" maxlength="240" value="' + esc(existing && existing.description || '') + '"></div>' +
+      '</div><p class="small muted">Une pièce ouverte est une donnée du registre de suivi. Cette saisie ne poste aucune écriture et ne transforme pas un brouillon comptable en facture.</p></form>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="submit" class="btn btn-primary" form="aged-balance-item-form">' + (existing ? 'Enregistrer la pièce' : 'Ajouter la pièce') + '</button>';
+    openModal(existing ? 'Modifier la pièce ouverte' : 'Ajouter une pièce ouverte', 'Registre distinct de la comptabilité générale', body, footer, true);
+    var form = $('#aged-balance-item-form');
+    var natureInput = $('#aged-balance-item-nature', form);
+    if (natureInput) natureInput.addEventListener('change', function () {
+      agedBalancePartyChoiceOptions(form, natureInput.value, '', '');
+    });
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var actionId = mode === 'edit' ? 'agedBalance.items.edit' : 'agedBalance.items.create';
+      if (!requireAgedBalancePermission(actionId)) return;
+      var input = {
+        nature: $('#aged-balance-item-nature', form).value,
+        accountCode: $('#aged-balance-item-account', form).value,
+        thirdPartyId: $('#aged-balance-item-party', form).value,
+        reference: $('#aged-balance-item-reference', form).value,
+        documentDate: $('#aged-balance-item-document-date', form).value,
+        dueDate: $('#aged-balance-item-due-date', form).value,
+        amount: $('#aged-balance-item-amount', form).value,
+        description: $('#aged-balance-item-description', form).value
+      };
+      var result = existing ? S.updateAgedBalanceItem(existing.id, input) : S.createAgedBalanceItem(input);
+      if (!result.ok) {
+        showGeneralBalanceReportErrors($('#aged-balance-item-errors', form), result.errors);
+        return;
+      }
+      closeModal(true);
+      toast(existing ? 'Pièce ouverte mise à jour dans le registre dédié.' : 'Pièce ouverte ajoutée au registre dédié.', 'success');
+      render();
+    });
+  }
+
+  function openAgedBalanceSettlementModal(id, itemId) {
+    var existing = id ? S.agedBalanceSettlements().find(function (record) { return record.id === id; }) : null;
+    if (id && !existing) { toast('Règlement introuvable dans le dossier actif.', 'error'); return; }
+    var items = S.agedBalanceItems();
+    var mode = existing ? 'edit' : 'create';
+    var selectedItemId = existing && existing.itemId || itemId || '';
+    var itemOptions = '<option value="">— Sélectionner une pièce —</option>' + items.map(function (item) {
+      var text = item.reference + ' · ' + (item.thirdPartyName || item.thirdPartyCode || 'tiers') + ' · ' + amount(item.amount);
+      return '<option value="' + esc(item.id) + '"' + (item.id === selectedItemId ? ' selected' : '') + '>' + esc(text) + '</option>';
+    }).join('');
+    var decimals = Number(S.accountingConfiguration().decimalPlaces) || 0;
+    var amountStep = Math.pow(10, -decimals).toString();
+    var body = '<form id="aged-balance-settlement-form" novalidate><div id="aged-balance-settlement-errors" aria-live="assertive"></div>' +
+      '<div class="form-grid aged-balance-settlement-form-grid">' +
+        '<div class="field" style="grid-column:1 / -1"><label for="aged-balance-settlement-item">Pièce ouverte</label><select id="aged-balance-settlement-item" required>' + itemOptions + '</select></div>' +
+        '<div class="field"><label for="aged-balance-settlement-date">Date du règlement</label><input id="aged-balance-settlement-date" type="date" required value="' + esc(existing && existing.date || S.todayIso()) + '"></div>' +
+        '<div class="field"><label for="aged-balance-settlement-reference">Référence du règlement (facultative)</label><input id="aged-balance-settlement-reference" type="text" maxlength="100" value="' + esc(existing && existing.reference || '') + '"></div>' +
+        '<div class="field"><label for="aged-balance-settlement-amount">Montant réglé / avance</label><input id="aged-balance-settlement-amount" type="number" min="' + amountStep + '" step="' + amountStep + '" inputmode="decimal" required value="' + esc(existing && String(existing.amount) || '') + '"></div>' +
+        '<div class="field"><label for="aged-balance-settlement-description">Description (facultative)</label><input id="aged-balance-settlement-description" type="text" maxlength="240" value="' + esc(existing && existing.description || '') + '"></div>' +
+      '</div><p class="small muted">Les règlements postérieurs à la date d’arrêté ne sont pas inclus dans l’état. Ils ne réduisent pas les tranches brutes.</p></form>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="submit" class="btn btn-primary" form="aged-balance-settlement-form">' + (existing ? 'Enregistrer le règlement' : 'Ajouter le règlement') + '</button>';
+    openModal(existing ? 'Modifier le règlement / l’avance' : 'Ajouter un règlement / une avance', 'Règlement daté rattaché à une pièce ouverte', body, footer, true);
+    var form = $('#aged-balance-settlement-form');
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var actionId = mode === 'edit' ? 'agedBalance.settlements.edit' : 'agedBalance.settlements.create';
+      if (!requireAgedBalancePermission(actionId)) return;
+      var input = {
+        itemId: $('#aged-balance-settlement-item', form).value,
+        date: $('#aged-balance-settlement-date', form).value,
+        reference: $('#aged-balance-settlement-reference', form).value,
+        amount: $('#aged-balance-settlement-amount', form).value,
+        description: $('#aged-balance-settlement-description', form).value
+      };
+      var result = existing ? S.updateAgedBalanceSettlement(existing.id, input) : S.createAgedBalanceSettlement(input);
+      if (!result.ok) {
+        showGeneralBalanceReportErrors($('#aged-balance-settlement-errors', form), result.errors);
+        return;
+      }
+      closeModal(true);
+      toast(existing ? 'Règlement mis à jour dans le registre dédié.' : 'Règlement ajouté au registre dédié.', 'success');
+      render();
+    });
+  }
+
+  function bindAgedBalanceAction(selector, action, callback) {
+    var root = $('#view');
+    $$(selector, root).forEach(function (trigger) {
+      trigger.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!canPerformDemoAction(action, trigger)) return;
+        callback(trigger);
+      });
+    });
+  }
+
+  function bindAgedBalanceReport() {
+    var session = ensureAgedBalanceReportSession();
+    if (session.phase === 'selection') {
+      var selectionForm = $('#aged-balance-selection-form');
+      if (selectionForm) {
+        var natureInput = $('#aged-balance-nature', selectionForm);
+        var accountInput = $('#aged-balance-accounts', selectionForm);
+        if (natureInput && accountInput) {
+          var lastNatureKey = natureInput.value;
+          natureInput.addEventListener('change', function () {
+            var previousNature = agedBalanceDefaultNature(lastNatureKey);
+            var nextNature = agedBalanceDefaultNature(natureInput.value);
+            if (accountInput.value.trim() === previousNature.defaultAccounts) accountInput.value = nextNature.defaultAccounts;
+            lastNatureKey = natureInput.value;
+          });
+        }
+        selectionForm.addEventListener('submit', function (event) {
+          event.preventDefault();
+          submitAgedBalanceSelection(selectionForm, session);
+        });
+      }
+    } else if (session.phase === 'layout') {
+      var layoutForm = $('#aged-balance-layout-form');
+      if (layoutForm) layoutForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitAgedBalanceLayout(layoutForm, session);
+      });
+      var backToSelection = $('[data-aged-balance-back-selection]');
+      if (backToSelection) backToSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+    } else {
+      var backToLayout = $('[data-aged-balance-back-layout]');
+      if (backToLayout) backToLayout.addEventListener('click', function () { session.phase = 'layout'; render(); });
+      var backToSelection = $('[data-aged-balance-back-selection]');
+      if (backToSelection) backToSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+      var newReport = $('[data-aged-balance-new-report]');
+      if (newReport) newReport.addEventListener('click', function () {
+        agedBalanceReportSession = createAgedBalanceReportSession(S.currentDossier());
+        render();
+      });
+    }
+    bindAgedBalanceAction('[data-action="new-aged-balance-item"]', 'new-aged-balance-item', function () { openAgedBalanceItemModal(''); });
+    bindAgedBalanceAction('[data-action="edit-aged-balance-item"]', 'edit-aged-balance-item', function (trigger) { openAgedBalanceItemModal(trigger.getAttribute('data-id')); });
+    bindAgedBalanceAction('[data-action="delete-aged-balance-item"]', 'delete-aged-balance-item', function (trigger) {
+      var item = S.agedBalanceItem(trigger.getAttribute('data-id'));
+      if (!item) { toast('Pièce ouverte introuvable.', 'error'); return; }
+      if (!window.confirm('Supprimer la pièce ouverte « ' + item.reference + ' » ? Les écritures comptables restent inchangées.')) return;
+      var result = S.deleteAgedBalanceItem(item.id);
+      if (!result.ok) { toast(result.errors[0] || 'Suppression impossible.', 'error'); return; }
+      toast('Pièce ouverte supprimée du registre dédié.', 'success');
+      render();
+    });
+    bindAgedBalanceAction('[data-action="new-aged-balance-settlement"]', 'new-aged-balance-settlement', function (trigger) { openAgedBalanceSettlementModal('', trigger.getAttribute('data-id')); });
+    bindAgedBalanceAction('[data-action="edit-aged-balance-settlement"]', 'edit-aged-balance-settlement', function (trigger) { openAgedBalanceSettlementModal(trigger.getAttribute('data-id'), ''); });
+    bindAgedBalanceAction('[data-action="delete-aged-balance-settlement"]', 'delete-aged-balance-settlement', function (trigger) {
+      var id = trigger.getAttribute('data-id');
+      if (!window.confirm('Supprimer ce règlement ou cette avance du registre dédié ? Les écritures comptables restent inchangées.')) return;
+      var result = S.deleteAgedBalanceSettlement(id);
+      if (!result.ok) { toast(result.errors[0] || 'Suppression impossible.', 'error'); return; }
+      toast('Règlement supprimé du registre dédié.', 'success');
+      render();
+    });
+    bindAgedBalanceAction('[data-action="aged-balance-print"]', 'aged-balance-print', function () { openAgedBalanceReportPreview(session); });
+    bindAgedBalanceAction('[data-action="aged-balance-export"]', 'aged-balance-export', function () {
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'agedBalance.export', accountingAccessContext(S.currentDossier()))) {
+        toast('Export refusé : le droit « Exporter la balance âgée » n’est pas accordé.', 'warning');
+        return;
+      }
+      try { generateAgedBalanceReportFile(session, session.layout.destination); }
+      catch (error) { toast('Export impossible : ' + (error && error.message || 'erreur inconnue.'), 'error'); }
+    });
   }
 
   function viewGeneralBalanceReport(backLink) {
@@ -12993,6 +13649,7 @@
     if (child.id === 'journal-lines' || child.id === 'journal-modified-pieces' || child.id === 'journal-unbalanced-pieces' || child.id === 'journal-entry-totals' || child.id === 'journal-individual-account-totals' || child.id === 'journal-summary-account-totals' || child.id === 'journal-third-party-totals' || child.id === 'journal-analytic-center-totals' || child.id === 'journal-currency-totals') return viewJournalLinesReport(backLink);
     if (child.id === 'general-balance') return viewGeneralBalanceReport(backLink);
     if (child.id === 'general-summary-balance') return viewGeneralSummaryBalanceReport(backLink);
+    if (child.id === 'general-aged-balance') return viewAgedBalanceReport(backLink);
     if (child.id === 'general-ledger') return '<div class="edition-report-detail-view">' + backLink + viewLedger() + '</div>';
     var inactive = child.status === 'inactive';
     var analytic = inactive && (child.section === 'analysis' || child.section === 'situations' || child.section === 'definitionsAnalytics' || child.id.indexOf('analytic-') === 0 || child.id === 'general-analytic-balance' || child.id === 'journal-analytic-center-totals');
@@ -14424,6 +15081,7 @@
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && menuParams.c === 'journal-allocation-sheet') bindJournalAllocationSheet();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-balance') bindGeneralBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-summary-balance') bindGeneralSummaryBalanceReport();
+      if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-aged-balance') bindAgedBalanceReport();
       if (menuParams.g === 'parametres' && menuParams.t === 'dossier-configuration') bindAccountingConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'sections-accounts') bindAnalyticalSectionsConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'allocation-keys') bindAnalyticalAllocationKeys();

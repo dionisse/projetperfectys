@@ -8,6 +8,7 @@ const nav = require('../modern-proto/js/accounting-navigation.js');
 const appSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'app.js'), 'utf8');
 const journalLinesSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'journal-lines-report.js'), 'utf8');
 const generalBalanceSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'accounting-balance-report.js'), 'utf8');
+const agedBalanceSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'aged-balance-report.js'), 'utf8');
 const configurationCss = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'css', 'accounting-configuration.css'), 'utf8');
 const htmlSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'index.html'), 'utf8');
 const serviceWorkerSource = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'service-worker.js'), 'utf8');
@@ -483,6 +484,21 @@ assert.deepEqual(findTab('editions', 'general-accounts').children.map(child => c
 ]);
 assert.equal(findTab('editions', 'general-accounts').children.find(child => child.id === 'general-balance').status, 'active');
 assert.ok(findTab('editions', 'general-accounts').children.find(child => child.id === 'general-balance').reason.includes('cumul'));
+const agedBalanceNavigation = findTab('editions', 'general-accounts').children.find(child => child.id === 'general-aged-balance');
+assert.equal(agedBalanceNavigation.status, 'active');
+assert.ok(agedBalanceNavigation.reason.includes('registre dédié'));
+assert.ok(agedBalanceNavigation.reason.includes('1–30'));
+assert.match(agedBalanceSource, /balanceEqualsTotalDueLessAdvances: true[\s\S]*postedJournalEntriesAreNotUsed: true/);
+assert.match(agedBalanceSource, /itemsAreGrossAmounts: true[\s\S]*advancesAreDatedSettlements: true/);
+assert.match(agedBalanceSource, /function horizonStart\([\s\S]*shiftMonths\(asOfDate, months\)/);
+assert.match(appSource, /child\.id === 'general-aged-balance'\) return viewAgedBalanceReport\(backLink\)/);
+assert.match(appSource, /menuParams\.g === 'editions' && menuParams\.t === 'general-accounts' && menuParams\.c === 'general-aged-balance'\) bindAgedBalanceReport\(\)/);
+assert.match(appSource, /function submitAgedBalanceSelection\([\s\S]*session\.phase = 'layout'[\s\S]*function openAgedBalanceItemModal/);
+assert.match(appSource, /function openAgedBalanceItemModal\([\s\S]*agedBalance\.items\.create[\s\S]*S\.createAgedBalanceItem/);
+assert.match(appSource, /function openAgedBalanceReportPreview\([\s\S]*agedBalance\.print[\s\S]*openReportPreview\('Aperçu — Balance âgée'/);
+assert.ok(htmlSource.indexOf('js/aged-balance-report.js') < htmlSource.indexOf('js/app.js'));
+assert.match(serviceWorkerSource, /\.\/js\/aged-balance-report\.js/);
+assert.match(configurationCss, /\.aged-balance-register-table[\s\S]*\.aged-balance-report-table/);
 assert.ok(findTab('editions', 'general-accounts').children.find(child => child.id === 'general-balance').reason.includes('aperçu'));
 assert.equal(findTab('editions', 'general-accounts').children.find(child => child.id === 'general-ledger').status, 'partial');
 assert.equal(findTab('editions', 'general-accounts').children.find(child => child.id === 'general-analytic-balance').status, 'inactive');
@@ -660,7 +676,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v101/);
+assert.match(serviceWorkerSource, /perfecto-static-v102/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

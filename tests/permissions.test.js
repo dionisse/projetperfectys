@@ -95,6 +95,31 @@ test('les reports à nouveau ont des droits distincts pour maintenance, transfer
   ]);
 });
 
+test('les opérations du registre Balance âgée et ses sorties ont des droits explicites distincts', () => {
+  const dossier = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  const employee = {
+    role: 'employee', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view', 'agedBalance.items.create'] }] }
+  };
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'agedBalance.items.create', dossier), true);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'agedBalance.items.edit', dossier), false);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'agedBalance.settlements.create', dossier), false);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'agedBalance.print', dossier), false);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'agedBalance.export', dossier), false);
+  employee.grants.accounting[0].actions.push('agedBalance.settlements.create', 'agedBalance.print', 'agedBalance.export');
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'agedBalance.settlements.create', dossier), true);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'agedBalance.print', dossier), true);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'agedBalance.export', dossier), true);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'agedBalance.items.create', {
+    organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-2'
+  }), false);
+  assert.deepEqual(Permissions.actionsForModule('accounting').filter(action => action.id.startsWith('agedBalance.')).map(action => action.id), [
+    'agedBalance.items.create', 'agedBalance.items.edit', 'agedBalance.items.delete',
+    'agedBalance.settlements.create', 'agedBalance.settlements.edit', 'agedBalance.settlements.delete',
+    'agedBalance.print', 'agedBalance.export'
+  ]);
+});
+
 test('la gestion d’organisation peut être déléguée explicitement dans le bon périmètre', () => {
   const manager = {
     role: 'manager', organizationId: 'org-1',

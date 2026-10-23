@@ -1017,3 +1017,88 @@ body.report-preview-printing .report-preview-content .general-balance-report-pri
   border-top: 2px solid #899b91;
   background: #e7eeea !important;
 }
+
+/* Balance âgée : critères, registre source dédié et sorties de rapport. */
+.aged-balance-report-steps { margin-bottom: 20px; }
+.aged-balance-source-note { margin-bottom: 16px; }
+.aged-balance-selection-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; align-items: start; }
+.aged-balance-account-filter-field { grid-column: 1 / -1; }
+.aged-balance-range-field { min-width: 0; margin: 0; padding: 12px; border: 1px solid #dce4df; border-radius: 8px; }
+.aged-balance-range-field legend { padding: 0 6px; color: #354e47; font-size: .76rem; font-weight: 700; }
+.aged-balance-range-field .hint { display: block; margin-top: 6px; }
+.aged-balance-column-picker { margin-top: 20px; padding-top: 17px; border-top: 1px solid #e7ece8; }
+.aged-balance-column-picker .journal-lines-section-heading { margin-bottom: 12px; }
+.aged-balance-column-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.aged-balance-column-option { min-height: 40px; }
+.aged-balance-column-option input { flex: 0 0 auto; }
+.aged-balance-register-card { margin-top: 20px; }
+.aged-balance-register-card > .supplier-directory-head { align-items: center; }
+.aged-balance-register-card .supplier-directory-head h3 { margin: 2px 0 5px; color: #263f46; font-size: 1.02rem; }
+.aged-balance-register-card .supplier-directory-head p:not(.page-kicker) { max-width: 720px; margin: 0; color: #708078; font-size: .76rem; line-height: 1.55; }
+.aged-balance-register-table-wrap { max-height: 650px; overflow: auto; }
+.aged-balance-register-table { min-width: 1150px; }
+.aged-balance-register-table th, .aged-balance-register-table td,
+.aged-balance-settlement-table th, .aged-balance-settlement-table td { vertical-align: top; }
+.aged-balance-register-table td small { color: #77847d; }
+.aged-balance-row-actions { display: flex; flex-wrap: wrap; gap: 5px; min-width: 190px; }
+.aged-balance-settlement-details { min-width: 210px; }
+.aged-balance-settlement-details > summary { color: #31584c; cursor: pointer; font-size: .73rem; font-weight: 700; }
+.aged-balance-settlement-table-wrap { max-width: 620px; margin-top: 10px; }
+.aged-balance-settlement-table { min-width: 540px; }
+.aged-balance-no-settlements { margin: 8px 0 0; }
+.aged-balance-register-empty { margin-top: 8px; }
+.aged-balance-item-form-grid, .aged-balance-settlement-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.aged-balance-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.aged-balance-settings-grid .journal-lines-destination-card { grid-column: 1 / -1; }
+.aged-balance-layout-summary { margin-bottom: 16px; }
+.aged-balance-inline-preview { margin-top: 18px; }
+.aged-balance-preview-page > .panel { overflow: hidden; }
+.aged-balance-print-report { width: 100%; color: #22332c; background: #fff; font-family: Arial, sans-serif; }
+.aged-balance-print-heading { margin: 0 0 12px; }
+.aged-balance-print-heading .page-kicker { color: #587065; font-size: 8pt; font-weight: 700; letter-spacing: .08em; }
+.aged-balance-print-heading h2 { margin: 5px 0; color: #213f35; font-size: 17pt; }
+.aged-balance-print-heading p, .aged-balance-print-source, .aged-balance-report-formula { color: #596a61; font-size: 9pt; line-height: 1.5; }
+.aged-balance-report-table-wrap { overflow-x: auto; }
+.aged-balance-report-table { width: 100%; min-width: 640px; border-collapse: collapse; font-size: 8pt; }
+.aged-balance-report-table th, .aged-balance-report-table td { padding: 6px 7px; border: 1px solid #d7dfda; text-align: left; vertical-align: top; }
+.aged-balance-report-table th { color: #21483a; background: #edf3ef; font-size: .72rem; }
+.aged-balance-report-table td.num, .aged-balance-report-table th.num { text-align: right; white-space: nowrap; }
+.aged-balance-report-table tfoot td { border-top: 2px solid #8d9f95; background: #f0f4f1; }
+.aged-balance-style-color .aged-balance-report-table { font-size: 10pt; }
+.aged-balance-style-color .aged-balance-report-table th { background: #e6f0eb; }
+.aged-balance-style-plain .aged-balance-report-table th { color: #111; background: #fff; }
+.aged-balance-report-formula { margin: 10px 0 0; font-size: 8pt; }
+.aged-balance-report-detail .journal-lines-form-actions { align-items: center; }
+
+@media (max-width: 850px) {
+  .aged-balance-column-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .aged-balance-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .aged-balance-selection-grid,
+  .aged-balance-column-grid,
+  .aged-balance-settings-grid,
+  .aged-balance-item-form-grid,
+  .aged-balance-settlement-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .aged-balance-account-filter-field,
+  .aged-balance-settings-grid .journal-lines-destination-card { grid-column: auto; }
+  .aged-balance-register-card > .supplier-directory-head { align-items: stretch; flex-direction: column; }
+  .aged-balance-register-card > .supplier-directory-head .btn { width: 100%; }
+  .aged-balance-report-detail .journal-lines-section-heading { align-items: flex-start; flex-direction: column; }
+  .aged-balance-preview-page > .panel, .aged-balance-inline-preview > .panel { padding: 11px; }
+  .aged-balance-report-table { min-width: 640px; }
+}
+
+@media print {
+  body.report-preview-printing .report-preview-content .aged-balance-print-report { width: 100%; max-width: none; margin: 0; padding: 0; color: #111 !important; background: #fff !important; }
+  body.report-preview-printing .report-preview-content .aged-balance-print-heading h2 { color: #111 !important; font-size: 14pt !important; }
+  body.report-preview-printing .report-preview-content .aged-balance-print-heading p,
+  body.report-preview-printing .report-preview-content .aged-balance-print-source,
+  body.report-preview-printing .report-preview-content .aged-balance-report-formula { color: #222 !important; }
+  body.report-preview-printing .report-preview-content .aged-balance-report-table { width: 100%; min-width: 0 !important; font-size: 8pt !important; }
+  body.report-preview-printing .report-preview-content .aged-balance-report-table thead { display: table-header-group; }
+  body.report-preview-printing .report-preview-content .aged-balance-report-table tr { break-inside: avoid; page-break-inside: avoid; }
+  body.report-preview-printing .report-preview-content .aged-balance-style-plain .aged-balance-report-table th { color: #111 !important; background: #fff !important; }
+  body.report-preview-printing .report-preview-content .aged-balance-style-color .aged-balance-report-table { font-size: 10pt !important; }
+}
