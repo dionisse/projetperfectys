@@ -20,6 +20,7 @@
   var GeneralLedgerReport = window.PerfectoGeneralLedgerReport;
   var MultiYearHistoryReport = window.PerfectoMultiYearHistoryReport;
   var OpeningBalanceReport = window.PerfectoOpeningBalanceReport;
+  var OpeningBalanceJournalReport = window.PerfectoOpeningBalanceJournalReport;
   var AgedBalanceReport = window.PerfectoAgedBalanceReport;
   var FecImport = window.PerfectoFecImport;
   var BankStatement = window.PerfectoBankStatement;
@@ -153,9 +154,11 @@
   var multiYearHistoryReportSession = null;
   var generalSummaryBalanceReportSession = null;
   var openingBalanceReportSession = null;
+  var openingBalanceJournalReportSession = null;
   var accountSituationReportSession = null;
   var agedBalanceReportSession = null;
   var OPENING_BALANCE_COLUMN_DEFINITIONS = OpeningBalanceReport.COLUMN_DEFINITIONS.map(function (column) { return Object.assign({}, column); });
+  var OPENING_BALANCE_JOURNAL_COLUMN_DEFINITIONS = OpeningBalanceJournalReport.COLUMN_DEFINITIONS.map(function (column) { return Object.assign({}, column); });
   var ACCOUNT_SITUATION_COLUMN_DEFINITIONS = AccountSituationReport.COLUMN_DEFINITIONS.map(function (column) { return Object.assign({}, column); });
   var AGED_BALANCE_AGE_COLUMN_DEFINITIONS = AgedBalanceReport.AGE_BUCKETS.map(function (bucket) {
     return { key: 'age:' + bucket.key, label: bucket.label, defaultSelected: false, ageBucket: true };
@@ -766,6 +769,7 @@
     var isMultiYearHistoryReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-multiyear-history';
     var isGeneralSummaryBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-summary-balance';
     var isOpeningBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-opening-balance';
+    var isOpeningBalanceJournalReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-opening-journal';
     var isAccountSituationReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-account-situation';
     var isAgedBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-aged-balance';
     if (!isGeneralBalanceReportRoute) generalBalanceReportSession = null;
@@ -773,6 +777,7 @@
     if (!isMultiYearHistoryReportRoute) multiYearHistoryReportSession = null;
     if (!isGeneralSummaryBalanceReportRoute) generalSummaryBalanceReportSession = null;
     if (!isOpeningBalanceReportRoute) openingBalanceReportSession = null;
+    if (!isOpeningBalanceJournalReportRoute) openingBalanceJournalReportSession = null;
     if (!isAccountSituationReportRoute) accountSituationReportSession = null;
     if (!isAgedBalanceReportRoute) {
       agedBalanceReportSession = null;
@@ -4218,6 +4223,366 @@
     if (session.phase === 'preview' && !session.previewOpened) {
       session.previewOpened = true;
       openOpeningBalanceReportPreview(session);
+    }
+  }
+
+  /* --------------------------- Journal des reports ------------------------ */
+  function createOpeningBalanceJournalReportSession(dossier) {
+    var columns = Object.create(null);
+    OPENING_BALANCE_JOURNAL_COLUMN_DEFINITIONS.forEach(function (column) { columns[column.key] = !!column.defaultSelected; });
+    return {
+      dossierId: dossier.id,
+      phase: 'selection',
+      filters: { accounts: '*' },
+      columns: columns,
+      layout: {
+        printer: 'system', style: 'plain8', orientation: 'landscape', margins: 'standard',
+        pageFirst: '', pageLast: '', parity: 'none', destination: 'preview'
+      },
+      report: null,
+      previewOpened: false,
+      exportFilename: '',
+      exportMessage: ''
+    };
+  }
+
+  function ensureOpeningBalanceJournalReportSession() {
+    var dossier = S.currentDossier();
+    if (!openingBalanceJournalReportSession || openingBalanceJournalReportSession.dossierId !== dossier.id) {
+      openingBalanceJournalReportSession = createOpeningBalanceJournalReportSession(dossier);
+    }
+    return openingBalanceJournalReportSession;
+  }
+
+  function buildOpeningBalanceJournalReport(session) {
+    var dossier = S.currentDossier();
+    return OpeningBalanceJournalReport.build({
+      accounts: S.accounts(),
+      openingBalances: S.openingBalances(),
+      accountFilter: session.filters.accounts,
+      reportDate: dossier.cycleStart,
+      sourceDate: S.expectedOpeningBalanceDate()
+    });
+  }
+
+  function openingBalanceJournalColumnOption(column, session) {
+    var unsupported = column.supported === false;
+    var availabilityId = 'opening-journal-column-availability';
+    return '<label class="journal-lines-column-option general-balance-column-option opening-journal-column-option' + (unsupported ? ' is-unavailable' : '') + '">' +
+      '<input type="checkbox" data-opening-journal-column="' + esc(column.key) + '"' +
+        (session.columns[column.key] ? ' checked' : '') +
+        (unsupported ? ' aria-describedby="' + availabilityId + '"' : '') + '>' +
+      '<span><strong>' + esc(column.label) + '</strong>' +
+        (column.key === 'letteringDate' ? '<small>Non enregistrée dans le registre ; cellule laissée vide</small>' : '') +
+        (column.key === 'currencyAmount' ? '<small>Aucun montant d’origine en devise n’est enregistré</small>' : '') +
+      '</span></label>';
+  }
+
+  function openingBalanceJournalReportSelectionView(session, dossier) {
+    var leftColumns = OPENING_BALANCE_JOURNAL_COLUMN_DEFINITIONS.slice(0, 5).map(function (column) {
+      return openingBalanceJournalColumnOption(column, session);
+    }).join('');
+    var rightColumns = OPENING_BALANCE_JOURNAL_COLUMN_DEFINITIONS.slice(5).map(function (column) {
+      return openingBalanceJournalColumnOption(column, session);
+    }).join('');
+    var placeholders = Array.from({ length: 5 }, function () {
+      return '<div class="opening-journal-column-placeholder" aria-hidden="true">—</div>';
+    }).join('');
+    return generalBalanceReportSteps('selection', 'Étapes de préparation du Journal des reports') +
+      pageHeader('Journal des reports', 'Consultez les reports à nouveau enregistrés, ligne par ligne, puis choisissez la mise en page.', '') +
+      '<div class="alert info opening-journal-source-note"><div><strong>Source : registre Reports à nouveau du dossier actif.</strong> Une ligne du rapport reprend un enregistrement valide du registre ; aucune écriture de journal n’est recherchée ni créée. Les intitulés viennent du plan comptable. La date des reports attendue est le ' + esc(dateLabel(S.expectedOpeningBalanceDate())) + ' (veille du début du cycle au ' + esc(dateLabel(dossier.cycleStart)) + ').</div></div>' +
+      '<form id="opening-journal-selection-form" novalidate>' +
+        '<section class="card journal-lines-card"><div class="panel">' +
+          '<div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div><span class="journal-lines-cycle-badge">Cycle ' + esc(dateLabel(dossier.cycleStart)) + ' — ' + esc(dateLabel(dossier.cycleEnd)) + '</span></div>' +
+          '<div class="field opening-balance-account-filter"><label for="opening-journal-accounts">Comptes</label><div class="journal-lines-picker-control"><input id="opening-journal-accounts" name="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou 401*; 411100" autocomplete="off" required><button type="button" class="btn btn-ghost" data-opening-journal-picker aria-label="Choisir les comptes">…</button></div><span class="hint">« * » sélectionne tous les comptes ; saisissez un code ou un préfixe suivi de * pour restreindre la liste.</span></div>' +
+        '</div></section>' +
+        '<section class="card journal-lines-card"><div class="panel">' +
+          '<div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
+          '<div class="opening-journal-column-grid"><div class="opening-journal-column-stack">' + leftColumns + '</div><div class="opening-journal-column-stack">' + rightColumns + '</div><div class="opening-journal-column-stack opening-journal-column-placeholder-stack">' + placeholders + '</div></div>' +
+          '<p class="hint journal-lines-columns-hint" id="opening-journal-column-availability">Les colonnes « Date lettrage » et « Montant en devise » restent cochées comme sur le modèle, mais leurs cellules sont vides : le registre ne stocke ni date de lettrage ni montant d’origine en devise.</p>' +
+        '</div></section>' +
+        '<div class="journal-lines-form-errors" id="opening-journal-selection-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="journal-lines-form-actions"><button type="submit" class="btn btn-primary">Mise en page <span aria-hidden="true">→</span></button></div>' +
+      '</form>';
+  }
+
+  function submitOpeningBalanceJournalReportSelection(form, session) {
+    var errors = [];
+    var accountsInput = $('#opening-journal-accounts', form);
+    var accountFilter = GeneralBalanceReport.parseAccountFilter(accountsInput ? accountsInput.value : '');
+    var selectedColumns = $$('[data-opening-journal-column]:checked', form).map(function (input) {
+      return input.getAttribute('data-opening-journal-column');
+    });
+    if (!accountFilter.valid) errors.push(accountFilter.error);
+    if (!selectedColumns.length) errors.push('Sélectionnez au moins une colonne à imprimer.');
+    if (selectedColumns.indexOf('accountCode') === -1 && selectedColumns.indexOf('accountTitle') === -1) {
+      errors.push('Conservez au moins une colonne d’identification du compte (code ou intitulé).');
+    }
+    showGeneralBalanceReportErrors($('#opening-journal-selection-errors', form), errors);
+    if (errors.length) return;
+    session.filters.accounts = String(accountsInput.value || '*').trim();
+    session.columns = Object.create(null);
+    OPENING_BALANCE_JOURNAL_COLUMN_DEFINITIONS.forEach(function (column) {
+      session.columns[column.key] = selectedColumns.indexOf(column.key) !== -1;
+    });
+    session.report = buildOpeningBalanceJournalReport(session);
+    if (!session.report.ok) {
+      showGeneralBalanceReportErrors($('#opening-journal-selection-errors', form), session.report.errors);
+      return;
+    }
+    session.phase = 'layout';
+    session.previewOpened = false;
+    render();
+  }
+
+  function openingBalanceJournalReportLeafColumns(session) {
+    return OPENING_BALANCE_JOURNAL_COLUMN_DEFINITIONS.filter(function (column) {
+      return session.columns[column.key];
+    }).map(function (column) {
+      return { key: column.key, label: column.reportLabel || column.label, exportLabel: column.exportLabel, text: column.text };
+    });
+  }
+
+  function openingBalanceJournalReportValue(row, column, forSpreadsheet) {
+    if (column.key === 'date') return forSpreadsheet ? String(row.date || '') : dateLabel(row.date);
+    if (column.key === 'letteringDate' || column.key === 'currencyAmount') return '';
+    if (column.key === 'debit' || column.key === 'credit') {
+      var numericValue = Number(row[column.key]) || 0;
+      return forSpreadsheet ? numericValue : (numericValue ? amount(numericValue) : '');
+    }
+    return String(row[column.key] == null ? '' : row[column.key]);
+  }
+
+  function openingBalanceJournalReportExportMatrix(session, report, forSpreadsheet) {
+    var columns = openingBalanceJournalReportLeafColumns(session);
+    return [columns.map(function (column) { return column.exportLabel; })].concat(report.rows.map(function (row) {
+      return columns.map(function (column) { return openingBalanceJournalReportValue(row, column, !!forSpreadsheet); });
+    }));
+  }
+
+  function openingBalanceJournalReportWarningsHtml(report) {
+    if (!report.warnings || !report.warnings.length) return '';
+    return '<div class="alert warning opening-journal-report-warnings"><div><ul>' + report.warnings.map(function (warning) {
+      return '<li>' + esc(warning) + '</li>';
+    }).join('') + '</ul></div></div>';
+  }
+
+  function openingBalanceJournalReportPrintableHtml(session, report) {
+    report = report || session.report || buildOpeningBalanceJournalReport(session);
+    var columns = openingBalanceJournalReportLeafColumns(session);
+    var bodyRows = report.rows.map(function (row) {
+      return '<tr>' + columns.map(function (column) {
+        var value = openingBalanceJournalReportValue(row, column, false);
+        return '<td' + (!column.text ? ' class="num"' : '') + '>' + esc(value) + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    var emptyRow = report.rows.length ? '' : '<tr class="general-balance-empty-row"><td colspan="' + Math.max(columns.length, 1) + '"><strong>Aucun report à afficher.</strong> Vérifiez le filtre de comptes et le registre du dossier actif.</td></tr>';
+    var styleClass = session.layout.style === 'color10' ? 'is-color-style' : 'is-mono-style';
+    var countCaption = openingBalanceReportCount(report.lineCount) + (report.lineCount === 1 ? ' ligne du registre' : ' lignes du registre');
+    return '<article class="general-balance-report-print opening-journal-report-print ' + styleClass + '">' +
+      '<header class="general-balance-print-heading"><p class="page-kicker">ÉDITIONS · COMPTES GÉNÉRAUX</p><h2>Journal des reports</h2>' +
+        '<p>Reports datés du ' + esc(dateLabel(report.sourceDate)) + '</p></header>' +
+      '<div class="general-balance-print-context"><span><strong>Comptes :</strong> ' + esc(session.filters.accounts === '*' ? 'Tous les comptes' : session.filters.accounts) + '</span>' +
+        '<span><strong>Cycle :</strong> ' + esc(dateLabel(report.reportDate)) + '</span></div>' +
+      '<p class="general-balance-print-basis">Détail fidèle du registre Reports à nouveau du dossier actif, une ligne par enregistrement retenu. Les débits et crédits sont en XOF. Le registre ne contient pas de date de lettrage ni de montant d’origine en devise ; ces deux colonnes restent vides.</p>' +
+      openingBalanceJournalReportWarningsHtml(report) +
+      '<div class="table-wrap general-balance-table-wrap"><table class="data-table general-balance-table opening-journal-report-table"><caption>' + esc(countCaption) + '</caption>' +
+        '<thead><tr>' + columns.map(function (column) {
+          return '<th scope="col"' + (!column.text ? ' class="num"' : '') + '>' + esc(column.label) + '</th>';
+        }).join('') + '</tr></thead><tbody>' + (bodyRows || emptyRow) + '</tbody>' +
+      '</table></div></article>';
+  }
+
+  function openingBalanceJournalReportLayoutView(session) {
+    var report = session.report || buildOpeningBalanceJournalReport(session);
+    var resultSummary = openingBalanceReportCount(report.lineCount) + (report.lineCount === 1 ? ' ligne du registre' : ' lignes du registre');
+    return generalBalanceReportSteps('layout', 'Étapes de préparation du Journal des reports') +
+      pageHeader('Mise en page', 'Choisissez le style, l’orientation, les marges, les pages et la destination.', '') +
+      '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(resultSummary) + '. Aucune écriture ne sera modifiée.</div></div>' +
+      openingBalanceJournalReportWarningsHtml(report) +
+      '<form id="opening-journal-layout-form" novalidate><div class="journal-lines-settings-grid general-balance-settings-grid">' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="opening-journal-printer">Imprimante</label><select id="opening-journal-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante par défaut (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select><span class="hint">Le navigateur garde le choix final du périphérique ou du PDF.</span></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="opening-journal-style">Style du rapport</label><select id="opening-journal-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('opening-journal-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('opening-journal-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('opening-journal-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('opening-journal-margins', 'binding', 'Reliure à gauche', session.layout.margins === 'binding', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Pages</h3></div><div class="journal-lines-page-range"><div class="field"><label for="opening-journal-page-first">Première</label><input id="opening-journal-page-first" type="number" min="1" step="1" value="' + esc(session.layout.pageFirst) + '" placeholder="1"></div><span aria-hidden="true">à</span><div class="field"><label for="opening-journal-page-last">Dernière</label><input id="opening-journal-page-last" type="number" min="1" step="1" value="' + esc(session.layout.pageLast) + '" placeholder="Fin"></div></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Parité</h3></div><div class="field"><label for="opening-journal-parity">Pages</label><select id="opening-journal-parity"><option value="none"' + (session.layout.parity === 'none' ? ' selected' : '') + '>Aucune</option><option value="odd"' + (session.layout.parity === 'odd' ? ' selected' : '') + '>Impaire</option><option value="even"' + (session.layout.parity === 'even' ? ' selected' : '') + '>Paire</option></select></div></div></section>' +
+        '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
+          generalBalanceReportRadio('opening-journal-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
+          generalBalanceReportRadio('opening-journal-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
+          generalBalanceReportRadio('opening-journal-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('opening-journal-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
+        '</div></div></section>' +
+      '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire.</strong> La plage de pages et la parité sont à appliquer dans la boîte d’impression du navigateur si elles y sont proposées. Le choix final de l’imprimante ou du PDF reste dans le navigateur.</div></div>' +
+      '<div class="journal-lines-form-errors" id="opening-journal-layout-errors" role="alert" aria-live="polite"></div>' +
+      '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-opening-journal-back-selection>Retour à la sélection</button><button type="submit" class="btn btn-primary">Valider</button></div></form>';
+  }
+
+  function openingBalanceJournalReportPreviewView(session) {
+    var report = session.report || buildOpeningBalanceJournalReport(session);
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans PERFECTO';
+    return generalBalanceReportSteps('preview', 'Étapes de préparation du Journal des reports') +
+      pageHeader('Aperçu du Journal des reports', 'Vérifiez les lignes du registre avant impression ou enregistrement PDF.',
+        '<button type="button" class="btn btn-primary" data-opening-journal-open-preview>Ouvrir l’aperçu avant impression</button>') +
+      '<div class="alert info"><div><strong>Destination choisie :</strong> ' + esc(destination) + '. La boîte d’impression ne s’ouvrira qu’après votre action depuis l’aperçu.</div></div>' +
+      openingBalanceJournalReportWarningsHtml(report) +
+      (report.rows.length ? '' : '<div class="alert warning"><div>Aucun report ne correspond aux comptes sélectionnés dans le registre du dossier actif.</div></div>') +
+      '<section class="card general-balance-preview-page"><div class="panel">' + openingBalanceJournalReportPrintableHtml(session, report) + '</div></section>' +
+      '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-opening-journal-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-ghost" data-opening-journal-back-selection>Modifier la sélection</button></div>';
+  }
+
+  function openingBalanceJournalReportSavedView(session) {
+    return generalBalanceReportSteps('preview', 'Étapes de préparation du Journal des reports') +
+      pageHeader('Export prêt', 'Le fichier a été préparé sans modifier le registre des reports ni les écritures.', '') +
+      '<section class="card journal-lines-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
+        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-opening-journal-open-preview>Afficher l’aperçu</button><button type="button" class="btn btn-ghost" data-opening-journal-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-opening-journal-new-report>Nouvelle sélection</button></div></div></section>';
+  }
+
+  function generateOpeningBalanceJournalReportFile(session, destination) {
+    var report = buildOpeningBalanceJournalReport(session);
+    if (!report.ok) throw new Error((report.errors || ['Le Journal des reports est invalide.']).join(' '));
+    session.report = report;
+    var spreadsheet = destination === 'table';
+    var matrix = openingBalanceJournalReportExportMatrix(session, report, spreadsheet);
+    var extension = spreadsheet ? 'xlsx' : 'txt';
+    var filename = 'Journal-des-reports-' + safeFilePart(S.currentDossier().name) + '-' + report.sourceDate + '.' + extension;
+    var content = spreadsheet
+      ? AccountingExchange.exportTabularWorkbook('Journal des reports', matrix[0], matrix.slice(1))
+      : generalBalanceReportTsv(matrix);
+    downloadFile(filename, content, spreadsheet ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/plain;charset=utf-8');
+    session.exportFilename = filename;
+    session.exportMessage = spreadsheet ? 'Téléchargement du classeur Excel lancé dans le navigateur.' : 'Téléchargement du fichier texte tabulé lancé dans le navigateur.';
+    session.phase = 'saved';
+    render();
+  }
+
+  function submitOpeningBalanceJournalReportLayout(form, session) {
+    var errors = [];
+    var destination = $('input[name="opening-journal-destination"]:checked', form);
+    var orientation = $('input[name="opening-journal-orientation"]:checked', form);
+    var margins = $('input[name="opening-journal-margins"]:checked', form);
+    var first = $('#opening-journal-page-first', form).value;
+    var last = $('#opening-journal-page-last', form).value;
+    if (first && (!Number.isInteger(Number(first)) || Number(first) < 1)) errors.push('La première page doit être un entier supérieur ou égal à 1.');
+    if (last && (!Number.isInteger(Number(last)) || Number(last) < 1)) errors.push('La dernière page doit être un entier supérieur ou égal à 1.');
+    if (first && last && Number(first) > Number(last)) errors.push('La première page doit précéder ou égaler la dernière page.');
+    showGeneralBalanceReportErrors($('#opening-journal-layout-errors', form), errors);
+    if (errors.length) return;
+    session.layout.printer = $('#opening-journal-printer', form).value;
+    session.layout.style = $('#opening-journal-style', form).value;
+    session.layout.orientation = orientation ? orientation.value : 'landscape';
+    session.layout.margins = margins ? margins.value : 'standard';
+    session.layout.pageFirst = first;
+    session.layout.pageLast = last;
+    session.layout.parity = $('#opening-journal-parity', form).value;
+    session.layout.destination = destination ? destination.value : 'preview';
+    session.report = buildOpeningBalanceJournalReport(session);
+    if (session.layout.destination === 'table' || session.layout.destination === 'file') {
+      try {
+        generateOpeningBalanceJournalReportFile(session, session.layout.destination);
+      } catch (error) {
+        session.phase = 'layout';
+        render();
+        toast('Export impossible : ' + (error && error.message || 'erreur inconnue.'), 'error');
+      }
+      return;
+    }
+    session.previewOpened = false;
+    session.phase = 'preview';
+    render();
+  }
+
+  function openingBalanceJournalReportPrintOptions(session) {
+    var styleNode = null;
+    var previousStyleText = '';
+    var createdStyle = false;
+    var previousTitle = '';
+    return {
+      beforePrint: function () {
+        styleNode = $('#opening-journal-print-page-style');
+        createdStyle = !styleNode;
+        if (!styleNode) {
+          styleNode = document.createElement('style');
+          styleNode.id = 'opening-journal-print-page-style';
+          document.head.appendChild(styleNode);
+        } else previousStyleText = styleNode.textContent;
+        var orientation = session.layout.orientation === 'portrait' ? 'portrait' : 'landscape';
+        var left = session.layout.margins === 'binding' ? '18mm' : '12mm';
+        styleNode.textContent = '@page { size: A4 ' + orientation + '; margin: 12mm 12mm 12mm ' + left + '; }';
+        previousTitle = document.title;
+        document.title = 'Journal-des-reports-' + safeFilePart(S.currentDossier().name) + '-' + session.report.sourceDate;
+      },
+      afterPrint: function () {
+        document.title = previousTitle || document.title;
+        if (!styleNode) return;
+        if (createdStyle && styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+        else styleNode.textContent = previousStyleText;
+      }
+    };
+  }
+
+  function openOpeningBalanceJournalReportPreview(session) {
+    var report = session.report || buildOpeningBalanceJournalReport(session);
+    session.report = report;
+    openReportPreview('Aperçu — Journal des reports', openingBalanceJournalReportPrintableHtml(session, report), openingBalanceJournalReportPrintOptions(session));
+  }
+
+  function viewOpeningBalanceJournalReport(backLink) {
+    var session = ensureOpeningBalanceJournalReportSession();
+    if (session.phase !== 'selection') session.report = buildOpeningBalanceJournalReport(session);
+    var content = session.phase === 'layout'
+      ? openingBalanceJournalReportLayoutView(session)
+      : (session.phase === 'preview'
+        ? openingBalanceJournalReportPreviewView(session)
+        : (session.phase === 'saved'
+          ? openingBalanceJournalReportSavedView(session)
+          : openingBalanceJournalReportSelectionView(session, S.currentDossier())));
+    return '<div class="edition-report-detail-view general-balance-report-detail opening-journal-report-detail">' + backLink + content + '</div>';
+  }
+
+  function bindOpeningBalanceJournalReport() {
+    var session = ensureOpeningBalanceJournalReportSession();
+    if (session.phase === 'selection') {
+      var selectionForm = $('#opening-journal-selection-form');
+      if (!selectionForm) return;
+      selectionForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitOpeningBalanceJournalReportSelection(selectionForm, session);
+      });
+      var pickerButton = $('[data-opening-journal-picker]', selectionForm);
+      if (pickerButton) pickerButton.addEventListener('click', function () {
+        openGeneralBalanceAccountPicker($('#opening-journal-accounts', selectionForm));
+      });
+      return;
+    }
+    if (session.phase === 'layout') {
+      var layoutForm = $('#opening-journal-layout-form');
+      if (!layoutForm) return;
+      layoutForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitOpeningBalanceJournalReportLayout(layoutForm, session);
+      });
+      var backSelection = $('[data-opening-journal-back-selection]');
+      if (backSelection) backSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+      return;
+    }
+    $$('[data-opening-journal-open-preview]').forEach(function (button) {
+      button.addEventListener('click', function () { openOpeningBalanceJournalReportPreview(session); });
+    });
+    $$('[data-opening-journal-back-layout]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'layout'; render(); });
+    });
+    $$('[data-opening-journal-back-selection]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'selection'; render(); });
+    });
+    var newReportButton = $('[data-opening-journal-new-report]');
+    if (newReportButton) newReportButton.addEventListener('click', function () {
+      openingBalanceJournalReportSession = createOpeningBalanceJournalReportSession(S.currentDossier());
+      render();
+    });
+    if (session.phase === 'preview' && !session.previewOpened) {
+      session.previewOpened = true;
+      openOpeningBalanceJournalReportPreview(session);
     }
   }
 
@@ -15458,6 +15823,7 @@
     if (child.id === 'general-summary-balance') return viewGeneralSummaryBalanceReport(backLink);
     if (child.id === 'general-aged-balance') return viewAgedBalanceReport(backLink);
     if (child.id === 'general-opening-balance') return viewOpeningBalanceReport(backLink);
+    if (child.id === 'general-opening-journal') return viewOpeningBalanceJournalReport(backLink);
     if (child.id === 'general-account-situation') return viewAccountSituationReport(backLink);
     if (child.id === 'general-ledger') return viewGeneralLedgerReport(backLink);
     if (child.id === 'general-multiyear-history') return viewMultiYearHistoryReport(backLink);
@@ -15478,7 +15844,7 @@
       extra = 'Aucun registre de budget, de commande engagée ou de réalisation rapprochée n’est enregistré ; aucun disponible ni taux d’exécution n’est simulé.';
     } else if (child.id === 'general-aged-balance') {
       extra = 'Aucun registre de factures/règlements avec échéances et soldes ouverts n’est disponible pour calculer une ancienneté fiable.';
-    } else if (child.id === 'general-opening-balance' || child.id === 'general-opening-journal' || child.id.indexOf('third-party-opening') === 0 || child.id.indexOf('currency-opening') === 0) {
+    } else if (child.id === 'general-opening-balance' || child.id.indexOf('third-party-opening') === 0 || child.id.indexOf('currency-opening') === 0) {
       extra = 'Les reports restent dans le registre Reports à nouveau, séparé des écritures de journal ; cette carte ne les modifie pas.';
     } else if (child.id.indexOf('general-counterpart-') === 0) {
       extra = 'Le critère de contrepartie par pièce, notamment pour les pièces à plusieurs lignes, reste à confirmer avant tout cumul.';
@@ -16893,6 +17259,7 @@
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-summary-balance') bindGeneralSummaryBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-aged-balance') bindAgedBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-opening-balance') bindOpeningBalanceReport();
+      if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-opening-journal') bindOpeningBalanceJournalReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-account-situation') bindAccountSituationReport();
       if (menuParams.g === 'parametres' && menuParams.t === 'dossier-configuration') bindAccountingConfiguration();
       if (menuParams.g === 'parametres' && menuParams.t === 'sections-accounts') bindAnalyticalSectionsConfiguration();

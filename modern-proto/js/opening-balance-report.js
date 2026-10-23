@@ -68,6 +68,7 @@
       sourceDate: String(options.sourceDate || ''),
       rows: [],
       displayRows: [],
+      sourceRecords: [],
       totals: { accountCount: 0, lines: 0, debit: 0, credit: 0, difference: 0, balanced: true },
       lineCount: 0,
       invalidLineCount: invalidLineCount || 0,
@@ -185,6 +186,7 @@
       sourceDate: sourceDate,
       rows: rows,
       displayRows: displayRows,
+      sourceRecords: selectedRecords.map(function (record) { return Object.assign({}, record); }),
       totals: {
         accountCount: rows.length,
         lines: selectedRecords.length,

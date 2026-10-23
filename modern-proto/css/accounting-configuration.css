@@ -927,6 +927,14 @@ body.report-preview-open { overflow: hidden; }
 .opening-balance-column-stack { display: grid; align-content: start; gap: 9px; }
 .opening-balance-column-option { min-height: 38px; }
 .opening-balance-subtotal-option { max-width: 720px; }
+.opening-journal-source-note { margin: 0 0 14px; line-height: 1.55; }
+.opening-journal-column-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 22px; }
+.opening-journal-column-stack { display: grid; align-content: start; gap: 9px; }
+.opening-journal-column-option { min-height: 42px; }
+.opening-journal-column-option small { display: block; margin-top: 3px; color: #748078; font-size: .7rem; font-weight: 500; line-height: 1.35; }
+.opening-journal-column-placeholder { min-height: 42px; padding: 10px 12px; border: 1px dashed #e1e7e3; border-radius: 8px; color: #c2cbc5; }
+.opening-journal-report-warnings { margin: 12px 0; }
+.opening-journal-report-warnings ul { margin: 0 0 0 18px; }
 .opening-balance-report-warnings { margin: 12px 0; }
 .opening-balance-report-warnings ul { margin: 0 0 0 18px; }
 .account-situation-source-note { margin: 0 0 14px; line-height: 1.55; }
@@ -1063,7 +1071,9 @@ body.report-preview-open { overflow: hidden; }
   .general-balance-option-grid,
   .general-balance-column-grid,
   .opening-balance-column-grid,
+  .opening-journal-column-grid,
   .account-situation-column-grid { grid-template-columns: minmax(0, 1fr); }
+  .opening-journal-column-placeholder-stack { display: none; }
   .general-balance-settings-grid { grid-template-columns: minmax(0, 1fr); }
   .general-balance-settings-grid .journal-lines-destination-card { grid-column: auto; }
   .general-balance-report-detail .journal-lines-section-heading { align-items: flex-start; flex-direction: column; }

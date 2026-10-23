@@ -71,6 +71,7 @@ test('agrège les reports par compte en conservant séparément les débits et c
   assert.equal(report.totals.balanced, false);
   assert.equal(report.totals.difference, -50);
   assert.equal(report.rows[0].currency, '');
+  assert.deepEqual(report.sourceRecords.map(record => record.id), ['RAN-1', 'RAN-2', 'RAN-3', 'RAN-4']);
   assert.equal(report.basis.grossDebitAndCreditRetained, true);
   assert.equal(report.basis.foreignCurrencyAmountsAvailable, false);
 });
