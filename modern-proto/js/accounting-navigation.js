@@ -110,10 +110,10 @@
           ]
         },
         {
-          id: 'third-parties', label: 'Tiers', status: 'mixed', reason: 'La Balance des tiers est disponible pour les mouvements auxiliaires validés portant une référence explicite et non ambiguë ; les autres éditions restent en attente de données individualisées.',
+          id: 'third-parties', label: 'Tiers', status: 'mixed', reason: 'La Balance des tiers et la Balance d’ouverture sont disponibles dans la limite des identifiants auxiliaires explicites ; les autres éditions restent en attente de données individualisées.',
           children: [
             { id: 'third-party-balance', label: 'Balance des tiers', section: 'balances', status: 'active', reason: 'Sélection de la nature et des tiers, période, colonnes, mise en page, aperçu, export Excel/TXT et impression. Les mouvements proviennent uniquement des écritures validées portant une référence auxiliaire explicite non ambiguë ; les reports d’ouverture ne sont repris que s’ils portent un identifiant/code tiers explicite.' },
-            { id: 'third-party-opening-balance', label: 'Balance d’ouverture', section: 'balances', status: 'planned', reason: 'Le registre Reports à nouveau ne contient pas encore une balance auxiliaire individualisée ; format à définir après capture.' },
+            { id: 'third-party-opening-balance', label: 'Balance d’ouverture', section: 'balances', status: 'active', reason: 'Sélection de la nature et des tiers, colonnes, mise en page, aperçu plein écran, export Excel/TXT et impression. Source : registre Reports à nouveau du dossier actif ; seules les lignes explicitement reliées à une fiche sont attribuées.' },
             { id: 'third-party-situation', label: 'Situation des comptes', section: 'balances', status: 'planned', reason: 'La période, les colonnes et le niveau de détail seront définis à partir de votre capture.' },
             { id: 'third-party-nature-breakdown', label: 'Décomposition des soldes par nature (clients/fournisseurs)', section: 'balances', status: 'planned', reason: 'Les comptes collectifs existants sont consultables ; la décomposition auxiliaire clients/fournisseurs attend des mouvements identifiés par tiers.' },
             { id: 'third-party-ledger', label: 'Grand livre', section: 'ledgers', status: 'planned', reason: 'Le grand livre par tiers attend des écritures portant un identifiant individuel ; aucun mouvement collectif ne sera attribué à une fiche.' },

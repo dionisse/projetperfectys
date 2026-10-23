@@ -995,6 +995,21 @@ body.report-preview-open { overflow: hidden; }
 .third-party-balance-print.is-mono-style .third-party-balance-table,
 .third-party-balance-print.is-mono-style .third-party-balance-table thead th { color: #111 !important; background: #fff !important; }
 .third-party-balance-print.is-color-style .third-party-balance-table thead th { color: #1d4c3d !important; background: #edf5f0 !important; }
+.third-party-opening-balance-source-note { margin: 0 0 14px; line-height: 1.55; }
+.third-party-opening-balance-filter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.third-party-opening-balance-column-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 26px; }
+.third-party-opening-balance-column-stack { display: grid; align-content: start; gap: 7px; min-width: 0; }
+.third-party-opening-balance-column-option { min-height: 36px; }
+.third-party-opening-balance-line-count { margin: 12px 0 0; }
+.third-party-opening-balance-warnings { margin: 12px 0; }
+.third-party-opening-balance-warnings ul { margin: 6px 0 4px 18px; }
+.third-party-opening-balance-table { width: 100%; min-width: 0 !important; table-layout: auto; }
+.third-party-opening-balance-table th, .third-party-opening-balance-table td { padding: 6px 8px !important; }
+.third-party-opening-balance-table .num { text-align: right !important; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.third-party-opening-balance-print.is-mono-style .third-party-opening-balance-table,
+.third-party-opening-balance-print.is-mono-style .third-party-opening-balance-table thead th { color: #111 !important; background: #fff !important; }
+.third-party-opening-balance-print.is-color-style .third-party-opening-balance-table thead th { color: #1d4c3d !important; background: #edf5f0 !important; }
+.third-party-opening-balance-preview-page > .panel { overflow: hidden; }
 .multi-year-history-source-note { margin: 0 0 14px; line-height: 1.55; }
 .multi-year-history-source-warning { margin: 0 0 14px; line-height: 1.5; }
 .multi-year-history-source-warning ul,
@@ -1119,6 +1134,8 @@ body.report-preview-open { overflow: hidden; }
   .general-counterpart-total-column-grid,
   .third-party-balance-filter-grid,
   .third-party-balance-column-grid,
+  .third-party-opening-balance-filter-grid,
+  .third-party-opening-balance-column-grid,
   .multi-year-history-filter-grid { grid-template-columns: minmax(0, 1fr); }
   .general-ledger-column-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .multi-year-history-column-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
