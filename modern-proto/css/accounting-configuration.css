@@ -1010,6 +1010,22 @@ body.report-preview-open { overflow: hidden; }
 .third-party-opening-balance-print.is-mono-style .third-party-opening-balance-table thead th { color: #111 !important; background: #fff !important; }
 .third-party-opening-balance-print.is-color-style .third-party-opening-balance-table thead th { color: #1d4c3d !important; background: #edf5f0 !important; }
 .third-party-opening-balance-preview-page > .panel { overflow: hidden; }
+.third-party-account-situation-source-note { margin: 0 0 14px; line-height: 1.55; }
+.third-party-account-situation-filter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.third-party-account-situation-filter-grid .field:last-child { grid-column: 1 / -1; max-width: 360px; }
+.third-party-account-situation-column-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 26px; }
+.third-party-account-situation-column-stack { display: grid; align-content: start; gap: 7px; min-width: 0; }
+.third-party-account-situation-column-option { min-height: 36px; }
+.third-party-account-situation-line-count { margin: 12px 0 0; }
+.third-party-account-situation-warnings { margin: 12px 0; }
+.third-party-account-situation-warnings ul { margin: 6px 0 4px 18px; }
+.third-party-account-situation-table { width: 100%; min-width: 0 !important; table-layout: auto; }
+.third-party-account-situation-table th, .third-party-account-situation-table td { padding: 6px 8px !important; }
+.third-party-account-situation-table .num { text-align: right !important; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.third-party-account-situation-print.is-mono-style .third-party-account-situation-table,
+.third-party-account-situation-print.is-mono-style .third-party-account-situation-table thead th { color: #111 !important; background: #fff !important; }
+.third-party-account-situation-print.is-color-style .third-party-account-situation-table thead th { color: #1d4c3d !important; background: #edf5f0 !important; }
+.third-party-account-situation-preview-page > .panel { overflow: hidden; }
 .multi-year-history-source-note { margin: 0 0 14px; line-height: 1.55; }
 .multi-year-history-source-warning { margin: 0 0 14px; line-height: 1.5; }
 .multi-year-history-source-warning ul,
@@ -1136,7 +1152,10 @@ body.report-preview-open { overflow: hidden; }
   .third-party-balance-column-grid,
   .third-party-opening-balance-filter-grid,
   .third-party-opening-balance-column-grid,
+  .third-party-account-situation-filter-grid,
+  .third-party-account-situation-column-grid,
   .multi-year-history-filter-grid { grid-template-columns: minmax(0, 1fr); }
+  .third-party-account-situation-filter-grid .field:last-child { grid-column: auto; max-width: none; }
   .general-ledger-column-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .multi-year-history-column-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .general-ledger-selection-options { grid-template-columns: minmax(0, 1fr); }
