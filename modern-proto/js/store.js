@@ -130,6 +130,9 @@
       var existing = currentByCode[account.code];
       chartByCode[account.code] = true;
       if (!existing) return account;
+      var previousDefault = ACCOUNTING_CHART.previousVersionOneAccount
+        ? ACCOUNTING_CHART.previousVersionOneAccount(account.code)
+        : null;
       var merged = Object.assign({}, account, existing);
       merged.code = account.code;
       merged.cls = account.cls;
@@ -138,6 +141,13 @@
       merged.subclassLabel = account.subclassLabel;
       merged.chartOriginCode = account.code;
       merged.usage = typeof existing.usage === 'string' && existing.usage ? existing.usage : account.usage;
+      if (existing.standard === true && previousDefault) {
+        // Mettre à jour les valeurs de référence restées inchangées depuis v1,
+        // tout en conservant les libellés, natures et usages personnalisés.
+        if (existing.label === previousDefault.label) merged.label = account.label;
+        if (existing.nature === previousDefault.nature) merged.nature = account.nature;
+        if (existing.usage === previousDefault.usage) merged.usage = account.usage;
+      }
       merged.postable = account.postable;
       merged.legacy = false;
       merged.standard = true;
@@ -161,12 +171,32 @@
         legacy.classLabel = ACCOUNTING_CHART.classLabel(legacy.cls);
         legacy.subclass = code.slice(0, 2);
         legacy.subclassLabel = ACCOUNTING_CHART.SUBCLASS_LABELS[legacy.subclass] || 'Compte historique';
-        legacy.usage = 'Compte historique conservé pour assurer la continuité des écritures et dossiers existants.';
+        legacy.usage = String(existing.usage || 'Compte historique conservé pour assurer la continuité des écritures et dossiers existants.');
         legacy.active = typeof existing.active === 'boolean' ? existing.active : true;
         legacy.postable = typeof existing.postable === 'boolean' ? existing.postable : true;
         legacy.legacy = true;
         legacy.standard = false;
         carried.push(legacy);
+        return;
+      }
+      var previousDefault = ACCOUNTING_CHART.previousVersionOneAccount
+        ? ACCOUNTING_CHART.previousVersionOneAccount(code)
+        : null;
+      if (previousDefault && existing.standard === true) {
+        var historical = Object.assign({}, existing);
+        historical.code = code;
+        historical.cls = Number(existing.cls || code.charAt(0));
+        historical.classLabel = ACCOUNTING_CHART.classLabel(historical.cls);
+        historical.subclass = code.slice(0, 2);
+        historical.subclassLabel = ACCOUNTING_CHART.SUBCLASS_LABELS[historical.subclass] || 'Compte historique';
+        historical.label = String(existing.label || previousDefault.label || code);
+        historical.nature = String(existing.nature || previousDefault.nature || '');
+        historical.usage = String(existing.usage || previousDefault.usage || 'Compte historique conservé pour assurer la continuité des écritures et dossiers existants.');
+        historical.active = typeof existing.active === 'boolean' ? existing.active : true;
+        historical.postable = typeof existing.postable === 'boolean' ? existing.postable : true;
+        historical.legacy = true;
+        historical.standard = false;
+        carried.push(historical);
         return;
       }
       var custom = Object.assign({}, existing);

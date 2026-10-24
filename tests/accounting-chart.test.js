@@ -1,4 +1,4 @@
-/* Tests du référentiel comptable fourni et de sa migration conservatrice. */
+/* Tests du référentiel SYSCOHADA transcrit et de sa migration conservatrice. */
 'use strict';
 
 const assert = require('node:assert/strict');
@@ -7,38 +7,42 @@ const path = require('node:path');
 const vm = require('node:vm');
 const Chart = require('../modern-proto/js/accounting-chart.js');
 
-const expectedCodes = [
-  '10', '101', '102', '104', '11', '111', '112', '118', '12', '121', '129', '13', '131', '139', '161', '162', '163', '164', '165', '168',
-  '20', '211', '212', '213', '214', '215', '221', '222', '224', '231', '232', '234', '241', '242', '244', '245', '246', '251', '271', '281', '283', '284',
-  '311', '312', '321', '322', '331', '335', '351', '352', '361', '38', '391',
-  '401', '402', '404', '408', '409', '411', '412', '413', '416', '419', '421', '422', '425', '427', '431', '441', '443', '444', '447', '449', '451', '471', '481', '486', '487', '488',
-  '521', '522', '523', '524', '531', '541', '571', '572', '581',
-  '601', '602', '604', '605', '608', '609', '611', '612', '613', '618', '621', '622', '623', '624', '625', '626', '627', '628', '631', '634', '636', '641', '643', '644', '645', '647', '651', '659', '661', '664', '671', '681', '691', '695',
-  '701', '702', '703', '706', '707', '709', '721', '722', '731', '752', '755', '758', '761', '771', '791',
-  '81', '82', '83', '84', '85', '86', '87', '88', '891', '892'
-];
+assert.equal(Chart.VERSION, 2);
+assert.equal(Chart.accountCount(), 1400);
+assert.equal(Chart.METADATA.sourceFile, 'NOMENCLATURE-DES-COMPTES-SYSCOHADA-FINAL-1.pdf');
+assert.equal(Chart.METADATA.sourcePdfSha256, '3d90abdfc6c741cfa0f2a3168ad1b696d3dd7d3d40bd1669119a7883f1c5f43c');
+assert.equal(Chart.METADATA.sourcePages, 37);
+assert.deepEqual(JSON.parse(JSON.stringify(Chart.METADATA.classCounts)), {
+  1: 151, 2: 286, 3: 84, 4: 257, 5: 92, 6: 258, 7: 128, 8: 54, 9: 90
+});
 
-assert.equal(Chart.accountCount(), 147);
-assert.deepEqual(Chart.codes(), expectedCodes, 'les 147 codes, leur ordre par classe et les zéros éventuels sont préservés');
-assert.equal(new Set(Chart.codes()).size, 147, 'le référentiel ne comporte aucun doublon');
+const accounts = Chart.accounts();
+assert.equal(accounts.length, 1400);
+assert.equal(new Set(Chart.codes()).size, 1400, 'le référentiel ne comporte aucun code dupliqué');
 assert.deepEqual(
-  [1, 2, 3, 4, 5, 6, 7, 8].map(cls => Chart.accounts().filter(account => account.cls === cls).length),
-  [20, 22, 11, 26, 9, 34, 15, 10]
+  [1, 2, 3, 4, 5, 6, 7, 8, 9].map(cls => accounts.filter(account => account.cls === cls).length),
+  [151, 286, 84, 257, 92, 258, 128, 54, 90]
 );
-for (const account of Chart.accounts()) {
-  assert.ok(account.label, `le compte ${account.code} possède un libellé`);
+for (const account of accounts) {
+  assert.ok(account.label, `le compte ${account.code} possède un libellé transcrit`);
   assert.ok(account.classLabel, `le compte ${account.code} possède une classe libellée`);
   assert.ok(account.subclass, `le compte ${account.code} possède un code de sous-classe`);
   assert.ok(account.subclassLabel, `le compte ${account.code} possède une sous-classe libellée`);
-  assert.ok(account.usage, `le compte ${account.code} possède une utilisation`);
   assert.equal(account.cls, Number(account.code.charAt(0)));
+  assert.ok(Number.isInteger(account.sourcePage) && account.sourcePage >= 1 && account.sourcePage <= 37,
+    `le compte ${account.code} renvoie à une page source`);
 }
-assert.equal(Chart.accounts().find(account => account.code === '101').subclass, '10');
-assert.equal(Chart.accounts().find(account => account.code === '101').classLabel, 'Ressources durables');
-assert.equal(Chart.accounts().find(account => account.code === '10').postable, false, 'une rubrique de regroupement n’est pas imputable');
-assert.equal(Chart.accounts().find(account => account.code === '601').postable, true);
-assert.equal(Chart.accounts().find(account => account.code === '81').postable, false, 'un indicateur de gestion n’est pas une ligne de journal');
-assert.equal(Chart.accounts().find(account => account.code === '891').postable, true);
+assert.equal(accounts.find(account => account.code === '101').subclass, '10');
+assert.equal(accounts.find(account => account.code === '101').classLabel, 'Ressources durables');
+assert.equal(accounts.find(account => account.code === '10').postable, false, 'une rubrique de regroupement n’est pas imputable');
+assert.equal(accounts.find(account => account.code === '601').postable, true);
+assert.equal(accounts.find(account => account.code === '81').postable, false, 'un indicateur de gestion n’est pas une ligne de journal');
+assert.equal(accounts.find(account => account.code === '891').postable, true);
+assert.ok(accounts.filter(account => account.cls === 9).every(account => account.postable === false),
+  'la classe 9 reste une référence seule et n’est pas rendue imputable');
+assert.equal(accounts.find(account => account.code === '1551').label, 'Reconstitution des gisements miniers et pétroliers');
+assert.equal(accounts.find(account => account.code === '1551').sourcePage, 7, 'le code 1551 et son libellé ont été vérifiés dans la page physique 7 du PDF');
+assert.equal(accounts.find(account => account.code === '10').usage, '', 'aucune utilisation absente du PDF n’est inventée');
 
 const values = new Map();
 const originalEntries = [{
@@ -50,12 +54,18 @@ const originalEntries = [{
   ],
   sourceMetadata: { note: 'ne pas modifier' }
 }];
+const previous601 = Chart.previousVersionOneAccount('601');
+const previous401 = Chart.previousVersionOneAccount('401');
+assert.ok(previous601 && previous401, 'les anciennes valeurs par défaut v1 sont conservées pour la migration');
 const oldState = {
   version: 1,
   exercise: 2026,
   cycleStart: '2026-01-01',
   cycleEnd: '2026-12-31',
   accounts: [
+    { code: '601', label: previous601.label, cls: 6, nature: previous601.nature, usage: previous601.usage, aux: false, active: true, standard: true },
+    { code: '401', label: 'Fournisseurs personnalisés', cls: 4, nature: 'Passif', usage: 'Usage propre au dossier', aux: true, active: true, standard: true },
+    { code: '755', label: 'Libellé historique personnalisé', cls: 7, nature: 'Produit', usage: 'Usage historique personnalisé', aux: false, active: true, standard: true },
     { code: '101200', label: 'Capital social', cls: 1, nature: 'Passif', aux: false, active: true },
     { code: '401100', label: 'Fournisseurs', cls: 4, nature: 'Passif', aux: true, active: true },
     { code: '601100', label: 'Achats de marchandises', cls: 6, nature: 'Charge', aux: false, active: true },
@@ -81,12 +91,22 @@ vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js',
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'store.js'), 'utf8'), sandbox, { filename: 'store.js' });
 const store = sandbox.window.PerfectoStore;
 const migratedAccounts = store.accounts();
-assert.equal(migratedAccounts.filter(account => account.standard).length, 147);
-assert.ok(store.account('601'));
+assert.equal(migratedAccounts.filter(account => account.standard).length, 1400, 'la migration ajoute le référentiel complet');
+assert.equal(store.account('601').label, accounts.find(account => account.code === '601').label,
+  'une valeur par défaut v1 est actualisée depuis le PDF');
+assert.equal(store.account('601').usage, accounts.find(account => account.code === '601').usage,
+  'l’usage non personnalisé suit aussi la mise à jour de référence');
+assert.equal(store.account('401').label, 'Fournisseurs personnalisés', 'un libellé personnalisé est préservé');
+assert.equal(store.account('401').usage, 'Usage propre au dossier', 'une utilisation personnalisée est préservée');
+assert.equal(store.account('755').legacy, true, 'un compte standard v1 absent du nouveau PDF est conservé comme historique');
+assert.equal(store.account('755').label, 'Libellé historique personnalisé', 'le libellé dossier de l’ancien compte reste inchangé');
+assert.equal(store.account('755').usage, 'Usage historique personnalisé', 'l’utilisation personnalisée de l’ancien compte reste inchangée');
+assert.equal(store.account('101200').legacy, true);
+assert.equal(store.account('101200').active, true, 'un ancien compte reste utilisable pour la compatibilité');
 assert.equal(store.account('601100').legacy, true);
-assert.equal(store.account('601100').active, true, 'un ancien compte reste utilisable pour la compatibilité');
+assert.equal(store.account('601100').active, true, 'un compte ancien référencé dans des pièces est conservé');
 assert.equal(store.account('604500').label, 'Compte personnalisé à conserver');
-assert.equal(store.account('604500').legacy, false, 'un compte personnalisé n’est pas confondu avec l’ancien référentiel');
+assert.equal(store.account('604500').legacy, false, 'un compte ajouté n’est pas confondu avec un ancien compte standard');
 assert.equal(store.getState().accountChartVersion, Chart.VERSION);
 assert.deepEqual(JSON.parse(JSON.stringify(store.entries())), originalEntries, 'les écritures validées et leurs métadonnées restent strictement inchangées');
 assert.equal(values.get('perfecto.lot1.v1'), JSON.stringify(store.getState()), 'la version enrichie est persistée dans le dossier existant');
@@ -98,5 +118,11 @@ const rejectedGroupEntry = store.validateEntry({
 }, { requireBalanced: true, status: 'posted' });
 assert.equal(rejectedGroupEntry.ok, false, 'une rubrique non imputable ne peut pas recevoir une écriture');
 assert.ok(rejectedGroupEntry.errors.some(error => /non imputable/.test(error)));
+const rejectedClassNineEntry = store.validateEntry({
+  reference: 'OD-2026-TEST-CLASSE-9', journal: 'OD', date: '2026-02-10',
+  lines: [{ account: '90', debit: 10, credit: 0 }, { account: '401', debit: 0, credit: 10 }]
+}, { requireBalanced: true, status: 'posted' });
+assert.equal(rejectedClassNineEntry.ok, false, 'les comptes classe 9 de référence ne sont pas activés dans la saisie générale');
+assert.ok(rejectedClassNineEntry.errors.some(error => /non imputable/.test(error)));
 
-console.log('Plan comptable : 147 codes, classes/sous-classes et migration historique non destructive — OK');
+console.log('Plan comptable SYSCOHADA : 1 400 codes, 9 classes, page source 1551 vérifiée, migration conservatrice et classe 9 non imputable — OK');

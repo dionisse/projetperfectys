@@ -62,8 +62,8 @@ function test(name, fn) {
 }
 
 console.log('Référentiel de démonstration');
-test('147 comptes standards, 18 comptes historiques, 8 journaux standards et 2 journaux système', () => {
-  assert.strictEqual(STANDARD_ACCOUNT_COUNT, 147);
+test('1 400 comptes standards, 18 comptes historiques, 8 journaux standards et 2 journaux système', () => {
+  assert.strictEqual(STANDARD_ACCOUNT_COUNT, 1400);
   assert.strictEqual(S.accounts().length, STANDARD_ACCOUNT_COUNT + 18);
   assert.strictEqual(S.journals().length, 10);
   assert.strictEqual(S.journals().filter((journal) => journal.isStandard).length, 8);
@@ -74,7 +74,8 @@ test('147 comptes standards, 18 comptes historiques, 8 journaux standards et 2 j
 
 test('les codes du plan fourni sont imputables ou regroupés selon leur nature', () => {
   assert.equal(S.account('101').subclass, '10');
-  assert.equal(S.account('601').usage.length > 0, true);
+  assert.strictEqual(S.account('601').label, 'ACHATS DE MARCHANDISES');
+  assert.strictEqual(S.account('601').usage, '', 'aucune utilisation absente du PDF n’est inventée');
   const group = S.validateEntry({
     reference: 'OD-2026-GROUPE', journal: 'OD', date: '2026-03-01',
     lines: [{ account: '10', debit: 100, credit: 0 }, { account: '401', debit: 0, credit: 100 }]

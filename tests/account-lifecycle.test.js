@@ -51,19 +51,19 @@ assert.equal(changedCustom.ok, true, changedCustom.errors.join(' '));
 assert.equal(store.account('758901'), null);
 assert.equal(store.account('758902').label, 'Compte personnalisé modifié');
 
-const renamedStandard = store.updateAccount('755', {
-  code: '7555', label: 'Quote-part personnalisée', nature: 'Produit', usage: 'Libellé ajusté par le dossier', aux: false
+const renamedStandard = store.updateAccount('756', {
+  code: '7569', label: 'Quote-part personnalisée', nature: 'Produit', usage: 'Libellé ajusté par le dossier', aux: false
 });
 assert.equal(renamedStandard.ok, true, renamedStandard.errors.join(' '));
-assert.ok(store.getState().deletedStandardAccountCodes.includes('755'));
+assert.ok(store.getState().deletedStandardAccountCodes.includes('756'));
 const renamedStandardCode = store.getState().accountChartVersion;
-sandbox.window.PerfectoAccountingChart.VERSION = renamedStandardCode + 1;
+sandbox.window.PerfectoAccountingChart = Object.assign({}, sandbox.window.PerfectoAccountingChart, { VERSION: renamedStandardCode + 1 });
 store = loadStore();
-assert.equal(store.account('755'), null, 'une mise à niveau du plan ne restaure pas le compte standard supprimé');
-assert.equal(store.account('7555').label, 'Quote-part personnalisée', 'le compte renuméroté reste conservé après migration');
-assert.equal(store.deleteAccount('7555').ok, true, 'un compte personnalisé désormais inutilisé peut être supprimé');
-assert.equal(store.account('7555'), null);
-assert.equal(store.account('755'), null);
+assert.equal(store.account('756'), null, 'une mise à niveau du plan ne restaure pas le compte standard supprimé');
+assert.equal(store.account('7569').label, 'Quote-part personnalisée', 'le compte renuméroté reste conservé après migration');
+assert.equal(store.deleteAccount('7569').ok, true, 'un compte personnalisé désormais inutilisé peut être supprimé');
+assert.equal(store.account('7569'), null);
+assert.equal(store.account('756'), null);
 
 // Les préfixes sont partagés, mais les compteurs et historiques sont isolés par dossier.
 assert.equal(store.nextIdentificationCode('supplier'), 'FOU-0001');

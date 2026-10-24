@@ -74,7 +74,8 @@ assert.equal(S.currentDossier().confidentialAccountsConfiguration, undefined, 'l
 const safeExport = JSON.parse(S.exportJson());
 assert.equal(safeExport.data.entries.some(entry => entry.id === 'confidential-entry'), false, 'l’export destiné à un profil non superviseur est filtré');
 assert.equal(JSON.stringify(safeExport).includes('OD-CONF-01'), false);
-assert.equal(JSON.stringify(safeExport).includes('601'), false);
+assert.equal(safeExport.data.accounts.some(account => account.code === '601'), false,
+  'l’export exclut le code confidentiel exact sans masquer ses sous-comptes distincts');
 assert.equal(S.importJson(S.exportJson()).ok, false, 'la restauration complète est bloquée pour un profil non superviseur si une liste confidentielle existe');
 assert.equal(S.createEntry({ lines: [{ account: '601', debit: 10, credit: 0 }] }, 'draft').ok, false, 'une nouvelle pièce ne peut pas utiliser un compte confidentiel');
 assert.equal(S.previewExchangeImport([{ lines: [{ account: '601', debit: 10, credit: 0 }] }], 'draft').ok, false, 'un import ne peut pas prévisualiser le compte confidentiel');

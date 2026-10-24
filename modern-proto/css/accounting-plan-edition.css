@@ -1,0 +1,82 @@
+/* PERFECTO · Édition du Plan comptable, en consultation seule. */
+.accounting-plan-edition-report-detail,
+.accounting-plan-edition-report-detail .card,
+.accounting-plan-edition-print { min-width: 0; }
+.accounting-plan-edition-report-detail > .edition-report-back { margin-bottom: 15px; }
+.accounting-plan-edition-source-note { margin: 0 0 14px; line-height: 1.6; }
+.accounting-plan-edition-filter-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px 22px; align-items: start; max-width: 900px; }
+.accounting-plan-edition-account-field { min-width: 0; }
+.accounting-plan-edition-filter-grid .journal-lines-picker-control { display: flex; align-items: stretch; gap: 8px; }
+.accounting-plan-edition-filter-grid .journal-lines-picker-control input { min-width: 0; flex: 1 1 auto; }
+.accounting-plan-edition-filter-grid .journal-lines-picker-control .btn { flex: 0 0 auto; min-width: 112px; }
+.accounting-plan-edition-columns-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.accounting-plan-edition-selection-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 16px; padding: 13px 16px; border: 1px solid #dce4df; border-radius: 10px; background: #fbfcfa; }
+.accounting-plan-edition-selection-actions .pointing-edition-line-count { margin: 0 auto 0 0; }
+.accounting-plan-edition-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.accounting-plan-edition-destination-card { grid-column: 1 / -1; }
+.accounting-plan-edition-picker-option { grid-template-columns: auto minmax(65px, auto) minmax(0, 1fr); }
+.accounting-plan-edition-print { width: 100%; box-sizing: border-box; color: #22332c; background: #fff; font-family: Arial, sans-serif; }
+.accounting-plan-edition-print-heading { margin: 0 0 12px; }
+.accounting-plan-edition-print-heading .page-kicker { color: #587065; font-size: 8pt; font-weight: 700; letter-spacing: .08em; }
+.accounting-plan-edition-print-heading h2 { margin: 5px 0; color: #213f35; font-size: 17pt; overflow-wrap: anywhere; }
+.accounting-plan-edition-print-heading p,
+.accounting-plan-edition-print-note { color: #596a61; font-size: 9pt; line-height: 1.5; }
+.accounting-plan-edition-print-note { margin: 10px 0 0; font-size: 8pt; overflow-wrap: anywhere; }
+.accounting-plan-edition-table-wrap { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
+.accounting-plan-edition-table { width: 100%; min-width: 980px; table-layout: fixed; border-collapse: collapse; font-size: 8pt; }
+.accounting-plan-edition-table th,
+.accounting-plan-edition-table td { padding: 5px 6px; border: 1px solid #d7dfda; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.accounting-plan-edition-table thead th { color: #21483a; background: #edf3ef; font-size: .72rem; line-height: 1.3; }
+.accounting-plan-edition-cell-code { width: 7%; white-space: nowrap; }
+.accounting-plan-edition-cell-label { width: 19%; }
+.accounting-plan-edition-cell-class { width: 10%; }
+.accounting-plan-edition-cell-subclass { width: 14%; }
+.accounting-plan-edition-cell-usage { width: 13%; }
+.accounting-plan-edition-cell-nature { width: 7%; }
+.accounting-plan-edition-cell-posting { width: 9%; }
+.accounting-plan-edition-cell-auxiliary { width: 6%; }
+.accounting-plan-edition-cell-origin { width: 9%; }
+.accounting-plan-edition-cell-sourcePage { width: 6%; white-space: nowrap; }
+.accounting-plan-edition-empty-row td { color: #596a61; }
+.accounting-plan-edition-style-color .accounting-plan-edition-table { font-size: 10pt; }
+.accounting-plan-edition-style-color .accounting-plan-edition-table thead th { background: #e6f0eb; }
+.accounting-plan-edition-style-plain .accounting-plan-edition-print-heading .page-kicker,
+.accounting-plan-edition-style-plain .accounting-plan-edition-table thead th { color: #111; background: #fff; }
+.accounting-plan-edition-report-detail .journal-lines-form-errors:empty { display: none; }
+
+@media (max-width: 850px) {
+  .accounting-plan-edition-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .accounting-plan-edition-columns-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .accounting-plan-edition-columns-grid,
+  .accounting-plan-edition-settings-grid { grid-template-columns: minmax(0, 1fr); }
+  .accounting-plan-edition-destination-card { grid-column: auto; }
+  .accounting-plan-edition-selection-actions { align-items: flex-start; flex-direction: column; }
+  .accounting-plan-edition-selection-actions .btn { width: 100%; }
+  .accounting-plan-edition-selection-actions .pointing-edition-line-count { margin: 0; }
+  .accounting-plan-edition-filter-grid .journal-lines-picker-control { flex-wrap: wrap; }
+  .accounting-plan-edition-filter-grid .journal-lines-picker-control .btn { flex: 0 0 auto; }
+  .accounting-plan-edition-picker-option { grid-template-columns: auto minmax(65px, auto) minmax(0, 1fr); }
+  .accounting-plan-edition-print,
+  .accounting-plan-edition-table-wrap { min-width: 0; max-width: 100%; }
+  .accounting-plan-edition-print-heading h2 { font-size: 14pt; }
+  .accounting-plan-edition-table { min-width: 920px; font-size: 7pt; }
+}
+
+@media print {
+  body.report-preview-printing .report-preview-content .accounting-plan-edition-print { width: 100%; max-width: none; margin: 0; padding: 0; color: #111 !important; background: #fff !important; }
+  body.report-preview-printing .report-preview-content .accounting-plan-edition-print-heading h2 { color: #111 !important; font-size: 14pt !important; }
+  body.report-preview-printing .report-preview-content .accounting-plan-edition-print-heading p,
+  body.report-preview-printing .report-preview-content .accounting-plan-edition-print-note { color: #222 !important; }
+  body.report-preview-printing .report-preview-content .accounting-plan-edition-table-wrap { width: 100%; max-width: none; overflow: visible !important; }
+  body.report-preview-printing .report-preview-content .accounting-plan-edition-table { width: 100%; min-width: 0 !important; table-layout: fixed; font-size: 7.5pt !important; }
+  body.report-preview-printing .report-preview-content .accounting-plan-edition-table th,
+  body.report-preview-printing .report-preview-content .accounting-plan-edition-table td { padding: 3px 4px !important; overflow-wrap: anywhere; }
+  body.report-preview-printing .report-preview-content .accounting-plan-edition-table thead { display: table-header-group; }
+  body.report-preview-printing .report-preview-content .accounting-plan-edition-table tr { break-inside: avoid; page-break-inside: avoid; }
+  body.report-preview-printing .report-preview-content .accounting-plan-edition-style-plain .accounting-plan-edition-print-heading .page-kicker,
+  body.report-preview-printing .report-preview-content .accounting-plan-edition-style-plain .accounting-plan-edition-table thead th { color: #111 !important; background: #fff !important; }
+  body.report-preview-printing .report-preview-content .accounting-plan-edition-style-color .accounting-plan-edition-table { font-size: 9pt !important; }
+}

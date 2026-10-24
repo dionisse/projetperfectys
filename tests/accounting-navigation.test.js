@@ -473,9 +473,10 @@ assert.deepEqual(findTab('editions', 'definitions-and-plans').children.map(child
   'definitionsFramework', 'definitionsFramework', 'definitionsAccounts', 'definitionsAccounts',
   'definitionsThirdParties', 'definitionsJournals', 'definitionsAnalytics'
 ]);
-assert.ok(findTab('editions', 'definitions-and-plans').children.slice(2, 6).every(child => child.status === 'planned'));
+assert.equal(findTab('editions', 'definitions-and-plans').children[2].status, 'active');
+assert.ok(findTab('editions', 'definitions-and-plans').children[2].reason.includes('1 400 codes'));
+assert.ok(findTab('editions', 'definitions-and-plans').children.slice(3, 6).every(child => child.status === 'planned'));
 assert.equal(findTab('editions', 'definitions-and-plans').children[6].status, 'inactive');
-assert.ok(findTab('editions', 'definitions-and-plans').children.find(child => child.id === 'edition-chart-of-accounts').reason.includes('maintenance'));
 assert.ok(findTab('editions', 'definitions-and-plans').children.find(child => child.id === 'edition-third-parties').reason.includes('maintenance'));
 assert.ok(findTab('editions', 'definitions-and-plans').children.find(child => child.id === 'edition-journal-plan').reason.includes('maintenance'));
 assert.match(appSource, /matching: \{ title: 'États du lettrage'/);
@@ -726,7 +727,7 @@ assert.match(appSource, /function generalLedgerReportLayoutView\([\s\S]*general-
 assert.match(appSource, /function generalLedgerReportPrintableHtml\([\s\S]*GRAND LIVRE DES COMPTES[\s\S]*reports à nouveau[\s\S]*page-break/);
 assert.match(generalLedgerSource, /priorEntriesIncludedInRunningBalance: true[\s\S]*sourceReferenceOnly: true[\s\S]*noAccountingMutation: true/);
 assert.match(configurationCss, /\.general-ledger-column-grid[\s\S]*\.general-ledger-account-section/);
-assert.match(serviceWorkerSource, /perfecto-static-v129/);
+assert.match(serviceWorkerSource, /perfecto-static-v130/);
 
 assert.match(appSource, /function accountingMenuHash\(groupId, tabId, childId\)[\s\S]*return childId \? hash \+ '&c='/,
   'le lien d’un enfant conserve son identifiant dans la route');
@@ -762,7 +763,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v129/);
+assert.match(serviceWorkerSource, /perfecto-static-v130/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

@@ -54,7 +54,7 @@ assert.ok(htmlSource.indexOf('js/pointing-edition-reports.js') < htmlSource.inde
 assert.match(htmlSource, /css\/pointing-edition-reports\.css/);
 assert.match(serviceWorkerSource, /\.\/js\/pointing-edition-reports\.js/);
 assert.match(serviceWorkerSource, /\.\/css\/pointing-edition-reports\.css/);
-assert.match(serviceWorkerSource, /perfecto-static-v129/);
+assert.match(serviceWorkerSource, /perfecto-static-v130/);
 assert.match(cssSource, /\.pointing-edition-filter-grid[\s\S]*\.pointing-edition-columns-grid[\s\S]*\.pointing-edition-table/);
 assert.match(cssSource, /body\.report-preview-printing[\s\S]*\.pointing-edition-table/);
 assert.match(cssSource, /max-width: 640px/);

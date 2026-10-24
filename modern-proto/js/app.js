@@ -14,6 +14,7 @@
   var FinancialFrameworkEditionReport = window.PerfectoAccountingFrameworkEdition;
   var BalanceItems = window.PerfectoBalanceItems;
   var BalanceItemsEditionReport = window.PerfectoBalanceItemsEdition;
+  var AccountingPlanEditionReport = window.PerfectoAccountingPlanEdition;
   var CashOperations = window.PerfectoCashOperations;
   var AccountMovements = window.PerfectoAccountMovements;
   var AccountingExchange = window.PerfectoAccountingExchange;
@@ -180,6 +181,7 @@
   var fixedAssetAdditionalReportSession = null;
   var financialFrameworkEditionReportSession = null;
   var balanceItemsEditionReportSession = null;
+  var accountingPlanEditionReportSession = null;
   var generalLedgerReportSession = null;
   var generalCounterpartDetailReportSession = null;
   var generalCounterpartTotalReportSession = null;
@@ -828,6 +830,7 @@
     var isFixedAssetAdditionalReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'fixed-assets' && FixedAssetAdditionalReports.REPORT_IDS.indexOf(parsed.params.c) !== -1;
     var isFinancialFrameworkEditionReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'definitions-and-plans' && parsed.params.c === FinancialFrameworkEditionReport.REPORT_ID;
     var isBalanceItemsEditionReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'definitions-and-plans' && parsed.params.c === BalanceItemsEditionReport.REPORT_ID;
+    var isAccountingPlanEditionReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'definitions-and-plans' && parsed.params.c === AccountingPlanEditionReport.REPORT_ID;
     var isGeneralLedgerReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-ledger';
     var isGeneralCounterpartDetailReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-detail';
     var isGeneralCounterpartTotalReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-total';
@@ -855,6 +858,7 @@
     if (!isFixedAssetAdditionalReportRoute) fixedAssetAdditionalReportSession = null;
     if (!isFinancialFrameworkEditionReportRoute) financialFrameworkEditionReportSession = null;
     if (!isBalanceItemsEditionReportRoute) balanceItemsEditionReportSession = null;
+    if (!isAccountingPlanEditionReportRoute) accountingPlanEditionReportSession = null;
     if (!isGeneralLedgerReportRoute) generalLedgerReportSession = null;
     if (!isGeneralCounterpartDetailReportRoute) generalCounterpartDetailReportSession = null;
     if (!isGeneralCounterpartTotalReportRoute) generalCounterpartTotalReportSession = null;
@@ -2109,7 +2113,7 @@
       return true;
     });
 
-    var html = pageHeader('Plan comptable', 'Référentiel source de 147 comptes, personnalisable dans le dossier. Un numéro utilisé dans des pièces ou comme rattachement auxiliaire client, fournisseur, tiers divers ou personnel est protégé contre le changement et la suppression.',
+    var html = pageHeader('Plan comptable', 'Référentiel SYSCOHADA de 1 400 codes issu du PDF fourni, personnalisable dans le dossier. La classe 9 reste une référence seule ; les comptes de classe 1 à 8 conservent les règles de saisie du dossier. Un numéro utilisé dans des pièces ou comme rattachement auxiliaire client, fournisseur, tiers divers ou personnel est protégé contre le changement et la suppression.',
       '<button type="button" class="btn btn-ghost" data-action="export-accounts-csv">↓ Export CSV</button>' +
       '<button type="button" class="btn btn-primary" data-action="new-account">＋ Nouveau compte</button>');
 
@@ -2119,14 +2123,14 @@
           '<input id="f-accounts-q" type="search" data-filter="accounts:q" value="' + esc(filter.q) + '" placeholder="Code, intitulé, sous-classe ou utilisation…"></div>' +
         '<div class="field"><label for="f-accounts-cls">Classe</label><select id="f-accounts-cls" data-filter="accounts:cls">' +
           '<option value="">Toutes</option>' +
-          [1, 2, 3, 4, 5, 6, 7, 8].map(function (c) {
+          [1, 2, 3, 4, 5, 6, 7, 8, 9].map(function (c) {
             var label = window.PerfectoAccountingChart ? window.PerfectoAccountingChart.classLabel(c) : ('Classe ' + c);
             return '<option value="' + c + '"' + (filter.cls === String(c) ? ' selected' : '') + '>Classe ' + c + ' — ' + esc(label) + '</option>';
           }).join('') +
         '</select></div>' +
         '<div class="field"><label for="f-accounts-nature">Nature comptable</label><select id="f-accounts-nature" data-filter="accounts:nature">' +
           '<option value="">Toutes</option>' +
-          ['Actif', 'Passif', 'Charge', 'Produit', 'SIG', 'Hors bilan'].map(function (n) {
+          ['Actif', 'Passif', 'Charge', 'Produit', 'SIG', 'Hors bilan', 'Analytique'].map(function (n) {
             return '<option value="' + esc(n) + '"' + (filter.nature === n ? ' selected' : '') + '>' + esc(n) + '</option>';
           }).join('') +
         '</select></div>' +
@@ -2143,9 +2147,16 @@
         (list.length ? list.map(function (a) {
           var row = bal[a.code] || { debit: 0, credit: 0 };
           var solde = row.debit - row.credit;
+          var referenceOnlyClassNine = Number(a.cls) === 9;
           var imputation = a.legacy
             ? '<span class="badge plain">Historique</span>'
-            : (a.postable === false ? '<span class="badge plain">Rubrique / indicateur</span>' : '<span class="badge open">Imputable</span>');
+            : (referenceOnlyClassNine
+              ? '<span class="badge plain" title="La saisie générale est limitée aux classes 1 à 8.">Référence seule</span>'
+              : (a.postable === false ? '<span class="badge plain">Rubrique / indicateur</span>' : '<span class="badge open">Imputable</span>'));
+          var accountActions = referenceOnlyClassNine
+            ? '<span class="badge plain" title="La classe 9 est conservée pour consultation, sans modification dans le grand livre général.">Consultation seule</span>'
+            : '<button type="button" class="btn btn-ghost btn-sm" data-action="edit-account" data-id="' + esc(a.code) + '" aria-label="Modifier le compte ' + esc(a.code) + '">Modifier</button>' +
+              '<button type="button" class="btn btn-ghost btn-sm" data-action="delete-account" data-id="' + esc(a.code) + '" aria-label="Supprimer le compte ' + esc(a.code) + '" title="La suppression est refusée si le compte a des pièces, des auxiliaires clients/fournisseurs/tiers/personnel rattachés ou des sous-comptes.">Supprimer</button>';
           return '<tr>' +
             '<td><span class="code-chip">' + esc(a.code) + '</span></td>' +
             '<td class="strong">' + esc(a.label || '—') + '</td>' +
@@ -2158,10 +2169,7 @@
             '<td class="num">' + (row.debit ? amount(row.debit) : '—') + '</td>' +
             '<td class="num">' + (row.credit ? amount(row.credit) : '—') + '</td>' +
             '<td class="num strong">' + (solde === 0 ? '—' : amount(Math.abs(solde)) + (solde > 0 ? ' D' : ' C')) + '</td>' +
-            '<td><div class="account-row-actions">' +
-              '<button type="button" class="btn btn-ghost btn-sm" data-action="edit-account" data-id="' + esc(a.code) + '" aria-label="Modifier le compte ' + esc(a.code) + '">Modifier</button>' +
-              '<button type="button" class="btn btn-ghost btn-sm" data-action="delete-account" data-id="' + esc(a.code) + '" aria-label="Supprimer le compte ' + esc(a.code) + '" title="La suppression est refusée si le compte a des pièces, des auxiliaires clients/fournisseurs/tiers/personnel rattachés ou des sous-comptes.">Supprimer</button>' +
-            '</div></td>' +
+            '<td><div class="account-row-actions">' + accountActions + '</div></td>' +
           '</tr>';
         }).join('') : '<tr><td colspan="12"><div class="empty-state"><strong>Aucun compte ne correspond</strong>Modifiez la recherche ou les filtres.</div></td></tr>') +
         '</tbody></table></div>' +
@@ -15149,6 +15157,333 @@
     });
   }
 
+  /* --------------------- Édition du Plan comptable --------------------- */
+  function createAccountingPlanEditionReportSession() {
+    var columns = Object.create(null);
+    AccountingPlanEditionReport.COLUMNS.forEach(function (column) { columns[column.key] = !!column.defaultSelected; });
+    return {
+      phase: 'selection',
+      filters: { accounts: '*' },
+      columns: columns,
+      layout: { printer: 'system', style: 'plain8', orientation: 'landscape', margins: 'standard', pageFirst: '', pageLast: '', parity: 'none', destination: 'preview' },
+      report: null,
+      exportFilename: '',
+      exportMessage: ''
+    };
+  }
+
+  function ensureAccountingPlanEditionReportSession() {
+    if (!accountingPlanEditionReportSession) accountingPlanEditionReportSession = createAccountingPlanEditionReportSession();
+    return accountingPlanEditionReportSession;
+  }
+
+  function buildAccountingPlanEditionReport(session) {
+    return AccountingPlanEditionReport.buildReport({ accountFilter: session.filters.accounts, records: S.accounts() });
+  }
+
+  function accountingPlanEditionSelectedColumns(session) {
+    return AccountingPlanEditionReport.COLUMNS.filter(function (column) { return !!session.columns[column.key]; });
+  }
+
+  function accountingPlanEditionColumnOption(column, session) {
+    return '<label class="journal-lines-column-option accounting-plan-edition-column-option"><input type="checkbox" data-accounting-plan-edition-column="' + esc(column.key) + '"' +
+      (session.columns[column.key] ? ' checked' : '') + '><span><strong>' + esc(column.label) + '</strong></span></label>';
+  }
+
+  function accountingPlanEditionFilterField(session) {
+    return '<div class="field accounting-plan-edition-account-field"><label for="accounting-plan-edition-accounts">Comptes</label>' +
+      '<div class="journal-lines-picker-control"><input id="accounting-plan-edition-accounts" data-accounting-plan-edition-filter="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou préfixe de compte" maxlength="1000" autocomplete="off" required>' +
+      '<button type="button" class="btn btn-ghost" data-accounting-plan-edition-picker>Parcourir…</button></div>' +
+      '<span class="hint">« * » sélectionne le plan complet du dossier, référentiel et ajouts compris. Saisissez un code, un préfixe avec * ou plusieurs codes séparés par des virgules.</span></div>';
+  }
+
+  function accountingPlanEditionSelectionView(session) {
+    var metadata = window.PerfectoAccountingChart && window.PerfectoAccountingChart.METADATA || {};
+    var columns = AccountingPlanEditionReport.COLUMNS.map(function (column) { return accountingPlanEditionColumnOption(column, session); }).join('');
+    var report = session.report || buildAccountingPlanEditionReport(session);
+    session.report = report;
+    return generalBalanceReportSteps('selection', 'Étapes de préparation du Plan comptable') +
+      pageHeader('Plan comptable', 'Sélectionnez les comptes et les colonnes à restituer.', '') +
+      '<div class="alert info accounting-plan-edition-source-note"><div><strong>Référentiel SYSCOHADA · consultation seule.</strong> Le PDF fourni contient ' + esc(metadata.accountCount || 1400) + ' codes sur ' + esc(metadata.sourcePages || 37) + ' pages. L’édition reprend le plan visible du dossier et conserve les comptes personnalisés ou historiques ; aucune écriture ni aucun solde n’est recalculé. La classe 9 reste une référence seule.</div></div>' +
+      '<form id="accounting-plan-edition-selection-form" novalidate>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div></div>' +
+          '<div class="accounting-plan-edition-filter-grid">' + accountingPlanEditionFilterField(session) + '</div>' +
+        '</div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
+          '<div class="currency-balance-column-grid accounting-plan-edition-columns-grid">' + columns + '</div>' +
+        '</div></section>' +
+        '<div class="journal-lines-form-errors" id="accounting-plan-edition-selection-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="accounting-plan-edition-selection-actions"><a class="btn btn-ghost" href="' + esc(accountingMenuHash('editions', 'definitions-and-plans')) + '">Annuler</a>' +
+          '<span class="pointing-edition-line-count" role="status">Lignes générées : <strong data-accounting-plan-edition-line-count>' + esc(report.generatedLineCount || 0) + '</strong></span>' +
+          '<button type="submit" class="btn btn-primary">Valider <span aria-hidden="true">→</span></button></div>' +
+      '</form>';
+  }
+
+  function syncAccountingPlanEditionSelection(form, session) {
+    if (!form) return null;
+    var accountsInput = $('[data-accounting-plan-edition-filter="accounts"]', form);
+    if (accountsInput) session.filters.accounts = accountsInput.value;
+    $$('[data-accounting-plan-edition-column]', form).forEach(function (input) {
+      session.columns[input.getAttribute('data-accounting-plan-edition-column')] = !!input.checked;
+    });
+    var report = buildAccountingPlanEditionReport(session);
+    session.report = report;
+    showGeneralBalanceReportErrors($('#accounting-plan-edition-selection-errors', form), report.errors);
+    var count = $('[data-accounting-plan-edition-line-count]', form);
+    if (count) count.textContent = String(report.generatedLineCount || 0);
+    return report;
+  }
+
+  function submitAccountingPlanEditionSelection(form, session) {
+    var report = syncAccountingPlanEditionSelection(form, session);
+    var errors = report ? report.errors.slice() : ['Impossible de lire la sélection du Plan comptable.'];
+    if (!accountingPlanEditionSelectedColumns(session).length) errors.push('Sélectionnez au moins une colonne à restituer.');
+    showGeneralBalanceReportErrors($('#accounting-plan-edition-selection-errors', form), errors);
+    if (errors.length) return;
+    session.report = report;
+    session.phase = 'layout';
+    render();
+  }
+
+  function accountingPlanEditionLayoutView(session) {
+    var report = session.report || buildAccountingPlanEditionReport(session);
+    var count = report.generatedLineCount + (report.generatedLineCount === 1 ? ' ligne générée' : ' lignes générées');
+    return generalBalanceReportSteps('layout', 'Étapes de préparation du Plan comptable') +
+      pageHeader('Mise en page — Plan comptable', 'Choisissez le style, l’orientation, les marges, les pages et la destination.', '') +
+      '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(count) + ', en-tête compris. Les ajouts du dossier sont inclus ; le rapport ne modifie ni le plan ni les écritures.</div></div>' +
+      '<form id="accounting-plan-edition-layout-form" novalidate><div class="journal-lines-settings-grid accounting-plan-edition-settings-grid">' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="accounting-plan-edition-printer">Imprimante</label><select id="accounting-plan-edition-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="accounting-plan-edition-style">Style du rapport</label><select id="accounting-plan-edition-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('accounting-plan-edition-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('accounting-plan-edition-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('accounting-plan-edition-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('accounting-plan-edition-margins', 'binding', 'Reliure', session.layout.margins === 'binding', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Pages</h3></div><div class="journal-lines-page-range"><div class="field"><label for="accounting-plan-edition-page-first">Première</label><input id="accounting-plan-edition-page-first" type="number" min="1" step="1" value="' + esc(session.layout.pageFirst) + '" placeholder="1"></div><span aria-hidden="true">à</span><div class="field"><label for="accounting-plan-edition-page-last">Dernière</label><input id="accounting-plan-edition-page-last" type="number" min="1" step="1" value="' + esc(session.layout.pageLast) + '" placeholder="Fin"></div></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Parité</h3></div><div class="field"><label for="accounting-plan-edition-parity">Pages</label><select id="accounting-plan-edition-parity"><option value="none"' + (session.layout.parity === 'none' ? ' selected' : '') + '>Aucune</option><option value="odd"' + (session.layout.parity === 'odd' ? ' selected' : '') + '>Impaire</option><option value="even"' + (session.layout.parity === 'even' ? ' selected' : '') + '>Paire</option></select></div></div></section>' +
+        '<section class="card journal-lines-card accounting-plan-edition-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
+          generalBalanceReportRadio('accounting-plan-edition-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
+          generalBalanceReportRadio('accounting-plan-edition-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
+          generalBalanceReportRadio('accounting-plan-edition-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('accounting-plan-edition-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
+        '</div></div></section></div>' +
+        '<div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> Le choix final de l’imprimante ou du PDF, des pages et de la parité reste dans la boîte du navigateur.</div></div>' +
+        '<div class="journal-lines-form-errors" id="accounting-plan-edition-layout-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-accounting-plan-edition-back-selection>Retour à la sélection</button><button type="submit" class="btn btn-primary">Valider</button></div></form>';
+  }
+
+  function accountingPlanEditionCellText(row, column) {
+    if (!row || row[column.key] == null) return '';
+    var value = String(row[column.key]);
+    return column.key === 'usage' && !value ? '—' : value;
+  }
+
+  function accountingPlanEditionPrintableHtml(session, report) {
+    report = report || session.report || buildAccountingPlanEditionReport(session);
+    var columns = accountingPlanEditionSelectedColumns(session);
+    var headers = columns.map(function (column) { return '<th scope="col">' + esc(column.label) + '</th>'; }).join('');
+    var rows = report.rows.map(function (row) {
+      return '<tr' + (row.sourcePage ? ' title="Source PDF · page ' + esc(row.sourcePage) + '"' : '') + '>' + columns.map(function (column) {
+        return '<td class="accounting-plan-edition-cell-' + esc(column.key) + '">' + esc(accountingPlanEditionCellText(row, column)) + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    if (!rows) rows = '<tr class="accounting-plan-edition-empty-row"><td colspan="' + Math.max(columns.length, 1) + '">Aucun compte ne correspond au filtre.</td></tr>';
+    var styleClass = session.layout.style === 'color10' ? 'accounting-plan-edition-style-color' : 'accounting-plan-edition-style-plain';
+    var metadata = window.PerfectoAccountingChart && window.PerfectoAccountingChart.METADATA || {};
+    return '<article class="accounting-plan-edition-print ' + styleClass + '">' +
+      '<header class="accounting-plan-edition-print-heading"><p class="page-kicker">ÉDITIONS · DÉFINITIONS ET PLANS</p><h2>Plan comptable</h2>' +
+        '<p>Comptes : ' + esc(session.filters.accounts === '*' ? 'Plan complet du dossier' : session.filters.accounts) + ' · ' + report.sourceRowCount + ' ligne(s) · ' + report.referenceAccountCount + ' référence(s) · ' + report.userAddedAccountCount + ' ajout(s) · ' + report.historicalAccountCount + ' historique(s)</p></header>' +
+      '<div class="accounting-plan-edition-table-wrap"><table class="accounting-plan-edition-table"><caption>' + esc(report.sourceRowCount + ' compte(s) du dossier · ' + (metadata.sourceFile || 'référentiel SYSCOHADA')) + '</caption>' +
+        '<thead><tr>' + headers + '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<p class="accounting-plan-edition-print-note">Source de référence : « ' + esc(metadata.sourceFile || '') + ' » (' + esc(metadata.sourcePages || 0) + ' pages, SHA-256 ' + esc(metadata.sourcePdfSha256 || '') + '). Les comptes ajoutés au dossier et les comptes historiques conservés sont inclus ; la colonne Origine les distingue lorsqu’elle est sélectionnée. Les champs d’utilisation reprennent ceux du dossier lorsqu’ils existent ; aucune donnée, écriture ou opération comptable n’est créée par cette édition. La classe 9 est reproduite à titre de référence seule.</p>' +
+    '</article>';
+  }
+
+  function accountingPlanEditionExportMatrix(session, report) {
+    var columns = accountingPlanEditionSelectedColumns(session);
+    var matrix = [columns.map(function (column) { return column.label; })];
+    report.rows.forEach(function (row) { matrix.push(columns.map(function (column) { return accountingPlanEditionCellText(row, column); })); });
+    if (!report.rows.length) matrix.push(['Aucun compte ne correspond au filtre.']);
+    return matrix;
+  }
+
+  function generateAccountingPlanEditionFile(session, destination) {
+    var report = buildAccountingPlanEditionReport(session);
+    if (!report.ok) throw new Error(report.errors.join(' '));
+    var matrix = accountingPlanEditionExportMatrix(session, report);
+    var spreadsheet = destination === 'table';
+    var extension = spreadsheet ? 'xlsx' : 'txt';
+    var filename = safeFilePart('Plan-comptable') + '-' + safeFilePart(S.currentDossier().name) + '-' + safeFilePart(session.filters.accounts || 'selection') + '.' + extension;
+    var content = spreadsheet
+      ? AccountingExchange.exportTabularWorkbook('Plan comptable', matrix[0], matrix.slice(1))
+      : generalBalanceReportTsv(matrix);
+    downloadFile(filename, content, spreadsheet ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/plain;charset=utf-8');
+    session.report = report;
+    session.exportFilename = filename;
+    session.exportMessage = spreadsheet ? 'Téléchargement du classeur Excel lancé. Le plan du dossier reste inchangé.' : 'Téléchargement du fichier texte tabulé lancé. Le plan du dossier reste inchangé.';
+    session.phase = 'saved';
+    render();
+  }
+
+  function accountingPlanEditionPrintOptions(session) {
+    var styleNode = null;
+    var previousStyleText = '';
+    var createdStyle = false;
+    var previousTitle = '';
+    return {
+      beforePrint: function () {
+        styleNode = $('#accounting-plan-edition-print-page-style');
+        createdStyle = !styleNode;
+        if (!styleNode) {
+          styleNode = document.createElement('style');
+          styleNode.id = 'accounting-plan-edition-print-page-style';
+          document.head.appendChild(styleNode);
+        } else previousStyleText = styleNode.textContent;
+        var orientation = session.layout.orientation === 'portrait' ? 'portrait' : 'landscape';
+        var left = session.layout.margins === 'binding' ? '18mm' : '12mm';
+        styleNode.textContent = '@page { size: A4 ' + orientation + '; margin: 12mm 12mm 12mm ' + left + '; }';
+        previousTitle = document.title;
+        document.title = safeFilePart('Plan-comptable') + '-' + safeFilePart(S.currentDossier().name);
+      },
+      afterPrint: function () {
+        document.title = previousTitle || document.title;
+        if (!styleNode) return;
+        if (createdStyle && styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+        else styleNode.textContent = previousStyleText;
+      }
+    };
+  }
+
+  function openAccountingPlanEditionPreview(session) {
+    var report = buildAccountingPlanEditionReport(session);
+    session.report = report;
+    openReportPreview('Aperçu — Plan comptable', accountingPlanEditionPrintableHtml(session, report), accountingPlanEditionPrintOptions(session));
+  }
+
+  function accountingPlanEditionPreviewView(session, report) {
+    return generalBalanceReportSteps('preview', 'Étapes de préparation du Plan comptable') +
+      pageHeader('Aperçu — Plan comptable', 'Vérifiez les comptes de référence et les ajouts du dossier avant impression.', '<button type="button" class="btn btn-primary" data-accounting-plan-edition-open-preview>Ouvrir l’aperçu plein écran</button>') +
+      '<div class="alert info"><div><strong>Consultation seule.</strong> L’aperçu plein écran et l’impression n’ajoutent, ne suppriment et ne modifient aucun compte ni aucune écriture.</div></div>' +
+      accountingPlanEditionPrintableHtml(session, report) +
+      '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-accounting-plan-edition-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-ghost" data-accounting-plan-edition-back-selection>Modifier la sélection</button></div>';
+  }
+
+  function accountingPlanEditionSavedView(session) {
+    return generalBalanceReportSteps('preview', 'Étapes de préparation du Plan comptable') +
+      pageHeader('Export prêt', 'Le fichier contient le référentiel, les ajouts du dossier et les colonnes sélectionnées.', '') +
+      '<section class="card journal-lines-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
+        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-accounting-plan-edition-open-preview>Afficher l’aperçu plein écran</button><button type="button" class="btn btn-ghost" data-accounting-plan-edition-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-accounting-plan-edition-new>Nouvelle sélection</button></div></div></section>';
+  }
+
+  function submitAccountingPlanEditionLayout(form, session) {
+    var errors = [];
+    var destination = $('input[name="accounting-plan-edition-destination"]:checked', form);
+    var orientation = $('input[name="accounting-plan-edition-orientation"]:checked', form);
+    var margins = $('input[name="accounting-plan-edition-margins"]:checked', form);
+    var first = $('#accounting-plan-edition-page-first', form).value;
+    var last = $('#accounting-plan-edition-page-last', form).value;
+    if (first && (!Number.isInteger(Number(first)) || Number(first) < 1)) errors.push('La première page doit être un entier supérieur ou égal à 1.');
+    if (last && (!Number.isInteger(Number(last)) || Number(last) < 1)) errors.push('La dernière page doit être un entier supérieur ou égal à 1.');
+    if (first && last && Number(first) > Number(last)) errors.push('La première page doit précéder ou égaler la dernière page.');
+    var report = buildAccountingPlanEditionReport(session);
+    if (!report.ok) errors = errors.concat(report.errors);
+    showGeneralBalanceReportErrors($('#accounting-plan-edition-layout-errors', form), errors);
+    if (errors.length) return;
+    session.layout.printer = $('#accounting-plan-edition-printer', form).value;
+    session.layout.style = $('#accounting-plan-edition-style', form).value;
+    session.layout.orientation = orientation ? orientation.value : 'landscape';
+    session.layout.margins = margins ? margins.value : 'standard';
+    session.layout.pageFirst = first;
+    session.layout.pageLast = last;
+    session.layout.parity = $('#accounting-plan-edition-parity', form).value;
+    session.layout.destination = destination ? destination.value : 'preview';
+    session.report = report;
+    if (session.layout.destination === 'table' || session.layout.destination === 'file') {
+      try { generateAccountingPlanEditionFile(session, session.layout.destination); }
+      catch (error) { showGeneralBalanceReportErrors($('#accounting-plan-edition-layout-errors', form), [error && error.message || 'Export impossible.']); }
+      return;
+    }
+    session.phase = 'preview';
+    render();
+  }
+
+  function viewAccountingPlanEdition(backLink) {
+    var session = ensureAccountingPlanEditionReportSession();
+    if (session.phase !== 'selection') session.report = buildAccountingPlanEditionReport(session);
+    var content = session.phase === 'layout'
+      ? accountingPlanEditionLayoutView(session)
+      : (session.phase === 'preview'
+        ? accountingPlanEditionPreviewView(session, session.report)
+        : (session.phase === 'saved' ? accountingPlanEditionSavedView(session) : accountingPlanEditionSelectionView(session)));
+    return '<div class="edition-report-detail-view accounting-plan-edition-report-detail">' + backLink + content + '</div>';
+  }
+
+  function bindAccountingPlanEditionReport() {
+    var session = ensureAccountingPlanEditionReportSession();
+    if (session.phase === 'selection') {
+      var form = $('#accounting-plan-edition-selection-form');
+      if (!form) return;
+      var update = function () { syncAccountingPlanEditionSelection(form, session); };
+      form.addEventListener('input', update);
+      form.addEventListener('change', update);
+      form.addEventListener('submit', function (event) { event.preventDefault(); submitAccountingPlanEditionSelection(form, session); });
+      var picker = $('[data-accounting-plan-edition-picker]', form);
+      if (picker) picker.addEventListener('click', function () {
+        var input = $('[data-accounting-plan-edition-filter="accounts"]', form);
+        if (input) openAccountingPlanEditionAccountPicker(input);
+      });
+      return;
+    }
+    if (session.phase === 'layout') {
+      var layoutForm = $('#accounting-plan-edition-layout-form');
+      if (layoutForm) layoutForm.addEventListener('submit', function (event) { event.preventDefault(); submitAccountingPlanEditionLayout(layoutForm, session); });
+      var backSelection = $('[data-accounting-plan-edition-back-selection]');
+      if (backSelection) backSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+      return;
+    }
+    $$('[data-accounting-plan-edition-open-preview]').forEach(function (button) { button.addEventListener('click', function () { openAccountingPlanEditionPreview(session); }); });
+    var backLayout = $('[data-accounting-plan-edition-back-layout]');
+    if (backLayout) backLayout.addEventListener('click', function () { session.phase = 'layout'; render(); });
+    var backToSelection = $('[data-accounting-plan-edition-back-selection]');
+    if (backToSelection) backToSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+    var newReport = $('[data-accounting-plan-edition-new]');
+    if (newReport) newReport.addEventListener('click', function () { accountingPlanEditionReportSession = createAccountingPlanEditionReportSession(); render(); });
+  }
+
+  function openAccountingPlanEditionAccountPicker(input) {
+    var records = S.accounts();
+    var current = AccountingPlanEditionReport.parseAccountFilter(input.value);
+    var selectAll = current.valid && current.all;
+    var prefix = 'accounting-plan-edition-picker';
+    var rows = records.map(function (record, index) {
+      var checked = selectAll || (current.valid && AccountingPlanEditionReport.accountMatches(record.code, current));
+      var searchText = [record.code, record.label, record.classLabel, record.subclassLabel, record.nature, record.usage].join(' ');
+      return '<label class="journal-lines-picker-option accounting-plan-edition-picker-option" data-picker-text="' + esc(searchText) + '"><input type="checkbox" data-accounting-plan-edition-picker-code value="' + esc(record.code) + '" id="' + prefix + '-' + index + '"' + (checked ? ' checked' : '') + '><strong>' + esc(record.code) + '</strong><span>' + esc(record.label) + '</span></label>';
+    }).join('');
+    var body = '<div class="journal-lines-picker"><div class="field"><label for="' + prefix + '-search">Rechercher un compte</label><input id="' + prefix + '-search" type="search" placeholder="Code, intitulé, classe ou utilisation"></div>' +
+      '<label class="journal-lines-picker-all"><input id="' + prefix + '-all" type="checkbox"' + (selectAll ? ' checked' : '') + '>Tous les comptes du dossier</label>' +
+      '<div class="journal-lines-picker-list" role="group" aria-label="Comptes du plan du dossier">' + (rows || '<div class="empty-state">Aucun compte disponible dans le dossier.</div>') + '</div></div>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="button" class="btn btn-primary" data-accounting-plan-edition-picker-apply>Appliquer</button>';
+    openModal('Choisir les comptes', 'La liste reprend les comptes visibles du plan comptable du dossier, y compris les ajouts personnalisés.', body, footer, true);
+    var modalRoot = $('#modal-root');
+    var search = $('#' + prefix + '-search', modalRoot);
+    var pickerRows = $$('.accounting-plan-edition-picker-option', modalRoot);
+    var allToggle = $('#' + prefix + '-all', modalRoot);
+    var checkboxes = $$('[data-accounting-plan-edition-picker-code]', modalRoot);
+    if (search) search.addEventListener('input', function () {
+      var query = search.value.trim().toLocaleLowerCase();
+      pickerRows.forEach(function (row) { row.hidden = !!query && row.getAttribute('data-picker-text').toLocaleLowerCase().indexOf(query) === -1; });
+    });
+    if (allToggle) allToggle.addEventListener('change', function () { checkboxes.forEach(function (checkbox) { checkbox.checked = allToggle.checked; }); });
+    checkboxes.forEach(function (checkbox) {
+      checkbox.addEventListener('change', function () { if (allToggle) allToggle.checked = !!checkboxes.length && checkboxes.every(function (item) { return item.checked; }); });
+    });
+    var apply = $('[data-accounting-plan-edition-picker-apply]', modalRoot);
+    if (apply) apply.addEventListener('click', function () {
+      input.value = allToggle && allToggle.checked ? '*' : $$('[data-accounting-plan-edition-picker-code]:checked', modalRoot).map(function (checkbox) { return checkbox.value; }).join(', ');
+      try { var inputEvent = document.createEvent('Event'); inputEvent.initEvent('input', true, false); input.dispatchEvent(inputEvent); } catch (error) { /* la valeur saisie reste disponible */ }
+      closeModal();
+      input.focus();
+    });
+  }
+
   function createBalanceItemsEditionReportSession() {
     var columns = Object.create(null);
     BalanceItemsEditionReport.COLUMNS.forEach(function (column) { columns[column.key] = !!column.defaultSelected; });
@@ -24250,6 +24585,7 @@
     if (child.id === 'edition-fixed-asset-other-anomalies') return viewFixedAssetAnomaliesReport(backLink);
     if (child.id === 'edition-accounting-framework') return viewFinancialFrameworkEdition(backLink);
     if (child.id === 'edition-balance-items') return viewBalanceItemsEdition(backLink);
+    if (child.id === 'edition-chart-of-accounts') return viewAccountingPlanEdition(backLink);
     if (PointingEditionReports.REPORT_IDS.indexOf(child.id) !== -1) return viewPointingEditionReport(backLink, child.id);
     if (MatchingEditionReports.REPORT_IDS.indexOf(child.id) !== -1) return viewMatchingEditionReport(backLink, child.id);
     if (child.id === 'general-summary-balance') return viewGeneralSummaryBalanceReport(backLink);
@@ -25705,6 +26041,7 @@
       if (menuParams.g === 'editions' && menuParams.t === 'fixed-assets' && FixedAssetAdditionalReports.REPORT_IDS.indexOf(menuParams.c) !== -1) bindFixedAssetAdditionalReport(menuParams.c);
       if (menuParams.g === 'editions' && menuParams.t === 'definitions-and-plans' && menuParams.c === FinancialFrameworkEditionReport.REPORT_ID) bindFinancialFrameworkEditionReport();
       if (menuParams.g === 'editions' && menuParams.t === 'definitions-and-plans' && menuParams.c === BalanceItemsEditionReport.REPORT_ID) bindBalanceItemsEditionReport();
+      if (menuParams.g === 'editions' && menuParams.t === 'definitions-and-plans' && menuParams.c === AccountingPlanEditionReport.REPORT_ID) bindAccountingPlanEditionReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-ledger') bindGeneralLedgerReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-detail') bindGeneralCounterpartDetailReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-total') bindGeneralCounterpartTotalReport();
