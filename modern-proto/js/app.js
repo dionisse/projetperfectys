@@ -48,6 +48,7 @@
   var AccountingCentralization = window.PerfectoAccountingCentralization;
   var CentralizationCancellation = window.PerfectoCentralizationCancellation;
   var FixedAssetDepreciation = window.PerfectoFixedAssetDepreciation;
+  var FixedAssetDepreciationReport = window.PerfectoFixedAssetDepreciationReport;
   var FixedAssetOverviewReport = window.PerfectoFixedAssetOverviewReport;
   var OpeningBalances = window.PerfectoOpeningBalances;
 
@@ -170,6 +171,7 @@
   var budgetReportSession = null;
   var matchingEditionReportSession = null;
   var pointingEditionReportSession = null;
+  var fixedAssetDepreciationReportSession = null;
   var fixedAssetOverviewReportSession = null;
   var generalLedgerReportSession = null;
   var generalCounterpartDetailReportSession = null;
@@ -814,6 +816,7 @@
     var isBudgetReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'budget' && BudgetReports.REPORT_IDS.indexOf(parsed.params.c) !== -1;
     var isMatchingEditionReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'matching' && MatchingEditionReports.REPORT_IDS.indexOf(parsed.params.c) !== -1;
     var isPointingEditionReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'bank-reconciliation' && PointingEditionReports.REPORT_IDS.indexOf(parsed.params.c) !== -1;
+    var isFixedAssetDepreciationReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'fixed-assets' && parsed.params.c === 'edition-fixed-asset-depreciation';
     var isFixedAssetOverviewReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'fixed-assets' && parsed.params.c === 'edition-fixed-asset-overview';
     var isGeneralLedgerReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-ledger';
     var isGeneralCounterpartDetailReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-detail';
@@ -837,6 +840,7 @@
     if (!isBudgetReportRoute) budgetReportSession = null;
     if (!isMatchingEditionReportRoute) matchingEditionReportSession = null;
     if (!isPointingEditionReportRoute) pointingEditionReportSession = null;
+    if (!isFixedAssetDepreciationReportRoute) fixedAssetDepreciationReportSession = null;
     if (!isFixedAssetOverviewReportRoute) fixedAssetOverviewReportSession = null;
     if (!isGeneralLedgerReportRoute) generalLedgerReportSession = null;
     if (!isGeneralCounterpartDetailReportRoute) generalCounterpartDetailReportSession = null;
@@ -6194,6 +6198,419 @@
     if (session.phase === 'preview' && !session.previewOpened) {
       session.previewOpened = true;
       openPointingEditionPreview(session, definition);
+    }
+  }
+
+  /* ------------------------- Tableau des amortissements ------------------ */
+  function createFixedAssetDepreciationReportSession(dossier) {
+    var definition = FixedAssetDepreciationReport.definitionFor('edition-fixed-asset-depreciation');
+    var columns = Object.create(null);
+    definition.columns.forEach(function (column) { columns[column.key] = !!column.defaultSelected; });
+    return {
+      dossierId: dossier.id,
+      reportId: definition.id,
+      phase: 'selection',
+      filters: {
+        accounts: '*', from: dossier.cycleStart, to: dossier.cycleEnd,
+        netValueNonzero: true, netValueZero: false,
+        withDepreciation: true, withoutDepreciation: false, withExits: true
+      },
+      columns: columns,
+      layout: { printer: 'system', style: 'plain8', orientation: 'portrait', margins: 'standard', pageFirst: '', pageLast: '', parity: 'none', destination: 'preview' },
+      report: null,
+      previewOpened: false,
+      exportFilename: '',
+      exportMessage: ''
+    };
+  }
+
+  function ensureFixedAssetDepreciationReportSession() {
+    var dossier = S.currentDossier();
+    if (!fixedAssetDepreciationReportSession || fixedAssetDepreciationReportSession.dossierId !== dossier.id) {
+      fixedAssetDepreciationReportSession = createFixedAssetDepreciationReportSession(dossier);
+    }
+    return fixedAssetDepreciationReportSession;
+  }
+
+  function buildFixedAssetDepreciationReport(session) {
+    var dossier = S.currentDossier();
+    return FixedAssetDepreciationReport.buildReport({
+      cycleStart: dossier.cycleStart,
+      cycleEnd: dossier.cycleEnd,
+      accountFilter: session.filters.accounts,
+      from: session.filters.from,
+      to: session.filters.to,
+      includeWithDepreciation: session.filters.withDepreciation,
+      includeWithoutDepreciation: session.filters.withoutDepreciation,
+      includeNetValueNonzero: session.filters.netValueNonzero,
+      includeNetValueZero: session.filters.netValueZero,
+      includeExits: session.filters.withExits,
+      accounts: S.accounts(),
+      assets: S.fixedAssets()
+    });
+  }
+
+  function fixedAssetDepreciationSelectedColumns(session) {
+    var definition = FixedAssetDepreciationReport.definitionFor(session.reportId);
+    return definition.columns.filter(function (column) { return !!session.columns[column.key]; });
+  }
+
+  function fixedAssetDepreciationWarningsHtml(report) {
+    return report && report.warnings && report.warnings.length
+      ? '<div class="alert info fixed-asset-depreciation-warnings"><ul>' + report.warnings.map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('') + '</ul></div>'
+      : '';
+  }
+
+  function fixedAssetDepreciationColumnOption(column, session) {
+    return '<label class="journal-lines-column-option"><input type="checkbox" data-fixed-asset-depreciation-column="' + esc(column.key) + '"' +
+      (session.columns[column.key] ? ' checked' : '') + '><span><strong>' + esc(column.label) + '</strong></span></label>';
+  }
+
+  function fixedAssetDepreciationFilterField(session, dossier, key) {
+    if (key === 'accounts') {
+      return '<div class="field fixed-asset-depreciation-accounts-field"><label for="fixed-asset-depreciation-accounts">Comptes</label><div class="journal-lines-picker-control"><input id="fixed-asset-depreciation-accounts" data-fixed-asset-depreciation-filter="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou 21*; 22*" autocomplete="off" required><button type="button" class="btn btn-ghost" data-fixed-asset-depreciation-picker="accounts" aria-label="Choisir les comptes du plan">…</button></div><span class="hint">« * » couvre tous les comptes présents et futurs ; filtre sur le compte d’immobilisation de la fiche.</span></div>';
+    }
+    var dateKey = key === 'from' ? 'from' : 'to';
+    var label = dateKey === 'from' ? 'Début' : 'Fin';
+    return '<div class="field"><label for="fixed-asset-depreciation-' + dateKey + '">' + label + '</label><input id="fixed-asset-depreciation-' + dateKey + '" data-fixed-asset-depreciation-filter="' + dateKey + '" type="date" value="' + esc(session.filters[dateKey]) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required></div>';
+  }
+
+  function fixedAssetDepreciationScopeOption(key, label, checked, unavailable) {
+    return '<label class="journal-lines-check-option' + (unavailable ? ' is-unavailable' : '') + '"><input type="checkbox" data-fixed-asset-depreciation-scope="' + esc(key) + '"' +
+      (checked ? ' checked' : '') + (unavailable ? ' disabled aria-describedby="fixed-asset-depreciation-scope-note"' : '') + '><span>' + esc(label) + '</span></label>';
+  }
+
+  function fixedAssetDepreciationSelectionView(session, dossier) {
+    var definition = FixedAssetDepreciationReport.definitionFor(session.reportId);
+    var columnMarkup = definition.columns.map(function (column) { return fixedAssetDepreciationColumnOption(column, session); });
+    var stackCount = 3;
+    var stackSize = Math.ceil(columnMarkup.length / stackCount);
+    var stacks = [];
+    for (var stackIndex = 0; stackIndex < stackCount; stackIndex += 1) {
+      stacks.push('<div class="currency-balance-column-stack">' + columnMarkup.slice(stackIndex * stackSize, (stackIndex + 1) * stackSize).join('') + '</div>');
+    }
+    var filters = ['accounts', 'from', 'to'].map(function (key) { return fixedAssetDepreciationFilterField(session, dossier, key); }).join('');
+    var report = session.report || buildFixedAssetDepreciationReport(session);
+    session.report = report;
+    return generalBalanceReportSteps('selection', 'Étapes de préparation du Tableau des amortissements') +
+      pageHeader('Tableau des amortissements', 'Sélectionnez les comptes, la période et les colonnes à restituer.', '') +
+      '<div class="alert info fixed-asset-depreciation-source-note"><div><strong>Lecture seule.</strong> La valeur brute reprend le coût d’acquisition enregistré. Aucune dotation d’amortissement ni valeur nette comptable par élément n’est disponible dans le registre ; elles restent vides. La simulation linéaire existante reste séparée et exige le choix explicite d’une convention.</div></div>' +
+      '<form id="fixed-asset-depreciation-selection-form" novalidate>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div><span class="journal-lines-cycle-badge">Cycle ' + esc(dateLabel(dossier.cycleStart)) + ' — ' + esc(dateLabel(dossier.cycleEnd)) + '</span></div>' +
+          '<div class="fixed-asset-depreciation-filter-grid">' + filters + '</div>' +
+        '</div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
+          '<div class="currency-balance-column-grid fixed-asset-depreciation-columns-grid" style="--fixed-asset-depreciation-column-count:' + stackCount + '">' + stacks.join('') + '</div>' +
+          '<p class="hint">Valeur brute = coût d’acquisition enregistré. Amortissement et Valeur nette restent vides faute de sources par élément.</p>' +
+        '</div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">CRITÈRES DE RESTITUTION</p><h3>Éléments à imprimer</h3></div></div>' +
+          '<div class="fixed-asset-depreciation-elements-grid">' +
+            '<div class="fixed-asset-depreciation-elements-column">' +
+              fixedAssetDepreciationScopeOption('netValueNonzero', 'Valeur nette non nulle', session.filters.netValueNonzero, true) +
+              fixedAssetDepreciationScopeOption('netValueZero', 'Valeur nette nulle', session.filters.netValueZero, true) +
+            '</div>' +
+            '<div class="fixed-asset-depreciation-elements-column">' +
+              fixedAssetDepreciationScopeOption('withDepreciation', 'Avec amortissement', session.filters.withDepreciation, false) +
+              fixedAssetDepreciationScopeOption('withoutDepreciation', 'Sans amortissement', session.filters.withoutDepreciation, false) +
+            '</div>' +
+            '<div class="fixed-asset-depreciation-elements-column">' +
+              fixedAssetDepreciationScopeOption('withExits', 'Avec les sorties', session.filters.withExits, true) +
+            '</div>' +
+          '</div>' +
+          '<p class="hint" id="fixed-asset-depreciation-scope-note">Les filtres de valeur nette et de sorties sont affichés comme sur la capture, mais désactivés : aucune VNC ni date de sortie par élément n’est enregistrée. Avec/Sans amortissement suit uniquement la méthode de la fiche ; aucune dotation n’est calculée.</p>' +
+        '</div></section>' +
+        '<div id="fixed-asset-depreciation-selection-warnings">' + fixedAssetDepreciationWarningsHtml(report) + '</div>' +
+        '<div class="journal-lines-form-errors" id="fixed-asset-depreciation-selection-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="fixed-asset-depreciation-selection-actions"><a class="btn btn-ghost" href="' + esc(accountingMenuHash('editions', 'fixed-assets')) + '">Annuler</a><span class="pointing-edition-line-count" role="status">Lignes générées : <strong data-fixed-asset-depreciation-line-count>' + esc(report.generatedLineCount || 0) + '</strong></span><button type="submit" class="btn btn-primary">Valider <span aria-hidden="true">→</span></button></div>' +
+      '</form>';
+  }
+
+  function syncFixedAssetDepreciationSelection(form, session) {
+    if (!form) return null;
+    $$('[data-fixed-asset-depreciation-filter]', form).forEach(function (input) {
+      session.filters[input.getAttribute('data-fixed-asset-depreciation-filter')] = input.value;
+    });
+    $$('[data-fixed-asset-depreciation-column]', form).forEach(function (input) {
+      session.columns[input.getAttribute('data-fixed-asset-depreciation-column')] = !!input.checked;
+    });
+    $$('[data-fixed-asset-depreciation-scope]', form).forEach(function (input) {
+      var key = input.getAttribute('data-fixed-asset-depreciation-scope');
+      if (key === 'withDepreciation') session.filters.withDepreciation = !!input.checked;
+      if (key === 'withoutDepreciation') session.filters.withoutDepreciation = !!input.checked;
+    });
+    var report = buildFixedAssetDepreciationReport(session);
+    session.report = report;
+    showGeneralBalanceReportErrors($('#fixed-asset-depreciation-selection-errors', form), report.errors);
+    var warnings = $('#fixed-asset-depreciation-selection-warnings', form);
+    if (warnings) warnings.innerHTML = fixedAssetDepreciationWarningsHtml(report);
+    var count = $('[data-fixed-asset-depreciation-line-count]', form);
+    if (count) count.textContent = String(report.generatedLineCount || 0);
+    return report;
+  }
+
+  function submitFixedAssetDepreciationSelection(form, session) {
+    var report = syncFixedAssetDepreciationSelection(form, session);
+    var errors = report ? report.errors.slice() : ['Impossible de lire la sélection du tableau des amortissements.'];
+    var columns = fixedAssetDepreciationSelectedColumns(session);
+    if (!columns.length) errors.push('Sélectionnez au moins une colonne à restituer.');
+    if (!columns.some(function (column) { return column.key === 'assetCode' || column.key === 'assetName'; })) errors.push('Conservez au moins une colonne d’identification de l’élément.');
+    showGeneralBalanceReportErrors($('#fixed-asset-depreciation-selection-errors', form), errors);
+    if (errors.length) return;
+    session.report = report;
+    session.phase = 'layout';
+    session.previewOpened = false;
+    render();
+  }
+
+  function fixedAssetDepreciationReportValue(row, column) {
+    var value = row[column.key];
+    if (value == null || value === '') return '';
+    if (column.key === 'entryDate' && FixedAssetDepreciationReport.isIsoDate(value)) return dateLabel(value);
+    if (column.key === 'grossValue') return amount(value);
+    if (column.text === false) return amount(value);
+    return String(value);
+  }
+
+  function fixedAssetDepreciationRowsHtml(report, columns) {
+    if (!report.rows.length) {
+      return '<tbody><tr><td colspan="' + Math.max(columns.length, 1) + '"><div class="empty-state"><strong>Aucun élément ne correspond à cette sélection.</strong>Aucune dotation ou valeur nette n’est calculée en l’absence de source explicite.</div></td></tr></tbody>';
+    }
+    var rowsByAccount = Object.create(null);
+    report.rows.forEach(function (row) {
+      if (!rowsByAccount[row.accountCode]) rowsByAccount[row.accountCode] = [];
+      rowsByAccount[row.accountCode].push(row);
+    });
+    var body = (report.displayAccounts || []).map(function (account) {
+      var rows = rowsByAccount[account.code] || [];
+      var title = account.code + (account.label ? ' · ' + account.label : '');
+      var heading = '<tr class="fixed-asset-depreciation-account-heading"><th colspan="' + Math.max(columns.length, 1) + '">' + esc(title) + '</th></tr>';
+      return heading + rows.map(function (row) {
+        return '<tr>' + columns.map(function (column) {
+          return '<td' + (column.text === false ? ' class="num"' : '') + '>' + esc(fixedAssetDepreciationReportValue(row, column)) + '</td>';
+        }).join('') + '</tr>';
+      }).join('');
+    }).join('');
+    return '<tbody>' + body + '</tbody>';
+  }
+
+  function fixedAssetDepreciationPrintableHtml(session, report) {
+    report = report || session.report || buildFixedAssetDepreciationReport(session);
+    var columns = fixedAssetDepreciationSelectedColumns(session);
+    var headers = '<tr>' + columns.map(function (column) {
+      return '<th scope="col"' + (column.text === false ? ' class="num"' : '') + '>' + esc(column.label) + '</th>';
+    }).join('') + '</tr>';
+    var styleClass = session.layout.style === 'color10' ? 'fixed-asset-depreciation-style-color' : 'fixed-asset-depreciation-style-plain';
+    return '<article class="fixed-asset-depreciation-print ' + styleClass + '"><header class="fixed-asset-depreciation-print-heading"><p class="page-kicker">ÉDITIONS · IMMOBILISATIONS</p><h2>TABLEAU DES AMORTISSEMENTS</h2><p><strong>Comptes :</strong> ' + esc(session.filters.accounts === '*' ? 'Tous les comptes sélectionnés' : session.filters.accounts) + ' · <strong>Période :</strong> ' + esc(dateLabel(report.from)) + ' — ' + esc(dateLabel(report.to)) + ' · <strong>Montants :</strong> XOF</p></header>' +
+      fixedAssetDepreciationWarningsHtml(report) +
+      '<div class="fixed-asset-depreciation-table-wrap"><table class="fixed-asset-depreciation-table"><thead>' + headers + '</thead>' + fixedAssetDepreciationRowsHtml(report, columns) + '</table></div>' +
+      '<p class="fixed-asset-depreciation-print-note">État en lecture seule. La valeur brute reprend le coût enregistré ; Amortissement et Valeur nette restent vides. Aucun total, cumul ou montant prévisionnel n’est calculé.</p></article>';
+  }
+
+  function fixedAssetDepreciationExportMatrix(session, report) {
+    var columns = fixedAssetDepreciationSelectedColumns(session);
+    var matrix = [columns.map(function (column) { return column.label; })];
+    var rowsByAccount = Object.create(null);
+    report.rows.forEach(function (row) {
+      if (!rowsByAccount[row.accountCode]) rowsByAccount[row.accountCode] = [];
+      rowsByAccount[row.accountCode].push(row);
+    });
+    (report.displayAccounts || []).forEach(function (account) {
+      matrix.push([account.code + (account.label ? ' · ' + account.label : '')].concat(columns.slice(1).map(function () { return ''; })));
+      (rowsByAccount[account.code] || []).forEach(function (row) {
+        matrix.push(columns.map(function (column) { return fixedAssetDepreciationReportValue(row, column); }));
+      });
+    });
+    if (!report.rows.length) matrix.push(['Aucun élément ne correspond à la sélection.']);
+    return matrix;
+  }
+
+  function fixedAssetDepreciationLayoutView(session, report) {
+    var count = report.generatedLineCount + (report.generatedLineCount === 1 ? ' ligne générée' : ' lignes générées');
+    return generalBalanceReportSteps('layout', 'Étapes de préparation du Tableau des amortissements') +
+      pageHeader('Mise en page — Tableau des amortissements', 'Choisissez le style, l’orientation, les marges, les pages et la destination.', '') +
+      '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(count) + '. Aucun amortissement ou solde n’est calculé.</div></div>' +
+      fixedAssetDepreciationWarningsHtml(report) +
+      '<form id="fixed-asset-depreciation-layout-form" novalidate><div class="journal-lines-settings-grid fixed-asset-depreciation-settings-grid">' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="fixed-asset-depreciation-printer">Imprimante</label><select id="fixed-asset-depreciation-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="fixed-asset-depreciation-style">Style du rapport</label><select id="fixed-asset-depreciation-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 7 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 8 points</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('fixed-asset-depreciation-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('fixed-asset-depreciation-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('fixed-asset-depreciation-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('fixed-asset-depreciation-margins', 'binding', 'Reliure à gauche', session.layout.margins === 'binding', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Pages</h3></div><div class="journal-lines-page-range"><div class="field"><label for="fixed-asset-depreciation-page-first">Première</label><input id="fixed-asset-depreciation-page-first" type="number" min="1" step="1" value="' + esc(session.layout.pageFirst) + '" placeholder="1"></div><span aria-hidden="true">à</span><div class="field"><label for="fixed-asset-depreciation-page-last">Dernière</label><input id="fixed-asset-depreciation-page-last" type="number" min="1" step="1" value="' + esc(session.layout.pageLast) + '" placeholder="Fin"></div></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Parité</h3></div><div class="field"><label for="fixed-asset-depreciation-parity">Pages</label><select id="fixed-asset-depreciation-parity"><option value="none"' + (session.layout.parity === 'none' ? ' selected' : '') + '>Aucune</option><option value="odd"' + (session.layout.parity === 'odd' ? ' selected' : '') + '>Impaire</option><option value="even"' + (session.layout.parity === 'even' ? ' selected' : '') + '>Paire</option></select></div></div></section>' +
+        '<section class="card journal-lines-card fixed-asset-depreciation-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
+          generalBalanceReportRadio('fixed-asset-depreciation-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
+          generalBalanceReportRadio('fixed-asset-depreciation-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
+          generalBalanceReportRadio('fixed-asset-depreciation-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('fixed-asset-depreciation-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
+        '</div></div></section></div>' +
+        '<div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> Les pages et la parité se règlent dans le navigateur si celui-ci le permet.</div></div>' +
+        '<div class="journal-lines-form-errors" id="fixed-asset-depreciation-layout-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-fixed-asset-depreciation-back-selection>Retour à la sélection</button><button type="submit" class="btn btn-primary">Valider</button></div></form>';
+  }
+
+  function fixedAssetDepreciationPrintOptions(session) {
+    var styleNode = null;
+    var previousStyleText = '';
+    var createdStyle = false;
+    var previousTitle = '';
+    return {
+      beforePrint: function () {
+        styleNode = $('#fixed-asset-depreciation-print-page-style');
+        createdStyle = !styleNode;
+        if (!styleNode) {
+          styleNode = document.createElement('style');
+          styleNode.id = 'fixed-asset-depreciation-print-page-style';
+          document.head.appendChild(styleNode);
+        } else previousStyleText = styleNode.textContent;
+        var orientation = session.layout.orientation === 'landscape' ? 'landscape' : 'portrait';
+        var left = session.layout.margins === 'binding' ? '18mm' : '12mm';
+        styleNode.textContent = '@page { size: A4 ' + orientation + '; margin: 12mm 12mm 12mm ' + left + '; }';
+        previousTitle = document.title;
+        document.title = safeFilePart('Tableau des amortissements') + '-' + safeFilePart(S.currentDossier().name);
+      },
+      afterPrint: function () {
+        document.title = previousTitle || document.title;
+        if (!styleNode) return;
+        if (createdStyle && styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+        else styleNode.textContent = previousStyleText;
+      }
+    };
+  }
+
+  function openFixedAssetDepreciationPreview(session) {
+    var report = session.report || buildFixedAssetDepreciationReport(session);
+    session.report = report;
+    openReportPreview('Aperçu — Tableau des amortissements', fixedAssetDepreciationPrintableHtml(session, report), fixedAssetDepreciationPrintOptions(session));
+  }
+
+  function fixedAssetDepreciationPreviewView(session, report) {
+    return generalBalanceReportSteps('layout', 'Étapes de préparation du Tableau des amortissements') +
+      pageHeader('Aperçu — Tableau des amortissements', 'Vérifiez les valeurs provenant du registre avant impression ou export.', '<button type="button" class="btn btn-primary" data-fixed-asset-depreciation-open-preview>Ouvrir l’aperçu plein écran</button>') +
+      '<div class="alert info"><div><strong>Lecture seule.</strong> L’impression ne s’ouvrira qu’après votre action depuis l’aperçu plein écran ; Amortissement et Valeur nette restent vides.</div></div>' +
+      fixedAssetDepreciationPrintableHtml(session, report) +
+      '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-fixed-asset-depreciation-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-ghost" data-fixed-asset-depreciation-back-selection>Modifier la sélection</button></div>';
+  }
+
+  function fixedAssetDepreciationSavedView(session) {
+    return generalBalanceReportSteps('layout', 'Étapes de préparation du Tableau des amortissements') +
+      pageHeader('Export prêt', 'Le fichier reprend les colonnes sélectionnées et les valeurs présentes dans le registre.', '') +
+      '<section class="card journal-lines-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
+        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-fixed-asset-depreciation-open-preview>Afficher l’aperçu plein écran</button><button type="button" class="btn btn-ghost" data-fixed-asset-depreciation-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-fixed-asset-depreciation-new>Nouvelle sélection</button></div></div></section>';
+  }
+
+  function viewFixedAssetDepreciationReport(backLink) {
+    var session = ensureFixedAssetDepreciationReportSession();
+    var dossier = S.currentDossier();
+    if (session.phase !== 'selection') session.report = buildFixedAssetDepreciationReport(session);
+    var content = session.phase === 'layout'
+      ? fixedAssetDepreciationLayoutView(session, session.report)
+      : (session.phase === 'preview'
+        ? fixedAssetDepreciationPreviewView(session, session.report)
+        : (session.phase === 'saved'
+          ? fixedAssetDepreciationSavedView(session)
+          : fixedAssetDepreciationSelectionView(session, dossier)));
+    return '<div class="edition-report-detail-view general-balance-report-detail fixed-asset-depreciation-report-detail">' + backLink + content + '</div>';
+  }
+
+  function generateFixedAssetDepreciationReportFile(session, destination) {
+    var report = buildFixedAssetDepreciationReport(session);
+    if (!report.ok) throw new Error(report.errors.join(' '));
+    session.report = report;
+    var spreadsheet = destination === 'table';
+    var matrix = fixedAssetDepreciationExportMatrix(session, report);
+    var extension = spreadsheet ? 'xlsx' : 'txt';
+    var filename = 'Tableau-amortissements-' + safeFilePart(S.currentDossier().name) + '-' + report.from + '-' + report.to + '.' + extension;
+    var content = spreadsheet
+      ? AccountingExchange.exportTabularWorkbook(FixedAssetDepreciationReport.TITLE, matrix[0], matrix.slice(1))
+      : generalLedgerReportTsv(matrix);
+    downloadFile(filename, content, spreadsheet ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/plain;charset=utf-8');
+    session.exportFilename = filename;
+    session.exportMessage = spreadsheet ? 'Téléchargement du classeur Excel lancé. Aucun amortissement ou solde n’est calculé.' : 'Téléchargement du fichier texte tabulé lancé. Aucun amortissement ou solde n’est calculé.';
+    session.phase = 'saved';
+    render();
+  }
+
+  function submitFixedAssetDepreciationLayout(form, session) {
+    var errors = [];
+    var destination = $('input[name="fixed-asset-depreciation-destination"]:checked', form);
+    var orientation = $('input[name="fixed-asset-depreciation-orientation"]:checked', form);
+    var margins = $('input[name="fixed-asset-depreciation-margins"]:checked', form);
+    var first = $('#fixed-asset-depreciation-page-first', form).value;
+    var last = $('#fixed-asset-depreciation-page-last', form).value;
+    if (first && (!Number.isInteger(Number(first)) || Number(first) < 1)) errors.push('La première page doit être un entier supérieur ou égal à 1.');
+    if (last && (!Number.isInteger(Number(last)) || Number(last) < 1)) errors.push('La dernière page doit être un entier supérieur ou égal à 1.');
+    if (first && last && Number(first) > Number(last)) errors.push('La première page doit précéder ou égaler la dernière page.');
+    var report = buildFixedAssetDepreciationReport(session);
+    if (!report.ok) errors = errors.concat(report.errors);
+    showGeneralBalanceReportErrors($('#fixed-asset-depreciation-layout-errors', form), errors);
+    if (errors.length) return;
+    session.layout.printer = $('#fixed-asset-depreciation-printer', form).value;
+    session.layout.style = $('#fixed-asset-depreciation-style', form).value;
+    session.layout.orientation = orientation ? orientation.value : 'portrait';
+    session.layout.margins = margins ? margins.value : 'standard';
+    session.layout.pageFirst = first;
+    session.layout.pageLast = last;
+    session.layout.parity = $('#fixed-asset-depreciation-parity', form).value;
+    session.layout.destination = destination ? destination.value : 'preview';
+    session.report = report;
+    if (session.layout.destination === 'table' || session.layout.destination === 'file') {
+      try { generateFixedAssetDepreciationReportFile(session, session.layout.destination); }
+      catch (error) { showGeneralBalanceReportErrors($('#fixed-asset-depreciation-layout-errors', form), [error && error.message || 'Export impossible.']); }
+      return;
+    }
+    session.previewOpened = false;
+    session.phase = 'preview';
+    render();
+  }
+
+  function bindFixedAssetDepreciationReport() {
+    var session = ensureFixedAssetDepreciationReportSession();
+    if (session.phase === 'selection') {
+      var form = $('#fixed-asset-depreciation-selection-form');
+      if (!form) return;
+      var update = function () { syncFixedAssetDepreciationSelection(form, session); };
+      form.addEventListener('input', update);
+      form.addEventListener('change', update);
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitFixedAssetDepreciationSelection(form, session);
+      });
+      $$('[data-fixed-asset-depreciation-picker]', form).forEach(function (button) {
+        button.addEventListener('click', function () {
+          var input = $('input[data-fixed-asset-depreciation-filter="accounts"]', form);
+          if (input) openGeneralBalanceAccountPicker(input);
+        });
+      });
+      return;
+    }
+    if (session.phase === 'layout') {
+      var layoutForm = $('#fixed-asset-depreciation-layout-form');
+      if (!layoutForm) return;
+      layoutForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitFixedAssetDepreciationLayout(layoutForm, session);
+      });
+      var backSelection = $('[data-fixed-asset-depreciation-back-selection]');
+      if (backSelection) backSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+      return;
+    }
+    $$('[data-fixed-asset-depreciation-open-preview]').forEach(function (button) {
+      button.addEventListener('click', function () { openFixedAssetDepreciationPreview(session); });
+    });
+    $$('[data-fixed-asset-depreciation-back-layout]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'layout'; render(); });
+    });
+    $$('[data-fixed-asset-depreciation-back-selection]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'selection'; render(); });
+    });
+    var newReport = $('[data-fixed-asset-depreciation-new]');
+    if (newReport) newReport.addEventListener('click', function () {
+      fixedAssetDepreciationReportSession = createFixedAssetDepreciationReportSession(S.currentDossier());
+      render();
+    });
+    if (session.phase === 'preview' && !session.previewOpened) {
+      session.previewOpened = true;
+      openFixedAssetDepreciationPreview(session);
     }
   }
 
@@ -22641,6 +23058,7 @@
     if (child.id === 'budget-outside-realizations-detail') return viewBudgetOutsideRealizationsDetailReport(backLink);
     if (child.id === 'budget-available-not-committed') return viewBudgetAvailabilitySummaryReport(backLink);
     if (child.id === 'budget-available-balance') return viewBudgetAvailableBalanceReport(backLink);
+    if (child.id === 'edition-fixed-asset-depreciation') return viewFixedAssetDepreciationReport(backLink);
     if (child.id === 'edition-fixed-asset-overview') return viewFixedAssetOverviewReport(backLink);
     if (PointingEditionReports.REPORT_IDS.indexOf(child.id) !== -1) return viewPointingEditionReport(backLink, child.id);
     if (MatchingEditionReports.REPORT_IDS.indexOf(child.id) !== -1) return viewMatchingEditionReport(backLink, child.id);
@@ -24092,6 +24510,7 @@
       if (menuParams.g === 'editions' && menuParams.t === 'budget' && BudgetReports.REPORT_IDS.indexOf(menuParams.c) !== -1) bindBudgetReport();
       if (menuParams.g === 'editions' && menuParams.t === 'matching' && MatchingEditionReports.REPORT_IDS.indexOf(menuParams.c) !== -1) bindMatchingEditionReport();
       if (menuParams.g === 'editions' && menuParams.t === 'bank-reconciliation' && PointingEditionReports.REPORT_IDS.indexOf(menuParams.c) !== -1) bindPointingEditionReport();
+      if (menuParams.g === 'editions' && menuParams.t === 'fixed-assets' && menuParams.c === 'edition-fixed-asset-depreciation') bindFixedAssetDepreciationReport();
       if (menuParams.g === 'editions' && menuParams.t === 'fixed-assets' && menuParams.c === 'edition-fixed-asset-overview') bindFixedAssetOverviewReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-ledger') bindGeneralLedgerReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-detail') bindGeneralCounterpartDetailReport();

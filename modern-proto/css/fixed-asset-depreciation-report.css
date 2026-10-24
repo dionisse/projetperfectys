@@ -1,0 +1,87 @@
+/* PERFECTO · Tableau des amortissements : sélection, aperçu plein écran, impression. */
+.fixed-asset-depreciation-report-detail,
+.fixed-asset-depreciation-report-detail .card,
+.fixed-asset-depreciation-print { min-width: 0; }
+.fixed-asset-depreciation-report-detail > .edition-report-back { margin-bottom: 15px; }
+.fixed-asset-depreciation-source-note,
+.fixed-asset-depreciation-warnings { margin: 0 0 14px; line-height: 1.55; }
+.fixed-asset-depreciation-warnings ul { margin: 0 0 0 18px; }
+.fixed-asset-depreciation-filter-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 22px; align-items: start; max-width: 1060px; }
+.fixed-asset-depreciation-filter-grid .field { min-width: 0; }
+.fixed-asset-depreciation-accounts-field { grid-column: 1 / -1; }
+.fixed-asset-depreciation-filter-grid .journal-lines-picker-control { display: flex; align-items: stretch; gap: 8px; }
+.fixed-asset-depreciation-filter-grid .journal-lines-picker-control input { min-width: 0; flex: 1 1 auto; }
+.fixed-asset-depreciation-filter-grid .journal-lines-picker-control .btn { flex: 0 0 46px; min-width: 46px; font-size: 1.15rem; }
+.fixed-asset-depreciation-columns-grid { grid-template-columns: repeat(var(--fixed-asset-depreciation-column-count, 3), minmax(0, 1fr)); }
+.fixed-asset-depreciation-elements-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 18px; max-width: 900px; }
+.fixed-asset-depreciation-elements-column { display: grid; align-content: start; gap: 9px; min-width: 0; }
+.fixed-asset-depreciation-elements-grid .journal-lines-check-option.is-unavailable { opacity: .67; }
+.fixed-asset-depreciation-selection-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 16px; padding: 13px 16px; border: 1px solid #dce4df; border-radius: 10px; background: #fbfcfa; }
+.fixed-asset-depreciation-selection-actions .pointing-edition-line-count { margin: 0 auto 0 0; }
+.fixed-asset-depreciation-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.fixed-asset-depreciation-settings-grid .fixed-asset-depreciation-destination-card { grid-column: 1 / -1; }
+.fixed-asset-depreciation-print { width: 100%; box-sizing: border-box; color: #22332c; background: #fff; font-family: Arial, sans-serif; }
+.fixed-asset-depreciation-print-heading { margin: 0 0 12px; }
+.fixed-asset-depreciation-print-heading .page-kicker { color: #587065; font-size: 8pt; font-weight: 700; letter-spacing: .08em; }
+.fixed-asset-depreciation-print-heading h2 { margin: 5px 0; color: #213f35; font-size: 17pt; }
+.fixed-asset-depreciation-print-heading p,
+.fixed-asset-depreciation-print-note { color: #596a61; font-size: 9pt; line-height: 1.5; }
+.fixed-asset-depreciation-print-note { margin: 10px 0 0; font-size: 8pt; }
+.fixed-asset-depreciation-table-wrap { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
+.fixed-asset-depreciation-table { width: 100%; min-width: 780px; table-layout: fixed; border-collapse: collapse; font-size: 7pt; }
+.fixed-asset-depreciation-table th,
+.fixed-asset-depreciation-table td { padding: 4px; border: 1px solid #d7dfda; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.fixed-asset-depreciation-table thead th { color: #21483a; background: #edf3ef; font-size: .64rem; line-height: 1.25; }
+.fixed-asset-depreciation-table thead th.num,
+.fixed-asset-depreciation-table td.num { text-align: right; white-space: nowrap; }
+.fixed-asset-depreciation-account-heading th { color: #24483b; background: #f1f5f2; font-weight: 700; }
+.fixed-asset-depreciation-style-color .fixed-asset-depreciation-table { font-size: 8pt; }
+.fixed-asset-depreciation-style-color .fixed-asset-depreciation-table thead th { background: #e6f0eb; }
+.fixed-asset-depreciation-style-plain .fixed-asset-depreciation-print-heading .page-kicker,
+.fixed-asset-depreciation-style-plain .fixed-asset-depreciation-table thead th,
+.fixed-asset-depreciation-style-plain .fixed-asset-depreciation-account-heading th { color: #111; background: #fff; }
+.fixed-asset-depreciation-report-detail .journal-lines-form-errors:empty { display: none; }
+
+@media (max-width: 850px) {
+  .fixed-asset-depreciation-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fixed-asset-depreciation-accounts-field { grid-column: 1 / -1; }
+  .fixed-asset-depreciation-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .fixed-asset-depreciation-filter-grid,
+  .fixed-asset-depreciation-settings-grid,
+  .fixed-asset-depreciation-columns-grid,
+  .fixed-asset-depreciation-elements-grid { grid-template-columns: minmax(0, 1fr); }
+  .fixed-asset-depreciation-accounts-field,
+  .fixed-asset-depreciation-settings-grid .fixed-asset-depreciation-destination-card { grid-column: auto; }
+  .fixed-asset-depreciation-selection-actions { align-items: flex-start; flex-direction: column; }
+  .fixed-asset-depreciation-selection-actions .btn { width: 100%; }
+  .fixed-asset-depreciation-selection-actions .pointing-edition-line-count { margin: 0; }
+  .fixed-asset-depreciation-print,
+  .fixed-asset-depreciation-table-wrap { min-width: 0; max-width: 100%; }
+  .fixed-asset-depreciation-print-heading h2 { font-size: 14pt; overflow-wrap: anywhere; }
+  .fixed-asset-depreciation-print-heading p { font-size: 8pt; }
+  .fixed-asset-depreciation-table { min-width: 660px; font-size: 6.5pt; }
+  .fixed-asset-depreciation-table th,
+  .fixed-asset-depreciation-table td { padding: 3px; }
+  .fixed-asset-depreciation-table thead th { font-size: .58rem; }
+  .fixed-asset-depreciation-style-color .fixed-asset-depreciation-table { font-size: 7pt; }
+}
+
+@media print {
+  body.report-preview-printing .report-preview-content .fixed-asset-depreciation-print { width: 100%; max-width: none; margin: 0; padding: 0; color: #111 !important; background: #fff !important; }
+  body.report-preview-printing .report-preview-content .fixed-asset-depreciation-print-heading h2 { color: #111 !important; font-size: 14pt !important; }
+  body.report-preview-printing .report-preview-content .fixed-asset-depreciation-print-heading p,
+  body.report-preview-printing .report-preview-content .fixed-asset-depreciation-print-note { color: #222 !important; }
+  body.report-preview-printing .report-preview-content .fixed-asset-depreciation-table-wrap { width: 100%; max-width: none; overflow: visible !important; }
+  body.report-preview-printing .report-preview-content .fixed-asset-depreciation-table { width: 100%; min-width: 0 !important; table-layout: fixed; font-size: 7pt !important; }
+  body.report-preview-printing .report-preview-content .fixed-asset-depreciation-table th,
+  body.report-preview-printing .report-preview-content .fixed-asset-depreciation-table td { padding: 3px 4px !important; overflow-wrap: anywhere; }
+  body.report-preview-printing .report-preview-content .fixed-asset-depreciation-table thead { display: table-header-group; }
+  body.report-preview-printing .report-preview-content .fixed-asset-depreciation-table tr { break-inside: avoid; page-break-inside: avoid; }
+  body.report-preview-printing .report-preview-content .fixed-asset-depreciation-style-plain .fixed-asset-depreciation-print-heading .page-kicker,
+  body.report-preview-printing .report-preview-content .fixed-asset-depreciation-style-plain .fixed-asset-depreciation-table thead th,
+  body.report-preview-printing .report-preview-content .fixed-asset-depreciation-style-plain .fixed-asset-depreciation-account-heading th { color: #111 !important; background: #fff !important; }
+  body.report-preview-printing .report-preview-content .fixed-asset-depreciation-style-color .fixed-asset-depreciation-table { font-size: 8pt !important; }
+}
