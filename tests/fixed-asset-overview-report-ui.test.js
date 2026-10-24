@@ -53,7 +53,10 @@ assert.match(serviceWorkerSource, /\.\/js\/fixed-asset-overview-report\.js/);
 assert.match(serviceWorkerSource, /\.\/css\/fixed-asset-overview-report\.css/);
 assert.match(serviceWorkerSource, /perfecto-static-v124/);
 assert.match(cssSource, /\.fixed-asset-overview-filter-grid[\s\S]*\.fixed-asset-overview-columns-grid[\s\S]*\.fixed-asset-overview-table/);
+assert.match(cssSource, /\.fixed-asset-overview-table-wrap \{ width: 100%; max-width: 100%; min-width: 0; overflow-x: auto/);
+assert.match(cssSource, /\.fixed-asset-overview-table \{ width: 100%; min-width: 780px; table-layout: fixed; border-collapse: collapse; font-size: 7pt/);
+assert.match(cssSource, /max-width: 640px[\s\S]*\.fixed-asset-overview-table \{ min-width: 680px; font-size: 6\.5pt/);
 assert.match(cssSource, /body\.report-preview-printing[\s\S]*\.fixed-asset-overview-table/);
-assert.match(cssSource, /max-width: 640px/);
+assert.match(appSource, /fixed-asset-overview-style[\s\S]*Sans couleurs, 7 points[\s\S]*Avec couleurs, 8 points/);
 
 console.log('Immobilisations : sous-menu, filtres, colonnes, code explicite, aperçu et exports contrôlés.');

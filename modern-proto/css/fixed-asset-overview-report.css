@@ -16,22 +16,22 @@
 .fixed-asset-overview-selection-actions .pointing-edition-line-count { margin: 0 auto 0 0; }
 .fixed-asset-overview-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .fixed-asset-overview-settings-grid .fixed-asset-overview-destination-card { grid-column: 1 / -1; }
-.fixed-asset-overview-print { width: 100%; color: #22332c; background: #fff; font-family: Arial, sans-serif; }
+.fixed-asset-overview-print { width: 100%; min-width: 0; box-sizing: border-box; color: #22332c; background: #fff; font-family: Arial, sans-serif; }
 .fixed-asset-overview-print-heading { margin: 0 0 12px; }
 .fixed-asset-overview-print-heading .page-kicker { color: #587065; font-size: 8pt; font-weight: 700; letter-spacing: .08em; }
 .fixed-asset-overview-print-heading h2 { margin: 5px 0; color: #213f35; font-size: 17pt; }
 .fixed-asset-overview-print-heading p,
 .fixed-asset-overview-print-note { color: #596a61; font-size: 9pt; line-height: 1.5; }
 .fixed-asset-overview-print-note { margin: 10px 0 0; font-size: 8pt; }
-.fixed-asset-overview-table-wrap { overflow-x: auto; }
-.fixed-asset-overview-table { width: 100%; min-width: 1050px; border-collapse: collapse; font-size: 8pt; }
+.fixed-asset-overview-table-wrap { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
+.fixed-asset-overview-table { width: 100%; min-width: 780px; table-layout: fixed; border-collapse: collapse; font-size: 7pt; }
 .fixed-asset-overview-table th,
-.fixed-asset-overview-table td { padding: 5px 6px; border: 1px solid #d7dfda; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
-.fixed-asset-overview-table thead th { color: #21483a; background: #edf3ef; font-size: .72rem; }
+.fixed-asset-overview-table td { padding: 4px 4px; border: 1px solid #d7dfda; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.fixed-asset-overview-table thead th { color: #21483a; background: #edf3ef; font-size: .64rem; line-height: 1.25; }
 .fixed-asset-overview-table thead th.num,
 .fixed-asset-overview-table td.num { text-align: right; white-space: nowrap; }
 .fixed-asset-overview-account-heading th { color: #24483b; background: #f1f5f2; font-weight: 700; }
-.fixed-asset-overview-style-color .fixed-asset-overview-table { font-size: 10pt; }
+.fixed-asset-overview-style-color .fixed-asset-overview-table { font-size: 8pt; }
 .fixed-asset-overview-style-color .fixed-asset-overview-table thead th { background: #e6f0eb; }
 .fixed-asset-overview-style-plain .fixed-asset-overview-print-heading .page-kicker,
 .fixed-asset-overview-style-plain .fixed-asset-overview-table thead th,
@@ -54,7 +54,15 @@
   .fixed-asset-overview-selection-actions { align-items: flex-start; flex-direction: column; }
   .fixed-asset-overview-selection-actions .btn { width: 100%; }
   .fixed-asset-overview-selection-actions .pointing-edition-line-count { margin: 0; }
-  .fixed-asset-overview-table { min-width: 1050px; }
+  .fixed-asset-overview-print,
+  .fixed-asset-overview-table-wrap { min-width: 0; max-width: 100%; }
+  .fixed-asset-overview-print-heading h2 { font-size: 14pt; overflow-wrap: anywhere; }
+  .fixed-asset-overview-print-heading p { font-size: 8pt; }
+  .fixed-asset-overview-table { min-width: 680px; font-size: 6.5pt; }
+  .fixed-asset-overview-table th,
+  .fixed-asset-overview-table td { padding: 3px; }
+  .fixed-asset-overview-table thead th { font-size: .58rem; }
+  .fixed-asset-overview-style-color .fixed-asset-overview-table { font-size: 7pt; }
 }
 
 @media print {
