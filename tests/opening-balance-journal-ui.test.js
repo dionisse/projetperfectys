@@ -39,7 +39,7 @@ assert.match(sourceReport, /sourceRecords: selectedRecords\.map\(function \(reco
 assert.ok(htmlSource.indexOf('js/opening-balance-report.js') < htmlSource.indexOf('js/opening-balance-journal-report.js'));
 assert.ok(htmlSource.indexOf('js/opening-balance-journal-report.js') < htmlSource.indexOf('js/app.js'));
 assert.match(serviceWorkerSource, /\.\/js\/opening-balance-journal-report\.js/);
-assert.match(serviceWorkerSource, /perfecto-static-v119/);
+assert.match(serviceWorkerSource, /perfecto-static-v120/);
 assert.match(configurationCss, /\.opening-journal-column-grid[\s\S]*\.opening-journal-column-placeholder-stack/);
 
 console.log('Journal des reports : intégration navigation, colonnes et parcours vérifiée.');

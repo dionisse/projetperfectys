@@ -33,7 +33,7 @@
     },
     'budget-orders-followup': {
       id: 'budget-orders-followup', kind: 'orders-followup', title: 'Budget, reste sur commandes',
-      filters: ['budget', 'accounts', 'from', 'to'], showLines: true, showGroupingCodes: false, showGeneratedCount: true,
+      filters: ['budget', 'accounts', 'from', 'to'], showLines: true, showGroupingCodes: false, showGeneratedCount: true, columnStacks: 3,
       accountLabel: 'Compte',
       columns: [
         { key: 'accountCode', label: 'Code', text: true },
@@ -47,7 +47,7 @@
     },
     'budget-orders-by-line': {
       id: 'budget-orders-by-line', kind: 'orders-by-line', title: 'Détail des commandes des lignes budgétaires',
-      filters: ['budget', 'accounts', 'from', 'to'], accountLabel: 'Compte',
+      filters: ['budget', 'accounts', 'from', 'to'], accountLabel: 'Compte', columnStacks: 3,
       columns: [
         { key: 'date', label: 'Date', text: true },
         { key: 'order', label: 'Commande', text: true },
@@ -60,7 +60,7 @@
     },
     'budget-orders-outside': {
       id: 'budget-orders-outside', kind: 'orders-outside', title: 'Commandes hors Budget',
-      filters: ['budget', 'from', 'to'],
+      filters: ['budget', 'from', 'to'], columnStacks: 3,
       columns: [
         { key: 'date', label: 'Date', text: true },
         { key: 'accountCode', label: 'Compte', text: true },
@@ -88,7 +88,7 @@
     },
     'budget-realizations-by-line': {
       id: 'budget-realizations-by-line', kind: 'realizations-by-line', title: 'Détail des réalisations budgétaires',
-      filters: ['budget', 'accounts', 'from', 'to'], accountLabel: 'Compte',
+      filters: ['budget', 'accounts', 'from', 'to'], accountLabel: 'Compte', columnStacks: 3,
       columns: [
         { key: 'date', label: 'Date', text: true },
         { key: 'journal', label: 'Journal', text: true },
@@ -102,11 +102,54 @@
     },
     'budget-outside-realizations-total': {
       id: 'budget-outside-realizations-total', kind: 'outside-realizations-total', title: 'Cumul des réalisations hors Budget',
-      filters: ['budget', 'from', 'to'],
+      filters: ['budget', 'from', 'to'], columnStacks: 2,
       columns: [
         { key: 'accountCode', label: 'Compte', text: true },
         { key: 'accountLabel', label: 'Intitulé', text: true },
         { key: 'amount', label: 'Montant', text: false }
+      ]
+    },
+    'budget-outside-realizations-detail': {
+      id: 'budget-outside-realizations-detail', kind: 'outside-realizations-detail', title: 'Réalisations hors Budget',
+      filters: ['budget', 'from', 'to'], columnStacks: 3,
+      columns: [
+        { key: 'date', label: 'Date', text: true },
+        { key: 'journal', label: 'Journal', text: true },
+        { key: 'piece', label: 'Pièce', text: true },
+        { key: 'accountCode', label: 'Compte', text: true },
+        { key: 'accountLabel', label: 'Intitulé', text: true },
+        { key: 'market', label: 'Marché', text: true },
+        { key: 'reserved1', label: '-', text: true },
+        { key: 'reserved2', label: '-', text: true },
+        { key: 'debit', label: 'Débit', text: false },
+        { key: 'credit', label: 'Crédit', text: false, defaultSelected: false },
+        { key: 'label', label: 'Libellé', text: true }
+      ]
+    },
+    'budget-available-not-committed': {
+      id: 'budget-available-not-committed', kind: 'availability-summary', title: 'Budget, engagements et réalisations',
+      filters: ['budget', 'asOfDate'], showLines: true, showGroupingCodes: false, columnStacks: 3,
+      columns: [
+        { key: 'accountCode', label: 'Code', text: true },
+        { key: 'accountLabel', label: 'Intitulé', text: true },
+        { key: 'budgetAmount', label: 'Budget', text: false },
+        { key: 'commitments', label: 'Engagements', text: false },
+        { key: 'realizations', label: 'Réalisations', text: false }
+      ]
+    },
+    'budget-available-balance': {
+      id: 'budget-available-balance', kind: 'available-balance', title: 'Budget, reste disponible',
+      filters: ['budget', 'accounts', 'asOfDate'], showLines: true, showGroupingCodes: false, columnStacks: 3,
+      accountLabel: 'Compte',
+      columns: [
+        { key: 'accountCode', label: 'Code', text: true },
+        { key: 'accountLabel', label: 'Intitulé', text: true },
+        { key: 'budgetAmount', label: 'Budget', text: false },
+        { key: 'commitments', label: 'Engagements', text: false },
+        { key: 'uncommittedExpenses', label: 'Dépenses hors engag.', text: false },
+        { key: 'consumedBudget', label: 'Budget consommé', text: false },
+        { key: 'consumedPercent', label: '% consommé', text: false },
+        { key: 'remainingAvailable', label: 'Reste disponible', text: false }
       ]
     }
   };
@@ -156,6 +199,7 @@
       budgetCode: budget ? budget.code : '',
       from: String(options && options.from || ''),
       to: String(options && options.to || ''),
+      asOfDate: String(options && options.asOfDate || ''),
       accountFilter: options && options.accountFilter || '*',
       rows: [],
       generatedLineCount: 0,
@@ -206,12 +250,19 @@
       else if (from > to) errors.push('La date de début doit précéder ou égaler la date de fin.');
       else if (from < cycleStart || to > cycleEnd) errors.push('La période budgétaire doit rester dans le cycle du dossier (' + cycleStart + ' — ' + cycleEnd + ').');
     }
+    var hasAsOfDate = definition.filters.indexOf('asOfDate') !== -1;
+    var asOfDate = String(options.asOfDate || (hasAsOfDate ? cycleEnd : ''));
+    if (hasAsOfDate) {
+      if (!isIsoDate(asOfDate)) errors.push('Indiquez une date d’arrêté valide.');
+      else if (asOfDate < cycleStart || asOfDate > cycleEnd) errors.push('La date d’arrêté doit rester dans le cycle du dossier (' + cycleStart + ' — ' + cycleEnd + ').');
+    }
     if (Array.isArray(options.sourceErrors) && options.sourceErrors.length) errors.push.apply(errors, options.sourceErrors.map(String));
 
     if (errors.length) return emptyResult(reportId, definition, options, errors, warnings, selectedBudget);
     if (definition.kind === 'forecast') warnings.push('Aucun registre de budget prévisionnel n’est enregistré dans le dossier ; aucun montant ni pourcentage n’est calculé.');
     else if (definition.kind.indexOf('orders-') === 0) warnings.push('Aucun registre de commandes ou d’engagements budgétaires n’est disponible ; aucune commande, ligne ou somme engagée n’est inventée.');
-    else if (definition.kind.indexOf('realizations-') === 0 || definition.kind === 'outside-realizations-total') warnings.push('Aucune réalisation budgétaire rapprochée n’est enregistrée ; aucun montant réalisé ni cumul hors budget n’est calculé.');
+    else if (definition.kind.indexOf('realizations-') === 0 || definition.kind.indexOf('outside-realizations-') === 0 || definition.kind === 'outside-realizations-total') warnings.push('Aucune réalisation budgétaire rapprochée n’est enregistrée ; aucun montant réalisé ni cumul hors budget n’est calculé.');
+    else if (definition.kind === 'availability-summary' || definition.kind === 'available-balance') warnings.push('Aucun registre budgétaire, engagement ou réalisation rapprochée n’est disponible ; aucun budget consommé ni reste disponible n’est calculé.');
     warnings.push('Le périmètre de comptes, avec ou sans filtre affiché, est limité aux rubriques analytiques 93 à 99.');
 
     var result = emptyResult(reportId, definition, options, [], warnings, selectedBudget);
@@ -220,6 +271,7 @@
     result.cycleEnd = cycleEnd;
     result.from = hasPeriod ? from : '';
     result.to = hasPeriod ? to : '';
+    result.asOfDate = hasAsOfDate ? asOfDate : '';
     result.accountFilter = accountFilter;
     result.budgetOptions = availableBudgets.map(function (item) { return Object.assign({}, item); });
     result.lineSelection = {

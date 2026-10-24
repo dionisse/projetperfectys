@@ -141,9 +141,9 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Budget, suivi des réalisations',
   'Détail des réalisations budgétaires',
   'Cumul des réalisations hors Budget',
-  'Détail des réalisations hors budget',
-  'Reste disponible sur engagements et réalisations',
-  'Reste disponible sur engagements et réalisations non engagées',
+  'Réalisations hors Budget',
+  'Budget, engagements et réalisations',
+  'Budget, reste disponible',
   'Comptes en devises',
   'États analytiques',
   'Comptes à payer (analytique)',
@@ -543,14 +543,15 @@ assert.equal(findTab('editions', 'analytic-statements').children.length, 7);
 assert.ok(findTab('editions', 'analytic-statements').children.every(child => child.status === 'inactive'));
 assert.equal(findTab('editions', 'supplier-orders').status, 'inactive');
 assert.equal(findTab('editions', 'budget').children.length, 10);
-assert.equal(findTab('editions', 'budget').status, 'mixed');
+assert.equal(findTab('editions', 'budget').status, 'active');
 const budgetTab = findTab('editions', 'budget');
 const visibleBudgetReportIds = [
   'budget-entered', 'budget-orders-followup', 'budget-orders-by-line', 'budget-orders-outside',
-  'budget-realizations-followup', 'budget-realizations-by-line', 'budget-outside-realizations-total'
+  'budget-realizations-followup', 'budget-realizations-by-line', 'budget-outside-realizations-total',
+  'budget-outside-realizations-detail', 'budget-available-not-committed', 'budget-available-balance'
 ];
 assert.ok(visibleBudgetReportIds.every(id => budgetTab.children.find(child => child.id === id).status === 'active'));
-assert.ok(budgetTab.children.filter(child => !visibleBudgetReportIds.includes(child.id)).every(child => child.status === 'planned'));
+assert.ok(budgetTab.children.every(child => child.status === 'active'));
 assert.equal(['general-accounts', 'third-parties', 'foreign-currency', 'analytic-statements', 'budget']
   .reduce((total, tabId) => total + findTab('editions', tabId).children.length, 0), 40);
 assert.equal(findTab('definitions', 'responsibility-centers').status, 'partial');
@@ -706,7 +707,7 @@ assert.match(appSource, /function generalLedgerReportLayoutView\([\s\S]*general-
 assert.match(appSource, /function generalLedgerReportPrintableHtml\([\s\S]*GRAND LIVRE DES COMPTES[\s\S]*reports à nouveau[\s\S]*page-break/);
 assert.match(generalLedgerSource, /priorEntriesIncludedInRunningBalance: true[\s\S]*sourceReferenceOnly: true[\s\S]*noAccountingMutation: true/);
 assert.match(configurationCss, /\.general-ledger-column-grid[\s\S]*\.general-ledger-account-section/);
-assert.match(serviceWorkerSource, /perfecto-static-v119/);
+assert.match(serviceWorkerSource, /perfecto-static-v120/);
 
 assert.match(appSource, /function accountingMenuHash\(groupId, tabId, childId\)[\s\S]*return childId \? hash \+ '&c='/,
   'le lien d’un enfant conserve son identifiant dans la route');
@@ -742,7 +743,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v119/);
+assert.match(serviceWorkerSource, /perfecto-static-v120/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

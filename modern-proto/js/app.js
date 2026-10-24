@@ -4804,7 +4804,7 @@
       phase: 'selection',
       filters: {
         budgetCode: availableBudgets.length ? availableBudgets[0].code : '',
-        accounts: '*', from: dossier.cycleStart, to: dossier.cycleEnd
+        accounts: '*', from: dossier.cycleStart, to: dossier.cycleEnd, asOfDate: dossier.cycleEnd
       },
       lineSelection: { generalAccounts: true, groupingCodes: false, placeholderLines: [false, false] },
       columns: columns,
@@ -4836,6 +4836,7 @@
       entries: S.postedEntries(),
       from: session.filters.from,
       to: session.filters.to,
+      asOfDate: session.filters.asOfDate,
       generalAccounts: session.lineSelection.generalAccounts,
       groupingCodes: session.lineSelection.groupingCodes,
       placeholderLines: session.lineSelection.placeholderLines
@@ -4858,6 +4859,9 @@
     if (key === 'accounts') {
       var label = definition.accountLabel || 'Compte';
       return '<div class="field"><label for="budget-report-accounts">' + esc(label) + '</label><div class="journal-lines-picker-control"><input id="budget-report-accounts" data-budget-report-filter="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou 93, 9301*" autocomplete="off" required><button type="button" class="btn btn-ghost" data-budget-report-picker="accounts" aria-label="Choisir les comptes analytiques">…</button></div><span class="hint">« * » sélectionne les comptes des rubriques analytiques 93 à 99 ; un code de rubrique inclut ses sous-comptes.</span></div>';
+    }
+    if (key === 'asOfDate') {
+      return '<div class="field"><label for="budget-report-date">Date</label><input id="budget-report-date" data-budget-report-filter="asOfDate" type="date" value="' + esc(session.filters.asOfDate) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required></div>';
     }
     var dateKey = key === 'from' ? 'from' : 'to';
     return '<div class="field"><label for="budget-report-' + dateKey + '">' + (dateKey === 'from' ? 'Début' : 'Fin') + '</label><input id="budget-report-' + dateKey + '" data-budget-report-filter="' + dateKey + '" type="date" value="' + esc(session.filters[dateKey]) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required></div>';
@@ -4903,7 +4907,12 @@
     session.report = report;
     var filterMarkup = definition.filters.map(function (key) { return budgetReportFilterField(session, dossier, definition, key); }).join('');
     var columnMarkup = definition.columns.map(function (column) { return budgetReportColumnOption(column, session); });
-    var split = Math.ceil(columnMarkup.length / 2);
+    var stackCount = Math.max(1, Math.min(3, Number(definition.columnStacks) || 2));
+    var stackSize = Math.ceil(columnMarkup.length / stackCount);
+    var columnStacksMarkup = [];
+    for (var stackIndex = 0; stackIndex < stackCount; stackIndex += 1) {
+      columnStacksMarkup.push('<div class="currency-balance-column-stack">' + columnMarkup.slice(stackIndex * stackSize, (stackIndex + 1) * stackSize).join('') + '</div>');
+    }
     var lineMarkup = '';
     if (definition.showLines) {
       lineMarkup = '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">PÉRIMÈTRE</p><h3>Lignes à imprimer</h3></div></div>' +
@@ -4916,14 +4925,19 @@
       ? '<div class="budget-report-generated-count" role="status" aria-live="polite">Lignes générées : <strong data-budget-report-line-count>' + esc(report.generatedLineCount || 0) + '</strong></div>'
       : '';
     var sourceNote = '<div class="alert info budget-report-source-note"><div><strong>Lecture seule.</strong> Les formulaires et filtres sont prêts, mais le dossier ne contient pas encore de registre budgétaire, de commandes engagées ni de réalisations rapprochées. Aucun montant n’est simulé. Tous les filtres de compte restent limités aux rubriques analytiques 93 à 99.</div></div>';
+    var criteria = ['le budget'];
+    if (definition.filters.indexOf('accounts') !== -1) criteria.push('les comptes');
+    if (definition.filters.indexOf('from') !== -1) criteria.push('la période');
+    if (definition.filters.indexOf('asOfDate') !== -1) criteria.push('la date d’arrêté');
+    var selectionDescription = 'Sélectionnez ' + criteria.join(', ').replace(/, ([^,]*)$/, ' et $1') + ' de l’état.';
     return generalBalanceReportSteps('selection', 'Étapes de préparation de ' + definition.title) +
-      pageHeader(definition.title, 'Sélectionnez le budget, les comptes et la période demandée.', '') + sourceNote +
+      pageHeader(definition.title, selectionDescription, '') + sourceNote +
       '<form id="budget-report-selection-form" novalidate data-budget-report="' + esc(session.reportId) + '">' +
         '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div><span class="journal-lines-cycle-badge">Cycle ' + esc(dateLabel(dossier.cycleStart)) + ' — ' + esc(dateLabel(dossier.cycleEnd)) + '</span></div>' +
           '<div class="budget-report-filter-grid">' + filterMarkup + '</div>' +
         '</div></section>' +
         '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
-          '<div class="currency-balance-column-grid"><div class="currency-balance-column-stack">' + columnMarkup.slice(0, split).join('') + '</div><div class="currency-balance-column-stack">' + columnMarkup.slice(split).join('') + '</div></div>' +
+          '<div class="currency-balance-column-grid budget-report-columns-grid" style="--budget-column-count:' + stackCount + '">' + columnStacksMarkup.join('') + '</div>' +
         '</div></section>' + lineMarkup +
         '<div id="budget-report-selection-warnings">' + budgetReportWarningsHtml(report) + '</div>' +
         '<div class="journal-lines-form-errors" id="budget-report-selection-errors" role="alert" aria-live="polite"></div>' +
@@ -4952,13 +4966,18 @@
   function viewBudgetRealizationsFollowupReport(backLink) { return viewBudgetReportSelection(backLink, 'budget-realizations-followup'); }
   function viewBudgetRealizationsByLineReport(backLink) { return viewBudgetReportSelection(backLink, 'budget-realizations-by-line'); }
   function viewBudgetOutsideRealizationsTotalReport(backLink) { return viewBudgetReportSelection(backLink, 'budget-outside-realizations-total'); }
+  function viewBudgetOutsideRealizationsDetailReport(backLink) { return viewBudgetReportSelection(backLink, 'budget-outside-realizations-detail'); }
+  function viewBudgetAvailabilitySummaryReport(backLink) { return viewBudgetReportSelection(backLink, 'budget-available-not-committed'); }
+  function viewBudgetAvailableBalanceReport(backLink) { return viewBudgetReportSelection(backLink, 'budget-available-balance'); }
 
   function budgetReportPrintableHtml(session, report, definition) {
     var columns = budgetReportSelectedColumns(session, definition);
     var columnCount = Math.max(1, columns.length + 1);
     var period = definition.filters.indexOf('from') !== -1
       ? 'Période : ' + dateLabel(report.from) + ' — ' + dateLabel(report.to)
-      : 'Exercice : ' + esc(report.budget && report.budget.year || '');
+      : (definition.filters.indexOf('asOfDate') !== -1
+        ? 'Date : ' + dateLabel(report.asOfDate)
+        : 'Exercice : ' + esc(report.budget && report.budget.year || ''));
     var tableHeader = '<tr><th scope="col">Budget</th>' + columns.map(function (column) {
       return '<th scope="col"' + (column.text ? '' : ' class="num"') + '>' + esc(column.label) + '</th>';
     }).join('') + '</tr>';
@@ -5063,10 +5082,13 @@
       'orders-outside': 'Commandes-hors-budget',
       'realizations-followup': 'Budget-suivi-realisations',
       'realizations-by-line': 'Detail-realisations-budgetaires',
-      'outside-realizations-total': 'Cumul-realisations-hors-budget'
+      'outside-realizations-total': 'Cumul-realisations-hors-budget',
+      'outside-realizations-detail': 'Realisations-hors-budget',
+      'availability-summary': 'Budget-engagements-realisations',
+      'available-balance': 'Budget-reste-disponible'
     };
     var budgetPart = report.budget ? report.budget.code : 'budget';
-    var period = report.from && report.to ? '-' + report.from + '-' + report.to : '';
+    var period = report.from && report.to ? '-' + report.from + '-' + report.to : (report.asOfDate ? '-' + report.asOfDate : '');
     var filename = (stems[definition.kind] || 'Etat-budget') + '-' + safeFilePart(S.currentDossier().name) + '-' + budgetPart + period + '.' + extension;
     var content = spreadsheet
       ? AccountingExchange.exportTabularWorkbook(definition.title, matrix[0], matrix.slice(1))
@@ -21212,6 +21234,9 @@
     if (child.id === 'budget-realizations-followup') return viewBudgetRealizationsFollowupReport(backLink);
     if (child.id === 'budget-realizations-by-line') return viewBudgetRealizationsByLineReport(backLink);
     if (child.id === 'budget-outside-realizations-total') return viewBudgetOutsideRealizationsTotalReport(backLink);
+    if (child.id === 'budget-outside-realizations-detail') return viewBudgetOutsideRealizationsDetailReport(backLink);
+    if (child.id === 'budget-available-not-committed') return viewBudgetAvailabilitySummaryReport(backLink);
+    if (child.id === 'budget-available-balance') return viewBudgetAvailableBalanceReport(backLink);
     if (child.id === 'general-summary-balance') return viewGeneralSummaryBalanceReport(backLink);
     if (child.id === 'general-aged-balance') return viewAgedBalanceReport(backLink);
     if (child.id === 'general-opening-balance') return viewOpeningBalanceReport(backLink);

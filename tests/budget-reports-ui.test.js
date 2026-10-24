@@ -1,4 +1,4 @@
-/* Intégration des sept fenêtres Budget de la capture au sous-menu et au parcours d’édition. */
+/* Intégration des dix fenêtres Budget des captures au sous-menu et au parcours d’édition. */
 'use strict';
 
 const assert = require('node:assert/strict');
@@ -21,11 +21,14 @@ const expected = [
   ['budget-orders-outside', 'Commandes hors Budget', 'viewBudgetOrdersOutsideReport'],
   ['budget-realizations-followup', 'Budget, suivi des réalisations', 'viewBudgetRealizationsFollowupReport'],
   ['budget-realizations-by-line', 'Détail des réalisations budgétaires', 'viewBudgetRealizationsByLineReport'],
-  ['budget-outside-realizations-total', 'Cumul des réalisations hors Budget', 'viewBudgetOutsideRealizationsTotalReport']
+  ['budget-outside-realizations-total', 'Cumul des réalisations hors Budget', 'viewBudgetOutsideRealizationsTotalReport'],
+  ['budget-outside-realizations-detail', 'Réalisations hors Budget', 'viewBudgetOutsideRealizationsDetailReport'],
+  ['budget-available-not-committed', 'Budget, engagements et réalisations', 'viewBudgetAvailabilitySummaryReport'],
+  ['budget-available-balance', 'Budget, reste disponible', 'viewBudgetAvailableBalanceReport']
 ];
 
 assert.ok(budgetTab, 'le sous-menu Budget existe');
-assert.equal(budgetTab.status, 'mixed');
+assert.equal(budgetTab.status, 'active');
 assert.match(budgetTab.reason, /93 à 99/);
 assert.match(budgetTab.reason, /sans montant simulé/i);
 for (const [id, label, viewFunction] of expected) {
@@ -39,12 +42,15 @@ for (const [id, label, viewFunction] of expected) {
   assert.ok(appSource.includes(`if (child.id === '${id}') return ${viewFunction}(backLink)`), `${id} est routé vers sa vue`);
   assert.ok(Reports.REPORT_IDS.includes(id));
 }
-assert.equal(budgetTab.children.filter(item => item.status === 'active').length, 7);
-assert.equal(budgetTab.children.filter(item => item.status === 'planned').length, 3);
+assert.equal(budgetTab.children.filter(item => item.status === 'active').length, 10);
+assert.equal(budgetTab.children.filter(item => item.status === 'planned').length, 0);
 
 assert.match(appSource, /var BudgetReports = window\.PerfectoBudgetReports/);
-assert.match(appSource, /function createBudgetReportSession\([\s\S]*budgetOptions\(dossier\.cycleStart\)[\s\S]*from: dossier\.cycleStart, to: dossier\.cycleEnd/);
-assert.match(appSource, /function budgetReportFilterField\([\s\S]*C = Charges, I = Investissements, P = Produits/);
+assert.match(appSource, /function createBudgetReportSession\([\s\S]*budgetOptions\(dossier\.cycleStart\)[\s\S]*from: dossier\.cycleStart, to: dossier\.cycleEnd, asOfDate: dossier\.cycleEnd/);
+assert.match(appSource, /function budgetReportFilterField\([\s\S]*data-budget-report-filter=\"asOfDate\"/);
+assert.match(appSource, /C = Charges, I = Investissements, P = Produits/);
+assert.match(appSource, /budget-column-count:[\s\S]*columnStacksMarkup\.join\(''\)/);
+assert.match(appSource, /dateLabel\(report\.asOfDate\)/);
 assert.match(appSource, /« \* » sélectionne les comptes des rubriques analytiques 93 à 99/);
 assert.match(appSource, /function buildBudgetReport\([\s\S]*accounts: S\.accounts\(\)[\s\S]*entries: S\.postedEntries\(\)/);
 assert.match(appSource, /function bindBudgetReport\([\s\S]*openCurrencyBalancePicker\(input, 'accounts'\)[\s\S]*openBudgetReportPreview/);
@@ -59,7 +65,7 @@ assert.ok(htmlSource.indexOf('js/budget-reports.js') < htmlSource.indexOf('js/ap
 assert.match(htmlSource, /css\/budget-reports\.css/);
 assert.match(serviceWorkerSource, /\.\/js\/budget-reports\.js/);
 assert.match(serviceWorkerSource, /\.\/css\/budget-reports\.css/);
-assert.match(serviceWorkerSource, /perfecto-static-v119/);
+assert.match(serviceWorkerSource, /perfecto-static-v120/);
 assert.match(cssSource, /\.budget-report-filter-grid[\s\S]*\.budget-report-column-option[\s\S]*\.budget-report-table/);
 assert.match(cssSource, /max-width: 640px/);
 assert.match(cssSource, /body\.report-preview-printing[\s\S]*\.budget-report-table/);
