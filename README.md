@@ -447,12 +447,14 @@ lui-même.
 index.html                    redirection vers modern-proto/ (déploiement racine)
 modern-proto/index.html        coquille de l'application (navigation, topbar)
 modern-proto/css/modern.css    identité GOBEX (papier, encre, vert canard et or doux), responsive et imprimable
+modern-proto/css/fixed-asset-overview-report.css mise en page responsive et impression du tableau des immobilisations
 modern-proto/js/accounting-chart.js référentiel de 147 comptes et de leurs classes, sous-classes et utilisations
 modern-proto/js/accounting-framework.js transcription réutilisable du cadre SYSCOHADA révisé (532 lignes, postes Débit/Crédit)
 modern-proto/js/store.js       dossiers clients, cycles, migration du plan comptable, données isolées, règles métier, calculs, import/export
 modern-proto/js/modules.js     catalogue déclaratif des modules du launcher
 modern-proto/js/permissions.js politique d’accès démo (refus par défaut)
 modern-proto/js/accounting-navigation.js  menus, sous-menus et états d’activation du Lot 1
+modern-proto/js/fixed-asset-overview-report.js lecture seule du registre d’immobilisations, filtres et colonnes sans mouvements inventés
 modern-proto/js/accounting-exchange.js lecture et export comptable CSV/XLSX ; lecteur de tableaux génériques
 modern-proto/js/bank-statement.js normalisation locale des relevés et suggestions sans pointage automatique
 modern-proto/js/bank-statement-storage.js stockage IndexedDB de démonstration, non connecté à Drive
@@ -481,6 +483,8 @@ node tests/workspaces.test.js
 node tests/modules.test.js
 node tests/permissions.test.js
 node tests/accounting-navigation.test.js
+node tests/fixed-asset-overview-report.test.js
+node tests/fixed-asset-overview-report-ui.test.js
 node tests/table-design-system.test.js
 node tests/confidential-accounts.test.js
 node tests/accounting-framework.test.js
@@ -488,7 +492,7 @@ node tests/account-lifecycle.test.js
 node tests/centralization-cancellation.test.js
 ```
 
-Les tests couvrent les règles comptables, la transcription exhaustive des 532 lignes du référentiel SYSCOHADA (codes, intitulés, pages et rattachements Débit/Crédit, y compris les cases vides), les migrations, les références et le cycle de vie sécurisé des comptes et des répertoires clients, fournisseurs, débiteurs/créditeurs divers et personnel, les codes réservés, les cycles et l’isolation des dossiers clients, le masquage des comptes confidentiels et des pièces qui les contiennent, le catalogue modulaire, la politique d’accès de démonstration (refus par défaut, organisation, actions et portée par identifiant de dossier), la hiérarchie du menu, le style partagé de l’ensemble des tableaux (entêtes, quadrillage, zébrage et cache hors ligne), les relevés tabulaires (mappage, contrôle des montants, suggestions non pointantes) et l’annulation des centralisations internes (provenance, écriture inverse, immuabilité, anti-doublon et brouillons). La CI GitHub Actions exécute ces scénarios ainsi qu’un contrôle de syntaxe et un test de service HTTP.
+Les tests couvrent les règles comptables, la transcription exhaustive des 532 lignes du référentiel SYSCOHADA (codes, intitulés, pages et rattachements Débit/Crédit, y compris les cases vides), les migrations, les références et le cycle de vie sécurisé des comptes et des répertoires clients, fournisseurs, débiteurs/créditeurs divers et personnel, les codes réservés, les cycles et l’isolation des dossiers clients, le masquage des comptes confidentiels et des pièces qui les contiennent, le catalogue modulaire, la politique d’accès de démonstration (refus par défaut, organisation, actions et portée par identifiant de dossier), la hiérarchie du menu, le style partagé de l’ensemble des tableaux (entêtes, quadrillage, zébrage et cache hors ligne), les relevés tabulaires (mappage, contrôle des montants, suggestions non pointantes), le Tableau des immobilisations (registre explicite, code matériel non déduit, champs de mouvements vides) et l’annulation des centralisations internes (provenance, écriture inverse, immuabilité, anti-doublon et brouillons). La CI GitHub Actions exécute ces scénarios ainsi qu’un contrôle de syntaxe et un test de service HTTP.
 
 ## Limites de cette prévisualisation
 

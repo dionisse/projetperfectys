@@ -181,9 +181,9 @@
           ]
         },
         {
-          id: 'fixed-assets', label: 'Immobilisations', status: 'planned', reason: 'Catalogue structuré selon votre capture. Les critères, colonnes, calculs et rendus restent à préciser ; aucune édition n’est simulée avant réception des captures.',
+          id: 'fixed-assets', label: 'Immobilisations', status: 'partial', reason: 'Le Tableau des immobilisations est disponible en consultation du registre existant, avec la sélection et la mise en page de votre capture. Les autres états restent à préciser. Les mouvements ne sont pas enregistrés dans ce prototype : report, augmentations, diminutions et solde restent vides plutôt que d’être inventés.',
           children: [
-            { id: 'edition-fixed-asset-overview', label: 'Tableau des immobilisations', section: 'assetSummary', status: 'planned', reason: 'Tableau de consultation à préciser à partir de votre capture ; aucune colonne ni aucun total n’est inventé.' },
+            { id: 'edition-fixed-asset-overview', label: 'Tableau des immobilisations', section: 'assetSummary', status: 'active', reason: 'Sélection des comptes (*) et des dates Début/Fin aux bornes du cycle ; colonnes Code élément, Intitulé élément, Code matériel, Date d’entrée, Taux d’amortissement, Report, Augmentation, Diminution et Solde. Suivis par éléments coché par défaut, Non suivis par éléments décoché. Lecture du registre ; aucune donnée de mouvement n’est inventée. Aperçu plein écran et exports Excel/TXT.' },
             { id: 'edition-fixed-asset-depreciation', label: 'Tableau des amortissements', section: 'assetSummary', status: 'planned', reason: 'Présentation et règles à confirmer par capture. La simulation linéaire existante reste indicative, sans barème fiscal ni écriture générée ou validée.' },
             { id: 'edition-fixed-asset-transfers', label: 'Virements internes', section: 'assetMovements', status: 'planned', reason: 'Critères et présentation du mouvement à préciser ; aucune mutation d’immobilisation n’est déclenchée par cette édition.' },
             { id: 'edition-fixed-asset-entries', label: 'Entrées de la période', section: 'assetMovements', status: 'planned', reason: 'Période, colonnes et critères de l’état à confirmer par capture ; aucune liste d’entrées n’est simulée.' },

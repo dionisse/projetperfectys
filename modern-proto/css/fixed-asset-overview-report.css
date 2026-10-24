@@ -1,0 +1,74 @@
+/* PERFECTO · Tableau des immobilisations : sélection, aperçu et impression. */
+.fixed-asset-overview-report-detail { min-width: 0; }
+.fixed-asset-overview-report-detail > .edition-report-back { margin-bottom: 15px; }
+.fixed-asset-overview-source-note,
+.fixed-asset-overview-warnings { margin: 0 0 14px; line-height: 1.55; }
+.fixed-asset-overview-warnings ul { margin: 0 0 0 18px; }
+.fixed-asset-overview-filter-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 22px; align-items: start; max-width: 1060px; }
+.fixed-asset-overview-filter-grid .field { min-width: 0; }
+.fixed-asset-overview-accounts-field { grid-column: 1 / -1; }
+.fixed-asset-overview-filter-grid .journal-lines-picker-control { display: flex; align-items: stretch; gap: 8px; }
+.fixed-asset-overview-filter-grid .journal-lines-picker-control input { min-width: 0; flex: 1 1 auto; }
+.fixed-asset-overview-filter-grid .journal-lines-picker-control .btn { flex: 0 0 46px; min-width: 46px; font-size: 1.15rem; }
+.fixed-asset-overview-columns-grid { grid-template-columns: repeat(var(--fixed-asset-overview-column-count, 3), minmax(0, 1fr)); }
+.fixed-asset-overview-account-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-width: 700px; }
+.fixed-asset-overview-selection-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 16px; padding: 13px 16px; border: 1px solid #dce4df; border-radius: 10px; background: #fbfcfa; }
+.fixed-asset-overview-selection-actions .pointing-edition-line-count { margin: 0 auto 0 0; }
+.fixed-asset-overview-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.fixed-asset-overview-settings-grid .fixed-asset-overview-destination-card { grid-column: 1 / -1; }
+.fixed-asset-overview-print { width: 100%; color: #22332c; background: #fff; font-family: Arial, sans-serif; }
+.fixed-asset-overview-print-heading { margin: 0 0 12px; }
+.fixed-asset-overview-print-heading .page-kicker { color: #587065; font-size: 8pt; font-weight: 700; letter-spacing: .08em; }
+.fixed-asset-overview-print-heading h2 { margin: 5px 0; color: #213f35; font-size: 17pt; }
+.fixed-asset-overview-print-heading p,
+.fixed-asset-overview-print-note { color: #596a61; font-size: 9pt; line-height: 1.5; }
+.fixed-asset-overview-print-note { margin: 10px 0 0; font-size: 8pt; }
+.fixed-asset-overview-table-wrap { overflow-x: auto; }
+.fixed-asset-overview-table { width: 100%; min-width: 1050px; border-collapse: collapse; font-size: 8pt; }
+.fixed-asset-overview-table th,
+.fixed-asset-overview-table td { padding: 5px 6px; border: 1px solid #d7dfda; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.fixed-asset-overview-table thead th { color: #21483a; background: #edf3ef; font-size: .72rem; }
+.fixed-asset-overview-table thead th.num,
+.fixed-asset-overview-table td.num { text-align: right; white-space: nowrap; }
+.fixed-asset-overview-account-heading th { color: #24483b; background: #f1f5f2; font-weight: 700; }
+.fixed-asset-overview-style-color .fixed-asset-overview-table { font-size: 10pt; }
+.fixed-asset-overview-style-color .fixed-asset-overview-table thead th { background: #e6f0eb; }
+.fixed-asset-overview-style-plain .fixed-asset-overview-print-heading .page-kicker,
+.fixed-asset-overview-style-plain .fixed-asset-overview-table thead th,
+.fixed-asset-overview-style-plain .fixed-asset-overview-account-heading th { color: #111; background: #fff; }
+.fixed-asset-overview-report-detail .journal-lines-form-errors:empty { display: none; }
+
+@media (max-width: 850px) {
+  .fixed-asset-overview-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fixed-asset-overview-accounts-field { grid-column: 1 / -1; }
+  .fixed-asset-overview-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .fixed-asset-overview-filter-grid,
+  .fixed-asset-overview-settings-grid,
+  .fixed-asset-overview-columns-grid,
+  .fixed-asset-overview-account-options { grid-template-columns: minmax(0, 1fr); }
+  .fixed-asset-overview-accounts-field,
+  .fixed-asset-overview-settings-grid .fixed-asset-overview-destination-card { grid-column: auto; }
+  .fixed-asset-overview-selection-actions { align-items: flex-start; flex-direction: column; }
+  .fixed-asset-overview-selection-actions .btn { width: 100%; }
+  .fixed-asset-overview-selection-actions .pointing-edition-line-count { margin: 0; }
+  .fixed-asset-overview-table { min-width: 1050px; }
+}
+
+@media print {
+  body.report-preview-printing .report-preview-content .fixed-asset-overview-print { width: 100%; max-width: none; margin: 0; padding: 0; color: #111 !important; background: #fff !important; }
+  body.report-preview-printing .report-preview-content .fixed-asset-overview-print-heading h2 { color: #111 !important; font-size: 14pt !important; }
+  body.report-preview-printing .report-preview-content .fixed-asset-overview-print-heading p,
+  body.report-preview-printing .report-preview-content .fixed-asset-overview-print-note { color: #222 !important; }
+  body.report-preview-printing .report-preview-content .fixed-asset-overview-table { width: 100%; min-width: 0 !important; table-layout: fixed; font-size: 7pt !important; }
+  body.report-preview-printing .report-preview-content .fixed-asset-overview-table th,
+  body.report-preview-printing .report-preview-content .fixed-asset-overview-table td { padding: 3px 4px !important; overflow-wrap: anywhere; }
+  body.report-preview-printing .report-preview-content .fixed-asset-overview-table thead { display: table-header-group; }
+  body.report-preview-printing .report-preview-content .fixed-asset-overview-table tr { break-inside: avoid; page-break-inside: avoid; }
+  body.report-preview-printing .report-preview-content .fixed-asset-overview-style-plain .fixed-asset-overview-print-heading .page-kicker,
+  body.report-preview-printing .report-preview-content .fixed-asset-overview-style-plain .fixed-asset-overview-table thead th,
+  body.report-preview-printing .report-preview-content .fixed-asset-overview-style-plain .fixed-asset-overview-account-heading th { color: #111 !important; background: #fff !important; }
+  body.report-preview-printing .report-preview-content .fixed-asset-overview-style-color .fixed-asset-overview-table { font-size: 8pt !important; }
+}

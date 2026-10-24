@@ -48,6 +48,7 @@
   var AccountingCentralization = window.PerfectoAccountingCentralization;
   var CentralizationCancellation = window.PerfectoCentralizationCancellation;
   var FixedAssetDepreciation = window.PerfectoFixedAssetDepreciation;
+  var FixedAssetOverviewReport = window.PerfectoFixedAssetOverviewReport;
   var OpeningBalances = window.PerfectoOpeningBalances;
 
   /* ------------------------------ Utilitaires ------------------------------ */
@@ -169,6 +170,7 @@
   var budgetReportSession = null;
   var matchingEditionReportSession = null;
   var pointingEditionReportSession = null;
+  var fixedAssetOverviewReportSession = null;
   var generalLedgerReportSession = null;
   var generalCounterpartDetailReportSession = null;
   var generalCounterpartTotalReportSession = null;
@@ -812,6 +814,7 @@
     var isBudgetReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'budget' && BudgetReports.REPORT_IDS.indexOf(parsed.params.c) !== -1;
     var isMatchingEditionReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'matching' && MatchingEditionReports.REPORT_IDS.indexOf(parsed.params.c) !== -1;
     var isPointingEditionReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'bank-reconciliation' && PointingEditionReports.REPORT_IDS.indexOf(parsed.params.c) !== -1;
+    var isFixedAssetOverviewReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'fixed-assets' && parsed.params.c === 'edition-fixed-asset-overview';
     var isGeneralLedgerReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-ledger';
     var isGeneralCounterpartDetailReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-detail';
     var isGeneralCounterpartTotalReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-total';
@@ -834,6 +837,7 @@
     if (!isBudgetReportRoute) budgetReportSession = null;
     if (!isMatchingEditionReportRoute) matchingEditionReportSession = null;
     if (!isPointingEditionReportRoute) pointingEditionReportSession = null;
+    if (!isFixedAssetOverviewReportRoute) fixedAssetOverviewReportSession = null;
     if (!isGeneralLedgerReportRoute) generalLedgerReportSession = null;
     if (!isGeneralCounterpartDetailReportRoute) generalCounterpartDetailReportSession = null;
     if (!isGeneralCounterpartTotalReportRoute) generalCounterpartTotalReportSession = null;
@@ -6190,6 +6194,396 @@
     if (session.phase === 'preview' && !session.previewOpened) {
       session.previewOpened = true;
       openPointingEditionPreview(session, definition);
+    }
+  }
+
+  /* ------------------------- Tableau des immobilisations ------------------ */
+  function createFixedAssetOverviewReportSession(dossier) {
+    var definition = FixedAssetOverviewReport.definitionFor('edition-fixed-asset-overview');
+    var columns = Object.create(null);
+    definition.columns.forEach(function (column) { columns[column.key] = !!column.defaultSelected; });
+    return {
+      dossierId: dossier.id,
+      reportId: definition.id,
+      phase: 'selection',
+      filters: { accounts: '*', from: dossier.cycleStart, to: dossier.cycleEnd, includeTracked: true, includeUntracked: false },
+      columns: columns,
+      layout: { printer: 'system', style: 'plain8', orientation: 'portrait', margins: 'standard', pageFirst: '', pageLast: '', parity: 'none', destination: 'preview' },
+      report: null,
+      previewOpened: false,
+      exportFilename: '',
+      exportMessage: ''
+    };
+  }
+
+  function ensureFixedAssetOverviewReportSession() {
+    var dossier = S.currentDossier();
+    if (!fixedAssetOverviewReportSession || fixedAssetOverviewReportSession.dossierId !== dossier.id) {
+      fixedAssetOverviewReportSession = createFixedAssetOverviewReportSession(dossier);
+    }
+    return fixedAssetOverviewReportSession;
+  }
+
+  function buildFixedAssetOverviewReport(session) {
+    var dossier = S.currentDossier();
+    return FixedAssetOverviewReport.buildReport({
+      cycleStart: dossier.cycleStart,
+      cycleEnd: dossier.cycleEnd,
+      accountFilter: session.filters.accounts,
+      from: session.filters.from,
+      to: session.filters.to,
+      includeTracked: session.filters.includeTracked,
+      includeUntracked: session.filters.includeUntracked,
+      accounts: S.accounts(),
+      assets: S.fixedAssets()
+    });
+  }
+
+  function fixedAssetOverviewSelectedColumns(session) {
+    var definition = FixedAssetOverviewReport.definitionFor(session.reportId);
+    return definition.columns.filter(function (column) { return !!session.columns[column.key]; });
+  }
+
+  function fixedAssetOverviewWarningsHtml(report) {
+    return report && report.warnings && report.warnings.length
+      ? '<div class="alert info fixed-asset-overview-warnings"><ul>' + report.warnings.map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('') + '</ul></div>'
+      : '';
+  }
+
+  function fixedAssetOverviewColumnOption(column, session) {
+    return '<label class="journal-lines-column-option fixed-asset-overview-column-option"><input type="checkbox" data-fixed-asset-overview-column="' + esc(column.key) + '"' +
+      (session.columns[column.key] ? ' checked' : '') + '><span><strong>' + esc(column.label) + '</strong></span></label>';
+  }
+
+  function fixedAssetOverviewFilterField(session, dossier, key) {
+    if (key === 'accounts') {
+      return '<div class="field fixed-asset-overview-accounts-field"><label for="fixed-asset-overview-accounts">Comptes</label><div class="journal-lines-picker-control"><input id="fixed-asset-overview-accounts" data-fixed-asset-overview-filter="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou 21*; 22*" autocomplete="off" required><button type="button" class="btn btn-ghost" data-fixed-asset-overview-picker="accounts" aria-label="Choisir les comptes du plan">…</button></div><span class="hint">« * » couvre tous les comptes présents et futurs ; le filtre porte sur le compte d’immobilisation enregistré sur la fiche.</span></div>';
+    }
+    var dateKey = key === 'from' ? 'from' : 'to';
+    var label = dateKey === 'from' ? 'Début' : 'Fin';
+    return '<div class="field"><label for="fixed-asset-overview-' + dateKey + '">' + label + '</label><input id="fixed-asset-overview-' + dateKey + '" data-fixed-asset-overview-filter="' + dateKey + '" type="date" value="' + esc(session.filters[dateKey]) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required></div>';
+  }
+
+  function fixedAssetOverviewSelectionView(session, dossier) {
+    var definition = FixedAssetOverviewReport.definitionFor(session.reportId);
+    var columnMarkup = definition.columns.map(function (column) { return fixedAssetOverviewColumnOption(column, session); });
+    var stackCount = 3;
+    var stackSize = Math.ceil(columnMarkup.length / stackCount);
+    var stacks = [];
+    for (var stackIndex = 0; stackIndex < stackCount; stackIndex += 1) {
+      stacks.push('<div class="currency-balance-column-stack">' + columnMarkup.slice(stackIndex * stackSize, (stackIndex + 1) * stackSize).join('') + '</div>');
+    }
+    var filters = ['accounts', 'from', 'to'].map(function (key) { return fixedAssetOverviewFilterField(session, dossier, key); }).join('');
+    var report = session.report || buildFixedAssetOverviewReport(session);
+    session.report = report;
+    return generalBalanceReportSteps('selection', 'Étapes de préparation du Tableau des immobilisations') +
+      pageHeader('Tableau des immobilisations', 'Sélectionnez les comptes, la période et les colonnes à restituer.', '') +
+      '<div class="alert info fixed-asset-overview-source-note"><div><strong>Consultation seule.</strong> Le Code élément et l’intitulé viennent du registre. Aucun code matériel explicite n’y est enregistré : cette colonne reste vide. Le taux n’est affiché que s’il est explicitement saisi ; les champs de mouvement sans source restent vides.</div></div>' +
+      '<form id="fixed-asset-overview-selection-form" novalidate>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div><span class="journal-lines-cycle-badge">Cycle ' + esc(dateLabel(dossier.cycleStart)) + ' — ' + esc(dateLabel(dossier.cycleEnd)) + '</span></div>' +
+          '<div class="fixed-asset-overview-filter-grid">' + filters + '</div>' +
+        '</div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
+          '<div class="currency-balance-column-grid fixed-asset-overview-columns-grid" style="--fixed-asset-overview-column-count:' + stackCount + '">' + stacks.join('') + '</div>' +
+          '<p class="hint">Report, Augmentation, Diminution et Solde restent vides : aucun registre de mouvements par immobilisation n’est disponible.</p>' +
+        '</div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">COMPTES À IMPRIMER</p><h3>Suivi par éléments</h3></div></div>' +
+          '<div class="fixed-asset-overview-account-options">' +
+            '<label class="journal-lines-check-option"><input type="checkbox" data-fixed-asset-overview-scope="tracked"' + (session.filters.includeTracked ? ' checked' : '') + '><span>Suivis par éléments</span></label>' +
+            '<label class="journal-lines-check-option"><input type="checkbox" data-fixed-asset-overview-scope="untracked"' + (session.filters.includeUntracked ? ' checked' : '') + '><span>Non suivis par éléments</span></label>' +
+          '</div><p class="hint">Les éléments suivis proviennent du registre des immobilisations. Aucune source de détail pour les comptes non suivis n’est disponible.</p>' +
+        '</div></section>' +
+        '<div id="fixed-asset-overview-selection-warnings">' + fixedAssetOverviewWarningsHtml(report) + '</div>' +
+        '<div class="journal-lines-form-errors" id="fixed-asset-overview-selection-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="fixed-asset-overview-selection-actions"><a class="btn btn-ghost" href="' + esc(accountingMenuHash('editions', 'fixed-assets')) + '">Annuler</a><span class="pointing-edition-line-count" role="status">Lignes générées : <strong data-fixed-asset-overview-line-count>' + esc(report.generatedLineCount || 0) + '</strong></span><button type="submit" class="btn btn-primary">Valider <span aria-hidden="true">→</span></button></div>' +
+      '</form>';
+  }
+
+  function syncFixedAssetOverviewSelection(form, session) {
+    if (!form) return null;
+    $$('[data-fixed-asset-overview-filter]', form).forEach(function (input) {
+      session.filters[input.getAttribute('data-fixed-asset-overview-filter')] = input.value;
+    });
+    $$('[data-fixed-asset-overview-column]', form).forEach(function (input) {
+      session.columns[input.getAttribute('data-fixed-asset-overview-column')] = !!input.checked;
+    });
+    $$('[data-fixed-asset-overview-scope]', form).forEach(function (input) {
+      if (input.getAttribute('data-fixed-asset-overview-scope') === 'tracked') session.filters.includeTracked = !!input.checked;
+      if (input.getAttribute('data-fixed-asset-overview-scope') === 'untracked') session.filters.includeUntracked = !!input.checked;
+    });
+    var report = buildFixedAssetOverviewReport(session);
+    session.report = report;
+    showGeneralBalanceReportErrors($('#fixed-asset-overview-selection-errors', form), report.errors);
+    var warnings = $('#fixed-asset-overview-selection-warnings', form);
+    if (warnings) warnings.innerHTML = fixedAssetOverviewWarningsHtml(report);
+    var count = $('[data-fixed-asset-overview-line-count]', form);
+    if (count) count.textContent = String(report.generatedLineCount || 0);
+    return report;
+  }
+
+  function submitFixedAssetOverviewSelection(form, session) {
+    var report = syncFixedAssetOverviewSelection(form, session);
+    var errors = report ? report.errors.slice() : ['Impossible de lire la sélection du tableau des immobilisations.'];
+    var columns = fixedAssetOverviewSelectedColumns(session);
+    if (!columns.length) errors.push('Sélectionnez au moins une colonne à restituer.');
+    if (!columns.some(function (column) { return column.key === 'assetCode' || column.key === 'assetName'; })) errors.push('Conservez au moins une colonne d’identification de l’élément.');
+    showGeneralBalanceReportErrors($('#fixed-asset-overview-selection-errors', form), errors);
+    if (errors.length) return;
+    session.report = report;
+    session.phase = 'layout';
+    session.previewOpened = false;
+    render();
+  }
+
+  function fixedAssetOverviewReportValue(row, column) {
+    var value = row[column.key];
+    if (value == null || value === '') return '';
+    if (column.key === 'entryDate' && FixedAssetOverviewReport.isIsoDate(value)) return dateLabel(value);
+    if (column.text === false) return amount(value);
+    return String(value);
+  }
+
+  function fixedAssetOverviewRowsHtml(report, columns) {
+    var accounts = report.displayAccounts || [];
+    if (!report.rows.length) {
+      return '<tbody><tr><td colspan="' + Math.max(columns.length, 1) + '"><div class="empty-state fixed-asset-overview-empty"><strong>Aucun élément immobilisé ne correspond à cette sélection.</strong>Aucune ligne ni aucun montant n’est créé pour un registre vide ou une catégorie sans source.</div></td></tr></tbody>';
+    }
+    var rowsByAccount = Object.create(null);
+    report.rows.forEach(function (row) {
+      if (!rowsByAccount[row.accountCode]) rowsByAccount[row.accountCode] = [];
+      rowsByAccount[row.accountCode].push(row);
+    });
+    var body = accounts.map(function (account) {
+      var rows = rowsByAccount[account.code] || [];
+      var headingText = account.code + (account.label ? ' · ' + account.label : '');
+      var heading = '<tr class="fixed-asset-overview-account-heading"><th colspan="' + Math.max(columns.length, 1) + '">' + esc(headingText) + '</th></tr>';
+      return heading + rows.map(function (row) {
+        return '<tr>' + columns.map(function (column) {
+          return '<td' + (column.text === false ? ' class="num"' : '') + '>' + esc(fixedAssetOverviewReportValue(row, column)) + '</td>';
+        }).join('') + '</tr>';
+      }).join('');
+    }).join('');
+    return '<tbody>' + body + '</tbody>';
+  }
+
+  function fixedAssetOverviewPrintableHtml(session, report) {
+    report = report || session.report || buildFixedAssetOverviewReport(session);
+    var columns = fixedAssetOverviewSelectedColumns(session);
+    var headers = '<tr>' + columns.map(function (column) {
+      return '<th scope="col"' + (column.text === false ? ' class="num"' : '') + '>' + esc(column.label) + '</th>';
+    }).join('') + '</tr>';
+    var styleClass = session.layout.style === 'color10' ? 'fixed-asset-overview-style-color' : 'fixed-asset-overview-style-plain';
+    return '<article class="fixed-asset-overview-print ' + styleClass + '"><header class="fixed-asset-overview-print-heading"><p class="page-kicker">ÉDITIONS · IMMOBILISATIONS</p><h2>TABLEAU DES IMMOBILISATIONS</h2><p><strong>Comptes :</strong> ' + esc(session.filters.accounts === '*' ? 'Tous les comptes sélectionnés' : session.filters.accounts) + ' · <strong>Période :</strong> ' + esc(dateLabel(report.from)) + ' — ' + esc(dateLabel(report.to)) + '</p></header>' +
+      fixedAssetOverviewWarningsHtml(report) +
+      '<div class="fixed-asset-overview-table-wrap"><table class="fixed-asset-overview-table"><thead>' + headers + '</thead>' + fixedAssetOverviewRowsHtml(report, columns) + '</table></div>' +
+      '<p class="fixed-asset-overview-print-note">État en lecture seule. Les lignes identifient les fiches du registre à la fin de la période. Les colonnes de mouvement et de solde restent vides en l’absence d’un registre de mouvements explicite ; aucun total n’est calculé.</p></article>';
+  }
+
+  function fixedAssetOverviewExportMatrix(session, report) {
+    var columns = fixedAssetOverviewSelectedColumns(session);
+    var matrix = [columns.map(function (column) { return column.label; })];
+    var rowsByAccount = Object.create(null);
+    report.rows.forEach(function (row) {
+      if (!rowsByAccount[row.accountCode]) rowsByAccount[row.accountCode] = [];
+      rowsByAccount[row.accountCode].push(row);
+    });
+    (report.displayAccounts || []).forEach(function (account) {
+      matrix.push([account.code + (account.label ? ' · ' + account.label : '')].concat(columns.slice(1).map(function () { return ''; })));
+      (rowsByAccount[account.code] || []).forEach(function (row) {
+        matrix.push(columns.map(function (column) { return fixedAssetOverviewReportValue(row, column); }));
+      });
+    });
+    if (!report.rows.length) matrix.push(['Aucun élément immobilisé ne correspond à la sélection.']);
+    return matrix;
+  }
+
+  function fixedAssetOverviewLayoutView(session, report) {
+    var count = report.generatedLineCount + (report.generatedLineCount === 1 ? ' ligne générée' : ' lignes générées');
+    return generalBalanceReportSteps('layout', 'Étapes de préparation du Tableau des immobilisations') +
+      pageHeader('Mise en page — Tableau des immobilisations', 'Choisissez le style, l’orientation, les marges, les pages et la destination.', '') +
+      '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(count) + '. Le registre des immobilisations reste inchangé.</div></div>' +
+      fixedAssetOverviewWarningsHtml(report) +
+      '<form id="fixed-asset-overview-layout-form" novalidate><div class="journal-lines-settings-grid fixed-asset-overview-settings-grid">' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="fixed-asset-overview-printer">Imprimante</label><select id="fixed-asset-overview-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="fixed-asset-overview-style">Style du rapport</label><select id="fixed-asset-overview-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('fixed-asset-overview-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('fixed-asset-overview-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('fixed-asset-overview-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('fixed-asset-overview-margins', 'binding', 'Reliure à gauche', session.layout.margins === 'binding', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Pages</h3></div><div class="journal-lines-page-range"><div class="field"><label for="fixed-asset-overview-page-first">Première</label><input id="fixed-asset-overview-page-first" type="number" min="1" step="1" value="' + esc(session.layout.pageFirst) + '" placeholder="1"></div><span aria-hidden="true">à</span><div class="field"><label for="fixed-asset-overview-page-last">Dernière</label><input id="fixed-asset-overview-page-last" type="number" min="1" step="1" value="' + esc(session.layout.pageLast) + '" placeholder="Fin"></div></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Parité</h3></div><div class="field"><label for="fixed-asset-overview-parity">Pages</label><select id="fixed-asset-overview-parity"><option value="none"' + (session.layout.parity === 'none' ? ' selected' : '') + '>Aucune</option><option value="odd"' + (session.layout.parity === 'odd' ? ' selected' : '') + '>Impaire</option><option value="even"' + (session.layout.parity === 'even' ? ' selected' : '') + '>Paire</option></select></div></div></section>' +
+        '<section class="card journal-lines-card fixed-asset-overview-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
+          generalBalanceReportRadio('fixed-asset-overview-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
+          generalBalanceReportRadio('fixed-asset-overview-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
+          generalBalanceReportRadio('fixed-asset-overview-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('fixed-asset-overview-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
+        '</div></div></section></div>' +
+        '<div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> Les pages et la parité se règlent dans le navigateur si celui-ci le permet.</div></div>' +
+        '<div class="journal-lines-form-errors" id="fixed-asset-overview-layout-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-fixed-asset-overview-back-selection>Retour à la sélection</button><button type="submit" class="btn btn-primary">Valider</button></div></form>';
+  }
+
+  function fixedAssetOverviewPrintOptions(session) {
+    var styleNode = null;
+    var previousStyleText = '';
+    var createdStyle = false;
+    var previousTitle = '';
+    return {
+      beforePrint: function () {
+        styleNode = $('#fixed-asset-overview-print-page-style');
+        createdStyle = !styleNode;
+        if (!styleNode) {
+          styleNode = document.createElement('style');
+          styleNode.id = 'fixed-asset-overview-print-page-style';
+          document.head.appendChild(styleNode);
+        } else previousStyleText = styleNode.textContent;
+        var orientation = session.layout.orientation === 'landscape' ? 'landscape' : 'portrait';
+        var left = session.layout.margins === 'binding' ? '18mm' : '12mm';
+        styleNode.textContent = '@page { size: A4 ' + orientation + '; margin: 12mm 12mm 12mm ' + left + '; }';
+        previousTitle = document.title;
+        document.title = safeFilePart('Tableau des immobilisations') + '-' + safeFilePart(S.currentDossier().name);
+      },
+      afterPrint: function () {
+        document.title = previousTitle || document.title;
+        if (!styleNode) return;
+        if (createdStyle && styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+        else styleNode.textContent = previousStyleText;
+      }
+    };
+  }
+
+  function openFixedAssetOverviewPreview(session) {
+    var report = session.report || buildFixedAssetOverviewReport(session);
+    session.report = report;
+    openReportPreview('Aperçu — Tableau des immobilisations', fixedAssetOverviewPrintableHtml(session, report), fixedAssetOverviewPrintOptions(session));
+  }
+
+  function fixedAssetOverviewPreviewView(session, report) {
+    return generalBalanceReportSteps('layout', 'Étapes de préparation du Tableau des immobilisations') +
+      pageHeader('Aperçu — Tableau des immobilisations', 'Vérifiez les lignes du registre avant impression ou export.', '<button type="button" class="btn btn-primary" data-fixed-asset-overview-open-preview>Ouvrir l’aperçu plein écran</button>') +
+      '<div class="alert info"><div><strong>Lecture seule.</strong> L’impression ne s’ouvrira qu’après votre action depuis l’aperçu plein écran.</div></div>' +
+      fixedAssetOverviewPrintableHtml(session, report) +
+      '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-fixed-asset-overview-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-ghost" data-fixed-asset-overview-back-selection>Modifier la sélection</button></div>';
+  }
+
+  function fixedAssetOverviewSavedView(session) {
+    return generalBalanceReportSteps('layout', 'Étapes de préparation du Tableau des immobilisations') +
+      pageHeader('Export prêt', 'Le fichier reprend les colonnes sélectionnées et les éléments du registre.', '') +
+      '<section class="card journal-lines-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
+        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-fixed-asset-overview-open-preview>Afficher l’aperçu plein écran</button><button type="button" class="btn btn-ghost" data-fixed-asset-overview-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-fixed-asset-overview-new>Nouvelle sélection</button></div></div></section>';
+  }
+
+  function viewFixedAssetOverviewReport(backLink) {
+    var session = ensureFixedAssetOverviewReportSession();
+    var dossier = S.currentDossier();
+    if (session.phase !== 'selection') session.report = buildFixedAssetOverviewReport(session);
+    var content = session.phase === 'layout'
+      ? fixedAssetOverviewLayoutView(session, session.report)
+      : (session.phase === 'preview'
+        ? fixedAssetOverviewPreviewView(session, session.report)
+        : (session.phase === 'saved'
+          ? fixedAssetOverviewSavedView(session)
+          : fixedAssetOverviewSelectionView(session, dossier)));
+    return '<div class="edition-report-detail-view general-balance-report-detail fixed-asset-overview-report-detail">' + backLink + content + '</div>';
+  }
+
+  function generateFixedAssetOverviewReportFile(session, destination) {
+    var report = buildFixedAssetOverviewReport(session);
+    if (!report.ok) throw new Error(report.errors.join(' '));
+    session.report = report;
+    var spreadsheet = destination === 'table';
+    var matrix = fixedAssetOverviewExportMatrix(session, report);
+    var extension = spreadsheet ? 'xlsx' : 'txt';
+    var filename = 'Tableau-immobilisations-' + safeFilePart(S.currentDossier().name) + '-' + report.from + '-' + report.to + '.' + extension;
+    var content = spreadsheet
+      ? AccountingExchange.exportTabularWorkbook(FixedAssetOverviewReport.TITLE, matrix[0], matrix.slice(1))
+      : generalLedgerReportTsv(matrix);
+    downloadFile(filename, content, spreadsheet ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/plain;charset=utf-8');
+    session.exportFilename = filename;
+    session.exportMessage = spreadsheet ? 'Téléchargement du classeur Excel lancé dans le navigateur. Les champs de mouvement sans source restent vides.' : 'Téléchargement du fichier texte tabulé lancé dans le navigateur. Les champs de mouvement sans source restent vides.';
+    session.phase = 'saved';
+    render();
+  }
+
+  function submitFixedAssetOverviewLayout(form, session) {
+    var errors = [];
+    var destination = $('input[name="fixed-asset-overview-destination"]:checked', form);
+    var orientation = $('input[name="fixed-asset-overview-orientation"]:checked', form);
+    var margins = $('input[name="fixed-asset-overview-margins"]:checked', form);
+    var first = $('#fixed-asset-overview-page-first', form).value;
+    var last = $('#fixed-asset-overview-page-last', form).value;
+    if (first && (!Number.isInteger(Number(first)) || Number(first) < 1)) errors.push('La première page doit être un entier supérieur ou égal à 1.');
+    if (last && (!Number.isInteger(Number(last)) || Number(last) < 1)) errors.push('La dernière page doit être un entier supérieur ou égal à 1.');
+    if (first && last && Number(first) > Number(last)) errors.push('La première page doit précéder ou égaler la dernière page.');
+    var report = buildFixedAssetOverviewReport(session);
+    if (!report.ok) errors = errors.concat(report.errors);
+    showGeneralBalanceReportErrors($('#fixed-asset-overview-layout-errors', form), errors);
+    if (errors.length) return;
+    session.layout.printer = $('#fixed-asset-overview-printer', form).value;
+    session.layout.style = $('#fixed-asset-overview-style', form).value;
+    session.layout.orientation = orientation ? orientation.value : 'portrait';
+    session.layout.margins = margins ? margins.value : 'standard';
+    session.layout.pageFirst = first;
+    session.layout.pageLast = last;
+    session.layout.parity = $('#fixed-asset-overview-parity', form).value;
+    session.layout.destination = destination ? destination.value : 'preview';
+    session.report = report;
+    if (session.layout.destination === 'table' || session.layout.destination === 'file') {
+      try { generateFixedAssetOverviewReportFile(session, session.layout.destination); }
+      catch (error) { showGeneralBalanceReportErrors($('#fixed-asset-overview-layout-errors', form), [error && error.message || 'Export impossible.']); }
+      return;
+    }
+    session.previewOpened = false;
+    session.phase = 'preview';
+    render();
+  }
+
+  function bindFixedAssetOverviewReport() {
+    var session = ensureFixedAssetOverviewReportSession();
+    if (session.phase === 'selection') {
+      var form = $('#fixed-asset-overview-selection-form');
+      if (!form) return;
+      var update = function () { syncFixedAssetOverviewSelection(form, session); };
+      form.addEventListener('input', update);
+      form.addEventListener('change', update);
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitFixedAssetOverviewSelection(form, session);
+      });
+      $$('[data-fixed-asset-overview-picker]', form).forEach(function (button) {
+        button.addEventListener('click', function () {
+          var input = $('input[data-fixed-asset-overview-filter="accounts"]', form);
+          if (input) openGeneralBalanceAccountPicker(input);
+        });
+      });
+      return;
+    }
+    if (session.phase === 'layout') {
+      var layoutForm = $('#fixed-asset-overview-layout-form');
+      if (!layoutForm) return;
+      layoutForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitFixedAssetOverviewLayout(layoutForm, session);
+      });
+      var backSelection = $('[data-fixed-asset-overview-back-selection]');
+      if (backSelection) backSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+      return;
+    }
+    $$('[data-fixed-asset-overview-open-preview]').forEach(function (button) {
+      button.addEventListener('click', function () { openFixedAssetOverviewPreview(session); });
+    });
+    $$('[data-fixed-asset-overview-back-layout]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'layout'; render(); });
+    });
+    $$('[data-fixed-asset-overview-back-selection]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'selection'; render(); });
+    });
+    var newReport = $('[data-fixed-asset-overview-new]');
+    if (newReport) newReport.addEventListener('click', function () {
+      fixedAssetOverviewReportSession = createFixedAssetOverviewReportSession(S.currentDossier());
+      render();
+    });
+    if (session.phase === 'preview' && !session.previewOpened) {
+      session.previewOpened = true;
+      openFixedAssetOverviewPreview(session);
     }
   }
 
@@ -21044,7 +21438,7 @@
       matching: { title: 'États du lettrage', description: 'Consultation des écritures lettrées et non lettrées, et contrôle des anomalies selon les règles enregistrées du lettrage.' },
       pointing: { title: 'Écritures et justifications par pointage', description: 'Consultation des écritures pointées et non pointées, et justification à partir des marqueurs enregistrés, sans recalcul de solde.' },
       bankReconciliation: { title: 'Relevés et rapprochements bancaires', description: 'Édition des pointages explicitement liés à un relevé ; l’état Relevé de banque reste à définir.' },
-      assetSummary: { title: 'Tableaux des immobilisations', description: 'États de synthèse structurés avant définition des paramètres et de la présentation.' },
+      assetSummary: { title: 'Tableaux des immobilisations', description: 'Le Tableau des immobilisations consulte le registre des biens avec les filtres et colonnes de la capture ; les autres restitutions restent à préciser.' },
       assetMovements: { title: 'Mouvements de la période', description: 'Virements, entrées et sorties ; critères et rendus à confirmer par capture.' },
       assetInventory: { title: 'Inventaire', description: 'États d’inventaire à préciser sans générer de fiches ou de listes avant vos captures.' },
       assetAccounts: { title: 'Consultation par comptes', description: 'Cumul et grand-livre des éléments à définir à partir de vos captures.' },
@@ -22247,6 +22641,7 @@
     if (child.id === 'budget-outside-realizations-detail') return viewBudgetOutsideRealizationsDetailReport(backLink);
     if (child.id === 'budget-available-not-committed') return viewBudgetAvailabilitySummaryReport(backLink);
     if (child.id === 'budget-available-balance') return viewBudgetAvailableBalanceReport(backLink);
+    if (child.id === 'edition-fixed-asset-overview') return viewFixedAssetOverviewReport(backLink);
     if (PointingEditionReports.REPORT_IDS.indexOf(child.id) !== -1) return viewPointingEditionReport(backLink, child.id);
     if (MatchingEditionReports.REPORT_IDS.indexOf(child.id) !== -1) return viewMatchingEditionReport(backLink, child.id);
     if (child.id === 'general-summary-balance') return viewGeneralSummaryBalanceReport(backLink);
@@ -23697,6 +24092,7 @@
       if (menuParams.g === 'editions' && menuParams.t === 'budget' && BudgetReports.REPORT_IDS.indexOf(menuParams.c) !== -1) bindBudgetReport();
       if (menuParams.g === 'editions' && menuParams.t === 'matching' && MatchingEditionReports.REPORT_IDS.indexOf(menuParams.c) !== -1) bindMatchingEditionReport();
       if (menuParams.g === 'editions' && menuParams.t === 'bank-reconciliation' && PointingEditionReports.REPORT_IDS.indexOf(menuParams.c) !== -1) bindPointingEditionReport();
+      if (menuParams.g === 'editions' && menuParams.t === 'fixed-assets' && menuParams.c === 'edition-fixed-asset-overview') bindFixedAssetOverviewReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-ledger') bindGeneralLedgerReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-detail') bindGeneralCounterpartDetailReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-total') bindGeneralCounterpartTotalReport();
