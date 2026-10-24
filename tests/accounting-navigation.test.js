@@ -68,8 +68,8 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Pièces modifiées après première saisie',
   'Pièces déséquilibrées',
   'Écritures lettrées',
-  'Anomalies sur les lettrages',
   'Écritures non lettrées',
+  'Anomalies sur les lettrages',
   'Écritures pointées',
   'Écritures non pointées',
   'Justification des soldes par pointage',
@@ -408,12 +408,14 @@ assert.equal(findTab('editions', 'journals').children.find(child => child.id ===
 assert.ok(findTab('editions', 'journals').children.find(child => child.id === 'journal-analytic-center-totals').reason.includes('référence explicite et non ambiguë'));
 assert.ok(findTab('editions', 'journals').children.find(child => child.id === 'journal-analytic-center-totals').reason.includes('aucune imputation'));
 assert.ok(findTab('editions', 'journals').children.find(child => child.id === 'journal-analytic-center-totals').reason.includes('export Excel/TXT'));
-assert.equal(findTab('editions', 'matching').status, 'planned');
+assert.equal(findTab('editions', 'matching').status, 'active');
 assert.deepEqual(findTab('editions', 'matching').children.map(child => child.label), [
-  'Écritures lettrées', 'Anomalies sur les lettrages', 'Écritures non lettrées'
+  'Écritures lettrées', 'Écritures non lettrées', 'Anomalies sur les lettrages'
 ]);
-assert.ok(findTab('editions', 'matching').children.every(child => child.status === 'planned'));
-assert.ok(findTab('editions', 'matching').children.find(child => child.id === 'edition-matching-anomalies').reason.includes('aucun lettrage n’est qualifié'));
+assert.ok(findTab('editions', 'matching').children.every(child => child.status === 'active'));
+assert.ok(findTab('editions', 'matching').children.find(child => child.id === 'edition-matching-anomalies').reason.includes('invariants enregistrés'));
+assert.ok(findTab('editions', 'matching').children.find(child => child.id === 'edition-matched-entries').reason.includes('tous les comptes du plan'));
+assert.ok(findTab('editions', 'matching').children.find(child => child.id === 'edition-unmatched-entries').reason.includes('Écritures à partir du'));
 assert.equal(findTab('saisie', 'matching').children, undefined, 'le lettrage opérationnel reste séparé des éditions');
 assert.equal(findTab('editions', 'bank-reconciliation').status, 'planned');
 assert.deepEqual(findTab('editions', 'bank-reconciliation').children.map(child => child.label), [
@@ -707,7 +709,7 @@ assert.match(appSource, /function generalLedgerReportLayoutView\([\s\S]*general-
 assert.match(appSource, /function generalLedgerReportPrintableHtml\([\s\S]*GRAND LIVRE DES COMPTES[\s\S]*reports à nouveau[\s\S]*page-break/);
 assert.match(generalLedgerSource, /priorEntriesIncludedInRunningBalance: true[\s\S]*sourceReferenceOnly: true[\s\S]*noAccountingMutation: true/);
 assert.match(configurationCss, /\.general-ledger-column-grid[\s\S]*\.general-ledger-account-section/);
-assert.match(serviceWorkerSource, /perfecto-static-v120/);
+assert.match(serviceWorkerSource, /perfecto-static-v121/);
 
 assert.match(appSource, /function accountingMenuHash\(groupId, tabId, childId\)[\s\S]*return childId \? hash \+ '&c='/,
   'le lien d’un enfant conserve son identifiant dans la route');
@@ -743,7 +745,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v120/);
+assert.match(serviceWorkerSource, /perfecto-static-v121/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

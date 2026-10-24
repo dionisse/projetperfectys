@@ -19,6 +19,7 @@
   var CurrencyBalanceReport = window.PerfectoCurrencyBalanceReport;
   var CurrencySupplementaryReports = window.PerfectoCurrencySupplementaryReports;
   var BudgetReports = window.PerfectoBudgetReports;
+  var MatchingEditionReports = window.PerfectoMatchingEditionReports;
   var AccountSituationReport = window.PerfectoAccountSituationReport;
   var GeneralLedgerReport = window.PerfectoGeneralLedgerReport;
   var GeneralCounterpartDetailReport = window.PerfectoGeneralCounterpartDetailReport;
@@ -165,6 +166,7 @@
   var currencyBalanceReportSession = null;
   var currencySupplementaryReportSession = null;
   var budgetReportSession = null;
+  var matchingEditionReportSession = null;
   var generalLedgerReportSession = null;
   var generalCounterpartDetailReportSession = null;
   var generalCounterpartTotalReportSession = null;
@@ -806,6 +808,7 @@
     var isCurrencySupplementaryReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'foreign-currency' &&
       ['currency-opening-balance', 'currency-situation', 'currency-ledger', 'currency-exchange-differences'].indexOf(parsed.params.c) !== -1;
     var isBudgetReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'budget' && BudgetReports.REPORT_IDS.indexOf(parsed.params.c) !== -1;
+    var isMatchingEditionReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'matching' && MatchingEditionReports.REPORT_IDS.indexOf(parsed.params.c) !== -1;
     var isGeneralLedgerReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-ledger';
     var isGeneralCounterpartDetailReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-detail';
     var isGeneralCounterpartTotalReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-total';
@@ -826,6 +829,7 @@
     if (!isCurrencyBalanceReportRoute) currencyBalanceReportSession = null;
     if (!isCurrencySupplementaryReportRoute) currencySupplementaryReportSession = null;
     if (!isBudgetReportRoute) budgetReportSession = null;
+    if (!isMatchingEditionReportRoute) matchingEditionReportSession = null;
     if (!isGeneralLedgerReportRoute) generalLedgerReportSession = null;
     if (!isGeneralCounterpartDetailReportRoute) generalCounterpartDetailReportSession = null;
     if (!isGeneralCounterpartTotalReportRoute) generalCounterpartTotalReportSession = null;
@@ -5180,6 +5184,429 @@
     if (session.phase === 'preview' && !session.previewOpened) {
       session.previewOpened = true;
       openBudgetReportPreview(session, definition);
+    }
+  }
+
+  /* -------------------------- États du lettrage --------------------------- */
+  function createMatchingEditionReportSession(dossier, reportId) {
+    var definition = MatchingEditionReports.definitionFor(reportId);
+    if (!definition) return null;
+    var columns = Object.create(null);
+    definition.columns.forEach(function (column) { columns[column.key] = !!column.defaultSelected; });
+    return {
+      dossierId: dossier.id,
+      reportId: reportId,
+      phase: 'selection',
+      filters: { accounts: '*', from: dossier.cycleStart, to: dossier.cycleEnd },
+      columns: columns,
+      layout: {
+        printer: 'system', style: 'plain8',
+        orientation: definition.columns.length > 6 ? 'landscape' : 'portrait',
+        margins: 'standard', pageFirst: '', pageLast: '', parity: 'none', destination: 'preview'
+      },
+      report: null,
+      previewOpened: false,
+      exportFilename: '',
+      exportMessage: ''
+    };
+  }
+
+  function ensureMatchingEditionReportSession() {
+    var dossier = S.currentDossier();
+    var reportId = parseHash().params.c;
+    if (!matchingEditionReportSession || matchingEditionReportSession.dossierId !== dossier.id || matchingEditionReportSession.reportId !== reportId) {
+      matchingEditionReportSession = createMatchingEditionReportSession(dossier, reportId);
+    }
+    return matchingEditionReportSession;
+  }
+
+  function buildMatchingEditionReport(session) {
+    var dossier = S.currentDossier();
+    return MatchingEditionReports.buildReport(session.reportId, {
+      cycleStart: dossier.cycleStart,
+      cycleEnd: dossier.cycleEnd,
+      accountFilter: session.filters.accounts,
+      from: session.filters.from,
+      to: session.filters.to,
+      accounts: S.accounts(),
+      entries: S.entries(),
+      matchingGroups: S.matchingGroups()
+    });
+  }
+
+  function matchingEditionSelectedColumns(session, definition) {
+    return definition.columns.filter(function (column) { return !!session.columns[column.key]; });
+  }
+
+  function matchingEditionFilterField(session, dossier, definition, key) {
+    if (key === 'accounts') {
+      return '<div class="field matching-edition-accounts-field"><label for="matching-edition-accounts">Comptes</label><div class="journal-lines-picker-control"><input id="matching-edition-accounts" data-matching-edition-filter="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou 401*; 411100" autocomplete="off" required><button type="button" class="btn btn-ghost" data-matching-edition-picker="accounts" aria-label="Choisir les comptes du plan">…</button></div><span class="hint">« * » inclut tous les comptes présents et futurs du plan comptable ; un code ou un préfixe peut être saisi.</span></div>';
+    }
+    var dateKey = key === 'from' ? 'from' : 'to';
+    var label = dateKey === 'from' ? (definition.fromLabel || 'Début') : (definition.toLabel || 'Fin');
+    return '<div class="field"><label for="matching-edition-' + dateKey + '">' + esc(label) + '</label><input id="matching-edition-' + dateKey + '" data-matching-edition-filter="' + dateKey + '" type="date" value="' + esc(session.filters[dateKey]) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required></div>';
+  }
+
+  function matchingEditionColumnOption(column, session) {
+    return '<label class="journal-lines-column-option matching-edition-column-option"><input type="checkbox" data-matching-edition-column="' + esc(column.key) + '"' +
+      (session.columns[column.key] ? ' checked' : '') + '><span><strong>' + esc(column.label) + '</strong></span></label>';
+  }
+
+  function syncMatchingEditionSelection(form, session, definition) {
+    if (!form) return null;
+    $$('[data-matching-edition-filter]', form).forEach(function (input) {
+      session.filters[input.getAttribute('data-matching-edition-filter')] = input.value;
+    });
+    $$('[data-matching-edition-column]', form).forEach(function (input) {
+      session.columns[input.getAttribute('data-matching-edition-column')] = !!input.checked;
+    });
+    var report = buildMatchingEditionReport(session);
+    session.report = report;
+    showGeneralBalanceReportErrors($('#matching-edition-selection-errors', form), report.errors);
+    var warnings = $('#matching-edition-selection-warnings', form);
+    if (warnings) warnings.innerHTML = matchingEditionWarningsHtml(report);
+    var count = $('[data-matching-edition-line-count]', form);
+    if (count) count.textContent = String(report.generatedLineCount || 0);
+    return report;
+  }
+
+  function matchingEditionWarningsHtml(report) {
+    return report && report.warnings && report.warnings.length
+      ? '<div class="alert info matching-edition-warnings"><ul>' + report.warnings.map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('') + '</ul></div>'
+      : '';
+  }
+
+  function matchingEditionReportSelectionView(session, dossier, definition) {
+    var report = session.report || buildMatchingEditionReport(session);
+    session.report = report;
+    var columnMarkup = definition.columns.map(function (column) { return matchingEditionColumnOption(column, session); });
+    var stackCount = Math.max(1, Math.min(4, Number(definition.columnStacks) || 2));
+    var stackSize = Math.ceil(columnMarkup.length / stackCount);
+    var stacks = [];
+    for (var stackIndex = 0; stackIndex < stackCount; stackIndex += 1) {
+      stacks.push('<div class="currency-balance-column-stack">' + columnMarkup.slice(stackIndex * stackSize, (stackIndex + 1) * stackSize).join('') + '</div>');
+    }
+    var filters = definition.filters.map(function (key) { return matchingEditionFilterField(session, dossier, definition, key); }).join('');
+    var sourceNote = definition.kind === 'anomalies'
+      ? '<div class="alert info matching-edition-source-note"><div><strong>Consultation seule.</strong> Les anomalies sont contrôlées à partir des lettrages enregistrés et des lignes source. Seules les règles déjà appliquées à la saisie sont contrôlées ; aucun lettrage n’est créé, corrigé ou annulé.</div></div>'
+      : '<div class="alert info matching-edition-source-note"><div><strong>Consultation seule.</strong> L’état lit les écritures validées et le registre de lettrage du dossier. Les écritures et le registre ne sont pas modifiés.</div></div>';
+    return generalBalanceReportSteps('selection', 'Étapes de préparation de ' + definition.title) +
+      pageHeader(definition.title, definition.kind === 'anomalies'
+        ? 'Sélectionnez les comptes à contrôler.'
+        : 'Sélectionnez les comptes et les dates de l’état.', '') + sourceNote +
+      '<form id="matching-edition-selection-form" novalidate data-matching-edition-report="' + esc(session.reportId) + '">' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div><span class="journal-lines-cycle-badge">Cycle ' + esc(dateLabel(dossier.cycleStart)) + ' — ' + esc(dateLabel(dossier.cycleEnd)) + '</span></div>' +
+          '<div class="matching-edition-filter-grid matching-edition-filter-grid-' + esc(definition.kind) + '">' + filters + '</div>' +
+        '</div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
+          '<div class="currency-balance-column-grid matching-edition-columns-grid" style="--matching-column-count:' + stackCount + '">' + stacks.join('') + '</div>' +
+        '</div></section>' +
+        '<div id="matching-edition-selection-warnings">' + matchingEditionWarningsHtml(report) + '</div>' +
+        '<div class="journal-lines-form-errors" id="matching-edition-selection-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="matching-edition-selection-actions"><a class="btn btn-ghost" href="' + esc(accountingMenuHash('editions', 'matching')) + '">Annuler</a><span class="matching-edition-line-count" role="status">Lignes générées : <strong data-matching-edition-line-count>' + esc(report.generatedLineCount || 0) + '</strong></span><button type="submit" class="btn btn-primary">Valider <span aria-hidden="true">→</span></button></div>' +
+      '</form>';
+  }
+
+  function matchingEditionReportValue(row, column) {
+    var value = row[column.key];
+    if (value == null || value === '') return '';
+    if (column.key === 'date' || column.key === 'entryDate' || column.key === 'letteringDate') return dateLabel(value);
+    if (column.text === false) return amount(value);
+    return String(value);
+  }
+
+  function matchingEditionReportRowsHtml(session, report, definition, columns) {
+    if (!report.rows.length) {
+      var emptyMessage = definition.kind === 'matched'
+        ? 'Aucune écriture lettrée ne correspond à ces critères.'
+        : (definition.kind === 'unmatched'
+          ? 'Aucune écriture non lettrée ne correspond à ces critères.'
+          : (report.matchingGroupCount
+            ? 'Aucune anomalie ne contredit les règles de validation des lettrages.'
+            : 'Aucun lettrage actif à contrôler.'));
+      return '<tbody><tr><td colspan="' + Math.max(columns.length, 1) + '"><div class="empty-state"><strong>' + esc(emptyMessage) + '</strong>Les données comptables ne sont pas modifiées par cet état.</div></td></tr></tbody>';
+    }
+    var body = '';
+    if (definition.kind === 'anomalies') {
+      body = report.rows.map(function (row) {
+        return '<tr class="matching-edition-anomaly-row">' + columns.map(function (column) {
+          return '<td' + (column.text === false ? ' class="num"' : '') + '>' + esc(matchingEditionReportValue(row, column)) + '</td>';
+        }).join('') + '</tr>';
+      }).join('');
+      return '<tbody>' + body + '</tbody>';
+    }
+    var groups = [];
+    var groupByAccount = Object.create(null);
+    report.rows.forEach(function (row) {
+      var code = String(row.accountCode || '');
+      if (!groupByAccount[code]) {
+        groupByAccount[code] = { code: code, label: String(row.accountLabel || ''), rows: [] };
+        groups.push(groupByAccount[code]);
+      }
+      groupByAccount[code].rows.push(row);
+    });
+    groups.sort(function (left, right) { return left.code.localeCompare(right.code, 'fr', { numeric: true }); });
+    body = groups.map(function (group) {
+      var accountHeading = group.code + (group.label ? ' · ' + group.label : '');
+      var heading = '<tr class="matching-edition-account-heading"><th colspan="' + Math.max(columns.length, 1) + '">' + esc(accountHeading) + '</th></tr>';
+      var rows = group.rows.map(function (row) {
+        return '<tr>' + columns.map(function (column) {
+          return '<td' + (column.text === false ? ' class="num"' : '') + '>' + esc(matchingEditionReportValue(row, column)) + '</td>';
+        }).join('') + '</tr>';
+      }).join('');
+      return heading + rows;
+    }).join('');
+    return '<tbody>' + body + '</tbody>';
+  }
+
+  function matchingEditionReportPrintableHtml(session, report, definition) {
+    var columns = matchingEditionSelectedColumns(session, definition);
+    var headers = '<tr>' + columns.map(function (column) {
+      return '<th scope="col"' + (column.text === false ? ' class="num"' : '') + '>' + esc(column.label) + '</th>';
+    }).join('') + '</tr>';
+    var period = definition.filters.indexOf('from') !== -1
+      ? 'Période : ' + dateLabel(report.from) + ' — ' + dateLabel(report.to)
+      : 'Cycle : ' + dateLabel(report.cycleStart) + ' — ' + dateLabel(report.cycleEnd);
+    var accountsLabel = session.filters.accounts === '*' ? 'Tous les comptes' : session.filters.accounts;
+    var styleClass = session.layout.style === 'color10' ? 'matching-edition-style-color' : 'matching-edition-style-plain';
+    return '<article class="matching-edition-print ' + styleClass + '"><header class="matching-edition-print-heading"><p class="page-kicker">ÉDITIONS · LETTRAGE</p><h2>' + esc(definition.title) + '</h2><p><strong>Comptes :</strong> ' + esc(accountsLabel) + ' · ' + period + '</p></header>' +
+      matchingEditionWarningsHtml(report) +
+      '<div class="matching-edition-table-wrap"><table class="matching-edition-table"><thead>' + headers + '</thead>' + matchingEditionReportRowsHtml(session, report, definition, columns) + '</table></div>' +
+      '<p class="matching-edition-print-note">État en lecture seule. Les valeurs proviennent des écritures validées et du registre de lettrage disponible dans le dossier ; aucune écriture ni aucun lettrage n’est modifié.</p></article>';
+  }
+
+  function matchingEditionReportExportMatrix(session, report, definition) {
+    var columns = matchingEditionSelectedColumns(session, definition);
+    var matrix = [columns.map(function (column) { return column.label; })];
+    if (definition.kind === 'anomalies') {
+      report.rows.forEach(function (row) {
+        matrix.push(columns.map(function (column) { return matchingEditionReportValue(row, column); }));
+      });
+      return matrix;
+    }
+    var groupByAccount = Object.create(null);
+    report.rows.forEach(function (row) {
+      var code = String(row.accountCode || '');
+      if (!groupByAccount[code]) groupByAccount[code] = { label: String(row.accountLabel || ''), rows: [] };
+      groupByAccount[code].rows.push(row);
+    });
+    Object.keys(groupByAccount).sort(function (left, right) { return left.localeCompare(right, 'fr', { numeric: true }); }).forEach(function (code) {
+      var group = groupByAccount[code];
+      matrix.push([code + (group.label ? ' · ' + group.label : '')].concat(columns.slice(1).map(function () { return ''; })));
+      group.rows.forEach(function (row) {
+        matrix.push(columns.map(function (column) { return matchingEditionReportValue(row, column); }));
+      });
+    });
+    return matrix;
+  }
+
+  function matchingEditionReportLayoutView(session, report, definition) {
+    var count = report.generatedLineCount + (report.generatedLineCount === 1 ? ' ligne générée' : ' lignes générées');
+    return generalBalanceReportSteps('layout', 'Étapes de préparation de ' + definition.title) +
+      pageHeader('Mise en page — ' + definition.title, 'Choisissez le style, l’orientation, les marges, les pages et la destination.', '') +
+      '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(count) + '. Les sources comptables restent inchangées.</div></div>' +
+      matchingEditionWarningsHtml(report) +
+      '<form id="matching-edition-layout-form" novalidate><div class="journal-lines-settings-grid matching-edition-settings-grid">' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="matching-edition-printer">Imprimante</label><select id="matching-edition-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="matching-edition-style">Style du rapport</label><select id="matching-edition-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('matching-edition-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('matching-edition-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('matching-edition-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('matching-edition-margins', 'binding', 'Reliure à gauche', session.layout.margins === 'binding', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Pages</h3></div><div class="journal-lines-page-range"><div class="field"><label for="matching-edition-page-first">Première</label><input id="matching-edition-page-first" type="number" min="1" step="1" value="' + esc(session.layout.pageFirst) + '" placeholder="1"></div><span aria-hidden="true">à</span><div class="field"><label for="matching-edition-page-last">Dernière</label><input id="matching-edition-page-last" type="number" min="1" step="1" value="' + esc(session.layout.pageLast) + '" placeholder="Fin"></div></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Parité</h3></div><div class="field"><label for="matching-edition-parity">Pages</label><select id="matching-edition-parity"><option value="none"' + (session.layout.parity === 'none' ? ' selected' : '') + '>Aucune</option><option value="odd"' + (session.layout.parity === 'odd' ? ' selected' : '') + '>Impaire</option><option value="even"' + (session.layout.parity === 'even' ? ' selected' : '') + '>Paire</option></select></div></div></section>' +
+        '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
+          generalBalanceReportRadio('matching-edition-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
+          generalBalanceReportRadio('matching-edition-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
+          generalBalanceReportRadio('matching-edition-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('matching-edition-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
+        '</div></div></section></div>' +
+        '<div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> Les pages et la parité se règlent dans le navigateur si celui-ci le permet.</div></div>' +
+        '<div class="journal-lines-form-errors" id="matching-edition-layout-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-matching-edition-back-selection>Retour à la sélection</button><button type="submit" class="btn btn-primary">Valider</button></div></form>';
+  }
+
+  function matchingEditionPrintOptions(session, definition) {
+    var styleNode = null;
+    var previousStyleText = '';
+    var createdStyle = false;
+    var previousTitle = '';
+    return {
+      beforePrint: function () {
+        styleNode = $('#matching-edition-print-page-style');
+        createdStyle = !styleNode;
+        if (!styleNode) {
+          styleNode = document.createElement('style');
+          styleNode.id = 'matching-edition-print-page-style';
+          document.head.appendChild(styleNode);
+        } else previousStyleText = styleNode.textContent;
+        var orientation = session.layout.orientation === 'portrait' ? 'portrait' : 'landscape';
+        var left = session.layout.margins === 'binding' ? '18mm' : '12mm';
+        styleNode.textContent = '@page { size: A4 ' + orientation + '; margin: 12mm 12mm 12mm ' + left + '; }';
+        previousTitle = document.title;
+        document.title = safeFilePart(definition.title) + '-' + safeFilePart(S.currentDossier().name);
+      },
+      afterPrint: function () {
+        document.title = previousTitle || document.title;
+        if (!styleNode) return;
+        if (createdStyle && styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+        else styleNode.textContent = previousStyleText;
+      }
+    };
+  }
+
+  function openMatchingEditionReportPreview(session, definition) {
+    var report = session.report || buildMatchingEditionReport(session);
+    session.report = report;
+    openReportPreview('Aperçu — ' + definition.title, matchingEditionReportPrintableHtml(session, report, definition), matchingEditionPrintOptions(session, definition));
+  }
+
+  function matchingEditionReportPreviewView(session, report, definition) {
+    return generalBalanceReportSteps('layout', 'Étapes de préparation de ' + definition.title) +
+      pageHeader('Aperçu — ' + definition.title, 'Vérifiez les sources et les lignes retenues avant impression ou export.', '<button type="button" class="btn btn-primary" data-matching-edition-open-preview>Ouvrir l’aperçu plein écran</button>') +
+      '<div class="alert info"><div><strong>Lecture seule.</strong> L’impression ne s’ouvrira qu’après votre action depuis l’aperçu plein écran.</div></div>' +
+      matchingEditionReportPrintableHtml(session, report, definition) +
+      '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-matching-edition-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-ghost" data-matching-edition-back-selection>Modifier la sélection</button></div>';
+  }
+
+  function matchingEditionReportSavedView(session, definition) {
+    return generalBalanceReportSteps('layout', 'Étapes de préparation de ' + definition.title) +
+      pageHeader('Export prêt', 'Le fichier reprend les lignes sources retenues, sans modifier les écritures ni les lettrages.', '') +
+      '<section class="card journal-lines-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
+        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-matching-edition-open-preview>Afficher l’aperçu plein écran</button><button type="button" class="btn btn-ghost" data-matching-edition-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-matching-edition-new>Nouvelle sélection</button></div></div></section>';
+  }
+
+  function viewMatchingEditionReport(backLink, reportId) {
+    var session = ensureMatchingEditionReportSession();
+    var definition = MatchingEditionReports.definitionFor(reportId);
+    var dossier = S.currentDossier();
+    if (!session || !definition) return backLink + '<div class="alert warning">État du lettrage introuvable.</div>';
+    if (session.phase !== 'selection') session.report = buildMatchingEditionReport(session);
+    var content;
+    if (session.phase === 'layout') content = matchingEditionReportLayoutView(session, session.report, definition);
+    else if (session.phase === 'preview') content = matchingEditionReportPreviewView(session, session.report, definition);
+    else if (session.phase === 'saved') content = matchingEditionReportSavedView(session, definition);
+    else content = matchingEditionReportSelectionView(session, dossier, definition);
+    return '<div class="edition-report-detail-view general-balance-report-detail matching-edition-report-detail">' + backLink + content + '</div>';
+  }
+
+  function submitMatchingEditionReportSelection(form, session, definition) {
+    var report = syncMatchingEditionSelection(form, session, definition);
+    var errors = report ? report.errors.slice() : ['Impossible de lire la sélection du lettrage.'];
+    if (!matchingEditionSelectedColumns(session, definition).length) errors.push('Sélectionnez au moins une colonne à restituer.');
+    showGeneralBalanceReportErrors($('#matching-edition-selection-errors', form), errors);
+    if (errors.length) return;
+    session.report = report;
+    session.phase = 'layout';
+    render();
+  }
+
+  function generateMatchingEditionReportFile(session, definition, destination) {
+    var report = buildMatchingEditionReport(session);
+    if (!report.ok) throw new Error(report.errors.join(' '));
+    session.report = report;
+    var spreadsheet = destination === 'table';
+    var matrix = matchingEditionReportExportMatrix(session, report, definition);
+    var extension = spreadsheet ? 'xlsx' : 'txt';
+    var stems = {
+      matched: 'Ecritures-lettrees',
+      unmatched: 'Ecritures-non-lettrees',
+      anomalies: 'Anomalies-lettrages'
+    };
+    var period = report.from && report.to ? '-' + report.from + '-' + report.to : '-' + String(report.cycleStart || '').slice(0, 4);
+    var filename = (stems[definition.kind] || 'Etat-lettrage') + '-' + safeFilePart(S.currentDossier().name) + period + '.' + extension;
+    var content = spreadsheet
+      ? AccountingExchange.exportTabularWorkbook(definition.title, matrix[0], matrix.slice(1))
+      : generalLedgerReportTsv(matrix);
+    downloadFile(filename, content, spreadsheet ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/plain;charset=utf-8');
+    session.exportFilename = filename;
+    session.exportMessage = spreadsheet ? 'Téléchargement du classeur Excel lancé dans le navigateur.' : 'Téléchargement du fichier texte tabulé lancé dans le navigateur.';
+    session.phase = 'saved';
+    render();
+  }
+
+  function submitMatchingEditionReportLayout(form, session, definition) {
+    var errors = [];
+    var destination = $('input[name="matching-edition-destination"]:checked', form);
+    var orientation = $('input[name="matching-edition-orientation"]:checked', form);
+    var margins = $('input[name="matching-edition-margins"]:checked', form);
+    var first = $('#matching-edition-page-first', form).value;
+    var last = $('#matching-edition-page-last', form).value;
+    if (first && (!Number.isInteger(Number(first)) || Number(first) < 1)) errors.push('La première page doit être un entier supérieur ou égal à 1.');
+    if (last && (!Number.isInteger(Number(last)) || Number(last) < 1)) errors.push('La dernière page doit être un entier supérieur ou égal à 1.');
+    if (first && last && Number(first) > Number(last)) errors.push('La première page doit précéder ou égaler la dernière page.');
+    var report = buildMatchingEditionReport(session);
+    if (!report.ok) errors = errors.concat(report.errors);
+    showGeneralBalanceReportErrors($('#matching-edition-layout-errors', form), errors);
+    if (errors.length) return;
+    session.layout.printer = $('#matching-edition-printer', form).value;
+    session.layout.style = $('#matching-edition-style', form).value;
+    session.layout.orientation = orientation ? orientation.value : 'landscape';
+    session.layout.margins = margins ? margins.value : 'standard';
+    session.layout.pageFirst = first;
+    session.layout.pageLast = last;
+    session.layout.parity = $('#matching-edition-parity', form).value;
+    session.layout.destination = destination ? destination.value : 'preview';
+    session.report = report;
+    if (session.layout.destination === 'table' || session.layout.destination === 'file') {
+      try { generateMatchingEditionReportFile(session, definition, session.layout.destination); }
+      catch (error) { showGeneralBalanceReportErrors($('#matching-edition-layout-errors', form), [error && error.message || 'Export impossible.']); }
+      return;
+    }
+    session.previewOpened = false;
+    session.phase = 'preview';
+    render();
+  }
+
+  function bindMatchingEditionReport() {
+    var session = ensureMatchingEditionReportSession();
+    if (!session) return;
+    var definition = MatchingEditionReports.definitionFor(session.reportId);
+    if (!definition) return;
+    if (session.phase === 'selection') {
+      var form = $('#matching-edition-selection-form');
+      if (!form) return;
+      var update = function () { syncMatchingEditionSelection(form, session, definition); };
+      form.addEventListener('input', update);
+      form.addEventListener('change', update);
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitMatchingEditionReportSelection(form, session, definition);
+      });
+      $$('[data-matching-edition-picker]', form).forEach(function (button) {
+        button.addEventListener('click', function () {
+          var input = $('input[data-matching-edition-filter="accounts"]', form);
+          if (input) openGeneralBalanceAccountPicker(input);
+        });
+      });
+      return;
+    }
+    if (session.phase === 'layout') {
+      var layoutForm = $('#matching-edition-layout-form');
+      if (!layoutForm) return;
+      layoutForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitMatchingEditionReportLayout(layoutForm, session, definition);
+      });
+      var backSelection = $('[data-matching-edition-back-selection]');
+      if (backSelection) backSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+      return;
+    }
+    $$('[data-matching-edition-open-preview]').forEach(function (button) {
+      button.addEventListener('click', function () { openMatchingEditionReportPreview(session, definition); });
+    });
+    $$('[data-matching-edition-back-layout]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'layout'; render(); });
+    });
+    $$('[data-matching-edition-back-selection]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'selection'; render(); });
+    });
+    var newReport = $('[data-matching-edition-new]');
+    if (newReport) newReport.addEventListener('click', function () {
+      matchingEditionReportSession = createMatchingEditionReportSession(S.currentDossier(), session.reportId);
+      render();
+    });
+    if (session.phase === 'preview' && !session.previewOpened) {
+      session.previewOpened = true;
+      openMatchingEditionReportPreview(session, definition);
     }
   }
 
@@ -20031,7 +20458,7 @@
   function editionReportCatalog(children, groupId, tabId, tabLabel) {
     var sectionMap = {
       pieces: { title: 'Suivi et contrôle des pièces', description: 'Explorer les lignes, repérer les situations à contrôler et consulter les cumuls de saisie.' },
-      matching: { title: 'États du lettrage', description: 'Les sous-états sont structurés ; critères, colonnes et rendus attendent vos captures.' },
+      matching: { title: 'États du lettrage', description: 'Consultation des écritures lettrées et non lettrées, et contrôle des anomalies selon les règles enregistrées du lettrage.' },
       pointing: { title: 'Écritures et justifications par pointage', description: 'Les trois sous-états sont structurés ; critères, colonnes, calculs et rendus attendent vos captures.' },
       bankReconciliation: { title: 'Relevés et rapprochement bancaire', description: 'Les deux sous-états sont structurés ; format, critères, colonnes et rendus attendent vos captures.' },
       assetSummary: { title: 'Tableaux des immobilisations', description: 'États de synthèse structurés avant définition des paramètres et de la présentation.' },
@@ -21237,6 +21664,7 @@
     if (child.id === 'budget-outside-realizations-detail') return viewBudgetOutsideRealizationsDetailReport(backLink);
     if (child.id === 'budget-available-not-committed') return viewBudgetAvailabilitySummaryReport(backLink);
     if (child.id === 'budget-available-balance') return viewBudgetAvailableBalanceReport(backLink);
+    if (MatchingEditionReports.REPORT_IDS.indexOf(child.id) !== -1) return viewMatchingEditionReport(backLink, child.id);
     if (child.id === 'general-summary-balance') return viewGeneralSummaryBalanceReport(backLink);
     if (child.id === 'general-aged-balance') return viewAgedBalanceReport(backLink);
     if (child.id === 'general-opening-balance') return viewOpeningBalanceReport(backLink);
@@ -22683,6 +23111,7 @@
       if (menuParams.g === 'editions' && menuParams.t === 'foreign-currency' && menuParams.c === 'currency-balance') bindCurrencyBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'foreign-currency' && ['currency-opening-balance', 'currency-situation', 'currency-ledger', 'currency-exchange-differences'].indexOf(menuParams.c) !== -1) bindCurrencySupplementaryReport();
       if (menuParams.g === 'editions' && menuParams.t === 'budget' && BudgetReports.REPORT_IDS.indexOf(menuParams.c) !== -1) bindBudgetReport();
+      if (menuParams.g === 'editions' && menuParams.t === 'matching' && MatchingEditionReports.REPORT_IDS.indexOf(menuParams.c) !== -1) bindMatchingEditionReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-ledger') bindGeneralLedgerReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-detail') bindGeneralCounterpartDetailReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-total') bindGeneralCounterpartTotalReport();

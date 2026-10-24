@@ -65,7 +65,7 @@ assert.ok(htmlSource.indexOf('js/budget-reports.js') < htmlSource.indexOf('js/ap
 assert.match(htmlSource, /css\/budget-reports\.css/);
 assert.match(serviceWorkerSource, /\.\/js\/budget-reports\.js/);
 assert.match(serviceWorkerSource, /\.\/css\/budget-reports\.css/);
-assert.match(serviceWorkerSource, /perfecto-static-v120/);
+assert.match(serviceWorkerSource, /perfecto-static-v121/);
 assert.match(cssSource, /\.budget-report-filter-grid[\s\S]*\.budget-report-column-option[\s\S]*\.budget-report-table/);
 assert.match(cssSource, /max-width: 640px/);
 assert.match(cssSource, /body\.report-preview-printing[\s\S]*\.budget-report-table/);
