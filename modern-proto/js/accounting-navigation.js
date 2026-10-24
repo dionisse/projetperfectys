@@ -122,9 +122,9 @@
           ]
         },
         {
-          id: 'foreign-currency', label: 'Comptes en devises', status: 'planned', reason: 'Les cinq états sont référencés ci-dessous et restent en attente des critères propres aux montants d’origine, aux périodes et à la valorisation. Le cumul consultatif « Cumul par devises » est disponible séparément sous Journaux ; ces cinq états n’effectuent aucun calcul simulé.',
+          id: 'foreign-currency', label: 'Comptes en devises', status: 'mixed', reason: 'La Balance des comptes en devises est disponible en lecture seule pour les rubriques analytiques 93 à 99, avec filtres, mise en page, aperçu plein écran et exports. Les autres états restent en attente de leurs sources et critères propres ; aucun taux ou solde étranger absent n’est simulé.',
           children: [
-            { id: 'currency-balance', label: 'Balance', section: 'balances', status: 'planned', reason: 'La devise, les montants d’origine et la présentation de la balance seront définis à partir de vos captures.' },
+            { id: 'currency-balance', label: 'Balance', section: 'balances', status: 'active', reason: 'Sélection des devises, rubriques et sous-comptes analytiques 93 à 99, période et cinq colonnes par défaut, compteur de lignes, mise en page, aperçu plein écran, exports Excel/TXT et impression. Seules les pièces validées et les montants d’origine explicites sont repris ; aucun cours n’est appliqué. Le registre des reports à nouveau est en XOF : les soldes étrangers de début et de fin restent vides, sans conversion ni zéro supposé.' },
             { id: 'currency-opening-balance', label: 'Balance d’ouverture', section: 'balances', status: 'planned', reason: 'Les soldes d’ouverture en devises ne sont pas portés par le registre actuel ; aucun montant converti n’est inventé.' },
             { id: 'currency-situation', label: 'Situation des comptes', section: 'balances', status: 'planned', reason: 'La situation attend les paramètres de devise, période et valorisation à confirmer par capture.' },
             { id: 'currency-ledger', label: 'Grand livre', section: 'ledgers', status: 'planned', reason: 'Les pièces ne conservent pas de montants en devise distincts des montants comptabilisés en XOF.' },

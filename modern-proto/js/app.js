@@ -16,6 +16,7 @@
   var AccountingExchange = window.PerfectoAccountingExchange;
   var JournalLinesReport = window.PerfectoJournalLinesReport;
   var GeneralBalanceReport = window.PerfectoGeneralBalanceReport;
+  var CurrencyBalanceReport = window.PerfectoCurrencyBalanceReport;
   var AccountSituationReport = window.PerfectoAccountSituationReport;
   var GeneralLedgerReport = window.PerfectoGeneralLedgerReport;
   var GeneralCounterpartDetailReport = window.PerfectoGeneralCounterpartDetailReport;
@@ -159,6 +160,7 @@
   var journalLinesReportSession = null;
   var journalLinesReportMode = 'standard';
   var generalBalanceReportSession = null;
+  var currencyBalanceReportSession = null;
   var generalLedgerReportSession = null;
   var generalCounterpartDetailReportSession = null;
   var generalCounterpartTotalReportSession = null;
@@ -175,6 +177,7 @@
   var thirdPartyOpeningBalanceReportSession = null;
   var thirdPartyAccountSituationReportSession = null;
   var thirdPartyNatureBreakdownReportSession = null;
+  var CURRENCY_BALANCE_COLUMN_DEFINITIONS = CurrencyBalanceReport.COLUMN_DEFINITIONS.map(function (column) { return Object.assign({}, column); });
   var THIRD_PARTY_BALANCE_COLUMN_DEFINITIONS = ThirdPartyBalanceReport.COLUMN_DEFINITIONS.map(function (column) { return Object.assign({}, column); });
   var THIRD_PARTY_STATEMENT_COLUMN_DEFINITIONS = ThirdPartyStatementReport.COLUMN_DEFINITIONS.map(function (column) { return Object.assign({}, column); });
   var THIRD_PARTY_BALANCE_JUSTIFICATION_COLUMN_DEFINITIONS = ThirdPartyBalanceJustificationReport.COLUMN_DEFINITIONS.map(function (column) { return Object.assign({}, column); });
@@ -791,6 +794,7 @@
     var parsed = parseHash();
     var route = parsed.route;
     var isGeneralBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-balance';
+    var isCurrencyBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'foreign-currency' && parsed.params.c === 'currency-balance';
     var isGeneralLedgerReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-ledger';
     var isGeneralCounterpartDetailReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-detail';
     var isGeneralCounterpartTotalReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-total';
@@ -808,6 +812,7 @@
     var isThirdPartyAccountSituationReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'third-parties' && parsed.params.c === 'third-party-situation';
     var isThirdPartyNatureBreakdownReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'third-parties' && parsed.params.c === 'third-party-nature-breakdown';
     if (!isGeneralBalanceReportRoute) generalBalanceReportSession = null;
+    if (!isCurrencyBalanceReportRoute) currencyBalanceReportSession = null;
     if (!isGeneralLedgerReportRoute) generalLedgerReportSession = null;
     if (!isGeneralCounterpartDetailReportRoute) generalCounterpartDetailReportSession = null;
     if (!isGeneralCounterpartTotalReportRoute) generalCounterpartTotalReportSession = null;
@@ -3868,6 +3873,456 @@
     if (session.phase === 'preview' && !session.previewOpened) {
       session.previewOpened = true;
       openGeneralBalanceReportPreview(session);
+    }
+  }
+
+  /* -------------------- Balance des comptes en devises ------------------- */
+  function createCurrencyBalanceReportSession(dossier) {
+    var columns = Object.create(null);
+    CURRENCY_BALANCE_COLUMN_DEFINITIONS.forEach(function (column) { columns[column.key] = !!column.defaultSelected; });
+    return {
+      dossierId: dossier.id,
+      phase: 'selection',
+      filters: { currencies: '*', accounts: '*', from: dossier.cycleStart, to: dossier.cycleEnd },
+      columns: columns,
+      layout: { printer: 'system', style: 'plain8', orientation: 'portrait', margins: 'standard', pageFirst: '', pageLast: '', parity: 'none', destination: 'preview' },
+      report: null,
+      previewOpened: false,
+      exportFilename: '',
+      exportMessage: ''
+    };
+  }
+
+  function ensureCurrencyBalanceReportSession() {
+    var dossier = S.currentDossier();
+    if (!currencyBalanceReportSession || currencyBalanceReportSession.dossierId !== dossier.id) {
+      currencyBalanceReportSession = createCurrencyBalanceReportSession(dossier);
+    }
+    return currencyBalanceReportSession;
+  }
+
+  function buildCurrencyBalanceReport(session) {
+    var dossier = S.currentDossier();
+    var currencyConfiguration = S.currenciesConfiguration();
+    var accountingConfiguration = S.accountingConfiguration();
+    return CurrencyBalanceReport.build({
+      accounts: S.accounts(),
+      entries: S.postedEntries(),
+      openingBalances: S.openingBalances(),
+      currencyRecords: currencyConfiguration.rows,
+      baseCurrencyCode: currencyConfiguration.defaultCurrencyCode,
+      decimalPlaces: accountingConfiguration.decimalPlaces,
+      currencyFilter: session.filters.currencies,
+      accountFilter: session.filters.accounts,
+      from: session.filters.from,
+      to: session.filters.to,
+      cycleStart: dossier.cycleStart,
+      cycleEnd: dossier.cycleEnd
+    });
+  }
+
+  function currencyBalanceReportColumnOption(column, session) {
+    return '<label class="journal-lines-column-option currency-balance-column-option"><input type="checkbox" data-currency-balance-column="' + esc(column.key) + '"' +
+      (session.columns[column.key] ? ' checked' : '') + '><span><strong>' + esc(column.label) + '</strong></span></label>';
+  }
+
+  function currencyBalanceReportColumns(session) {
+    return CURRENCY_BALANCE_COLUMN_DEFINITIONS.filter(function (column) { return !!session.columns[column.key]; });
+  }
+
+  function syncCurrencyBalanceReportSelection(form, session) {
+    if (!form) return null;
+    session.filters.currencies = $('#currency-balance-currencies', form).value;
+    session.filters.accounts = $('#currency-balance-accounts', form).value;
+    session.filters.from = $('#currency-balance-from', form).value;
+    session.filters.to = $('#currency-balance-to', form).value;
+    $$('[data-currency-balance-column]', form).forEach(function (input) {
+      session.columns[input.getAttribute('data-currency-balance-column')] = !!input.checked;
+    });
+    var report = buildCurrencyBalanceReport(session);
+    session.report = report;
+    var counter = $('[data-currency-balance-line-count]', form);
+    if (counter) counter.textContent = String(report.ok ? report.generatedLineCount : 0);
+    showGeneralBalanceReportErrors($('#currency-balance-selection-errors', form), report.errors);
+    return report;
+  }
+
+  function currencyBalanceReportSelectionView(session, dossier) {
+    var report = session.report || buildCurrencyBalanceReport(session);
+    session.report = report;
+    var columns = CURRENCY_BALANCE_COLUMN_DEFINITIONS.map(function (column) { return currencyBalanceReportColumnOption(column, session); });
+    var leftColumns = columns.slice(0, 3).join('');
+    var rightColumns = columns.slice(3).join('');
+    return generalBalanceReportSteps('selection', 'Étapes de préparation de la Balance des comptes en devises') +
+      pageHeader('Balance des comptes en devises', 'Sélectionnez les devises, les comptes analytiques, la période et les colonnes à restituer.', '') +
+      '<div class="alert info currency-balance-source-note"><div><strong>Lecture seule.</strong> Seuls les mouvements validés effectivement enregistrés sur les comptes analytiques des rubriques 93 à 99 sont retenus. Les montants d’origine exigent un code devise et un montant explicites ; aucun taux n’est appliqué. Le registre des reports à nouveau est en XOF : un solde d’ouverture étranger indisponible, ou un report XOF absent, reste vide plutôt que supposé nul.</div></div>' +
+      '<form id="currency-balance-selection-form" novalidate>' +
+        '<section class="card journal-lines-card"><div class="panel">' +
+          '<div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div><span class="journal-lines-cycle-badge">Cycle ' + esc(dateLabel(dossier.cycleStart)) + ' — ' + esc(dateLabel(dossier.cycleEnd)) + '</span></div>' +
+          '<div class="currency-balance-filter-grid">' +
+            '<div class="field"><label for="currency-balance-currencies">Devises</label><div class="journal-lines-picker-control"><input id="currency-balance-currencies" name="currencies" type="text" value="' + esc(session.filters.currencies) + '" placeholder="* ou EUR, USD" autocomplete="off" required><button type="button" class="btn btn-ghost" data-currency-balance-picker="currencies" aria-label="Choisir les devises">…</button></div><span class="hint">« * » sélectionne toutes les devises du dossier ; les codes peuvent être séparés par des virgules.</span></div>' +
+            '<div class="field"><label for="currency-balance-accounts">Comptes</label><div class="journal-lines-picker-control"><input id="currency-balance-accounts" name="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou 93, 9301*" autocomplete="off" required><button type="button" class="btn btn-ghost" data-currency-balance-picker="accounts" aria-label="Choisir les comptes analytiques">…</button></div><span class="hint">« * » sélectionne les rubriques 93 à 99 ; un code de rubrique inclut ses sous-comptes.</span></div>' +
+            '<div class="field"><label for="currency-balance-from">Début</label><input id="currency-balance-from" name="from" type="date" value="' + esc(session.filters.from) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required></div>' +
+            '<div class="field"><label for="currency-balance-to">Fin</label><input id="currency-balance-to" name="to" type="date" value="' + esc(session.filters.to) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required></div>' +
+          '</div>' +
+        '</div></section>' +
+        '<section class="card journal-lines-card"><div class="panel">' +
+          '<div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
+          '<div class="currency-balance-column-grid"><div class="currency-balance-column-stack">' + leftColumns + '</div><div class="currency-balance-column-stack">' + rightColumns + '</div></div>' +
+          '<p class="hint journal-lines-columns-hint">Les mouvements sont exprimés dans la devise sélectionnée, au débit moins le crédit. Les soldes de début et de fin sont renseignés seulement quand une source d’ouverture explicite est disponible.</p>' +
+        '</div></section>' +
+        '<div class="journal-lines-form-errors" id="currency-balance-selection-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="currency-balance-selection-footer"><p class="currency-balance-generated-count" role="status" aria-live="polite">Lignes générées : <strong data-currency-balance-line-count>' + esc(report.ok ? report.generatedLineCount : 0) + '</strong></p>' +
+          '<div class="journal-lines-form-actions"><a class="btn btn-ghost" href="' + esc(accountingMenuHash('editions', 'foreign-currency')) + '">Annuler</a><button type="submit" class="btn btn-primary">Valider <span aria-hidden="true">→</span></button></div>' +
+        '</div>' +
+      '</form>';
+  }
+
+  function openCurrencyBalancePicker(input, kind) {
+    var modalRoot;
+    if (kind === 'currencies') {
+      var configuration = S.currenciesConfiguration();
+      var currencyRecords = Array.isArray(configuration.rows) ? configuration.rows : [];
+      var currentFilter = CurrencyBalanceReport.parseCurrencyFilter(input.value, currencyRecords);
+      var selectAll = currentFilter.valid && currentFilter.all;
+      var rows = currencyRecords.map(function (currency, index) {
+        var code = String(currency.code || '').trim();
+        var checked = selectAll || (currentFilter.valid && currentFilter.codes.indexOf(code.toLocaleUpperCase()) !== -1);
+        return '<label class="journal-lines-picker-option currency-balance-picker-option" data-picker-text="' + esc(code + ' ' + (currency.label || '')) + '"><input type="checkbox" data-currency-balance-picker-currency value="' + esc(code) + '" id="currency-balance-picker-currency-' + index + '"' + (checked ? ' checked' : '') + '><strong>' + esc(code) + '</strong><span>' + esc(currency.label || '') + '</span></label>';
+      }).join('');
+      var body = '<div class="journal-lines-picker currency-balance-picker"><div class="field"><label for="currency-balance-picker-search">Rechercher une devise</label><input id="currency-balance-picker-search" type="search" placeholder="Code ou intitulé"></div>' +
+        '<label class="journal-lines-picker-all"><input id="currency-balance-picker-all" type="checkbox"' + (selectAll ? ' checked' : '') + '>Toutes les devises</label>' +
+        '<div class="journal-lines-picker-list" role="group" aria-label="Devises du dossier">' + (rows || '<div class="empty-state">Aucune devise configurée dans ce dossier.</div>') + '</div></div>';
+      openModal('Choisir les devises', 'La liste provient du référentiel du dossier actif.', body,
+        '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="button" class="btn btn-primary" data-currency-balance-picker-apply>Appliquer</button>', true);
+      modalRoot = $('#modal-root');
+      var currencySearch = $('#currency-balance-picker-search', modalRoot);
+      var currencyRows = $$('.currency-balance-picker-option', modalRoot);
+      var allCurrencies = $('#currency-balance-picker-all', modalRoot);
+      var currencyChecks = $$('[data-currency-balance-picker-currency]', modalRoot);
+      if (currencySearch) currencySearch.addEventListener('input', function () {
+        var query = currencySearch.value.trim().toLocaleLowerCase();
+        currencyRows.forEach(function (row) { row.hidden = !!query && row.getAttribute('data-picker-text').toLocaleLowerCase().indexOf(query) === -1; });
+      });
+      if (allCurrencies) allCurrencies.addEventListener('change', function () { currencyChecks.forEach(function (checkbox) { checkbox.checked = allCurrencies.checked; }); });
+      currencyChecks.forEach(function (checkbox) { checkbox.addEventListener('change', function () {
+        if (allCurrencies) allCurrencies.checked = !!currencyChecks.length && currencyChecks.every(function (item) { return item.checked; });
+      }); });
+      modalRoot.addEventListener('click', function (event) {
+        var apply = event.target.closest ? event.target.closest('[data-currency-balance-picker-apply]') : null;
+        if (!apply) return;
+        var selected = $$('[data-currency-balance-picker-currency]:checked', modalRoot).map(function (checkbox) { return checkbox.value; });
+        input.value = allCurrencies && allCurrencies.checked ? '*' : selected.join(', ');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        closeModal(true);
+        input.focus();
+      });
+      return;
+    }
+
+    var availableAccounts = CurrencyBalanceReport.accountOptions(S.accounts(), S.postedEntries());
+    var accountFilter = CurrencyBalanceReport.parseAccountFilter(input.value, availableAccounts);
+    var selectEveryAccount = accountFilter.valid && accountFilter.all;
+    var accountRows = availableAccounts.map(function (account, index) {
+      var checked = selectEveryAccount || (accountFilter.valid && CurrencyBalanceReport.accountMatches(account.code, accountFilter));
+      var description = account.root ? 'Rubrique analytique' : 'Compte analytique';
+      return '<label class="journal-lines-picker-option currency-balance-picker-option' + (account.root ? ' is-root' : '') + '" data-picker-text="' + esc(account.code + ' ' + (account.label || '')) + '"><input type="checkbox" data-currency-balance-picker-account value="' + esc(account.code) + '" id="currency-balance-picker-account-' + index + '"' + (checked ? ' checked' : '') + '><strong>' + esc(account.code) + '</strong><span>' + esc(account.label || description) + '</span></label>';
+    }).join('');
+    var accountBody = '<div class="journal-lines-picker currency-balance-picker"><div class="field"><label for="currency-balance-account-picker-search">Rechercher un compte analytique</label><input id="currency-balance-account-picker-search" type="search" placeholder="Code ou intitulé"></div>' +
+      '<label class="journal-lines-picker-all"><input id="currency-balance-account-picker-all" type="checkbox"' + (selectEveryAccount ? ' checked' : '') + '>Toutes les rubriques 93 à 99</label>' +
+      '<div class="journal-lines-picker-list" role="group" aria-label="Comptes analytiques 93 à 99">' + (accountRows || '<div class="empty-state">Aucun compte analytique répertorié.</div>') + '</div></div>';
+    openModal('Choisir les comptes', 'Rubriques 93 à 99 du cadre comptable et comptes analytiques disponibles dans les écritures du dossier.', accountBody,
+      '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="button" class="btn btn-primary" data-currency-balance-picker-apply>Appliquer</button>', true);
+    modalRoot = $('#modal-root');
+    var accountSearch = $('#currency-balance-account-picker-search', modalRoot);
+    var accountPickerRows = $$('.currency-balance-picker-option', modalRoot);
+    var allAccounts = $('#currency-balance-account-picker-all', modalRoot);
+    var accountChecks = $$('[data-currency-balance-picker-account]', modalRoot);
+    if (accountSearch) accountSearch.addEventListener('input', function () {
+      var query = accountSearch.value.trim().toLocaleLowerCase();
+      accountPickerRows.forEach(function (row) { row.hidden = !!query && row.getAttribute('data-picker-text').toLocaleLowerCase().indexOf(query) === -1; });
+    });
+    if (allAccounts) allAccounts.addEventListener('change', function () { accountChecks.forEach(function (checkbox) { checkbox.checked = allAccounts.checked; }); });
+    accountChecks.forEach(function (checkbox) { checkbox.addEventListener('change', function () {
+      if (allAccounts) allAccounts.checked = !!accountChecks.length && accountChecks.every(function (item) { return item.checked; });
+    }); });
+    modalRoot.addEventListener('click', function (event) {
+      var applyAccount = event.target.closest ? event.target.closest('[data-currency-balance-picker-apply]') : null;
+      if (!applyAccount) return;
+      var selectedAccounts = $$('[data-currency-balance-picker-account]:checked', modalRoot).map(function (checkbox) { return checkbox.value; });
+      input.value = allAccounts && allAccounts.checked ? '*' : selectedAccounts.join(', ');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      closeModal(true);
+      input.focus();
+    });
+  }
+
+  function currencyBalanceReportWarningsHtml(report) {
+    return report && report.warnings && report.warnings.length
+      ? '<div class="alert warning currency-balance-report-warnings"><ul>' + report.warnings.map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('') + '</ul></div>'
+      : '';
+  }
+
+  function currencyBalanceReportFormatAmount(value) {
+    if (value == null || !Number.isFinite(Number(value))) return '';
+    try { return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 4, useGrouping: true }).format(Number(value)); }
+    catch (error) { return String(value); }
+  }
+
+  function currencyBalanceReportCellValue(row, column, forSpreadsheet) {
+    var value = row[column.key];
+    if (column.text) return String(value == null ? '' : value);
+    if (value == null || !Number.isFinite(Number(value))) return '';
+    return forSpreadsheet ? Number(value) : currencyBalanceReportFormatAmount(value);
+  }
+
+  function currencyBalanceReportPrintableHtml(session, report) {
+    report = report || session.report || buildCurrencyBalanceReport(session);
+    var columns = currencyBalanceReportColumns(session);
+    var styleClass = session.layout.style === 'color10' ? 'currency-balance-style-color' : 'currency-balance-style-plain';
+    var header = '<header class="currency-balance-print-heading"><p class="page-kicker">ÉDITIONS · COMPTES EN DEVISES</p><h2>Balance des comptes en devises</h2>' +
+      '<p>Période : <strong>' + esc(dateLabel(report.from)) + ' — ' + esc(dateLabel(report.to)) + '</strong> · Comptes analytiques : 93 à 99</p></header>';
+    var groups = (report.groups || []).map(function (group) {
+      var groupHeading = '<tr class="currency-balance-group-row"><th colspan="' + Math.max(1, columns.length) + '" scope="rowgroup">Devise ' + esc(group.currencyCode) + (group.currencyLabel ? ' · ' + esc(group.currencyLabel) : '') + '</th></tr>';
+      var rows = group.rows.map(function (row) {
+        return '<tr>' + columns.map(function (column) {
+          var value = currencyBalanceReportCellValue(row, column, false);
+          return '<td' + (column.text ? '' : ' class="num"') + '>' + esc(value) + '</td>';
+        }).join('') + '</tr>';
+      }).join('');
+      return '<tbody>' + groupHeading + rows + '</tbody>';
+    }).join('');
+    var empty = report.groups && report.groups.length ? '' : '<tbody><tr><td colspan="' + Math.max(1, columns.length) + '"><div class="empty-state"><strong>Aucune ligne générée</strong>Aucun mouvement validé ou report explicite ne correspond aux filtres.</div></td></tr></tbody>';
+    return '<article class="currency-balance-report-print ' + styleClass + '">' + header +
+      currencyBalanceReportWarningsHtml(report) +
+      '<div class="currency-balance-report-table-wrap"><table class="currency-balance-report-table"><thead><tr>' + columns.map(function (column) {
+        return '<th scope="col"' + (column.text ? '' : ' class="num"') + '>' + esc(column.label) + '</th>';
+      }).join('') + '</tr></thead>' + groups + empty + '</table></div>' +
+      '<p class="currency-balance-print-basis">Mouvements = débits − crédits dans la devise d’origine. Les reports d’ouverture sont lus uniquement depuis les lignes XOF explicites du registre. Les montants en devise non disponibles ne sont ni convertis ni remplacés par zéro.</p>' +
+    '</article>';
+  }
+
+  function currencyBalanceReportExportMatrix(session, report, forSpreadsheet) {
+    var columns = currencyBalanceReportColumns(session);
+    var headings = ['Devise'].concat(columns.map(function (column) { return column.exportLabel; }));
+    var rows = [];
+    (report.groups || []).forEach(function (group) {
+      group.rows.forEach(function (row) {
+        rows.push([group.currencyCode].concat(columns.map(function (column) { return currencyBalanceReportCellValue(row, column, !!forSpreadsheet); })));
+      });
+    });
+    return [headings].concat(rows);
+  }
+
+  function currencyBalanceReportTsv(matrix) {
+    return '\uFEFF' + matrix.map(function (row) {
+      return row.map(function (cell) {
+        var value = String(cell == null ? '' : cell).replace(/[\t\r\n]+/g, ' ');
+        if (typeof cell === 'string' && /^[=+\-@]/.test(value)) value = "'" + value;
+        return value;
+      }).join('\t');
+    }).join('\r\n');
+  }
+
+  function generateCurrencyBalanceReportFile(session, destination) {
+    var report = buildCurrencyBalanceReport(session);
+    session.report = report;
+    if (!report.ok) throw new Error(report.errors.join(' '));
+    var spreadsheet = destination === 'table';
+    var matrix = currencyBalanceReportExportMatrix(session, report, true);
+    var extension = spreadsheet ? 'xlsx' : 'txt';
+    var filename = 'Balance-comptes-devises-' + safeFilePart(S.currentDossier().name) + '-' + report.from + '-' + report.to + '.' + extension;
+    var content = spreadsheet
+      ? AccountingExchange.exportTabularWorkbook('Balance des comptes en devises', matrix[0], matrix.slice(1))
+      : currencyBalanceReportTsv(currencyBalanceReportExportMatrix(session, report, false));
+    downloadFile(filename, content, spreadsheet ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/plain;charset=utf-8');
+    session.exportFilename = filename;
+    session.exportMessage = spreadsheet ? 'Téléchargement du classeur Excel lancé dans le navigateur.' : 'Téléchargement du fichier texte tabulé lancé dans le navigateur.';
+    session.phase = 'saved';
+    render();
+  }
+
+  function currencyBalanceReportLayoutView(session) {
+    var report = session.report || buildCurrencyBalanceReport(session);
+    session.report = report;
+    var resultSummary = report.generatedLineCount + (report.generatedLineCount === 1 ? ' ligne générée' : ' lignes générées');
+    return generalBalanceReportSteps('layout', 'Étapes de préparation de la Balance des comptes en devises') +
+      pageHeader('Mise en page — Balance des comptes en devises', 'Choisissez le style, l’orientation, les marges, les pages et la destination.', '') +
+      '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(resultSummary) + '. Les montants sont restitués dans leur devise d’origine ; aucune écriture ne sera modifiée.</div></div>' +
+      currencyBalanceReportWarningsHtml(report) +
+      '<form id="currency-balance-layout-form" novalidate><div class="journal-lines-settings-grid currency-balance-settings-grid">' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="currency-balance-printer">Imprimante</label><select id="currency-balance-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select><span class="hint">Le navigateur conserve le choix final du périphérique ou du PDF.</span></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="currency-balance-style">Style du rapport</label><select id="currency-balance-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('currency-balance-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('currency-balance-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('currency-balance-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('currency-balance-margins', 'binding', 'Reliure à gauche', session.layout.margins === 'binding', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Pages</h3></div><div class="journal-lines-page-range"><div class="field"><label for="currency-balance-page-first">Première</label><input id="currency-balance-page-first" type="number" min="1" step="1" value="' + esc(session.layout.pageFirst) + '" placeholder="1"></div><span aria-hidden="true">à</span><div class="field"><label for="currency-balance-page-last">Dernière</label><input id="currency-balance-page-last" type="number" min="1" step="1" value="' + esc(session.layout.pageLast) + '" placeholder="Fin"></div></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Parité</h3></div><div class="field"><label for="currency-balance-parity">Pages</label><select id="currency-balance-parity"><option value="none"' + (session.layout.parity === 'none' ? ' selected' : '') + '>Aucune</option><option value="odd"' + (session.layout.parity === 'odd' ? ' selected' : '') + '>Impaire</option><option value="even"' + (session.layout.parity === 'even' ? ' selected' : '') + '>Paire</option></select></div></div></section>' +
+        '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
+          generalBalanceReportRadio('currency-balance-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
+          generalBalanceReportRadio('currency-balance-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
+          generalBalanceReportRadio('currency-balance-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('currency-balance-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
+        '</div></div></section>' +
+      '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> La plage et la parité indiquées ne peuvent pas être préconfigurées dans la boîte d’impression ; réglez-les dans le navigateur si celui-ci le permet.</div></div>' +
+      '<div class="journal-lines-form-errors" id="currency-balance-layout-errors" role="alert" aria-live="polite"></div>' +
+      '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-currency-balance-back-selection>Retour à la sélection</button><button type="submit" class="btn btn-primary">Valider</button></div></form>';
+  }
+
+  function submitCurrencyBalanceReportSelection(form, session) {
+    var report = syncCurrencyBalanceReportSelection(form, session);
+    var errors = report ? report.errors.slice() : ['Impossible de lire la sélection.'];
+    if (!currencyBalanceReportColumns(session).length) errors.push('Sélectionnez au moins une colonne à restituer.');
+    showGeneralBalanceReportErrors($('#currency-balance-selection-errors', form), errors);
+    if (errors.length) return;
+    session.phase = 'layout';
+    session.report = report;
+    render();
+  }
+
+  function submitCurrencyBalanceReportLayout(form, session) {
+    var errors = [];
+    var destination = $('input[name="currency-balance-destination"]:checked', form);
+    var orientation = $('input[name="currency-balance-orientation"]:checked', form);
+    var margins = $('input[name="currency-balance-margins"]:checked', form);
+    var first = $('#currency-balance-page-first', form).value;
+    var last = $('#currency-balance-page-last', form).value;
+    if (first && (!Number.isInteger(Number(first)) || Number(first) < 1)) errors.push('La première page doit être un entier supérieur ou égal à 1.');
+    if (last && (!Number.isInteger(Number(last)) || Number(last) < 1)) errors.push('La dernière page doit être un entier supérieur ou égal à 1.');
+    if (first && last && Number(first) > Number(last)) errors.push('La première page doit précéder ou égaler la dernière page.');
+    var report = buildCurrencyBalanceReport(session);
+    if (!report.ok) errors = errors.concat(report.errors);
+    showGeneralBalanceReportErrors($('#currency-balance-layout-errors', form), errors);
+    if (errors.length) return;
+    session.layout.printer = $('#currency-balance-printer', form).value;
+    session.layout.style = $('#currency-balance-style', form).value;
+    session.layout.orientation = orientation ? orientation.value : 'portrait';
+    session.layout.margins = margins ? margins.value : 'standard';
+    session.layout.pageFirst = first;
+    session.layout.pageLast = last;
+    session.layout.parity = $('#currency-balance-parity', form).value;
+    session.layout.destination = destination ? destination.value : 'preview';
+    session.report = report;
+    if (session.layout.destination === 'table' || session.layout.destination === 'file') {
+      try { generateCurrencyBalanceReportFile(session, session.layout.destination); }
+      catch (error) { showGeneralBalanceReportErrors($('#currency-balance-layout-errors', form), [error && error.message || 'Export impossible.']); }
+      return;
+    }
+    session.previewOpened = false;
+    session.phase = 'preview';
+    render();
+  }
+
+  function currencyBalancePrintOptions(session) {
+    var styleNode = null;
+    var previousStyleText = '';
+    var createdStyle = false;
+    var previousTitle = '';
+    return {
+      beforePrint: function () {
+        styleNode = $('#currency-balance-print-page-style');
+        createdStyle = !styleNode;
+        if (!styleNode) {
+          styleNode = document.createElement('style');
+          styleNode.id = 'currency-balance-print-page-style';
+          document.head.appendChild(styleNode);
+        } else previousStyleText = styleNode.textContent;
+        var orientation = session.layout.orientation === 'landscape' ? 'landscape' : 'portrait';
+        var left = session.layout.margins === 'binding' ? '18mm' : '12mm';
+        styleNode.textContent = '@page { size: A4 ' + orientation + '; margin: 12mm 12mm 12mm ' + left + '; }';
+        previousTitle = document.title;
+        document.title = 'Balance-comptes-devises-' + safeFilePart(S.currentDossier().name) + '-' + session.filters.from + '-' + session.filters.to;
+      },
+      afterPrint: function () {
+        document.title = previousTitle || document.title;
+        if (!styleNode) return;
+        if (createdStyle && styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+        else styleNode.textContent = previousStyleText;
+      }
+    };
+  }
+
+  function openCurrencyBalanceReportPreview(session) {
+    var report = session.report || buildCurrencyBalanceReport(session);
+    session.report = report;
+    openReportPreview('Aperçu — Balance des comptes en devises', currencyBalanceReportPrintableHtml(session, report), currencyBalancePrintOptions(session));
+  }
+
+  function currencyBalanceReportPreviewView(session) {
+    var report = session.report || buildCurrencyBalanceReport(session);
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu plein écran obligatoire' : 'Aperçu dans PERFECTO';
+    return generalBalanceReportSteps('layout', 'Étapes de préparation de la Balance des comptes en devises') +
+      pageHeader('Aperçu — Balance des comptes en devises', 'Vérifiez la sélection avant impression ou export.', '<button type="button" class="btn btn-primary" data-currency-balance-open-preview>Ouvrir l’aperçu plein écran</button>') +
+      '<div class="alert info"><div><strong>Destination choisie :</strong> ' + esc(destination) + '. La boîte d’impression du navigateur ne s’ouvrira qu’après votre action depuis l’aperçu plein écran.</div></div>' +
+      currencyBalanceReportWarningsHtml(report) + currencyBalanceReportPrintableHtml(session, report) +
+      '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-currency-balance-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-ghost" data-currency-balance-back-selection>Modifier la sélection</button></div>';
+  }
+
+  function currencyBalanceReportSavedView(session) {
+    return generalBalanceReportSteps('layout', 'Étapes de préparation de la Balance des comptes en devises') +
+      pageHeader('Export prêt', 'Le fichier a été préparé à partir des sources enregistrées, sans modifier les écritures comptables.', '') +
+      '<section class="card journal-lines-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
+        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-currency-balance-open-preview>Afficher l’aperçu plein écran</button><button type="button" class="btn btn-ghost" data-currency-balance-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-currency-balance-new-report>Nouvelle sélection</button></div></div></section>';
+  }
+
+  function viewCurrencyBalanceReport(backLink) {
+    var session = ensureCurrencyBalanceReportSession();
+    var dossier = S.currentDossier();
+    if (session.phase !== 'selection') session.report = buildCurrencyBalanceReport(session);
+    var content = session.phase === 'layout'
+      ? currencyBalanceReportLayoutView(session)
+      : (session.phase === 'preview'
+        ? currencyBalanceReportPreviewView(session)
+        : (session.phase === 'saved'
+          ? currencyBalanceReportSavedView(session)
+          : currencyBalanceReportSelectionView(session, dossier)));
+    return '<div class="edition-report-detail-view general-balance-report-detail currency-balance-report-detail">' + backLink + content + '</div>';
+  }
+
+  function bindCurrencyBalanceReport() {
+    var session = ensureCurrencyBalanceReportSession();
+    if (session.phase === 'selection') {
+      var selectionForm = $('#currency-balance-selection-form');
+      if (!selectionForm) return;
+      var updateSelection = function () { syncCurrencyBalanceReportSelection(selectionForm, session); };
+      selectionForm.addEventListener('input', updateSelection);
+      selectionForm.addEventListener('change', updateSelection);
+      selectionForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitCurrencyBalanceReportSelection(selectionForm, session);
+      });
+      $$('[data-currency-balance-picker]', selectionForm).forEach(function (button) {
+        button.addEventListener('click', function () {
+          openCurrencyBalancePicker($('#currency-balance-' + button.getAttribute('data-currency-balance-picker'), selectionForm), button.getAttribute('data-currency-balance-picker'));
+        });
+      });
+      return;
+    }
+    if (session.phase === 'layout') {
+      var layoutForm = $('#currency-balance-layout-form');
+      if (!layoutForm) return;
+      layoutForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitCurrencyBalanceReportLayout(layoutForm, session);
+      });
+      var backSelection = $('[data-currency-balance-back-selection]');
+      if (backSelection) backSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+      return;
+    }
+    $$('[data-currency-balance-open-preview]').forEach(function (button) {
+      button.addEventListener('click', function () { openCurrencyBalanceReportPreview(session); });
+    });
+    $$('[data-currency-balance-back-layout]').forEach(function (button) { button.addEventListener('click', function () { session.phase = 'layout'; render(); }); });
+    $$('[data-currency-balance-back-selection]').forEach(function (button) { button.addEventListener('click', function () { session.phase = 'selection'; render(); }); });
+    var newReportButton = $('[data-currency-balance-new-report]');
+    if (newReportButton) newReportButton.addEventListener('click', function () {
+      currencyBalanceReportSession = createCurrencyBalanceReportSession(S.currentDossier());
+      render();
+    });
+    if (session.phase === 'preview' && !session.previewOpened) {
+      session.previewOpened = true;
+      openCurrencyBalanceReportPreview(session);
     }
   }
 
@@ -19910,6 +20365,7 @@
     if (child.id === 'journal-allocation-sheet') return viewJournalAllocationSheet(backLink);
     if (child.id === 'journal-lines' || child.id === 'journal-modified-pieces' || child.id === 'journal-unbalanced-pieces' || child.id === 'journal-entry-totals' || child.id === 'journal-individual-account-totals' || child.id === 'journal-summary-account-totals' || child.id === 'journal-third-party-totals' || child.id === 'journal-analytic-center-totals' || child.id === 'journal-currency-totals') return viewJournalLinesReport(backLink);
     if (child.id === 'general-balance') return viewGeneralBalanceReport(backLink);
+    if (child.id === 'currency-balance') return viewCurrencyBalanceReport(backLink);
     if (child.id === 'general-summary-balance') return viewGeneralSummaryBalanceReport(backLink);
     if (child.id === 'general-aged-balance') return viewAgedBalanceReport(backLink);
     if (child.id === 'general-opening-balance') return viewOpeningBalanceReport(backLink);
@@ -21353,6 +21809,7 @@
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && (menuParams.c === 'journal-lines' || menuParams.c === 'journal-modified-pieces' || menuParams.c === 'journal-unbalanced-pieces' || menuParams.c === 'journal-entry-totals' || menuParams.c === 'journal-individual-account-totals' || menuParams.c === 'journal-summary-account-totals' || menuParams.c === 'journal-third-party-totals' || menuParams.c === 'journal-analytic-center-totals' || menuParams.c === 'journal-currency-totals')) bindJournalLinesReport();
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && menuParams.c === 'journal-allocation-sheet') bindJournalAllocationSheet();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-balance') bindGeneralBalanceReport();
+      if (menuParams.g === 'editions' && menuParams.t === 'foreign-currency' && menuParams.c === 'currency-balance') bindCurrencyBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-ledger') bindGeneralLedgerReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-detail') bindGeneralCounterpartDetailReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-total') bindGeneralCounterpartTotalReport();
