@@ -11,6 +11,7 @@
   var AccountingNavigation = window.PerfectoAccountingNavigation;
   var AccountingBridge = window.PerfectoAccountingBridge;
   var AccountingFramework = window.PerfectoAccountingFramework;
+  var FinancialFrameworkEditionReport = window.PerfectoAccountingFrameworkEdition;
   var CashOperations = window.PerfectoCashOperations;
   var AccountMovements = window.PerfectoAccountMovements;
   var AccountingExchange = window.PerfectoAccountingExchange;
@@ -175,6 +176,7 @@
   var fixedAssetDepreciationReportSession = null;
   var fixedAssetOverviewReportSession = null;
   var fixedAssetAdditionalReportSession = null;
+  var financialFrameworkEditionReportSession = null;
   var generalLedgerReportSession = null;
   var generalCounterpartDetailReportSession = null;
   var generalCounterpartTotalReportSession = null;
@@ -821,6 +823,7 @@
     var isFixedAssetDepreciationReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'fixed-assets' && parsed.params.c === 'edition-fixed-asset-depreciation';
     var isFixedAssetOverviewReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'fixed-assets' && parsed.params.c === 'edition-fixed-asset-overview';
     var isFixedAssetAdditionalReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'fixed-assets' && FixedAssetAdditionalReports.REPORT_IDS.indexOf(parsed.params.c) !== -1;
+    var isFinancialFrameworkEditionReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'definitions-and-plans' && parsed.params.c === FinancialFrameworkEditionReport.REPORT_ID;
     var isGeneralLedgerReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-ledger';
     var isGeneralCounterpartDetailReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-detail';
     var isGeneralCounterpartTotalReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-total';
@@ -846,6 +849,7 @@
     if (!isFixedAssetDepreciationReportRoute) fixedAssetDepreciationReportSession = null;
     if (!isFixedAssetOverviewReportRoute) fixedAssetOverviewReportSession = null;
     if (!isFixedAssetAdditionalReportRoute) fixedAssetAdditionalReportSession = null;
+    if (!isFinancialFrameworkEditionReportRoute) financialFrameworkEditionReportSession = null;
     if (!isGeneralLedgerReportRoute) generalLedgerReportSession = null;
     if (!isGeneralCounterpartDetailReportRoute) generalCounterpartDetailReportSession = null;
     if (!isGeneralCounterpartTotalReportRoute) generalCounterpartTotalReportSession = null;
@@ -14803,6 +14807,343 @@
     '</div>';
   }
 
+  function createFinancialFrameworkEditionReportSession() {
+    var columns = Object.create(null);
+    FinancialFrameworkEditionReport.COLUMNS.forEach(function (column) { columns[column.key] = !!column.defaultSelected; });
+    return {
+      phase: 'selection',
+      filters: { accounts: '*' },
+      columns: columns,
+      layout: { printer: 'system', style: 'plain8', orientation: 'portrait', margins: 'standard', pageFirst: '', pageLast: '', parity: 'none', destination: 'preview' },
+      report: null,
+      exportFilename: '',
+      exportMessage: ''
+    };
+  }
+
+  function ensureFinancialFrameworkEditionReportSession() {
+    if (!financialFrameworkEditionReportSession) financialFrameworkEditionReportSession = createFinancialFrameworkEditionReportSession();
+    return financialFrameworkEditionReportSession;
+  }
+
+  function buildFinancialFrameworkEditionReport(session) {
+    return FinancialFrameworkEditionReport.buildReport({ accountFilter: session.filters.accounts });
+  }
+
+  function financialFrameworkEditionSelectedColumns(session) {
+    return FinancialFrameworkEditionReport.COLUMNS.filter(function (column) { return !!session.columns[column.key]; });
+  }
+
+  function financialFrameworkEditionColumnOption(column, session) {
+    return '<label class="journal-lines-column-option financial-framework-edition-column-option"><input type="checkbox" data-financial-framework-edition-column="' + esc(column.key) + '"' +
+      (session.columns[column.key] ? ' checked' : '') + '><span><strong>' + esc(column.label) + '</strong></span></label>';
+  }
+
+  function financialFrameworkEditionFilterField(session) {
+    return '<div class="field financial-framework-edition-account-field"><label for="financial-framework-edition-accounts">Comptes</label>' +
+      '<div class="journal-lines-picker-control"><input id="financial-framework-edition-accounts" data-financial-framework-edition-filter="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou préfixe de compte" maxlength="1000" autocomplete="off" required>' +
+      '<button type="button" class="btn btn-ghost" data-financial-framework-edition-picker>Parcourir…</button></div>' +
+      '<span class="hint">« * » couvre les comptes et rubriques du PDF. Saisissez un code, un préfixe avec * ou plusieurs codes séparés par des virgules.</span></div>';
+  }
+
+  function financialFrameworkEditionSelectionView(session) {
+    var metadata = AccountingFramework.metadata;
+    var columns = FinancialFrameworkEditionReport.COLUMNS.map(function (column) { return financialFrameworkEditionColumnOption(column, session); }).join('');
+    var report = session.report || buildFinancialFrameworkEditionReport(session);
+    session.report = report;
+    return generalBalanceReportSteps('selection', 'Étapes de préparation du Cadre comptable') +
+      pageHeader('Cadre comptable', 'Sélectionnez les comptes et les colonnes du référentiel à restituer.', '') +
+      '<div class="alert info financial-framework-edition-source-note"><div><strong>Référentiel SYSCOHADA révisé · consultation seule.</strong> Les ' + metadata.rowCount + ' lignes, intitulés et postes viennent du PDF fourni (' + metadata.sourcePages + ' pages). La colonne Postes au bilan distingue les rattachements Débit et Crédit ; les cellules vides du document restent vides. Aucune écriture ni aucun calcul n’est activé.</div></div>' +
+      '<form id="financial-framework-edition-selection-form" novalidate>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div></div>' +
+          '<div class="financial-framework-edition-filter-grid">' + financialFrameworkEditionFilterField(session) + '</div>' +
+        '</div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
+          '<div class="currency-balance-column-grid financial-framework-edition-columns-grid">' + columns + '</div>' +
+        '</div></section>' +
+        '<div class="journal-lines-form-errors" id="financial-framework-edition-selection-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="financial-framework-edition-selection-actions"><a class="btn btn-ghost" href="' + esc(accountingMenuHash('editions', 'definitions-and-plans')) + '">Annuler</a>' +
+          '<span class="pointing-edition-line-count" role="status">Lignes générées : <strong data-financial-framework-edition-line-count>' + esc(report.generatedLineCount || 0) + '</strong></span>' +
+          '<button type="submit" class="btn btn-primary">Valider <span aria-hidden="true">→</span></button></div>' +
+      '</form>';
+  }
+
+  function syncFinancialFrameworkEditionSelection(form, session) {
+    if (!form) return null;
+    var accountsInput = $('[data-financial-framework-edition-filter="accounts"]', form);
+    if (accountsInput) session.filters.accounts = accountsInput.value;
+    $$('[data-financial-framework-edition-column]', form).forEach(function (input) {
+      session.columns[input.getAttribute('data-financial-framework-edition-column')] = !!input.checked;
+    });
+    var report = buildFinancialFrameworkEditionReport(session);
+    session.report = report;
+    showGeneralBalanceReportErrors($('#financial-framework-edition-selection-errors', form), report.errors);
+    var count = $('[data-financial-framework-edition-line-count]', form);
+    if (count) count.textContent = String(report.generatedLineCount || 0);
+    return report;
+  }
+
+  function submitFinancialFrameworkEditionSelection(form, session) {
+    var report = syncFinancialFrameworkEditionSelection(form, session);
+    var errors = report ? report.errors.slice() : ['Impossible de lire la sélection du cadre comptable.'];
+    if (!financialFrameworkEditionSelectedColumns(session).length) errors.push('Sélectionnez au moins une colonne à restituer.');
+    showGeneralBalanceReportErrors($('#financial-framework-edition-selection-errors', form), errors);
+    if (errors.length) return;
+    session.report = report;
+    session.phase = 'layout';
+    render();
+  }
+
+  function financialFrameworkEditionLayoutView(session) {
+    var report = session.report || buildFinancialFrameworkEditionReport(session);
+    var count = report.generatedLineCount + (report.generatedLineCount === 1 ? ' ligne générée' : ' lignes générées');
+    return generalBalanceReportSteps('layout', 'Étapes de préparation du Cadre comptable') +
+      pageHeader('Mise en page — Cadre comptable', 'Choisissez le style, l’orientation, les marges, les pages et la destination.', '') +
+      '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(count) + ', en-têtes compris. Le référentiel et les écritures ne seront pas modifiés.</div></div>' +
+      '<form id="financial-framework-edition-layout-form" novalidate><div class="journal-lines-settings-grid financial-framework-edition-settings-grid">' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="financial-framework-edition-printer">Imprimante</label><select id="financial-framework-edition-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="financial-framework-edition-style">Style du rapport</label><select id="financial-framework-edition-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('financial-framework-edition-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('financial-framework-edition-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('financial-framework-edition-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('financial-framework-edition-margins', 'binding', 'Reliure', session.layout.margins === 'binding', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Pages</h3></div><div class="journal-lines-page-range"><div class="field"><label for="financial-framework-edition-page-first">Première</label><input id="financial-framework-edition-page-first" type="number" min="1" step="1" value="' + esc(session.layout.pageFirst) + '" placeholder="1"></div><span aria-hidden="true">à</span><div class="field"><label for="financial-framework-edition-page-last">Dernière</label><input id="financial-framework-edition-page-last" type="number" min="1" step="1" value="' + esc(session.layout.pageLast) + '" placeholder="Fin"></div></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Parité</h3></div><div class="field"><label for="financial-framework-edition-parity">Pages</label><select id="financial-framework-edition-parity"><option value="none"' + (session.layout.parity === 'none' ? ' selected' : '') + '>Aucune</option><option value="odd"' + (session.layout.parity === 'odd' ? ' selected' : '') + '>Impaire</option><option value="even"' + (session.layout.parity === 'even' ? ' selected' : '') + '>Paire</option></select></div></div></section>' +
+        '<section class="card journal-lines-card financial-framework-edition-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
+          generalBalanceReportRadio('financial-framework-edition-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
+          generalBalanceReportRadio('financial-framework-edition-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
+          generalBalanceReportRadio('financial-framework-edition-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('financial-framework-edition-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
+        '</div></div></section></div>' +
+        '<div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> Le choix final de l’imprimante ou du PDF, des pages et de la parité reste dans la boîte du navigateur.</div></div>' +
+        '<div class="journal-lines-form-errors" id="financial-framework-edition-layout-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-financial-framework-edition-back-selection>Retour à la sélection</button><button type="submit" class="btn btn-primary">Valider</button></div></form>';
+  }
+
+  function financialFrameworkEditionCellText(row, column) {
+    if (column.key === 'code') return row.code;
+    if (column.key === 'label') return row.label;
+    if (column.key === 'posts') return FinancialFrameworkEditionReport.formatBalancePosts(row);
+    return '';
+  }
+
+  function financialFrameworkEditionPostHtml(row) {
+    var output = [];
+    if (row.debit) output.push('<span class="financial-framework-edition-post-line"><strong>Débit :</strong> &lt;' + esc(row.debit.code) + '&gt; ' + esc(row.debit.label) + '</span>');
+    if (row.credit) output.push('<span class="financial-framework-edition-post-line"><strong>Crédit :</strong> &lt;' + esc(row.credit.code) + '&gt; ' + esc(row.credit.label) + '</span>');
+    return output.join('');
+  }
+
+  function financialFrameworkEditionPrintableHtml(session, report) {
+    report = report || session.report || buildFinancialFrameworkEditionReport(session);
+    var columns = financialFrameworkEditionSelectedColumns(session);
+    var headers = columns.map(function (column) { return '<th scope="col">' + esc(column.label) + '</th>'; }).join('');
+    var rows = report.rows.map(function (row) {
+      return '<tr>' + columns.map(function (column) {
+        var value = column.key === 'posts' ? financialFrameworkEditionPostHtml(row) : esc(financialFrameworkEditionCellText(row, column));
+        return '<td class="financial-framework-edition-cell-' + esc(column.key) + '">' + value + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    if (!rows) rows = '<tr class="financial-framework-edition-empty-row"><td colspan="' + Math.max(columns.length, 1) + '">Aucun compte ou rubrique ne correspond au filtre.</td></tr>';
+    var styleClass = session.layout.style === 'color10' ? 'financial-framework-edition-style-color' : 'financial-framework-edition-style-plain';
+    var metadata = AccountingFramework.metadata;
+    return '<article class="financial-framework-edition-print ' + styleClass + '">' +
+      '<header class="financial-framework-edition-print-heading"><p class="page-kicker">ÉDITIONS · DÉFINITIONS ET PLANS</p><h2>Cadre comptable</h2>' +
+        '<p>Comptes : ' + esc(session.filters.accounts === '*' ? 'Tous les comptes et rubriques du PDF' : session.filters.accounts) + ' · ' + report.sourceRowCount + ' lignes source · ' + metadata.sourcePages + ' pages</p></header>' +
+      '<div class="financial-framework-edition-table-wrap"><table class="financial-framework-edition-table"><caption>' + esc(metadata.standard + ' · ' + report.sourceRowCount + ' lignes issues du PDF') + '</caption>' +
+        '<thead><tr>' + headers + '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<p class="financial-framework-edition-print-note">Source : « ' + esc(metadata.sourceFile) + ' ». La colonne Postes au bilan restitue séparément les libellés Débit et Crédit du document. Les cellules vides et libellés tronqués sont conservés ; aucune correspondance n’est complétée.</p>' +
+    '</article>';
+  }
+
+  function financialFrameworkEditionExportMatrix(session, report) {
+    var columns = financialFrameworkEditionSelectedColumns(session);
+    var matrix = [columns.map(function (column) { return column.label; })];
+    report.rows.forEach(function (row) {
+      matrix.push(columns.map(function (column) { return financialFrameworkEditionCellText(row, column); }));
+    });
+    if (!report.rows.length) matrix.push(['Aucun compte ou rubrique ne correspond au filtre.']);
+    return matrix;
+  }
+
+  function generateFinancialFrameworkEditionFile(session, destination) {
+    var report = buildFinancialFrameworkEditionReport(session);
+    if (!report.ok) throw new Error(report.errors.join(' '));
+    var matrix = financialFrameworkEditionExportMatrix(session, report);
+    var spreadsheet = destination === 'table';
+    var extension = spreadsheet ? 'xlsx' : 'txt';
+    var filename = safeFilePart('Cadre-comptable') + '-' + safeFilePart(S.currentDossier().name) + '-' + safeFilePart(session.filters.accounts || 'selection') + '.' + extension;
+    var content = spreadsheet
+      ? AccountingExchange.exportTabularWorkbook('Cadre comptable', matrix[0], matrix.slice(1))
+      : generalBalanceReportTsv(matrix);
+    downloadFile(filename, content, spreadsheet ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/plain;charset=utf-8');
+    session.report = report;
+    session.exportFilename = filename;
+    session.exportMessage = spreadsheet ? 'Téléchargement du classeur Excel lancé. Le référentiel source reste inchangé.' : 'Téléchargement du fichier texte tabulé lancé. Le référentiel source reste inchangé.';
+    session.phase = 'saved';
+    render();
+  }
+
+  function financialFrameworkEditionPrintOptions(session) {
+    var styleNode = null;
+    var previousStyleText = '';
+    var createdStyle = false;
+    var previousTitle = '';
+    return {
+      beforePrint: function () {
+        styleNode = $('#financial-framework-edition-print-page-style');
+        createdStyle = !styleNode;
+        if (!styleNode) {
+          styleNode = document.createElement('style');
+          styleNode.id = 'financial-framework-edition-print-page-style';
+          document.head.appendChild(styleNode);
+        } else previousStyleText = styleNode.textContent;
+        var orientation = session.layout.orientation === 'landscape' ? 'landscape' : 'portrait';
+        var left = session.layout.margins === 'binding' ? '18mm' : '12mm';
+        styleNode.textContent = '@page { size: A4 ' + orientation + '; margin: 12mm 12mm 12mm ' + left + '; }';
+        previousTitle = document.title;
+        document.title = safeFilePart('Cadre-comptable') + '-' + safeFilePart(S.currentDossier().name);
+      },
+      afterPrint: function () {
+        document.title = previousTitle || document.title;
+        if (!styleNode) return;
+        if (createdStyle && styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+        else styleNode.textContent = previousStyleText;
+      }
+    };
+  }
+
+  function openFinancialFrameworkEditionPreview(session) {
+    var report = buildFinancialFrameworkEditionReport(session);
+    session.report = report;
+    openReportPreview('Aperçu — Cadre comptable', financialFrameworkEditionPrintableHtml(session, report), financialFrameworkEditionPrintOptions(session));
+  }
+
+  function financialFrameworkEditionPreviewView(session, report) {
+    return generalBalanceReportSteps('preview', 'Étapes de préparation du Cadre comptable') +
+      pageHeader('Aperçu — Cadre comptable', 'Vérifiez le référentiel avant impression ou export.', '<button type="button" class="btn btn-primary" data-financial-framework-edition-open-preview>Ouvrir l’aperçu plein écran</button>') +
+      '<div class="alert info"><div><strong>Consultation seule.</strong> La fenêtre d’aperçu plein écran et la boîte d’impression ne modifient ni le référentiel ni les écritures.</div></div>' +
+      financialFrameworkEditionPrintableHtml(session, report) +
+      '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-financial-framework-edition-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-ghost" data-financial-framework-edition-back-selection>Modifier la sélection</button></div>';
+  }
+
+  function financialFrameworkEditionSavedView(session) {
+    return generalBalanceReportSteps('preview', 'Étapes de préparation du Cadre comptable') +
+      pageHeader('Export prêt', 'Le fichier reprend les lignes et colonnes sélectionnées du PDF.', '') +
+      '<section class="card journal-lines-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
+        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-financial-framework-edition-open-preview>Afficher l’aperçu plein écran</button><button type="button" class="btn btn-ghost" data-financial-framework-edition-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-financial-framework-edition-new>Nouvelle sélection</button></div></div></section>';
+  }
+
+  function submitFinancialFrameworkEditionLayout(form, session) {
+    var errors = [];
+    var destination = $('input[name="financial-framework-edition-destination"]:checked', form);
+    var orientation = $('input[name="financial-framework-edition-orientation"]:checked', form);
+    var margins = $('input[name="financial-framework-edition-margins"]:checked', form);
+    var first = $('#financial-framework-edition-page-first', form).value;
+    var last = $('#financial-framework-edition-page-last', form).value;
+    if (first && (!Number.isInteger(Number(first)) || Number(first) < 1)) errors.push('La première page doit être un entier supérieur ou égal à 1.');
+    if (last && (!Number.isInteger(Number(last)) || Number(last) < 1)) errors.push('La dernière page doit être un entier supérieur ou égal à 1.');
+    if (first && last && Number(first) > Number(last)) errors.push('La première page doit précéder ou égaler la dernière page.');
+    var report = buildFinancialFrameworkEditionReport(session);
+    if (!report.ok) errors = errors.concat(report.errors);
+    showGeneralBalanceReportErrors($('#financial-framework-edition-layout-errors', form), errors);
+    if (errors.length) return;
+    session.layout.printer = $('#financial-framework-edition-printer', form).value;
+    session.layout.style = $('#financial-framework-edition-style', form).value;
+    session.layout.orientation = orientation ? orientation.value : 'portrait';
+    session.layout.margins = margins ? margins.value : 'standard';
+    session.layout.pageFirst = first;
+    session.layout.pageLast = last;
+    session.layout.parity = $('#financial-framework-edition-parity', form).value;
+    session.layout.destination = destination ? destination.value : 'preview';
+    session.report = report;
+    if (session.layout.destination === 'table' || session.layout.destination === 'file') {
+      try { generateFinancialFrameworkEditionFile(session, session.layout.destination); }
+      catch (error) { showGeneralBalanceReportErrors($('#financial-framework-edition-layout-errors', form), [error && error.message || 'Export impossible.']); }
+      return;
+    }
+    session.phase = 'preview';
+    render();
+  }
+
+  function viewFinancialFrameworkEdition(backLink) {
+    var session = ensureFinancialFrameworkEditionReportSession();
+    if (session.phase !== 'selection') session.report = buildFinancialFrameworkEditionReport(session);
+    var content = session.phase === 'layout'
+      ? financialFrameworkEditionLayoutView(session)
+      : (session.phase === 'preview'
+        ? financialFrameworkEditionPreviewView(session, session.report)
+        : (session.phase === 'saved' ? financialFrameworkEditionSavedView(session) : financialFrameworkEditionSelectionView(session)));
+    return '<div class="edition-report-detail-view financial-framework-edition-report-detail">' + backLink + content + '</div>';
+  }
+
+  function bindFinancialFrameworkEditionReport() {
+    var session = ensureFinancialFrameworkEditionReportSession();
+    if (session.phase === 'selection') {
+      var form = $('#financial-framework-edition-selection-form');
+      if (!form) return;
+      var update = function () { syncFinancialFrameworkEditionSelection(form, session); };
+      form.addEventListener('input', update);
+      form.addEventListener('change', update);
+      form.addEventListener('submit', function (event) { event.preventDefault(); submitFinancialFrameworkEditionSelection(form, session); });
+      var picker = $('[data-financial-framework-edition-picker]', form);
+      if (picker) picker.addEventListener('click', function () {
+        var input = $('[data-financial-framework-edition-filter="accounts"]', form);
+        if (input) openFinancialFrameworkEditionAccountPicker(input);
+      });
+      return;
+    }
+    if (session.phase === 'layout') {
+      var layoutForm = $('#financial-framework-edition-layout-form');
+      if (layoutForm) layoutForm.addEventListener('submit', function (event) { event.preventDefault(); submitFinancialFrameworkEditionLayout(layoutForm, session); });
+      var backSelection = $('[data-financial-framework-edition-back-selection]');
+      if (backSelection) backSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+      return;
+    }
+    $$('[data-financial-framework-edition-open-preview]').forEach(function (button) { button.addEventListener('click', function () { openFinancialFrameworkEditionPreview(session); }); });
+    var backLayout = $('[data-financial-framework-edition-back-layout]');
+    if (backLayout) backLayout.addEventListener('click', function () { session.phase = 'layout'; render(); });
+    var backToSelection = $('[data-financial-framework-edition-back-selection]');
+    if (backToSelection) backToSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+    var newReport = $('[data-financial-framework-edition-new]');
+    if (newReport) newReport.addEventListener('click', function () { financialFrameworkEditionReportSession = createFinancialFrameworkEditionReportSession(); render(); });
+  }
+
+  function openFinancialFrameworkEditionAccountPicker(input) {
+    var records = AccountingFramework.all();
+    var current = FinancialFrameworkEditionReport.parseAccountFilter(input.value);
+    var selectAll = current.valid && current.all;
+    var prefix = 'financial-framework-edition-picker';
+    var rows = records.map(function (record, index) {
+      var checked = selectAll || (current.valid && FinancialFrameworkEditionReport.accountMatches(record.code, current));
+      var searchText = record.code + ' ' + record.label + ' ' + FinancialFrameworkEditionReport.formatBalancePosts(record);
+      return '<label class="journal-lines-picker-option financial-framework-edition-picker-option" data-picker-text="' + esc(searchText) + '"><input type="checkbox" data-financial-framework-edition-picker-code value="' + esc(record.code) + '" id="' + prefix + '-' + index + '"' + (checked ? ' checked' : '') + '><strong>' + esc(record.code) + '</strong><span>' + esc(record.label) + '</span></label>';
+    }).join('');
+    var body = '<div class="journal-lines-picker"><div class="field"><label for="' + prefix + '-search">Rechercher dans le PDF</label><input id="' + prefix + '-search" type="search" placeholder="Code, intitulé ou poste"></div>' +
+      '<label class="journal-lines-picker-all"><input id="' + prefix + '-all" type="checkbox"' + (selectAll ? ' checked' : '') + '>Tous les comptes et rubriques</label>' +
+      '<div class="journal-lines-picker-list" role="group" aria-label="Comptes et rubriques du cadre comptable">' + (rows || '<div class="empty-state">Aucune ligne disponible dans le PDF source.</div>') + '</div></div>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="button" class="btn btn-primary" data-financial-framework-edition-picker-apply>Appliquer</button>';
+    openModal('Choisir les comptes', 'La liste reprend les codes présents dans le PDF du cadre comptable.', body, footer, true);
+    var modalRoot = $('#modal-root');
+    var search = $('#' + prefix + '-search', modalRoot);
+    var pickerRows = $$('.financial-framework-edition-picker-option', modalRoot);
+    var allToggle = $('#' + prefix + '-all', modalRoot);
+    var checkboxes = $$('[data-financial-framework-edition-picker-code]', modalRoot);
+    if (search) search.addEventListener('input', function () {
+      var query = search.value.trim().toLocaleLowerCase();
+      pickerRows.forEach(function (row) { row.hidden = !!query && row.getAttribute('data-picker-text').toLocaleLowerCase().indexOf(query) === -1; });
+    });
+    if (allToggle) allToggle.addEventListener('change', function () { checkboxes.forEach(function (checkbox) { checkbox.checked = allToggle.checked; }); });
+    checkboxes.forEach(function (checkbox) {
+      checkbox.addEventListener('change', function () { if (allToggle) allToggle.checked = !!checkboxes.length && checkboxes.every(function (item) { return item.checked; }); });
+    });
+    var apply = $('[data-financial-framework-edition-picker-apply]', modalRoot);
+    if (apply) apply.addEventListener('click', function () {
+      input.value = allToggle && allToggle.checked ? '*' : $$('[data-financial-framework-edition-picker-code]:checked', modalRoot).map(function (checkbox) { return checkbox.value; }).join(', ');
+      try { var inputEvent = document.createEvent('Event'); inputEvent.initEvent('input', true, false); input.dispatchEvent(inputEvent); } catch (error) { /* la valeur saisie reste disponible */ }
+      closeModal();
+      input.focus();
+    });
+  }
+
   function accountingBridgeSourceDefinitions() {
     return [
       {
@@ -22364,7 +22705,7 @@
       assetAccounts: { title: 'Consultation par comptes', description: 'Cumul et grand-livre des éléments à définir à partir de vos captures.' },
       assetDiscrepancies: { title: 'Écarts et anomalies', description: 'Sources de comparaison, critères et résultats à préciser ; aucun écart n’est calculé ici.' },
       assetDimensions: { title: 'Ventilations désactivées', description: 'Les trois éléments restent grisés comme dans votre capture ; aucune sortie n’est affichée.' },
-      definitionsFramework: { title: 'Cadre comptable et postes du bilan', description: 'Les deux éléments sont structurés comme sur votre capture ; contenu et présentation à préciser.' },
+      definitionsFramework: { title: 'Cadre comptable et postes du bilan', description: 'Le Cadre comptable reprend le PDF SYSCOHADA révisé en lecture seule ; l’état Postes du bilan reste à préciser.' },
       definitionsAccounts: { title: 'Plan comptable et postes associés', description: 'Les deux éditions restent distinctes des fonctions de maintenance du plan.' },
       definitionsThirdParties: { title: 'Tiers', description: 'Édition à préciser sans ouvrir les écrans de maintenance des fiches.' },
       definitionsJournals: { title: 'Plan des journaux', description: 'Restitution à préciser sans ouvrir la maintenance des journaux.' },
@@ -23575,6 +23916,7 @@
     if (child.id === 'edition-fixed-asset-entry-discrepancies') return viewFixedAssetEntryDiscrepanciesReport(backLink);
     if (child.id === 'edition-fixed-asset-exit-discrepancies') return viewFixedAssetExitDiscrepanciesReport(backLink);
     if (child.id === 'edition-fixed-asset-other-anomalies') return viewFixedAssetAnomaliesReport(backLink);
+    if (child.id === 'edition-accounting-framework') return viewFinancialFrameworkEdition(backLink);
     if (PointingEditionReports.REPORT_IDS.indexOf(child.id) !== -1) return viewPointingEditionReport(backLink, child.id);
     if (MatchingEditionReports.REPORT_IDS.indexOf(child.id) !== -1) return viewMatchingEditionReport(backLink, child.id);
     if (child.id === 'general-summary-balance') return viewGeneralSummaryBalanceReport(backLink);
@@ -25028,6 +25370,7 @@
       if (menuParams.g === 'editions' && menuParams.t === 'fixed-assets' && menuParams.c === 'edition-fixed-asset-depreciation') bindFixedAssetDepreciationReport();
       if (menuParams.g === 'editions' && menuParams.t === 'fixed-assets' && menuParams.c === 'edition-fixed-asset-overview') bindFixedAssetOverviewReport();
       if (menuParams.g === 'editions' && menuParams.t === 'fixed-assets' && FixedAssetAdditionalReports.REPORT_IDS.indexOf(menuParams.c) !== -1) bindFixedAssetAdditionalReport(menuParams.c);
+      if (menuParams.g === 'editions' && menuParams.t === 'definitions-and-plans' && menuParams.c === FinancialFrameworkEditionReport.REPORT_ID) bindFinancialFrameworkEditionReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-ledger') bindGeneralLedgerReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-detail') bindGeneralCounterpartDetailReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-total') bindGeneralCounterpartTotalReport();

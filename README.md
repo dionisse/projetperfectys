@@ -77,7 +77,7 @@ Le dépôt fournit un serveur statique sans dépendance ni compilation. Dans Bol
 | Éditions → Lettrage | Sous-menu organisé en « Écritures lettrées », « Anomalies sur les lettrages » et « Écritures non lettrées ». Les écrans et leurs paramètres restent provisoires jusqu’à réception des captures ; le lettrage manuel opérationnel reste dans Saisie → Lettrage |
 | Éditions → Pointage et rapprochement bancaire | Sous-menu en deux groupes : écritures pointées/non pointées et justification des soldes ; relevé de banque et rapprochement bancaire. Les critères, colonnes, calculs et rendus attendent les captures ; le pointage opérationnel reste dans Saisie → Pointage |
 | Éditions → Immobilisations | 17 états organisés en six groupes selon la capture : le Tableau des immobilisations, le Tableau des amortissements et les douze états complémentaires sont actifs ; les ventilations par centres de responsabilité, domaines d’activités et sources de financement restent grisées. Les états consultent les champs explicitement enregistrés ; les mouvements, rapprochements, montants et anomalies sans source ou règle explicite restent vides. Le tableau des amortissements demeure distinct de la simulation linéaire indicative |
-| Éditions → Définitions et plans | 7 sous-éléments organisés en cinq groupes comme sur la capture. Les contenus attendent vos captures ; aucun écran de maintenance du plan comptable, des tiers ou des journaux n’est exposé. « Plan analytiques » reste inactif dans le parcours général |
+| Éditions → Définitions et plans | 7 sous-éléments en cinq groupes. « Cadre comptable » est actif : filtre Comptes `*`, colonnes Code, Intitulé et Postes au bilan cochées par défaut, aperçu plein écran et export Excel/TXT en lecture seule. La restitution reprend les 532 lignes du PDF; chaque poste conserve séparément ses rattachements Débit et Crédit, et les cellules vides restent vides. Le compteur affiche 533 pour les 532 lignes source plus la ligne d’en-têtes, sans créer de donnée supplémentaire. Les autres états restent en attente de leurs spécifications ; aucune maintenance du plan comptable, des tiers ou des journaux n’est exposée. « Plan analytiques » reste inactif |
 | Éditions → Comptes généraux | 11 états : la balance générale, la balance de synthèse et la balance âgée ont un parcours de sélection, mise en page et aperçu plein écran ; le grand livre ouvre la vue existante. La Balance âgée s’appuie sur un registre manuel dédié des pièces ouvertes, échéances et règlements/avances, sans réutiliser les écritures validées comme factures. Les reports, situations, historique multi-exercices et contreparties restent à préciser. L’édition analytique est désactivée |
 | Éditions → Tiers | 7 états structurés ; les balances, grands livres et relevés individuels attendent les captures et l’identifiant de tiers dans les pièces. Aucun solde individuel n’est inventé |
 | Éditions → Comptes en devises | 5 états structurés (balance, ouverture, situation, grand livre, écarts) ; en attente du modèle multidevise et des règles de conversion. Le seul cumul actif se trouve sous Éditions → Journaux et ne convertit aucun montant |
@@ -456,8 +456,10 @@ modern-proto/css/modern.css    identité GOBEX (papier, encre, vert canard et or
 modern-proto/css/fixed-asset-overview-report.css mise en page responsive et impression du tableau des immobilisations
 modern-proto/css/fixed-asset-depreciation-report.css mise en page du tableau des amortissements et impression responsive
 modern-proto/css/fixed-asset-additional-reports.css sélection, fiches, tableaux responsives et impression des états complémentaires des immobilisations
+modern-proto/css/financial-framework-edition.css style responsive, aperçu et impression de l’édition Cadre comptable
 modern-proto/js/accounting-chart.js référentiel de 147 comptes et de leurs classes, sous-classes et utilisations
 modern-proto/js/accounting-framework.js transcription réutilisable du cadre SYSCOHADA révisé (532 lignes, postes Débit/Crédit)
+modern-proto/js/accounting-framework-edition-report.js filtres et restitution en lecture seule du cadre comptable dans Éditions
 modern-proto/js/store.js       dossiers clients, cycles, migration du plan comptable, données isolées, règles métier, calculs, import/export
 modern-proto/js/modules.js     catalogue déclaratif des modules du launcher
 modern-proto/js/permissions.js politique d’accès démo (refus par défaut)
@@ -505,6 +507,8 @@ node tests/fixed-asset-additional-reports-ui.test.js
 node tests/table-design-system.test.js
 node tests/confidential-accounts.test.js
 node tests/accounting-framework.test.js
+node tests/accounting-framework-edition.test.js
+node tests/accounting-framework-edition-ui.test.js
 node tests/account-lifecycle.test.js
 node tests/centralization-cancellation.test.js
 ```

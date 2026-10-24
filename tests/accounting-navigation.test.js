@@ -460,7 +460,9 @@ assert.ok(findTab('editions', 'fixed-assets').children.find(child => child.id ==
 assert.ok(findTab('editions', 'fixed-assets').children.find(child => child.id === 'edition-fixed-asset-entry-discrepancies').reason.includes('Montants enregistrés, Écart'));
 assert.ok(findTab('editions', 'fixed-assets').children.find(child => child.id === 'edition-fixed-asset-other-anomalies').reason.includes('Éléments (*)'));
 assert.ok(findTab('editions', 'fixed-assets').reason.includes('rapprochements et anomalies sans source/règle restent vides'));
-assert.equal(findTab('editions', 'definitions-and-plans').status, 'planned');
+assert.equal(findTab('editions', 'definitions-and-plans').status, 'partial');
+assert.equal(findTab('editions', 'definitions-and-plans').children[0].status, 'active');
+assert.match(findTab('editions', 'definitions-and-plans').children[0].reason, /532 lignes du PDF SYSCOHADA révisé[\s\S]*Aperçu plein écran/);
 assert.deepEqual(findTab('editions', 'definitions-and-plans').children.map(child => child.label), [
   'Cadre comptable', 'Postes du bilan', 'Plan comptable', 'Postes associés aux comptes',
   'Tiers', 'Plan des journaux', 'Plan analytiques'
@@ -469,7 +471,7 @@ assert.deepEqual(findTab('editions', 'definitions-and-plans').children.map(child
   'definitionsFramework', 'definitionsFramework', 'definitionsAccounts', 'definitionsAccounts',
   'definitionsThirdParties', 'definitionsJournals', 'definitionsAnalytics'
 ]);
-assert.ok(findTab('editions', 'definitions-and-plans').children.slice(0, 6).every(child => child.status === 'planned'));
+assert.ok(findTab('editions', 'definitions-and-plans').children.slice(1, 6).every(child => child.status === 'planned'));
 assert.equal(findTab('editions', 'definitions-and-plans').children[6].status, 'inactive');
 assert.ok(findTab('editions', 'definitions-and-plans').children.find(child => child.id === 'edition-chart-of-accounts').reason.includes('maintenance'));
 assert.ok(findTab('editions', 'definitions-and-plans').children.find(child => child.id === 'edition-third-parties').reason.includes('maintenance'));
@@ -722,7 +724,7 @@ assert.match(appSource, /function generalLedgerReportLayoutView\([\s\S]*general-
 assert.match(appSource, /function generalLedgerReportPrintableHtml\([\s\S]*GRAND LIVRE DES COMPTES[\s\S]*reports à nouveau[\s\S]*page-break/);
 assert.match(generalLedgerSource, /priorEntriesIncludedInRunningBalance: true[\s\S]*sourceReferenceOnly: true[\s\S]*noAccountingMutation: true/);
 assert.match(configurationCss, /\.general-ledger-column-grid[\s\S]*\.general-ledger-account-section/);
-assert.match(serviceWorkerSource, /perfecto-static-v127/);
+assert.match(serviceWorkerSource, /perfecto-static-v128/);
 
 assert.match(appSource, /function accountingMenuHash\(groupId, tabId, childId\)[\s\S]*return childId \? hash \+ '&c='/,
   'le lien d’un enfant conserve son identifiant dans la route');
@@ -758,7 +760,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v127/);
+assert.match(serviceWorkerSource, /perfecto-static-v128/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

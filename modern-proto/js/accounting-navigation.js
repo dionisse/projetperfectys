@@ -203,9 +203,9 @@
           ]
         },
         {
-          id: 'definitions-and-plans', label: 'Définitions et plans', status: 'planned', reason: 'Sous-menu organisé en cinq groupes selon votre capture. Le contenu reste à préciser ; aucun écran de maintenance n’est ouvert depuis les Éditions.',
+          id: 'definitions-and-plans', label: 'Définitions et plans', status: 'partial', reason: 'Sous-menu organisé en cinq groupes selon votre capture. Le Cadre comptable est disponible en consultation et en édition ; les autres états restent à préciser. Aucune entrée n’ouvre un écran de maintenance depuis les Éditions.',
           children: [
-            { id: 'edition-accounting-framework', label: 'Cadre comptable', section: 'definitionsFramework', status: 'planned', reason: 'Contenu et présentation à préciser à partir de votre capture ; aucun paramètre de dossier n’est modifié.' },
+            { id: 'edition-accounting-framework', label: 'Cadre comptable', section: 'definitionsFramework', status: 'active', reason: 'Filtre Comptes (*) ; colonnes Code, Intitulé et Postes au bilan cochées. Restitue les 532 lignes du PDF SYSCOHADA révisé ; les postes Débit/Crédit et cellules vides restent fidèles à la source. Aperçu plein écran et exports Excel/TXT ; aucune modification comptable.' },
             { id: 'edition-balance-items', label: 'Postes du bilan', section: 'definitionsFramework', status: 'planned', reason: 'Nomenclature, critères et présentation à définir à partir de votre capture ; aucun poste n’est créé ou modifié.' },
             { id: 'edition-chart-of-accounts', label: 'Plan comptable', section: 'definitionsAccounts', status: 'planned', reason: 'L’édition et son rendu restent à préciser par capture ; cette entrée ne dirige pas vers la maintenance du plan comptable.' },
             { id: 'edition-account-associated-items', label: 'Postes associés aux comptes', section: 'definitionsAccounts', status: 'planned', reason: 'Correspondances et présentation à confirmer par capture ; aucun rattachement de compte n’est modifié.' },
