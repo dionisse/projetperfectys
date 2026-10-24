@@ -449,6 +449,7 @@ modern-proto/index.html        coquille de l'application (navigation, topbar)
 modern-proto/css/modern.css    identité GOBEX (papier, encre, vert canard et or doux), responsive et imprimable
 modern-proto/css/fixed-asset-overview-report.css mise en page responsive et impression du tableau des immobilisations
 modern-proto/css/fixed-asset-depreciation-report.css mise en page du tableau des amortissements et impression responsive
+modern-proto/css/fixed-asset-additional-reports.css sélection, fiches, tableaux responsives et impression des états complémentaires des immobilisations
 modern-proto/js/accounting-chart.js référentiel de 147 comptes et de leurs classes, sous-classes et utilisations
 modern-proto/js/accounting-framework.js transcription réutilisable du cadre SYSCOHADA révisé (532 lignes, postes Débit/Crédit)
 modern-proto/js/store.js       dossiers clients, cycles, migration du plan comptable, données isolées, règles métier, calculs, import/export
@@ -457,6 +458,7 @@ modern-proto/js/permissions.js politique d’accès démo (refus par défaut)
 modern-proto/js/accounting-navigation.js  menus, sous-menus et états d’activation du Lot 1
 modern-proto/js/fixed-asset-overview-report.js lecture seule du registre d’immobilisations, filtres et colonnes sans mouvements inventés
 modern-proto/js/fixed-asset-depreciation-report.js état des amortissements depuis les champs explicites du registre, sans calcul de dotation/VNC
+modern-proto/js/fixed-asset-additional-reports.js neuf états d’immobilisations, compte/élément/localisation, références explicites et montants/écarts non sourcés laissés vides
 modern-proto/js/accounting-exchange.js lecture et export comptable CSV/XLSX ; lecteur de tableaux génériques
 modern-proto/js/bank-statement.js normalisation locale des relevés et suggestions sans pointage automatique
 modern-proto/js/bank-statement-storage.js stockage IndexedDB de démonstration, non connecté à Drive

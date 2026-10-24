@@ -1,0 +1,64 @@
+/* Intégration des neuf états complémentaires Immobilisations et aperçu plein écran. */
+'use strict';
+
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const navigation = require('../modern-proto/js/accounting-navigation.js');
+const Reports = require('../modern-proto/js/fixed-asset-additional-reports.js');
+const root = path.join(__dirname, '..', 'modern-proto');
+const appSource = fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8');
+const reportSource = fs.readFileSync(path.join(root, 'js', 'fixed-asset-additional-reports.js'), 'utf8');
+const htmlSource = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const serviceWorkerSource = fs.readFileSync(path.join(root, 'service-worker.js'), 'utf8');
+const cssSource = fs.readFileSync(path.join(root, 'css', 'fixed-asset-additional-reports.css'), 'utf8');
+const workflowSource = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'main.yml'), 'utf8');
+const tab = navigation.getTab('editions', 'fixed-assets');
+
+assert.ok(tab);
+const activeCaptureReports = Reports.REPORT_IDS.map(id => tab.children.find(child => child.id === id));
+assert.ok(activeCaptureReports.every(Boolean));
+assert.ok(activeCaptureReports.every(child => child.status === 'active'));
+assert.match(tab.children.find(child => child.id === 'edition-fixed-asset-entries').reason, /Début\/Date aux bornes du cycle/);
+assert.match(tab.children.find(child => child.id === 'edition-fixed-asset-inventory-sheets').reason, /Éléments \(\*\)/);
+assert.match(tab.children.find(child => child.id === 'edition-fixed-asset-ledger').reason, /Journal, Pièce, Amortissement, Date, Valeur brute et Valeur nette/);
+assert.match(tab.children.find(child => child.id === 'edition-fixed-asset-transfers').reason, /ne fournit pas d’historique/i);
+assert.match(tab.children.find(child => child.id === 'edition-fixed-asset-locations-inventory').reason, /Localisations \(\*\) et Comptes \(\*\)/);
+assert.match(tab.children.find(child => child.id === 'edition-fixed-asset-account-totals').reason, /Nombre = fiches enregistrées/);
+assert.match(tab.children.find(child => child.id === 'edition-fixed-asset-period-discrepancies').reason, /aucun écart n’est calculé/);
+assert.ok(tab.children.slice(11, 14).every(child => child.status === 'planned'), 'les autres états ne figurant pas dans la capture restent planifiés');
+
+assert.match(appSource, /var FixedAssetAdditionalReports = window\.PerfectoFixedAssetEditionReports/);
+assert.match(appSource, /function createFixedAssetAdditionalReportSession\([\s\S]*accounts: '\*'[\s\S]*from: dossier\.cycleStart, to: dossier\.cycleEnd, date: dossier\.cycleEnd/);
+assert.match(reportSource, /accountFilterIncludesCurrentAndFutureCodes:\s*true/);
+assert.match(appSource, /« \* » couvre tout le plan comptable actuel et futur/);
+assert.match(appSource, /function buildFixedAssetAdditionalReport\([\s\S]*accounts: S\.accounts\(\)[\s\S]*assets: S\.fixedAssets\(\)[\s\S]*locations: S\.fixedAssetLocations\(\)[\s\S]*entries: S\.postedEntries\(\)/);
+assert.match(appSource, /function fixedAssetAdditionalFilterField\([\s\S]*Comptes[\s\S]*Éléments[\s\S]*Localisations[\s\S]*type="date"/);
+assert.match(appSource, /function fixedAssetAdditionalSelectionView\([\s\S]*Colonnes à imprimer[\s\S]*fixed-asset-additional-selection-warnings/);
+assert.match(appSource, /function openFixedAssetAdditionalCodePicker\([\s\S]*S\.fixedAssets\(\)[\s\S]*S\.fixedAssetLocations\(\)/);
+assert.match(appSource, /function fixedAssetAdditionalPrintableHtml\([\s\S]*fixedAssetAdditionalTableRowsHtml/);
+assert.match(appSource, /function fixedAssetAdditionalPrintOptions\([\s\S]*@page \{ size: A4/);
+assert.match(appSource, /function openFixedAssetAdditionalPreview\([\s\S]*openReportPreview\(/);
+assert.match(appSource, /function generateFixedAssetAdditionalReportFile\([\s\S]*exportTabularWorkbook[\s\S]*generalLedgerReportTsv/);
+assert.match(appSource, /function viewFixedAssetEntriesReport\([\s\S]*edition-fixed-asset-entries/);
+assert.match(appSource, /function viewFixedAssetPeriodDiscrepanciesReport\([\s\S]*edition-fixed-asset-period-discrepancies/);
+assert.match(appSource, /FixedAssetAdditionalReports\.REPORT_IDS\.indexOf\(parsed\.params\.c\) !== -1/);
+assert.match(appSource, /FixedAssetAdditionalReports\.REPORT_IDS\.indexOf\(menuParams\.c\) !== -1\) bindFixedAssetAdditionalReport/);
+assert.match(appSource, /data-fixed-asset-additional-open-preview>Ouvrir l’aperçu plein écran/);
+assert.match(appSource, /data-fixed-asset-additional-filter="accounts"[\s\S]*couvre tout le plan comptable actuel et futur/);
+assert.match(reportSource, /noAccountingMutation:\s*true/);
+
+assert.ok(htmlSource.indexOf('js/fixed-asset-overview-report.js') < htmlSource.indexOf('js/fixed-asset-additional-reports.js'));
+assert.ok(htmlSource.indexOf('js/fixed-asset-additional-reports.js') < htmlSource.indexOf('js/app.js'));
+assert.match(htmlSource, /css\/fixed-asset-additional-reports\.css/);
+assert.match(serviceWorkerSource, /\.\/js\/fixed-asset-additional-reports\.js/);
+assert.match(serviceWorkerSource, /\.\/css\/fixed-asset-additional-reports\.css/);
+assert.match(serviceWorkerSource, /perfecto-static-v126/);
+assert.match(workflowSource, /modern-proto\/js\/fixed-asset-additional-reports\.js/);
+assert.match(workflowSource, /modern-proto\/css\/fixed-asset-additional-reports\.css/);
+assert.match(cssSource, /\.fixed-asset-additional-filter-grid/);
+assert.match(cssSource, /\.fixed-asset-additional-table-wrap[\s\S]*overflow-x: auto/);
+assert.match(cssSource, /max-width: 640px[\s\S]*\.fixed-asset-additional-table \{ min-width: 660px/);
+assert.match(cssSource, /body\.report-preview-printing[\s\S]*\.fixed-asset-additional-table/);
+
+console.log('Immobilisations complémentaires : navigation, sélections, aperçu plein écran, exports et cache vérifiés.');

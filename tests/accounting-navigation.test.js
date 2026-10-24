@@ -77,15 +77,15 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Rapprochements bancaires',
   'Tableau des immobilisations',
   'Tableau des amortissements',
-  'Virements internes',
-  'Entrées de la période',
-  'Sorties de la période',
-  'Immobilisations par localisations pour inventaire',
-  'Fiches d’inventaire',
-  'Cumul par comptes',
-  'Grand-livre des éléments',
+  'Virements des éléments immobilisés',
+  'Entrées d’immobilisations',
+  'Sorties des éléments immobilisés',
+  'Immobilisations par localisations',
+  'Fiche d’immobilisation',
+  'Cumul des éléments immobilisés',
+  'Grand-livre des éléments immobilisés',
   'Écarts à l’ouverture avec la comptabilité générale',
-  'Écarts de la période avec la comptabilité générale',
+  'Écarts de la période entre Comptabilité et Tableau des immobilisations',
   'Écarts sur les entrées',
   'Écarts sur les sorties',
   'Autres anomalies sur les immobilisations',
@@ -435,10 +435,10 @@ assert.ok(findTab('editions', 'bank-reconciliation').children.find(child => chil
 assert.equal(findTab('editions', 'fixed-assets').status, 'partial');
 assert.deepEqual(findTab('editions', 'fixed-assets').children.map(child => child.label), [
   'Tableau des immobilisations', 'Tableau des amortissements',
-  'Virements internes', 'Entrées de la période', 'Sorties de la période',
-  'Immobilisations par localisations pour inventaire', 'Fiches d’inventaire',
-  'Cumul par comptes', 'Grand-livre des éléments',
-  'Écarts à l’ouverture avec la comptabilité générale', 'Écarts de la période avec la comptabilité générale',
+  'Virements des éléments immobilisés', 'Entrées d’immobilisations', 'Sorties des éléments immobilisés',
+  'Immobilisations par localisations', 'Fiche d’immobilisation',
+  'Cumul des éléments immobilisés', 'Grand-livre des éléments immobilisés',
+  'Écarts à l’ouverture avec la comptabilité générale', 'Écarts de la période entre Comptabilité et Tableau des immobilisations',
   'Écarts sur les entrées', 'Écarts sur les sorties', 'Autres anomalies sur les immobilisations',
   'Immobilisations par Centres de responsabilité', 'Immobilisations par Domaines d’activités',
   'Immobilisations par Sources de financement'
@@ -452,11 +452,11 @@ assert.deepEqual(findTab('editions', 'fixed-assets').children.map(child => child
   'assetDimensions', 'assetDimensions', 'assetDimensions'
 ]);
 assert.ok(findTab('editions', 'fixed-assets').children.slice(0, 2).every(child => child.status === 'active'));
-assert.ok(findTab('editions', 'fixed-assets').children.slice(2, 14).every(child => child.status === 'planned'));
+assert.ok(findTab('editions', 'fixed-assets').children.slice(2, 11).every(child => child.status === 'active'));
 assert.ok(findTab('editions', 'fixed-assets').children.slice(14).every(child => child.status === 'inactive'));
 assert.ok(findTab('editions', 'fixed-assets').children[0].reason.includes('Aperçu plein écran'));
 assert.ok(findTab('editions', 'fixed-assets').children[1].reason.includes('Valeur nette et amortissement restent vides'));
-assert.ok(findTab('editions', 'fixed-assets').reason.includes('montants sans source explicite restent vides'));
+assert.ok(findTab('editions', 'fixed-assets').reason.includes('rapprochements sans source restent vides'));
 assert.equal(findTab('editions', 'definitions-and-plans').status, 'planned');
 assert.deepEqual(findTab('editions', 'definitions-and-plans').children.map(child => child.label), [
   'Cadre comptable', 'Postes du bilan', 'Plan comptable', 'Postes associés aux comptes',
@@ -719,7 +719,7 @@ assert.match(appSource, /function generalLedgerReportLayoutView\([\s\S]*general-
 assert.match(appSource, /function generalLedgerReportPrintableHtml\([\s\S]*GRAND LIVRE DES COMPTES[\s\S]*reports à nouveau[\s\S]*page-break/);
 assert.match(generalLedgerSource, /priorEntriesIncludedInRunningBalance: true[\s\S]*sourceReferenceOnly: true[\s\S]*noAccountingMutation: true/);
 assert.match(configurationCss, /\.general-ledger-column-grid[\s\S]*\.general-ledger-account-section/);
-assert.match(serviceWorkerSource, /perfecto-static-v125/);
+assert.match(serviceWorkerSource, /perfecto-static-v126/);
 
 assert.match(appSource, /function accountingMenuHash\(groupId, tabId, childId\)[\s\S]*return childId \? hash \+ '&c='/,
   'le lien d’un enfant conserve son identifiant dans la route');
@@ -755,7 +755,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v125/);
+assert.match(serviceWorkerSource, /perfecto-static-v126/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

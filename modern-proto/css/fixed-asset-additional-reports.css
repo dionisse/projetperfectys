@@ -1,0 +1,95 @@
+/* PERFECTO · États complémentaires des immobilisations. */
+.fixed-asset-additional-report-detail,
+.fixed-asset-additional-report-detail .card,
+.fixed-asset-additional-print { min-width: 0; }
+.fixed-asset-additional-report-detail > .edition-report-back { margin-bottom: 15px; }
+.fixed-asset-additional-source-note,
+.fixed-asset-additional-warnings { margin: 0 0 14px; line-height: 1.55; }
+.fixed-asset-additional-warnings ul { margin: 0 0 0 18px; }
+.fixed-asset-additional-filter-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 22px; align-items: start; max-width: 1100px; }
+.fixed-asset-additional-filter-grid .field { min-width: 0; }
+.fixed-asset-additional-accounts-field { grid-column: 1 / -1; }
+.fixed-asset-additional-filter-grid .journal-lines-picker-control { display: flex; align-items: stretch; gap: 8px; }
+.fixed-asset-additional-filter-grid .journal-lines-picker-control input { min-width: 0; flex: 1 1 auto; }
+.fixed-asset-additional-filter-grid .journal-lines-picker-control .btn { flex: 0 0 46px; min-width: 46px; font-size: 1.15rem; }
+.fixed-asset-additional-columns-grid { grid-template-columns: repeat(var(--fixed-asset-additional-column-count, 3), minmax(0, 1fr)); }
+.fixed-asset-additional-selection-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 16px; padding: 13px 16px; border: 1px solid #dce4df; border-radius: 10px; background: #fbfcfa; }
+.fixed-asset-additional-selection-actions .pointing-edition-line-count { margin: 0 auto 0 0; }
+.fixed-asset-additional-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.fixed-asset-additional-destination-card { grid-column: 1 / -1; }
+.fixed-asset-additional-print { width: 100%; box-sizing: border-box; color: #22332c; background: #fff; font-family: Arial, sans-serif; }
+.fixed-asset-additional-print-heading { margin: 0 0 12px; }
+.fixed-asset-additional-print-heading .page-kicker { color: #587065; font-size: 8pt; font-weight: 700; letter-spacing: .08em; }
+.fixed-asset-additional-print-heading h2 { margin: 5px 0; color: #213f35; font-size: 17pt; overflow-wrap: anywhere; }
+.fixed-asset-additional-print-heading p,
+.fixed-asset-additional-print-note { color: #596a61; font-size: 9pt; line-height: 1.5; }
+.fixed-asset-additional-print-note { margin: 10px 0 0; font-size: 8pt; }
+.fixed-asset-additional-table-wrap { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
+.fixed-asset-additional-table { width: 100%; min-width: 760px; table-layout: fixed; border-collapse: collapse; font-size: 7pt; }
+.fixed-asset-additional-table th,
+.fixed-asset-additional-table td { padding: 4px; border: 1px solid #d7dfda; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.fixed-asset-additional-table thead th { color: #21483a; background: #edf3ef; font-size: .64rem; line-height: 1.25; }
+.fixed-asset-additional-table thead th.num,
+.fixed-asset-additional-table td.num { text-align: right; white-space: nowrap; }
+.fixed-asset-additional-group-heading th { color: #24483b; background: #f1f5f2; font-weight: 700; }
+.fixed-asset-additional-empty-row td { color: #596a61; text-align: left; }
+.fixed-asset-additional-style-color .fixed-asset-additional-table { font-size: 8pt; }
+.fixed-asset-additional-style-color .fixed-asset-additional-table thead th { background: #e6f0eb; }
+.fixed-asset-additional-style-plain .fixed-asset-additional-print-heading .page-kicker,
+.fixed-asset-additional-style-plain .fixed-asset-additional-table thead th,
+.fixed-asset-additional-style-plain .fixed-asset-additional-group-heading th { color: #111; background: #fff; }
+.fixed-asset-additional-assets { display: grid; gap: 12px; }
+.fixed-asset-additional-asset-card { break-inside: avoid; page-break-inside: avoid; border: 1px solid #d7dfda; border-radius: 8px; padding: 12px; }
+.fixed-asset-additional-asset-card header { display: grid; grid-template-columns: 1fr; gap: 3px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #d7dfda; }
+.fixed-asset-additional-asset-card header span { color: #557367; font-size: 8pt; font-weight: 700; }
+.fixed-asset-additional-asset-card h3 { margin: 0; color: #213f35; font-size: 12pt; }
+.fixed-asset-additional-asset-card dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px 14px; margin: 0; }
+.fixed-asset-additional-card-field { min-width: 0; overflow-wrap: anywhere; }
+.fixed-asset-additional-card-field dt { margin-bottom: 2px; color: #596a61; font-size: 7pt; font-weight: 700; }
+.fixed-asset-additional-card-field dd { margin: 0; color: #22332c; font-size: 8pt; }
+.fixed-asset-additional-empty-card { padding: 14px; border: 1px dashed #b9c8bf; border-radius: 8px; color: #596a61; }
+.fixed-asset-additional-report-detail .journal-lines-form-errors:empty { display: none; }
+
+@media (max-width: 850px) {
+  .fixed-asset-additional-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fixed-asset-additional-accounts-field { grid-column: 1 / -1; }
+}
+
+@media (max-width: 640px) {
+  .fixed-asset-additional-filter-grid,
+  .fixed-asset-additional-settings-grid,
+  .fixed-asset-additional-columns-grid,
+  .fixed-asset-additional-asset-card dl { grid-template-columns: minmax(0, 1fr); }
+  .fixed-asset-additional-accounts-field,
+  .fixed-asset-additional-destination-card { grid-column: auto; }
+  .fixed-asset-additional-selection-actions { align-items: flex-start; flex-direction: column; }
+  .fixed-asset-additional-selection-actions .btn { width: 100%; }
+  .fixed-asset-additional-selection-actions .pointing-edition-line-count { margin: 0; }
+  .fixed-asset-additional-print,
+  .fixed-asset-additional-table-wrap { min-width: 0; max-width: 100%; }
+  .fixed-asset-additional-print-heading h2 { font-size: 14pt; }
+  .fixed-asset-additional-table { min-width: 660px; font-size: 6.5pt; }
+  .fixed-asset-additional-table th,
+  .fixed-asset-additional-table td { padding: 3px; }
+  .fixed-asset-additional-table thead th { font-size: .58rem; }
+  .fixed-asset-additional-style-color .fixed-asset-additional-table { font-size: 7pt; }
+}
+
+@media print {
+  body.report-preview-printing .report-preview-content .fixed-asset-additional-print { width: 100%; max-width: none; margin: 0; padding: 0; color: #111 !important; background: #fff !important; }
+  body.report-preview-printing .report-preview-content .fixed-asset-additional-print-heading h2 { color: #111 !important; font-size: 14pt !important; }
+  body.report-preview-printing .report-preview-content .fixed-asset-additional-print-heading p,
+  body.report-preview-printing .report-preview-content .fixed-asset-additional-print-note { color: #222 !important; }
+  body.report-preview-printing .report-preview-content .fixed-asset-additional-table-wrap { width: 100%; max-width: none; overflow: visible !important; }
+  body.report-preview-printing .report-preview-content .fixed-asset-additional-table { width: 100%; min-width: 0 !important; table-layout: fixed; font-size: 6.5pt !important; }
+  body.report-preview-printing .report-preview-content .fixed-asset-additional-table th,
+  body.report-preview-printing .report-preview-content .fixed-asset-additional-table td { padding: 3px 4px !important; overflow-wrap: anywhere; }
+  body.report-preview-printing .report-preview-content .fixed-asset-additional-table thead { display: table-header-group; }
+  body.report-preview-printing .report-preview-content .fixed-asset-additional-table tr { break-inside: avoid; page-break-inside: avoid; }
+  body.report-preview-printing .report-preview-content .fixed-asset-additional-asset-card { border-color: #aeb8b2 !important; border-radius: 0; }
+  body.report-preview-printing .report-preview-content .fixed-asset-additional-asset-card dl { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  body.report-preview-printing .report-preview-content .fixed-asset-additional-style-plain .fixed-asset-additional-print-heading .page-kicker,
+  body.report-preview-printing .report-preview-content .fixed-asset-additional-style-plain .fixed-asset-additional-table thead th,
+  body.report-preview-printing .report-preview-content .fixed-asset-additional-style-plain .fixed-asset-additional-group-heading th { color: #111 !important; background: #fff !important; }
+  body.report-preview-printing .report-preview-content .fixed-asset-additional-style-color .fixed-asset-additional-table { font-size: 7pt !important; }
+}
