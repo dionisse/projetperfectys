@@ -45,7 +45,7 @@ assert.doesNotMatch(reportSource, /record\.thirdParty\b/);
 assert.ok(htmlSource.indexOf('js/third-party-balance-report.js') < htmlSource.indexOf('js/third-party-account-situation-report.js'));
 assert.ok(htmlSource.indexOf('js/third-party-account-situation-report.js') < htmlSource.indexOf('js/app.js'));
 assert.match(serviceWorkerSource, /\.\/js\/third-party-account-situation-report\.js/);
-assert.match(serviceWorkerSource, /perfecto-static-v117/);
+assert.match(serviceWorkerSource, /perfecto-static-v118/);
 assert.match(cssSource, /\.report-preview-overlay\s*,[\s\S]*position:\s*fixed[\s\S]*inset:\s*0/);
 assert.match(cssSource, /\.third-party-account-situation-filter-grid[\s\S]*\.third-party-account-situation-column-grid[\s\S]*\.third-party-account-situation-table/);
 

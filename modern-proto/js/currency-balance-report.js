@@ -255,19 +255,47 @@
     return { valid: true, code: codes.values[0] || entryCode || baseCurrencyCode };
   }
 
-  function resolveLineAmounts(entry, line, sourceLine, currencyCode, baseCurrencyCode, decimalPlaces) {
+  function resolveLine(entry, line, sourceLine, baseCurrencyCode, decimalPlaces) {
+    var codeResult = lineCurrencyCode(entry, line, sourceLine, baseCurrencyCode);
+    if (!codeResult.valid) return { valid: false, reason: codeResult.reason };
     var baseDebitUnits = parseBaseAmountUnits(line.debit, decimalPlaces);
     var baseCreditUnits = parseBaseAmountUnits(line.credit, decimalPlaces);
     if (baseDebitUnits == null || baseCreditUnits == null || (baseDebitUnits > 0 && baseCreditUnits > 0) || (baseDebitUnits === 0 && baseCreditUnits === 0)) {
-      return { valid: false, reason: 'base-amount' };
+      return { valid: false, reason: 'base-amount', currencyCode: codeResult.code };
     }
-    if (currencyCode === baseCurrencyCode) return { valid: true, debitUnits: baseDebitUnits, creditUnits: baseCreditUnits };
+    if (codeResult.code === baseCurrencyCode) {
+      return {
+        valid: true, reason: '', currencyCode: codeResult.code,
+        baseDebitUnits: baseDebitUnits, baseCreditUnits: baseCreditUnits,
+        originalDebitUnits: baseDebitUnits, originalCreditUnits: baseCreditUnits,
+        originalAmountKnown: true, originalAmountInvalid: false
+      };
+    }
+    var hasForeignFields = [line, sourceLine].some(function (source) {
+      if (!source || typeof source !== 'object' || Array.isArray(source)) return false;
+      return ['foreignAmount', 'foreignDebit', 'foreignCredit', 'currencyDebit', 'currencyCredit'].some(function (key) {
+        return Object.prototype.hasOwnProperty.call(source, key) && source[key] != null && source[key] !== '';
+      });
+    });
     var amount = explicitCurrencyAmount(line, sourceLine, baseDebitUnits, baseCreditUnits);
-    if (!amount || !Number.isSafeInteger(amount.debitUnits) || !Number.isSafeInteger(amount.creditUnits) || amount.debitUnits < 0 || amount.creditUnits < 0 ||
-        (amount.debitUnits > 0 && amount.creditUnits > 0) || (amount.debitUnits === 0 && amount.creditUnits === 0)) {
-      return { valid: false, reason: 'foreign-amount' };
-    }
-    return { valid: true, debitUnits: amount.debitUnits, creditUnits: amount.creditUnits };
+    var validAmount = !!amount && Number.isSafeInteger(amount.debitUnits) && Number.isSafeInteger(amount.creditUnits) &&
+      amount.debitUnits >= 0 && amount.creditUnits >= 0 && !(amount.debitUnits > 0 && amount.creditUnits > 0) &&
+      !(amount.debitUnits === 0 && amount.creditUnits === 0);
+    return {
+      valid: true, reason: '', currencyCode: codeResult.code,
+      baseDebitUnits: baseDebitUnits, baseCreditUnits: baseCreditUnits,
+      originalDebitUnits: validAmount ? amount.debitUnits : null,
+      originalCreditUnits: validAmount ? amount.creditUnits : null,
+      originalAmountKnown: validAmount,
+      originalAmountInvalid: hasForeignFields && !validAmount
+    };
+  }
+
+  function resolveLineAmounts(entry, line, sourceLine, currencyCode, baseCurrencyCode, decimalPlaces) {
+    var resolved = resolveLine(entry, line, sourceLine, baseCurrencyCode, decimalPlaces);
+    if (!resolved.valid || resolved.currencyCode !== currencyCode) return { valid: false, reason: resolved.reason || 'currency-conflict' };
+    if (!resolved.originalAmountKnown) return { valid: false, reason: 'foreign-amount' };
+    return { valid: true, debitUnits: resolved.originalDebitUnits, creditUnits: resolved.originalCreditUnits };
   }
 
   function addToAccumulator(accumulator, debitUnits, creditUnits, field) {
@@ -584,6 +612,8 @@
     parseAccountFilter: parseAccountFilter,
     accountMatches: accountMatches,
     isAnalyticAccountCode: isAnalyticAccountCode,
+    parseBaseAmountUnits: parseBaseAmountUnits,
+    resolveLine: resolveLine,
     build: build
   };
 });

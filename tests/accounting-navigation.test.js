@@ -535,8 +535,9 @@ assert.ok(generalLedgerNavigation.reason.includes('comptes non mouvementés'));
 assert.equal(findTab('editions', 'general-accounts').children.find(child => child.id === 'general-analytic-balance').status, 'inactive');
 assert.equal(findTab('editions', 'third-parties').children.length, 7);
 assert.equal(findTab('editions', 'foreign-currency').children.length, 5);
-assert.equal(findTab('editions', 'foreign-currency').status, 'mixed');
+assert.equal(findTab('editions', 'foreign-currency').status, 'active');
 assert.equal(findTab('editions', 'foreign-currency').children.find(child => child.id === 'currency-balance').status, 'active');
+assert.ok(findTab('editions', 'foreign-currency').children.filter(child => child.id.startsWith('currency-')).every(child => child.status === 'active'));
 assert.equal(findTab('editions', 'analytic-statements').status, 'inactive');
 assert.equal(findTab('editions', 'analytic-statements').children.length, 7);
 assert.ok(findTab('editions', 'analytic-statements').children.every(child => child.status === 'inactive'));
@@ -698,7 +699,7 @@ assert.match(appSource, /function generalLedgerReportLayoutView\([\s\S]*general-
 assert.match(appSource, /function generalLedgerReportPrintableHtml\([\s\S]*GRAND LIVRE DES COMPTES[\s\S]*reports à nouveau[\s\S]*page-break/);
 assert.match(generalLedgerSource, /priorEntriesIncludedInRunningBalance: true[\s\S]*sourceReferenceOnly: true[\s\S]*noAccountingMutation: true/);
 assert.match(configurationCss, /\.general-ledger-column-grid[\s\S]*\.general-ledger-account-section/);
-assert.match(serviceWorkerSource, /perfecto-static-v117/);
+assert.match(serviceWorkerSource, /perfecto-static-v118/);
 
 assert.match(appSource, /function accountingMenuHash\(groupId, tabId, childId\)[\s\S]*return childId \? hash \+ '&c='/,
   'le lien d’un enfant conserve son identifiant dans la route');
@@ -734,7 +735,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v117/);
+assert.match(serviceWorkerSource, /perfecto-static-v118/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

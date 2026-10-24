@@ -1,6 +1,14 @@
 /* Balance des comptes en devises : sélection 93–99 et rendu par devise. */
 .currency-balance-report-detail { min-width: 0; }
 .currency-balance-report-detail > .edition-report-back { margin-bottom: 15px; }
+.currency-supp-filter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 22px; align-items: start; }
+.currency-supp-filter-grid .field { min-width: 0; }
+.currency-supp-filter-grid .journal-lines-picker-control { display: flex; align-items: stretch; gap: 8px; }
+.currency-supp-filter-grid .journal-lines-picker-control input { min-width: 0; flex: 1 1 auto; }
+.currency-supp-filter-grid .journal-lines-picker-control .btn { flex: 0 0 46px; min-width: 46px; font-size: 1.15rem; }
+.currency-supplementary-print { min-width: 0; }
+.currency-supplementary-table { min-width: 700px; }
+.currency-supplementary-report-detail .journal-lines-form-actions { margin-top: 16px; }
 .currency-balance-source-note { margin: 0 0 14px; line-height: 1.6; }
 .currency-balance-filter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 22px; align-items: start; }
 .currency-balance-filter-grid .field { min-width: 0; }
@@ -48,6 +56,7 @@
 
 @media (max-width: 640px) {
   .currency-balance-filter-grid,
+  .currency-supp-filter-grid,
   .currency-balance-column-grid,
   .currency-balance-settings-grid { grid-template-columns: minmax(0, 1fr); }
   .currency-balance-settings-grid .journal-lines-destination-card { grid-column: auto; }
