@@ -86,7 +86,7 @@ assert.match(htmlSource, /css\/currency-balance-report\.css/);
 assert.match(serviceWorkerSource, /\.\/js\/currency-balance-report\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/currency-supplementary-reports\.js/);
 assert.match(serviceWorkerSource, /\.\/css\/currency-balance-report\.css/);
-assert.match(serviceWorkerSource, /perfecto-static-v126/);
+assert.match(serviceWorkerSource, /perfecto-static-v127/);
 assert.match(cssSource, /\.currency-balance-selection-footer[\s\S]*\.currency-balance-generated-count/);
 assert.match(cssSource, /\.currency-balance-filter-grid[\s\S]*\.currency-balance-column-grid/);
 assert.match(cssSource, /body\.report-preview-printing[\s\S]*\.currency-balance-report-table/);

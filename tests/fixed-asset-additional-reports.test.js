@@ -63,8 +63,8 @@ function test(name, fn) {
 
 console.log('États complémentaires des immobilisations · filtres, sources et limites');
 
-test('expose les neuf fenêtres avec libellés, filtres et colonnes de la capture', () => {
-  assert.equal(Reports.REPORT_IDS.length, 9);
+test('expose les douze fenêtres complémentaires avec libellés, filtres et colonnes des captures', () => {
+  assert.equal(Reports.REPORT_IDS.length, 12);
   const expected = {
     'edition-fixed-asset-entries': ['Entrées d’immobilisations', ['accounts', 'from', 'to'], ['Code élément', 'Date d’entrée', 'Taux d’Amort.', 'Intitulé élément', 'Valeur brute']],
     'edition-fixed-asset-inventory-sheets': ['Fiche d’immobilisation', ['accounts', 'elements'], null],
@@ -74,7 +74,10 @@ test('expose les neuf fenêtres avec libellés, filtres et colonnes de la captur
     'edition-fixed-asset-opening-discrepancies': ['Écarts à l’ouverture avec la comptabilité générale', ['accounts'], ['Compte', 'Intitulé', 'Valeur brute', 'Amortissements', 'Écarts']],
     'edition-fixed-asset-exits': ['Sorties des éléments immobilisés', ['accounts', 'from', 'to'], ['Code élément', 'Amortissements', 'Intitulé élément', 'Date et valeur de sortie', 'Date et valeur d’entrée']],
     'edition-fixed-asset-account-totals': ['Cumul des éléments immobilisés', ['accounts', 'date'], ['Code du compte', 'Nombre d’éléments', 'Amortissement', 'Intitulé du compte', 'Valeur brute', 'Valeur nette']],
-    'edition-fixed-asset-period-discrepancies': ['Écarts de la période entre Comptabilité et Tableau des immobilisations', ['accounts', 'date'], ['Compte', 'Amortissements', 'Valeur brute']]
+    'edition-fixed-asset-period-discrepancies': ['Écarts de la période entre Comptabilité et Tableau des immobilisations', ['accounts', 'date'], ['Compte', 'Amortissements', 'Valeur brute']],
+    'edition-fixed-asset-entry-discrepancies': ['Écarts sur les entrées entre Comptabilité et Tableau des Immobilisations', ['accounts', 'date'], ['Date', 'Montants enregistrés', 'Écart']],
+    'edition-fixed-asset-exit-discrepancies': ['Écarts sur les sorties entre Comptabilité et Tableau des Immobilisations', ['accounts', 'date'], ['Date', 'Montants enregistrés', 'Écart']],
+    'edition-fixed-asset-other-anomalies': ['Anomalies sur les éléments immobilisés', ['accounts', 'elements'], ['Compte', 'Élément', 'Journal', 'Date', 'Anomalie']]
   };
   Object.entries(expected).forEach(([id, [title, filters, labels]]) => {
     const definition = Reports.definitionFor(id);
@@ -83,6 +86,7 @@ test('expose les neuf fenêtres avec libellés, filtres et colonnes de la captur
     assert.deepEqual(definition.filters, filters);
     if (labels) assert.deepEqual(definition.columns.map(column => column.label), labels);
     else assert.equal(definition.showColumns, false, 'aucun choix de colonnes n’est affiché pour la fiche');
+    if (id === 'edition-fixed-asset-entry-discrepancies' || id === 'edition-fixed-asset-exit-discrepancies') assert.equal(definition.filterLabels.date, 'Jusqu’au');
     assert.ok(definition.columns.every(column => column.defaultSelected));
   });
   assert.equal(Reports.definitionFor('unknown'), null);
@@ -177,7 +181,10 @@ test('les virements, sorties et écarts sans registre source restent sans lignes
     ['edition-fixed-asset-transfers', /pas d’historique explicite de virements/i],
     ['edition-fixed-asset-exits', /aucun registre de sorties/i],
     ['edition-fixed-asset-opening-discrepancies', /soldes d’ouverture comptables ne sont pas rapprochés/i],
-    ['edition-fixed-asset-period-discrepancies', /ne fournit pas de mouvements de la période/i]
+    ['edition-fixed-asset-period-discrepancies', /ne fournit pas de mouvements de la période/i],
+    ['edition-fixed-asset-entry-discrepancies', /aucune source ne rapproche les dates et montants d’entrée/i],
+    ['edition-fixed-asset-exit-discrepancies', /aucun registre de sorties/i],
+    ['edition-fixed-asset-other-anomalies', /critères d’anomalie ne sont pas définis/i]
   ].forEach(([id, warning]) => {
     const report = Reports.buildReport(id, options());
     assert.equal(report.ok, true, report.errors.join(' '));
@@ -194,6 +201,8 @@ test('valide les périodes du cycle et les filtres de codes sans élargir leur p
   assert.equal(Reports.buildReport('edition-fixed-asset-entries', options({ from: '' })).ok, false);
   assert.equal(Reports.buildReport('edition-fixed-asset-account-totals', options({ date: '' })).ok, false);
   assert.equal(Reports.buildReport('edition-fixed-asset-account-totals', options({ date: '2026-01-01' })).ok, false);
+  assert.equal(Reports.buildReport('edition-fixed-asset-entry-discrepancies', options({ date: '' })).ok, false);
+  assert.equal(Reports.buildReport('edition-fixed-asset-exit-discrepancies', options({ date: '2026-01-01' })).ok, false);
   assert.equal(Reports.buildReport('edition-fixed-asset-inventory-sheets', options({ elementFilter: '' })).ok, false);
   assert.equal(Reports.buildReport('edition-fixed-asset-locations-inventory', options({ locationFilter: 'LOC-*' })).rows.length, 2);
   assert.equal(Reports.parseCodeFilter('IMMO-00*', 'Éléments').valid, true);
@@ -202,4 +211,4 @@ test('valide les périodes du cycle et les filtres de codes sans élargir leur p
   assert.equal(Reports.parseCodeFilter('LOC-**', 'Localisations').valid, false);
 });
 
-console.log('Immobilisations complémentaires : 9 fenêtres, filtres, références explicites et limites de calcul contrôlés.');
+console.log('Immobilisations complémentaires : 12 fenêtres, filtres, références explicites et limites de calcul contrôlés.');

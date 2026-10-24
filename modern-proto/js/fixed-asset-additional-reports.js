@@ -142,6 +142,35 @@
         { key: 'depreciation', label: 'Amortissements', text: false },
         { key: 'grossValue', label: 'Valeur brute', text: false }
       ]
+    },
+    {
+      id: 'edition-fixed-asset-entry-discrepancies', title: 'Écarts sur les entrées entre Comptabilité et Tableau des Immobilisations', kind: 'entry-discrepancies',
+      filters: ['accounts', 'date'], filterLabels: { date: 'Jusqu’au' }, groupBy: 'none', showColumns: true,
+      columns: [
+        { key: 'date', label: 'Date', text: true },
+        { key: 'registeredAmounts', label: 'Montants enregistrés', text: false },
+        { key: 'discrepancy', label: 'Écart', text: false }
+      ]
+    },
+    {
+      id: 'edition-fixed-asset-exit-discrepancies', title: 'Écarts sur les sorties entre Comptabilité et Tableau des Immobilisations', kind: 'exit-discrepancies',
+      filters: ['accounts', 'date'], filterLabels: { date: 'Jusqu’au' }, groupBy: 'none', showColumns: true,
+      columns: [
+        { key: 'date', label: 'Date', text: true },
+        { key: 'registeredAmounts', label: 'Montants enregistrés', text: false },
+        { key: 'discrepancy', label: 'Écart', text: false }
+      ]
+    },
+    {
+      id: 'edition-fixed-asset-other-anomalies', title: 'Anomalies sur les éléments immobilisés', kind: 'other-anomalies',
+      filters: ['accounts', 'elements'], groupBy: 'none', showColumns: true,
+      columns: [
+        { key: 'accountCode', label: 'Compte', text: true },
+        { key: 'assetCode', label: 'Élément', text: true },
+        { key: 'journal', label: 'Journal', text: true },
+        { key: 'date', label: 'Date', text: true },
+        { key: 'anomaly', label: 'Anomalie', text: true }
+      ]
     }
   ];
   var REPORT_BY_ID = Object.create(null);
@@ -512,9 +541,15 @@
       warnings.push('Les soldes d’ouverture comptables ne sont pas rapprochés fiche par fiche avec des coûts et amortissements d’ouverture. Aucun écart n’est attribué à un élément ou compte.');
     } else if (definition.kind === 'period-discrepancies') {
       warnings.push('Le registre ne fournit pas de mouvements de la période associés aux écritures validées ; aucune comparaison ni aucun écart n’est calculé.');
+    } else if (definition.kind === 'entry-discrepancies') {
+      warnings.push('Aucune source ne rapproche les dates et montants d’entrée du registre avec les écritures comptables. Les colonnes Montants enregistrés et Écart restent vides ; aucun écart n’est calculé.');
+    } else if (definition.kind === 'exit-discrepancies') {
+      warnings.push('Aucun registre de sorties et aucun rapprochement explicite avec les écritures comptables ne sont disponibles. Les colonnes Montants enregistrés et Écart restent vides ; aucune sortie n’est déduite du statut d’une fiche.');
+    } else if (definition.kind === 'other-anomalies') {
+      warnings.push('Les critères d’anomalie ne sont pas définis par le registre. Aucune ligne n’est qualifiée d’anormale sans règle explicite ; les écritures et anomalies restent vides.');
     }
 
-    if (definition.kind !== 'entries' && definition.kind !== 'ledger' && definition.kind !== 'locations' && definition.kind !== 'account-totals' && definition.kind !== 'transfers' && definition.kind !== 'exits' && definition.kind !== 'opening-discrepancies' && definition.kind !== 'period-discrepancies' && definition.kind !== 'card') {
+    if (definition.kind !== 'entries' && definition.kind !== 'ledger' && definition.kind !== 'locations' && definition.kind !== 'account-totals' && definition.kind !== 'transfers' && definition.kind !== 'exits' && definition.kind !== 'opening-discrepancies' && definition.kind !== 'period-discrepancies' && definition.kind !== 'entry-discrepancies' && definition.kind !== 'exit-discrepancies' && definition.kind !== 'other-anomalies' && definition.kind !== 'card') {
       warnings.push('Aucune source métier spécifique n’est disponible pour cet état ; aucune ligne n’est générée.');
     }
     if (invalidDates) warnings.push(invalidDates + ' fiche(s) ou écriture(s) avec date absente/invalide n’ont pas pu être classées dans la période.');

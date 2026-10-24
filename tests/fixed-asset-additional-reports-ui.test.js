@@ -1,4 +1,4 @@
-/* Intégration des neuf états complémentaires Immobilisations et aperçu plein écran. */
+/* Intégration des douze états complémentaires Immobilisations et aperçu plein écran. */
 'use strict';
 
 const assert = require('node:assert/strict');
@@ -16,6 +16,7 @@ const workflowSource = fs.readFileSync(path.join(__dirname, '..', '.github', 'wo
 const tab = navigation.getTab('editions', 'fixed-assets');
 
 assert.ok(tab);
+assert.equal(Reports.REPORT_IDS.length, 12);
 const activeCaptureReports = Reports.REPORT_IDS.map(id => tab.children.find(child => child.id === id));
 assert.ok(activeCaptureReports.every(Boolean));
 assert.ok(activeCaptureReports.every(child => child.status === 'active'));
@@ -26,7 +27,11 @@ assert.match(tab.children.find(child => child.id === 'edition-fixed-asset-transf
 assert.match(tab.children.find(child => child.id === 'edition-fixed-asset-locations-inventory').reason, /Localisations \(\*\) et Comptes \(\*\)/);
 assert.match(tab.children.find(child => child.id === 'edition-fixed-asset-account-totals').reason, /Nombre = fiches enregistrées/);
 assert.match(tab.children.find(child => child.id === 'edition-fixed-asset-period-discrepancies').reason, /aucun écart n’est calculé/);
-assert.ok(tab.children.slice(11, 14).every(child => child.status === 'planned'), 'les autres états ne figurant pas dans la capture restent planifiés');
+assert.match(tab.children.find(child => child.id === 'edition-fixed-asset-entry-discrepancies').reason, /date Jusqu’au par défaut en fin de cycle[\s\S]*Montants enregistrés, Écart/);
+assert.match(tab.children.find(child => child.id === 'edition-fixed-asset-exit-discrepancies').reason, /aucun registre de sorties[\s\S]*montants et écarts restent vides/i);
+assert.match(tab.children.find(child => child.id === 'edition-fixed-asset-other-anomalies').reason, /Comptes \(\*\) et Éléments \(\*\)/);
+assert.ok(tab.children.slice(11, 14).every(child => child.status === 'active'), 'les trois nouveaux états sont actifs');
+assert.ok(tab.children.slice(14).every(child => child.status === 'inactive'), 'les ventilations grisées restent inactives');
 
 assert.match(appSource, /var FixedAssetAdditionalReports = window\.PerfectoFixedAssetEditionReports/);
 assert.match(appSource, /function createFixedAssetAdditionalReportSession\([\s\S]*accounts: '\*'[\s\S]*from: dossier\.cycleStart, to: dossier\.cycleEnd, date: dossier\.cycleEnd/);
@@ -42,6 +47,15 @@ assert.match(appSource, /function openFixedAssetAdditionalPreview\([\s\S]*openRe
 assert.match(appSource, /function generateFixedAssetAdditionalReportFile\([\s\S]*exportTabularWorkbook[\s\S]*generalLedgerReportTsv/);
 assert.match(appSource, /function viewFixedAssetEntriesReport\([\s\S]*edition-fixed-asset-entries/);
 assert.match(appSource, /function viewFixedAssetPeriodDiscrepanciesReport\([\s\S]*edition-fixed-asset-period-discrepancies/);
+assert.match(appSource, /function viewFixedAssetEntryDiscrepanciesReport\([\s\S]*edition-fixed-asset-entry-discrepancies/);
+assert.match(appSource, /function viewFixedAssetExitDiscrepanciesReport\([\s\S]*edition-fixed-asset-exit-discrepancies/);
+assert.match(appSource, /function viewFixedAssetAnomaliesReport\([\s\S]*edition-fixed-asset-other-anomalies/);
+assert.match(appSource, /edition-fixed-asset-entry-discrepancies'\) return viewFixedAssetEntryDiscrepanciesReport/);
+assert.match(appSource, /edition-fixed-asset-exit-discrepancies'\) return viewFixedAssetExitDiscrepanciesReport/);
+assert.match(appSource, /edition-fixed-asset-other-anomalies'\) return viewFixedAssetAnomaliesReport/);
+assert.match(appSource, /definition\.filterLabels && definition\.filterLabels\.date \|\| 'Arrêté au'/);
+assert.match(appSource, /function fixedAssetAdditionalEmptyMessage\([\s\S]*entry-discrepancies[\s\S]*other-anomalies/);
+assert.match(appSource, /function fixedAssetAdditionalPrintableHtml\([\s\S]*var amountText = definition\.columns\.some/);
 assert.match(appSource, /FixedAssetAdditionalReports\.REPORT_IDS\.indexOf\(parsed\.params\.c\) !== -1/);
 assert.match(appSource, /FixedAssetAdditionalReports\.REPORT_IDS\.indexOf\(menuParams\.c\) !== -1\) bindFixedAssetAdditionalReport/);
 assert.match(appSource, /data-fixed-asset-additional-open-preview>Ouvrir l’aperçu plein écran/);
@@ -53,7 +67,7 @@ assert.ok(htmlSource.indexOf('js/fixed-asset-additional-reports.js') < htmlSourc
 assert.match(htmlSource, /css\/fixed-asset-additional-reports\.css/);
 assert.match(serviceWorkerSource, /\.\/js\/fixed-asset-additional-reports\.js/);
 assert.match(serviceWorkerSource, /\.\/css\/fixed-asset-additional-reports\.css/);
-assert.match(serviceWorkerSource, /perfecto-static-v126/);
+assert.match(serviceWorkerSource, /perfecto-static-v127/);
 assert.match(workflowSource, /modern-proto\/js\/fixed-asset-additional-reports\.js/);
 assert.match(workflowSource, /modern-proto\/css\/fixed-asset-additional-reports\.css/);
 assert.match(cssSource, /\.fixed-asset-additional-filter-grid/);

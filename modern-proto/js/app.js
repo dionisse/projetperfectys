@@ -7097,7 +7097,10 @@
       'opening-discrepancies': 'Aucune comparaison par fiche entre valeur brute/amortissements d’ouverture et comptabilité générale n’est disponible ; aucun écart ne sera calculé.',
       exits: 'Aucun registre de sorties avec date et valeur n’est disponible ; le statut d’une fiche ne suffit pas à dater une cession.',
       'account-totals': 'Le nombre correspond aux fiches du registre et la valeur brute à la somme des coûts saisis par compte. Amortissement et valeur nette restent vides.',
-      'period-discrepancies': 'Aucun registre de mouvements de la période à comparer aux écritures comptables n’est disponible ; aucun écart ne sera calculé.'
+      'period-discrepancies': 'Aucun registre de mouvements de la période à comparer aux écritures comptables n’est disponible ; aucun écart ne sera calculé.',
+      'entry-discrepancies': 'Aucun rapprochement explicite des dates et montants d’entrée entre les fiches et les écritures n’est enregistré ; montants et écarts restent vides.',
+      'exit-discrepancies': 'Aucun registre de sorties ni rapprochement avec les écritures n’est disponible ; montants et écarts restent vides.',
+      'other-anomalies': 'Aucun critère d’anomalie n’est défini ; la sortie reste vide plutôt que de qualifier une fiche arbitrairement.'
     };
     return notes[definition.kind] || 'État consultatif ; seules les données explicitement enregistrées sont restituées.';
   }
@@ -7218,7 +7221,8 @@
   function fixedAssetAdditionalEmptyMessage(report) {
     if (report.kind === 'transfers') return 'Aucun virement : le registre ne fournit pas de mouvements de transfert par immobilisation.';
     if (report.kind === 'exits') return 'Aucune sortie restituée : aucune date/valeur de cession par élément n’est disponible.';
-    if (report.kind === 'opening-discrepancies' || report.kind === 'period-discrepancies') return 'Aucun écart n’est calculé faute de source de rapprochement explicite.';
+    if (report.kind === 'opening-discrepancies' || report.kind === 'period-discrepancies' || report.kind === 'entry-discrepancies' || report.kind === 'exit-discrepancies') return 'Aucun écart n’est calculé faute de source de rapprochement explicite.';
+    if (report.kind === 'other-anomalies') return 'Aucune anomalie n’est qualifiée : aucun critère explicite n’est défini.';
     if (report.kind === 'ledger') return 'Aucune ligne validée avec référence explicite à un élément de cette sélection.';
     return 'Aucune fiche ne correspond aux filtres sélectionnés.';
   }
@@ -7254,16 +7258,18 @@
     var columns = fixedAssetAdditionalSelectedColumns(session);
     var header = columns.map(function (column) { return '<th' + (column.text === false ? ' class="num"' : '') + ' scope="col">' + esc(column.label) + '</th>'; }).join('');
     var isPeriod = definition.filters.indexOf('from') !== -1 || definition.filters.indexOf('to') !== -1;
-    var periodLabel = isPeriod ? dateLabel(report.from) + ' — ' + dateLabel(report.to) : (definition.filters.indexOf('date') !== -1 ? 'Arrêté au ' + dateLabel(report.date) : '');
+    var dateLabelText = definition.filterLabels && definition.filterLabels.date || 'Arrêté au';
+    var periodLabel = isPeriod ? dateLabel(report.from) + ' — ' + dateLabel(report.to) : (definition.filters.indexOf('date') !== -1 ? dateLabelText + ' ' + dateLabel(report.date) : '');
     var accountText = session.filters.accounts === '*' ? 'Tous les comptes présents et futurs' : session.filters.accounts;
     var rows = report.kind === 'card'
       ? '<div class="fixed-asset-additional-assets">' + (report.rows.length ? report.rows.map(function (row) { return fixedAssetAdditionalCardHtml(row, definition); }).join('') : '<div class="fixed-asset-additional-empty-card">' + esc(fixedAssetAdditionalEmptyMessage(report)) + '</div>') + '</div>'
       : '<div class="fixed-asset-additional-table-wrap"><table class="fixed-asset-additional-table"><thead><tr>' + header + '</tr></thead><tbody>' + fixedAssetAdditionalTableRowsHtml(report, columns) + '</tbody></table></div>';
     var elementText = definition.filters.indexOf('elements') !== -1 ? ' · Éléments : ' + (session.filters.elements === '*' ? 'Tous' : session.filters.elements) : '';
     var locationText = definition.filters.indexOf('locations') !== -1 ? ' · Localisations : ' + (session.filters.locations === '*' ? 'Toutes' : session.filters.locations) : '';
+    var amountText = definition.columns.some(function (column) { return column.text === false; }) ? ' · Montants en XOF' : '';
     return '<article class="fixed-asset-additional-print fixed-asset-additional-style-' + (session.layout.style === 'color10' ? 'color' : 'plain') + '">' +
       '<header class="fixed-asset-additional-print-heading"><p class="page-kicker">ÉDITIONS · IMMOBILISATIONS</p><h2>' + esc(definition.title) + '</h2>' +
-        '<p>' + (periodLabel ? 'Période / date : ' + esc(periodLabel) + ' · ' : '') + 'Comptes : ' + esc(accountText) + elementText + locationText + ' · Montants en XOF</p></header>' +
+        '<p>' + (periodLabel ? 'Période / date : ' + esc(periodLabel) + ' · ' : '') + 'Comptes : ' + esc(accountText) + elementText + locationText + amountText + '</p></header>' +
       fixedAssetAdditionalWarningsHtml(report) + rows +
       '<p class="fixed-asset-additional-print-note">Lecture seule. Les cases vides indiquent une donnée indisponible dans une source explicite ; aucun rapprochement, amortissement, transfert ou écart n’est simulé.</p>' +
     '</article>';
@@ -7363,6 +7369,9 @@
   function viewFixedAssetExitsReport(backLink) { return viewFixedAssetAdditionalReport(backLink, 'edition-fixed-asset-exits'); }
   function viewFixedAssetAccountTotalsReport(backLink) { return viewFixedAssetAdditionalReport(backLink, 'edition-fixed-asset-account-totals'); }
   function viewFixedAssetPeriodDiscrepanciesReport(backLink) { return viewFixedAssetAdditionalReport(backLink, 'edition-fixed-asset-period-discrepancies'); }
+  function viewFixedAssetEntryDiscrepanciesReport(backLink) { return viewFixedAssetAdditionalReport(backLink, 'edition-fixed-asset-entry-discrepancies'); }
+  function viewFixedAssetExitDiscrepanciesReport(backLink) { return viewFixedAssetAdditionalReport(backLink, 'edition-fixed-asset-exit-discrepancies'); }
+  function viewFixedAssetAnomaliesReport(backLink) { return viewFixedAssetAdditionalReport(backLink, 'edition-fixed-asset-other-anomalies'); }
 
   function generateFixedAssetAdditionalReportFile(session, destination) {
     var report = buildFixedAssetAdditionalReport(session);
@@ -23563,6 +23572,9 @@
     if (child.id === 'edition-fixed-asset-exits') return viewFixedAssetExitsReport(backLink);
     if (child.id === 'edition-fixed-asset-account-totals') return viewFixedAssetAccountTotalsReport(backLink);
     if (child.id === 'edition-fixed-asset-period-discrepancies') return viewFixedAssetPeriodDiscrepanciesReport(backLink);
+    if (child.id === 'edition-fixed-asset-entry-discrepancies') return viewFixedAssetEntryDiscrepanciesReport(backLink);
+    if (child.id === 'edition-fixed-asset-exit-discrepancies') return viewFixedAssetExitDiscrepanciesReport(backLink);
+    if (child.id === 'edition-fixed-asset-other-anomalies') return viewFixedAssetAnomaliesReport(backLink);
     if (PointingEditionReports.REPORT_IDS.indexOf(child.id) !== -1) return viewPointingEditionReport(backLink, child.id);
     if (MatchingEditionReports.REPORT_IDS.indexOf(child.id) !== -1) return viewMatchingEditionReport(backLink, child.id);
     if (child.id === 'general-summary-balance') return viewGeneralSummaryBalanceReport(backLink);
