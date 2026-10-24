@@ -34,8 +34,13 @@
 .pointing-edition-table thead th { color: #21483a; background: #edf3ef; font-size: .72rem; }
 .pointing-edition-table thead th.num,
 .pointing-edition-table td.num { text-align: right; white-space: nowrap; }
-.pointing-edition-table .pointing-edition-account-heading th { color: #24483b; background: #f1f5f2; font-weight: 700; }
+.pointing-edition-table .pointing-edition-account-heading th,
+.pointing-edition-table .pointing-edition-statement-heading th { color: #24483b; background: #f1f5f2; font-weight: 700; }
 .pointing-edition-table .pointing-edition-no-movement td { color: #748078; font-style: italic; }
+.pointing-edition-table .pointing-edition-statement-invalid td { color: #7b2f23; background: #fff3ef; }
+.pointing-edition-table .pointing-edition-statement-invalid td:first-child { border-left: 3px solid #c05a42; }
+.pointing-edition-table-bank-statement { min-width: 880px; }
+.pointing-edition-statement-load-note { line-height: 1.5; }
 .pointing-edition-style-color .pointing-edition-table { font-size: 10pt; }
 .pointing-edition-style-color .pointing-edition-table thead th { background: #e6f0eb; }
 .pointing-edition-style-plain .pointing-edition-table thead th { color: #111; background: #fff; }

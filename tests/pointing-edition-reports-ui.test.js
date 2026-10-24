@@ -21,15 +21,20 @@ assert.deepEqual(tab.children.map(child => child.id), [
   'edition-bank-statement', 'edition-bank-reconciliation'
 ]);
 assert.deepEqual(tab.children.filter(child => Reports.REPORT_IDS.includes(child.id)).map(child => child.label), [
-  'Écritures pointées', 'Écritures non pointées', 'Justification des soldes par pointage', 'Rapprochements bancaires'
+  'Écritures pointées', 'Écritures non pointées', 'Justification des soldes par pointage', 'Relevé de banque', 'Rapprochements bancaires'
 ]);
 assert.ok(tab.children.filter(child => Reports.REPORT_IDS.includes(child.id)).every(child => child.status === 'active'));
-assert.equal(tab.children.find(child => child.id === 'edition-bank-statement').status, 'planned', 'le relevé de banque non montré dans la capture reste à définir');
-assert.ok(tab.children.filter(child => Reports.REPORT_IDS.includes(child.id)).every(child => /tout le plan actuel et futur/.test(child.reason)));
+assert.match(tab.children.find(child => child.id === 'edition-bank-statement').reason, /lignes invalides et leurs erreurs restent visibles/);
+assert.ok(tab.children.filter(child => Reports.REPORT_IDS.includes(child.id)).every(child => /tout le plan(?: comptable)? actuel et futur/.test(child.reason)));
 
 assert.match(appSource, /var PointingEditionReports = window\.PerfectoPointingEditionReports/);
-assert.match(appSource, /function createPointingEditionReportSession\([\s\S]*accounts: '\*', from: dossier\.cycleStart, to: dossier\.cycleEnd/);
-assert.match(appSource, /function buildPointingEditionReport\([\s\S]*accountFilter: session\.filters\.accounts[\s\S]*accounts: S\.accounts\(\)[\s\S]*entries: S\.entries\(\)[\s\S]*pointageMarks: S\.pointageMarks\(\)/);
+assert.match(appSource, /function createPointingEditionReportSession\([\s\S]*accounts: '\*', statementId: '\*', from: dossier\.cycleStart, to: dossier\.cycleEnd/);
+assert.match(appSource, /function buildPointingEditionReport\([\s\S]*accountFilter: session\.filters\.accounts[\s\S]*statementId: session\.filters\.statementId[\s\S]*accounts: S\.accounts\(\)[\s\S]*entries: S\.entries\(\)[\s\S]*pointageMarks: S\.pointageMarks\(\)[\s\S]*bankStatements: session\.statementRecords/);
+assert.match(appSource, /function loadPointingEditionStatements\([\s\S]*BankStatementStorage\.list\(dossierId\)/);
+assert.match(appSource, /function pointingEditionFilterField\([\s\S]*statementId[\s\S]*Tous les relevés correspondant aux comptes sélectionnés/);
+assert.match(appSource, /function pointingEditionStatementRowsHtml\([\s\S]*pointing-edition-statement-invalid/);
+assert.match(appSource, /column\.key === 'status' && row\.rowErrors/);
+assert.match(appSource, /function pointingEditionReportExportMatrix\([\s\S]*definition\.kind === 'bank-statement'[\s\S]*pointingEditionReportValue\(row, column\)/);
 assert.match(appSource, /openGeneralBalanceAccountPicker\(input\)/);
 assert.match(appSource, /Tous les comptes sélectionnés/);
 assert.match(appSource, /function pointingEditionSignatoriesView\([\s\S]*Centre[\s\S]*Gauche[\s\S]*Droite/);
@@ -49,7 +54,7 @@ assert.ok(htmlSource.indexOf('js/pointing-edition-reports.js') < htmlSource.inde
 assert.match(htmlSource, /css\/pointing-edition-reports\.css/);
 assert.match(serviceWorkerSource, /\.\/js\/pointing-edition-reports\.js/);
 assert.match(serviceWorkerSource, /\.\/css\/pointing-edition-reports\.css/);
-assert.match(serviceWorkerSource, /perfecto-static-v122/);
+assert.match(serviceWorkerSource, /perfecto-static-v123/);
 assert.match(cssSource, /\.pointing-edition-filter-grid[\s\S]*\.pointing-edition-columns-grid[\s\S]*\.pointing-edition-table/);
 assert.match(cssSource, /body\.report-preview-printing[\s\S]*\.pointing-edition-table/);
 assert.match(cssSource, /max-width: 640px/);

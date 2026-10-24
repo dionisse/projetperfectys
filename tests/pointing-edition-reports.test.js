@@ -38,10 +38,35 @@ const entries = [
 ];
 
 const pointageMarks = [
-  { id: 'P1', code: 'PNT-2025-0001', lineKey: 'BANK-1:0', entryId: 'BANK-1', lineIndex: 0, accountCode: '521000', statementDate: '2025-02-02', createdAt: '2025-02-02T11:30:00.000Z', bankStatementId: 'STMT-1', bankStatementRowId: 'ROW-1', status: 'pointed' },
+  { id: 'P1', code: 'PNT-2025-0001', lineKey: 'BANK-1:0', entryId: 'BANK-1', lineIndex: 0, accountCode: '521000', statementDate: '2025-02-02', createdAt: '2025-02-02T11:30:00.000Z', bankStatementId: 'STMT-1', bankStatementRowId: 'ROW-1', reference: 'BQ-001', status: 'pointed' },
   { id: 'P2', code: 'PNT-2025-0002', lineKey: 'MANUAL-1:0', entryId: 'MANUAL-1', lineIndex: 0, accountCode: '531000', statementDate: '', createdAt: '2025-02-12T09:00:00.000Z', status: 'pointed' },
   { id: 'P3', code: 'PNT-2025-0003', lineKey: 'FUTURE-1:0', entryId: 'FUTURE-1', lineIndex: 0, accountCode: '999900', statementDate: '2025-03-02', createdAt: '2025-03-02T09:00:00.000Z', status: 'pointed' },
   { id: 'P4', code: 'PNT-2025-0004', lineKey: 'CANCELLED-1:0', entryId: 'CANCELLED-1', lineIndex: 0, accountCode: '521000', statementDate: '2025-05-02', createdAt: '2025-05-02T09:00:00.000Z', status: 'cancelled' }
+];
+
+const bankStatements = [
+  {
+    id: 'STMT-1', dossierId: 'DOSSIER-1', accountCode: '521000', fileName: 'Releve-fevrier.csv', importedAt: '2025-03-01T08:00:00.000Z',
+    rowCount: 5, validCount: 3, invalidCount: 2, rows: [
+      { id: 'ROW-1', rowNumber: 2, date: '2025-02-02', reference: 'BQ-001', description: 'Virement', statementDebit: 100, statementCredit: 0, valid: true, errors: [] },
+      { id: 'ROW-2', rowNumber: 3, date: '2025-02-10', reference: 'FRAIS', description: 'Frais bancaires', statementDebit: 0, statementCredit: 0, valid: false, errors: ['montant nul ou manquant'] },
+      { id: 'ROW-3', rowNumber: 4, date: '2025-02-01', reference: 'BQ-001', description: 'Virement ressemblant', statementDebit: 100, statementCredit: 0, valid: true, errors: [] },
+      { id: 'ROW-4', rowNumber: 5, date: '2024-12-15', reference: 'HORS-CYCLE', description: 'Ligne antérieure', statementDebit: 1, statementCredit: 0, valid: true, errors: [] },
+      { id: 'ROW-INVALID-DATE', rowNumber: 6, date: '', reference: 'DATE-ERR', description: 'Date à contrôler', statementDebit: 2, statementCredit: 0, valid: false, errors: ['date invalide ou manquante'] }
+    ]
+  },
+  {
+    id: 'STMT-FUTURE', dossierId: 'DOSSIER-1', accountCode: '999900', fileName: 'Releve-futur.csv', importedAt: '2025-03-02T08:00:00.000Z',
+    rowCount: 1, validCount: 1, invalidCount: 0, rows: [
+      { id: 'ROW-FUTURE', rowNumber: 2, date: '2025-03-03', reference: 'FUT-1', description: 'Compte futur', statementDebit: 0, statementCredit: 7, valid: true, errors: [] }
+    ]
+  },
+  {
+    id: 'OTHER-DOSSIER', dossierId: 'DOSSIER-OTHER', accountCode: '521000', fileName: 'Autre-dossier.csv', importedAt: '2025-03-03T08:00:00.000Z',
+    rowCount: 1, validCount: 1, invalidCount: 0, rows: [
+      { id: 'OTHER-ROW', rowNumber: 2, date: '2025-02-03', reference: 'AUTRE', description: 'Autre dossier', statementDebit: 9, statementCredit: 0, valid: true, errors: [] }
+    ]
+  }
 ];
 
 function options(overrides = {}) {
@@ -53,9 +78,11 @@ function options(overrides = {}) {
     to: '2025-12-31',
     accountScope: 'all',
     signatories: { center: 'Centre', centerName: 'Nom Centre', left: 'Gauche', leftName: 'Nom Gauche', right: 'Droite', rightName: 'Nom Droite' },
+    dossierId: 'DOSSIER-1',
     accounts,
     entries,
-    pointageMarks
+    pointageMarks,
+    bankStatements: []
   }, overrides);
 }
 
@@ -70,18 +97,19 @@ function test(name, fn) {
   }
 }
 
-console.log('États du pointage · sélections, colonnes, sources et comptes');
+console.log('États du pointage · relevés importés, sélections, colonnes et comptes');
 
-test('expose les quatre états distincts correspondant aux fenêtres de la capture', () => {
+test('expose les cinq états distincts du sous-menu Pointage', () => {
   assert.deepEqual(Reports.REPORT_IDS, [
     'edition-pointed-entries', 'edition-unpointed-entries',
-    'edition-pointing-balance-justification', 'edition-bank-reconciliation'
+    'edition-pointing-balance-justification', 'edition-bank-reconciliation', 'edition-bank-statement'
   ]);
   const expected = {
     'edition-pointed-entries': ['Date pointage', 'Date écriture', 'Référence', 'Débit', 'Crédit', 'Libellé'],
     'edition-unpointed-entries': ['Date écriture', 'Référence', 'Débit', 'Crédit', 'Libellé'],
     'edition-pointing-balance-justification': ['Date écriture', 'Référence', 'Débit', 'Crédit', 'Libellé'],
-    'edition-bank-reconciliation': ['Date écriture', 'Référence', 'Débit', 'Crédit', 'Libellé']
+    'edition-bank-reconciliation': ['Date écriture', 'Référence', 'Débit', 'Crédit', 'Libellé'],
+    'edition-bank-statement': ['Date', 'Référence', 'Libellé', 'Débit banque', 'Crédit banque', 'État', 'Référence écriture associée']
   };
   for (const id of Reports.REPORT_IDS) {
     const definition = Reports.definitionFor(id);
@@ -90,6 +118,8 @@ test('expose les quatre états distincts correspondant aux fenêtres de la captu
   }
   assert.deepEqual(Reports.definitionFor('edition-pointed-entries').filters, ['accounts', 'from', 'to']);
   assert.deepEqual(Reports.definitionFor('edition-unpointed-entries').filters, ['accounts', 'to']);
+  assert.deepEqual(Reports.definitionFor('edition-bank-statement').filters, ['accounts', 'statementId', 'from', 'to']);
+  assert.equal(Reports.definitionFor('edition-bank-statement').columns.find(column => column.key === 'status').required, true);
   assert.equal(Reports.definitionFor('edition-bank-reconciliation').hasSignatories, true);
 });
 
@@ -136,6 +166,35 @@ test('les rapprochements bancaires ne reprennent que les liens explicites de rel
   assert.equal(report.basis.bankStatementLinkedRowsOnly, true);
   assert.match(report.warnings.join(' '), /aucun écart bancaire ni solde n’est recalculé/i);
   assert.equal(Reports.buildReport('edition-bank-reconciliation', options({ to: '2025-01-31' })).rows.length, 0);
+});
+
+test('le relevé de banque restitue les relevés enregistrés, les erreurs et les liens explicites uniquement', () => {
+  const report = Reports.buildReport('edition-bank-statement', options({ bankStatements }));
+  assert.equal(report.ok, true, report.errors.join(' '));
+  assert.deepEqual(report.displayStatements.map(statement => statement.id), ['STMT-1', 'STMT-FUTURE'], 'un autre dossier reste exclu');
+  assert.deepEqual(report.rows.map(row => [row.statementId, row.lineKey, row.status, row.ledgerReference]), [
+    ['STMT-1', 'STMT-1:ROW-INVALID-DATE', 'À contrôler', ''],
+    ['STMT-1', 'STMT-1:ROW-3', 'Non pointée', ''],
+    ['STMT-1', 'STMT-1:ROW-1', 'Pointée', 'BQ-001'],
+    ['STMT-1', 'STMT-1:ROW-2', 'À contrôler', ''],
+    ['STMT-FUTURE', 'STMT-FUTURE:ROW-FUTURE', 'Non pointée', '']
+  ]);
+  assert.deepEqual(report.rows.find(row => row.lineKey === 'STMT-1:ROW-2').rowErrors, ['montant nul ou manquant']);
+  assert.equal(report.rows.find(row => row.lineKey === 'STMT-1:ROW-INVALID-DATE').dateValid, false);
+  assert.deepEqual(report.rows.find(row => row.lineKey === 'STMT-1:ROW-INVALID-DATE').rowErrors, ['date invalide ou manquante']);
+  assert.equal(report.rows.find(row => row.lineKey === 'STMT-1:ROW-3').ledgerReference, '', 'une ligne ressemblante ne crée aucune correspondance automatique');
+  assert.equal(report.basis.importedBankStatementRowsOnly, true);
+  assert.match(report.warnings.join(' '), /aucun rapprochement n’est simulé/i);
+  assert.equal(report.generatedLineCount, 5);
+
+  const selected = Reports.buildReport('edition-bank-statement', options({ bankStatements, accountFilter: '521*', statementId: 'STMT-1' }));
+  assert.deepEqual(selected.rows.map(row => row.lineKey), ['STMT-1:ROW-INVALID-DATE', 'STMT-1:ROW-3', 'STMT-1:ROW-1', 'STMT-1:ROW-2']);
+  assert.deepEqual(selected.displayStatements.map(statement => statement.id), ['STMT-1']);
+  const outsideCycle = Reports.buildReport('edition-bank-statement', options({
+    bankStatements, statementId: 'STMT-1', from: '2024-12-01', to: '2025-12-31'
+  }));
+  assert.equal(outsideCycle.ok, true, outsideCycle.errors.join(' '));
+  assert.equal(outsideCycle.rows.some(row => row.lineKey === 'STMT-1:ROW-4'), true, 'un relevé peut être consulté hors des bornes du cycle');
 });
 
 test('la justification reprend les pointages actifs à la date sans recalculer de soldes', () => {

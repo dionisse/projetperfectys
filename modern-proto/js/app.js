@@ -5624,7 +5624,7 @@
       dossierId: dossier.id,
       reportId: reportId,
       phase: 'selection',
-      filters: { accounts: '*', from: dossier.cycleStart, to: dossier.cycleEnd, accountScope: 'all' },
+      filters: { accounts: '*', statementId: '*', from: dossier.cycleStart, to: dossier.cycleEnd, accountScope: 'all' },
       columns: columns,
       signatories: { center: '', centerName: '', left: '', leftName: '', right: '', rightName: '' },
       layout: {
@@ -5635,7 +5635,11 @@
       report: null,
       previewOpened: false,
       exportFilename: '',
-      exportMessage: ''
+      exportMessage: '',
+      statementRecords: [],
+      statementLoadStarted: false,
+      statementLoadPending: false,
+      statementLoadError: ''
     };
   }
 
@@ -5655,12 +5659,15 @@
       cycleEnd: dossier.cycleEnd,
       accountFilter: session.filters.accounts,
       accountScope: session.filters.accountScope,
+      statementId: session.filters.statementId,
       from: session.filters.from,
       to: session.filters.to,
       signatories: session.signatories,
+      dossierId: dossier.id,
       accounts: S.accounts(),
       entries: S.entries(),
-      pointageMarks: S.pointageMarks()
+      pointageMarks: S.pointageMarks(),
+      bankStatements: session.statementRecords
     });
   }
 
@@ -5672,14 +5679,29 @@
     if (key === 'accounts') {
       return '<div class="field pointing-edition-accounts-field"><label for="pointing-edition-accounts">Comptes</label><div class="journal-lines-picker-control"><input id="pointing-edition-accounts" data-pointing-edition-filter="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou 521*; 401100" autocomplete="off" required><button type="button" class="btn btn-ghost" data-pointing-edition-picker="accounts" aria-label="Choisir les comptes du plan">…</button></div><span class="hint">« * » couvre tous les comptes présents et futurs ; aucun filtre de classe n’est imposé.</span></div>';
     }
+    if (key === 'statementId') {
+      var statements = session.statementRecords || [];
+      var statementOptions = '<option value="*"' + (session.filters.statementId === '*' ? ' selected' : '') + '>Tous les relevés correspondant aux comptes sélectionnés</option>' +
+        statements.map(function (statement) {
+          var account = S.account(statement.accountCode);
+          var accountLabel = account ? ' · ' + account.label : '';
+          var imported = statement.importedAt ? ' · importé le ' + dateLabel(String(statement.importedAt).slice(0, 10)) : '';
+          return '<option value="' + esc(statement.id) + '"' + (String(session.filters.statementId) === String(statement.id) ? ' selected' : '') + '>' +
+            esc(String(statement.fileName || 'Relevé sans nom') + ' · ' + statement.accountCode + accountLabel + imported) + '</option>';
+        }).join('');
+      if (!statements.length) statementOptions += '<option value="" disabled>Aucun relevé importé dans ce dossier</option>';
+      return '<div class="field pointing-edition-statement-field"><label for="pointing-edition-statement">Relevé importé</label><select id="pointing-edition-statement" data-pointing-edition-filter="statementId"' + (statements.length ? '' : ' disabled') + '>' + statementOptions + '</select><span class="hint">La liste vient des relevés déjà conservés dans le dossier actif.</span></div>';
+    }
     var dateKey = key === 'from' ? 'from' : 'to';
     var label = dateKey === 'from' ? (definition.fromLabel || 'Début') : (definition.toLabel || 'Date');
-    return '<div class="field"><label for="pointing-edition-' + dateKey + '">' + esc(label) + '</label><input id="pointing-edition-' + dateKey + '" data-pointing-edition-filter="' + dateKey + '" type="date" value="' + esc(session.filters[dateKey]) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required></div>';
+    var noCycleBounds = definition.kind === 'bank-statement';
+    return '<div class="field"><label for="pointing-edition-' + dateKey + '">' + esc(label) + '</label><input id="pointing-edition-' + dateKey + '" data-pointing-edition-filter="' + dateKey + '" type="date" value="' + esc(session.filters[dateKey]) + '"' +
+      (noCycleBounds ? '' : ' min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '"') + ' required></div>';
   }
 
   function pointingEditionColumnOption(column, session) {
     return '<label class="journal-lines-column-option pointing-edition-column-option"><input type="checkbox" data-pointing-edition-column="' + esc(column.key) + '"' +
-      (session.columns[column.key] ? ' checked' : '') + '><span><strong>' + esc(column.label) + '</strong></span></label>';
+      (session.columns[column.key] || column.required ? ' checked' : '') + (column.required ? ' disabled' : '') + '><span><strong>' + esc(column.label) + (column.required ? ' <small>(obligatoire — erreurs conservées)</small>' : '') + '</strong></span></label>';
   }
 
   function syncPointingEditionSelection(form, session, definition) {
@@ -5740,16 +5762,28 @@
         generalBalanceReportRadio('pointing-edition-account-scope', 'moved', definition.movedAccountsLabel || 'Comptes mouvementés dans la période', session.filters.accountScope === 'moved', false) +
       '</div></div></section>'
       : '';
-    var sourceText = definition.kind === 'bank-reconciliation'
-      ? 'Seules les écritures validées explicitement reliées à une ligne de relevé sont reprises. Aucun écart ni solde bancaire n’est recalculé.'
-      : (definition.kind === 'justification'
-        ? 'Les lignes proviennent du registre actif de pointage et des écritures validées. Aucun solde ou total de rapprochement n’est recalculé.'
-        : (definition.kind === 'unpointed'
-          ? 'L’état exclut les écritures en brouillon et les lignes portant un marqueur de pointage actif.'
-          : 'L’état lit les marqueurs actifs du registre de pointage et leurs écritures validées. La date de pointage est lue dans le relevé ou dans la date d’enregistrement du marqueur.'));
+    var sourceText = definition.kind === 'bank-statement'
+      ? 'Restitution des lignes des relevés déjà importés et conservés dans ce dossier. Le statut de pointage provient uniquement des marqueurs enregistrés ; aucune suggestion de rapprochement n’est créée ici.'
+      : (definition.kind === 'bank-reconciliation'
+        ? 'Seules les écritures validées explicitement reliées à une ligne de relevé sont reprises. Aucun écart ni solde bancaire n’est recalculé.'
+        : (definition.kind === 'justification'
+          ? 'Les lignes proviennent du registre actif de pointage et des écritures validées. Aucun solde ou total de rapprochement n’est recalculé.'
+          : (definition.kind === 'unpointed'
+            ? 'L’état exclut les écritures en brouillon et les lignes portant un marqueur de pointage actif.'
+            : 'L’état lit les marqueurs actifs du registre de pointage et leurs écritures validées. La date de pointage est lue dans le relevé ou dans la date d’enregistrement du marqueur.')));
+    var statementLoadNote = '';
+    if (definition.kind === 'bank-statement') {
+      statementLoadNote = session.statementLoadPending
+        ? '<div class="alert info pointing-edition-statement-load-note">Chargement des relevés conservés dans le navigateur…</div>'
+        : (session.statementLoadError
+          ? '<div class="alert warning pointing-edition-statement-load-note">' + esc(session.statementLoadError) + '</div>'
+          : (!session.statementRecords.length
+            ? '<div class="alert warning pointing-edition-statement-load-note"><strong>Aucun relevé importé dans ce dossier.</strong> Importez-le depuis l’espace Pointage, puis revenez à cette édition. Le stockage est local au navigateur (IndexedDB), pas synchronisé dans le cloud.</div>'
+            : '<div class="alert info pointing-edition-statement-load-note">Les relevés proviennent du stockage local du navigateur (IndexedDB), séparé par dossier.</div>'));
+    }
     return generalBalanceReportSteps('selection', 'Étapes de préparation de ' + definition.title) +
       pageHeader(definition.title, 'Sélectionnez les comptes, la date ou la période et les colonnes à restituer.', '') +
-      '<div class="alert info pointing-edition-source-note"><div><strong>Consultation seule.</strong> ' + esc(sourceText) + ' Les écritures et les pointages restent inchangés.</div></div>' +
+      '<div class="alert info pointing-edition-source-note"><div><strong>Consultation seule.</strong> ' + esc(sourceText) + ' Les écritures et les pointages restent inchangés.</div></div>' + statementLoadNote +
       '<form id="pointing-edition-selection-form" novalidate data-pointing-edition-report="' + esc(session.reportId) + '">' +
         '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div><span class="journal-lines-cycle-badge">Cycle ' + esc(dateLabel(dossier.cycleStart)) + ' — ' + esc(dateLabel(dossier.cycleEnd)) + '</span></div>' +
           '<div class="pointing-edition-filter-grid pointing-edition-filter-grid-' + esc(definition.kind) + '">' + filters + '</div>' +
@@ -5767,13 +5801,42 @@
 
   function pointingEditionReportValue(row, column) {
     var value = row[column.key];
+    if (column.key === 'status' && row.rowErrors && row.rowErrors.length) return String(value || '') + ' — ' + row.rowErrors.join(' · ');
     if (value == null || value === '') return '';
     if (column.key === 'entryDate' || column.key === 'pointingDate') return dateLabel(value);
+    if (column.key === 'statementDate') return row.dateValid ? dateLabel(value) : String(value);
     if (column.text === false) return amount(value);
     return String(value);
   }
 
+  function pointingEditionStatementRowsHtml(report, columns) {
+    var statements = report.displayStatements || [];
+    if (!statements.length) {
+      return '<tbody><tr><td colspan="' + Math.max(columns.length, 1) + '"><div class="empty-state pointing-edition-empty"><strong>Aucun relevé importé ne correspond à cette sélection.</strong>Les lignes de banque ne sont pas générées à partir des écritures comptables.</div></td></tr></tbody>';
+    }
+    var rowsByStatement = Object.create(null);
+    report.rows.forEach(function (row) {
+      if (!rowsByStatement[row.statementId]) rowsByStatement[row.statementId] = [];
+      rowsByStatement[row.statementId].push(row);
+    });
+    var body = statements.map(function (statement) {
+      var rows = rowsByStatement[statement.id] || [];
+      var accountTitle = statement.accountCode + (statement.accountLabel ? ' · ' + statement.accountLabel : '');
+      var imported = statement.importedAt ? ' · importé le ' + dateLabel(String(statement.importedAt).slice(0, 10)) : '';
+      var headingText = String(statement.fileName || 'Relevé sans nom') + ' · ' + accountTitle + imported;
+      var heading = '<tr class="pointing-edition-statement-heading"><th colspan="' + Math.max(columns.length, 1) + '">' + esc(headingText) + '</th></tr>';
+      if (!rows.length) return heading + '<tr class="pointing-edition-no-movement"><td colspan="' + Math.max(columns.length, 1) + '">Aucune ligne de ce relevé ne correspond aux dates sélectionnées.</td></tr>';
+      return heading + rows.map(function (row) {
+        return '<tr' + (row.status === 'À contrôler' ? ' class="pointing-edition-statement-invalid"' : '') + '>' + columns.map(function (column) {
+          return '<td' + (column.text === false ? ' class="num"' : '') + '>' + esc(pointingEditionReportValue(row, column)) + '</td>';
+        }).join('') + '</tr>';
+      }).join('');
+    }).join('');
+    return '<tbody>' + body + '</tbody>';
+  }
+
   function pointingEditionReportRowsHtml(report, definition, columns) {
+    if (definition.kind === 'bank-statement') return pointingEditionStatementRowsHtml(report, columns);
     var accounts = report.displayAccounts || [];
     if (!accounts.length && report.rows.length) {
       var seen = Object.create(null);
@@ -5830,21 +5893,41 @@
     var headers = '<tr>' + columns.map(function (column) {
       return '<th scope="col"' + (column.text === false ? ' class="num"' : '') + '>' + esc(column.label) + '</th>';
     }).join('') + '</tr>';
-    var period = definition.kind === 'pointed'
+    var period = definition.kind === 'pointed' || definition.kind === 'bank-statement'
       ? 'Période : ' + dateLabel(report.from) + ' — ' + dateLabel(report.to)
       : 'Date : ' + dateLabel(report.to);
     var accountsLabel = session.filters.accounts === '*' ? 'Tous les comptes sélectionnés' : session.filters.accounts;
     var styleClass = session.layout.style === 'color10' ? 'pointing-edition-style-color' : 'pointing-edition-style-plain';
     var signatories = definition.hasSignatories ? pointingEditionSignatoriesHtml(report.signatories) : '';
+    var printNote = definition.kind === 'bank-statement'
+      ? 'État en lecture seule. Les lignes de banque et leurs erreurs sont restituées depuis les relevés importés ; les références d’écriture viennent uniquement des pointages explicites. Aucun rapprochement, solde ou écart n’est calculé.'
+      : 'État en lecture seule. Les valeurs sont lues dans les écritures validées et le registre de pointage. Aucun solde ni rapprochement n’est recalculé.';
     return '<article class="pointing-edition-print ' + styleClass + '"><header class="pointing-edition-print-heading"><p class="page-kicker">ÉDITIONS · POINTAGE ET RAPPROCHEMENT BANCAIRE</p><h2>' + esc(definition.title) + '</h2><p><strong>Comptes :</strong> ' + esc(accountsLabel) + ' · ' + period + '</p></header>' +
       pointingEditionWarningsHtml(report) + signatories +
-      '<div class="pointing-edition-table-wrap"><table class="pointing-edition-table"><thead>' + headers + '</thead>' + pointingEditionReportRowsHtml(report, definition, columns) + '</table></div>' +
-      '<p class="pointing-edition-print-note">État en lecture seule. Les valeurs sont lues dans les écritures validées et le registre de pointage. Aucun solde ni rapprochement n’est recalculé.</p></article>';
+      '<div class="pointing-edition-table-wrap"><table class="pointing-edition-table' + (definition.kind === 'bank-statement' ? ' pointing-edition-table-bank-statement' : '') + '"><thead>' + headers + '</thead>' + pointingEditionReportRowsHtml(report, definition, columns) + '</table></div>' +
+      '<p class="pointing-edition-print-note">' + esc(printNote) + '</p></article>';
   }
 
   function pointingEditionReportExportMatrix(session, report, definition) {
     var columns = pointingEditionSelectedColumns(session, definition);
     var matrix = [columns.map(function (column) { return column.label; })];
+    if (definition.kind === 'bank-statement') {
+      var rowsByStatement = Object.create(null);
+      report.rows.forEach(function (row) {
+        if (!rowsByStatement[row.statementId]) rowsByStatement[row.statementId] = [];
+        rowsByStatement[row.statementId].push(row);
+      });
+      (report.displayStatements || []).forEach(function (statement) {
+        var accountLabel = statement.accountCode + (statement.accountLabel ? ' · ' + statement.accountLabel : '');
+        var title = String(statement.fileName || 'Relevé sans nom') + ' · ' + accountLabel;
+        matrix.push([title].concat(columns.slice(1).map(function () { return ''; })));
+        (rowsByStatement[statement.id] || []).forEach(function (row) {
+          matrix.push(columns.map(function (column) { return pointingEditionReportValue(row, column); }));
+        });
+      });
+      if (!(report.displayStatements || []).length) matrix.push(['Aucun relevé importé ne correspond à la sélection.']);
+      return matrix;
+    }
     var rowsByAccount = Object.create(null);
     report.rows.forEach(function (row) {
       if (!rowsByAccount[row.accountCode]) rowsByAccount[row.accountCode] = [];
@@ -5939,10 +6022,37 @@
   }
 
   function pointingEditionReportSavedView(session, definition) {
+    var summary = definition.kind === 'bank-statement'
+      ? 'Le fichier reprend les lignes du relevé importé, leurs états et les erreurs source.'
+      : 'Le fichier reprend les lignes explicitement pointées et les filtres choisis.';
     return generalBalanceReportSteps('layout', 'Étapes de préparation de ' + definition.title) +
-      pageHeader('Export prêt', 'Le fichier reprend les lignes explicitement pointées et les filtres choisis.', '') +
+      pageHeader('Export prêt', summary, '') +
       '<section class="card journal-lines-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
         '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-pointing-edition-open-preview>Afficher l’aperçu plein écran</button><button type="button" class="btn btn-ghost" data-pointing-edition-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-pointing-edition-new>Nouvelle sélection</button></div></div></section>';
+  }
+
+  function loadPointingEditionStatements(session) {
+    if (!session || session.reportId !== 'edition-bank-statement' || session.statementLoadStarted) return;
+    session.statementLoadStarted = true;
+    if (!BankStatementStorage || !BankStatementStorage.available()) {
+      session.statementLoadError = 'IndexedDB n’est pas disponible dans ce navigateur ; les relevés ne peuvent pas être lus.';
+      return;
+    }
+    session.statementLoadPending = true;
+    var dossierId = session.dossierId;
+    BankStatementStorage.list(dossierId).then(function (records) {
+      if (pointingEditionReportSession !== session || S.currentDossier().id !== dossierId) return;
+      session.statementRecords = Array.isArray(records) ? records : [];
+      session.statementLoadPending = false;
+      session.statementLoadError = '';
+      render();
+    }).catch(function (error) {
+      if (pointingEditionReportSession !== session || S.currentDossier().id !== dossierId) return;
+      session.statementRecords = [];
+      session.statementLoadPending = false;
+      session.statementLoadError = error && error.message || 'Lecture des relevés locaux impossible.';
+      render();
+    });
   }
 
   function viewPointingEditionReport(backLink, reportId) {
@@ -5950,6 +6060,7 @@
     var definition = PointingEditionReports.definitionFor(reportId);
     var dossier = S.currentDossier();
     if (!session || !definition) return backLink + '<div class="alert warning">État du pointage introuvable.</div>';
+    loadPointingEditionStatements(session);
     if (session.phase !== 'selection') session.report = buildPointingEditionReport(session);
     var content;
     if (session.phase === 'layout') content = pointingEditionReportLayoutView(session, session.report, definition);
@@ -5980,7 +6091,8 @@
       pointed: 'Ecritures-pointees',
       unpointed: 'Ecritures-non-pointees',
       justification: 'Justification-soldes-pointage',
-      'bank-reconciliation': 'Rapprochements-bancaires'
+      'bank-reconciliation': 'Rapprochements-bancaires',
+      'bank-statement': 'Releve-de-banque'
     };
     var period = report.from ? '-' + report.from + '-' + report.to : '-' + report.to;
     var filename = (stems[definition.kind] || 'Etat-pointage') + '-' + safeFilePart(S.currentDossier().name) + period + (spreadsheet ? '.xlsx' : '.txt');
