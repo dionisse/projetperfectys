@@ -2098,7 +2098,8 @@
   }
 
   /* ----------------------------- Plan comptable ---------------------------- */
-  function viewAccounts() {
+  function viewAccounts(readOnly) {
+    var editionReadOnly = readOnly === true;
     var filter = ui.accounts;
     var allAccounts = S.accounts();
     var bal = balanceRows();
@@ -2113,10 +2114,17 @@
       return true;
     });
 
-    var html = pageHeader('Plan comptable', 'Référentiel SYSCOHADA de 1 400 codes issu du PDF fourni, personnalisable dans le dossier. La classe 9 reste une référence seule ; les comptes de classe 1 à 8 conservent les règles de saisie du dossier. Un numéro utilisé dans des pièces ou comme rattachement auxiliaire client, fournisseur, tiers divers ou personnel est protégé contre le changement et la suppression.',
+    var html = pageHeader('Plan comptable', editionReadOnly
+      ? 'Même plan comptable que dans Définitions : codes, libellés, filtres et soldes des écritures validées du dossier. Consultation seule dans Éditions ; aucune création, modification ou suppression de compte.'
+      : 'Référentiel SYSCOHADA de 1 400 codes issu du PDF fourni, personnalisable dans le dossier. La classe 9 reste une référence seule ; les comptes de classe 1 à 8 conservent les règles de saisie du dossier. Un numéro utilisé dans des pièces ou comme rattachement auxiliaire client, fournisseur, tiers divers ou personnel est protégé contre le changement et la suppression.',
       '<button type="button" class="btn btn-ghost" data-action="export-accounts-csv">↓ Export CSV</button>' +
-      '<button type="button" class="btn btn-primary" data-action="new-account">＋ Nouveau compte</button>');
+      (editionReadOnly
+        ? '<button type="button" class="btn btn-primary" data-accounting-plan-edition-prepare>Préparer l’édition imprimée</button>'
+        : '<button type="button" class="btn btn-primary" data-action="new-account">＋ Nouveau compte</button>'));
 
+    html += editionReadOnly
+      ? '<div class="alert info"><div><strong>Consultation seule.</strong> Cette liste reprend le même plan que Définitions, avec les ajouts propres au dossier et les soldes existants. Les actions de gestion des comptes ne sont pas disponibles dans Éditions.</div></div>'
+      : '';
     html += '<div class="card"><div class="panel">' +
       '<div class="filter-row">' +
         '<div class="field grow"><label for="f-accounts-q">Rechercher</label>' +
@@ -2153,10 +2161,12 @@
             : (referenceOnlyClassNine
               ? '<span class="badge plain" title="La saisie générale est limitée aux classes 1 à 8.">Référence seule</span>'
               : (a.postable === false ? '<span class="badge plain">Rubrique / indicateur</span>' : '<span class="badge open">Imputable</span>'));
-          var accountActions = referenceOnlyClassNine
-            ? '<span class="badge plain" title="La classe 9 est conservée pour consultation, sans modification dans le grand livre général.">Consultation seule</span>'
-            : '<button type="button" class="btn btn-ghost btn-sm" data-action="edit-account" data-id="' + esc(a.code) + '" aria-label="Modifier le compte ' + esc(a.code) + '">Modifier</button>' +
-              '<button type="button" class="btn btn-ghost btn-sm" data-action="delete-account" data-id="' + esc(a.code) + '" aria-label="Supprimer le compte ' + esc(a.code) + '" title="La suppression est refusée si le compte a des pièces, des auxiliaires clients/fournisseurs/tiers/personnel rattachés ou des sous-comptes.">Supprimer</button>';
+          var accountActions = editionReadOnly
+            ? '<span class="badge plain" title="Les comptes sont consultables mais non modifiables depuis les éditions.">Consultation seule</span>'
+            : (referenceOnlyClassNine
+              ? '<span class="badge plain" title="La classe 9 est conservée pour consultation, sans modification dans le grand livre général.">Consultation seule</span>'
+              : '<button type="button" class="btn btn-ghost btn-sm" data-action="edit-account" data-id="' + esc(a.code) + '" aria-label="Modifier le compte ' + esc(a.code) + '">Modifier</button>' +
+                '<button type="button" class="btn btn-ghost btn-sm" data-action="delete-account" data-id="' + esc(a.code) + '" aria-label="Supprimer le compte ' + esc(a.code) + '" title="La suppression est refusée si le compte a des pièces, des auxiliaires clients/fournisseurs/tiers/personnel rattachés ou des sous-comptes.">Supprimer</button>');
           return '<tr>' +
             '<td><span class="code-chip">' + esc(a.code) + '</span></td>' +
             '<td class="strong">' + esc(a.label || '—') + '</td>' +
@@ -15162,7 +15172,7 @@
     var columns = Object.create(null);
     AccountingPlanEditionReport.COLUMNS.forEach(function (column) { columns[column.key] = !!column.defaultSelected; });
     return {
-      phase: 'selection',
+      phase: 'listing',
       filters: { accounts: '*' },
       columns: columns,
       layout: { printer: 'system', style: 'plain8', orientation: 'landscape', margins: 'standard', pageFirst: '', pageLast: '', parity: 'none', destination: 'preview' },
@@ -15213,7 +15223,7 @@
           '<div class="currency-balance-column-grid accounting-plan-edition-columns-grid">' + columns + '</div>' +
         '</div></section>' +
         '<div class="journal-lines-form-errors" id="accounting-plan-edition-selection-errors" role="alert" aria-live="polite"></div>' +
-        '<div class="accounting-plan-edition-selection-actions"><a class="btn btn-ghost" href="' + esc(accountingMenuHash('editions', 'definitions-and-plans')) + '">Annuler</a>' +
+        '<div class="accounting-plan-edition-selection-actions"><button type="button" class="btn btn-ghost" data-accounting-plan-edition-back-listing>Retour au Plan comptable</button>' +
           '<span class="pointing-edition-line-count" role="status">Lignes générées : <strong data-accounting-plan-edition-line-count>' + esc(report.generatedLineCount || 0) + '</strong></span>' +
           '<button type="submit" class="btn btn-primary">Valider <span aria-hidden="true">→</span></button></div>' +
       '</form>';
@@ -15369,7 +15379,7 @@
     return generalBalanceReportSteps('preview', 'Étapes de préparation du Plan comptable') +
       pageHeader('Export prêt', 'Le fichier contient le référentiel, les ajouts du dossier et les colonnes sélectionnées.', '') +
       '<section class="card journal-lines-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
-        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-accounting-plan-edition-open-preview>Afficher l’aperçu plein écran</button><button type="button" class="btn btn-ghost" data-accounting-plan-edition-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-accounting-plan-edition-new>Nouvelle sélection</button></div></div></section>';
+        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-accounting-plan-edition-open-preview>Afficher l’aperçu plein écran</button><button type="button" class="btn btn-ghost" data-accounting-plan-edition-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-accounting-plan-edition-new>Retour au Plan comptable</button></div></div></section>';
   }
 
   function submitAccountingPlanEditionLayout(form, session) {
@@ -15406,18 +15416,31 @@
 
   function viewAccountingPlanEdition(backLink) {
     var session = ensureAccountingPlanEditionReportSession();
-    if (session.phase !== 'selection') session.report = buildAccountingPlanEditionReport(session);
-    var content = session.phase === 'layout'
-      ? accountingPlanEditionLayoutView(session)
-      : (session.phase === 'preview'
-        ? accountingPlanEditionPreviewView(session, session.report)
-        : (session.phase === 'saved' ? accountingPlanEditionSavedView(session) : accountingPlanEditionSelectionView(session)));
+    if (session.phase !== 'selection' && session.phase !== 'listing') session.report = buildAccountingPlanEditionReport(session);
+    var content = session.phase === 'listing'
+      ? viewAccounts(true)
+      : (session.phase === 'layout'
+        ? accountingPlanEditionLayoutView(session)
+        : (session.phase === 'preview'
+          ? accountingPlanEditionPreviewView(session, session.report)
+          : (session.phase === 'saved' ? accountingPlanEditionSavedView(session) : accountingPlanEditionSelectionView(session))));
     return '<div class="edition-report-detail-view accounting-plan-edition-report-detail">' + backLink + content + '</div>';
   }
 
   function bindAccountingPlanEditionReport() {
     var session = ensureAccountingPlanEditionReportSession();
+    if (session.phase === 'listing') {
+      var prepareEdition = $('[data-accounting-plan-edition-prepare]');
+      if (prepareEdition) prepareEdition.addEventListener('click', function () {
+        session.phase = 'selection';
+        session.report = buildAccountingPlanEditionReport(session);
+        render();
+      });
+      return;
+    }
     if (session.phase === 'selection') {
+      var backToListing = $('[data-accounting-plan-edition-back-listing]');
+      if (backToListing) backToListing.addEventListener('click', function () { session.phase = 'listing'; session.report = null; render(); });
       var form = $('#accounting-plan-edition-selection-form');
       if (!form) return;
       var update = function () { syncAccountingPlanEditionSelection(form, session); };

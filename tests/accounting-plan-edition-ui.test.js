@@ -35,6 +35,13 @@ assert.match(app, /var isAccountingPlanEditionReportRoute = route === 'menu'[\s\
 assert.match(app, /if \(!isAccountingPlanEditionReportRoute\) accountingPlanEditionReportSession = null/);
 assert.match(app, /child\.id === 'edition-chart-of-accounts'\) return viewAccountingPlanEdition/);
 assert.match(app, /menuParams\.t === 'definitions-and-plans' && menuParams\.c === AccountingPlanEditionReport\.REPORT_ID\) bindAccountingPlanEditionReport/);
+assert.match(reportUi, /function createAccountingPlanEditionReportSession\(\)[\s\S]*phase: 'listing'/);
+assert.match(reportUi, /function viewAccountingPlanEdition\([\s\S]*session\.phase === 'listing'[\s\S]*viewAccounts\(true\)/);
+assert.match(app, /function viewAccounts\(readOnly\)[\s\S]*editionReadOnly = readOnly === true[\s\S]*Même plan comptable que dans Définitions/);
+assert.match(app, /editionReadOnly[\s\S]*data-accounting-plan-edition-prepare/);
+assert.match(app, /var accountActions = editionReadOnly[\s\S]*Consultation seule/);
+assert.match(reportUi, /data-accounting-plan-edition-prepare[\s\S]*session\.phase = 'selection'/);
+assert.match(reportUi, /data-accounting-plan-edition-back-listing[\s\S]*session\.phase = 'listing'/);
 assert.match(reportUi, /function buildAccountingPlanEditionReport\([\s\S]*records: S\.accounts\(\)/);
 assert.match(reportUi, /function accountingPlanEditionSelectionView\([\s\S]*1400[\s\S]*Lignes générées/);
 assert.match(reportUi, /function accountingPlanEditionLayoutView\([\s\S]*Imprimante[\s\S]*Style[\s\S]*Orientation[\s\S]*Marges[\s\S]*Pages[\s\S]*Parité[\s\S]*Destination/);
