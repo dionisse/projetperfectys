@@ -52,7 +52,7 @@ assert.doesNotMatch(reportSource, /record\.thirdParty\b/);
 assert.ok(htmlSource.indexOf('js/third-party-balance-report.js') < htmlSource.indexOf('js/third-party-nature-breakdown-report.js'));
 assert.ok(htmlSource.indexOf('js/third-party-nature-breakdown-report.js') < htmlSource.indexOf('js/app.js'));
 assert.match(serviceWorkerSource, /\.\/js\/third-party-nature-breakdown-report\.js/);
-assert.match(serviceWorkerSource, /perfecto-static-v128/);
+assert.match(serviceWorkerSource, /perfecto-static-v129/);
 assert.match(cssSource, /\.third-party-nature-breakdown-filter-grid[\s\S]*\.third-party-nature-breakdown-column-grid[\s\S]*\.third-party-nature-breakdown-table/);
 assert.match(cssSource, /\.third-party-nature-breakdown-kind-options[\s\S]*\.third-party-nature-breakdown-nature-option/);
 

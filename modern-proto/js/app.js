@@ -12,6 +12,8 @@
   var AccountingBridge = window.PerfectoAccountingBridge;
   var AccountingFramework = window.PerfectoAccountingFramework;
   var FinancialFrameworkEditionReport = window.PerfectoAccountingFrameworkEdition;
+  var BalanceItems = window.PerfectoBalanceItems;
+  var BalanceItemsEditionReport = window.PerfectoBalanceItemsEdition;
   var CashOperations = window.PerfectoCashOperations;
   var AccountMovements = window.PerfectoAccountMovements;
   var AccountingExchange = window.PerfectoAccountingExchange;
@@ -177,6 +179,7 @@
   var fixedAssetOverviewReportSession = null;
   var fixedAssetAdditionalReportSession = null;
   var financialFrameworkEditionReportSession = null;
+  var balanceItemsEditionReportSession = null;
   var generalLedgerReportSession = null;
   var generalCounterpartDetailReportSession = null;
   var generalCounterpartTotalReportSession = null;
@@ -824,6 +827,7 @@
     var isFixedAssetOverviewReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'fixed-assets' && parsed.params.c === 'edition-fixed-asset-overview';
     var isFixedAssetAdditionalReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'fixed-assets' && FixedAssetAdditionalReports.REPORT_IDS.indexOf(parsed.params.c) !== -1;
     var isFinancialFrameworkEditionReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'definitions-and-plans' && parsed.params.c === FinancialFrameworkEditionReport.REPORT_ID;
+    var isBalanceItemsEditionReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'definitions-and-plans' && parsed.params.c === BalanceItemsEditionReport.REPORT_ID;
     var isGeneralLedgerReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-ledger';
     var isGeneralCounterpartDetailReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-detail';
     var isGeneralCounterpartTotalReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-total';
@@ -850,6 +854,7 @@
     if (!isFixedAssetOverviewReportRoute) fixedAssetOverviewReportSession = null;
     if (!isFixedAssetAdditionalReportRoute) fixedAssetAdditionalReportSession = null;
     if (!isFinancialFrameworkEditionReportRoute) financialFrameworkEditionReportSession = null;
+    if (!isBalanceItemsEditionReportRoute) balanceItemsEditionReportSession = null;
     if (!isGeneralLedgerReportRoute) generalLedgerReportSession = null;
     if (!isGeneralCounterpartDetailReportRoute) generalCounterpartDetailReportSession = null;
     if (!isGeneralCounterpartTotalReportRoute) generalCounterpartTotalReportSession = null;
@@ -15144,6 +15149,333 @@
     });
   }
 
+  function createBalanceItemsEditionReportSession() {
+    var columns = Object.create(null);
+    BalanceItemsEditionReport.COLUMNS.forEach(function (column) { columns[column.key] = !!column.defaultSelected; });
+    return {
+      phase: 'selection',
+      filters: { posts: '*' },
+      columns: columns,
+      layout: { printer: 'system', style: 'plain8', orientation: 'portrait', margins: 'standard', pageFirst: '', pageLast: '', parity: 'none', destination: 'preview' },
+      report: null,
+      exportFilename: '',
+      exportMessage: ''
+    };
+  }
+
+  function ensureBalanceItemsEditionReportSession() {
+    if (!balanceItemsEditionReportSession) balanceItemsEditionReportSession = createBalanceItemsEditionReportSession();
+    return balanceItemsEditionReportSession;
+  }
+
+  function buildBalanceItemsEditionReport(session) {
+    return BalanceItemsEditionReport.buildReport({ postFilter: session.filters.posts });
+  }
+
+  function balanceItemsEditionSelectedColumns(session) {
+    return BalanceItemsEditionReport.COLUMNS.filter(function (column) { return !!session.columns[column.key]; });
+  }
+
+  function balanceItemsEditionColumnOption(column, session) {
+    return '<label class="journal-lines-column-option balance-items-edition-column-option"><input type="checkbox" data-balance-items-edition-column="' + esc(column.key) + '"' +
+      (session.columns[column.key] ? ' checked' : '') + '><span><strong>' + esc(column.label) + '</strong></span></label>';
+  }
+
+  function balanceItemsEditionFilterField(session) {
+    return '<div class="field balance-items-edition-post-field"><label for="balance-items-edition-posts">Postes</label>' +
+      '<div class="journal-lines-picker-control"><input id="balance-items-edition-posts" data-balance-items-edition-filter="posts" type="text" value="' + esc(session.filters.posts) + '" placeholder="* ou code de poste" maxlength="1000" autocomplete="off" required>' +
+      '<button type="button" class="btn btn-ghost" data-balance-items-edition-picker>Parcourir</button></div>' +
+      '<span class="hint">« * » sélectionne les postes du PDF. Vous pouvez saisir un code, un préfixe avec * ou plusieurs codes séparés par des virgules.</span></div>';
+  }
+
+  function balanceItemsEditionSelectionView(session) {
+    var metadata = BalanceItems.metadata;
+    var columns = BalanceItemsEditionReport.COLUMNS.map(function (column) { return balanceItemsEditionColumnOption(column, session); }).join('');
+    var report = session.report || buildBalanceItemsEditionReport(session);
+    session.report = report;
+    return generalBalanceReportSteps('selection', 'Étapes de préparation des Postes du Bilan') +
+      pageHeader('Postes du Bilan', 'Sélectionnez les postes du bilan et les colonnes à restituer.', '') +
+      '<div class="alert info balance-items-edition-source-note"><div><strong>Référentiel SYSCOHADA révisé · consultation seule.</strong> Le PDF fourni contient ' + metadata.postCount + ' postes répartis sur ' + metadata.sourceLineCount + ' lignes de contenu (' + metadata.sourcePages + ' pages). Les codes, intitulés, comptes et signes sont restitués dans l’ordre source, sans affectation ajoutée ni calcul comptable.</div></div>' +
+      '<form id="balance-items-edition-selection-form" novalidate>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div></div>' +
+          '<div class="balance-items-edition-filter-grid">' + balanceItemsEditionFilterField(session) + '</div>' +
+        '</div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
+          '<div class="currency-balance-column-grid balance-items-edition-columns-grid">' + columns + '</div>' +
+        '</div></section>' +
+        '<div class="journal-lines-form-errors" id="balance-items-edition-selection-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="balance-items-edition-selection-actions"><a class="btn btn-ghost" href="' + esc(accountingMenuHash('editions', 'definitions-and-plans')) + '">Annuler</a>' +
+          '<span class="pointing-edition-line-count" role="status">Lignes générées : <strong data-balance-items-edition-line-count>' + esc(report.generatedLineCount || 0) + '</strong></span>' +
+          '<button type="submit" class="btn btn-primary">Valider <span aria-hidden="true">→</span></button></div>' +
+      '</form>';
+  }
+
+  function syncBalanceItemsEditionSelection(form, session) {
+    if (!form) return null;
+    var postsInput = $('[data-balance-items-edition-filter="posts"]', form);
+    if (postsInput) session.filters.posts = postsInput.value;
+    $$('[data-balance-items-edition-column]', form).forEach(function (input) {
+      session.columns[input.getAttribute('data-balance-items-edition-column')] = !!input.checked;
+    });
+    var report = buildBalanceItemsEditionReport(session);
+    session.report = report;
+    showGeneralBalanceReportErrors($('#balance-items-edition-selection-errors', form), report.errors);
+    var count = $('[data-balance-items-edition-line-count]', form);
+    if (count) count.textContent = String(report.generatedLineCount || 0);
+    return report;
+  }
+
+  function submitBalanceItemsEditionSelection(form, session) {
+    var report = syncBalanceItemsEditionSelection(form, session);
+    var errors = report ? report.errors.slice() : ['Impossible de lire la sélection des postes du bilan.'];
+    if (!balanceItemsEditionSelectedColumns(session).length) errors.push('Sélectionnez au moins une colonne à restituer.');
+    showGeneralBalanceReportErrors($('#balance-items-edition-selection-errors', form), errors);
+    if (errors.length) return;
+    session.report = report;
+    session.phase = 'layout';
+    render();
+  }
+
+  function balanceItemsEditionLayoutView(session) {
+    var report = session.report || buildBalanceItemsEditionReport(session);
+    var count = report.generatedLineCount + (report.generatedLineCount === 1 ? ' ligne générée' : ' lignes générées');
+    return generalBalanceReportSteps('layout', 'Étapes de préparation des Postes du Bilan') +
+      pageHeader('Mise en page — Postes du Bilan', 'Choisissez le style, l’orientation, les marges, les pages et la destination.', '') +
+      '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(count) + ', en-tête compris. L’ordre source et les données du PDF seront conservés ; aucun compte ne sera modifié.</div></div>' +
+      '<form id="balance-items-edition-layout-form" novalidate><div class="journal-lines-settings-grid balance-items-edition-settings-grid">' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="balance-items-edition-printer">Imprimante</label><select id="balance-items-edition-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="balance-items-edition-style">Style du rapport</label><select id="balance-items-edition-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('balance-items-edition-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('balance-items-edition-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('balance-items-edition-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('balance-items-edition-margins', 'binding', 'Reliure', session.layout.margins === 'binding', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Pages</h3></div><div class="journal-lines-page-range"><div class="field"><label for="balance-items-edition-page-first">Première</label><input id="balance-items-edition-page-first" type="number" min="1" step="1" value="' + esc(session.layout.pageFirst) + '" placeholder="1"></div><span aria-hidden="true">à</span><div class="field"><label for="balance-items-edition-page-last">Dernière</label><input id="balance-items-edition-page-last" type="number" min="1" step="1" value="' + esc(session.layout.pageLast) + '" placeholder="Fin"></div></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Parité</h3></div><div class="field"><label for="balance-items-edition-parity">Pages</label><select id="balance-items-edition-parity"><option value="none"' + (session.layout.parity === 'none' ? ' selected' : '') + '>Aucune</option><option value="odd"' + (session.layout.parity === 'odd' ? ' selected' : '') + '>Impaire</option><option value="even"' + (session.layout.parity === 'even' ? ' selected' : '') + '>Paire</option></select></div></div></section>' +
+        '<section class="card journal-lines-card balance-items-edition-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
+          generalBalanceReportRadio('balance-items-edition-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
+          generalBalanceReportRadio('balance-items-edition-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
+          generalBalanceReportRadio('balance-items-edition-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('balance-items-edition-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
+        '</div></div></section></div>' +
+        '<div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> Le choix final de l’imprimante ou du PDF, des pages et de la parité reste dans la boîte du navigateur.</div></div>' +
+        '<div class="journal-lines-form-errors" id="balance-items-edition-layout-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-balance-items-edition-back-selection>Retour à la sélection</button><button type="submit" class="btn btn-primary">Valider</button></div></form>';
+  }
+
+  function balanceItemsEditionCellText(row, column) {
+    if (!row || row[column.key] == null) return '';
+    return String(row[column.key]);
+  }
+
+  function balanceItemsEditionPrintableHtml(session, report) {
+    report = report || session.report || buildBalanceItemsEditionReport(session);
+    var columns = balanceItemsEditionSelectedColumns(session);
+    var headers = columns.map(function (column) { return '<th scope="col">' + esc(column.label) + '</th>'; }).join('');
+    var rows = report.rows.map(function (row) {
+      return '<tr title="Source PDF · page ' + esc(row.page || '') + '">' + columns.map(function (column) {
+        return '<td class="balance-items-edition-cell-' + esc(column.key) + '">' + esc(balanceItemsEditionCellText(row, column)) + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    if (!rows) rows = '<tr class="balance-items-edition-empty-row"><td colspan="' + Math.max(columns.length, 1) + '">Aucun poste ne correspond au filtre.</td></tr>';
+    var styleClass = session.layout.style === 'color10' ? 'balance-items-edition-style-color' : 'balance-items-edition-style-plain';
+    var metadata = BalanceItems.metadata;
+    return '<article class="balance-items-edition-print ' + styleClass + '">' +
+      '<header class="balance-items-edition-print-heading"><p class="page-kicker">ÉDITIONS · DÉFINITIONS ET PLANS</p><h2>Postes du Bilan</h2>' +
+        '<p>Postes : ' + esc(session.filters.posts === '*' ? 'Tous les postes du PDF' : session.filters.posts) + ' · ' + report.sourcePostCount + ' postes · ' + report.sourceLineCount + ' lignes source</p></header>' +
+      '<div class="balance-items-edition-table-wrap"><table class="balance-items-edition-table"><caption>' + esc(metadata.title + ' · ' + report.sourceLineCount + ' lignes issues du PDF') + '</caption>' +
+        '<thead><tr>' + headers + '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<p class="balance-items-edition-print-note">Source : « ' + esc(metadata.sourceFile) + ' » (' + metadata.sourcePages + ' pages). Les lignes, codes et intitulés restent dans l’ordre du document ; les cellules vides et les comptes reproduits tels quels ne sont ni complétés ni recalculés.</p>' +
+    '</article>';
+  }
+
+  function balanceItemsEditionExportMatrix(session, report) {
+    var columns = balanceItemsEditionSelectedColumns(session);
+    var matrix = [columns.map(function (column) { return column.label; })];
+    report.rows.forEach(function (row) {
+      matrix.push(columns.map(function (column) { return balanceItemsEditionCellText(row, column); }));
+    });
+    if (!report.rows.length) matrix.push(['Aucun poste ne correspond au filtre.']);
+    return matrix;
+  }
+
+  function generateBalanceItemsEditionFile(session, destination) {
+    var report = buildBalanceItemsEditionReport(session);
+    if (!report.ok) throw new Error(report.errors.join(' '));
+    var matrix = balanceItemsEditionExportMatrix(session, report);
+    var spreadsheet = destination === 'table';
+    var extension = spreadsheet ? 'xlsx' : 'txt';
+    var filename = safeFilePart('Postes-du-Bilan') + '-' + safeFilePart(S.currentDossier().name) + '-' + safeFilePart(session.filters.posts || 'selection') + '.' + extension;
+    var content = spreadsheet
+      ? AccountingExchange.exportTabularWorkbook('Postes du Bilan', matrix[0], matrix.slice(1))
+      : generalBalanceReportTsv(matrix);
+    downloadFile(filename, content, spreadsheet ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/plain;charset=utf-8');
+    session.report = report;
+    session.exportFilename = filename;
+    session.exportMessage = spreadsheet ? 'Téléchargement du classeur Excel lancé. Le document source reste inchangé.' : 'Téléchargement du fichier texte tabulé lancé. Le document source reste inchangé.';
+    session.phase = 'saved';
+    render();
+  }
+
+  function balanceItemsEditionPrintOptions(session) {
+    var styleNode = null;
+    var previousStyleText = '';
+    var createdStyle = false;
+    var previousTitle = '';
+    return {
+      beforePrint: function () {
+        styleNode = $('#balance-items-edition-print-page-style');
+        createdStyle = !styleNode;
+        if (!styleNode) {
+          styleNode = document.createElement('style');
+          styleNode.id = 'balance-items-edition-print-page-style';
+          document.head.appendChild(styleNode);
+        } else previousStyleText = styleNode.textContent;
+        var orientation = session.layout.orientation === 'landscape' ? 'landscape' : 'portrait';
+        var left = session.layout.margins === 'binding' ? '18mm' : '12mm';
+        styleNode.textContent = '@page { size: A4 ' + orientation + '; margin: 12mm 12mm 12mm ' + left + '; }';
+        previousTitle = document.title;
+        document.title = safeFilePart('Postes-du-Bilan') + '-' + safeFilePart(S.currentDossier().name);
+      },
+      afterPrint: function () {
+        document.title = previousTitle || document.title;
+        if (!styleNode) return;
+        if (createdStyle && styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+        else styleNode.textContent = previousStyleText;
+      }
+    };
+  }
+
+  function openBalanceItemsEditionPreview(session) {
+    var report = buildBalanceItemsEditionReport(session);
+    session.report = report;
+    openReportPreview('Aperçu — Postes du Bilan', balanceItemsEditionPrintableHtml(session, report), balanceItemsEditionPrintOptions(session));
+  }
+
+  function balanceItemsEditionPreviewView(session, report) {
+    return generalBalanceReportSteps('preview', 'Étapes de préparation des Postes du Bilan') +
+      pageHeader('Aperçu — Postes du Bilan', 'Vérifiez la restitution source avant impression ou export.', '<button type="button" class="btn btn-primary" data-balance-items-edition-open-preview>Ouvrir l’aperçu plein écran</button>') +
+      '<div class="alert info"><div><strong>Consultation seule.</strong> L’aperçu plein écran et l’impression ne modifient ni le référentiel ni les écritures comptables.</div></div>' +
+      balanceItemsEditionPrintableHtml(session, report) +
+      '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-balance-items-edition-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-ghost" data-balance-items-edition-back-selection>Modifier la sélection</button></div>';
+  }
+
+  function balanceItemsEditionSavedView(session) {
+    return generalBalanceReportSteps('preview', 'Étapes de préparation des Postes du Bilan') +
+      pageHeader('Export prêt', 'Le fichier reprend les lignes du PDF et les colonnes sélectionnées.', '') +
+      '<section class="card journal-lines-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
+        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-balance-items-edition-open-preview>Afficher l’aperçu plein écran</button><button type="button" class="btn btn-ghost" data-balance-items-edition-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-balance-items-edition-new>Nouvelle sélection</button></div></div></section>';
+  }
+
+  function submitBalanceItemsEditionLayout(form, session) {
+    var errors = [];
+    var destination = $('input[name="balance-items-edition-destination"]:checked', form);
+    var orientation = $('input[name="balance-items-edition-orientation"]:checked', form);
+    var margins = $('input[name="balance-items-edition-margins"]:checked', form);
+    var first = $('#balance-items-edition-page-first', form).value;
+    var last = $('#balance-items-edition-page-last', form).value;
+    if (first && (!Number.isInteger(Number(first)) || Number(first) < 1)) errors.push('La première page doit être un entier supérieur ou égal à 1.');
+    if (last && (!Number.isInteger(Number(last)) || Number(last) < 1)) errors.push('La dernière page doit être un entier supérieur ou égal à 1.');
+    if (first && last && Number(first) > Number(last)) errors.push('La première page doit précéder ou égaler la dernière page.');
+    var report = buildBalanceItemsEditionReport(session);
+    if (!report.ok) errors = errors.concat(report.errors);
+    showGeneralBalanceReportErrors($('#balance-items-edition-layout-errors', form), errors);
+    if (errors.length) return;
+    session.layout.printer = $('#balance-items-edition-printer', form).value;
+    session.layout.style = $('#balance-items-edition-style', form).value;
+    session.layout.orientation = orientation ? orientation.value : 'portrait';
+    session.layout.margins = margins ? margins.value : 'standard';
+    session.layout.pageFirst = first;
+    session.layout.pageLast = last;
+    session.layout.parity = $('#balance-items-edition-parity', form).value;
+    session.layout.destination = destination ? destination.value : 'preview';
+    session.report = report;
+    if (session.layout.destination === 'table' || session.layout.destination === 'file') {
+      try { generateBalanceItemsEditionFile(session, session.layout.destination); }
+      catch (error) { showGeneralBalanceReportErrors($('#balance-items-edition-layout-errors', form), [error && error.message || 'Export impossible.']); }
+      return;
+    }
+    session.phase = 'preview';
+    render();
+  }
+
+  function viewBalanceItemsEdition(backLink) {
+    var session = ensureBalanceItemsEditionReportSession();
+    if (session.phase !== 'selection') session.report = buildBalanceItemsEditionReport(session);
+    var content = session.phase === 'layout'
+      ? balanceItemsEditionLayoutView(session)
+      : (session.phase === 'preview'
+        ? balanceItemsEditionPreviewView(session, session.report)
+        : (session.phase === 'saved' ? balanceItemsEditionSavedView(session) : balanceItemsEditionSelectionView(session)));
+    return '<div class="edition-report-detail-view balance-items-edition-report-detail">' + backLink + content + '</div>';
+  }
+
+  function bindBalanceItemsEditionReport() {
+    var session = ensureBalanceItemsEditionReportSession();
+    if (session.phase === 'selection') {
+      var form = $('#balance-items-edition-selection-form');
+      if (!form) return;
+      var update = function () { syncBalanceItemsEditionSelection(form, session); };
+      form.addEventListener('input', update);
+      form.addEventListener('change', update);
+      form.addEventListener('submit', function (event) { event.preventDefault(); submitBalanceItemsEditionSelection(form, session); });
+      var picker = $('[data-balance-items-edition-picker]', form);
+      if (picker) picker.addEventListener('click', function () {
+        var input = $('[data-balance-items-edition-filter="posts"]', form);
+        if (input) openBalanceItemsEditionPostPicker(input);
+      });
+      return;
+    }
+    if (session.phase === 'layout') {
+      var layoutForm = $('#balance-items-edition-layout-form');
+      if (layoutForm) layoutForm.addEventListener('submit', function (event) { event.preventDefault(); submitBalanceItemsEditionLayout(layoutForm, session); });
+      var backSelection = $('[data-balance-items-edition-back-selection]');
+      if (backSelection) backSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+      return;
+    }
+    $$('[data-balance-items-edition-open-preview]').forEach(function (button) { button.addEventListener('click', function () { openBalanceItemsEditionPreview(session); }); });
+    var backLayout = $('[data-balance-items-edition-back-layout]');
+    if (backLayout) backLayout.addEventListener('click', function () { session.phase = 'layout'; render(); });
+    var backToSelection = $('[data-balance-items-edition-back-selection]');
+    if (backToSelection) backToSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+    var newReport = $('[data-balance-items-edition-new]');
+    if (newReport) newReport.addEventListener('click', function () { balanceItemsEditionReportSession = createBalanceItemsEditionReportSession(); render(); });
+  }
+
+  function openBalanceItemsEditionPostPicker(input) {
+    var records = BalanceItems.all();
+    var current = BalanceItemsEditionReport.parsePostFilter(input.value);
+    var selectAll = current.valid && current.all;
+    var prefix = 'balance-items-edition-picker';
+    var rows = records.map(function (post, index) {
+      var checked = selectAll || (current.valid && BalanceItemsEditionReport.postMatches(post.code, current));
+      var searchText = post.code + ' ' + post.label + ' ' + BalanceItemsEditionReport.formatAccounts(post);
+      return '<label class="journal-lines-picker-option balance-items-edition-picker-option" data-picker-text="' + esc(searchText) + '"><input type="checkbox" data-balance-items-edition-picker-code value="' + esc(post.code) + '" id="' + prefix + '-' + index + '"' + (checked ? ' checked' : '') + '><strong>' + esc(post.code) + '</strong><span>' + esc(post.label) + '</span></label>';
+    }).join('');
+    var body = '<div class="journal-lines-picker"><div class="field"><label for="' + prefix + '-search">Rechercher un poste</label><input id="' + prefix + '-search" type="search" placeholder="Code, intitulé ou compte"></div>' +
+      '<label class="journal-lines-picker-all"><input id="' + prefix + '-all" type="checkbox"' + (selectAll ? ' checked' : '') + '>Tous les postes du PDF</label>' +
+      '<div class="journal-lines-picker-list" role="group" aria-label="Postes du bilan du document source">' + (rows || '<div class="empty-state">Aucun poste disponible dans le PDF source.</div>') + '</div></div>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="button" class="btn btn-primary" data-balance-items-edition-picker-apply>Appliquer</button>';
+    openModal('Choisir les postes', 'La liste reprend les codes et intitulés du PDF des Postes du Bilan.', body, footer, true);
+    var modalRoot = $('#modal-root');
+    var search = $('#' + prefix + '-search', modalRoot);
+    var pickerRows = $$('.balance-items-edition-picker-option', modalRoot);
+    var allToggle = $('#' + prefix + '-all', modalRoot);
+    var checkboxes = $$('[data-balance-items-edition-picker-code]', modalRoot);
+    if (search) search.addEventListener('input', function () {
+      var query = search.value.trim().toLocaleLowerCase();
+      pickerRows.forEach(function (row) { row.hidden = !!query && row.getAttribute('data-picker-text').toLocaleLowerCase().indexOf(query) === -1; });
+    });
+    if (allToggle) allToggle.addEventListener('change', function () { checkboxes.forEach(function (checkbox) { checkbox.checked = allToggle.checked; }); });
+    checkboxes.forEach(function (checkbox) {
+      checkbox.addEventListener('change', function () { if (allToggle) allToggle.checked = !!checkboxes.length && checkboxes.every(function (item) { return item.checked; }); });
+    });
+    var apply = $('[data-balance-items-edition-picker-apply]', modalRoot);
+    if (apply) apply.addEventListener('click', function () {
+      input.value = allToggle && allToggle.checked ? '*' : $$('[data-balance-items-edition-picker-code]:checked', modalRoot).map(function (checkbox) { return checkbox.value; }).join(', ');
+      try { var inputEvent = document.createEvent('Event'); inputEvent.initEvent('input', true, false); input.dispatchEvent(inputEvent); } catch (error) { /* la valeur saisie reste disponible */ }
+      closeModal();
+      input.focus();
+    });
+  }
+
   function accountingBridgeSourceDefinitions() {
     return [
       {
@@ -22705,7 +23037,7 @@
       assetAccounts: { title: 'Consultation par comptes', description: 'Cumul et grand-livre des éléments à définir à partir de vos captures.' },
       assetDiscrepancies: { title: 'Écarts et anomalies', description: 'Sources de comparaison, critères et résultats à préciser ; aucun écart n’est calculé ici.' },
       assetDimensions: { title: 'Ventilations désactivées', description: 'Les trois éléments restent grisés comme dans votre capture ; aucune sortie n’est affichée.' },
-      definitionsFramework: { title: 'Cadre comptable et postes du bilan', description: 'Le Cadre comptable reprend le PDF SYSCOHADA révisé en lecture seule ; l’état Postes du bilan reste à préciser.' },
+      definitionsFramework: { title: 'Cadre comptable et postes du bilan', description: 'Le Cadre comptable et les Postes du bilan restituent leurs PDF de référence en lecture seule ; les autres éditions de ce groupe restent à préciser.' },
       definitionsAccounts: { title: 'Plan comptable et postes associés', description: 'Les deux éditions restent distinctes des fonctions de maintenance du plan.' },
       definitionsThirdParties: { title: 'Tiers', description: 'Édition à préciser sans ouvrir les écrans de maintenance des fiches.' },
       definitionsJournals: { title: 'Plan des journaux', description: 'Restitution à préciser sans ouvrir la maintenance des journaux.' },
@@ -23917,6 +24249,7 @@
     if (child.id === 'edition-fixed-asset-exit-discrepancies') return viewFixedAssetExitDiscrepanciesReport(backLink);
     if (child.id === 'edition-fixed-asset-other-anomalies') return viewFixedAssetAnomaliesReport(backLink);
     if (child.id === 'edition-accounting-framework') return viewFinancialFrameworkEdition(backLink);
+    if (child.id === 'edition-balance-items') return viewBalanceItemsEdition(backLink);
     if (PointingEditionReports.REPORT_IDS.indexOf(child.id) !== -1) return viewPointingEditionReport(backLink, child.id);
     if (MatchingEditionReports.REPORT_IDS.indexOf(child.id) !== -1) return viewMatchingEditionReport(backLink, child.id);
     if (child.id === 'general-summary-balance') return viewGeneralSummaryBalanceReport(backLink);
@@ -25371,6 +25704,7 @@
       if (menuParams.g === 'editions' && menuParams.t === 'fixed-assets' && menuParams.c === 'edition-fixed-asset-overview') bindFixedAssetOverviewReport();
       if (menuParams.g === 'editions' && menuParams.t === 'fixed-assets' && FixedAssetAdditionalReports.REPORT_IDS.indexOf(menuParams.c) !== -1) bindFixedAssetAdditionalReport(menuParams.c);
       if (menuParams.g === 'editions' && menuParams.t === 'definitions-and-plans' && menuParams.c === FinancialFrameworkEditionReport.REPORT_ID) bindFinancialFrameworkEditionReport();
+      if (menuParams.g === 'editions' && menuParams.t === 'definitions-and-plans' && menuParams.c === BalanceItemsEditionReport.REPORT_ID) bindBalanceItemsEditionReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-ledger') bindGeneralLedgerReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-detail') bindGeneralCounterpartDetailReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-total') bindGeneralCounterpartTotalReport();

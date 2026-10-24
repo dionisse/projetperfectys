@@ -47,7 +47,7 @@ assert.doesNotMatch(reportSource, /record\.thirdParty\b/);
 assert.ok(htmlSource.indexOf('js/aged-balance-report.js') < htmlSource.indexOf('js/third-party-balance-report.js'));
 assert.ok(htmlSource.indexOf('js/third-party-balance-report.js') < htmlSource.indexOf('js/app.js'));
 assert.match(serviceWorkerSource, /\.\/js\/third-party-balance-report\.js/);
-assert.match(serviceWorkerSource, /perfecto-static-v128/);
+assert.match(serviceWorkerSource, /perfecto-static-v129/);
 assert.match(cssSource, /\.third-party-balance-filter-grid[\s\S]*\.third-party-balance-column-grid[\s\S]*\.third-party-balance-table/);
 
 console.log('Balance des tiers : intégration navigation, parcours et ressources vérifiée.');
