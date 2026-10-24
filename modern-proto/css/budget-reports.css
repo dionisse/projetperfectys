@@ -1,0 +1,63 @@
+/* Rapports budgétaires : formulaires de sélection, état vide explicite et aperçu. */
+.budget-report-detail { min-width: 0; }
+.budget-report-detail > .edition-report-back { margin-bottom: 15px; }
+.budget-report-source-note,
+.budget-report-warnings { margin: 0 0 14px; line-height: 1.55; }
+.budget-report-warnings ul { margin: 0 0 0 18px; }
+.budget-report-filter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 22px; align-items: start; }
+.budget-report-filter-grid .field { min-width: 0; }
+.budget-report-filter-grid .journal-lines-picker-control { display: flex; align-items: stretch; gap: 8px; }
+.budget-report-filter-grid .journal-lines-picker-control input { min-width: 0; flex: 1 1 auto; }
+.budget-report-filter-grid .journal-lines-picker-control .btn { flex: 0 0 46px; min-width: 46px; font-size: 1.15rem; }
+.budget-report-column-option { min-height: 40px; }
+.budget-report-line-options { display: grid; gap: 9px; }
+.budget-report-selection-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 16px; padding: 13px 16px; border: 1px solid #dce4df; border-radius: 10px; background: #fbfcfa; }
+.budget-report-selection-actions .btn { flex: 0 0 auto; }
+.budget-report-generated-count { margin: 0 auto 0 0; color: #52645b; font-size: .83rem; }
+.budget-report-generated-count strong { color: #183e32; font-size: .92rem; }
+.budget-report-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.budget-report-settings-grid .journal-lines-destination-card { grid-column: 1 / -1; }
+.budget-report-print { width: 100%; color: #22332c; background: #fff; font-family: Arial, sans-serif; }
+.budget-report-print-heading { margin: 0 0 12px; }
+.budget-report-print-heading .page-kicker { color: #587065; font-size: 8pt; font-weight: 700; letter-spacing: .08em; }
+.budget-report-print-heading h2 { margin: 5px 0; color: #213f35; font-size: 17pt; }
+.budget-report-print-heading p,
+.budget-report-print-note { color: #596a61; font-size: 9pt; line-height: 1.5; }
+.budget-report-print-note { margin: 10px 0 0; font-size: 8pt; }
+.budget-report-table-wrap { overflow-x: auto; }
+.budget-report-table { width: 100%; min-width: 680px; border-collapse: collapse; font-size: 8pt; }
+.budget-report-table th,
+.budget-report-table td { padding: 6px 7px; border: 1px solid #d7dfda; text-align: left; vertical-align: top; }
+.budget-report-table th { color: #21483a; background: #edf3ef; font-size: .72rem; }
+.budget-report-table th.num,
+.budget-report-table td.num { text-align: right; white-space: nowrap; }
+.budget-report-style-color .budget-report-table { font-size: 10pt; }
+.budget-report-style-color .budget-report-table th { background: #e6f0eb; }
+.budget-report-style-plain .budget-report-table th { color: #111; background: #fff; }
+.budget-report-detail .journal-lines-form-errors:empty { display: none; }
+
+@media (max-width: 850px) {
+  .budget-report-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .budget-report-filter-grid,
+  .budget-report-settings-grid { grid-template-columns: minmax(0, 1fr); }
+  .budget-report-settings-grid .journal-lines-destination-card { grid-column: auto; }
+  .budget-report-selection-actions { align-items: flex-start; flex-direction: column; }
+  .budget-report-selection-actions .btn { width: 100%; }
+  .budget-report-generated-count { margin: 0; }
+  .budget-report-table { min-width: 680px; }
+}
+
+@media print {
+  body.report-preview-printing .report-preview-content .budget-report-print { width: 100%; max-width: none; margin: 0; padding: 0; color: #111 !important; background: #fff !important; }
+  body.report-preview-printing .report-preview-content .budget-report-print-heading h2 { color: #111 !important; font-size: 14pt !important; }
+  body.report-preview-printing .report-preview-content .budget-report-print-heading p,
+  body.report-preview-printing .report-preview-content .budget-report-print-note { color: #222 !important; }
+  body.report-preview-printing .report-preview-content .budget-report-table { width: 100%; min-width: 0 !important; font-size: 8pt !important; }
+  body.report-preview-printing .report-preview-content .budget-report-table thead { display: table-header-group; }
+  body.report-preview-printing .report-preview-content .budget-report-table tr { break-inside: avoid; page-break-inside: avoid; }
+  body.report-preview-printing .report-preview-content .budget-report-style-plain .budget-report-table th { color: #111 !important; background: #fff !important; }
+  body.report-preview-printing .report-preview-content .budget-report-style-color .budget-report-table { font-size: 10pt !important; }
+}

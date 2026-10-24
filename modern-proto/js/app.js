@@ -18,6 +18,7 @@
   var GeneralBalanceReport = window.PerfectoGeneralBalanceReport;
   var CurrencyBalanceReport = window.PerfectoCurrencyBalanceReport;
   var CurrencySupplementaryReports = window.PerfectoCurrencySupplementaryReports;
+  var BudgetReports = window.PerfectoBudgetReports;
   var AccountSituationReport = window.PerfectoAccountSituationReport;
   var GeneralLedgerReport = window.PerfectoGeneralLedgerReport;
   var GeneralCounterpartDetailReport = window.PerfectoGeneralCounterpartDetailReport;
@@ -163,6 +164,7 @@
   var generalBalanceReportSession = null;
   var currencyBalanceReportSession = null;
   var currencySupplementaryReportSession = null;
+  var budgetReportSession = null;
   var generalLedgerReportSession = null;
   var generalCounterpartDetailReportSession = null;
   var generalCounterpartTotalReportSession = null;
@@ -803,6 +805,7 @@
     var isCurrencyBalanceReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'foreign-currency' && parsed.params.c === 'currency-balance';
     var isCurrencySupplementaryReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'foreign-currency' &&
       ['currency-opening-balance', 'currency-situation', 'currency-ledger', 'currency-exchange-differences'].indexOf(parsed.params.c) !== -1;
+    var isBudgetReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'budget' && BudgetReports.REPORT_IDS.indexOf(parsed.params.c) !== -1;
     var isGeneralLedgerReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-ledger';
     var isGeneralCounterpartDetailReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-detail';
     var isGeneralCounterpartTotalReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-total';
@@ -822,6 +825,7 @@
     if (!isGeneralBalanceReportRoute) generalBalanceReportSession = null;
     if (!isCurrencyBalanceReportRoute) currencyBalanceReportSession = null;
     if (!isCurrencySupplementaryReportRoute) currencySupplementaryReportSession = null;
+    if (!isBudgetReportRoute) budgetReportSession = null;
     if (!isGeneralLedgerReportRoute) generalLedgerReportSession = null;
     if (!isGeneralCounterpartDetailReportRoute) generalCounterpartDetailReportSession = null;
     if (!isGeneralCounterpartTotalReportRoute) generalCounterpartTotalReportSession = null;
@@ -4784,6 +4788,376 @@
     if (session.phase === 'preview' && !session.previewOpened) {
       session.previewOpened = true;
       openCurrencySupplementaryReportPreview(session, definition);
+    }
+  }
+
+  /* ----------------------------- Rapports Budget -------------------------- */
+  function createBudgetReportSession(dossier, reportId) {
+    var definition = BudgetReports.definitionFor(reportId);
+    if (!definition) return null;
+    var availableBudgets = BudgetReports.budgetOptions(dossier.cycleStart);
+    var columns = Object.create(null);
+    definition.columns.forEach(function (column) { columns[column.key] = !!column.defaultSelected; });
+    return {
+      dossierId: dossier.id,
+      reportId: reportId,
+      phase: 'selection',
+      filters: {
+        budgetCode: availableBudgets.length ? availableBudgets[0].code : '',
+        accounts: '*', from: dossier.cycleStart, to: dossier.cycleEnd
+      },
+      lineSelection: { generalAccounts: true, groupingCodes: false, placeholderLines: [false, false] },
+      columns: columns,
+      layout: { printer: 'system', style: 'plain8', orientation: definition.columns.length > 5 ? 'landscape' : 'portrait', margins: 'standard', pageFirst: '', pageLast: '', parity: 'none', destination: 'preview' },
+      report: null,
+      previewOpened: false,
+      exportFilename: '',
+      exportMessage: ''
+    };
+  }
+
+  function ensureBudgetReportSession() {
+    var dossier = S.currentDossier();
+    var reportId = parseHash().params.c;
+    if (!budgetReportSession || budgetReportSession.dossierId !== dossier.id || budgetReportSession.reportId !== reportId) {
+      budgetReportSession = createBudgetReportSession(dossier, reportId);
+    }
+    return budgetReportSession;
+  }
+
+  function buildBudgetReport(session) {
+    var dossier = S.currentDossier();
+    return BudgetReports.buildReport(session.reportId, {
+      cycleStart: dossier.cycleStart,
+      cycleEnd: dossier.cycleEnd,
+      budgetCode: session.filters.budgetCode,
+      accountFilter: session.filters.accounts,
+      accounts: S.accounts(),
+      entries: S.postedEntries(),
+      from: session.filters.from,
+      to: session.filters.to,
+      generalAccounts: session.lineSelection.generalAccounts,
+      groupingCodes: session.lineSelection.groupingCodes,
+      placeholderLines: session.lineSelection.placeholderLines
+    });
+  }
+
+  function budgetReportDefinition(reportId) { return BudgetReports.definitionFor(reportId); }
+
+  function budgetReportSelectedColumns(session, definition) {
+    return definition.columns.filter(function (column) { return !!session.columns[column.key]; });
+  }
+
+  function budgetReportFilterField(session, dossier, definition, key) {
+    if (key === 'budget') {
+      var options = BudgetReports.budgetOptions(dossier.cycleStart);
+      return '<div class="field"><label for="budget-report-budget">Budget</label><select id="budget-report-budget" data-budget-report-filter="budgetCode" required>' + options.map(function (item) {
+        return '<option value="' + esc(item.code) + '"' + (session.filters.budgetCode === item.code ? ' selected' : '') + '>' + esc(item.label) + '</option>';
+      }).join('') + '</select><span class="hint">L’exercice est déduit du cycle du dossier ; C = Charges, I = Investissements, P = Produits.</span></div>';
+    }
+    if (key === 'accounts') {
+      var label = definition.accountLabel || 'Compte';
+      return '<div class="field"><label for="budget-report-accounts">' + esc(label) + '</label><div class="journal-lines-picker-control"><input id="budget-report-accounts" data-budget-report-filter="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou 93, 9301*" autocomplete="off" required><button type="button" class="btn btn-ghost" data-budget-report-picker="accounts" aria-label="Choisir les comptes analytiques">…</button></div><span class="hint">« * » sélectionne les comptes des rubriques analytiques 93 à 99 ; un code de rubrique inclut ses sous-comptes.</span></div>';
+    }
+    var dateKey = key === 'from' ? 'from' : 'to';
+    return '<div class="field"><label for="budget-report-' + dateKey + '">' + (dateKey === 'from' ? 'Début' : 'Fin') + '</label><input id="budget-report-' + dateKey + '" data-budget-report-filter="' + dateKey + '" type="date" value="' + esc(session.filters[dateKey]) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required></div>';
+  }
+
+  function budgetReportColumnOption(column, session) {
+    return '<label class="journal-lines-column-option budget-report-column-option"><input type="checkbox" data-budget-report-column="' + esc(column.key) + '"' +
+      (session.columns[column.key] ? ' checked' : '') + '><span><strong>' + esc(column.label) + '</strong></span></label>';
+  }
+
+  function syncBudgetReportSelection(form, session, definition) {
+    if (!form) return null;
+    $$('[data-budget-report-filter]', form).forEach(function (input) {
+      session.filters[input.getAttribute('data-budget-report-filter')] = input.value;
+    });
+    $$('[data-budget-report-column]', form).forEach(function (input) {
+      session.columns[input.getAttribute('data-budget-report-column')] = !!input.checked;
+    });
+    var generalAccounts = $('[data-budget-report-general-accounts]', form);
+    var groupingCodes = $('[data-budget-report-grouping-codes]', form);
+    var placeholderLines = $$('[data-budget-report-placeholder-line]', form);
+    session.lineSelection.generalAccounts = !generalAccounts || !!generalAccounts.checked;
+    session.lineSelection.groupingCodes = !!(groupingCodes && groupingCodes.checked);
+    session.lineSelection.placeholderLines = placeholderLines.map(function (input) { return !!input.checked; });
+    var report = buildBudgetReport(session);
+    session.report = report;
+    showGeneralBalanceReportErrors($('#budget-report-selection-errors', form), report.errors);
+    var warnings = $('#budget-report-selection-warnings', form);
+    if (warnings) warnings.innerHTML = budgetReportWarningsHtml(report);
+    var count = $('[data-budget-report-line-count]', form);
+    if (count) count.textContent = String(report.generatedLineCount || 0);
+    return report;
+  }
+
+  function budgetReportWarningsHtml(report) {
+    return report && report.warnings && report.warnings.length
+      ? '<div class="alert info budget-report-warnings"><ul>' + report.warnings.map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('') + '</ul></div>'
+      : '';
+  }
+
+  function budgetReportSelectionView(session, dossier, definition) {
+    var report = session.report || buildBudgetReport(session);
+    session.report = report;
+    var filterMarkup = definition.filters.map(function (key) { return budgetReportFilterField(session, dossier, definition, key); }).join('');
+    var columnMarkup = definition.columns.map(function (column) { return budgetReportColumnOption(column, session); });
+    var split = Math.ceil(columnMarkup.length / 2);
+    var lineMarkup = '';
+    if (definition.showLines) {
+      lineMarkup = '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">PÉRIMÈTRE</p><h3>Lignes à imprimer</h3></div></div>' +
+        '<div class="budget-report-line-options"><label class="journal-lines-column-option"><input type="checkbox" data-budget-report-general-accounts' + (session.lineSelection.generalAccounts ? ' checked' : '') + '><span><strong>Comptes généraux</strong></span></label>' +
+        [0, 1].map(function (index) { return '<label class="journal-lines-column-option"><input type="checkbox" data-budget-report-placeholder-line value="' + index + '"' + (session.lineSelection.placeholderLines[index] ? ' checked' : '') + '><span><strong>-</strong></span></label>'; }).join('') +
+        (definition.showGroupingCodes ? '<label class="journal-lines-column-option"><input type="checkbox" data-budget-report-grouping-codes' + (session.lineSelection.groupingCodes ? ' checked' : '') + '><span><strong>Avec les codes de regroupement</strong></span></label>' : '') +
+        '</div></div></section>';
+    }
+    var countMarkup = definition.showGeneratedCount
+      ? '<div class="budget-report-generated-count" role="status" aria-live="polite">Lignes générées : <strong data-budget-report-line-count>' + esc(report.generatedLineCount || 0) + '</strong></div>'
+      : '';
+    var sourceNote = '<div class="alert info budget-report-source-note"><div><strong>Lecture seule.</strong> Les formulaires et filtres sont prêts, mais le dossier ne contient pas encore de registre budgétaire, de commandes engagées ni de réalisations rapprochées. Aucun montant n’est simulé. Tous les filtres de compte restent limités aux rubriques analytiques 93 à 99.</div></div>';
+    return generalBalanceReportSteps('selection', 'Étapes de préparation de ' + definition.title) +
+      pageHeader(definition.title, 'Sélectionnez le budget, les comptes et la période demandée.', '') + sourceNote +
+      '<form id="budget-report-selection-form" novalidate data-budget-report="' + esc(session.reportId) + '">' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div><span class="journal-lines-cycle-badge">Cycle ' + esc(dateLabel(dossier.cycleStart)) + ' — ' + esc(dateLabel(dossier.cycleEnd)) + '</span></div>' +
+          '<div class="budget-report-filter-grid">' + filterMarkup + '</div>' +
+        '</div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
+          '<div class="currency-balance-column-grid"><div class="currency-balance-column-stack">' + columnMarkup.slice(0, split).join('') + '</div><div class="currency-balance-column-stack">' + columnMarkup.slice(split).join('') + '</div></div>' +
+        '</div></section>' + lineMarkup +
+        '<div id="budget-report-selection-warnings">' + budgetReportWarningsHtml(report) + '</div>' +
+        '<div class="journal-lines-form-errors" id="budget-report-selection-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="budget-report-selection-actions"><a class="btn btn-ghost" href="' + esc(accountingMenuHash('editions', 'budget')) + '">Annuler</a>' + countMarkup + '<button type="submit" class="btn btn-primary">Valider <span aria-hidden="true">→</span></button></div>' +
+      '</form>';
+  }
+
+  function viewBudgetReportSelection(backLink, reportId) {
+    var session = ensureBudgetReportSession();
+    var definition = budgetReportDefinition(reportId);
+    var dossier = S.currentDossier();
+    if (!session || !definition) return backLink + '<div class="alert warning">État budgétaire introuvable.</div>';
+    if (session.phase !== 'selection') session.report = buildBudgetReport(session);
+    var content;
+    if (session.phase === 'layout') content = budgetReportLayoutView(session, session.report, definition);
+    else if (session.phase === 'preview') content = budgetReportPreviewView(session, session.report, definition);
+    else if (session.phase === 'saved') content = budgetReportSavedView(session, definition);
+    else content = budgetReportSelectionView(session, dossier, definition);
+    return '<div class="edition-report-detail-view general-balance-report-detail budget-report-detail">' + backLink + content + '</div>';
+  }
+
+  function viewBudgetForecastReport(backLink) { return viewBudgetReportSelection(backLink, 'budget-entered'); }
+  function viewBudgetOrdersFollowupReport(backLink) { return viewBudgetReportSelection(backLink, 'budget-orders-followup'); }
+  function viewBudgetOrdersByLineReport(backLink) { return viewBudgetReportSelection(backLink, 'budget-orders-by-line'); }
+  function viewBudgetOrdersOutsideReport(backLink) { return viewBudgetReportSelection(backLink, 'budget-orders-outside'); }
+  function viewBudgetRealizationsFollowupReport(backLink) { return viewBudgetReportSelection(backLink, 'budget-realizations-followup'); }
+  function viewBudgetRealizationsByLineReport(backLink) { return viewBudgetReportSelection(backLink, 'budget-realizations-by-line'); }
+  function viewBudgetOutsideRealizationsTotalReport(backLink) { return viewBudgetReportSelection(backLink, 'budget-outside-realizations-total'); }
+
+  function budgetReportPrintableHtml(session, report, definition) {
+    var columns = budgetReportSelectedColumns(session, definition);
+    var columnCount = Math.max(1, columns.length + 1);
+    var period = definition.filters.indexOf('from') !== -1
+      ? 'Période : ' + dateLabel(report.from) + ' — ' + dateLabel(report.to)
+      : 'Exercice : ' + esc(report.budget && report.budget.year || '');
+    var tableHeader = '<tr><th scope="col">Budget</th>' + columns.map(function (column) {
+      return '<th scope="col"' + (column.text ? '' : ' class="num"') + '>' + esc(column.label) + '</th>';
+    }).join('') + '</tr>';
+    var styleClass = session.layout.style === 'color10' ? 'budget-report-style-color' : 'budget-report-style-plain';
+    var empty = '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune ligne générée</strong>Le dossier ne fournit aucun budget, engagement ou mouvement de réalisation pour cet état.</div></td></tr></tbody>';
+    return '<article class="budget-report-print ' + styleClass + '"><header class="budget-report-print-heading"><p class="page-kicker">ÉDITIONS · BUDGET</p><h2>' + esc(definition.title) + '</h2><p>' + esc(report.budget && report.budget.label || '') + ' · ' + period + ' · Comptes analytiques 93 à 99</p></header>' +
+      budgetReportWarningsHtml(report) + '<div class="budget-report-table-wrap"><table class="budget-report-table"><thead>' + tableHeader + '</thead>' + empty + '</table></div>' +
+      '<p class="budget-report-print-note">État en lecture seule. Les lignes seront renseignées lorsque des sources budgétaires ou des commandes/réalisations explicites seront enregistrées dans le dossier.</p></article>';
+  }
+
+  function budgetReportExportMatrix(session, report, definition) {
+    var columns = budgetReportSelectedColumns(session, definition);
+    var headers = ['Budget'].concat(columns.map(function (column) { return column.label; }));
+    return [headers];
+  }
+
+  function budgetReportLayoutView(session, report, definition) {
+    var count = report.generatedLineCount + (report.generatedLineCount === 1 ? ' ligne générée' : ' lignes générées');
+    return generalBalanceReportSteps('layout', 'Étapes de préparation de ' + definition.title) +
+      pageHeader('Mise en page — ' + definition.title, 'Choisissez le style, l’orientation, les marges, les pages et la destination.', '') +
+      '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(count) + '. Les sources comptables restent inchangées.</div></div>' +
+      budgetReportWarningsHtml(report) +
+      '<form id="budget-report-layout-form" novalidate><div class="journal-lines-settings-grid budget-report-settings-grid">' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="budget-report-printer">Imprimante</label><select id="budget-report-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="budget-report-style">Style du rapport</label><select id="budget-report-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('budget-report-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('budget-report-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('budget-report-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('budget-report-margins', 'binding', 'Reliure à gauche', session.layout.margins === 'binding', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Pages</h3></div><div class="journal-lines-page-range"><div class="field"><label for="budget-report-page-first">Première</label><input id="budget-report-page-first" type="number" min="1" step="1" value="' + esc(session.layout.pageFirst) + '" placeholder="1"></div><span aria-hidden="true">à</span><div class="field"><label for="budget-report-page-last">Dernière</label><input id="budget-report-page-last" type="number" min="1" step="1" value="' + esc(session.layout.pageLast) + '" placeholder="Fin"></div></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Parité</h3></div><div class="field"><label for="budget-report-parity">Pages</label><select id="budget-report-parity"><option value="none"' + (session.layout.parity === 'none' ? ' selected' : '') + '>Aucune</option><option value="odd"' + (session.layout.parity === 'odd' ? ' selected' : '') + '>Impaire</option><option value="even"' + (session.layout.parity === 'even' ? ' selected' : '') + '>Paire</option></select></div></div></section>' +
+        '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
+          generalBalanceReportRadio('budget-report-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
+          generalBalanceReportRadio('budget-report-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
+          generalBalanceReportRadio('budget-report-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('budget-report-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
+        '</div></div></section></div>' +
+        '<div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> Les pages et la parité se règlent dans le navigateur si celui-ci le permet.</div></div>' +
+        '<div class="journal-lines-form-errors" id="budget-report-layout-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-budget-report-back-selection>Retour à la sélection</button><button type="submit" class="btn btn-primary">Valider</button></div></form>';
+  }
+
+  function budgetReportPrintOptions(session, definition) {
+    var styleNode = null;
+    var previousStyleText = '';
+    var createdStyle = false;
+    var previousTitle = '';
+    return {
+      beforePrint: function () {
+        styleNode = $('#budget-report-print-page-style');
+        createdStyle = !styleNode;
+        if (!styleNode) {
+          styleNode = document.createElement('style');
+          styleNode.id = 'budget-report-print-page-style';
+          document.head.appendChild(styleNode);
+        } else previousStyleText = styleNode.textContent;
+        var orientation = session.layout.orientation === 'landscape' ? 'landscape' : 'portrait';
+        var left = session.layout.margins === 'binding' ? '18mm' : '12mm';
+        styleNode.textContent = '@page { size: A4 ' + orientation + '; margin: 12mm 12mm 12mm ' + left + '; }';
+        previousTitle = document.title;
+        document.title = safeFilePart(definition.title) + '-' + safeFilePart(S.currentDossier().name);
+      },
+      afterPrint: function () {
+        document.title = previousTitle || document.title;
+        if (!styleNode) return;
+        if (createdStyle && styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+        else styleNode.textContent = previousStyleText;
+      }
+    };
+  }
+
+  function openBudgetReportPreview(session, definition) {
+    var report = session.report || buildBudgetReport(session);
+    session.report = report;
+    openReportPreview('Aperçu — ' + definition.title, budgetReportPrintableHtml(session, report, definition), budgetReportPrintOptions(session, definition));
+  }
+
+  function budgetReportPreviewView(session, report, definition) {
+    return generalBalanceReportSteps('layout', 'Étapes de préparation de ' + definition.title) +
+      pageHeader('Aperçu — ' + definition.title, 'Vérifiez l’état et les sources disponibles avant impression ou export.', '<button type="button" class="btn btn-primary" data-budget-report-open-preview>Ouvrir l’aperçu plein écran</button>') +
+      '<div class="alert info"><div><strong>Destination choisie :</strong> ' + (session.layout.destination === 'printer' ? 'Imprimante · aperçu plein écran obligatoire' : 'Aperçu dans PERFECTO') + '. Aucun montant ne sera ajouté en l’absence de source budgétaire.</div></div>' +
+      budgetReportPrintableHtml(session, report, definition) +
+      '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-budget-report-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-ghost" data-budget-report-back-selection>Modifier la sélection</button></div>';
+  }
+
+  function budgetReportSavedView(session, definition) {
+    return generalBalanceReportSteps('layout', 'Étapes de préparation de ' + definition.title) +
+      pageHeader('Export prêt', 'Le fichier contient l’en-tête du rapport ; aucune ligne budgétaire n’est inventée.', '') +
+      '<section class="card journal-lines-card"><div class="panel"><div class="alert info"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
+        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-budget-report-open-preview>Afficher l’aperçu plein écran</button><button type="button" class="btn btn-ghost" data-budget-report-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-budget-report-new>Nouvelle sélection</button></div></div></section>';
+  }
+
+  function generateBudgetReportFile(session, definition, destination) {
+    var report = buildBudgetReport(session);
+    session.report = report;
+    if (!report.ok) throw new Error(report.errors.join(' '));
+    var spreadsheet = destination === 'table';
+    var matrix = budgetReportExportMatrix(session, report, definition);
+    var extension = spreadsheet ? 'xlsx' : 'txt';
+    var stems = {
+      forecast: 'Budget-previsionnel',
+      'orders-followup': 'Budget-reste-sur-commandes',
+      'orders-by-line': 'Detail-commandes-lignes-budgetaires',
+      'orders-outside': 'Commandes-hors-budget',
+      'realizations-followup': 'Budget-suivi-realisations',
+      'realizations-by-line': 'Detail-realisations-budgetaires',
+      'outside-realizations-total': 'Cumul-realisations-hors-budget'
+    };
+    var budgetPart = report.budget ? report.budget.code : 'budget';
+    var period = report.from && report.to ? '-' + report.from + '-' + report.to : '';
+    var filename = (stems[definition.kind] || 'Etat-budget') + '-' + safeFilePart(S.currentDossier().name) + '-' + budgetPart + period + '.' + extension;
+    var content = spreadsheet
+      ? AccountingExchange.exportTabularWorkbook(definition.title, matrix[0], matrix.slice(1))
+      : currencySupplementaryTsv(matrix);
+    downloadFile(filename, content, spreadsheet ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/plain;charset=utf-8');
+    session.exportFilename = filename;
+    session.exportMessage = spreadsheet ? 'Téléchargement du classeur Excel lancé dans le navigateur.' : 'Téléchargement du fichier texte tabulé lancé dans le navigateur.';
+    session.phase = 'saved';
+    render();
+  }
+
+  function submitBudgetReportSelection(form, session, definition) {
+    var report = syncBudgetReportSelection(form, session, definition);
+    var errors = report ? report.errors.slice() : ['Impossible de lire la sélection budgétaire.'];
+    if (!budgetReportSelectedColumns(session, definition).length) errors.push('Sélectionnez au moins une colonne à restituer.');
+    showGeneralBalanceReportErrors($('#budget-report-selection-errors', form), errors);
+    if (errors.length) return;
+    session.report = report;
+    session.phase = 'layout';
+    render();
+  }
+
+  function submitBudgetReportLayout(form, session, definition) {
+    var errors = [];
+    var destination = $('input[name="budget-report-destination"]:checked', form);
+    var orientation = $('input[name="budget-report-orientation"]:checked', form);
+    var margins = $('input[name="budget-report-margins"]:checked', form);
+    var first = $('#budget-report-page-first', form).value;
+    var last = $('#budget-report-page-last', form).value;
+    if (first && (!Number.isInteger(Number(first)) || Number(first) < 1)) errors.push('La première page doit être un entier supérieur ou égal à 1.');
+    if (last && (!Number.isInteger(Number(last)) || Number(last) < 1)) errors.push('La dernière page doit être un entier supérieur ou égal à 1.');
+    if (first && last && Number(first) > Number(last)) errors.push('La première page doit précéder ou égaler la dernière page.');
+    var report = buildBudgetReport(session);
+    if (!report.ok) errors = errors.concat(report.errors);
+    showGeneralBalanceReportErrors($('#budget-report-layout-errors', form), errors);
+    if (errors.length) return;
+    session.layout.printer = $('#budget-report-printer', form).value;
+    session.layout.style = $('#budget-report-style', form).value;
+    session.layout.orientation = orientation ? orientation.value : 'portrait';
+    session.layout.margins = margins ? margins.value : 'standard';
+    session.layout.pageFirst = first;
+    session.layout.pageLast = last;
+    session.layout.parity = $('#budget-report-parity', form).value;
+    session.layout.destination = destination ? destination.value : 'preview';
+    session.report = report;
+    if (session.layout.destination === 'table' || session.layout.destination === 'file') {
+      try { generateBudgetReportFile(session, definition, session.layout.destination); }
+      catch (error) { showGeneralBalanceReportErrors($('#budget-report-layout-errors', form), [error && error.message || 'Export impossible.']); }
+      return;
+    }
+    session.previewOpened = false;
+    session.phase = 'preview';
+    render();
+  }
+
+  function bindBudgetReport() {
+    var session = ensureBudgetReportSession();
+    if (!session) return;
+    var definition = budgetReportDefinition(session.reportId);
+    if (!definition) return;
+    if (session.phase === 'selection') {
+      var form = $('#budget-report-selection-form');
+      if (!form) return;
+      var update = function () { syncBudgetReportSelection(form, session, definition); };
+      form.addEventListener('input', update);
+      form.addEventListener('change', update);
+      form.addEventListener('submit', function (event) { event.preventDefault(); submitBudgetReportSelection(form, session, definition); });
+      $$('[data-budget-report-picker]', form).forEach(function (button) {
+        button.addEventListener('click', function () {
+          var input = $('input[data-budget-report-filter="accounts"]', form);
+          if (input) openCurrencyBalancePicker(input, 'accounts');
+        });
+      });
+      return;
+    }
+    if (session.phase === 'layout') {
+      var layoutForm = $('#budget-report-layout-form');
+      if (!layoutForm) return;
+      layoutForm.addEventListener('submit', function (event) { event.preventDefault(); submitBudgetReportLayout(layoutForm, session, definition); });
+      var backSelection = $('[data-budget-report-back-selection]');
+      if (backSelection) backSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+      return;
+    }
+    $$('[data-budget-report-open-preview]').forEach(function (button) { button.addEventListener('click', function () { openBudgetReportPreview(session, definition); }); });
+    $$('[data-budget-report-back-layout]').forEach(function (button) { button.addEventListener('click', function () { session.phase = 'layout'; render(); }); });
+    $$('[data-budget-report-back-selection]').forEach(function (button) { button.addEventListener('click', function () { session.phase = 'selection'; render(); }); });
+    var newReport = $('[data-budget-report-new]');
+    if (newReport) newReport.addEventListener('click', function () { budgetReportSession = createBudgetReportSession(S.currentDossier(), session.reportId); render(); });
+    if (session.phase === 'preview' && !session.previewOpened) {
+      session.previewOpened = true;
+      openBudgetReportPreview(session, definition);
     }
   }
 
@@ -20831,6 +21205,13 @@
     if (child.id === 'currency-situation') return viewCurrencyPositionReport(backLink);
     if (child.id === 'currency-ledger') return viewCurrencyLedgerReport(backLink);
     if (child.id === 'currency-exchange-differences') return viewCurrencyExchangeDifferenceReport(backLink);
+    if (child.id === 'budget-entered') return viewBudgetForecastReport(backLink);
+    if (child.id === 'budget-orders-followup') return viewBudgetOrdersFollowupReport(backLink);
+    if (child.id === 'budget-orders-by-line') return viewBudgetOrdersByLineReport(backLink);
+    if (child.id === 'budget-orders-outside') return viewBudgetOrdersOutsideReport(backLink);
+    if (child.id === 'budget-realizations-followup') return viewBudgetRealizationsFollowupReport(backLink);
+    if (child.id === 'budget-realizations-by-line') return viewBudgetRealizationsByLineReport(backLink);
+    if (child.id === 'budget-outside-realizations-total') return viewBudgetOutsideRealizationsTotalReport(backLink);
     if (child.id === 'general-summary-balance') return viewGeneralSummaryBalanceReport(backLink);
     if (child.id === 'general-aged-balance') return viewAgedBalanceReport(backLink);
     if (child.id === 'general-opening-balance') return viewOpeningBalanceReport(backLink);
@@ -22276,6 +22657,7 @@
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-balance') bindGeneralBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'foreign-currency' && menuParams.c === 'currency-balance') bindCurrencyBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'foreign-currency' && ['currency-opening-balance', 'currency-situation', 'currency-ledger', 'currency-exchange-differences'].indexOf(menuParams.c) !== -1) bindCurrencySupplementaryReport();
+      if (menuParams.g === 'editions' && menuParams.t === 'budget' && BudgetReports.REPORT_IDS.indexOf(menuParams.c) !== -1) bindBudgetReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-ledger') bindGeneralLedgerReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-detail') bindGeneralCounterpartDetailReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-total') bindGeneralCounterpartTotalReport();
