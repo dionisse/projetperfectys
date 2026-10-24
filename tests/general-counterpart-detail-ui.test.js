@@ -36,7 +36,7 @@ assert.match(ledgerSource, /counterpartCodes: counterpartCodes\.slice\(\)/);
 assert.ok(htmlSource.indexOf('js/general-ledger-report.js') < htmlSource.indexOf('js/general-counterpart-detail-report.js'));
 assert.ok(htmlSource.indexOf('js/general-counterpart-detail-report.js') < htmlSource.indexOf('js/app.js'));
 assert.match(serviceWorkerSource, /\.\/js\/general-counterpart-detail-report\.js/);
-assert.match(serviceWorkerSource, /perfecto-static-v121/);
+assert.match(serviceWorkerSource, /perfecto-static-v122/);
 assert.match(configurationCss, /\.general-counterpart-detail-filter-grid[\s\S]*\.general-counterpart-detail-column-grid[\s\S]*\.general-counterpart-detail-table/);
 
 console.log('Détail des contreparties : intégration navigation, filtres et écrans vérifiée.');

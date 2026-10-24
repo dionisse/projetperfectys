@@ -20,6 +20,7 @@
   var CurrencySupplementaryReports = window.PerfectoCurrencySupplementaryReports;
   var BudgetReports = window.PerfectoBudgetReports;
   var MatchingEditionReports = window.PerfectoMatchingEditionReports;
+  var PointingEditionReports = window.PerfectoPointingEditionReports;
   var AccountSituationReport = window.PerfectoAccountSituationReport;
   var GeneralLedgerReport = window.PerfectoGeneralLedgerReport;
   var GeneralCounterpartDetailReport = window.PerfectoGeneralCounterpartDetailReport;
@@ -167,6 +168,7 @@
   var currencySupplementaryReportSession = null;
   var budgetReportSession = null;
   var matchingEditionReportSession = null;
+  var pointingEditionReportSession = null;
   var generalLedgerReportSession = null;
   var generalCounterpartDetailReportSession = null;
   var generalCounterpartTotalReportSession = null;
@@ -809,6 +811,7 @@
       ['currency-opening-balance', 'currency-situation', 'currency-ledger', 'currency-exchange-differences'].indexOf(parsed.params.c) !== -1;
     var isBudgetReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'budget' && BudgetReports.REPORT_IDS.indexOf(parsed.params.c) !== -1;
     var isMatchingEditionReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'matching' && MatchingEditionReports.REPORT_IDS.indexOf(parsed.params.c) !== -1;
+    var isPointingEditionReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'bank-reconciliation' && PointingEditionReports.REPORT_IDS.indexOf(parsed.params.c) !== -1;
     var isGeneralLedgerReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-ledger';
     var isGeneralCounterpartDetailReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-detail';
     var isGeneralCounterpartTotalReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-total';
@@ -830,6 +833,7 @@
     if (!isCurrencySupplementaryReportRoute) currencySupplementaryReportSession = null;
     if (!isBudgetReportRoute) budgetReportSession = null;
     if (!isMatchingEditionReportRoute) matchingEditionReportSession = null;
+    if (!isPointingEditionReportRoute) pointingEditionReportSession = null;
     if (!isGeneralLedgerReportRoute) generalLedgerReportSession = null;
     if (!isGeneralCounterpartDetailReportRoute) generalCounterpartDetailReportSession = null;
     if (!isGeneralCounterpartTotalReportRoute) generalCounterpartTotalReportSession = null;
@@ -5607,6 +5611,473 @@
     if (session.phase === 'preview' && !session.previewOpened) {
       session.previewOpened = true;
       openMatchingEditionReportPreview(session, definition);
+    }
+  }
+
+  /* ------------------ États du pointage et des rapprochements ------------- */
+  function createPointingEditionReportSession(dossier, reportId) {
+    var definition = PointingEditionReports.definitionFor(reportId);
+    if (!definition) return null;
+    var columns = Object.create(null);
+    definition.columns.forEach(function (column) { columns[column.key] = !!column.defaultSelected; });
+    return {
+      dossierId: dossier.id,
+      reportId: reportId,
+      phase: 'selection',
+      filters: { accounts: '*', from: dossier.cycleStart, to: dossier.cycleEnd, accountScope: 'all' },
+      columns: columns,
+      signatories: { center: '', centerName: '', left: '', leftName: '', right: '', rightName: '' },
+      layout: {
+        printer: 'system', style: 'plain8',
+        orientation: definition.columns.length > 5 ? 'landscape' : 'portrait',
+        margins: 'standard', pageFirst: '', pageLast: '', parity: 'none', destination: 'preview'
+      },
+      report: null,
+      previewOpened: false,
+      exportFilename: '',
+      exportMessage: ''
+    };
+  }
+
+  function ensurePointingEditionReportSession() {
+    var dossier = S.currentDossier();
+    var reportId = parseHash().params.c;
+    if (!pointingEditionReportSession || pointingEditionReportSession.dossierId !== dossier.id || pointingEditionReportSession.reportId !== reportId) {
+      pointingEditionReportSession = createPointingEditionReportSession(dossier, reportId);
+    }
+    return pointingEditionReportSession;
+  }
+
+  function buildPointingEditionReport(session) {
+    var dossier = S.currentDossier();
+    return PointingEditionReports.buildReport(session.reportId, {
+      cycleStart: dossier.cycleStart,
+      cycleEnd: dossier.cycleEnd,
+      accountFilter: session.filters.accounts,
+      accountScope: session.filters.accountScope,
+      from: session.filters.from,
+      to: session.filters.to,
+      signatories: session.signatories,
+      accounts: S.accounts(),
+      entries: S.entries(),
+      pointageMarks: S.pointageMarks()
+    });
+  }
+
+  function pointingEditionSelectedColumns(session, definition) {
+    return definition.columns.filter(function (column) { return !!session.columns[column.key]; });
+  }
+
+  function pointingEditionFilterField(session, dossier, definition, key) {
+    if (key === 'accounts') {
+      return '<div class="field pointing-edition-accounts-field"><label for="pointing-edition-accounts">Comptes</label><div class="journal-lines-picker-control"><input id="pointing-edition-accounts" data-pointing-edition-filter="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou 521*; 401100" autocomplete="off" required><button type="button" class="btn btn-ghost" data-pointing-edition-picker="accounts" aria-label="Choisir les comptes du plan">…</button></div><span class="hint">« * » couvre tous les comptes présents et futurs ; aucun filtre de classe n’est imposé.</span></div>';
+    }
+    var dateKey = key === 'from' ? 'from' : 'to';
+    var label = dateKey === 'from' ? (definition.fromLabel || 'Début') : (definition.toLabel || 'Date');
+    return '<div class="field"><label for="pointing-edition-' + dateKey + '">' + esc(label) + '</label><input id="pointing-edition-' + dateKey + '" data-pointing-edition-filter="' + dateKey + '" type="date" value="' + esc(session.filters[dateKey]) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required></div>';
+  }
+
+  function pointingEditionColumnOption(column, session) {
+    return '<label class="journal-lines-column-option pointing-edition-column-option"><input type="checkbox" data-pointing-edition-column="' + esc(column.key) + '"' +
+      (session.columns[column.key] ? ' checked' : '') + '><span><strong>' + esc(column.label) + '</strong></span></label>';
+  }
+
+  function syncPointingEditionSelection(form, session, definition) {
+    if (!form) return null;
+    $$('[data-pointing-edition-filter]', form).forEach(function (input) {
+      session.filters[input.getAttribute('data-pointing-edition-filter')] = input.value;
+    });
+    $$('[data-pointing-edition-column]', form).forEach(function (input) {
+      session.columns[input.getAttribute('data-pointing-edition-column')] = !!input.checked;
+    });
+    var accountScope = $('input[name="pointing-edition-account-scope"]:checked', form);
+    if (accountScope) session.filters.accountScope = accountScope.value;
+    $$('[data-pointing-edition-signatory]', form).forEach(function (input) {
+      session.signatories[input.getAttribute('data-pointing-edition-signatory')] = input.value.slice(0, 120);
+    });
+    var report = buildPointingEditionReport(session);
+    session.report = report;
+    showGeneralBalanceReportErrors($('#pointing-edition-selection-errors', form), report.errors);
+    var warnings = $('#pointing-edition-selection-warnings', form);
+    if (warnings) warnings.innerHTML = pointingEditionWarningsHtml(report);
+    var count = $('[data-pointing-edition-line-count]', form);
+    if (count) count.textContent = String(report.generatedLineCount || 0);
+    return report;
+  }
+
+  function pointingEditionWarningsHtml(report) {
+    return report && report.warnings && report.warnings.length
+      ? '<div class="alert info pointing-edition-warnings"><ul>' + report.warnings.map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('') + '</ul></div>'
+      : '';
+  }
+
+  function pointingEditionSignatoriesView(session) {
+    var fields = [
+      ['center', 'Centre'], ['centerName', 'Nom'],
+      ['left', 'Gauche'], ['leftName', 'Nom'],
+      ['right', 'Droite'], ['rightName', 'Nom']
+    ];
+    return '<section class="card journal-lines-card pointing-edition-signatories-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">SIGNATAIRES</p><h3>Signataires</h3></div></div>' +
+      '<div class="pointing-edition-signatory-grid">' + fields.map(function (field) {
+        return '<div class="field"><label for="pointing-edition-signatory-' + field[0] + '">' + esc(field[1]) + '</label><input id="pointing-edition-signatory-' + field[0] + '" data-pointing-edition-signatory="' + field[0] + '" type="text" maxlength="120" value="' + esc(session.signatories[field[0]]) + '"></div>';
+      }).join('') + '</div></div></section>';
+  }
+
+  function pointingEditionReportSelectionView(session, dossier, definition) {
+    var report = session.report || buildPointingEditionReport(session);
+    session.report = report;
+    var columnMarkup = definition.columns.map(function (column) { return pointingEditionColumnOption(column, session); });
+    var stackCount = Math.max(1, Math.min(4, Number(definition.columnStacks) || 2));
+    var stackSize = Math.ceil(columnMarkup.length / stackCount);
+    var stacks = [];
+    for (var stackIndex = 0; stackIndex < stackCount; stackIndex += 1) {
+      stacks.push('<div class="currency-balance-column-stack">' + columnMarkup.slice(stackIndex * stackSize, (stackIndex + 1) * stackSize).join('') + '</div>');
+    }
+    var filters = definition.filters.map(function (key) { return pointingEditionFilterField(session, dossier, definition, key); }).join('');
+    var accountPrintMode = definition.accountPrintMode
+      ? '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">COMPTES À IMPRIMER</p><h3>Comptes à imprimer</h3></div></div><div class="pointing-edition-account-scope-options">' +
+        generalBalanceReportRadio('pointing-edition-account-scope', 'all', 'Tous les comptes sélectionnés', session.filters.accountScope === 'all', false) +
+        generalBalanceReportRadio('pointing-edition-account-scope', 'moved', definition.movedAccountsLabel || 'Comptes mouvementés dans la période', session.filters.accountScope === 'moved', false) +
+      '</div></div></section>'
+      : '';
+    var sourceText = definition.kind === 'bank-reconciliation'
+      ? 'Seules les écritures validées explicitement reliées à une ligne de relevé sont reprises. Aucun écart ni solde bancaire n’est recalculé.'
+      : (definition.kind === 'justification'
+        ? 'Les lignes proviennent du registre actif de pointage et des écritures validées. Aucun solde ou total de rapprochement n’est recalculé.'
+        : (definition.kind === 'unpointed'
+          ? 'L’état exclut les écritures en brouillon et les lignes portant un marqueur de pointage actif.'
+          : 'L’état lit les marqueurs actifs du registre de pointage et leurs écritures validées. La date de pointage est lue dans le relevé ou dans la date d’enregistrement du marqueur.'));
+    return generalBalanceReportSteps('selection', 'Étapes de préparation de ' + definition.title) +
+      pageHeader(definition.title, 'Sélectionnez les comptes, la date ou la période et les colonnes à restituer.', '') +
+      '<div class="alert info pointing-edition-source-note"><div><strong>Consultation seule.</strong> ' + esc(sourceText) + ' Les écritures et les pointages restent inchangés.</div></div>' +
+      '<form id="pointing-edition-selection-form" novalidate data-pointing-edition-report="' + esc(session.reportId) + '">' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div><span class="journal-lines-cycle-badge">Cycle ' + esc(dateLabel(dossier.cycleStart)) + ' — ' + esc(dateLabel(dossier.cycleEnd)) + '</span></div>' +
+          '<div class="pointing-edition-filter-grid pointing-edition-filter-grid-' + esc(definition.kind) + '">' + filters + '</div>' +
+        '</div></section>' +
+        (definition.hasSignatories ? pointingEditionSignatoriesView(session) : '') +
+        accountPrintMode +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
+          '<div class="currency-balance-column-grid pointing-edition-columns-grid" style="--pointing-column-count:' + stackCount + '">' + stacks.join('') + '</div>' +
+        '</div></section>' +
+        '<div id="pointing-edition-selection-warnings">' + pointingEditionWarningsHtml(report) + '</div>' +
+        '<div class="journal-lines-form-errors" id="pointing-edition-selection-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="pointing-edition-selection-actions"><a class="btn btn-ghost" href="' + esc(accountingMenuHash('editions', 'bank-reconciliation')) + '">Annuler</a><span class="pointing-edition-line-count" role="status">Lignes générées : <strong data-pointing-edition-line-count>' + esc(report.generatedLineCount || 0) + '</strong></span><button type="submit" class="btn btn-primary">Valider <span aria-hidden="true">→</span></button></div>' +
+      '</form>';
+  }
+
+  function pointingEditionReportValue(row, column) {
+    var value = row[column.key];
+    if (value == null || value === '') return '';
+    if (column.key === 'entryDate' || column.key === 'pointingDate') return dateLabel(value);
+    if (column.text === false) return amount(value);
+    return String(value);
+  }
+
+  function pointingEditionReportRowsHtml(report, definition, columns) {
+    var accounts = report.displayAccounts || [];
+    if (!accounts.length && report.rows.length) {
+      var seen = Object.create(null);
+      report.rows.forEach(function (row) {
+        if (!seen[row.accountCode]) {
+          seen[row.accountCode] = true;
+          accounts.push({ code: row.accountCode, label: row.accountLabel || '' });
+        }
+      });
+    }
+    if (!accounts.length) {
+      var empty = definition.kind === 'unpointed'
+        ? 'Aucune écriture non pointée ne correspond à ces critères.'
+        : (definition.kind === 'bank-reconciliation'
+          ? 'Aucun pointage actif lié à un relevé bancaire ne correspond à ces critères.'
+          : (definition.kind === 'justification'
+            ? 'Aucun pointage actif ne justifie des écritures à cette date.'
+            : 'Aucune écriture pointée ne correspond à cette période.'));
+      return '<tbody><tr><td colspan="' + Math.max(columns.length, 1) + '"><div class="empty-state pointing-edition-empty"><strong>' + esc(empty) + '</strong>Les écritures et les pointages ne sont pas modifiés.</div></td></tr></tbody>';
+    }
+    var rowsByAccount = Object.create(null);
+    report.rows.forEach(function (row) {
+      if (!rowsByAccount[row.accountCode]) rowsByAccount[row.accountCode] = [];
+      rowsByAccount[row.accountCode].push(row);
+    });
+    var body = accounts.map(function (account) {
+      var code = String(account.code || '');
+      var rows = rowsByAccount[code] || [];
+      var title = code + (account.label ? ' · ' + account.label : '');
+      var heading = '<tr class="pointing-edition-account-heading"><th colspan="' + Math.max(columns.length, 1) + '">' + esc(title) + '</th></tr>';
+      if (!rows.length) return heading + '<tr class="pointing-edition-no-movement"><td colspan="' + Math.max(columns.length, 1) + '">Aucune ligne source à imprimer pour ce compte.</td></tr>';
+      return heading + rows.map(function (row) {
+        return '<tr>' + columns.map(function (column) {
+          return '<td' + (column.text === false ? ' class="num"' : '') + '>' + esc(pointingEditionReportValue(row, column)) + '</td>';
+        }).join('') + '</tr>';
+      }).join('');
+    }).join('');
+    return '<tbody>' + body + '</tbody>';
+  }
+
+  function pointingEditionSignatoriesHtml(signatories) {
+    var rows = [
+      ['Centre', signatories.center, signatories.centerName],
+      ['Gauche', signatories.left, signatories.leftName],
+      ['Droite', signatories.right, signatories.rightName]
+    ];
+    return '<section class="pointing-edition-print-signatories"><h3>Signataires</h3><div class="pointing-edition-print-signatory-grid">' + rows.map(function (row) {
+      return '<div class="pointing-edition-print-signatory"><strong>' + esc(row[0]) + '</strong><span>' + (row[1] ? esc(row[1]) : '&nbsp;') + '</span><small>Nom</small><span>' + (row[2] ? esc(row[2]) : '&nbsp;') + '</span></div>';
+    }).join('') + '</div></section>';
+  }
+
+  function pointingEditionReportPrintableHtml(session, report, definition) {
+    var columns = pointingEditionSelectedColumns(session, definition);
+    var headers = '<tr>' + columns.map(function (column) {
+      return '<th scope="col"' + (column.text === false ? ' class="num"' : '') + '>' + esc(column.label) + '</th>';
+    }).join('') + '</tr>';
+    var period = definition.kind === 'pointed'
+      ? 'Période : ' + dateLabel(report.from) + ' — ' + dateLabel(report.to)
+      : 'Date : ' + dateLabel(report.to);
+    var accountsLabel = session.filters.accounts === '*' ? 'Tous les comptes sélectionnés' : session.filters.accounts;
+    var styleClass = session.layout.style === 'color10' ? 'pointing-edition-style-color' : 'pointing-edition-style-plain';
+    var signatories = definition.hasSignatories ? pointingEditionSignatoriesHtml(report.signatories) : '';
+    return '<article class="pointing-edition-print ' + styleClass + '"><header class="pointing-edition-print-heading"><p class="page-kicker">ÉDITIONS · POINTAGE ET RAPPROCHEMENT BANCAIRE</p><h2>' + esc(definition.title) + '</h2><p><strong>Comptes :</strong> ' + esc(accountsLabel) + ' · ' + period + '</p></header>' +
+      pointingEditionWarningsHtml(report) + signatories +
+      '<div class="pointing-edition-table-wrap"><table class="pointing-edition-table"><thead>' + headers + '</thead>' + pointingEditionReportRowsHtml(report, definition, columns) + '</table></div>' +
+      '<p class="pointing-edition-print-note">État en lecture seule. Les valeurs sont lues dans les écritures validées et le registre de pointage. Aucun solde ni rapprochement n’est recalculé.</p></article>';
+  }
+
+  function pointingEditionReportExportMatrix(session, report, definition) {
+    var columns = pointingEditionSelectedColumns(session, definition);
+    var matrix = [columns.map(function (column) { return column.label; })];
+    var rowsByAccount = Object.create(null);
+    report.rows.forEach(function (row) {
+      if (!rowsByAccount[row.accountCode]) rowsByAccount[row.accountCode] = [];
+      rowsByAccount[row.accountCode].push(row);
+    });
+    var accounts = report.displayAccounts || [];
+    if (!accounts.length && report.rows.length) accounts = Object.keys(rowsByAccount).map(function (code) {
+      return { code: code, label: rowsByAccount[code][0].accountLabel || '' };
+    });
+    accounts.forEach(function (account) {
+      var code = String(account.code || '');
+      var accountRows = rowsByAccount[code] || [];
+      matrix.push([code + (account.label ? ' · ' + account.label : '')].concat(columns.slice(1).map(function () { return ''; })));
+      accountRows.forEach(function (row) {
+        matrix.push(columns.map(function (column) { return pointingEditionReportValue(row, column); }));
+      });
+    });
+    if (definition.hasSignatories) {
+      matrix.push(['']);
+      matrix.push(['Centre', report.signatories.center, 'Nom', report.signatories.centerName]);
+      matrix.push(['Gauche', report.signatories.left, 'Nom', report.signatories.leftName]);
+      matrix.push(['Droite', report.signatories.right, 'Nom', report.signatories.rightName]);
+    }
+    return matrix;
+  }
+
+  function pointingEditionReportLayoutView(session, report, definition) {
+    var count = report.generatedLineCount + (report.generatedLineCount === 1 ? ' ligne générée' : ' lignes générées');
+    return generalBalanceReportSteps('layout', 'Étapes de préparation de ' + definition.title) +
+      pageHeader('Mise en page — ' + definition.title, 'Choisissez le style, l’orientation, les marges, les pages et la destination.', '') +
+      '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(count) + '. Les sources comptables restent inchangées.</div></div>' +
+      pointingEditionWarningsHtml(report) +
+      '<form id="pointing-edition-layout-form" novalidate><div class="journal-lines-settings-grid pointing-edition-settings-grid">' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="pointing-edition-printer">Imprimante</label><select id="pointing-edition-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="pointing-edition-style">Style du rapport</label><select id="pointing-edition-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option></select></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('pointing-edition-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('pointing-edition-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('pointing-edition-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('pointing-edition-margins', 'binding', 'Reliure à gauche', session.layout.margins === 'binding', false) + '</div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Pages</h3></div><div class="journal-lines-page-range"><div class="field"><label for="pointing-edition-page-first">Première</label><input id="pointing-edition-page-first" type="number" min="1" step="1" value="' + esc(session.layout.pageFirst) + '" placeholder="1"></div><span aria-hidden="true">à</span><div class="field"><label for="pointing-edition-page-last">Dernière</label><input id="pointing-edition-page-last" type="number" min="1" step="1" value="' + esc(session.layout.pageLast) + '" placeholder="Fin"></div></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Parité</h3></div><div class="field"><label for="pointing-edition-parity">Pages</label><select id="pointing-edition-parity"><option value="none"' + (session.layout.parity === 'none' ? ' selected' : '') + '>Aucune</option><option value="odd"' + (session.layout.parity === 'odd' ? ' selected' : '') + '>Impaire</option><option value="even"' + (session.layout.parity === 'even' ? ' selected' : '') + '>Paire</option></select></div></div></section>' +
+        '<section class="card journal-lines-card pointing-edition-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
+          generalBalanceReportRadio('pointing-edition-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
+          generalBalanceReportRadio('pointing-edition-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
+          generalBalanceReportRadio('pointing-edition-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('pointing-edition-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
+        '</div></div></section></div>' +
+        '<div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> Les pages et la parité se règlent dans le navigateur si celui-ci le permet.</div></div>' +
+        '<div class="journal-lines-form-errors" id="pointing-edition-layout-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-pointing-edition-back-selection>Retour à la sélection</button><button type="submit" class="btn btn-primary">Valider</button></div></form>';
+  }
+
+  function pointingEditionPrintOptions(session, definition) {
+    var styleNode = null;
+    var previousStyleText = '';
+    var createdStyle = false;
+    var previousTitle = '';
+    return {
+      beforePrint: function () {
+        styleNode = $('#pointing-edition-print-page-style');
+        createdStyle = !styleNode;
+        if (!styleNode) {
+          styleNode = document.createElement('style');
+          styleNode.id = 'pointing-edition-print-page-style';
+          document.head.appendChild(styleNode);
+        } else previousStyleText = styleNode.textContent;
+        var orientation = session.layout.orientation === 'portrait' ? 'portrait' : 'landscape';
+        var left = session.layout.margins === 'binding' ? '18mm' : '12mm';
+        styleNode.textContent = '@page { size: A4 ' + orientation + '; margin: 12mm 12mm 12mm ' + left + '; }';
+        previousTitle = document.title;
+        document.title = safeFilePart(definition.title) + '-' + safeFilePart(S.currentDossier().name);
+      },
+      afterPrint: function () {
+        document.title = previousTitle || document.title;
+        if (!styleNode) return;
+        if (createdStyle && styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+        else styleNode.textContent = previousStyleText;
+      }
+    };
+  }
+
+  function openPointingEditionPreview(session, definition) {
+    var report = session.report || buildPointingEditionReport(session);
+    session.report = report;
+    openReportPreview('Aperçu — ' + definition.title, pointingEditionReportPrintableHtml(session, report, definition), pointingEditionPrintOptions(session, definition));
+  }
+
+  function pointingEditionReportPreviewView(session, report, definition) {
+    return generalBalanceReportSteps('layout', 'Étapes de préparation de ' + definition.title) +
+      pageHeader('Aperçu — ' + definition.title, 'Vérifiez les lignes sources et les informations de signature avant impression ou export.', '<button type="button" class="btn btn-primary" data-pointing-edition-open-preview>Ouvrir l’aperçu plein écran</button>') +
+      '<div class="alert info"><div><strong>Lecture seule.</strong> L’impression ne s’ouvrira qu’après votre action depuis l’aperçu plein écran.</div></div>' +
+      pointingEditionReportPrintableHtml(session, report, definition) +
+      '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-pointing-edition-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-ghost" data-pointing-edition-back-selection>Modifier la sélection</button></div>';
+  }
+
+  function pointingEditionReportSavedView(session, definition) {
+    return generalBalanceReportSteps('layout', 'Étapes de préparation de ' + definition.title) +
+      pageHeader('Export prêt', 'Le fichier reprend les lignes explicitement pointées et les filtres choisis.', '') +
+      '<section class="card journal-lines-card"><div class="panel"><div class="alert success"><div><strong>' + esc(session.exportFilename) + '</strong><br>' + esc(session.exportMessage) + '</div></div>' +
+        '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-pointing-edition-open-preview>Afficher l’aperçu plein écran</button><button type="button" class="btn btn-ghost" data-pointing-edition-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-primary" data-pointing-edition-new>Nouvelle sélection</button></div></div></section>';
+  }
+
+  function viewPointingEditionReport(backLink, reportId) {
+    var session = ensurePointingEditionReportSession();
+    var definition = PointingEditionReports.definitionFor(reportId);
+    var dossier = S.currentDossier();
+    if (!session || !definition) return backLink + '<div class="alert warning">État du pointage introuvable.</div>';
+    if (session.phase !== 'selection') session.report = buildPointingEditionReport(session);
+    var content;
+    if (session.phase === 'layout') content = pointingEditionReportLayoutView(session, session.report, definition);
+    else if (session.phase === 'preview') content = pointingEditionReportPreviewView(session, session.report, definition);
+    else if (session.phase === 'saved') content = pointingEditionReportSavedView(session, definition);
+    else content = pointingEditionReportSelectionView(session, dossier, definition);
+    return '<div class="edition-report-detail-view general-balance-report-detail pointing-edition-report-detail">' + backLink + content + '</div>';
+  }
+
+  function submitPointingEditionReportSelection(form, session, definition) {
+    var report = syncPointingEditionSelection(form, session, definition);
+    var errors = report ? report.errors.slice() : ['Impossible de lire la sélection du pointage.'];
+    if (!pointingEditionSelectedColumns(session, definition).length) errors.push('Sélectionnez au moins une colonne à restituer.');
+    showGeneralBalanceReportErrors($('#pointing-edition-selection-errors', form), errors);
+    if (errors.length) return;
+    session.report = report;
+    session.phase = 'layout';
+    render();
+  }
+
+  function generatePointingEditionReportFile(session, definition, destination) {
+    var report = buildPointingEditionReport(session);
+    if (!report.ok) throw new Error(report.errors.join(' '));
+    session.report = report;
+    var spreadsheet = destination === 'table';
+    var matrix = pointingEditionReportExportMatrix(session, report, definition);
+    var stems = {
+      pointed: 'Ecritures-pointees',
+      unpointed: 'Ecritures-non-pointees',
+      justification: 'Justification-soldes-pointage',
+      'bank-reconciliation': 'Rapprochements-bancaires'
+    };
+    var period = report.from ? '-' + report.from + '-' + report.to : '-' + report.to;
+    var filename = (stems[definition.kind] || 'Etat-pointage') + '-' + safeFilePart(S.currentDossier().name) + period + (spreadsheet ? '.xlsx' : '.txt');
+    var content = spreadsheet
+      ? AccountingExchange.exportTabularWorkbook(definition.title, matrix[0], matrix.slice(1))
+      : generalLedgerReportTsv(matrix);
+    downloadFile(filename, content, spreadsheet ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/plain;charset=utf-8');
+    session.exportFilename = filename;
+    session.exportMessage = spreadsheet ? 'Téléchargement du classeur Excel lancé dans le navigateur.' : 'Téléchargement du fichier texte tabulé lancé dans le navigateur.';
+    session.phase = 'saved';
+    render();
+  }
+
+  function submitPointingEditionReportLayout(form, session, definition) {
+    var errors = [];
+    var destination = $('input[name="pointing-edition-destination"]:checked', form);
+    var orientation = $('input[name="pointing-edition-orientation"]:checked', form);
+    var margins = $('input[name="pointing-edition-margins"]:checked', form);
+    var first = $('#pointing-edition-page-first', form).value;
+    var last = $('#pointing-edition-page-last', form).value;
+    if (first && (!Number.isInteger(Number(first)) || Number(first) < 1)) errors.push('La première page doit être un entier supérieur ou égal à 1.');
+    if (last && (!Number.isInteger(Number(last)) || Number(last) < 1)) errors.push('La dernière page doit être un entier supérieur ou égal à 1.');
+    if (first && last && Number(first) > Number(last)) errors.push('La première page doit précéder ou égaler la dernière page.');
+    var report = buildPointingEditionReport(session);
+    if (!report.ok) errors = errors.concat(report.errors);
+    showGeneralBalanceReportErrors($('#pointing-edition-layout-errors', form), errors);
+    if (errors.length) return;
+    session.layout.printer = $('#pointing-edition-printer', form).value;
+    session.layout.style = $('#pointing-edition-style', form).value;
+    session.layout.orientation = orientation ? orientation.value : 'landscape';
+    session.layout.margins = margins ? margins.value : 'standard';
+    session.layout.pageFirst = first;
+    session.layout.pageLast = last;
+    session.layout.parity = $('#pointing-edition-parity', form).value;
+    session.layout.destination = destination ? destination.value : 'preview';
+    session.report = report;
+    if (session.layout.destination === 'table' || session.layout.destination === 'file') {
+      try { generatePointingEditionReportFile(session, definition, session.layout.destination); }
+      catch (error) { showGeneralBalanceReportErrors($('#pointing-edition-layout-errors', form), [error && error.message || 'Export impossible.']); }
+      return;
+    }
+    session.previewOpened = false;
+    session.phase = 'preview';
+    render();
+  }
+
+  function bindPointingEditionReport() {
+    var session = ensurePointingEditionReportSession();
+    if (!session) return;
+    var definition = PointingEditionReports.definitionFor(session.reportId);
+    if (!definition) return;
+    if (session.phase === 'selection') {
+      var form = $('#pointing-edition-selection-form');
+      if (!form) return;
+      var update = function () { syncPointingEditionSelection(form, session, definition); };
+      form.addEventListener('input', update);
+      form.addEventListener('change', update);
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitPointingEditionReportSelection(form, session, definition);
+      });
+      $$('[data-pointing-edition-picker]', form).forEach(function (button) {
+        button.addEventListener('click', function () {
+          var input = $('input[data-pointing-edition-filter="accounts"]', form);
+          if (input) openGeneralBalanceAccountPicker(input);
+        });
+      });
+      return;
+    }
+    if (session.phase === 'layout') {
+      var layoutForm = $('#pointing-edition-layout-form');
+      if (!layoutForm) return;
+      layoutForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitPointingEditionReportLayout(layoutForm, session, definition);
+      });
+      var backSelection = $('[data-pointing-edition-back-selection]');
+      if (backSelection) backSelection.addEventListener('click', function () { session.phase = 'selection'; render(); });
+      return;
+    }
+    $$('[data-pointing-edition-open-preview]').forEach(function (button) {
+      button.addEventListener('click', function () { openPointingEditionPreview(session, definition); });
+    });
+    $$('[data-pointing-edition-back-layout]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'layout'; render(); });
+    });
+    $$('[data-pointing-edition-back-selection]').forEach(function (button) {
+      button.addEventListener('click', function () { session.phase = 'selection'; render(); });
+    });
+    var newReport = $('[data-pointing-edition-new]');
+    if (newReport) newReport.addEventListener('click', function () {
+      pointingEditionReportSession = createPointingEditionReportSession(S.currentDossier(), session.reportId);
+      render();
+    });
+    if (session.phase === 'preview' && !session.previewOpened) {
+      session.previewOpened = true;
+      openPointingEditionPreview(session, definition);
     }
   }
 
@@ -20459,8 +20930,8 @@
     var sectionMap = {
       pieces: { title: 'Suivi et contrôle des pièces', description: 'Explorer les lignes, repérer les situations à contrôler et consulter les cumuls de saisie.' },
       matching: { title: 'États du lettrage', description: 'Consultation des écritures lettrées et non lettrées, et contrôle des anomalies selon les règles enregistrées du lettrage.' },
-      pointing: { title: 'Écritures et justifications par pointage', description: 'Les trois sous-états sont structurés ; critères, colonnes, calculs et rendus attendent vos captures.' },
-      bankReconciliation: { title: 'Relevés et rapprochement bancaire', description: 'Les deux sous-états sont structurés ; format, critères, colonnes et rendus attendent vos captures.' },
+      pointing: { title: 'Écritures et justifications par pointage', description: 'Consultation des écritures pointées et non pointées, et justification à partir des marqueurs enregistrés, sans recalcul de solde.' },
+      bankReconciliation: { title: 'Relevés et rapprochements bancaires', description: 'Édition des pointages explicitement liés à un relevé ; l’état Relevé de banque reste à définir.' },
       assetSummary: { title: 'Tableaux des immobilisations', description: 'États de synthèse structurés avant définition des paramètres et de la présentation.' },
       assetMovements: { title: 'Mouvements de la période', description: 'Virements, entrées et sorties ; critères et rendus à confirmer par capture.' },
       assetInventory: { title: 'Inventaire', description: 'États d’inventaire à préciser sans générer de fiches ou de listes avant vos captures.' },
@@ -21664,6 +22135,7 @@
     if (child.id === 'budget-outside-realizations-detail') return viewBudgetOutsideRealizationsDetailReport(backLink);
     if (child.id === 'budget-available-not-committed') return viewBudgetAvailabilitySummaryReport(backLink);
     if (child.id === 'budget-available-balance') return viewBudgetAvailableBalanceReport(backLink);
+    if (PointingEditionReports.REPORT_IDS.indexOf(child.id) !== -1) return viewPointingEditionReport(backLink, child.id);
     if (MatchingEditionReports.REPORT_IDS.indexOf(child.id) !== -1) return viewMatchingEditionReport(backLink, child.id);
     if (child.id === 'general-summary-balance') return viewGeneralSummaryBalanceReport(backLink);
     if (child.id === 'general-aged-balance') return viewAgedBalanceReport(backLink);
@@ -21704,7 +22176,7 @@
       extra = 'Le critère de contrepartie par pièce, notamment pour les pièces à plusieurs lignes, reste à confirmer avant tout cumul.';
     }
     var sectionLabels = {
-      pieces: 'SUIVI ET CONTRÔLE DES PIÈCES', matching: 'ÉTATS DU LETTRAGE', pointing: 'ÉCRITURES ET JUSTIFICATIONS PAR POINTAGE', bankReconciliation: 'RELEVÉS ET RAPPROCHEMENT BANCAIRE', assetSummary: 'TABLEAUX DES IMMOBILISATIONS', assetMovements: 'MOUVEMENTS DE LA PÉRIODE', assetInventory: 'INVENTAIRE', assetAccounts: 'CONSULTATION PAR COMPTES', assetDiscrepancies: 'ÉCARTS ET ANOMALIES', assetDimensions: 'VENTILATIONS DÉSACTIVÉES', definitionsFramework: 'CADRE COMPTABLE ET BILAN', definitionsAccounts: 'PLAN COMPTABLE ET POSTES ASSOCIÉS', definitionsThirdParties: 'TIERS', definitionsJournals: 'PLAN DES JOURNAUX', definitionsAnalytics: 'PLAN ANALYTIQUES', cumuls: 'CUMULS ET VENTILATIONS', imputation: 'IMPUTATION',
+      pieces: 'SUIVI ET CONTRÔLE DES PIÈCES', matching: 'ÉTATS DU LETTRAGE', pointing: 'ÉCRITURES ET JUSTIFICATIONS PAR POINTAGE', bankReconciliation: 'RELEVÉS ET RAPPROCHEMENTS BANCAIRES', assetSummary: 'TABLEAUX DES IMMOBILISATIONS', assetMovements: 'MOUVEMENTS DE LA PÉRIODE', assetInventory: 'INVENTAIRE', assetAccounts: 'CONSULTATION PAR COMPTES', assetDiscrepancies: 'ÉCARTS ET ANOMALIES', assetDimensions: 'VENTILATIONS DÉSACTIVÉES', definitionsFramework: 'CADRE COMPTABLE ET BILAN', definitionsAccounts: 'PLAN COMPTABLE ET POSTES ASSOCIÉS', definitionsThirdParties: 'TIERS', definitionsJournals: 'PLAN DES JOURNAUX', definitionsAnalytics: 'PLAN ANALYTIQUES', cumuls: 'CUMULS ET VENTILATIONS', imputation: 'IMPUTATION',
       balances: 'BALANCES, OUVERTURES ET SITUATIONS', ledgers: 'GRANDS LIVRES ET HISTORIQUES', analysis: 'ANALYSES ET CONTREPARTIES',
       controls: 'RELEVÉS ET CONTRÔLES DE TIERS', exchange: 'DEVISES ET ÉCARTS DE CHANGE', situations: 'SITUATIONS ANALYTIQUES',
       budgets: 'BUDGETS', commitments: 'COMMANDES ET ENGAGEMENTS', realisations: 'RÉALISATIONS', availability: 'DISPONIBILITÉS BUDGÉTAIRES'
@@ -23112,6 +23584,7 @@
       if (menuParams.g === 'editions' && menuParams.t === 'foreign-currency' && ['currency-opening-balance', 'currency-situation', 'currency-ledger', 'currency-exchange-differences'].indexOf(menuParams.c) !== -1) bindCurrencySupplementaryReport();
       if (menuParams.g === 'editions' && menuParams.t === 'budget' && BudgetReports.REPORT_IDS.indexOf(menuParams.c) !== -1) bindBudgetReport();
       if (menuParams.g === 'editions' && menuParams.t === 'matching' && MatchingEditionReports.REPORT_IDS.indexOf(menuParams.c) !== -1) bindMatchingEditionReport();
+      if (menuParams.g === 'editions' && menuParams.t === 'bank-reconciliation' && PointingEditionReports.REPORT_IDS.indexOf(menuParams.c) !== -1) bindPointingEditionReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-ledger') bindGeneralLedgerReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-detail') bindGeneralCounterpartDetailReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-total') bindGeneralCounterpartTotalReport();

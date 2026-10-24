@@ -74,7 +74,7 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Écritures non pointées',
   'Justification des soldes par pointage',
   'Relevé de banque',
-  'Rapprochement bancaire',
+  'Rapprochements bancaires',
   'Tableau des immobilisations',
   'Tableau des amortissements',
   'Virements internes',
@@ -417,15 +417,19 @@ assert.ok(findTab('editions', 'matching').children.find(child => child.id === 'e
 assert.ok(findTab('editions', 'matching').children.find(child => child.id === 'edition-matched-entries').reason.includes('tous les comptes du plan'));
 assert.ok(findTab('editions', 'matching').children.find(child => child.id === 'edition-unmatched-entries').reason.includes('Écritures à partir du'));
 assert.equal(findTab('saisie', 'matching').children, undefined, 'le lettrage opérationnel reste séparé des éditions');
-assert.equal(findTab('editions', 'bank-reconciliation').status, 'planned');
+assert.equal(findTab('editions', 'bank-reconciliation').status, 'active');
 assert.deepEqual(findTab('editions', 'bank-reconciliation').children.map(child => child.label), [
   'Écritures pointées', 'Écritures non pointées', 'Justification des soldes par pointage',
-  'Relevé de banque', 'Rapprochement bancaire'
+  'Relevé de banque', 'Rapprochements bancaires'
 ]);
 assert.deepEqual(findTab('editions', 'bank-reconciliation').children.map(child => child.section), [
   'pointing', 'pointing', 'pointing', 'bankReconciliation', 'bankReconciliation'
 ]);
-assert.ok(findTab('editions', 'bank-reconciliation').children.every(child => child.status === 'planned'));
+assert.deepEqual(findTab('editions', 'bank-reconciliation').children.map(child => child.status), [
+  'active', 'active', 'active', 'planned', 'active'
+]);
+assert.ok(findTab('editions', 'bank-reconciliation').children.find(child => child.id === 'edition-pointed-entries').reason.includes('tous les comptes sélectionnés'));
+assert.ok(findTab('editions', 'bank-reconciliation').children.find(child => child.id === 'edition-bank-reconciliation').reason.includes('ligne de relevé'));
 assert.equal(findTab('editions', 'fixed-assets').status, 'planned');
 assert.deepEqual(findTab('editions', 'fixed-assets').children.map(child => child.label), [
   'Tableau des immobilisations', 'Tableau des amortissements',
@@ -463,7 +467,7 @@ assert.ok(findTab('editions', 'definitions-and-plans').children.find(child => ch
 assert.ok(findTab('editions', 'definitions-and-plans').children.find(child => child.id === 'edition-journal-plan').reason.includes('maintenance'));
 assert.match(appSource, /matching: \{ title: 'États du lettrage'/);
 assert.match(appSource, /pointing: \{ title: 'Écritures et justifications par pointage'/);
-assert.match(appSource, /bankReconciliation: \{ title: 'Relevés et rapprochement bancaire'/);
+assert.match(appSource, /bankReconciliation: \{ title: 'Relevés et rapprochements bancaires'/);
 assert.match(appSource, /assetDiscrepancies: \{ title: 'Écarts et anomalies'/);
 assert.match(appSource, /assetDimensions: \{ title: 'Ventilations désactivées'/);
 assert.match(appSource, /definitionsFramework: \{ title: 'Cadre comptable et postes du bilan'/);
@@ -709,7 +713,7 @@ assert.match(appSource, /function generalLedgerReportLayoutView\([\s\S]*general-
 assert.match(appSource, /function generalLedgerReportPrintableHtml\([\s\S]*GRAND LIVRE DES COMPTES[\s\S]*reports à nouveau[\s\S]*page-break/);
 assert.match(generalLedgerSource, /priorEntriesIncludedInRunningBalance: true[\s\S]*sourceReferenceOnly: true[\s\S]*noAccountingMutation: true/);
 assert.match(configurationCss, /\.general-ledger-column-grid[\s\S]*\.general-ledger-account-section/);
-assert.match(serviceWorkerSource, /perfecto-static-v121/);
+assert.match(serviceWorkerSource, /perfecto-static-v122/);
 
 assert.match(appSource, /function accountingMenuHash\(groupId, tabId, childId\)[\s\S]*return childId \? hash \+ '&c='/,
   'le lien d’un enfant conserve son identifiant dans la route');
@@ -745,7 +749,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v121/);
+assert.match(serviceWorkerSource, /perfecto-static-v122/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);
