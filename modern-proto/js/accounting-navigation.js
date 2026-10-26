@@ -218,7 +218,7 @@
     },
     {
       id: 'declarations', label: 'Déclarations périodiques', icon: '▦', defaultTab: 'vat-difference', tabs: [
-        { id: 'vat-difference', label: 'Écarts entre TVA calculée et TVA facturée aux clients', status: 'planned', reason: 'État général à construire après validation des comptes et règles fiscales.' },
+        { id: 'vat-difference', label: 'Écarts entre TVA calculée et TVA facturée aux clients', status: 'active', reason: 'Comparaison annuelle des bases sélectionnées et des comptes de TVA, avec correspondances et taux modifiables par année. Les résultats restent un contrôle comptable à valider au regard des opérations et échéances fiscales.' },
         { id: 'vat-payment', label: 'État de paiement TVA', status: 'planned', reason: 'État général à construire après validation des règles et périodes déclaratives.' },
         { id: 'vat-detail', label: 'État détaillé à joindre à l’état de paiement', status: 'planned', reason: 'Dépend de l’état TVA et de ses données justificatives.' },
         { id: 'aib-suppliers', label: 'État mensuel des retenues d’AIB sur les fournisseurs', status: 'planned', reason: 'État fiscal général à construire après validation des règles et comptes tiers.' },

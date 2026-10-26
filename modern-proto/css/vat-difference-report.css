@@ -1,0 +1,295 @@
+.vat-difference-report-detail {
+  display: grid;
+  gap: 1rem;
+}
+
+.vat-difference-report-detail > .page-header {
+  margin-bottom: 0;
+}
+
+.vat-difference-report-detail > .page-header p {
+  color: var(--muted, #64748b);
+  margin: .35rem 0 0;
+}
+
+.vat-difference-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.vat-difference-period-card {
+  padding: 1.1rem 1.25rem;
+}
+
+.vat-difference-period-card .field {
+  max-width: 440px;
+  margin: 0;
+}
+
+.vat-difference-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.vat-difference-config-card {
+  display: grid;
+  gap: 1.2rem;
+  padding: 1.25rem;
+}
+
+.vat-difference-card-heading,
+.vat-difference-results-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.vat-difference-card-heading h3,
+.vat-difference-results-heading h3 {
+  margin: .2rem 0 0;
+  font-size: 1.05rem;
+}
+
+.vat-difference-step {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 2rem;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  color: var(--primary, #245c4d);
+  background: #e9f3ef;
+  font-size: .76rem;
+  font-weight: 800;
+}
+
+.vat-difference-account-field,
+.vat-difference-rate-field {
+  min-width: 0;
+  margin: 0;
+}
+
+.vat-difference-account-field > label,
+.vat-difference-rate-field > label {
+  display: block;
+  margin-bottom: .4rem;
+  font-weight: 700;
+}
+
+.vat-difference-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .5rem;
+}
+
+.vat-difference-input-row input,
+.vat-difference-rate-field input,
+.vat-difference-period-card select {
+  width: 100%;
+  min-width: 0;
+}
+
+.vat-difference-account-field > small,
+.vat-difference-rate-field > small,
+.vat-difference-period-card .field > small {
+  display: block;
+  margin-top: .4rem;
+  line-height: 1.5;
+}
+
+.vat-difference-rate-field {
+  max-width: 240px;
+  border-top: 1px solid var(--line, #e3e8e5);
+  padding-top: 1rem;
+}
+
+.vat-difference-legal-note,
+.vat-difference-method-note {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.vat-difference-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding-top: .2rem;
+}
+
+.vat-difference-line-count {
+  color: var(--muted, #64748b);
+  font-size: .9rem;
+  font-weight: 600;
+}
+
+.vat-difference-results {
+  display: grid;
+  gap: 1rem;
+  padding-top: .5rem;
+  scroll-margin-top: 1.25rem;
+}
+
+.vat-difference-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .85rem;
+}
+
+.vat-difference-summary-grid .card {
+  display: grid;
+  gap: .35rem;
+  padding: 1rem 1.1rem;
+  color: var(--muted, #64748b);
+  font-size: .86rem;
+}
+
+.vat-difference-summary-grid .card strong {
+  color: var(--ink, #1e293b);
+  font-size: clamp(1.15rem, 2.4vw, 1.6rem);
+  font-variant-numeric: tabular-nums;
+}
+
+.vat-difference-summary-grid .card strong small {
+  color: var(--muted, #64748b);
+  font-size: .72rem;
+  font-weight: 600;
+}
+
+.vat-difference-summary-alert {
+  border-color: #f1c27b;
+  background: #fff9ed;
+}
+
+.vat-difference-table-wrap {
+  max-height: min(65vh, 680px);
+  overflow: auto;
+  border: 1px solid var(--line, #e3e8e5);
+  border-radius: .75rem;
+  background: #fff;
+}
+
+.vat-difference-table {
+  min-width: 1150px;
+  font-variant-numeric: tabular-nums;
+}
+
+.vat-difference-table th,
+.vat-difference-table td {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.vat-difference-table th:first-child,
+.vat-difference-table tbody th {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  text-align: left;
+  background: #fff;
+}
+
+.vat-difference-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  text-align: center;
+  background: #f3f6f4;
+  line-height: 1.35;
+}
+
+.vat-difference-table thead th:first-child {
+  left: 0;
+  z-index: 3;
+}
+
+.vat-difference-table .vat-difference-alert-cell {
+  color: #9a4c12;
+  background: #fff6e8;
+  font-weight: 700;
+}
+
+.vat-difference-table .vat-difference-total-row th,
+.vat-difference-table .vat-difference-total-row td {
+  border-top: 2px solid var(--line, #d8dfdb);
+  background: #f3f6f4;
+  font-weight: 800;
+}
+
+.vat-difference-number {
+  display: inline-block;
+  min-width: 5.5rem;
+}
+
+.vat-difference-picker-list {
+  display: grid;
+  gap: .15rem;
+  max-height: min(55vh, 520px);
+  overflow: auto;
+  border: 1px solid var(--line, #e3e8e5);
+  border-radius: .65rem;
+  padding: .35rem;
+}
+
+.vat-difference-picker-row {
+  display: grid;
+  grid-template-columns: auto 6rem minmax(0, 1fr);
+  align-items: start;
+  gap: .65rem;
+  padding: .5rem;
+  border-radius: .35rem;
+  cursor: pointer;
+  font-size: .86rem;
+}
+
+.vat-difference-picker-row:hover {
+  background: #f4f7f5;
+}
+
+.vat-difference-picker-row[hidden] {
+  display: none;
+}
+
+.vat-difference-picker-code {
+  color: var(--primary, #245c4d);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.vat-difference-picker .field {
+  margin-bottom: .75rem;
+}
+
+@media (max-width: 850px) {
+  .vat-difference-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .vat-difference-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .vat-difference-input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .vat-difference-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .vat-difference-actions > div {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .vat-difference-picker-row {
+    grid-template-columns: auto 4.5rem minmax(0, 1fr);
+    font-size: .79rem;
+  }
+}

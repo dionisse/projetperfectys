@@ -18,6 +18,7 @@
   var DefinitionsPlansEditionReports = window.PerfectoDefinitionsPlansEditionReports;
   var AssociatedItemsEditionReport = window.PerfectoAssociatedAccountItemsEdition;
   var AssociatedItemsReference = window.PerfectoAssociatedAccountItems;
+  var VatDifferenceReport = window.PerfectoVatDifferenceReport;
   var CashOperations = window.PerfectoCashOperations;
   var AccountMovements = window.PerfectoAccountMovements;
   var AccountingExchange = window.PerfectoAccountingExchange;
@@ -24932,6 +24933,189 @@
     if (printButton) printButton.addEventListener('click', printJournalAllocationSheet);
   }
 
+  function vatDifferenceConfigurationKey(year) {
+    var dossier = S.currentDossier() || {};
+    return 'perfecto-vat-difference:' + String(dossier.id || 'default') + ':' + String(year);
+  }
+
+  function vatDifferenceYears() {
+    var found = Object.create(null);
+    var dossier = S.currentDossier() || {};
+    var current = Number(S.exercise()) || new Date().getFullYear();
+    found[current] = true;
+    [dossier.cycleStart, dossier.cycleEnd].forEach(function (date) {
+      var year = Number(String(date || '').slice(0, 4));
+      if (year >= 1900 && year <= 9999) found[year] = true;
+    });
+    S.entries().forEach(function (entry) {
+      var year = Number(String(entry.date || '').slice(0, 4));
+      if (entry.status === 'posted' && year >= 1900 && year <= 9999) found[year] = true;
+    });
+    return Object.keys(found).map(Number).sort(function (left, right) { return right - left; });
+  }
+
+  function vatDifferenceConfiguration(year) {
+    var defaults = VatDifferenceReport.defaults(year);
+    try {
+      var saved = localStorage.getItem(vatDifferenceConfigurationKey(year));
+      return saved ? VatDifferenceReport.normalise(JSON.parse(saved), year) : defaults;
+    } catch (error) {
+      return defaults;
+    }
+  }
+
+  function vatDifferenceCodeField(key, label, value, hint) {
+    return '<div class="field vat-difference-account-field"><label for="vat-difference-' + esc(key) + '">' + esc(label) + '</label>' +
+      '<div class="vat-difference-input-row"><input type="text" inputmode="text" autocomplete="off" id="vat-difference-' + esc(key) + '" data-vat-difference-code="' + esc(key) + '" value="' + esc(value.join(', ')) + '" placeholder="Ex. 701*, 706*" required>' +
+      '<button type="button" class="btn btn-ghost btn-sm" data-vat-difference-picker="' + esc(key) + '" aria-label="Choisir des comptes pour ' + esc(label) + '">Comptes… &lt;F2&gt;</button></div>' +
+      '<small class="muted">' + esc(hint) + '</small></div>';
+  }
+
+  function viewVatDifferenceReport(backLink) {
+    var year = Number(S.exercise()) || new Date().getFullYear();
+    var configuration = vatDifferenceConfiguration(year);
+    var years = vatDifferenceYears();
+    if (years.indexOf(year) === -1) years.unshift(year);
+    var yearOptions = years.map(function (item) { return '<option value="' + item + '"' + (item === year ? ' selected' : '') + '>' + item + '</option>'; }).join('');
+    return '<div class="edition-report-detail-view vat-difference-report-detail">' + backLink +
+      '<div class="page-header"><div><span class="page-kicker">DÉCLARATIONS PÉRIODIQUES · CONTRÔLE DE TVA</span><h2>Écarts entre TVA calculée et TVA facturée aux clients</h2><p>Contrôle sur les écritures validées, mois par mois, du 1er janvier au 31 décembre.</p></div></div>' +
+      '<form id="vat-difference-form" class="vat-difference-form" novalidate>' +
+        '<section class="card vat-difference-period-card"><div class="field"><label for="vat-difference-year">Période de référence · année complète</label><select id="vat-difference-year" name="year">' + yearOptions + '</select><small class="muted">Du 01/01 au 31/12 de l’année choisie, indépendamment de la période d’exercice courante.</small></div></section>' +
+        '<div class="vat-difference-columns">' +
+          '<section class="card vat-difference-config-card"><div class="vat-difference-card-heading"><div><span class="page-kicker">BASES TAXABLES · COMPTES DE PRODUITS / CONSOMMATION</span><h3>Comptes de ventes et de consommations</h3></div><span class="vat-difference-step">01</span></div>' +
+            vatDifferenceCodeField('salesBase', 'Ventes taxables', configuration.salesBase, 'Proposition : 70* (comptes de ventes et produits accessoires). Excluez les comptes/ventes exonérés ou à taux zéro si mélangés.') +
+            vatDifferenceCodeField('internalBase', 'Consommations internes taxables', configuration.internalBase, 'Proposition : 722* (production immobilisée corporelle) et 724 (production autoconsommée). Les comptes de charges de classe 6 peuvent aussi être sélectionnés : leur solde débiteur est traité comme une base positive. Ne retenez pas à la fois une charge et son compte de production interne si cela compterait deux fois la même opération.') +
+          '</section>' +
+          '<section class="card vat-difference-config-card"><div class="vat-difference-card-heading"><div><span class="page-kicker">COMPTES TVA · SYSCOHADA</span><h3>Comptes de TVA</h3></div><span class="vat-difference-step">02</span></div>' +
+            vatDifferenceCodeField('salesVat', 'TVA sur ventes', configuration.salesVat, 'Proposition : 4431 (ventes), 4432 (services) et 4433 (travaux). 4435 « factures à établir » est exclu par défaut.') +
+            vatDifferenceCodeField('internalVat', 'TVA sur consommations internes', configuration.internalVat, 'Proposition : 4434, TVA facturée sur production livrée à soi-même.') +
+            '<div class="field vat-difference-rate-field"><label for="vat-difference-rate">Taux appliqué (%)</label><input id="vat-difference-rate" name="rate" type="number" min="0" max="100" step="0.01" required value="' + esc(configuration.rate) + '"><small class="muted">Valeur proposée : 18 % (CGI béninois 2026, art. 241). À confirmer et enregistrer séparément pour chaque année.</small></div>' +
+          '</section>' +
+        '</div>' +
+        '<div class="alert warning vat-difference-legal-note"><div><strong>Paramétrage à valider avant usage déclaratif.</strong> Le CGI 2026 (notamment art. 224–229, 235–241 et règles de retenue) distingue opérations taxables, exonérées, à taux zéro, territorialité et exigibilité. Le plan comptable seul ne permet pas de distinguer les ventes mélangées dans un même compte. Les comptes, le taux et leur affectation sont modifiables ici et mémorisés localement par dossier et année.</div></div>' +
+        '<div class="alert info vat-difference-method-note"><div><strong>Limites du rapprochement.</strong> Le calcul utilise les montants nets débit/crédit des écritures validées à leur date comptable, pas la date de facture, de livraison ou d’encaissement. Les services, retenues à la source, exonérations, exportations et acomptes peuvent nécessiter une analyse dédiée. Aucun compte 445 (TVA récupérable), 444 (TVA due) ou 447 (retenues) n’est assimilé à la TVA facturée.</div></div>' +
+        '<div class="vat-difference-actions"><span class="vat-difference-line-count" id="vat-difference-line-count">Lignes générées : 0</span><div><button type="button" class="btn btn-ghost" data-vat-difference-cancel>Annuler</button> <button type="submit" class="btn btn-primary">Valider et calculer</button></div></div>' +
+      '</form><div id="vat-difference-result" aria-live="polite"></div></div>';
+  }
+
+  function vatDifferenceResultMarkup(report) {
+    var total = report.totals;
+    var moneyCell = function (value) { return '<span class="vat-difference-number">' + esc(amount(value)) + '</span>'; };
+    var monthName = function (month) { return new Intl.DateTimeFormat('fr-FR', { month: 'long' }).format(new Date(report.year, month - 1, 1)); };
+    var rows = report.months.map(function (row) {
+      return '<tr><th scope="row">' + esc(monthName(row.month)) + '</th><td>' + moneyCell(row.salesBase) + '</td><td>' + moneyCell(row.salesVatCalculated) + '</td><td>' + moneyCell(row.salesVatBooked) + '</td><td class="' + (row.salesDifference === 0 ? '' : 'vat-difference-alert-cell') + '">' + moneyCell(row.salesDifference) + '</td><td>' + moneyCell(row.internalBase) + '</td><td>' + moneyCell(row.internalVatCalculated) + '</td><td>' + moneyCell(row.internalVatBooked) + '</td><td class="' + (row.internalDifference === 0 ? '' : 'vat-difference-alert-cell') + '">' + moneyCell(row.internalDifference) + '</td><td class="' + (row.differenceTotal === 0 ? '' : 'vat-difference-alert-cell') + '">' + moneyCell(row.differenceTotal) + '</td></tr>';
+    }).join('');
+    return '<section class="vat-difference-results"><div class="vat-difference-results-heading"><div><span class="page-kicker">RAPPROCHEMENT · ' + report.year + '</span><h3>Résultat annuel et détail mensuel</h3></div><span class="vat-difference-line-count">Lignes générées : ' + report.generatedLineCount + '</span></div>' +
+      (report.generatedLineCount ? '<div class="vat-difference-summary-grid">' +
+        '<article class="card"><span>TVA calculée</span><strong>' + esc(amount(total.calculatedTotal)) + ' <small>XOF</small></strong><small>Ventes + consommations internes</small></article>' +
+        '<article class="card"><span>TVA comptabilisée</span><strong>' + esc(amount(total.bookedTotal)) + ' <small>XOF</small></strong><small>Comptes TVA sélectionnés</small></article>' +
+        '<article class="card ' + (total.differenceTotal === 0 ? '' : 'vat-difference-summary-alert') + '"><span>Écart calculé − comptabilisé</span><strong>' + esc(amount(total.differenceTotal)) + ' <small>XOF</small></strong><small>Positif : calcul supérieur à la TVA comptabilisée</small></article>' +
+      '</div><div class="table-wrap vat-difference-table-wrap"><table class="data-table vat-difference-table"><thead><tr><th>Mois</th><th>Base ventes</th><th>TVA calculée<br>ventes</th><th>TVA comptabilisée<br>ventes</th><th>Écart<br>ventes</th><th>Base interne</th><th>TVA calculée<br>interne</th><th>TVA comptabilisée<br>interne</th><th>Écart<br>interne</th><th>Écart<br>total</th></tr></thead><tbody>' + rows + '<tr class="vat-difference-total-row"><th scope="row">Total annuel</th><td>' + moneyCell(total.salesBase) + '</td><td>' + moneyCell(total.salesVatCalculated) + '</td><td>' + moneyCell(total.salesVatBooked) + '</td><td>' + moneyCell(total.salesDifference) + '</td><td>' + moneyCell(total.internalBase) + '</td><td>' + moneyCell(total.internalVatCalculated) + '</td><td>' + moneyCell(total.internalVatBooked) + '</td><td>' + moneyCell(total.internalDifference) + '</td><td>' + moneyCell(total.differenceTotal) + '</td></tr></tbody></table></div><p class="exchange-footnote">Écart = TVA calculée à ' + esc(report.rate) + ' % moins solde créditeur net des comptes de TVA sélectionnés. Les mouvements débiteurs (avoirs/régularisations) réduisent le montant comptabilisé. Le rapport ne génère aucune écriture comptable.</p>' : '<div class="empty-state"><strong>Aucune ligne générée pour ' + report.year + '.</strong><br>Aucun mouvement validé n’a été trouvé dans les comptes sélectionnés sur les douze mois.</div>') +
+      '</section>';
+  }
+
+  function bindVatDifferenceReport() {
+    var form = $('#vat-difference-form');
+    if (!form) return;
+    var result = $('#vat-difference-result');
+    var yearSelect = $('#vat-difference-year', form);
+    var count = $('#vat-difference-line-count', form);
+    var readConfiguration = function () {
+      var config = { year: Number(yearSelect.value), rate: $('#vat-difference-rate', form).value };
+      ['salesBase', 'internalBase', 'salesVat', 'internalVat'].forEach(function (key) {
+        config[key] = $('#vat-difference-' + key, form).value;
+      });
+      return config;
+    };
+    var hydrate = function (year) {
+      var config = vatDifferenceConfiguration(year);
+      ['salesBase', 'internalBase', 'salesVat', 'internalVat'].forEach(function (key) {
+        $('#vat-difference-' + key, form).value = config[key].join(', ');
+      });
+      $('#vat-difference-rate', form).value = config.rate;
+      count.textContent = 'Lignes générées : 0';
+      result.innerHTML = '';
+    };
+    yearSelect.addEventListener('change', function () { hydrate(Number(yearSelect.value)); });
+    $$('[data-vat-difference-picker]', form).forEach(function (button) {
+      button.addEventListener('click', function () { openVatDifferenceAccountPicker(button.getAttribute('data-vat-difference-picker'), form); });
+    });
+    form.addEventListener('keydown', function (event) {
+      if (event.key !== 'F2') return;
+      var field = event.target && event.target.getAttribute('data-vat-difference-code');
+      if (!field) return;
+      event.preventDefault();
+      openVatDifferenceAccountPicker(field, form);
+    });
+    $('[data-vat-difference-cancel]', form).addEventListener('click', function () { hydrate(Number(yearSelect.value)); });
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var raw = readConfiguration();
+      var errors = [];
+      ['salesBase', 'internalBase', 'salesVat', 'internalVat'].forEach(function (key) {
+        var tokens = String(raw[key]).split(/[\s,;]+/).filter(Boolean);
+        if (!tokens.length) errors.push('Renseignez au moins un compte pour « ' + key + ' ».');
+        if (tokens.some(function (token) { return !/^[0-9]+\*?$/.test(token); })) errors.push('Format de compte invalide : utilisez des numéros, séparés par des virgules (ex. 701*, 706*).');
+      });
+      var overlaps = function (left, right) {
+        var leftCodes = VatDifferenceReport.cleanCodes(left);
+        var rightCodes = VatDifferenceReport.cleanCodes(right);
+        return leftCodes.some(function (a) {
+          var aPrefix = a.slice(-1) === '*' ? a.slice(0, -1) : a;
+          return rightCodes.some(function (b) {
+            var bPrefix = b.slice(-1) === '*' ? b.slice(0, -1) : b;
+            return aPrefix.indexOf(bPrefix) === 0 || bPrefix.indexOf(aPrefix) === 0;
+          });
+        });
+      };
+      if (overlaps(raw.salesBase, raw.internalBase)) errors.push('Les comptes de base sélectionnés se recoupent entre ventes et consommations internes.');
+      if (overlaps(raw.salesVat, raw.internalVat)) errors.push('Les comptes de TVA sélectionnés se recoupent entre ventes et consommations internes.');
+      var rate = Number(raw.rate);
+      if (String(raw.rate).trim() === '' || !Number.isFinite(rate) || rate < 0 || rate > 100) errors.push('Le taux doit être compris entre 0 et 100 %.');
+      if (errors.length) { toast(errors[0], 'warning'); return; }
+      var configuration = VatDifferenceReport.normalise(raw, raw.year);
+      var storageWarning = '';
+      try { localStorage.setItem(vatDifferenceConfigurationKey(raw.year), JSON.stringify(configuration)); }
+      catch (storageError) { storageWarning = 'Les paramètres ne peuvent pas être mémorisés dans ce navigateur. '; }
+      var report = VatDifferenceReport.calculate({
+        entries: S.entries(), year: raw.year, configuration: configuration,
+        decimalPlaces: S.accountingConfiguration().decimalPlaces
+      });
+      count.textContent = 'Lignes générées : ' + report.generatedLineCount;
+      result.innerHTML = (storageWarning ? '<div class="alert warning">' + esc(storageWarning) + 'Le calcul affiché reste temporaire.</div>' : '') + vatDifferenceResultMarkup(report);
+      result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  function openVatDifferenceAccountPicker(fieldKey, form) {
+    var input = $('#vat-difference-' + fieldKey, form);
+    if (!input) return;
+    var labels = { salesBase: 'Ventes taxables', internalBase: 'Consommations internes taxables', salesVat: 'TVA sur ventes', internalVat: 'TVA sur consommations internes' };
+    var selected = VatDifferenceReport.cleanCodes(input.value);
+    var accounts = S.accounts().slice().sort(function (left, right) { return String(left.code).localeCompare(String(right.code), 'fr', { numeric: true }); });
+    var rows = accounts.map(function (account, index) {
+      var code = String(account.code);
+      var hasChildren = accounts.some(function (candidate) { return String(candidate.code).length > code.length && String(candidate.code).indexOf(code) === 0; });
+      var token = code + (hasChildren ? '*' : '');
+      var checked = (selected.indexOf(token) !== -1 || selected.indexOf(code) !== -1) ? ' checked' : '';
+      return '<label class="vat-difference-picker-row" data-vat-picker-text="' + esc(code + ' ' + (account.label || '')) + '"><input type="checkbox" data-vat-difference-picker-account value="' + esc(token) + '" id="vat-difference-picker-' + index + '"' + checked + '><span class="vat-difference-picker-code">' + esc(token) + '</span><span>' + esc(account.label || '') + '</span></label>';
+    }).join('');
+    var body = '<div class="vat-difference-picker"><div class="field"><label for="vat-difference-picker-search">Rechercher un compte général</label><input id="vat-difference-picker-search" type="search" placeholder="Code ou intitulé"></div><p class="small muted">Cochez les comptes souhaités. Un code terminé par * inclut ses sous-comptes. Vous pouvez aussi saisir des préfixes personnalisés dans le champ.</p><div class="vat-difference-picker-list" role="group" aria-label="Comptes à associer à ' + esc(labels[fieldKey]) + '">' + (rows || '<div class="empty-state">Aucun compte disponible.</div>') + '</div></div>';
+    openModal('Sélection des comptes', esc(labels[fieldKey]), body, '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="button" class="btn btn-primary" data-vat-difference-picker-apply>Appliquer la sélection</button>', true);
+    var modalRoot = $('#modal-root');
+    var search = $('#vat-difference-picker-search', modalRoot);
+    var pickerRows = $$('.vat-difference-picker-row', modalRoot);
+    search.addEventListener('input', function () {
+      var query = search.value.trim().toLocaleLowerCase();
+      pickerRows.forEach(function (row) { row.hidden = !!query && row.getAttribute('data-vat-picker-text').toLocaleLowerCase().indexOf(query) === -1; });
+    });
+    $('[data-vat-difference-picker-apply]', modalRoot).addEventListener('click', function () {
+      input.value = $$('[data-vat-difference-picker-account]:checked', modalRoot).map(function (checkbox) { return checkbox.value; }).join(', ');
+      closeModal();
+      input.focus();
+    });
+  }
+
   function editionReportChildView(child, groupId, tabId) {
     var backLabel = groupId === 'editions' && tabId === 'journals' ? 'Tous les éléments Journaux' : 'Tous les états';
     var backLink = '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(accountingMenuHash(groupId, tabId)) + '">← ' + esc(backLabel) + '</a>';
@@ -25078,6 +25262,8 @@
       exchangeFeature = selectedChild
         ? editionReportChildView(selectedChild, group.id, tab.id)
         : editionReportCatalog(tab.children, group.id, tab.id, tab.label);
+    } else if (group.id === 'declarations' && tab.id === 'vat-difference') {
+      exchangeFeature = viewVatDifferenceReport('');
     } else if (isJournalEntrySubmenu) {
       exchangeFeature = viewEntryJournalSelector();
     } else if (group.id === 'saisie' && tab.id === 'live-cash') {
@@ -26414,6 +26600,7 @@
     }
     if (route === 'menu') {
       var menuParams = parseHash().params;
+      if (menuParams.g === 'declarations' && menuParams.t === 'vat-difference') bindVatDifferenceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && (menuParams.c === 'journal-lines' || menuParams.c === 'journal-modified-pieces' || menuParams.c === 'journal-unbalanced-pieces' || menuParams.c === 'journal-entry-totals' || menuParams.c === 'journal-individual-account-totals' || menuParams.c === 'journal-summary-account-totals' || menuParams.c === 'journal-third-party-totals' || menuParams.c === 'journal-analytic-center-totals' || menuParams.c === 'journal-currency-totals')) bindJournalLinesReport();
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && menuParams.c === 'journal-allocation-sheet') bindJournalAllocationSheet();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-balance') bindGeneralBalanceReport();
