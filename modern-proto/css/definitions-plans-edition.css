@@ -1,0 +1,64 @@
+/* PERFECTO · Éditions de consultation : Tiers et Plan des journaux. */
+.definitions-plans-edition-report-detail { min-width: 0; }
+.definitions-plans-edition-window { width: min(900px, 100%); margin: 0 auto; overflow: hidden; border: 1px solid #d5ded8; border-radius: 12px; background: #f4f6f4; box-shadow: 0 12px 34px rgba(24, 48, 38, .12); }
+.definitions-plans-edition-titlebar { display: flex; align-items: center; gap: 10px; min-height: 54px; padding: 0 20px; color: #fff; background: #2d5547; }
+.definitions-plans-edition-titlebar h2 { margin: 0; font-size: 1.1rem; }
+.definitions-plans-edition-app-icon { display: inline-grid; width: 25px; height: 25px; place-items: center; border-radius: 50%; color: #224537; background: #d8eabb; }
+.definitions-plans-edition-window form { padding: 20px; }
+.definitions-plans-edition-selection,
+.definitions-plans-edition-columns { min-width: 0; margin: 0; padding: 18px; border: 1px solid #c7d2cb; border-radius: 8px; background: #fff; }
+.definitions-plans-edition-selection legend,
+.definitions-plans-edition-columns legend { padding: 0 7px; color: #243c32; font-size: 1rem; font-weight: 700; }
+.definitions-plans-edition-nature { display: grid; grid-template-columns: minmax(150px, 185px) minmax(180px, 1fr); align-items: center; gap: 14px; max-width: 610px; margin: 0 auto 18px; }
+.definitions-plans-edition-nature label,
+.definitions-plans-edition-picker-row > label { font-weight: 600; }
+.definitions-plans-edition-nature select,
+.definitions-plans-edition-picker-control input { min-width: 0; width: 100%; min-height: 42px; padding: 8px 11px; border: 1px solid #87978e; border-radius: 4px; color: #222; background: #fff; }
+.definitions-plans-edition-picker-row { display: grid; grid-template-columns: minmax(150px, 185px) minmax(0, 1fr); align-items: center; gap: 14px; max-width: 610px; margin: 0 auto; }
+.definitions-plans-edition-picker-control { display: flex; gap: 8px; }
+.definitions-plans-edition-picker-control input { background: #fffed2; }
+.definitions-plans-edition-picker-control .btn { flex: 0 0 auto; }
+.definitions-plans-edition-selection > .small { max-width: 610px; margin: 9px auto 0; }
+.definitions-plans-edition-lower { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; gap: 14px; margin-top: 16px; }
+.definitions-plans-edition-columns-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; }
+.definitions-plans-edition-column { display: flex; align-items: center; gap: 9px; cursor: pointer; }
+.definitions-plans-edition-column input { width: 18px; height: 18px; accent-color: #315c4c; }
+.definitions-plans-edition-actions { display: flex; min-width: 145px; flex-direction: column; justify-content: center; gap: 10px; }
+.definitions-plans-edition-actions .btn { min-width: 140px; }
+.definitions-plans-edition-count { margin: 17px -20px -20px; padding: 10px 14px; border-top: 1px solid #d2dbd5; color: #34453c; background: #f8faf8; }
+.definitions-plans-edition-count strong { font-variant-numeric: tabular-nums; }
+.definitions-plans-edition-picker-option { display: grid; grid-template-columns: auto minmax(75px, auto) minmax(0, 1fr); align-items: start; gap: 8px; padding: 8px; border-bottom: 1px solid #e5eae7; }
+.definitions-plans-edition-picker-option[hidden] { display: none; }
+.definitions-plans-edition-print { max-width: 1180px; margin: 18px auto; padding: 24px; color: #202b25; background: #fff; box-shadow: 0 5px 22px rgba(0, 0, 0, .08); }
+.definitions-plans-edition-print header { margin-bottom: 16px; }
+.definitions-plans-edition-print header p { margin: 4px 0; color: #5f6b64; }
+.definitions-plans-edition-print h2 { margin: 8px 0; color: #234638; }
+.definitions-plans-edition-print-table-wrap { overflow-x: auto; }
+.definitions-plans-edition-print table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.definitions-plans-edition-print th,
+.definitions-plans-edition-print td { padding: 8px; border: 1px solid #cad5ce; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.definitions-plans-edition-print thead th { color: #244b3b; background: #edf3ef; }
+.definitions-plans-edition-note,
+.definitions-plans-edition-count-print { color: #5e6b64; font-size: .85rem; }
+@media (max-width: 680px) {
+  .definitions-plans-edition-window form { padding: 14px; }
+  .definitions-plans-edition-nature,
+  .definitions-plans-edition-picker-row { grid-template-columns: 1fr; gap: 7px; }
+  .definitions-plans-edition-lower { grid-template-columns: 1fr; }
+  .definitions-plans-edition-actions { flex-direction: row; }
+  .definitions-plans-edition-actions .btn { flex: 1 1 50%; min-width: 0; }
+  .definitions-plans-edition-columns-grid { gap: 11px; }
+  .definitions-plans-edition-print { padding: 12px; }
+  .definitions-plans-edition-print table { min-width: 540px; }
+}
+@media print {
+  body.report-preview-printing .report-preview-content .definitions-plans-edition-print { max-width: none; margin: 0; padding: 0; box-shadow: none; color: #111; }
+  body.report-preview-printing .report-preview-content .definitions-plans-edition-print h2,
+  body.report-preview-printing .report-preview-content .definitions-plans-edition-print thead th { color: #111; background: #fff; }
+  body.report-preview-printing .report-preview-content .definitions-plans-edition-print-table-wrap { overflow: visible; }
+  body.report-preview-printing .report-preview-content .definitions-plans-edition-print table { width: 100%; min-width: 0; font-size: 9pt; }
+  body.report-preview-printing .report-preview-content .definitions-plans-edition-print th,
+  body.report-preview-printing .report-preview-content .definitions-plans-edition-print td { padding: 4px; }
+  body.report-preview-printing .report-preview-content .definitions-plans-edition-print thead { display: table-header-group; }
+  body.report-preview-printing .report-preview-content .definitions-plans-edition-print tr { break-inside: avoid; page-break-inside: avoid; }
+}

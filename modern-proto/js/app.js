@@ -15,6 +15,7 @@
   var BalanceItems = window.PerfectoBalanceItems;
   var BalanceItemsEditionReport = window.PerfectoBalanceItemsEdition;
   var AccountingPlanEditionReport = window.PerfectoAccountingPlanEdition;
+  var DefinitionsPlansEditionReports = window.PerfectoDefinitionsPlansEditionReports;
   var CashOperations = window.PerfectoCashOperations;
   var AccountMovements = window.PerfectoAccountMovements;
   var AccountingExchange = window.PerfectoAccountingExchange;
@@ -182,6 +183,7 @@
   var financialFrameworkEditionReportSession = null;
   var balanceItemsEditionReportSession = null;
   var accountingPlanEditionReportSession = null;
+  var definitionsPlansEditionReportSession = null;
   var generalLedgerReportSession = null;
   var generalCounterpartDetailReportSession = null;
   var generalCounterpartTotalReportSession = null;
@@ -831,6 +833,7 @@
     var isFinancialFrameworkEditionReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'definitions-and-plans' && parsed.params.c === FinancialFrameworkEditionReport.REPORT_ID;
     var isBalanceItemsEditionReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'definitions-and-plans' && parsed.params.c === BalanceItemsEditionReport.REPORT_ID;
     var isAccountingPlanEditionReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'definitions-and-plans' && parsed.params.c === AccountingPlanEditionReport.REPORT_ID;
+    var isDefinitionsPlansEditionReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'definitions-and-plans' && [DefinitionsPlansEditionReports.THIRD_PARTY_ID, DefinitionsPlansEditionReports.JOURNAL_ID].indexOf(parsed.params.c) !== -1;
     var isGeneralLedgerReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-ledger';
     var isGeneralCounterpartDetailReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-detail';
     var isGeneralCounterpartTotalReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-total';
@@ -859,6 +862,7 @@
     if (!isFinancialFrameworkEditionReportRoute) financialFrameworkEditionReportSession = null;
     if (!isBalanceItemsEditionReportRoute) balanceItemsEditionReportSession = null;
     if (!isAccountingPlanEditionReportRoute) accountingPlanEditionReportSession = null;
+    if (!isDefinitionsPlansEditionReportRoute) definitionsPlansEditionReportSession = null;
     if (!isGeneralLedgerReportRoute) generalLedgerReportSession = null;
     if (!isGeneralCounterpartDetailReportRoute) generalCounterpartDetailReportSession = null;
     if (!isGeneralCounterpartTotalReportRoute) generalCounterpartTotalReportSession = null;
@@ -15414,6 +15418,193 @@
     render();
   }
 
+  function definitionsPlansEditionCreateSession(reportId) {
+    var columns = Object.create(null);
+    var definitions = reportId === DefinitionsPlansEditionReports.THIRD_PARTY_ID
+      ? DefinitionsPlansEditionReports.THIRD_PARTY_COLUMNS
+      : DefinitionsPlansEditionReports.JOURNAL_COLUMNS;
+    definitions.forEach(function (column) { columns[column.key] = !!column.defaultSelected; });
+    return { reportId: reportId, phase: 'selection', nature: 'suppliers', filter: '*', columns: columns, report: null };
+  }
+
+  function definitionsPlansEditionSession(reportId) {
+    if (!definitionsPlansEditionReportSession || definitionsPlansEditionReportSession.reportId !== reportId) {
+      definitionsPlansEditionReportSession = definitionsPlansEditionCreateSession(reportId);
+    }
+    return definitionsPlansEditionReportSession;
+  }
+
+  function definitionsPlansEditionRecords(session) {
+    if (session.reportId === DefinitionsPlansEditionReports.JOURNAL_ID) return S.journals();
+    return {
+      suppliers: S.suppliers(), clients: S.clients(), personnel: S.personnel(), otherParties: S.otherParties()
+    };
+  }
+
+  function buildDefinitionsPlansEditionReport(session) {
+    var options = { filter: session.filter, columns: session.columns };
+    if (session.reportId === DefinitionsPlansEditionReports.JOURNAL_ID) {
+      options.records = definitionsPlansEditionRecords(session);
+      return DefinitionsPlansEditionReports.buildJournalsReport(options);
+    }
+    options.nature = session.nature;
+    options.collections = definitionsPlansEditionRecords(session);
+    return DefinitionsPlansEditionReports.buildThirdPartiesReport(options);
+  }
+
+  function definitionsPlansEditionColumnOptions(session) {
+    var columns = session.reportId === DefinitionsPlansEditionReports.THIRD_PARTY_ID
+      ? DefinitionsPlansEditionReports.THIRD_PARTY_COLUMNS
+      : DefinitionsPlansEditionReports.JOURNAL_COLUMNS;
+    return columns.map(function (column) {
+      return '<label class="definitions-plans-edition-column"><input type="checkbox" data-definitions-plans-column="' + esc(column.key) + '"' + (session.columns[column.key] ? ' checked' : '') + '><span>' + esc(column.label) + '</span></label>';
+    }).join('');
+  }
+
+  function definitionsPlansEditionSelectionView(session, backLink) {
+    var isTiers = session.reportId === DefinitionsPlansEditionReports.THIRD_PARTY_ID;
+    var report = buildDefinitionsPlansEditionReport(session);
+    session.report = report;
+    var title = isTiers ? 'Liste des Tiers' : 'Plan des journaux';
+    var selectionField = isTiers
+      ? '<div class="definitions-plans-edition-nature"><label for="definitions-plans-edition-nature">Nature des tiers</label><select id="definitions-plans-edition-nature">' + DefinitionsPlansEditionReports.NATURES.map(function (nature) { return '<option value="' + esc(nature.key) + '"' + (nature.key === session.nature ? ' selected' : '') + '>' + esc(nature.label) + '</option>'; }).join('') + '</select></div>'
+      : '';
+    var fieldLabel = isTiers ? DefinitionsPlansEditionReports.NATURES.find(function (nature) { return nature.key === session.nature; }).label : 'Journaux';
+    var hint = isTiers
+      ? 'La liste reprend les fiches enregistrées pour la nature choisie dans le dossier actif.'
+      : 'Journaux standards, automatiques et créés dans le dossier actif ; les journaux historiques retirés sont exclus.';
+    return '<div class="edition-report-detail-view definitions-plans-edition-report-detail">' + backLink +
+      '<div class="definitions-plans-edition-window"><header class="definitions-plans-edition-titlebar"><span class="definitions-plans-edition-app-icon" aria-hidden="true">⚙</span><h2>' + esc(title) + '</h2></header>' +
+        '<form id="definitions-plans-edition-form" novalidate><fieldset class="definitions-plans-edition-selection"><legend>Sélection</legend>' + selectionField +
+          '<div class="definitions-plans-edition-picker-row"><label for="definitions-plans-edition-filter">' + esc(fieldLabel) + '</label><div class="definitions-plans-edition-picker-control"><input id="definitions-plans-edition-filter" type="text" data-definitions-plans-filter value="' + esc(session.filter) + '" autocomplete="off"><button type="button" class="btn btn-ghost" data-definitions-plans-picker>Parcourir…</button></div></div>' +
+          '<p class="small muted">' + esc(hint) + '</p>' +
+        '</fieldset><div class="definitions-plans-edition-lower"><fieldset class="definitions-plans-edition-columns"><legend>Colonnes à imprimer</legend><div class="definitions-plans-edition-columns-grid">' + definitionsPlansEditionColumnOptions(session) + '</div></fieldset>' +
+          '<div class="definitions-plans-edition-actions"><button type="button" class="btn btn-ghost" data-definitions-plans-cancel>Annuler</button><button type="submit" class="btn btn-primary">Valider</button></div></div>' +
+          '<div class="definitions-plans-edition-count" role="status">Lignes générées : <strong data-definitions-plans-count>' + report.generatedLineCount + '</strong></div>' +
+        '</form></div></div>';
+  }
+
+  function definitionsPlansEditionPrintHtml(report) {
+    var dossier = S.currentDossier();
+    var headings = report.columns.map(function (column) { return '<th scope="col">' + esc(column.label) + '</th>'; }).join('');
+    var body = report.rows.map(function (row) {
+      return '<tr>' + report.columns.map(function (column) { return '<td>' + esc(row[column.key] == null ? '' : row[column.key]) + '</td>'; }).join('') + '</tr>';
+    }).join('');
+    var note = report.reportId === DefinitionsPlansEditionReports.JOURNAL_ID
+      ? '<p class="definitions-plans-edition-note">La clôture est gérée au niveau des périodes comptables, pas des journaux. Une cellule vide signifie qu’aucun état de clôture propre au journal n’est enregistré.</p>'
+      : '<p class="definitions-plans-edition-note">Restitution des fiches du dossier actif. Aucune donnée ni information manquante n’est déduite.</p>';
+    return '<article class="definitions-plans-edition-print"><header><p>' + esc(dossier.name) + ' · Exercice ' + esc(dossier.exerciseYear) + '</p><h2>' + esc(report.title) + (report.natureLabel ? ' — ' + esc(report.natureLabel) : '') + '</h2><p>Filtre : ' + esc(report.filter) + '</p></header>' +
+      '<div class="definitions-plans-edition-print-table-wrap"><table><thead><tr>' + headings + '</tr></thead><tbody>' + (body || '<tr><td colspan="' + Math.max(1, report.columns.length) + '">Aucune ligne à imprimer.</td></tr>') + '</tbody></table></div>' + note +
+      '<p class="definitions-plans-edition-count-print">Lignes générées : ' + report.generatedLineCount + '</p></article>';
+  }
+
+  function definitionsPlansEditionPreviewView(session, backLink) {
+    var report = session.report || buildDefinitionsPlansEditionReport(session);
+    var title = session.reportId === DefinitionsPlansEditionReports.THIRD_PARTY_ID ? 'Liste des Tiers' : 'Plan des journaux';
+    return '<div class="edition-report-detail-view definitions-plans-edition-report-detail">' + backLink +
+      pageHeader('Aperçu — ' + title, 'Vérifiez les données du dossier avant d’ouvrir l’aperçu plein écran.', '<button type="button" class="btn btn-primary" data-definitions-plans-open-preview>Ouvrir l’aperçu plein écran</button>') +
+      '<div class="alert info"><div><strong>Consultation seule.</strong> La restitution n’ajoute ni ne modifie aucune fiche, aucun journal et aucune écriture.</div></div>' +
+      definitionsPlansEditionPrintHtml(report) +
+      '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-definitions-plans-back-selection>Modifier la sélection</button></div></div>';
+  }
+
+  function viewDefinitionsPlansEditionReport(child, backLink) {
+    var session = definitionsPlansEditionSession(child.id);
+    return session.phase === 'preview'
+      ? definitionsPlansEditionPreviewView(session, backLink)
+      : definitionsPlansEditionSelectionView(session, backLink);
+  }
+
+  function syncDefinitionsPlansEditionForm(form, session) {
+    if (!form) return null;
+    var filter = $('[data-definitions-plans-filter]', form);
+    if (filter) session.filter = filter.value;
+    var nature = $('#definitions-plans-edition-nature', form);
+    if (nature) session.nature = nature.value;
+    $$('[data-definitions-plans-column]', form).forEach(function (input) {
+      session.columns[input.getAttribute('data-definitions-plans-column')] = !!input.checked;
+    });
+    var report = buildDefinitionsPlansEditionReport(session);
+    var count = $('[data-definitions-plans-count]', form);
+    if (count) count.textContent = String(report.generatedLineCount);
+    return report;
+  }
+
+  function definitionsPlansEditionPicker(input, session) {
+    var isTiers = session.reportId === DefinitionsPlansEditionReports.THIRD_PARTY_ID;
+    var records = definitionsPlansEditionRecords(session);
+    if (isTiers) records = records[session.nature] || [];
+    records = records.filter(function (record) { return record && (isTiers || !record.retired); });
+    var prefix = 'definitions-plans-edition-picker';
+    var current = String(input.value || '').trim();
+    var allSelected = current === '*';
+    var rows = records.map(function (record, index) {
+      var checked = allSelected || DefinitionsPlansEditionReports.matchesFilter(record.code, current);
+      var text = [record.code, record.name, record.label, record.address].filter(Boolean).join(' ');
+      return '<label class="definitions-plans-edition-picker-option" data-picker-text="' + esc(text) + '"><input type="checkbox" data-definitions-plans-picker-code value="' + esc(record.code) + '" id="' + prefix + '-' + index + '"' + (checked ? ' checked' : '') + '><strong>' + esc(record.code) + '</strong><span>' + esc(record.name || record.label || '') + '</span></label>';
+    }).join('');
+    var body = '<div class="journal-lines-picker"><div class="field"><label for="' + prefix + '-search">Rechercher</label><input id="' + prefix + '-search" type="search" placeholder="Code ou intitulé"></div><label class="journal-lines-picker-all"><input id="' + prefix + '-all" type="checkbox"' + (allSelected ? ' checked' : '') + '>Tous</label><div class="journal-lines-picker-list" role="group">' + (rows || '<div class="empty-state">Aucune fiche disponible pour cette sélection.</div>') + '</div></div>';
+    openModal('Choisir ' + (isTiers ? 'les tiers' : 'les journaux'), 'La sélection porte uniquement sur les données du dossier actif.', body,
+      '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="button" class="btn btn-primary" data-definitions-plans-picker-apply>Appliquer</button>', true);
+    var root = $('#modal-root');
+    var search = $('#' + prefix + '-search', root);
+    var optionRows = $$('.definitions-plans-edition-picker-option', root);
+    var all = $('#' + prefix + '-all', root);
+    var boxes = $$('[data-definitions-plans-picker-code]', root);
+    if (search) search.addEventListener('input', function () {
+      var needle = search.value.trim().toLocaleLowerCase();
+      optionRows.forEach(function (row) { row.hidden = needle && row.getAttribute('data-picker-text').toLocaleLowerCase().indexOf(needle) === -1; });
+    });
+    if (all) all.addEventListener('change', function () { boxes.forEach(function (box) { box.checked = all.checked; }); });
+    boxes.forEach(function (box) { box.addEventListener('change', function () { if (!box.checked && all) all.checked = false; }); });
+    var apply = $('[data-definitions-plans-picker-apply]', root);
+    if (apply) apply.addEventListener('click', function () {
+      var selected = boxes.filter(function (box) { return box.checked; }).map(function (box) { return box.value; });
+      input.value = all && all.checked ? '*' : selected.join(', ');
+      closeModal();
+      var form = $('#definitions-plans-edition-form');
+      syncDefinitionsPlansEditionForm(form, session);
+    });
+  }
+
+  function bindDefinitionsPlansEditionReport(reportId) {
+    var session = definitionsPlansEditionSession(reportId);
+    if (session.phase === 'selection') {
+      var form = $('#definitions-plans-edition-form');
+      if (!form) return;
+      var update = function () { syncDefinitionsPlansEditionForm(form, session); };
+      form.addEventListener('input', update);
+      form.addEventListener('change', update);
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var report = syncDefinitionsPlansEditionForm(form, session);
+        if (!report.columns.length) {
+          toast('Sélectionnez au moins une colonne à imprimer.', 'warning');
+          return;
+        }
+        session.report = report;
+        session.phase = 'preview';
+        render();
+      });
+      var picker = $('[data-definitions-plans-picker]', form);
+      if (picker) picker.addEventListener('click', function () { definitionsPlansEditionPicker($('[data-definitions-plans-filter]', form), session); });
+      var cancel = $('[data-definitions-plans-cancel]', form);
+      if (cancel) cancel.addEventListener('click', function () { window.location.hash = accountingMenuHash('editions', 'definitions-and-plans'); });
+      return;
+    }
+    var open = $('[data-definitions-plans-open-preview]');
+    if (open) open.addEventListener('click', function () {
+      var report = session.report || buildDefinitionsPlansEditionReport(session);
+      var previousTitle = document.title;
+      openReportPreview('Aperçu — ' + report.title, definitionsPlansEditionPrintHtml(report), {
+        beforePrint: function () { document.title = safeFilePart(report.title) + '-' + safeFilePart(S.currentDossier().name); },
+        afterPrint: function () { document.title = previousTitle; }
+      });
+    });
+    var back = $('[data-definitions-plans-back-selection]');
+    if (back) back.addEventListener('click', function () { session.phase = 'selection'; render(); });
+  }
+
   function viewAccountingPlanEdition(backLink) {
     var session = ensureAccountingPlanEditionReportSession();
     if (session.phase !== 'selection' && session.phase !== 'listing') session.report = buildAccountingPlanEditionReport(session);
@@ -23397,8 +23588,8 @@
       assetDimensions: { title: 'Ventilations désactivées', description: 'Les trois éléments restent grisés comme dans votre capture ; aucune sortie n’est affichée.' },
       definitionsFramework: { title: 'Cadre comptable et postes du bilan', description: 'Le Cadre comptable et les Postes du bilan restituent leurs PDF de référence en lecture seule ; les autres éditions de ce groupe restent à préciser.' },
       definitionsAccounts: { title: 'Plan comptable et postes associés', description: 'Les deux éditions restent distinctes des fonctions de maintenance du plan.' },
-      definitionsThirdParties: { title: 'Tiers', description: 'Édition à préciser sans ouvrir les écrans de maintenance des fiches.' },
-      definitionsJournals: { title: 'Plan des journaux', description: 'Restitution à préciser sans ouvrir la maintenance des journaux.' },
+      definitionsThirdParties: { title: 'Tiers', description: 'Liste des fiches du dossier selon la nature choisie, avec sélection de colonnes et aperçu plein écran imprimable.' },
+      definitionsJournals: { title: 'Plan des journaux', description: 'Liste les journaux du dossier, y compris les journaux automatiques et ceux créés par l’utilisateur, en lecture seule.' },
       definitionsAnalytics: { title: 'Plan analytiques', description: 'Élément visible mais désactivé dans le parcours général.' },
       cumuls: { title: 'Cumuls et ventilations', description: 'Consulter les montants selon le niveau de compte ou l’axe de ventilation à confirmer.' },
       imputation: { title: 'Imputation', description: 'Accéder aux fiches et restitutions associées à l’imputation.' },
@@ -24609,6 +24800,7 @@
     if (child.id === 'edition-accounting-framework') return viewFinancialFrameworkEdition(backLink);
     if (child.id === 'edition-balance-items') return viewBalanceItemsEdition(backLink);
     if (child.id === 'edition-chart-of-accounts') return viewAccountingPlanEdition(backLink);
+    if (child.id === DefinitionsPlansEditionReports.THIRD_PARTY_ID || child.id === DefinitionsPlansEditionReports.JOURNAL_ID) return viewDefinitionsPlansEditionReport(child, backLink);
     if (PointingEditionReports.REPORT_IDS.indexOf(child.id) !== -1) return viewPointingEditionReport(backLink, child.id);
     if (MatchingEditionReports.REPORT_IDS.indexOf(child.id) !== -1) return viewMatchingEditionReport(backLink, child.id);
     if (child.id === 'general-summary-balance') return viewGeneralSummaryBalanceReport(backLink);
@@ -26065,6 +26257,7 @@
       if (menuParams.g === 'editions' && menuParams.t === 'definitions-and-plans' && menuParams.c === FinancialFrameworkEditionReport.REPORT_ID) bindFinancialFrameworkEditionReport();
       if (menuParams.g === 'editions' && menuParams.t === 'definitions-and-plans' && menuParams.c === BalanceItemsEditionReport.REPORT_ID) bindBalanceItemsEditionReport();
       if (menuParams.g === 'editions' && menuParams.t === 'definitions-and-plans' && menuParams.c === AccountingPlanEditionReport.REPORT_ID) bindAccountingPlanEditionReport();
+      if (menuParams.g === 'editions' && menuParams.t === 'definitions-and-plans' && [DefinitionsPlansEditionReports.THIRD_PARTY_ID, DefinitionsPlansEditionReports.JOURNAL_ID].indexOf(menuParams.c) !== -1) bindDefinitionsPlansEditionReport(menuParams.c);
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-ledger') bindGeneralLedgerReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-detail') bindGeneralCounterpartDetailReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-total') bindGeneralCounterpartTotalReport();
