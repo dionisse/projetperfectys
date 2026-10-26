@@ -16,6 +16,8 @@
   var BalanceItemsEditionReport = window.PerfectoBalanceItemsEdition;
   var AccountingPlanEditionReport = window.PerfectoAccountingPlanEdition;
   var DefinitionsPlansEditionReports = window.PerfectoDefinitionsPlansEditionReports;
+  var AssociatedItemsEditionReport = window.PerfectoAssociatedAccountItemsEdition;
+  var AssociatedItemsReference = window.PerfectoAssociatedAccountItems;
   var CashOperations = window.PerfectoCashOperations;
   var AccountMovements = window.PerfectoAccountMovements;
   var AccountingExchange = window.PerfectoAccountingExchange;
@@ -184,6 +186,7 @@
   var balanceItemsEditionReportSession = null;
   var accountingPlanEditionReportSession = null;
   var definitionsPlansEditionReportSession = null;
+  var associatedItemsEditionReportSession = null;
   var generalLedgerReportSession = null;
   var generalCounterpartDetailReportSession = null;
   var generalCounterpartTotalReportSession = null;
@@ -834,6 +837,7 @@
     var isBalanceItemsEditionReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'definitions-and-plans' && parsed.params.c === BalanceItemsEditionReport.REPORT_ID;
     var isAccountingPlanEditionReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'definitions-and-plans' && parsed.params.c === AccountingPlanEditionReport.REPORT_ID;
     var isDefinitionsPlansEditionReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'definitions-and-plans' && [DefinitionsPlansEditionReports.THIRD_PARTY_ID, DefinitionsPlansEditionReports.JOURNAL_ID].indexOf(parsed.params.c) !== -1;
+    var isAssociatedItemsEditionReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'definitions-and-plans' && parsed.params.c === AssociatedItemsEditionReport.REPORT_ID;
     var isGeneralLedgerReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-ledger';
     var isGeneralCounterpartDetailReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-detail';
     var isGeneralCounterpartTotalReportRoute = route === 'menu' && parsed.params.g === 'editions' && parsed.params.t === 'general-accounts' && parsed.params.c === 'general-counterpart-total';
@@ -863,6 +867,7 @@
     if (!isBalanceItemsEditionReportRoute) balanceItemsEditionReportSession = null;
     if (!isAccountingPlanEditionReportRoute) accountingPlanEditionReportSession = null;
     if (!isDefinitionsPlansEditionReportRoute) definitionsPlansEditionReportSession = null;
+    if (!isAssociatedItemsEditionReportRoute) associatedItemsEditionReportSession = null;
     if (!isGeneralLedgerReportRoute) generalLedgerReportSession = null;
     if (!isGeneralCounterpartDetailReportRoute) generalCounterpartDetailReportSession = null;
     if (!isGeneralCounterpartTotalReportRoute) generalCounterpartTotalReportSession = null;
@@ -15418,6 +15423,160 @@
     render();
   }
 
+  function createAssociatedItemsEditionSession() {
+    return { phase: 'selection', accountFilter: '*', columns: { account: true, label: true, posts: true }, report: null };
+  }
+
+  function ensureAssociatedItemsEditionSession() {
+    if (!associatedItemsEditionReportSession) associatedItemsEditionReportSession = createAssociatedItemsEditionSession();
+    return associatedItemsEditionReportSession;
+  }
+
+  function buildAssociatedItemsEditionReport(session) {
+    return AssociatedItemsEditionReport.buildReport({ accountFilter: session.accountFilter, columns: session.columns });
+  }
+
+  function associatedItemsEditionColumnOptions(session) {
+    return AssociatedItemsEditionReport.COLUMNS.map(function (column) {
+      return '<label class="definitions-plans-edition-column"><input type="checkbox" data-associated-items-column="' + esc(column.key) + '"' + (session.columns[column.key] ? ' checked' : '') + '><span>' + esc(column.label) + '</span></label>';
+    }).join('');
+  }
+
+  function associatedItemsEditionSelectionView(session, backLink) {
+    var report = buildAssociatedItemsEditionReport(session);
+    session.report = report;
+    return '<div class="edition-report-detail-view associated-items-edition-report-detail">' + backLink +
+      '<div class="definitions-plans-edition-window associated-items-edition-window"><header class="definitions-plans-edition-titlebar"><span class="definitions-plans-edition-app-icon" aria-hidden="true">⚙</span><h2>Postes associés aux comptes</h2></header>' +
+        '<form id="associated-items-edition-form" novalidate><fieldset class="definitions-plans-edition-selection"><legend>Sélection</legend>' +
+          '<div class="definitions-plans-edition-picker-row"><label for="associated-items-edition-filter">Comptes</label><div class="definitions-plans-edition-picker-control"><input id="associated-items-edition-filter" type="text" data-associated-items-filter value="' + esc(session.accountFilter) + '" autocomplete="off"><button type="button" class="btn btn-ghost" data-associated-items-picker aria-label="Parcourir les comptes">…</button></div></div>' +
+          '<p class="small muted">Codes issus du PDF référentiel joint. Saisissez un compte, plusieurs codes séparés par des virgules, un préfixe suivi de * ou * pour tous.</p>' +
+        '</fieldset><div class="definitions-plans-edition-lower"><fieldset class="definitions-plans-edition-columns"><legend>Colonnes à imprimer</legend><div class="definitions-plans-edition-columns-grid">' + associatedItemsEditionColumnOptions(session) + '</div></fieldset>' +
+          '<div class="definitions-plans-edition-actions"><button type="button" class="btn btn-ghost" data-associated-items-cancel>Annuler</button><button type="submit" class="btn btn-primary">Valider</button></div></div>' +
+          '<div class="definitions-plans-edition-count" role="status">Lignes générées : <strong data-associated-items-count>' + report.generatedLineCount + '</strong></div>' +
+          '<div class="journal-lines-form-errors" id="associated-items-edition-errors" role="alert" aria-live="polite"></div>' +
+        '</form></div></div>';
+  }
+
+  function associatedItemsEditionPrintableHtml(report) {
+    var metadata = AssociatedItemsReference.metadata;
+    var columnsByKey = Object.create(null);
+    report.columns.forEach(function (column) { columnsByKey[column.key] = true; });
+    var topHeaders = [];
+    if (columnsByKey.account) topHeaders.push('<th scope="col" rowspan="' + (columnsByKey.posts ? '2' : '1') + '">Compte</th>');
+    if (columnsByKey.label) topHeaders.push('<th scope="col" rowspan="' + (columnsByKey.posts ? '2' : '1') + '">Intitulé</th>');
+    if (columnsByKey.posts) topHeaders.push('<th scope="colgroup" colspan="2">Postes</th>');
+    var secondHeaders = columnsByKey.posts ? '<tr><th scope="col">Débiteur</th><th scope="col">Créditeur</th></tr>' : '';
+    var rows = report.rows.map(function (row) {
+      var cells = '';
+      if (columnsByKey.account) cells += '<td><strong>' + esc(row.account) + '</strong></td>';
+      if (columnsByKey.label) cells += '<td>' + esc(row.label) + '</td>';
+      if (columnsByKey.posts) cells += '<td>' + esc(row.debit) + '</td><td>' + esc(row.credit) + '</td>';
+      return '<tr>' + cells + '</tr>';
+    }).join('');
+    var colspan = (columnsByKey.account ? 1 : 0) + (columnsByKey.label ? 1 : 0) + (columnsByKey.posts ? 2 : 0);
+    return '<article class="definitions-plans-edition-print associated-items-edition-print"><header><p>' + esc(metadata.sourceOrganization) + ' · ' + esc(metadata.sourceEntity) + '</p><h2>' + esc(report.title) + '</h2><p>' + esc(metadata.sourceReportTitle) + '</p><p>Comptes sélectionnés : ' + esc(report.filters.accounts) + '</p></header>' +
+      '<div class="definitions-plans-edition-print-table-wrap"><table><thead><tr>' + topHeaders.join('') + '</tr>' + secondHeaders + '</thead><tbody>' + (rows || '<tr><td colspan="' + colspan + '">Aucune ligne à imprimer.</td></tr>') + '</tbody></table></div>' +
+      '<p class="definitions-plans-edition-note">Source : « ' + esc(metadata.sourceFile) + ' » · ' + metadata.sourcePages + ' pages. Les libellés sont repris tels qu’ils apparaissent dans le document ; les cellules Débiteur et Créditeur vides restent vides. Aucune correspondance n’est complétée ou recalculée.</p>' +
+      '<p class="definitions-plans-edition-count-print">Lignes générées : ' + report.generatedLineCount + '</p></article>';
+  }
+
+  function associatedItemsEditionPreviewView(session, backLink) {
+    var report = session.report || buildAssociatedItemsEditionReport(session);
+    return '<div class="edition-report-detail-view associated-items-edition-report-detail">' + backLink +
+      pageHeader('Aperçu — Postes associés aux comptes', 'Vérifiez la transcription du référentiel source avant impression.', '<button type="button" class="btn btn-primary" data-associated-items-open-preview>Ouvrir l’aperçu plein écran</button>') +
+      '<div class="alert info"><div><strong>Référentiel PDF en consultation seule.</strong> Le document joint comporte ' + AssociatedItemsReference.metadata.sourceRowCount + ' lignes ; cette édition conserve les codes, libellés et postes du PDF, y compris les valeurs absentes.</div></div>' +
+      associatedItemsEditionPrintableHtml(report) +
+      '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-associated-items-back-selection>Modifier la sélection</button></div></div>';
+  }
+
+  function viewAssociatedItemsEditionReport(backLink) {
+    var session = ensureAssociatedItemsEditionSession();
+    return session.phase === 'preview'
+      ? associatedItemsEditionPreviewView(session, backLink)
+      : associatedItemsEditionSelectionView(session, backLink);
+  }
+
+  function syncAssociatedItemsEditionForm(form, session) {
+    if (!form) return null;
+    var filter = $('[data-associated-items-filter]', form);
+    if (filter) session.accountFilter = filter.value;
+    $$('[data-associated-items-column]', form).forEach(function (input) {
+      session.columns[input.getAttribute('data-associated-items-column')] = !!input.checked;
+    });
+    var report = buildAssociatedItemsEditionReport(session);
+    showGeneralBalanceReportErrors($('#associated-items-edition-errors', form), report.errors);
+    var count = $('[data-associated-items-count]', form);
+    if (count) count.textContent = String(report.generatedLineCount);
+    return report;
+  }
+
+  function openAssociatedItemsAccountPicker(input) {
+    var records = AssociatedItemsReference.all();
+    var currentFilter = AssociatedItemsEditionReport.parseAccountFilter(input.value);
+    var selectAll = currentFilter.valid && currentFilter.all;
+    var prefix = 'associated-items-account-picker';
+    var rows = records.map(function (record, index) {
+      var checked = selectAll || (currentFilter.valid && AssociatedItemsEditionReport.accountMatches(record.code, currentFilter));
+      var searchText = record.code + ' ' + record.label;
+      return '<label class="definitions-plans-edition-picker-option" data-picker-text="' + esc(searchText) + '"><input type="checkbox" data-associated-items-picker-code value="' + esc(record.code) + '" id="' + prefix + '-' + index + '"' + (checked ? ' checked' : '') + '><strong>' + esc(record.code) + '</strong><span>' + esc(record.label) + '</span></label>';
+    }).join('');
+    var body = '<div class="journal-lines-picker"><div class="field"><label for="' + prefix + '-search">Rechercher un compte</label><input id="' + prefix + '-search" type="search" placeholder="Code ou intitulé"></div><label class="journal-lines-picker-all"><input id="' + prefix + '-all" type="checkbox"' + (selectAll ? ' checked' : '') + '>Tous les comptes du PDF</label><div class="journal-lines-picker-list" role="group" aria-label="Comptes référencés dans le PDF">' + rows + '</div></div>';
+    openModal('Choisir les comptes', 'Sélection extraite du PDF référentiel joint.', body,
+      '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="button" class="btn btn-primary" data-associated-items-picker-apply>Appliquer</button>', true);
+    var modalRoot = $('#modal-root');
+    var search = $('#' + prefix + '-search', modalRoot);
+    var optionRows = $$('.definitions-plans-edition-picker-option', modalRoot);
+    var all = $('#' + prefix + '-all', modalRoot);
+    var boxes = $$('[data-associated-items-picker-code]', modalRoot);
+    if (search) search.addEventListener('input', function () {
+      var needle = search.value.trim().toLocaleLowerCase();
+      optionRows.forEach(function (row) { row.hidden = needle && row.getAttribute('data-picker-text').toLocaleLowerCase().indexOf(needle) === -1; });
+    });
+    if (all) all.addEventListener('change', function () { boxes.forEach(function (box) { box.checked = all.checked; }); });
+    boxes.forEach(function (box) { box.addEventListener('change', function () { if (!box.checked && all) all.checked = false; }); });
+    var apply = $('[data-associated-items-picker-apply]', modalRoot);
+    if (apply) apply.addEventListener('click', function () {
+      input.value = all && all.checked ? '*' : boxes.filter(function (box) { return box.checked; }).map(function (box) { return box.value; }).join(', ');
+      closeModal();
+      syncAssociatedItemsEditionForm($('#associated-items-edition-form'), ensureAssociatedItemsEditionSession());
+    });
+  }
+
+  function bindAssociatedItemsEditionReport() {
+    var session = ensureAssociatedItemsEditionSession();
+    if (session.phase === 'selection') {
+      var form = $('#associated-items-edition-form');
+      if (!form) return;
+      var update = function () { syncAssociatedItemsEditionForm(form, session); };
+      form.addEventListener('input', update);
+      form.addEventListener('change', update);
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var report = syncAssociatedItemsEditionForm(form, session);
+        if (!report.ok) return;
+        session.report = report;
+        session.phase = 'preview';
+        render();
+      });
+      var picker = $('[data-associated-items-picker]', form);
+      if (picker) picker.addEventListener('click', function () { openAssociatedItemsAccountPicker($('[data-associated-items-filter]', form)); });
+      var cancel = $('[data-associated-items-cancel]', form);
+      if (cancel) cancel.addEventListener('click', function () { window.location.hash = accountingMenuHash('editions', 'definitions-and-plans'); });
+      return;
+    }
+    var open = $('[data-associated-items-open-preview]');
+    if (open) open.addEventListener('click', function () {
+      var report = session.report || buildAssociatedItemsEditionReport(session);
+      var previousTitle = document.title;
+      openReportPreview('Aperçu — ' + report.title, associatedItemsEditionPrintableHtml(report), {
+        beforePrint: function () { document.title = safeFilePart(report.title); },
+        afterPrint: function () { document.title = previousTitle; }
+      });
+    });
+    var back = $('[data-associated-items-back-selection]');
+    if (back) back.addEventListener('click', function () { session.phase = 'selection'; render(); });
+  }
+
   function definitionsPlansEditionCreateSession(reportId) {
     var columns = Object.create(null);
     var definitions = reportId === DefinitionsPlansEditionReports.THIRD_PARTY_ID
@@ -24801,6 +24960,7 @@
     if (child.id === 'edition-balance-items') return viewBalanceItemsEdition(backLink);
     if (child.id === 'edition-chart-of-accounts') return viewAccountingPlanEdition(backLink);
     if (child.id === DefinitionsPlansEditionReports.THIRD_PARTY_ID || child.id === DefinitionsPlansEditionReports.JOURNAL_ID) return viewDefinitionsPlansEditionReport(child, backLink);
+    if (child.id === AssociatedItemsEditionReport.REPORT_ID) return viewAssociatedItemsEditionReport(backLink);
     if (PointingEditionReports.REPORT_IDS.indexOf(child.id) !== -1) return viewPointingEditionReport(backLink, child.id);
     if (MatchingEditionReports.REPORT_IDS.indexOf(child.id) !== -1) return viewMatchingEditionReport(backLink, child.id);
     if (child.id === 'general-summary-balance') return viewGeneralSummaryBalanceReport(backLink);
@@ -26258,6 +26418,7 @@
       if (menuParams.g === 'editions' && menuParams.t === 'definitions-and-plans' && menuParams.c === BalanceItemsEditionReport.REPORT_ID) bindBalanceItemsEditionReport();
       if (menuParams.g === 'editions' && menuParams.t === 'definitions-and-plans' && menuParams.c === AccountingPlanEditionReport.REPORT_ID) bindAccountingPlanEditionReport();
       if (menuParams.g === 'editions' && menuParams.t === 'definitions-and-plans' && [DefinitionsPlansEditionReports.THIRD_PARTY_ID, DefinitionsPlansEditionReports.JOURNAL_ID].indexOf(menuParams.c) !== -1) bindDefinitionsPlansEditionReport(menuParams.c);
+      if (menuParams.g === 'editions' && menuParams.t === 'definitions-and-plans' && menuParams.c === AssociatedItemsEditionReport.REPORT_ID) bindAssociatedItemsEditionReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-ledger') bindGeneralLedgerReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-detail') bindGeneralCounterpartDetailReport();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-counterpart-total') bindGeneralCounterpartTotalReport();

@@ -1,0 +1,33 @@
+/* PERFECTO · Aperçu du référentiel des postes associés aux comptes. */
+.associated-items-edition-window { max-width: 805px; }
+.associated-items-edition-window .definitions-plans-edition-picker-row { max-width: 650px; }
+.associated-items-edition-window .definitions-plans-edition-picker-control > button { min-width: 42px; padding-inline: 12px; font-weight: 800; }
+.associated-items-edition-window .definitions-plans-edition-columns-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.associated-items-edition-window .definitions-plans-edition-count { min-height: 18px; }
+.associated-items-edition-report-detail .journal-lines-form-errors:empty { display: none; }
+.associated-items-edition-print header p { overflow-wrap: anywhere; }
+.associated-items-edition-print header p:first-child { color: #52665a; font-weight: 700; }
+.associated-items-edition-print table { table-layout: fixed; }
+.associated-items-edition-print table th:first-child,
+.associated-items-edition-print table td:first-child { width: 16%; }
+.associated-items-edition-print table th:nth-child(2),
+.associated-items-edition-print table td:nth-child(2) { width: 42%; }
+.associated-items-edition-print table th:nth-last-child(-n+2),
+.associated-items-edition-print table td:nth-last-child(-n+2) { width: 21%; }
+.associated-items-edition-print table th[rowspan="2"] { vertical-align: middle; }
+.associated-items-edition-print table tbody td:first-child { white-space: nowrap; }
+@media (max-width: 680px) {
+  .associated-items-edition-window .definitions-plans-edition-columns-grid { grid-template-columns: 1fr; }
+}
+@media print {
+  body.report-preview-printing .report-preview-content .associated-items-edition-print { font-size: 9pt; }
+  body.report-preview-printing .report-preview-content .associated-items-edition-print header { margin-bottom: 10px; }
+  body.report-preview-printing .report-preview-content .associated-items-edition-print table { table-layout: fixed; font-size: 8pt; }
+  body.report-preview-printing .report-preview-content .associated-items-edition-print table th:first-child,
+  body.report-preview-printing .report-preview-content .associated-items-edition-print table td:first-child { width: 15%; }
+  body.report-preview-printing .report-preview-content .associated-items-edition-print table th:nth-child(2),
+  body.report-preview-printing .report-preview-content .associated-items-edition-print table td:nth-child(2) { width: 40%; }
+  body.report-preview-printing .report-preview-content .associated-items-edition-print table th:nth-last-child(-n+2),
+  body.report-preview-printing .report-preview-content .associated-items-edition-print table td:nth-last-child(-n+2) { width: 22.5%; }
+  body.report-preview-printing .report-preview-content .associated-items-edition-print .definitions-plans-edition-note { font-size: 7pt; }
+}
