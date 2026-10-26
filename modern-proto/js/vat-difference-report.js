@@ -7,8 +7,8 @@
 
   var STANDARD_RATE_2026 = 18;
   var DEFAULTS = {
-    salesBase: ['70*'],
-    internalBase: ['722', '724'],
+    salesBase: [],
+    internalBase: [],
     salesVat: ['4431', '4432', '4433'],
     internalVat: ['4434']
   };
@@ -26,7 +26,7 @@
 
   function defaults(year) {
     return {
-      year: Number(year), rate: STANDARD_RATE_2026,
+      schemaVersion: 2, year: Number(year), rate: Number(year) === 2026 ? STANDARD_RATE_2026 : null,
       salesBase: DEFAULTS.salesBase.slice(), internalBase: DEFAULTS.internalBase.slice(),
       salesVat: DEFAULTS.salesVat.slice(), internalVat: DEFAULTS.internalVat.slice()
     };
@@ -35,12 +35,22 @@
   function normalise(configuration, year) {
     var base = defaults(year);
     var source = configuration || {};
+    var sourceVersion = Number(source.schemaVersion) || 1;
     ['salesBase', 'internalBase', 'salesVat', 'internalVat'].forEach(function (key) {
       base[key] = cleanCodes(source[key] == null ? base[key] : source[key]);
     });
-    var rate = Number(source.rate);
-    base.rate = Number.isFinite(rate) && rate >= 0 && rate <= 100 ? rate : STANDARD_RATE_2026;
+    // Migration sûre : les anciens réglages préremplissaient des bases larges sans validation explicite.
+    if (sourceVersion < 2) {
+      if (base.salesBase.length === 1 && base.salesBase[0] === '70*') base.salesBase = [];
+      if (base.internalBase.length === 2 && base.internalBase[0] === '722' && base.internalBase[1] === '724') base.internalBase = [];
+    }
+    base.schemaVersion = 2;
+    var rateValue = source.rate == null || String(source.rate).trim() === '' ? NaN : Number(source.rate);
     base.year = Number(year) || Number(source.year) || new Date().getFullYear();
+    base.rate = Number.isFinite(rateValue) && rateValue >= 0 && rateValue <= 100
+      ? rateValue
+      : (base.year === 2026 ? STANDARD_RATE_2026 : null);
+    if (sourceVersion < 2 && base.year !== 2026 && base.rate === STANDARD_RATE_2026) base.rate = null;
     return base;
   }
 
@@ -69,6 +79,7 @@
     options = options || {};
     var year = Number(options.year);
     var configuration = normalise(options.configuration, year);
+    if (configuration.rate == null) throw new Error('Le taux applicable à cette année doit être confirmé avant le calcul.');
     var places = options.decimalPlaces;
     var months = [];
     var byMonth = Object.create(null);

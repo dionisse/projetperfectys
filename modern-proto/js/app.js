@@ -24983,13 +24983,13 @@
         '<section class="card vat-difference-period-card"><div class="field"><label for="vat-difference-year">Période de référence · année complète</label><select id="vat-difference-year" name="year">' + yearOptions + '</select><small class="muted">Du 01/01 au 31/12 de l’année choisie, indépendamment de la période d’exercice courante.</small></div></section>' +
         '<div class="vat-difference-columns">' +
           '<section class="card vat-difference-config-card"><div class="vat-difference-card-heading"><div><span class="page-kicker">BASES TAXABLES · COMPTES DE PRODUITS / CONSOMMATION</span><h3>Comptes de ventes et de consommations</h3></div><span class="vat-difference-step">01</span></div>' +
-            vatDifferenceCodeField('salesBase', 'Ventes taxables', configuration.salesBase, 'Proposition : 70* (comptes de ventes et produits accessoires). Excluez les comptes/ventes exonérés ou à taux zéro si mélangés.') +
-            vatDifferenceCodeField('internalBase', 'Consommations internes taxables', configuration.internalBase, 'Proposition : 722* (production immobilisée corporelle) et 724 (production autoconsommée). Les comptes de charges de classe 6 peuvent aussi être sélectionnés : leur solde débiteur est traité comme une base positive. Ne retenez pas à la fois une charge et son compte de production interne si cela compterait deux fois la même opération.') +
+            vatDifferenceCodeField('salesBase', 'Ventes taxables', configuration.salesBase, 'Aucun compte n’est présélectionné. 70* est trop large pour être fiable sans ventilation : sélectionnez uniquement les comptes dédiés aux ventes taxables au taux appliqué.') +
+            vatDifferenceCodeField('internalBase', 'Consommations internes taxables', configuration.internalBase, 'Aucun compte n’est présélectionné. 722* (production immobilisée corporelle) et 724 (production autoconsommée) sont des pistes à vérifier. Les comptes de charges de classe 6 peuvent aussi être sélectionnés : leur solde débiteur est traité comme une base positive. Ne retenez pas les deux côtés d’une même opération.') +
           '</section>' +
           '<section class="card vat-difference-config-card"><div class="vat-difference-card-heading"><div><span class="page-kicker">COMPTES TVA · SYSCOHADA</span><h3>Comptes de TVA</h3></div><span class="vat-difference-step">02</span></div>' +
             vatDifferenceCodeField('salesVat', 'TVA sur ventes', configuration.salesVat, 'Proposition : 4431 (ventes), 4432 (services) et 4433 (travaux). 4435 « factures à établir » est exclu par défaut.') +
             vatDifferenceCodeField('internalVat', 'TVA sur consommations internes', configuration.internalVat, 'Proposition : 4434, TVA facturée sur production livrée à soi-même.') +
-            '<div class="field vat-difference-rate-field"><label for="vat-difference-rate">Taux appliqué (%)</label><input id="vat-difference-rate" name="rate" type="number" min="0" max="100" step="0.01" required value="' + esc(configuration.rate) + '"><small class="muted">Valeur proposée : 18 % (CGI béninois 2026, art. 241). À confirmer et enregistrer séparément pour chaque année.</small></div>' +
+            '<div class="field vat-difference-rate-field"><label for="vat-difference-rate">Taux appliqué (%)</label><input id="vat-difference-rate" name="rate" type="number" min="0" max="100" step="0.01" required value="' + esc(configuration.rate) + '"><small class="muted">Pour 2026 : 18 % proposé (CGI béninois 2026, art. 241). Pour toute autre année, le taux reste vide jusqu’à confirmation du texte applicable.</small></div>' +
           '</section>' +
         '</div>' +
         '<div class="alert warning vat-difference-legal-note"><div><strong>Paramétrage à valider avant usage déclaratif.</strong> Le CGI 2026 (notamment art. 224–229, 235–241 et règles de retenue) distingue opérations taxables, exonérées, à taux zéro, territorialité et exigibilité. Le plan comptable seul ne permet pas de distinguer les ventes mélangées dans un même compte. Les comptes, le taux et leur affectation sont modifiables ici et mémorisés localement par dossier et année.</div></div>' +
@@ -25021,7 +25021,7 @@
     var yearSelect = $('#vat-difference-year', form);
     var count = $('#vat-difference-line-count', form);
     var readConfiguration = function () {
-      var config = { year: Number(yearSelect.value), rate: $('#vat-difference-rate', form).value };
+      var config = { schemaVersion: 2, year: Number(yearSelect.value), rate: $('#vat-difference-rate', form).value };
       ['salesBase', 'internalBase', 'salesVat', 'internalVat'].forEach(function (key) {
         config[key] = $('#vat-difference-' + key, form).value;
       });
@@ -25052,9 +25052,10 @@
       event.preventDefault();
       var raw = readConfiguration();
       var errors = [];
+      var fieldLabels = { salesBase: 'ventes taxables', internalBase: 'consommations internes taxables', salesVat: 'TVA sur ventes', internalVat: 'TVA sur consommations internes' };
       ['salesBase', 'internalBase', 'salesVat', 'internalVat'].forEach(function (key) {
         var tokens = String(raw[key]).split(/[\s,;]+/).filter(Boolean);
-        if (!tokens.length) errors.push('Renseignez au moins un compte pour « ' + key + ' ».');
+        if (!tokens.length) errors.push('Sélectionnez au moins un compte pour ' + fieldLabels[key] + '.');
         if (tokens.some(function (token) { return !/^[0-9]+\*?$/.test(token); })) errors.push('Format de compte invalide : utilisez des numéros, séparés par des virgules (ex. 701*, 706*).');
       });
       var overlaps = function (left, right) {

@@ -8,10 +8,21 @@ require('../modern-proto/js/vat-difference-report.js');
 const report = globalThis.PerfectoVatDifferenceReport;
 
 assert.deepEqual(report.defaults(2026), {
-  year: 2026, rate: 18,
-  salesBase: ['70*'], internalBase: ['722', '724'],
+  schemaVersion: 2, year: 2026, rate: 18,
+  salesBase: [], internalBase: [],
   salesVat: ['4431', '4432', '4433'], internalVat: ['4434']
 });
+assert.equal(report.defaults(2025).rate, null, 'un taux d’une autre année ne doit pas être supposé');
+const migrated = report.normalise({
+  salesBase: ['70*'], internalBase: ['722', '724'],
+  salesVat: ['4431', '4432', '4433'], internalVat: ['4434'], rate: 18
+}, 2026);
+assert.deepEqual(migrated.salesBase, []);
+assert.deepEqual(migrated.internalBase, []);
+assert.equal(migrated.schemaVersion, 2);
+const migratedHistoricalRate = report.normalise({ rate: 18, salesBase: ['7011'] }, 2025);
+assert.equal(migratedHistoricalRate.rate, null);
+assert.throws(() => report.calculate({ entries: [], year: 2025, configuration: report.defaults(2025) }), /taux applicable/);
 assert.equal(report.accountMatches('7011', ['70*']), true);
 assert.equal(report.accountMatches('4432', ['4431']), false);
 assert.deepEqual(report.cleanCodes('70*, 706*; 70*'), ['70*', '706*']);
@@ -38,7 +49,11 @@ const entries = [
   ] }
 ];
 
-const result = report.calculate({ entries, year: 2026, configuration: report.defaults(2026), decimalPlaces: 0 });
+const result = report.calculate({
+  entries, year: 2026,
+  configuration: Object.assign({}, report.defaults(2026), { salesBase: ['70*'], internalBase: ['722', '724'] }),
+  decimalPlaces: 0
+});
 assert.equal(result.generatedLineCount, 2);
 assert.equal(result.months[0].salesBase, 9000);
 assert.equal(result.months[0].salesVatCalculated, 1620);
