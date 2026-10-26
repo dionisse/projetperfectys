@@ -21,7 +21,8 @@ assert.match(child.reason, /193 lignes du PDF joint sur 4 pages/);
 assert.match(child.reason, /Aperçu plein écran imprimable/);
 
 assert.match(app, /var AssociatedItemsEditionReport = window\.PerfectoAssociatedAccountItemsEdition/);
-assert.match(app, /function associatedItemsEditionSelectionView\([\s\S]*Comptes[\s\S]*Colonnes à imprimer[\s\S]*Lignes générées/);
+assert.match(app, /function associatedItemsEditionSelectionView\([\s\S]*pageHeader\('Postes associés aux comptes'[\s\S]*card journal-lines-card[\s\S]*Comptes[\s\S]*Colonnes à imprimer[\s\S]*Lignes générées/);
+assert.doesNotMatch(app, /associated-items-edition-window|definitions-plans-edition-titlebar/);
 assert.match(app, /function associatedItemsEditionPrintableHtml\([\s\S]*Postes[\s\S]*Débiteur[\s\S]*Créditeur[\s\S]*Comptes sélectionnés/);
 assert.match(app, /function openAssociatedItemsAccountPicker\([\s\S]*AssociatedItemsReference\.all\(\)/);
 assert.match(app, /openReportPreview\('Aperçu — '[\s\S]*associatedItemsEditionPrintableHtml/);

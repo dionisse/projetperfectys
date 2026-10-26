@@ -15438,23 +15438,27 @@
 
   function associatedItemsEditionColumnOptions(session) {
     return AssociatedItemsEditionReport.COLUMNS.map(function (column) {
-      return '<label class="definitions-plans-edition-column"><input type="checkbox" data-associated-items-column="' + esc(column.key) + '"' + (session.columns[column.key] ? ' checked' : '') + '><span>' + esc(column.label) + '</span></label>';
+      return '<label class="journal-lines-column-option associated-items-edition-column-option"><input type="checkbox" data-associated-items-column="' + esc(column.key) + '"' + (session.columns[column.key] ? ' checked' : '') + '><span><strong>' + esc(column.label) + '</strong></span></label>';
     }).join('');
   }
 
   function associatedItemsEditionSelectionView(session, backLink) {
     var report = buildAssociatedItemsEditionReport(session);
     session.report = report;
+    var columns = associatedItemsEditionColumnOptions(session);
     return '<div class="edition-report-detail-view associated-items-edition-report-detail">' + backLink +
-      '<div class="definitions-plans-edition-window associated-items-edition-window"><header class="definitions-plans-edition-titlebar"><span class="definitions-plans-edition-app-icon" aria-hidden="true">⚙</span><h2>Postes associés aux comptes</h2></header>' +
-        '<form id="associated-items-edition-form" novalidate><fieldset class="definitions-plans-edition-selection"><legend>Sélection</legend>' +
-          '<div class="definitions-plans-edition-picker-row"><label for="associated-items-edition-filter">Comptes</label><div class="definitions-plans-edition-picker-control"><input id="associated-items-edition-filter" type="text" data-associated-items-filter value="' + esc(session.accountFilter) + '" autocomplete="off"><button type="button" class="btn btn-ghost" data-associated-items-picker aria-label="Parcourir les comptes">…</button></div></div>' +
-          '<p class="small muted">Codes issus du PDF référentiel joint. Saisissez un compte, plusieurs codes séparés par des virgules, un préfixe suivi de * ou * pour tous.</p>' +
-        '</fieldset><div class="definitions-plans-edition-lower"><fieldset class="definitions-plans-edition-columns"><legend>Colonnes à imprimer</legend><div class="definitions-plans-edition-columns-grid">' + associatedItemsEditionColumnOptions(session) + '</div></fieldset>' +
-          '<div class="definitions-plans-edition-actions"><button type="button" class="btn btn-ghost" data-associated-items-cancel>Annuler</button><button type="submit" class="btn btn-primary">Valider</button></div></div>' +
-          '<div class="definitions-plans-edition-count" role="status">Lignes générées : <strong data-associated-items-count>' + report.generatedLineCount + '</strong></div>' +
-          '<div class="journal-lines-form-errors" id="associated-items-edition-errors" role="alert" aria-live="polite"></div>' +
-        '</form></div></div>';
+      pageHeader('Postes associés aux comptes', 'Sélectionnez les comptes et les colonnes du référentiel PDF à restituer.', '') +
+      '<div class="alert info associated-items-edition-source-note"><div><strong>Référentiel joint · consultation seule.</strong> Les ' + AssociatedItemsReference.metadata.sourceRowCount + ' lignes du PDF sont reprises telles quelles, y compris les libellés tronqués et les cellules vides. Aucune association n’est complétée ou modifiée.</div></div>' +
+      '<form id="associated-items-edition-form" novalidate>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div></div>' +
+          '<div class="associated-items-edition-filter-grid"><div class="field"><label for="associated-items-edition-filter">Comptes</label><div class="journal-lines-picker-control"><input id="associated-items-edition-filter" data-associated-items-filter type="text" value="' + esc(session.accountFilter) + '" placeholder="* ou préfixe de compte" autocomplete="off"><button type="button" class="btn btn-ghost" data-associated-items-picker aria-label="Parcourir les comptes">Parcourir…</button></div><span class="hint">Saisissez un compte, plusieurs codes séparés par des virgules, un préfixe suivi de * ou * pour tous les comptes du PDF.</span></div></div>' +
+        '</div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
+          '<div class="currency-balance-column-grid associated-items-edition-columns-grid">' + columns + '</div>' +
+        '</div></section>' +
+        '<div class="journal-lines-form-errors" id="associated-items-edition-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="journal-lines-form-actions"><a class="btn btn-ghost" href="' + esc(accountingMenuHash('editions', 'definitions-and-plans')) + '">Annuler</a><span class="pointing-edition-line-count" role="status">Lignes générées : <strong data-associated-items-count>' + report.generatedLineCount + '</strong></span><button type="submit" class="btn btn-primary">Valider <span aria-hidden="true">→</span></button></div>' +
+      '</form></div>';
   }
 
   function associatedItemsEditionPrintableHtml(report) {
@@ -15616,7 +15620,7 @@
       ? DefinitionsPlansEditionReports.THIRD_PARTY_COLUMNS
       : DefinitionsPlansEditionReports.JOURNAL_COLUMNS;
     return columns.map(function (column) {
-      return '<label class="definitions-plans-edition-column"><input type="checkbox" data-definitions-plans-column="' + esc(column.key) + '"' + (session.columns[column.key] ? ' checked' : '') + '><span>' + esc(column.label) + '</span></label>';
+      return '<label class="journal-lines-column-option definitions-plans-edition-column"><input type="checkbox" data-definitions-plans-column="' + esc(column.key) + '"' + (session.columns[column.key] ? ' checked' : '') + '><span><strong>' + esc(column.label) + '</strong></span></label>';
     }).join('');
   }
 
@@ -15625,22 +15629,31 @@
     var report = buildDefinitionsPlansEditionReport(session);
     session.report = report;
     var title = isTiers ? 'Liste des Tiers' : 'Plan des journaux';
-    var selectionField = isTiers
-      ? '<div class="definitions-plans-edition-nature"><label for="definitions-plans-edition-nature">Nature des tiers</label><select id="definitions-plans-edition-nature">' + DefinitionsPlansEditionReports.NATURES.map(function (nature) { return '<option value="' + esc(nature.key) + '"' + (nature.key === session.nature ? ' selected' : '') + '>' + esc(nature.label) + '</option>'; }).join('') + '</select></div>'
-      : '';
     var fieldLabel = isTiers ? DefinitionsPlansEditionReports.NATURES.find(function (nature) { return nature.key === session.nature; }).label : 'Journaux';
+    var natureField = isTiers
+      ? '<div class="field definitions-plans-edition-nature-field"><label for="definitions-plans-edition-nature">Nature des tiers</label><select id="definitions-plans-edition-nature">' + DefinitionsPlansEditionReports.NATURES.map(function (nature) { return '<option value="' + esc(nature.key) + '"' + (nature.key === session.nature ? ' selected' : '') + '>' + esc(nature.label) + '</option>'; }).join('') + '</select></div>'
+      : '';
     var hint = isTiers
       ? 'La liste reprend les fiches enregistrées pour la nature choisie dans le dossier actif.'
       : 'Journaux standards, automatiques et créés dans le dossier actif ; les journaux historiques retirés sont exclus.';
+    var explanation = isTiers
+      ? 'Choisissez une nature, filtrez les fiches du dossier et les colonnes à imprimer.'
+      : 'Filtrez les journaux du dossier et choisissez les colonnes à imprimer.';
     return '<div class="edition-report-detail-view definitions-plans-edition-report-detail">' + backLink +
-      '<div class="definitions-plans-edition-window"><header class="definitions-plans-edition-titlebar"><span class="definitions-plans-edition-app-icon" aria-hidden="true">⚙</span><h2>' + esc(title) + '</h2></header>' +
-        '<form id="definitions-plans-edition-form" novalidate><fieldset class="definitions-plans-edition-selection"><legend>Sélection</legend>' + selectionField +
-          '<div class="definitions-plans-edition-picker-row"><label for="definitions-plans-edition-filter">' + esc(fieldLabel) + '</label><div class="definitions-plans-edition-picker-control"><input id="definitions-plans-edition-filter" type="text" data-definitions-plans-filter value="' + esc(session.filter) + '" autocomplete="off"><button type="button" class="btn btn-ghost" data-definitions-plans-picker>Parcourir…</button></div></div>' +
-          '<p class="small muted">' + esc(hint) + '</p>' +
-        '</fieldset><div class="definitions-plans-edition-lower"><fieldset class="definitions-plans-edition-columns"><legend>Colonnes à imprimer</legend><div class="definitions-plans-edition-columns-grid">' + definitionsPlansEditionColumnOptions(session) + '</div></fieldset>' +
-          '<div class="definitions-plans-edition-actions"><button type="button" class="btn btn-ghost" data-definitions-plans-cancel>Annuler</button><button type="submit" class="btn btn-primary">Valider</button></div></div>' +
-          '<div class="definitions-plans-edition-count" role="status">Lignes générées : <strong data-definitions-plans-count>' + report.generatedLineCount + '</strong></div>' +
-        '</form></div></div>';
+      pageHeader(title, explanation, '') +
+      '<div class="alert info"><div><strong>Consultation seule.</strong> La liste utilise les données du dossier actif et ne modifie aucune fiche, aucun journal ni aucune écriture.</div></div>' +
+      '<form id="definitions-plans-edition-form" novalidate>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">PARAMÈTRES DU RAPPORT</p><h3>Sélection</h3></div></div>' +
+          '<div class="definitions-plans-edition-filter-grid">' + natureField +
+            '<div class="field"><label for="definitions-plans-edition-filter">' + esc(fieldLabel) + '</label><div class="journal-lines-picker-control"><input id="definitions-plans-edition-filter" data-definitions-plans-filter type="text" value="' + esc(session.filter) + '" placeholder="* ou code(s)" autocomplete="off"><button type="button" class="btn btn-ghost" data-definitions-plans-picker>Parcourir…</button></div><span class="hint">' + esc(hint) + '</span></div>' +
+          '</div>' +
+        '</div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><div><p class="page-kicker">CHAMPS DE SORTIE</p><h3>Colonnes à imprimer</h3></div></div>' +
+          '<div class="currency-balance-column-grid definitions-plans-edition-columns-grid">' + definitionsPlansEditionColumnOptions(session) + '</div>' +
+        '</div></section>' +
+        '<div class="journal-lines-form-errors" id="definitions-plans-edition-errors" role="alert" aria-live="polite"></div>' +
+        '<div class="journal-lines-form-actions"><a class="btn btn-ghost" href="' + esc(accountingMenuHash('editions', 'definitions-and-plans')) + '">Annuler</a><span class="pointing-edition-line-count" role="status">Lignes générées : <strong data-definitions-plans-count>' + report.generatedLineCount + '</strong></span><button type="submit" class="btn btn-primary">Valider <span aria-hidden="true">→</span></button></div>' +
+      '</form></div>';
   }
 
   function definitionsPlansEditionPrintHtml(report) {
@@ -15747,8 +15760,6 @@
       });
       var picker = $('[data-definitions-plans-picker]', form);
       if (picker) picker.addEventListener('click', function () { definitionsPlansEditionPicker($('[data-definitions-plans-filter]', form), session); });
-      var cancel = $('[data-definitions-plans-cancel]', form);
-      if (cancel) cancel.addEventListener('click', function () { window.location.hash = accountingMenuHash('editions', 'definitions-and-plans'); });
       return;
     }
     var open = $('[data-definitions-plans-open-preview]');
