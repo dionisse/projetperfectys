@@ -38,7 +38,7 @@ assert.deepEqual(all.rows[0], {
   code: '10', label: 'CAPITAL', class: '1 — Ressources durables',
   subclass: '10 — CAPITAL', usage: '', nature: 'Passif', posting: 'Rubrique / indicateur',
   auxiliary: '—', origin: 'Référentiel SYSCOHADA', sourcePage: 6,
-  standard: true, legacy: false, custom: false
+  standard: true, legacy: false, custom: false, userProvided: false
 });
 const classNine = all.rows.filter(row => row.code.charAt(0) === '9');
 assert.equal(classNine.length, 90);
@@ -71,6 +71,13 @@ assert.equal(dossierReport.rows.find(row => row.code === '604500').origin, 'Ajou
 assert.equal(dossierReport.rows.find(row => row.code === '604500').usage, 'Usage personnalisé');
 assert.equal(dossierReport.rows.find(row => row.code === '601100').origin, 'Compte historique');
 assert.equal(dossierReport.rows.find(row => row.code === '601100').posting, 'Historique');
+
+const defaultPlan = Edition.buildReport({ accountFilter: '*', records: Chart.defaultAccounts() });
+assert.equal(defaultPlan.sourceRowCount, 1405);
+assert.equal(defaultPlan.referenceAccountCount, 1400);
+assert.equal(defaultPlan.userProvidedAccountCount, 5);
+assert.equal(defaultPlan.rows.find(row => row.code === '447803').origin, 'Complément fourni par l’utilisateur');
+assert.equal(defaultPlan.rows.find(row => row.code === '447803').userProvided, true);
 
 const filtered = Edition.buildReport({ accountFilter: '1551, 604500, 601100', records: dossierAccounts });
 assert.equal(filtered.ok, true);

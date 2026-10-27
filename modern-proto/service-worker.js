@@ -3,11 +3,12 @@
  * Stratégie : réseau d'abord (contenu toujours à jour), cache en secours hors ligne.
  */
 
-const CACHE_NAME = 'perfecto-static-v143';
+const CACHE_NAME = 'perfecto-static-v146';
 const APP_SHELL = [
   './',
   './index.html',
   './assets/OHADAr-template.xlsx',
+  './assets/aib-suppliers-template.xlsx',
   './css/modern.css',
   './css/accounting-configuration.css',
   './css/table-design-system.css',

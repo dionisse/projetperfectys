@@ -77,7 +77,10 @@
   ];
 
   function chartAccounts() {
-    return ACCOUNTING_CHART ? ACCOUNTING_CHART.accounts() : [];
+    if (!ACCOUNTING_CHART) return [];
+    return typeof ACCOUNTING_CHART.defaultAccounts === 'function'
+      ? ACCOUNTING_CHART.defaultAccounts()
+      : ACCOUNTING_CHART.accounts();
   }
 
   function legacyAccountRecord(account) {

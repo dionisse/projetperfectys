@@ -25610,10 +25610,10 @@
         '</section>' +
         '<div class="aib-suppliers-details-column">' +
           '<section class="card aib-suppliers-period-card"><label for="aib-suppliers-period">Mois</label><select id="aib-suppliers-period" required><option value="">— Choisir un mois —</option>' + options + '</select></section>' +
-          '<fieldset class="card aib-suppliers-payment-card"><legend>Mode de règlement</legend><div class="aib-suppliers-payment-options"><label><input type="radio" name="aib-suppliers-payment" value="cash" checked> Espèces</label><label><input type="radio" name="aib-suppliers-payment" value="cheque"> Chèque</label></div><div class="field"><label for="aib-suppliers-cheque">Chèque</label><input id="aib-suppliers-cheque" type="text" maxlength="120" disabled></div><div class="field"><label for="aib-suppliers-bank">Banque</label><input id="aib-suppliers-bank" type="text" maxlength="160" disabled></div></fieldset>' +
+          '<fieldset class="card aib-suppliers-payment-card"><legend>Mode de règlement</legend><div class="aib-suppliers-payment-options"><label><input type="radio" name="aib-suppliers-payment" value="cash"> Espèces</label><label><input type="radio" name="aib-suppliers-payment" value="cheque"> Chèque</label><label><input type="radio" name="aib-suppliers-payment" value="transfer"> Virement</label></div><div class="field"><label for="aib-suppliers-cheque">N° chèque</label><input id="aib-suppliers-cheque" type="text" maxlength="120" disabled></div><div class="field"><label for="aib-suppliers-bank">Banque (chèque)</label><input id="aib-suppliers-bank" type="text" maxlength="160" disabled></div><div class="field"><label for="aib-suppliers-transfer-bank">Banque (virement)</label><input id="aib-suppliers-transfer-bank" type="text" maxlength="160" disabled></div><div class="field"><label for="aib-suppliers-transfer-reference">Référence du virement</label><input id="aib-suppliers-transfer-reference" type="text" maxlength="120" disabled></div></fieldset>' +
           '<fieldset class="card aib-suppliers-declarant-card"><legend>Déclarant</legend><div class="aib-suppliers-common-declarant">Le nom du signataire et la ville sont définis dans les <a href="#/menu?g=parametres&amp;t=print-information">Informations communes aux états imprimés</a>.<p><strong>Signataire :</strong> ' + esc(declarant.signer || 'Non renseigné') + '<br><strong>Ville :</strong> ' + esc(declarant.city || 'Non renseignée') + '</p></div><div class="field"><label for="aib-suppliers-signature-date">Date de signature</label><input id="aib-suppliers-signature-date" type="date"></div></fieldset>' +
         '</div></div>' +
-        '<div class="alert warning aib-suppliers-future-note"><div><strong>Préparation provisoire.</strong> « Editer » ouvrira un aperçu plein écran des paramètres. Le tableau Excel dédié, son alimentation automatique et le calcul des retenues seront raccordés ultérieurement, après définition du modèle et validation des règles applicables.</div></div>' +
+        '<div class="alert warning aib-suppliers-future-note"><div><strong>Analyse de contrôle provisoire.</strong> « Éditer » analysera les écritures validées du mois, classera les bases selon les contreparties de classe 60 ou 61–63 et comparera le montant théorique aux mouvements des sous-comptes 4478 configurés. Les ambiguïtés resteront dans un rapport d’écarts; le fichier Excel officiel n’est pas encore généré.</div></div>' +
         '<div class="aib-suppliers-actions"><span class="small muted" id="aib-suppliers-status">Définition des taux non validée.</span><div><button type="button" class="btn btn-ghost" data-aib-cancel>Annuler</button> <button type="button" class="btn btn-ghost" data-aib-validate-definition>Valider la définition des taux</button> <button type="button" class="btn btn-primary" data-aib-edit>Éditer</button></div></div>' +
       '</form><div id="aib-suppliers-result" aria-live="polite"></div></div>';
   }
@@ -25638,26 +25638,60 @@
     }, year);
   }
 
+  function aibSuppliersFormatAmount(value) {
+    if (value == null || !Number.isFinite(Number(value))) return '';
+    return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 4 }).format(Number(value));
+  }
+
+  function aibSuppliersFormatRate(value) {
+    return String(value == null ? '' : value).replace('.', ',');
+  }
+
   function aibSuppliersPreviewMarkup(preparation) {
     var categories = preparation.configuration.categories.map(function (category) {
       return category.lines.map(function (line, index) {
-        return '<tr><th scope="row">' + esc(category.label) + '</th><td>' + (index + 1) + '</td><td class="num">' + esc(line.rate) + ' %</td><td>' + esc(line.accounts.join(', ')) + '</td></tr>';
+        return '<tr><th scope="row">' + esc(category.label) + '</th><td>' + (index + 1) + '</td><td class="num">' + esc(aibSuppliersFormatRate(line.rate)) + ' %</td><td>' + esc(line.accounts.join(', ')) + '</td></tr>';
       }).join('');
     }).join('');
+    var analysis = preparation.movementAnalysis;
+    var movementRows = '';
+    var gapMarkup = '';
+    if (analysis && analysis.ok) {
+      movementRows = analysis.categories.map(function (category) {
+        return category.lines.map(function (line, index) {
+          var recordedState = line.recordedAmount == null ? 'Non trouvé' : (line.actualComplete ? 'Complet' : 'Partiel');
+          return '<tr><th scope="row">' + esc(category.label) + '</th><td>' + (index + 1) + '</td><td class="num">' + esc(aibSuppliersFormatRate(line.rate)) + ' %</td><td class="num">' + esc(aibSuppliersFormatAmount(line.base)) + '</td><td class="num">' + esc(aibSuppliersFormatAmount(line.theoreticalAmount)) + '</td><td class="num">' + esc(aibSuppliersFormatAmount(line.recordedAmount)) + '</td><td>' + esc(recordedState) + '</td><td class="num">' + esc(aibSuppliersFormatAmount(line.variance)) + '</td></tr>';
+        }).join('');
+      }).join('');
+      gapMarkup = analysis.gaps.length
+        ? '<section class="alert warning"><div><strong>Écarts et actions à vérifier</strong><ul>' + analysis.gaps.map(function (gap) {
+          var origin = [gap.date, gap.reference, gap.account].filter(Boolean).join(' · ');
+          return '<li>' + (origin ? '<strong>' + esc(origin) + ' :</strong> ' : '') + esc(gap.message) + '</li>';
+        }).join('') + '</ul></div></section>'
+        : '<div class="alert info"><div>Aucun écart automatique détecté dans les écritures validées analysées.</div></div>';
+    }
     var monthOption = aibSuppliersPeriodOptions().find(function (item) { return item.value === preparation.period; });
-    var paymentText = preparation.payment.method === 'cash' ? 'Espèces' : (preparation.payment.method === 'cheque' ? 'Chèque' : 'Non renseigné');
+    var paymentText = preparation.payment.method === 'cash' ? 'Espèces' : (preparation.payment.method === 'cheque' ? 'Chèque' : (preparation.payment.method === 'transfer' ? 'Virement' : 'Non renseigné'));
     if (preparation.payment.method === 'cheque') paymentText += ' · N° ' + (preparation.payment.cheque || 'non renseigné') + ' · Banque : ' + (preparation.payment.bank || 'non renseignée');
+    if (preparation.payment.method === 'transfer') paymentText += ' · Réf. ' + (preparation.payment.transferReference || 'non renseignée') + ' · Banque : ' + (preparation.payment.transferBank || 'non renseignée');
+    var movementSection = analysis && analysis.ok
+      ? '<section class="card"><h4>Analyse des écritures validées · ' + esc(analysis.sourceEntryCount) + ' écritures du mois</h4><p>Classement par contrepartie : classe 60 pour les marchandises, classes 61 à 63 pour les services. La base est le mouvement net des comptes de charge. Le montant théorique est comparé aux mouvements nets des sous-comptes 4478 configurés. Les débits de règlement isolés ne constituent pas une nouvelle retenue.</p><div class="table-wrap"><table class="data-table"><thead><tr><th>Rubrique</th><th>Ligne</th><th>Taux</th><th>Base analysée</th><th>Montant théorique</th><th>Mouvement 4478</th><th>État du mouvement</th><th>Écart</th></tr></thead><tbody>' + movementRows + '</tbody></table></div>' + gapMarkup + '<p class="small muted">Les cellules sans données restent vides. Cette analyse est un contrôle de travail, pas une déclaration fiscale ni un fichier Excel officiel.</p></section>'
+      : '';
     return '<article class="aib-suppliers-preview"><div class="aib-suppliers-preview-heading"><div><span class="page-kicker">APERÇU DE PRÉPARATION · ' + esc(monthOption ? monthOption.label : preparation.period) + '</span><h3>État mensuel des retenues d’AIB sur les fournisseurs</h3></div></div>' +
       '<dl class="aib-suppliers-preview-details"><div><dt>Mois de référence</dt><dd>' + esc(monthOption ? monthOption.label : preparation.period) + '</dd></div><div><dt>Mode de règlement</dt><dd>' + esc(paymentText) + '</dd></div><div><dt>Signataire (paramétrage commun)</dt><dd>' + esc(preparation.declarant.signer || 'Non renseigné') + '</dd></div><div><dt>Ville de signature</dt><dd>' + esc(preparation.declarant.city || 'Non renseignée') + '</dd></div><div><dt>Date de signature</dt><dd>' + esc(preparation.declarant.signatureDate ? dateLabel(preparation.declarant.signatureDate) : 'Non renseignée') + '</dd></div></dl>' +
-      '<div class="aib-suppliers-preview-table-wrap"><table class="data-table aib-suppliers-preview-table"><thead><tr><th>Nature de retenue</th><th>Ligne</th><th>Taux défini</th><th>Comptes associés</th></tr></thead><tbody>' + categories + '</tbody></table></div>' +
-      '<div class="alert warning"><div><strong>Aucun tableau Excel ni montant de retenue n’est produit dans cette étape.</strong> L’aperçu restitue uniquement les paramètres saisis; le format Excel et le raccordement aux données fournisseurs restent à construire.</div></div></article>';
+      '<div class="aib-suppliers-preview-table-wrap"><table class="data-table aib-suppliers-preview-table"><thead><tr><th>Nature de retenue</th><th>Ligne</th><th>Taux défini</th><th>Sous-comptes 4478</th></tr></thead><tbody>' + categories + '</tbody></table></div>' + movementSection +
+      '<div class="aib-suppliers-download-actions"><button type="button" class="btn btn-primary" data-aib-download-workbook>Générer et télécharger le classeur officiel</button><button type="button" class="btn btn-ghost" data-aib-download-gaps disabled>Télécharger le rapport séparé des écarts (.csv)</button><span class="small muted" data-aib-generation-status>Le fichier sera créé à partir du modèle officiel, sans écriture dans le dossier comptable.</span></div>' +
+      '<div class="alert info"><div>Les montants théoriques et les mouvements 4478 restent présentés séparément pour contrôle. Les champs non renseignés restent vierges dans le classeur et sont signalés dans le rapport d’écarts.</div></div></article>';
   }
 
   function openAibSuppliersAccountPicker(categoryKey, lineId, form) {
     var input = $('[data-aib-accounts="' + categoryKey + '"][data-aib-line-id="' + lineId + '"]', form);
     if (!input) return;
     var selected = AibSuppliersReport.cleanAccounts(input.value);
-    var accounts = S.accounts().slice().sort(function (left, right) { return String(left.code).localeCompare(String(right.code), 'fr', { numeric: true }); });
+    var accounts = S.accounts().filter(function (account) {
+      var code = String(account.code || '');
+      return code.indexOf('4478') === 0 && code.length > 4;
+    }).slice().sort(function (left, right) { return String(left.code).localeCompare(String(right.code), 'fr', { numeric: true }); });
     var rows = accounts.map(function (account, index) {
       var code = String(account.code);
       var hasChildren = accounts.some(function (candidate) { return String(candidate.code).length > code.length && String(candidate.code).indexOf(code) === 0; });
@@ -25665,7 +25699,7 @@
       var checked = selected.indexOf(token) !== -1 || selected.indexOf(code) !== -1 ? ' checked' : '';
       return '<label class="aib-suppliers-picker-row" data-aib-picker-text="' + esc(code + ' ' + (account.label || '')) + '"><input type="checkbox" data-aib-picker-account value="' + esc(token) + '" id="aib-suppliers-account-' + index + '"' + checked + '><span class="aib-suppliers-picker-code">' + esc(token) + '</span><span>' + esc(account.label || '') + '</span></label>';
     }).join('');
-    var body = '<div class="aib-suppliers-picker"><div class="field"><label for="aib-suppliers-picker-search">Rechercher un compte</label><input id="aib-suppliers-picker-search" type="search" placeholder="Numéro ou libellé"></div><p class="small muted">Les comptes choisis servent de paramétrage pour cette nature; aucune retenue n’est calculée.</p><div class="aib-suppliers-picker-list" role="group" aria-label="Comptes généraux">' + (rows || '<div class="empty-state">Aucun compte disponible.</div>') + '</div></div>';
+    var body = '<div class="aib-suppliers-picker"><div class="field"><label for="aib-suppliers-picker-search">Rechercher un compte</label><input id="aib-suppliers-picker-search" type="search" placeholder="Numéro ou libellé"></div><p class="small muted">Sélectionnez uniquement les sous-comptes 4478 à suivre pour cette nature. Les comptes 4493 ne sont pas utilisés.</p><div class="aib-suppliers-picker-list" role="group" aria-label="Comptes généraux">' + (rows || '<div class="empty-state">Aucun compte disponible.</div>') + '</div></div>';
     openModal('Sélection des comptes', 'Comptes de ' + (AibSuppliersReport.CATEGORIES.find(function (category) { return category.key === categoryKey; }) || {}).label, body, '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="button" class="btn btn-primary" data-aib-picker-apply>Appliquer la sélection</button>', true);
     var modalRoot = $('#modal-root');
     $('#aib-suppliers-picker-search', modalRoot).addEventListener('input', function (event) {
@@ -25741,8 +25775,11 @@
     function updateAibPaymentFields() {
       var selectedMode = $('input[name="aib-suppliers-payment"]:checked', form);
       var chequeMode = !!selectedMode && selectedMode.value === 'cheque';
+      var transferMode = !!selectedMode && selectedMode.value === 'transfer';
       $('#aib-suppliers-cheque', form).disabled = !chequeMode;
       $('#aib-suppliers-bank', form).disabled = !chequeMode;
+      $('#aib-suppliers-transfer-bank', form).disabled = !transferMode;
+      $('#aib-suppliers-transfer-reference', form).disabled = !transferMode;
     }
 
     body.addEventListener('click', function (event) {
@@ -25812,12 +25849,49 @@
       try {
         preparation = AibSuppliersReport.prepare({
           period: period.value, configuration: validation.configuration,
-          payment: { method: paymentMode ? paymentMode.value : '', cheque: $('#aib-suppliers-cheque', form).value, bank: $('#aib-suppliers-bank', form).value },
+          entries: S.postedEntries(), decimalPlaces: S.accountingConfiguration().decimalPlaces,
+          payment: {
+            method: paymentMode ? paymentMode.value : '',
+            cheque: $('#aib-suppliers-cheque', form).value,
+            bank: $('#aib-suppliers-bank', form).value,
+            transferBank: $('#aib-suppliers-transfer-bank', form).value,
+            transferReference: $('#aib-suppliers-transfer-reference', form).value
+          },
           signer: common.signer, city: common.city, signatureDate: $('#aib-suppliers-signature-date', form).value
         });
       } catch (error) { toast(error.message || 'Impossible de préparer cet aperçu.', 'warning'); return; }
-      result.innerHTML = '<div class="alert info aib-suppliers-preview-ready">Aperçu préparé à partir des paramètres saisis. Le tableau Excel dédié n’est pas encore généré.</div>';
-      openReportPreview('Aperçu — AIB sur fournisseurs · ' + preparation.period, aibSuppliersPreviewMarkup(preparation));
+      result.innerHTML = '<div class="alert info aib-suppliers-preview-ready">Analyse préparée à partir des écritures validées et des sous-comptes 4478 configurés.</div>';
+      var preview = openReportPreview('Aperçu — AIB sur fournisseurs · ' + preparation.period, aibSuppliersPreviewMarkup(preparation));
+      var workbookButton = preview && $('[data-aib-download-workbook]', preview);
+      var gapsButton = preview && $('[data-aib-download-gaps]', preview);
+      var generationStatus = preview && $('[data-aib-generation-status]', preview);
+      var generatedWorkbook = null;
+      if (workbookButton) workbookButton.addEventListener('click', function () {
+        if (workbookButton.disabled) return;
+        workbookButton.disabled = true;
+        if (generationStatus) generationStatus.textContent = 'Chargement du modèle officiel et remplissage en cours…';
+        AibSuppliersReport.loadTemplate().then(function (templateBytes) {
+          return AibSuppliersReport.generateWorkbook(templateBytes, preparation, {
+            printedInformationRows: S.printedReportInformationConfiguration().rows,
+            decimalPlaces: S.accountingConfiguration().decimalPlaces
+          });
+        }).then(function (generated) {
+          generatedWorkbook = generated;
+          downloadFile('Declaration-AIB-fournisseurs-' + preparation.period + '.xlsx', generated.bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+          if (gapsButton) gapsButton.disabled = false;
+          if (generationStatus) generationStatus.textContent = 'Classeur officiel généré · ' + generated.formulaCount + ' formules conservées · ' + generated.gaps.length + ' point(s) à vérifier dans le rapport séparé.';
+          toast('Classeur officiel AIB téléchargé.', 'success');
+        }).catch(function (error) {
+          if (generationStatus) generationStatus.textContent = error && error.message || 'La génération du classeur a échoué.';
+          toast(error && error.message || 'Impossible de générer le classeur officiel AIB.', 'error');
+        }).then(function () { workbookButton.disabled = false; });
+      });
+      if (gapsButton) gapsButton.addEventListener('click', function () {
+        if (!generatedWorkbook) return;
+        var csv = AibSuppliersReport.buildGapReport(generatedWorkbook.gaps);
+        downloadFile('Rapport-ecarts-AIB-fournisseurs-' + preparation.period + '.csv', csv, 'text/csv;charset=utf-8');
+        toast('Rapport séparé des écarts AIB téléchargé.', 'success');
+      });
     });
     $('[data-aib-cancel]', form).addEventListener('click', function () {
       form.reset();

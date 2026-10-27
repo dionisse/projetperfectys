@@ -46,7 +46,7 @@ vm.runInContext(
 );
 
 const S = sandbox.window.PerfectoStore;
-const STANDARD_ACCOUNT_COUNT = sandbox.window.PerfectoAccountingChart.accountCount();
+const STANDARD_ACCOUNT_COUNT = sandbox.window.PerfectoAccountingChart.defaultAccountCount();
 let passed = 0;
 
 function test(name, fn) {
@@ -62,8 +62,8 @@ function test(name, fn) {
 }
 
 console.log('Référentiel de démonstration');
-test('1 400 comptes standards, 18 comptes historiques, 8 journaux standards et 2 journaux système', () => {
-  assert.strictEqual(STANDARD_ACCOUNT_COUNT, 1400);
+test('1 405 comptes standards, dont cinq sous-comptes AIB, 18 comptes historiques, 8 journaux standards et 2 journaux système', () => {
+  assert.strictEqual(STANDARD_ACCOUNT_COUNT, 1405);
   assert.strictEqual(S.accounts().length, STANDARD_ACCOUNT_COUNT + 18);
   assert.strictEqual(S.journals().length, 10);
   assert.strictEqual(S.journals().filter((journal) => journal.isStandard).length, 8);

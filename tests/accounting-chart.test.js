@@ -7,8 +7,9 @@ const path = require('node:path');
 const vm = require('node:vm');
 const Chart = require('../modern-proto/js/accounting-chart.js');
 
-assert.equal(Chart.VERSION, 2);
+assert.equal(Chart.VERSION, 3);
 assert.equal(Chart.accountCount(), 1400);
+assert.equal(Chart.defaultAccountCount(), 1405);
 assert.equal(Chart.METADATA.sourceFile, 'NOMENCLATURE-DES-COMPTES-SYSCOHADA-FINAL-1.pdf');
 assert.equal(Chart.METADATA.sourcePdfSha256, '3d90abdfc6c741cfa0f2a3168ad1b696d3dd7d3d40bd1669119a7883f1c5f43c');
 assert.equal(Chart.METADATA.sourcePages, 37);
@@ -43,6 +44,13 @@ assert.ok(accounts.filter(account => account.cls === 9).every(account => account
 assert.equal(accounts.find(account => account.code === '1551').label, 'Reconstitution des gisements miniers et pétroliers');
 assert.equal(accounts.find(account => account.code === '1551').sourcePage, 7, 'le code 1551 et son libellé ont été vérifiés dans la page physique 7 du PDF');
 assert.equal(accounts.find(account => account.code === '10').usage, '', 'aucune utilisation absente du PDF n’est inventée');
+const defaultAccounts = Chart.defaultAccounts();
+assert.equal(defaultAccounts.length, 1405);
+assert.deepEqual(defaultAccounts.slice(-5).map(account => [account.code, account.label]), [
+  ['447800', 'AIB sur vente'], ['447801', 'AIB sur achat'], ['447802', 'AIB sur vente'],
+  ['447803', 'Crédit d’AIB'], ['447804', 'AIB dû']
+]);
+assert.ok(defaultAccounts.slice(-5).every(account => account.userProvided && account.standard && account.postable && account.sourcePage === null));
 
 const values = new Map();
 const originalEntries = [{
@@ -91,7 +99,8 @@ vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js',
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'store.js'), 'utf8'), sandbox, { filename: 'store.js' });
 const store = sandbox.window.PerfectoStore;
 const migratedAccounts = store.accounts();
-assert.equal(migratedAccounts.filter(account => account.standard).length, 1400, 'la migration ajoute le référentiel complet');
+assert.equal(migratedAccounts.filter(account => account.standard).length, 1405, 'la migration ajoute le référentiel et les cinq comptes AIB fournis');
+assert.equal(store.account('447804').label, 'AIB dû');
 assert.equal(store.account('601').label, accounts.find(account => account.code === '601').label,
   'une valeur par défaut v1 est actualisée depuis le PDF');
 assert.equal(store.account('601').usage, accounts.find(account => account.code === '601').usage,

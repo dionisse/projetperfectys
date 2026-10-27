@@ -60,6 +60,14 @@
 .aib-suppliers-picker-row input { width: auto; }
 .aib-suppliers-picker-code { font-family: ui-monospace, monospace; font-weight: 700; }
 .aib-suppliers-preview-ready { margin-bottom: .75rem; }
+.aib-suppliers-download-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem; }
+.aib-suppliers-download-actions [data-aib-generation-status] { flex: 1 1 100%; }
+.aib-suppliers-preview .table-wrap { overflow-x: auto; }
+.aib-suppliers-preview .alert ul { margin-bottom: 0; }
+
+@media print {
+  .aib-suppliers-download-actions { display: none !important; }
+}
 
 @media (max-width: 820px) {
   .aib-suppliers-layout { grid-template-columns: 1fr; }

@@ -49,6 +49,7 @@
 
   function originLabel(account) {
     if (account && account.legacy) return 'Compte historique';
+    if (account && (account.userProvided || account.sourceType === 'user-provided')) return 'Complément fourni par l’utilisateur';
     if (account && account.standard) return 'Référentiel SYSCOHADA';
     return 'Ajout du dossier';
   }
@@ -71,9 +72,10 @@
       auxiliary: account.aux ? 'Oui' : '—',
       origin: originLabel(account),
       sourcePage: Number(account.sourcePage) || '',
-      standard: account.standard === true && !account.legacy,
+      standard: account.standard === true && !account.legacy && !account.userProvided,
       legacy: account.legacy === true,
-      custom: !account.standard && !account.legacy
+      custom: !account.standard && !account.legacy,
+      userProvided: !!account.userProvided
     };
   }
 
@@ -115,6 +117,7 @@
     var standardCount = rows.filter(function (row) { return row.standard; }).length;
     var customCount = rows.filter(function (row) { return row.custom; }).length;
     var legacyCount = rows.filter(function (row) { return row.legacy; }).length;
+    var userProvidedCount = rows.filter(function (row) { return row.userProvided; }).length;
     var metadata = AccountingChart && AccountingChart.METADATA || {};
 
     return {
@@ -127,6 +130,7 @@
       sourceRowCount: rows.length,
       referenceAccountCount: standardCount,
       userAddedAccountCount: customCount,
+      userProvidedAccountCount: userProvidedCount,
       historicalAccountCount: legacyCount,
       generatedLineCount: rows.length ? rows.length + 1 : 0,
       filters: { accounts: String(expression == null ? '*' : expression) },
@@ -138,6 +142,7 @@
         sourceRowCount: rows.length,
         referenceAccountCount: standardCount,
         userAddedAccountCount: customCount,
+        userProvidedAccountCount: userProvidedCount,
         historicalAccountCount: legacyCount,
         noAccountingMutation: true
       }

@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
-const STANDARD_ACCOUNT_COUNT = require('../modern-proto/js/accounting-chart.js').accountCount();
+const STANDARD_ACCOUNT_COUNT = require('../modern-proto/js/accounting-chart.js').defaultAccountCount();
 
 const values = new Map();
 let storageWritesBlocked = false;

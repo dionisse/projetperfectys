@@ -12,7 +12,7 @@
 })(typeof window !== 'undefined' ? window : globalThis, function () {
   'use strict';
 
-  var VERSION = 2;
+  var VERSION = 3;
   var METADATA = Object.freeze({
     sourceFile: 'NOMENCLATURE-DES-COMPTES-SYSCOHADA-FINAL-1.pdf',
     sourcePdfSha256: '3d90abdfc6c741cfa0f2a3168ad1b696d3dd7d3d40bd1669119a7883f1c5f43c',
@@ -1638,6 +1638,15 @@
     return 'Actif';
   }
 
+  // Sous-comptes AIB communiqués par l’utilisateur, distincts du PDF de référence.
+  var USER_SUPPLEMENTAL_ROWS = Object.freeze([
+    ['447800', 'AIB sur vente'],
+    ['447801', 'AIB sur achat'],
+    ['447802', 'AIB sur vente'],
+    ['447803', 'Crédit d’AIB'],
+    ['447804', 'AIB dû']
+  ]);
+
   var SUBCLASS_LABELS = ROWS.reduce(function (map, row) {
     if (row[0].length === 2) map[row[0]] = row[1];
     return map;
@@ -1668,6 +1677,15 @@
   }
 
   function accounts() { return ROWS.map(accountFromRow); }
+  function defaultAccounts() {
+    return accounts().concat(USER_SUPPLEMENTAL_ROWS.map(function (row) {
+      var account = accountFromRow([row[0], row[1], null]);
+      account.sourcePage = null;
+      account.sourceType = 'user-provided';
+      account.userProvided = true;
+      return account;
+    }));
+  }
   function codes() { return ROWS.map(function (row) { return row[0]; }); }
   function classLabel(cls) { return CLASS_LABELS[Number(cls)] || ('Classe ' + Number(cls)); }
   function previousVersionOneAccount(code) { return PREVIOUS_VERSION_ONE[String(code)] || null; }
@@ -1678,9 +1696,11 @@
     CLASS_LABELS: CLASS_LABELS,
     SUBCLASS_LABELS: SUBCLASS_LABELS,
     accounts: accounts,
+    defaultAccounts: defaultAccounts,
     codes: codes,
     classLabel: classLabel,
     accountCount: function () { return ROWS.length; },
+    defaultAccountCount: function () { return ROWS.length + USER_SUPPLEMENTAL_ROWS.length; },
     previousVersionOneAccount: previousVersionOneAccount
   });
 });
