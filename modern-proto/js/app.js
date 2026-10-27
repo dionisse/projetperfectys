@@ -21,6 +21,7 @@
   var VatDifferenceReport = window.PerfectoVatDifferenceReport;
   var VatPaymentReport = window.PerfectoVatPaymentReport;
   var VatDetailReport = window.PerfectoVatDetailReport;
+  var AibSuppliersReport = window.PerfectoAibSuppliersReport;
   var CashOperations = window.PerfectoCashOperations;
   var AccountMovements = window.PerfectoAccountMovements;
   var AccountingExchange = window.PerfectoAccountingExchange;
@@ -25504,6 +25505,240 @@
     });
   }
 
+  function aibSuppliersConfigurationKey(year) {
+    var dossier = S.currentDossier() || {};
+    return 'perfecto-aib-suppliers.v1:' + String(dossier.id || 'default') + ':' + String(year || 'non-date');
+  }
+
+  function aibSuppliersConfiguration(year) {
+    try {
+      var saved = localStorage.getItem(aibSuppliersConfigurationKey(year));
+      return saved ? AibSuppliersReport.normalise(JSON.parse(saved), year) : AibSuppliersReport.defaults(year);
+    } catch (error) { return AibSuppliersReport.defaults(year); }
+  }
+
+  function aibSuppliersSaveConfiguration(year, configuration) {
+    try {
+      localStorage.setItem(aibSuppliersConfigurationKey(year), JSON.stringify(configuration));
+      return true;
+    } catch (error) { return false; }
+  }
+
+  function aibSuppliersPeriodOptions() {
+    var years = Object.create(null);
+    var exercise = Number(S.exercise()) || new Date().getFullYear();
+    years[exercise] = true;
+    var dossier = S.currentDossier() || {};
+    [dossier.cycleStart, dossier.cycleEnd].forEach(function (date) {
+      var year = Number(String(date || '').slice(0, 4));
+      if (year >= 1900 && year <= 9999) years[year] = true;
+    });
+    S.entries().forEach(function (entry) {
+      var year = Number(String(entry.date || '').slice(0, 4));
+      if (entry.status === 'posted' && year >= 1900 && year <= 9999) years[year] = true;
+    });
+    return Object.keys(years).map(Number).sort(function (a, b) { return b - a; }).reduce(function (periods, year) {
+      for (var month = 12; month >= 1; month--) {
+        var monthLabel = new Intl.DateTimeFormat('fr-FR', { month: 'long' }).format(new Date(year, month - 1, 1));
+        monthLabel = monthLabel.charAt(0).toLocaleUpperCase('fr-FR') + monthLabel.slice(1);
+        periods.push({ value: year + '-' + String(month).padStart(2, '0'), label: year + ' - ' + monthLabel });
+      }
+      return periods;
+    }, []);
+  }
+
+  function aibSuppliersCommonDeclarant() {
+    var rows = S.printedReportInformationConfiguration().rows || [];
+    function valueFor(id) {
+      var row = rows.find(function (item) { return item.id === id; });
+      return row && row.value ? row.value : '';
+    }
+    return { signer: valueFor('tax-declaration-signer'), city: valueFor('signature-city') };
+  }
+
+  function aibSuppliersDefinitionRows(configuration) {
+    return configuration.categories.map(function (category) {
+      return '<tr data-aib-category-row="' + esc(category.key) + '" tabindex="0" aria-selected="false"><td><label class="sr-only" for="aib-rate-' + esc(category.key) + '">' + esc(category.label) + ' · taux en pourcentage</label><input id="aib-rate-' + esc(category.key) + '" type="text" inputmode="decimal" maxlength="24" data-aib-rate="' + esc(category.key) + '" value="' + esc(category.rate) + '" placeholder="%" aria-label="Taux de ' + esc(category.label) + '"></td><td><strong class="aib-suppliers-category-label">-- ' + esc(category.label) + '</strong><input type="text" data-aib-accounts="' + esc(category.key) + '" value="' + esc(category.accounts.join(', ')) + '" placeholder="Sélectionner des comptes" readonly aria-label="Comptes pour ' + esc(category.label) + '"></td></tr>';
+    }).join('');
+  }
+
+  function viewAibSuppliersReport(backLink) {
+    var periods = aibSuppliersPeriodOptions();
+    var initialYear = Number(S.exercise()) || new Date().getFullYear();
+    var configuration = aibSuppliersConfiguration(initialYear);
+    var options = periods.map(function (period) { return '<option value="' + esc(period.value) + '">' + esc(period.label) + '</option>'; }).join('');
+    var declarant = aibSuppliersCommonDeclarant();
+    return '<div class="edition-report-detail-view aib-suppliers-report-detail">' + backLink +
+      '<div class="page-header"><div><span class="page-kicker">DÉCLARATIONS PÉRIODIQUES · AIB</span><h2>État mensuel des retenues d’AIB sur les fournisseurs</h2><p>Définissez les taux et comptes de l’année, puis préparez les paramètres de l’état mensuel.</p></div></div>' +
+      '<form id="aib-suppliers-form" novalidate><div class="aib-suppliers-layout">' +
+        '<section class="card aib-suppliers-definitions-card"><div class="aib-suppliers-card-heading"><div><span class="page-kicker">DÉFINITION ANNUELLE</span><h3>Taux de l’AIB · comptes</h3><p>Les valeurs restent vierges jusqu’à votre paramétrage; elles sont conservées par dossier et année.</p></div><span id="aib-suppliers-year-badge" class="aib-suppliers-year-badge">Référentiel ' + initialYear + '</span></div>' +
+          '<div class="aib-suppliers-definition-table-wrap"><table class="aib-suppliers-definition-table"><thead><tr><th scope="col">Taux de l’AIB</th><th scope="col">Comptes</th></tr></thead><tbody>' + aibSuppliersDefinitionRows(configuration) + '</tbody></table></div>' +
+          '<div class="aib-suppliers-definition-actions"><button type="button" class="btn btn-ghost" data-aib-select-accounts disabled>Sélection…</button><span class="small muted" id="aib-suppliers-selection-hint">Sélectionnez une ligne pour choisir ses comptes.</span></div>' +
+        '</section>' +
+        '<div class="aib-suppliers-details-column">' +
+          '<section class="card aib-suppliers-period-card"><label for="aib-suppliers-period">Mois</label><select id="aib-suppliers-period" required><option value="">— Choisir un mois —</option>' + options + '</select></section>' +
+          '<fieldset class="card aib-suppliers-payment-card"><legend>Mode de règlement</legend><div class="aib-suppliers-payment-options"><label><input type="radio" name="aib-suppliers-payment" value="cash" checked> Espèces</label><label><input type="radio" name="aib-suppliers-payment" value="cheque"> Chèque</label></div><div class="field"><label for="aib-suppliers-cheque">Chèque</label><input id="aib-suppliers-cheque" type="text" maxlength="120" disabled></div><div class="field"><label for="aib-suppliers-bank">Banque</label><input id="aib-suppliers-bank" type="text" maxlength="160" disabled></div></fieldset>' +
+          '<fieldset class="card aib-suppliers-declarant-card"><legend>Déclarant</legend><div class="aib-suppliers-common-declarant">Le nom du signataire et la ville sont définis dans les <a href="#/menu?g=parametres&amp;t=print-information">Informations communes aux états imprimés</a>.<p><strong>Signataire :</strong> ' + esc(declarant.signer || 'Non renseigné') + '<br><strong>Ville :</strong> ' + esc(declarant.city || 'Non renseignée') + '</p></div><div class="field"><label for="aib-suppliers-signature-date">Date de signature</label><input id="aib-suppliers-signature-date" type="date"></div></fieldset>' +
+        '</div></div>' +
+        '<div class="alert warning aib-suppliers-future-note"><div><strong>Préparation provisoire.</strong> « Editer » ouvrira un aperçu plein écran des paramètres. Le tableau Excel dédié, son alimentation automatique et le calcul des retenues seront raccordés ultérieurement, après définition du modèle et validation des règles applicables.</div></div>' +
+        '<div class="aib-suppliers-actions"><span class="small muted" id="aib-suppliers-status">Définition des taux non validée.</span><div><button type="button" class="btn btn-ghost" data-aib-cancel>Annuler</button> <button type="button" class="btn btn-ghost" data-aib-validate-definition>Valider la définition des taux</button> <button type="button" class="btn btn-primary" data-aib-edit>Éditer</button></div></div>' +
+      '</form><div id="aib-suppliers-result" aria-live="polite"></div></div>';
+  }
+
+  function aibSuppliersConfigurationFromForm(form, year) {
+    return AibSuppliersReport.normalise({
+      year: year,
+      categories: AibSuppliersReport.CATEGORIES.map(function (category) {
+        return {
+          key: category.key,
+          rate: $('[data-aib-rate="' + category.key + '"]', form).value,
+          accounts: AibSuppliersReport.cleanAccounts($('[data-aib-accounts="' + category.key + '"]', form).value)
+        };
+      })
+    }, year);
+  }
+
+  function aibSuppliersPreviewMarkup(preparation) {
+    var categories = preparation.configuration.categories.map(function (category) {
+      return '<tr><th scope="row">' + esc(category.label) + '</th><td class="num">' + esc(category.rate) + ' %</td><td>' + esc(category.accounts.join(', ')) + '</td></tr>';
+    }).join('');
+    var monthOption = aibSuppliersPeriodOptions().find(function (item) { return item.value === preparation.period; });
+    var paymentText = preparation.payment.method === 'cash' ? 'Espèces' : (preparation.payment.method === 'cheque' ? 'Chèque' : 'Non renseigné');
+    if (preparation.payment.method === 'cheque') paymentText += ' · N° ' + (preparation.payment.cheque || 'non renseigné') + ' · Banque : ' + (preparation.payment.bank || 'non renseignée');
+    return '<article class="aib-suppliers-preview"><div class="aib-suppliers-preview-heading"><div><span class="page-kicker">APERÇU DE PRÉPARATION · ' + esc(monthOption ? monthOption.label : preparation.period) + '</span><h3>État mensuel des retenues d’AIB sur les fournisseurs</h3></div></div>' +
+      '<dl class="aib-suppliers-preview-details"><div><dt>Mois de référence</dt><dd>' + esc(monthOption ? monthOption.label : preparation.period) + '</dd></div><div><dt>Mode de règlement</dt><dd>' + esc(paymentText) + '</dd></div><div><dt>Signataire (paramétrage commun)</dt><dd>' + esc(preparation.declarant.signer || 'Non renseigné') + '</dd></div><div><dt>Ville de signature</dt><dd>' + esc(preparation.declarant.city || 'Non renseignée') + '</dd></div><div><dt>Date de signature</dt><dd>' + esc(preparation.declarant.signatureDate ? dateLabel(preparation.declarant.signatureDate) : 'Non renseignée') + '</dd></div></dl>' +
+      '<div class="aib-suppliers-preview-table-wrap"><table class="data-table aib-suppliers-preview-table"><thead><tr><th>Nature de retenue</th><th>Taux défini</th><th>Comptes associés</th></tr></thead><tbody>' + categories + '</tbody></table></div>' +
+      '<div class="alert warning"><div><strong>Aucun tableau Excel ni montant de retenue n’est produit dans cette étape.</strong> L’aperçu restitue uniquement les paramètres saisis; le format Excel et le raccordement aux données fournisseurs restent à construire.</div></div></article>';
+  }
+
+  function openAibSuppliersAccountPicker(categoryKey, form) {
+    var input = $('[data-aib-accounts="' + categoryKey + '"]', form);
+    if (!input) return;
+    var selected = AibSuppliersReport.cleanAccounts(input.value);
+    var accounts = S.accounts().slice().sort(function (left, right) { return String(left.code).localeCompare(String(right.code), 'fr', { numeric: true }); });
+    var rows = accounts.map(function (account, index) {
+      var code = String(account.code);
+      var hasChildren = accounts.some(function (candidate) { return String(candidate.code).length > code.length && String(candidate.code).indexOf(code) === 0; });
+      var token = code + (hasChildren ? '*' : '');
+      var checked = selected.indexOf(token) !== -1 || selected.indexOf(code) !== -1 ? ' checked' : '';
+      return '<label class="aib-suppliers-picker-row" data-aib-picker-text="' + esc(code + ' ' + (account.label || '')) + '"><input type="checkbox" data-aib-picker-account value="' + esc(token) + '" id="aib-suppliers-account-' + index + '"' + checked + '><span class="aib-suppliers-picker-code">' + esc(token) + '</span><span>' + esc(account.label || '') + '</span></label>';
+    }).join('');
+    var body = '<div class="aib-suppliers-picker"><div class="field"><label for="aib-suppliers-picker-search">Rechercher un compte</label><input id="aib-suppliers-picker-search" type="search" placeholder="Numéro ou libellé"></div><p class="small muted">Les comptes choisis servent de paramétrage pour cette nature; aucune retenue n’est calculée.</p><div class="aib-suppliers-picker-list" role="group" aria-label="Comptes généraux">' + (rows || '<div class="empty-state">Aucun compte disponible.</div>') + '</div></div>';
+    openModal('Sélection des comptes', 'Comptes de ' + (AibSuppliersReport.CATEGORIES.find(function (category) { return category.key === categoryKey; }) || {}).label, body, '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="button" class="btn btn-primary" data-aib-picker-apply>Appliquer la sélection</button>', true);
+    var modalRoot = $('#modal-root');
+    $('#aib-suppliers-picker-search', modalRoot).addEventListener('input', function (event) {
+      var query = event.target.value.trim().toLocaleLowerCase();
+      $$('.aib-suppliers-picker-row', modalRoot).forEach(function (row) { row.hidden = !!query && row.getAttribute('data-aib-picker-text').toLocaleLowerCase().indexOf(query) === -1; });
+    });
+    $('[data-aib-picker-apply]', modalRoot).addEventListener('click', function () {
+      input.value = AibSuppliersReport.cleanAccounts($$('[data-aib-picker-account]:checked', modalRoot).map(function (checkbox) { return checkbox.value; })).join(', ');
+      closeModal();
+      input.focus();
+    });
+  }
+
+  function bindAibSuppliersReport() {
+    var form = $('#aib-suppliers-form');
+    if (!form) return;
+    var period = $('#aib-suppliers-period', form);
+    var result = $('#aib-suppliers-result');
+    var status = $('#aib-suppliers-status');
+    var selectedCategoryKey = '';
+    var savedConfiguration = null;
+    function loadYear(year) {
+      var configuration = aibSuppliersConfiguration(year);
+      AibSuppliersReport.CATEGORIES.forEach(function (category) {
+        $('[data-aib-rate="' + category.key + '"]', form).value = configuration.categories.find(function (row) { return row.key === category.key; }).rate;
+        $('[data-aib-accounts="' + category.key + '"]', form).value = configuration.categories.find(function (row) { return row.key === category.key; }).accounts.join(', ');
+      });
+      $('#aib-suppliers-year-badge').textContent = 'Référentiel ' + year;
+      selectedCategoryKey = '';
+      $$('[data-aib-category-row]', form).forEach(function (row) { row.classList.remove('is-selected'); row.setAttribute('aria-selected', 'false'); });
+      $('[data-aib-select-accounts]', form).disabled = true;
+      $('#aib-suppliers-selection-hint', form).textContent = 'Sélectionnez une ligne pour choisir ses comptes.';
+      status.textContent = 'Définition des taux non validée.';
+      savedConfiguration = configuration;
+      result.innerHTML = '';
+    }
+    function selectCategory(row) {
+      selectedCategoryKey = row.getAttribute('data-aib-category-row');
+      $$('[data-aib-category-row]', form).forEach(function (item) {
+        var isSelected = item === row;
+        item.classList.toggle('is-selected', isSelected);
+        item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+      });
+      $('[data-aib-select-accounts]', form).disabled = !selectedCategoryKey;
+      var category = AibSuppliersReport.CATEGORIES.find(function (item) { return item.key === selectedCategoryKey; });
+      $('#aib-suppliers-selection-hint', form).textContent = category ? 'Comptes à sélectionner pour « ' + category.label + ' ».' : 'Sélectionnez une ligne pour choisir ses comptes.';
+    }
+    $$('[data-aib-category-row]', form).forEach(function (row) {
+      row.addEventListener('click', function () { selectCategory(row); });
+      row.addEventListener('keydown', function (event) { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectCategory(row); } });
+      $('[data-aib-rate]', row).addEventListener('focus', function () { selectCategory(row); });
+    });
+    period.addEventListener('change', function () { var year = Number(period.value.slice(0, 4)); if (year) loadYear(year); });
+    function updateAibPaymentFields() {
+      var selectedMode = $('input[name="aib-suppliers-payment"]:checked', form);
+      var chequeMode = !!selectedMode && selectedMode.value === 'cheque';
+      $('#aib-suppliers-cheque', form).disabled = !chequeMode;
+      $('#aib-suppliers-bank', form).disabled = !chequeMode;
+    }
+    $$('input[name="aib-suppliers-payment"]', form).forEach(function (radio) {
+      radio.addEventListener('change', updateAibPaymentFields);
+    });
+    $('[data-aib-select-accounts]', form).addEventListener('click', function () { if (selectedCategoryKey) openAibSuppliersAccountPicker(selectedCategoryKey, form); });
+    $$('[data-aib-category-row]', form).forEach(function (row) {
+      row.addEventListener('dblclick', function () { selectCategory(row); openAibSuppliersAccountPicker(selectedCategoryKey, form); });
+    });
+    $('[data-aib-validate-definition]', form).addEventListener('click', function () {
+      var year = period.value.slice(0, 4);
+      if (!/^\d{4}$/.test(year)) { toast('Choisissez le mois de référence pour identifier l’année des taux.', 'warning'); return; }
+      var validation = AibSuppliersReport.validateDefinition(aibSuppliersConfigurationFromForm(form, year), year);
+      if (!validation.ok) { toast(validation.errors.join(' '), 'warning'); return; }
+      if (!aibSuppliersSaveConfiguration(year, validation.configuration)) { toast('La définition est valide, mais elle n’a pas pu être enregistrée dans ce navigateur.', 'warning'); return; }
+      savedConfiguration = validation.configuration;
+      status.textContent = 'Définition validée par l’utilisateur · ' + year + ' (format contrôlé, conformité fiscale non vérifiée).';
+      toast('Définition enregistrée pour ' + year + '.', 'success');
+    });
+    $('[data-aib-edit]', form).addEventListener('click', function () {
+      if (!period.value) { toast('Choisissez le mois de référence.', 'warning'); return; }
+      var year = Number(period.value.slice(0, 4));
+      var configuration = aibSuppliersConfigurationFromForm(form, year);
+      var validation = AibSuppliersReport.validateDefinition(configuration, year);
+      if (!validation.ok) { toast(validation.errors.join(' '), 'warning'); return; }
+      var paymentMode = $('input[name="aib-suppliers-payment"]:checked', form);
+      var common = aibSuppliersCommonDeclarant();
+      var preparation;
+      try {
+        preparation = AibSuppliersReport.prepare({
+          period: period.value, configuration: validation.configuration,
+          payment: { method: paymentMode ? paymentMode.value : '', cheque: $('#aib-suppliers-cheque', form).value, bank: $('#aib-suppliers-bank', form).value },
+          signer: common.signer, city: common.city, signatureDate: $('#aib-suppliers-signature-date', form).value
+        });
+      } catch (error) { toast(error.message || 'Impossible de préparer cet aperçu.', 'warning'); return; }
+      result.innerHTML = '<div class="alert info aib-suppliers-preview-ready">Aperçu préparé à partir des paramètres saisis. Le tableau Excel dédié n’est pas encore généré.</div>';
+      openReportPreview('Aperçu — AIB sur fournisseurs · ' + preparation.period, aibSuppliersPreviewMarkup(preparation));
+    });
+    $('[data-aib-cancel]', form).addEventListener('click', function () {
+      form.reset();
+      updateAibPaymentFields();
+      result.innerHTML = '';
+      var year = Number(S.exercise()) || new Date().getFullYear();
+      var configuration = savedConfiguration && savedConfiguration.year === year ? savedConfiguration : aibSuppliersConfiguration(year);
+      AibSuppliersReport.CATEGORIES.forEach(function (category) {
+        var row = configuration.categories.find(function (item) { return item.key === category.key; });
+        $('[data-aib-rate="' + category.key + '"]', form).value = row.rate;
+        $('[data-aib-accounts="' + category.key + '"]', form).value = row.accounts.join(', ');
+      });
+      status.textContent = 'Définition des taux non validée.';
+      selectedCategoryKey = '';
+      $('[data-aib-select-accounts]', form).disabled = true;
+      $$('[data-aib-category-row]', form).forEach(function (row) { row.classList.remove('is-selected'); row.setAttribute('aria-selected', 'false'); });
+    });
+    updateAibPaymentFields();
+    loadYear(Number(S.exercise()) || new Date().getFullYear());
+  }
+
   function editionReportChildView(child, groupId, tabId) {
     var backLabel = groupId === 'editions' && tabId === 'journals' ? 'Tous les éléments Journaux' : 'Tous les états';
     var backLink = '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(accountingMenuHash(groupId, tabId)) + '">← ' + esc(backLabel) + '</a>';
@@ -25656,6 +25891,8 @@
       exchangeFeature = viewVatPaymentReport('');
     } else if (group.id === 'declarations' && tab.id === 'vat-detail') {
       exchangeFeature = viewVatDetailReport('');
+    } else if (group.id === 'declarations' && tab.id === 'aib-suppliers') {
+      exchangeFeature = viewAibSuppliersReport('');
     } else if (isJournalEntrySubmenu) {
       exchangeFeature = viewEntryJournalSelector();
     } else if (group.id === 'saisie' && tab.id === 'live-cash') {
@@ -26995,6 +27232,7 @@
       if (menuParams.g === 'declarations' && menuParams.t === 'vat-difference') bindVatDifferenceReport();
       if (menuParams.g === 'declarations' && menuParams.t === 'vat-payment') bindVatPaymentReport();
       if (menuParams.g === 'declarations' && menuParams.t === 'vat-detail') bindVatDetailReport();
+      if (menuParams.g === 'declarations' && menuParams.t === 'aib-suppliers') bindAibSuppliersReport();
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && (menuParams.c === 'journal-lines' || menuParams.c === 'journal-modified-pieces' || menuParams.c === 'journal-unbalanced-pieces' || menuParams.c === 'journal-entry-totals' || menuParams.c === 'journal-individual-account-totals' || menuParams.c === 'journal-summary-account-totals' || menuParams.c === 'journal-third-party-totals' || menuParams.c === 'journal-analytic-center-totals' || menuParams.c === 'journal-currency-totals')) bindJournalLinesReport();
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && menuParams.c === 'journal-allocation-sheet') bindJournalAllocationSheet();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-balance') bindGeneralBalanceReport();

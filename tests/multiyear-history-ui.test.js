@@ -34,7 +34,7 @@ assert.match(reportSource, /dossiersIsolatedByClientAndAccountingType: true/);
 assert.ok(htmlSource.indexOf('js/general-ledger-report.js') < htmlSource.indexOf('js/multiyear-history-report.js'));
 assert.ok(htmlSource.indexOf('js/multiyear-history-report.js') < htmlSource.indexOf('js/app.js'));
 assert.match(serviceWorkerSource, /\.\/js\/multiyear-history-report\.js/);
-assert.match(serviceWorkerSource, /perfecto-static-v137/);
+assert.match(serviceWorkerSource, /perfecto-static-v138/);
 assert.match(configurationCss, /\.multi-year-history-column-grid[\s\S]*\.multi-year-history-table[\s\S]*multi-year-history-report-print/);
 
 console.log('Historique pluriannuel : intégration navigation, écrans et ressources vérifiée.');

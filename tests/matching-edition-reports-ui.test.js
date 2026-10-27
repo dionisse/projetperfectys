@@ -59,7 +59,7 @@ assert.ok(htmlSource.indexOf('js/matching-edition-reports.js') < htmlSource.inde
 assert.match(htmlSource, /css\/matching-edition-reports\.css/);
 assert.match(serviceWorkerSource, /\.\/js\/matching-edition-reports\.js/);
 assert.match(serviceWorkerSource, /\.\/css\/matching-edition-reports\.css/);
-assert.match(serviceWorkerSource, /perfecto-static-v137/);
+assert.match(serviceWorkerSource, /perfecto-static-v138/);
 assert.match(cssSource, /\.matching-edition-filter-grid[\s\S]*\.matching-edition-columns-grid[\s\S]*\.matching-edition-table/);
 assert.match(cssSource, /body\.report-preview-printing[\s\S]*\.matching-edition-table/);
 assert.match(cssSource, /max-width: 640px/);
