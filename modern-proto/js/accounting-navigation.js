@@ -219,7 +219,7 @@
     {
       id: 'declarations', label: 'Déclarations périodiques', icon: '▦', defaultTab: 'vat-difference', tabs: [
         { id: 'vat-difference', label: 'Écarts entre TVA calculée et TVA facturée aux clients', status: 'active', reason: 'Comparaison annuelle des bases sélectionnées et des comptes de TVA, avec correspondances et taux modifiables par année. Les résultats restent un contrôle comptable à valider au regard des opérations et échéances fiscales.' },
-        { id: 'vat-payment', label: 'État de paiement TVA', status: 'planned', reason: 'État général à construire après validation des règles et périodes déclaratives.' },
+        { id: 'vat-payment', label: 'État de paiement TVA', status: 'active', reason: 'Écran de déclaration avec période, comptes ventilés par rubriques, informations de paiement et options Pharmacie / prorata cosmétiques. L’aperçu restitue les mouvements validés sans inventer le montant fiscal à payer.' },
         { id: 'vat-detail', label: 'État détaillé à joindre à l’état de paiement', status: 'planned', reason: 'Dépend de l’état TVA et de ses données justificatives.' },
         { id: 'aib-suppliers', label: 'État mensuel des retenues d’AIB sur les fournisseurs', status: 'planned', reason: 'État fiscal général à construire après validation des règles et comptes tiers.' },
         { id: 'aib-wholesale-sales', label: 'État mensuel des retenues AIB sur vente en gros', status: 'planned', reason: 'État fiscal général à construire après validation des règles et données de vente.' },

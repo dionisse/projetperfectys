@@ -19,6 +19,7 @@
   var AssociatedItemsEditionReport = window.PerfectoAssociatedAccountItemsEdition;
   var AssociatedItemsReference = window.PerfectoAssociatedAccountItems;
   var VatDifferenceReport = window.PerfectoVatDifferenceReport;
+  var VatPaymentReport = window.PerfectoVatPaymentReport;
   var CashOperations = window.PerfectoCashOperations;
   var AccountMovements = window.PerfectoAccountMovements;
   var AccountingExchange = window.PerfectoAccountingExchange;
@@ -25117,6 +25118,240 @@
     });
   }
 
+  function vatPaymentConfigurationKey(year) {
+    var dossier = S.currentDossier() || {};
+    return 'perfecto-vat-payment:' + String(dossier.id || 'default') + ':' + String(year || 'non-date');
+  }
+
+  function vatPaymentConfiguration(year) {
+    var defaults = VatPaymentReport.defaults(year);
+    try {
+      var saved = localStorage.getItem(vatPaymentConfigurationKey(year));
+      return saved ? VatPaymentReport.normalise(JSON.parse(saved), year) : defaults;
+    } catch (error) {
+      return defaults;
+    }
+  }
+
+  function vatPaymentAccountMappingRows(configuration) {
+    var html = '';
+    var section = '';
+    VatPaymentReport.ROWS.forEach(function (row) {
+      if (row.section !== section) {
+        section = row.section;
+        html += '<tr class="vat-payment-map-section"><th colspan="2">' + esc('-- ' + section) + '</th></tr>';
+      }
+      var codes = configuration.accounts[row.key] || [];
+      html += '<tr class="vat-payment-map-row"><th scope="row">' + esc(row.label) + '</th><td><div class="vat-payment-account-input"><input type="text" data-vat-payment-code="' + esc(row.key) + '" value="' + esc(codes.join(', ')) + '" placeholder="Choisir les comptes" aria-label="Comptes pour ' + esc(row.label) + '"><button type="button" class="btn btn-ghost btn-sm" data-vat-payment-picker="' + esc(row.key) + '">Comptes…</button></div></td></tr>';
+    });
+    return html;
+  }
+
+  function viewVatPaymentReport(backLink) {
+    var year = Number(S.exercise()) || new Date().getFullYear();
+    var configuration = vatPaymentConfiguration(year);
+    return '<div class="edition-report-detail-view vat-payment-report-detail">' + backLink +
+      '<div class="page-header"><div><span class="page-kicker">DÉCLARATIONS PÉRIODIQUES · TVA</span><h2>État de paiement TVA</h2><p>Paramétrez les comptes déclaratifs, la période et les informations de règlement.</p></div></div>' +
+      '<form id="vat-payment-form" class="vat-payment-form" novalidate>' +
+        '<div class="vat-payment-layout">' +
+          '<section class="card vat-payment-accounts-card"><div class="vat-payment-card-heading"><div><span class="page-kicker">PARAMÉTRAGE DES RUBRIQUES</span><h3>Comptes à inclure</h3><p>Aucun compte fiscal n’est présélectionné. Les correspondances sont modifiables et conservées par dossier et année.</p></div><span class="vat-payment-year-badge" id="vat-payment-config-year">Référentiel ' + year + '</span></div>' +
+            '<div class="vat-payment-mapping-scroll"><table class="vat-payment-mapping-table"><thead><tr><th scope="col">Libellé</th><th scope="col">Comptes</th></tr></thead><tbody>' + vatPaymentAccountMappingRows(configuration) + '</tbody></table></div>' +
+            '<div class="vat-payment-map-footer"><button type="button" class="btn btn-ghost btn-sm" data-vat-payment-current-picker disabled>Sélection…</button><small class="muted">Sélectionnez une rubrique pour activer ce raccourci. F2 ouvre également la sélection.</small></div>' +
+          '</section>' +
+          '<div class="vat-payment-details-column">' +
+            '<section class="card vat-payment-period-card"><div class="vat-payment-card-heading"><div><span class="page-kicker">PÉRIODE DÉCLARÉE</span><h3>Période</h3></div></div><div class="vat-payment-period-fields"><div class="field"><label for="vat-payment-from">Du</label><input id="vat-payment-from" type="date" required></div><span class="vat-payment-period-separator" aria-hidden="true">—</span><div class="field"><label for="vat-payment-to">Au</label><input id="vat-payment-to" type="date" required></div></div><div class="field"><label for="vat-payment-credit">Crédit reporté (XOF)</label><input id="vat-payment-credit" type="number" min="0" step="any" placeholder="À renseigner"></div></section>' +
+            '<section class="card vat-payment-extra-card"><fieldset><legend>Reversement complémentaire</legend><div class="field"><label for="vat-payment-extra-amount">Montant (XOF)</label><input id="vat-payment-extra-amount" type="number" min="0" step="any" placeholder="À renseigner"></div><div class="field"><label for="vat-payment-extra-reason">Motif</label><input id="vat-payment-extra-reason" type="text" maxlength="240"></div></fieldset></section>' +
+            '<section class="card vat-payment-method-card"><fieldset><legend>Mode de règlement</legend><div class="vat-payment-method-options"><label><input type="radio" name="vat-payment-method" value="cash"> Espèces</label><label><input type="radio" name="vat-payment-method" value="cheque"> Chèque</label></div><div class="field"><label for="vat-payment-cheque">Chèque</label><input id="vat-payment-cheque" type="text" disabled></div><div class="field"><label for="vat-payment-bank">Banque</label><input id="vat-payment-bank" type="text" disabled></div></fieldset></section>' +
+            '<section class="card vat-payment-declarant-card"><fieldset><legend>Déclarant</legend><div class="field"><label for="vat-payment-city">Ville</label><input id="vat-payment-city" type="text" maxlength="120"></div><div class="field"><label for="vat-payment-declarant-date">Date</label><input id="vat-payment-declarant-date" type="date"></div></fieldset></section>' +
+          '</div>' +
+        '</div>' +
+        '<section class="card vat-payment-options-card"><label class="vat-payment-checkbox"><input id="vat-payment-pharmacy" type="checkbox"> <span>Pharmacie</span></label><div class="field vat-payment-cosmetics-field"><label for="vat-payment-cosmetics-rate">Prorata cosmétiques</label><input id="vat-payment-cosmetics-rate" type="text" inputmode="decimal" disabled placeholder="Disponible si Pharmacie est sélectionné"></div><label class="vat-payment-checkbox vat-payment-petroleum"><input id="vat-payment-petroleum" type="checkbox"> <span>Format d’importation des produits pétroliers</span></label></section>' +
+        '<div class="alert warning vat-payment-caution"><div><strong>Calcul fiscal non automatisé à ce stade.</strong> Les comptes sélectionnés sont extraits en mouvements débit/crédit sur la période. Aucun montant net à payer n’est calculé : la règle de déductibilité au prorata, les retenues et leur traitement déclaratif doivent être confirmés avant d’appliquer une formule. Aucune écriture comptable n’est créée.</div></div>' +
+        '<div class="vat-payment-actions"><span class="vat-payment-generated" id="vat-payment-generated">Lignes générées : 0</span><div><button type="button" class="btn btn-ghost" data-vat-payment-cancel>Annuler</button> <button type="submit" class="btn btn-primary">Valider</button></div></div>' +
+      '</form><div id="vat-payment-result" aria-live="polite"></div></div>';
+  }
+
+  function vatPaymentDeclarationData(form) {
+    var selectedMode = $('input[name="vat-payment-method"]:checked', form);
+    return {
+      from: $('#vat-payment-from', form).value,
+      to: $('#vat-payment-to', form).value,
+      credit: $('#vat-payment-credit', form).value,
+      extraAmount: $('#vat-payment-extra-amount', form).value,
+      extraReason: $('#vat-payment-extra-reason', form).value.trim(),
+      paymentMethod: selectedMode ? selectedMode.value : '',
+      cheque: $('#vat-payment-cheque', form).value.trim(),
+      bank: $('#vat-payment-bank', form).value.trim(),
+      city: $('#vat-payment-city', form).value.trim(),
+      declarantDate: $('#vat-payment-declarant-date', form).value,
+      pharmacy: $('#vat-payment-pharmacy', form).checked,
+      cosmeticsRate: $('#vat-payment-cosmetics-rate', form).value,
+      petroleum: $('#vat-payment-petroleum', form).checked
+    };
+  }
+
+  function vatPaymentPreviewMarkup(configuration, declaration, report) {
+    var rowByKey = Object.create(null);
+    report.rows.forEach(function (row) { rowByKey[row.key] = row; });
+    var rowsHtml = '';
+    var section = '';
+    VatPaymentReport.ROWS.forEach(function (definition) {
+      if (definition.section !== section) {
+        section = definition.section;
+        rowsHtml += '<tr class="vat-payment-preview-section"><th colspan="4">' + esc('-- ' + section) + '</th></tr>';
+      }
+      var row = rowByKey[definition.key];
+      var codes = row.selectors.length ? row.selectors.join(', ') : '—';
+      var accountText = row.accounts.length ? row.accounts.map(function (account) { return esc(account.code + ' · ' + account.label); }).join('<br>') : (row.selectors.length ? 'Aucun mouvement validé' : 'Non paramétré');
+      rowsHtml += '<tr><th scope="row">' + esc(definition.label) + '<small class="vat-payment-source-codes">' + esc(codes) + '</small></th><td>' + accountText + '</td><td class="num">' + esc(amount(row.debitTotal)) + '</td><td class="num">' + esc(amount(row.creditTotal)) + '</td></tr>';
+    });
+    var mode = declaration.paymentMethod === 'cash' ? 'Espèces' : 'Chèque';
+    var declarationSummary = '<dl class="vat-payment-preview-details"><div><dt>Période</dt><dd>' + esc(dateLabel(declaration.from)) + ' – ' + esc(dateLabel(declaration.to)) + '</dd></div><div><dt>Crédit reporté saisi</dt><dd>' + esc(declaration.credit || 'Non renseigné') + (declaration.credit ? ' XOF' : '') + '</dd></div><div><dt>Reversement complémentaire</dt><dd>' + esc(declaration.extraAmount || 'Non renseigné') + (declaration.extraAmount ? ' XOF' : '') + (declaration.extraReason ? ' · ' + esc(declaration.extraReason) : '') + '</dd></div><div><dt>Mode de règlement</dt><dd>' + esc(mode) + (declaration.paymentMethod === 'cheque' ? ' · ' + esc(declaration.cheque) + ' · ' + esc(declaration.bank) : '') + '</dd></div><div><dt>Déclarant</dt><dd>' + esc(declaration.city || 'Ville non renseignée') + (declaration.declarantDate ? ' · ' + esc(dateLabel(declaration.declarantDate)) : '') + '</dd></div><div><dt>Options</dt><dd>' + (declaration.pharmacy ? 'Pharmacie' + (declaration.cosmeticsRate ? ' · Prorata cosmétiques : ' + esc(declaration.cosmeticsRate) : '') : 'Pharmacie non sélectionnée') + (declaration.petroleum ? ' · Format produits pétroliers' : '') + '</dd></div></dl>';
+    return '<section class="vat-payment-preview"><div class="vat-payment-preview-heading"><div><span class="page-kicker">APERÇU DE CONTRÔLE</span><h3>État de paiement TVA</h3></div><span class="vat-payment-generated">Lignes générées : ' + report.matchedLineCount + '</span></div>' + declarationSummary +
+      '<div class="table-wrap vat-payment-preview-table-wrap"><table class="data-table vat-payment-preview-table"><thead><tr><th>Rubrique</th><th>Compte(s) mouvementé(s)</th><th>Débit (XOF)</th><th>Crédit (XOF)</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>' +
+      '<p class="exchange-footnote">Mouvements des écritures validées uniquement, à leur date comptable. Ce relevé ne calcule pas la TVA nette due et ne constitue pas une déclaration finalisée.</p>' +
+      '<div class="vat-payment-preview-actions"><button type="button" class="btn btn-primary" data-vat-payment-open-preview>Ouvrir l’aperçu plein écran</button></div></section>';
+  }
+
+  function vatPaymentPrintableHtml(configuration, declaration, report) {
+    var preview = vatPaymentPreviewMarkup(configuration, declaration, report);
+    return '<article class="vat-payment-printable">' + preview.replace(/<div class="vat-payment-preview-actions">[\s\S]*?<\/div><\/section>$/, '</section>') + '</article>';
+  }
+
+  function bindVatPaymentReport() {
+    var form = $('#vat-payment-form');
+    if (!form) return;
+    var result = $('#vat-payment-result');
+    var fromInput = $('#vat-payment-from', form);
+    var currentPicker = $('[data-vat-payment-current-picker]', form);
+    var currentField = null;
+    var configYear = Number(S.exercise()) || new Date().getFullYear();
+    var hydrateMappings = function (year) {
+      configYear = Number(year) || configYear;
+      var configuration = vatPaymentConfiguration(configYear);
+      $$("[data-vat-payment-code]", form).forEach(function (input) { input.value = configuration.accounts[input.getAttribute('data-vat-payment-code')].join(', '); });
+      $('#vat-payment-config-year', form).textContent = 'Référentiel ' + configYear;
+    };
+    var updateChequeFields = function () {
+      var selected = $('input[name="vat-payment-method"]:checked', form);
+      var enabled = !!selected && selected.value === 'cheque';
+      $('#vat-payment-cheque', form).disabled = !enabled;
+      $('#vat-payment-bank', form).disabled = !enabled;
+      $('#vat-payment-cheque', form).required = enabled;
+      $('#vat-payment-bank', form).required = enabled;
+    };
+    $$('[data-vat-payment-code]', form).forEach(function (input) {
+      input.addEventListener('focus', function () { currentField = input.getAttribute('data-vat-payment-code'); currentPicker.disabled = false; });
+      input.addEventListener('keydown', function (event) {
+        if (event.key !== 'F2') return;
+        event.preventDefault();
+        openVatPaymentAccountPicker(input.getAttribute('data-vat-payment-code'), form);
+      });
+    });
+    $$('[data-vat-payment-picker]', form).forEach(function (button) { button.addEventListener('click', function () { openVatPaymentAccountPicker(button.getAttribute('data-vat-payment-picker'), form); }); });
+    currentPicker.addEventListener('click', function () { if (currentField) openVatPaymentAccountPicker(currentField, form); });
+    fromInput.addEventListener('change', function () {
+      var year = Number(String(fromInput.value || '').slice(0, 4));
+      if (year && year !== configYear) hydrateMappings(year);
+    });
+    $$('input[name="vat-payment-method"]', form).forEach(function (input) { input.addEventListener('change', updateChequeFields); });
+    $('#vat-payment-pharmacy', form).addEventListener('change', function (event) {
+      var rate = $('#vat-payment-cosmetics-rate', form);
+      rate.disabled = !event.target.checked;
+      if (!event.target.checked) rate.value = '';
+    });
+    $('[data-vat-payment-cancel]', form).addEventListener('click', function () {
+      form.reset();
+      $('#vat-payment-cosmetics-rate', form).disabled = true;
+      updateChequeFields();
+      hydrateMappings(configYear);
+      result.innerHTML = '';
+      $('#vat-payment-generated', form).textContent = 'Lignes générées : 0';
+    });
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var declaration = vatPaymentDeclarationData(form);
+      var errors = [];
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(declaration.from) || !/^\d{4}-\d{2}-\d{2}$/.test(declaration.to)) errors.push('Renseignez les deux dates de la période.');
+      else if (declaration.from > declaration.to) errors.push('La date de début doit précéder la date de fin.');
+      else if (declaration.from.slice(0, 4) !== declaration.to.slice(0, 4)) errors.push('La période et ses correspondances fiscales doivent rester dans la même année civile.');
+      if (!declaration.paymentMethod) errors.push('Choisissez un mode de règlement.');
+      if (declaration.paymentMethod === 'cheque' && (!declaration.cheque || !declaration.bank)) errors.push('Renseignez le numéro de chèque et la banque.');
+      var configuration = VatPaymentReport.defaults(configYear);
+      $$("[data-vat-payment-code]", form).forEach(function (input) {
+        var key = input.getAttribute('data-vat-payment-code');
+        var tokens = input.value.split(/[\s,;]+/).filter(Boolean);
+        if (tokens.some(function (token) { return !/^[0-9]+\*?$/.test(token); })) errors.push('Format de compte invalide dans la rubrique « ' + key + ' ».');
+        configuration.accounts[key] = VatPaymentReport.cleanCodes(input.value);
+      });
+      var mappingRows = VatPaymentReport.ROWS;
+      var prefixOf = function (code) { return code.slice(-1) === '*' ? code.slice(0, -1) : code; };
+      for (var leftIndex = 0; leftIndex < mappingRows.length; leftIndex++) {
+        for (var rightIndex = leftIndex + 1; rightIndex < mappingRows.length; rightIndex++) {
+          var leftKey = mappingRows[leftIndex].key;
+          var rightKey = mappingRows[rightIndex].key;
+          var overlaps = configuration.accounts[leftKey].some(function (leftCode) {
+            var leftPrefix = prefixOf(leftCode);
+            return configuration.accounts[rightKey].some(function (rightCode) {
+              var rightPrefix = prefixOf(rightCode);
+              return leftPrefix.indexOf(rightPrefix) === 0 || rightPrefix.indexOf(leftPrefix) === 0;
+            });
+          });
+          if (overlaps) errors.push('Une même plage de comptes est affectée à plusieurs rubriques : « ' + mappingRows[leftIndex].label + ' » et « ' + mappingRows[rightIndex].label + ' ».');
+        }
+      }
+      var extra = Number(declaration.extraAmount || 0);
+      var credit = Number(declaration.credit || 0);
+      if (!Number.isFinite(extra) || extra < 0 || !Number.isFinite(credit) || credit < 0) errors.push('Le crédit reporté et le reversement complémentaire doivent être des montants positifs ou nuls.');
+      if (extra > 0 && !declaration.extraReason) errors.push('Indiquez le motif du reversement complémentaire.');
+      if (errors.length) { toast(errors[0], 'warning'); return; }
+      configYear = Number(declaration.from.slice(0, 4));
+      configuration = VatPaymentReport.normalise(configuration, configYear);
+      var saveWarning = '';
+      try { localStorage.setItem(vatPaymentConfigurationKey(configYear), JSON.stringify(configuration)); }
+      catch (error) { saveWarning = 'Les correspondances ne peuvent pas être mémorisées dans ce navigateur. '; }
+      var report = VatPaymentReport.calculateMovements({
+        entries: S.entries(), accounts: S.accounts(), from: declaration.from, to: declaration.to,
+        configuration: configuration, decimalPlaces: S.accountingConfiguration().decimalPlaces
+      });
+      $('#vat-payment-config-year', form).textContent = 'Référentiel ' + configYear;
+      $('#vat-payment-generated', form).textContent = 'Lignes générées : ' + report.matchedLineCount;
+      result.innerHTML = (saveWarning ? '<div class="alert warning">' + esc(saveWarning) + 'L’aperçu reste disponible pour cette session.</div>' : '') + vatPaymentPreviewMarkup(configuration, declaration, report);
+      var openPreview = $('[data-vat-payment-open-preview]', result);
+      openPreview.addEventListener('click', function () { openReportPreview('Aperçu — État de paiement TVA', vatPaymentPrintableHtml(configuration, declaration, report)); });
+      result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    updateChequeFields();
+  }
+
+  function openVatPaymentAccountPicker(fieldKey, form) {
+    var input = $('[data-vat-payment-code="' + fieldKey + '"]', form);
+    if (!input) return;
+    var selected = VatPaymentReport.cleanCodes(input.value);
+    var accounts = S.accounts().slice().sort(function (left, right) { return String(left.code).localeCompare(String(right.code), 'fr', { numeric: true }); });
+    var rows = accounts.map(function (account, index) {
+      var code = String(account.code);
+      var hasChildren = accounts.some(function (candidate) { return String(candidate.code).length > code.length && String(candidate.code).indexOf(code) === 0; });
+      var token = code + (hasChildren ? '*' : '');
+      var checked = selected.indexOf(token) !== -1 || selected.indexOf(code) !== -1 ? ' checked' : '';
+      return '<label class="vat-payment-picker-row" data-vat-payment-picker-text="' + esc(code + ' ' + (account.label || '')) + '"><input type="checkbox" data-vat-payment-picker-account value="' + esc(token) + '" id="vat-payment-account-' + index + '"' + checked + '><span class="vat-payment-picker-code">' + esc(token) + '</span><span>' + esc(account.label || '') + '</span></label>';
+    }).join('');
+    var body = '<div class="vat-payment-picker"><div class="field"><label for="vat-payment-picker-search">Rechercher un compte</label><input id="vat-payment-picker-search" type="search" placeholder="Numéro ou libellé"></div><p class="small muted">Un code terminé par * inclut ses sous-comptes. Aucun compte n’est présélectionné dans les rubriques fiscales.</p><div class="vat-payment-picker-list" role="group" aria-label="Comptes généraux">' + (rows || '<div class="empty-state">Aucun compte disponible.</div>') + '</div></div>';
+    openModal('Sélection des comptes', 'Choisissez les comptes pour cette rubrique déclarative.', body, '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="button" class="btn btn-primary" data-vat-payment-picker-apply>Appliquer la sélection</button>', true);
+    var modalRoot = $('#modal-root');
+    var search = $('#vat-payment-picker-search', modalRoot);
+    var pickerRows = $$('.vat-payment-picker-row', modalRoot);
+    search.addEventListener('input', function () {
+      var query = search.value.trim().toLocaleLowerCase();
+      pickerRows.forEach(function (row) { row.hidden = !!query && row.getAttribute('data-vat-payment-picker-text').toLocaleLowerCase().indexOf(query) === -1; });
+    });
+    $('[data-vat-payment-picker-apply]', modalRoot).addEventListener('click', function () {
+      input.value = $$('[data-vat-payment-picker-account]:checked', modalRoot).map(function (checkbox) { return checkbox.value; }).join(', ');
+      closeModal();
+      input.focus();
+    });
+  }
+
   function editionReportChildView(child, groupId, tabId) {
     var backLabel = groupId === 'editions' && tabId === 'journals' ? 'Tous les éléments Journaux' : 'Tous les états';
     var backLink = '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(accountingMenuHash(groupId, tabId)) + '">← ' + esc(backLabel) + '</a>';
@@ -25265,6 +25500,8 @@
         : editionReportCatalog(tab.children, group.id, tab.id, tab.label);
     } else if (group.id === 'declarations' && tab.id === 'vat-difference') {
       exchangeFeature = viewVatDifferenceReport('');
+    } else if (group.id === 'declarations' && tab.id === 'vat-payment') {
+      exchangeFeature = viewVatPaymentReport('');
     } else if (isJournalEntrySubmenu) {
       exchangeFeature = viewEntryJournalSelector();
     } else if (group.id === 'saisie' && tab.id === 'live-cash') {
@@ -26602,6 +26839,7 @@
     if (route === 'menu') {
       var menuParams = parseHash().params;
       if (menuParams.g === 'declarations' && menuParams.t === 'vat-difference') bindVatDifferenceReport();
+      if (menuParams.g === 'declarations' && menuParams.t === 'vat-payment') bindVatPaymentReport();
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && (menuParams.c === 'journal-lines' || menuParams.c === 'journal-modified-pieces' || menuParams.c === 'journal-unbalanced-pieces' || menuParams.c === 'journal-entry-totals' || menuParams.c === 'journal-individual-account-totals' || menuParams.c === 'journal-summary-account-totals' || menuParams.c === 'journal-third-party-totals' || menuParams.c === 'journal-analytic-center-totals' || menuParams.c === 'journal-currency-totals')) bindJournalLinesReport();
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && menuParams.c === 'journal-allocation-sheet') bindJournalAllocationSheet();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-balance') bindGeneralBalanceReport();
