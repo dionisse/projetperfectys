@@ -25558,7 +25558,13 @@
 
   function aibSuppliersDefinitionRows(configuration) {
     return configuration.categories.map(function (category) {
-      return '<tr data-aib-category-row="' + esc(category.key) + '" tabindex="0" aria-selected="false"><td><label class="sr-only" for="aib-rate-' + esc(category.key) + '">' + esc(category.label) + ' · taux en pourcentage</label><input id="aib-rate-' + esc(category.key) + '" type="text" inputmode="decimal" maxlength="24" data-aib-rate="' + esc(category.key) + '" value="' + esc(category.rate) + '" placeholder="%" aria-label="Taux de ' + esc(category.label) + '"></td><td><strong class="aib-suppliers-category-label">-- ' + esc(category.label) + '</strong><input type="text" data-aib-accounts="' + esc(category.key) + '" value="' + esc(category.accounts.join(', ')) + '" placeholder="Sélectionner des comptes" readonly aria-label="Comptes pour ' + esc(category.label) + '"></td></tr>';
+      var rows = category.lines.map(function (line, index) {
+        return '<tr data-aib-line-row="' + esc(category.key) + '" data-aib-line-id="' + esc(line.id) + '" tabindex="0" aria-selected="false"><td><label class="sr-only" for="aib-rate-' + esc(line.id) + '">' + esc(category.label) + ' · ligne ' + (index + 1) + ' · taux en pourcentage</label><input id="aib-rate-' + esc(line.id) + '" type="text" inputmode="decimal" maxlength="24" data-aib-rate="' + esc(category.key) + '" data-aib-line-id="' + esc(line.id) + '" value="' + esc(line.rate) + '" placeholder="%" aria-label="Taux de ' + esc(category.label) + ', ligne ' + (index + 1) + '"></td><td>' +
+          (index === 0 ? '<strong class="aib-suppliers-category-label">-- ' + esc(category.label) + '</strong>' : '<span class="aib-suppliers-category-continuation">' + esc(category.label) + ' · ligne ' + (index + 1) + '</span>') +
+          '<div class="aib-suppliers-account-row"><input type="text" data-aib-accounts="' + esc(category.key) + '" data-aib-line-id="' + esc(line.id) + '" value="' + esc(line.accounts.join(', ')) + '" placeholder="Sélectionner des comptes" readonly aria-label="Comptes pour ' + esc(category.label) + ', ligne ' + (index + 1) + '"><button type="button" class="btn btn-ghost btn-sm aib-suppliers-remove-line" data-aib-remove-line="' + esc(category.key) + '" data-aib-line-id="' + esc(line.id) + '"' + (category.lines.length <= 1 ? ' disabled title="Une rubrique doit conserver au moins une ligne."' : '') + '>Retirer</button></div></td></tr>';
+      }).join('');
+      return '<tr class="aib-suppliers-group-row"><th colspan="2">-- ' + esc(category.label) + '</th></tr>' + rows +
+        '<tr class="aib-suppliers-add-row"><td colspan="2"><button type="button" class="btn btn-ghost btn-sm" data-aib-add-line="' + esc(category.key) + '">Ajouter une ligne à ' + esc(category.label) + '</button></td></tr>';
     }).join('');
   }
 
@@ -25572,7 +25578,7 @@
       '<div class="page-header"><div><span class="page-kicker">DÉCLARATIONS PÉRIODIQUES · AIB</span><h2>État mensuel des retenues d’AIB sur les fournisseurs</h2><p>Définissez les taux et comptes de l’année, puis préparez les paramètres de l’état mensuel.</p></div></div>' +
       '<form id="aib-suppliers-form" novalidate><div class="aib-suppliers-layout">' +
         '<section class="card aib-suppliers-definitions-card"><div class="aib-suppliers-card-heading"><div><span class="page-kicker">DÉFINITION ANNUELLE</span><h3>Taux de l’AIB · comptes</h3><p>Les valeurs restent vierges jusqu’à votre paramétrage; elles sont conservées par dossier et année.</p></div><span id="aib-suppliers-year-badge" class="aib-suppliers-year-badge">Référentiel ' + initialYear + '</span></div>' +
-          '<div class="aib-suppliers-definition-table-wrap"><table class="aib-suppliers-definition-table"><thead><tr><th scope="col">Taux de l’AIB</th><th scope="col">Comptes</th></tr></thead><tbody>' + aibSuppliersDefinitionRows(configuration) + '</tbody></table></div>' +
+          '<div class="aib-suppliers-definition-table-wrap"><table class="aib-suppliers-definition-table"><thead><tr><th scope="col">Taux de l’AIB</th><th scope="col">Comptes</th></tr></thead><tbody id="aib-suppliers-definitions-body">' + aibSuppliersDefinitionRows(configuration) + '</tbody></table></div>' +
           '<div class="aib-suppliers-definition-actions"><button type="button" class="btn btn-ghost" data-aib-select-accounts disabled>Sélection…</button><span class="small muted" id="aib-suppliers-selection-hint">Sélectionnez une ligne pour choisir ses comptes.</span></div>' +
         '</section>' +
         '<div class="aib-suppliers-details-column">' +
@@ -25589,10 +25595,17 @@
     return AibSuppliersReport.normalise({
       year: year,
       categories: AibSuppliersReport.CATEGORIES.map(function (category) {
+        var lineRows = $$('[data-aib-line-row="' + category.key + '"]', form);
         return {
           key: category.key,
-          rate: $('[data-aib-rate="' + category.key + '"]', form).value,
-          accounts: AibSuppliersReport.cleanAccounts($('[data-aib-accounts="' + category.key + '"]', form).value)
+          lines: lineRows.map(function (row) {
+            var lineId = row.getAttribute('data-aib-line-id');
+            return {
+              id: lineId,
+              rate: $('[data-aib-rate][data-aib-line-id="' + lineId + '"]', row).value,
+              accounts: AibSuppliersReport.cleanAccounts($('[data-aib-accounts][data-aib-line-id="' + lineId + '"]', row).value)
+            };
+          })
         };
       })
     }, year);
@@ -25600,19 +25613,21 @@
 
   function aibSuppliersPreviewMarkup(preparation) {
     var categories = preparation.configuration.categories.map(function (category) {
-      return '<tr><th scope="row">' + esc(category.label) + '</th><td class="num">' + esc(category.rate) + ' %</td><td>' + esc(category.accounts.join(', ')) + '</td></tr>';
+      return category.lines.map(function (line, index) {
+        return '<tr><th scope="row">' + esc(category.label) + '</th><td>' + (index + 1) + '</td><td class="num">' + esc(line.rate) + ' %</td><td>' + esc(line.accounts.join(', ')) + '</td></tr>';
+      }).join('');
     }).join('');
     var monthOption = aibSuppliersPeriodOptions().find(function (item) { return item.value === preparation.period; });
     var paymentText = preparation.payment.method === 'cash' ? 'Espèces' : (preparation.payment.method === 'cheque' ? 'Chèque' : 'Non renseigné');
     if (preparation.payment.method === 'cheque') paymentText += ' · N° ' + (preparation.payment.cheque || 'non renseigné') + ' · Banque : ' + (preparation.payment.bank || 'non renseignée');
     return '<article class="aib-suppliers-preview"><div class="aib-suppliers-preview-heading"><div><span class="page-kicker">APERÇU DE PRÉPARATION · ' + esc(monthOption ? monthOption.label : preparation.period) + '</span><h3>État mensuel des retenues d’AIB sur les fournisseurs</h3></div></div>' +
       '<dl class="aib-suppliers-preview-details"><div><dt>Mois de référence</dt><dd>' + esc(monthOption ? monthOption.label : preparation.period) + '</dd></div><div><dt>Mode de règlement</dt><dd>' + esc(paymentText) + '</dd></div><div><dt>Signataire (paramétrage commun)</dt><dd>' + esc(preparation.declarant.signer || 'Non renseigné') + '</dd></div><div><dt>Ville de signature</dt><dd>' + esc(preparation.declarant.city || 'Non renseignée') + '</dd></div><div><dt>Date de signature</dt><dd>' + esc(preparation.declarant.signatureDate ? dateLabel(preparation.declarant.signatureDate) : 'Non renseignée') + '</dd></div></dl>' +
-      '<div class="aib-suppliers-preview-table-wrap"><table class="data-table aib-suppliers-preview-table"><thead><tr><th>Nature de retenue</th><th>Taux défini</th><th>Comptes associés</th></tr></thead><tbody>' + categories + '</tbody></table></div>' +
+      '<div class="aib-suppliers-preview-table-wrap"><table class="data-table aib-suppliers-preview-table"><thead><tr><th>Nature de retenue</th><th>Ligne</th><th>Taux défini</th><th>Comptes associés</th></tr></thead><tbody>' + categories + '</tbody></table></div>' +
       '<div class="alert warning"><div><strong>Aucun tableau Excel ni montant de retenue n’est produit dans cette étape.</strong> L’aperçu restitue uniquement les paramètres saisis; le format Excel et le raccordement aux données fournisseurs restent à construire.</div></div></article>';
   }
 
-  function openAibSuppliersAccountPicker(categoryKey, form) {
-    var input = $('[data-aib-accounts="' + categoryKey + '"]', form);
+  function openAibSuppliersAccountPicker(categoryKey, lineId, form) {
+    var input = $('[data-aib-accounts="' + categoryKey + '"][data-aib-line-id="' + lineId + '"]', form);
     if (!input) return;
     var selected = AibSuppliersReport.cleanAccounts(input.value);
     var accounts = S.accounts().slice().sort(function (left, right) { return String(left.code).localeCompare(String(right.code), 'fr', { numeric: true }); });
@@ -25633,6 +25648,7 @@
     $('[data-aib-picker-apply]', modalRoot).addEventListener('click', function () {
       input.value = AibSuppliersReport.cleanAccounts($$('[data-aib-picker-account]:checked', modalRoot).map(function (checkbox) { return checkbox.value; })).join(', ');
       closeModal();
+      input.dispatchEvent(new Event('input', { bubbles: true }));
       input.focus();
     });
   }
@@ -25641,54 +25657,110 @@
     var form = $('#aib-suppliers-form');
     if (!form) return;
     var period = $('#aib-suppliers-period', form);
+    var body = $('#aib-suppliers-definitions-body', form);
     var result = $('#aib-suppliers-result');
     var status = $('#aib-suppliers-status');
-    var selectedCategoryKey = '';
+    var selectedLine = null;
     var savedConfiguration = null;
-    function loadYear(year) {
-      var configuration = aibSuppliersConfiguration(year);
-      AibSuppliersReport.CATEGORIES.forEach(function (category) {
-        $('[data-aib-rate="' + category.key + '"]', form).value = configuration.categories.find(function (row) { return row.key === category.key; }).rate;
-        $('[data-aib-accounts="' + category.key + '"]', form).value = configuration.categories.find(function (row) { return row.key === category.key; }).accounts.join(', ');
+    var currentLoadedYear = null;
+    var draftConfigurations = Object.create(null);
+
+    function currentYear() {
+      return Number(period.value.slice(0, 4)) || Number(S.exercise()) || new Date().getFullYear();
+    }
+    function clearLineSelection() {
+      selectedLine = null;
+      $$('[data-aib-line-row]', form).forEach(function (row) {
+        row.classList.remove('is-selected');
+        row.setAttribute('aria-selected', 'false');
       });
-      $('#aib-suppliers-year-badge').textContent = 'Référentiel ' + year;
-      selectedCategoryKey = '';
-      $$('[data-aib-category-row]', form).forEach(function (row) { row.classList.remove('is-selected'); row.setAttribute('aria-selected', 'false'); });
       $('[data-aib-select-accounts]', form).disabled = true;
       $('#aib-suppliers-selection-hint', form).textContent = 'Sélectionnez une ligne pour choisir ses comptes.';
-      status.textContent = 'Définition des taux non validée.';
+    }
+    function renderDefinitionRows(configuration) {
+      body.innerHTML = aibSuppliersDefinitionRows(configuration);
+      clearLineSelection();
+    }
+    function markDefinitionChanged() {
+      status.textContent = 'Modifications à valider.';
+      result.innerHTML = '';
+      if (currentLoadedYear) draftConfigurations[currentLoadedYear] = aibSuppliersConfigurationFromForm(form, currentLoadedYear);
+    }
+    function loadYear(year) {
+      if (currentLoadedYear && status.textContent === 'Modifications à valider.') {
+        draftConfigurations[currentLoadedYear] = aibSuppliersConfigurationFromForm(form, currentLoadedYear);
+      }
+      var configuration = draftConfigurations[year] || aibSuppliersConfiguration(year);
+      renderDefinitionRows(configuration);
+      $('#aib-suppliers-year-badge').textContent = 'Référentiel ' + year;
+      status.textContent = draftConfigurations[year] ? 'Modifications à valider.' : 'Définition des taux non validée.';
       savedConfiguration = configuration;
+      currentLoadedYear = Number(year);
       result.innerHTML = '';
     }
-    function selectCategory(row) {
-      selectedCategoryKey = row.getAttribute('data-aib-category-row');
-      $$('[data-aib-category-row]', form).forEach(function (item) {
+    function selectLine(row) {
+      selectedLine = { categoryKey: row.getAttribute('data-aib-line-row'), lineId: row.getAttribute('data-aib-line-id') };
+      $$('[data-aib-line-row]', form).forEach(function (item) {
         var isSelected = item === row;
         item.classList.toggle('is-selected', isSelected);
         item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
       });
-      $('[data-aib-select-accounts]', form).disabled = !selectedCategoryKey;
-      var category = AibSuppliersReport.CATEGORIES.find(function (item) { return item.key === selectedCategoryKey; });
-      $('#aib-suppliers-selection-hint', form).textContent = category ? 'Comptes à sélectionner pour « ' + category.label + ' ».' : 'Sélectionnez une ligne pour choisir ses comptes.';
+      $('[data-aib-select-accounts]', form).disabled = false;
+      var category = AibSuppliersReport.CATEGORIES.find(function (item) { return item.key === selectedLine.categoryKey; });
+      var siblingLines = $$('[data-aib-line-row="' + selectedLine.categoryKey + '"]', form);
+      var lineNumber = siblingLines.indexOf(row) + 1;
+      $('#aib-suppliers-selection-hint', form).textContent = category ? 'Comptes à sélectionner pour « ' + category.label + ' », ligne ' + lineNumber + '.' : 'Sélectionnez une ligne pour choisir ses comptes.';
     }
-    $$('[data-aib-category-row]', form).forEach(function (row) {
-      row.addEventListener('click', function () { selectCategory(row); });
-      row.addEventListener('keydown', function (event) { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectCategory(row); } });
-      $('[data-aib-rate]', row).addEventListener('focus', function () { selectCategory(row); });
-    });
-    period.addEventListener('change', function () { var year = Number(period.value.slice(0, 4)); if (year) loadYear(year); });
     function updateAibPaymentFields() {
       var selectedMode = $('input[name="aib-suppliers-payment"]:checked', form);
       var chequeMode = !!selectedMode && selectedMode.value === 'cheque';
       $('#aib-suppliers-cheque', form).disabled = !chequeMode;
       $('#aib-suppliers-bank', form).disabled = !chequeMode;
     }
+
+    body.addEventListener('click', function (event) {
+      var addButton = event.target.closest('[data-aib-add-line]');
+      if (addButton) {
+        var updated = AibSuppliersReport.addLine(aibSuppliersConfigurationFromForm(form, currentYear()), addButton.getAttribute('data-aib-add-line'));
+        renderDefinitionRows(updated);
+        markDefinitionChanged();
+        return;
+      }
+      var removeButton = event.target.closest('[data-aib-remove-line]');
+      if (removeButton && !removeButton.disabled) {
+        var reduced = AibSuppliersReport.removeLine(aibSuppliersConfigurationFromForm(form, currentYear()), removeButton.getAttribute('data-aib-remove-line'), removeButton.getAttribute('data-aib-line-id'));
+        renderDefinitionRows(reduced);
+        markDefinitionChanged();
+        return;
+      }
+      var row = event.target.closest('[data-aib-line-row]');
+      if (row) selectLine(row);
+    });
+    body.addEventListener('keydown', function (event) {
+      var row = event.target.closest('[data-aib-line-row]');
+      if (row && event.target === row && (event.key === 'Enter' || event.key === ' ')) {
+        event.preventDefault();
+        selectLine(row);
+      }
+    });
+    body.addEventListener('focusin', function (event) {
+      if (event.target.matches('[data-aib-rate]')) {
+        var row = event.target.closest('[data-aib-line-row]');
+        if (row) selectLine(row);
+      }
+    });
+    body.addEventListener('input', function (event) {
+      if (event.target.matches('[data-aib-rate], [data-aib-accounts]')) markDefinitionChanged();
+    });
+    period.addEventListener('change', function () {
+      var year = Number(period.value.slice(0, 4));
+      if (year) loadYear(year);
+    });
     $$('input[name="aib-suppliers-payment"]', form).forEach(function (radio) {
       radio.addEventListener('change', updateAibPaymentFields);
     });
-    $('[data-aib-select-accounts]', form).addEventListener('click', function () { if (selectedCategoryKey) openAibSuppliersAccountPicker(selectedCategoryKey, form); });
-    $$('[data-aib-category-row]', form).forEach(function (row) {
-      row.addEventListener('dblclick', function () { selectCategory(row); openAibSuppliersAccountPicker(selectedCategoryKey, form); });
+    $('[data-aib-select-accounts]', form).addEventListener('click', function () {
+      if (selectedLine) openAibSuppliersAccountPicker(selectedLine.categoryKey, selectedLine.lineId, form);
     });
     $('[data-aib-validate-definition]', form).addEventListener('click', function () {
       var year = period.value.slice(0, 4);
@@ -25697,6 +25769,7 @@
       if (!validation.ok) { toast(validation.errors.join(' '), 'warning'); return; }
       if (!aibSuppliersSaveConfiguration(year, validation.configuration)) { toast('La définition est valide, mais elle n’a pas pu être enregistrée dans ce navigateur.', 'warning'); return; }
       savedConfiguration = validation.configuration;
+      delete draftConfigurations[year];
       status.textContent = 'Définition validée par l’utilisateur · ' + year + ' (format contrôlé, conformité fiscale non vérifiée).';
       toast('Définition enregistrée pour ' + year + '.', 'success');
     });
@@ -25723,18 +25796,11 @@
       form.reset();
       updateAibPaymentFields();
       result.innerHTML = '';
-      var year = Number(S.exercise()) || new Date().getFullYear();
-      var configuration = savedConfiguration && savedConfiguration.year === year ? savedConfiguration : aibSuppliersConfiguration(year);
-      AibSuppliersReport.CATEGORIES.forEach(function (category) {
-        var row = configuration.categories.find(function (item) { return item.key === category.key; });
-        $('[data-aib-rate="' + category.key + '"]', form).value = row.rate;
-        $('[data-aib-accounts="' + category.key + '"]', form).value = row.accounts.join(', ');
-      });
-      status.textContent = 'Définition des taux non validée.';
-      selectedCategoryKey = '';
-      $('[data-aib-select-accounts]', form).disabled = true;
-      $$('[data-aib-category-row]', form).forEach(function (row) { row.classList.remove('is-selected'); row.setAttribute('aria-selected', 'false'); });
+      draftConfigurations = Object.create(null);
+      currentLoadedYear = null;
+      loadYear(Number(S.exercise()) || new Date().getFullYear());
     });
+
     updateAibPaymentFields();
     loadYear(Number(S.exercise()) || new Date().getFullYear());
   }
