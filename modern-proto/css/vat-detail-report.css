@@ -1,0 +1,49 @@
+.vat-detail-report-detail { display: grid; gap: .9rem; }
+.vat-detail-report-detail > .page-header { margin-bottom: 0; }
+.vat-detail-report-detail > .page-header h2 { margin: .2rem 0; font-size: 1.2rem; }
+.vat-detail-report-detail > .page-header p { margin: .25rem 0 0; color: var(--muted, #64748b); font-size: .82rem; }
+.vat-detail-form { display: block; }
+.vat-detail-selection-grid { display: grid; grid-template-columns: minmax(0, 1fr) 150px; grid-template-areas: "period period" "columns actions"; gap: .75rem; align-items: stretch; }
+.vat-detail-period-card, .vat-detail-columns-card { min-width: 0; margin: 0; padding: .85rem 1rem; border: 1px solid var(--line, #e3e8e5); border-radius: .75rem; background: #fff; }
+.vat-detail-period-card { grid-area: period; }
+.vat-detail-columns-card { grid-area: columns; }
+.vat-detail-period-card legend, .vat-detail-columns-card legend { padding: 0 .35rem; font-weight: 800; }
+.vat-detail-period-card .field { max-width: 360px; margin: .25rem auto .15rem; display: grid; grid-template-columns: minmax(130px, auto) minmax(180px, 1fr); align-items: center; gap: .8rem; }
+.vat-detail-period-card .field label { margin: 0; font-weight: 600; }
+.vat-detail-columns-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem 1rem; }
+.vat-detail-column-option { display: flex; align-items: center; gap: .55rem; min-width: 0; padding: .18rem .25rem; font-size: .88rem; cursor: pointer; }
+.vat-detail-column-option input { width: auto; flex: 0 0 auto; }
+.vat-detail-selection-actions { grid-area: actions; display: flex; flex-direction: column; justify-content: center; gap: .55rem; }
+.vat-detail-selection-actions .btn { width: 100%; }
+.vat-detail-account-config { min-width: 0; margin: 0; padding: .8rem 1rem; border: 1px solid var(--line, #e3e8e5); border-radius: .75rem; background: #fff; }
+.vat-detail-account-config legend { padding: 0 .35rem; font-weight: 800; }
+.vat-detail-account-config-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem 1.2rem; }
+.vat-detail-account-config .field { display: grid; gap: .32rem; margin: 0; }
+.vat-detail-account-config .field label { font-size: .84rem; font-weight: 700; }
+.vat-detail-account-config .field small { color: var(--muted, #64748b); font-size: .76rem; }
+.vat-detail-source-note { margin: .75rem 0 0; font-size: .82rem; line-height: 1.5; }
+.vat-detail-generated-count { color: var(--muted, #64748b); font-size: .84rem; font-weight: 700; }
+#vat-detail-result { scroll-margin-top: 1rem; }
+.vat-detail-results { display: grid; gap: .8rem; padding-top: .65rem; }
+.vat-detail-results-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.vat-detail-results-header h3 { margin: .2rem 0 0; font-size: 1rem; }
+.vat-detail-table-wrap { max-height: min(65vh, 620px); overflow: auto; border: 1px solid var(--line, #e3e8e5); border-radius: .7rem; background: #fff; }
+.vat-detail-table { min-width: 900px; font-variant-numeric: tabular-nums; }
+.vat-detail-table th, .vat-detail-table td { white-space: nowrap; }
+.vat-detail-table td { vertical-align: top; }
+.vat-detail-table td.num { text-align: right; }
+.vat-detail-table .vat-detail-total-row { border-top: 2px solid var(--line, #d8dfdb); background: #f3f6f4; font-weight: 800; }
+.vat-detail-summary { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .6rem 1.4rem; font-size: .9rem; }
+.vat-detail-summary strong { font-variant-numeric: tabular-nums; }
+.vat-detail-preview-actions { display: flex; justify-content: flex-end; }
+.vat-detail-printable .vat-detail-preview-actions { display: none; }
+.vat-detail-print-note { margin-bottom: .9rem; padding: .65rem .8rem; border-left: 3px solid #95aa9b; background: #f5f7f5; color: #46534b; font-size: .76rem; line-height: 1.45; }
+
+@media (max-width: 720px) {
+  .vat-detail-selection-grid { grid-template-columns: 1fr; grid-template-areas: "period" "columns" "actions"; }
+  .vat-detail-period-card .field { grid-template-columns: 1fr; gap: .35rem; }
+  .vat-detail-columns-grid, .vat-detail-account-config-grid { grid-template-columns: 1fr; }
+  .vat-detail-selection-actions { flex-direction: row; justify-content: flex-end; }
+  .vat-detail-selection-actions .btn { width: auto; }
+  .vat-detail-results-header { align-items: flex-start; flex-direction: column; }
+}

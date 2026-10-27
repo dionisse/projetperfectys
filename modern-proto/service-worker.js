@@ -3,7 +3,7 @@
  * Stratégie : réseau d'abord (contenu toujours à jour), cache en secours hors ligne.
  */
 
-const CACHE_NAME = 'perfecto-static-v136';
+const CACHE_NAME = 'perfecto-static-v137';
 const APP_SHELL = [
   './',
   './index.html',
@@ -24,6 +24,7 @@ const APP_SHELL = [
   './css/associated-items-edition.css',
   './css/vat-difference-report.css',
   './css/vat-payment-report.css',
+  './css/vat-detail-report.css',
   './js/accounting-chart.js',
   './js/accounting-framework.js',
   './js/store.js',
@@ -45,6 +46,7 @@ const APP_SHELL = [
   './js/definitions-plans-edition-reports.js',
   './js/vat-difference-report.js',
   './js/vat-payment-report.js',
+  './js/vat-detail-report.js',
   './js/currency-balance-report.js',
   './js/currency-supplementary-reports.js',
   './js/budget-reports.js',

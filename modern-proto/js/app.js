@@ -20,6 +20,7 @@
   var AssociatedItemsReference = window.PerfectoAssociatedAccountItems;
   var VatDifferenceReport = window.PerfectoVatDifferenceReport;
   var VatPaymentReport = window.PerfectoVatPaymentReport;
+  var VatDetailReport = window.PerfectoVatDetailReport;
   var CashOperations = window.PerfectoCashOperations;
   var AccountMovements = window.PerfectoAccountMovements;
   var AccountingExchange = window.PerfectoAccountingExchange;
@@ -25352,6 +25353,157 @@
     });
   }
 
+  function vatDetailConfiguration(year) {
+    var dossier = S.currentDossier() || {};
+    var dossierKey = String(dossier.id || dossier.code || dossier.name || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
+    var storageKey = 'perfecto.vat-detail-accounts.v1.' + dossierKey + '.' + year;
+    try {
+      var saved = localStorage.getItem(storageKey);
+      if (saved) return VatDetailReport.normaliseConfiguration(JSON.parse(saved));
+    } catch (error) { /* Valeurs par défaut modifiables si le stockage local est indisponible. */ }
+    return VatDetailReport.normaliseConfiguration({});
+  }
+
+  function vatDetailSaveConfiguration(year, configuration) {
+    var dossier = S.currentDossier() || {};
+    var dossierKey = String(dossier.id || dossier.code || dossier.name || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
+    try { localStorage.setItem('perfecto.vat-detail-accounts.v1.' + dossierKey + '.' + year, JSON.stringify(configuration)); }
+    catch (error) { toast('Configuration utilisée pour cet aperçu, mais non enregistrée localement.', 'warning'); }
+  }
+
+  function vatDetailConfigurationInputs(form, configuration) {
+    $('[data-vat-detail-accounts="billedAccounts"]', form).value = configuration.billedAccounts.join(', ');
+    $('[data-vat-detail-accounts="deductibleAccounts"]', form).value = configuration.deductibleAccounts.join(', ');
+  }
+
+  function vatDetailConfigurationFromInputs(form) {
+    return VatDetailReport.normaliseConfiguration({
+      billedAccounts: $('[data-vat-detail-accounts="billedAccounts"]', form).value.split(/[;,]/),
+      deductibleAccounts: $('[data-vat-detail-accounts="deductibleAccounts"]', form).value.split(/[;,]/)
+    });
+  }
+
+  function vatDetailAvailablePeriods() {
+    var years = Object.create(null);
+    var exercise = Number(S.exercise()) || new Date().getFullYear();
+    years[exercise] = true;
+    var dossier = S.currentDossier() || {};
+    [dossier.cycleStart, dossier.cycleEnd].forEach(function (date) {
+      var year = Number(String(date || '').slice(0, 4));
+      if (year >= 1900 && year <= 9999) years[year] = true;
+    });
+    S.entries().forEach(function (entry) {
+      var year = Number(String(entry.date || '').slice(0, 4));
+      if (entry.status === 'posted' && year >= 1900 && year <= 9999) years[year] = true;
+    });
+    return Object.keys(years).map(Number).sort(function (left, right) { return right - left; }).reduce(function (periods, year) {
+      for (var month = 12; month >= 1; month--) {
+        periods.push({ value: year + '-' + String(month).padStart(2, '0'), label: new Intl.DateTimeFormat('fr-FR', { month: 'long' }).format(new Date(year, month - 1, 1)) + ' ' + year });
+      }
+      return periods;
+    }, []);
+  }
+
+  function viewVatDetailReport(backLink) {
+    var periods = vatDetailAvailablePeriods();
+    var initialConfiguration = vatDetailConfiguration(S.exercise());
+    var options = periods.map(function (period) { return '<option value="' + esc(period.value) + '">' + esc(period.label) + '</option>'; }).join('');
+    var checkboxes = VatDetailReport.COLUMNS.map(function (column) {
+      return '<label class="vat-detail-column-option"><input type="checkbox" name="vat-detail-column" value="' + esc(column.key) + '" checked><span>' + esc(column.label) + '</span></label>';
+    }).join('');
+    return '<div class="edition-report-detail-view vat-detail-report-detail">' + backLink +
+      '<div class="page-header"><div><span class="page-kicker">DÉCLARATIONS PÉRIODIQUES · ANNEXE TVA</span><h2>État détaillé à joindre à l’état de paiement</h2><p>Choisissez le mois et les colonnes à restituer.</p></div></div>' +
+      '<form id="vat-detail-form" class="vat-detail-form" novalidate><div class="vat-detail-selection-grid">' +
+        '<fieldset class="card vat-detail-period-card"><legend>Sélection</legend><div class="field"><label for="vat-detail-period">Période de référence</label><select id="vat-detail-period" required><option value="">— Choisir un mois —</option>' + options + '</select></div></fieldset>' +
+        '<fieldset class="card vat-detail-columns-card"><legend>Colonnes à imprimer</legend><div class="vat-detail-columns-grid">' + checkboxes + '</div></fieldset>' +
+        '<div class="vat-detail-selection-actions"><button type="button" class="btn btn-primary" id="vat-detail-validate">Valider</button><button type="button" class="btn btn-ghost" id="vat-detail-cancel">Annuler</button></div>' +
+      '</div>' +
+      '<fieldset class="card vat-detail-account-config"><legend>Comptes de TVA à inclure · modifiables</legend><div class="vat-detail-account-config-grid"><div class="field"><label for="vat-detail-billed-accounts">TVA facturée (préfixes de comptes)</label><input id="vat-detail-billed-accounts" data-vat-detail-accounts="billedAccounts" value="' + esc(initialConfiguration.billedAccounts.join(', ')) + '" autocomplete="off"><small>Codes séparés par des virgules ou points-virgules</small></div><div class="field"><label for="vat-detail-deductible-accounts">TVA déductible (préfixes de comptes)</label><input id="vat-detail-deductible-accounts" data-vat-detail-accounts="deductibleAccounts" value="' + esc(initialConfiguration.deductibleAccounts.join(', ')) + '" autocomplete="off"><small>Le pré-réglage exclut 4455 (factures non parvenues); vous pouvez le modifier.</small></div></div></fieldset></form>' +
+      '<div class="alert warning vat-detail-source-note"><div><strong>Limites des données sources.</strong> Les comptes proposés sont modifiables et enregistrés par dossier et année. Le modèle actuel ne relie pas les lignes aux factures, fournisseurs/clients, IFU ni montants HT : ces cellules resteront vides, elles ne seront pas déduites de la référence comptable.</div></div>' +
+      '<div class="vat-detail-generated-count" id="vat-detail-generated-count">Lignes générées : 0</div><div id="vat-detail-result" aria-live="polite"></div></div>';
+  }
+
+  function vatDetailSelectedColumns(form) {
+    var selected = Object.create(null);
+    $$('input[name="vat-detail-column"]:checked', form).forEach(function (input) { selected[input.value] = true; });
+    return selected;
+  }
+
+  function vatDetailResultMarkup(report, columns) {
+    var empty = report.generatedLineCount === 0;
+    var headings = ['Date comptable', 'Journal', 'Pièce comptable', 'Compte(s) TVA'];
+    VatDetailReport.COLUMNS.forEach(function (column) { if (columns[column.key]) headings.push(column.label); });
+    var header = headings.map(function (label) { return '<th>' + esc(label) + '</th>'; }).join('');
+    var tableRows = report.rows.map(function (row) {
+      var cells = [dateLabel(row.date), row.journal || '—', row.reference || '—', row.accounts.map(function (account) { return esc(account.code + ' · ' + account.label); }).join('<br>')];
+      VatDetailReport.COLUMNS.forEach(function (column) {
+        if (!columns[column.key]) return;
+        if (column.key === 'vatBilled') cells.push(esc(amount(row.vatBilled)));
+        else if (column.key === 'vatDeductible') cells.push(esc(amount(row.vatDeductible)));
+        else cells.push('—');
+      });
+      return '<tr>' + cells.map(function (cell, index) { return '<td' + (index >= 4 && (headings[index] === 'TVA facturée' || headings[index] === 'TVA déductible') ? ' class="num"' : '') + '>' + cell + '</td>'; }).join('') + '</tr>';
+    }).join('');
+    if (!empty) {
+      var totals = ['Total période', '', '', ''];
+      VatDetailReport.COLUMNS.forEach(function (column) {
+        if (!columns[column.key]) return;
+        if (column.key === 'vatBilled') totals.push(esc(amount(report.totals.vatBilled)));
+        else if (column.key === 'vatDeductible') totals.push(esc(amount(report.totals.vatDeductible)));
+        else totals.push('—');
+      });
+      tableRows += '<tr class="vat-detail-total-row">' + totals.map(function (cell, index) { return '<td' + (index >= 4 ? ' class="num"' : '') + '>' + cell + '</td>'; }).join('') + '</tr>';
+    }
+    return '<section class="vat-detail-results"><div class="vat-detail-results-header"><div><span class="page-kicker">PÉRIODE · ' + esc(report.period) + '</span><h3>Détail des montants comptabilisés</h3></div><span class="vat-detail-generated-count">Lignes générées : ' + report.generatedLineCount + '</span></div>' +
+      (empty ? '<div class="empty-state">Aucun mouvement validé sur les comptes de TVA retenus pour cette période.</div>' : '<div class="vat-detail-table-wrap"><table class="data-table vat-detail-table"><thead><tr>' + header + '</tr></thead><tbody>' + tableRows + '</tbody></table></div>') +
+      '<div class="vat-detail-summary"><span>TVA facturée aux clients : <strong>' + esc(amount(report.totals.vatBilled)) + ' XOF</strong></span><span>TVA déductible : <strong>' + esc(amount(report.totals.vatDeductible)) + ' XOF</strong></span></div>' +
+      '<div class="vat-detail-preview-actions"><button type="button" class="btn btn-primary" data-vat-detail-open-preview>Ouvrir l’aperçu plein écran</button></div></section>';
+  }
+
+  function vatDetailPrintableHtml(report, columns) {
+    var markup = vatDetailResultMarkup(report, columns);
+    var note = '<div class="vat-detail-print-note"><strong>Source et limites :</strong> montants issus des écritures validées sur les comptes retenus ci-dessous. Le modèle ne stocke pas les numéros de facture, les fournisseurs/clients, les IFU ni les montants HT par ligne; ces informations ne sont pas reconstituées depuis la référence comptable.<br><strong>Comptes TVA facturée :</strong> ' + esc(report.configuration.billedAccounts.join(', ')) + ' · <strong>Comptes TVA déductible :</strong> ' + esc(report.configuration.deductibleAccounts.join(', ')) + '.</div>';
+    return '<article class="vat-detail-printable">' + note + markup.replace(/<div class="vat-detail-preview-actions">[\s\S]*?<\/div><\/section>$/, '</section>') + '</article>';
+  }
+
+  function bindVatDetailReport() {
+    var form = $('#vat-detail-form');
+    if (!form) return;
+    var result = $('#vat-detail-result');
+    var count = $('#vat-detail-generated-count');
+    $('#vat-detail-period', form).addEventListener('change', function (event) {
+      var year = event.target.value.slice(0, 4);
+      if (year) vatDetailConfigurationInputs(form, vatDetailConfiguration(year));
+    });
+    $('#vat-detail-cancel', form).addEventListener('click', function () {
+      form.reset();
+      result.innerHTML = '';
+      count.textContent = 'Lignes générées : 0';
+    });
+    $('#vat-detail-validate', form).addEventListener('click', function () {
+      var period = $('#vat-detail-period', form).value;
+      if (!/^\d{4}-\d{2}$/.test(period)) { toast('Choisissez une période de référence.', 'warning'); return; }
+      var columns = vatDetailSelectedColumns(form);
+      if (!Object.keys(columns).length) { toast('Cochez au moins une colonne à imprimer.', 'warning'); return; }
+      var report;
+      var configuration;
+      try {
+        configuration = vatDetailConfigurationFromInputs(form);
+        report = VatDetailReport.build({
+          period: period, entries: S.entries(), accounts: S.accounts(), configuration: configuration,
+          decimalPlaces: S.accountingConfiguration().decimalPlaces
+        });
+      } catch (error) { toast(error.message || 'Impossible de produire le détail TVA.', 'warning'); return; }
+      vatDetailSaveConfiguration(period.slice(0, 4), report.configuration);
+      count.textContent = 'Lignes générées : ' + report.generatedLineCount;
+      result.innerHTML = vatDetailResultMarkup(report, columns);
+      $('[data-vat-detail-open-preview]', result).addEventListener('click', function () {
+        openReportPreview('Aperçu — État détaillé à joindre à l’état de paiement', vatDetailPrintableHtml(report, columns));
+      });
+      result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
   function editionReportChildView(child, groupId, tabId) {
     var backLabel = groupId === 'editions' && tabId === 'journals' ? 'Tous les éléments Journaux' : 'Tous les états';
     var backLink = '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(accountingMenuHash(groupId, tabId)) + '">← ' + esc(backLabel) + '</a>';
@@ -25502,6 +25654,8 @@
       exchangeFeature = viewVatDifferenceReport('');
     } else if (group.id === 'declarations' && tab.id === 'vat-payment') {
       exchangeFeature = viewVatPaymentReport('');
+    } else if (group.id === 'declarations' && tab.id === 'vat-detail') {
+      exchangeFeature = viewVatDetailReport('');
     } else if (isJournalEntrySubmenu) {
       exchangeFeature = viewEntryJournalSelector();
     } else if (group.id === 'saisie' && tab.id === 'live-cash') {
@@ -26840,6 +26994,7 @@
       var menuParams = parseHash().params;
       if (menuParams.g === 'declarations' && menuParams.t === 'vat-difference') bindVatDifferenceReport();
       if (menuParams.g === 'declarations' && menuParams.t === 'vat-payment') bindVatPaymentReport();
+      if (menuParams.g === 'declarations' && menuParams.t === 'vat-detail') bindVatDetailReport();
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && (menuParams.c === 'journal-lines' || menuParams.c === 'journal-modified-pieces' || menuParams.c === 'journal-unbalanced-pieces' || menuParams.c === 'journal-entry-totals' || menuParams.c === 'journal-individual-account-totals' || menuParams.c === 'journal-summary-account-totals' || menuParams.c === 'journal-third-party-totals' || menuParams.c === 'journal-analytic-center-totals' || menuParams.c === 'journal-currency-totals')) bindJournalLinesReport();
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && menuParams.c === 'journal-allocation-sheet') bindJournalAllocationSheet();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-balance') bindGeneralBalanceReport();
