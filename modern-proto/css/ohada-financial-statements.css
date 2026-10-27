@@ -1,0 +1,21 @@
+.ohada-financial-statements-detail { display: grid; gap: .85rem; max-width: 1000px; margin-inline: auto; }
+.ohada-financial-statements-detail > .page-header { margin: 0; }
+.ohada-financial-statements-detail > .page-header h2 { margin: .2rem 0; font-size: 1.18rem; }
+.ohada-statements-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(190px, .85fr); gap: 1rem; min-height: min(58vh, 570px); }
+.ohada-statements-list-wrap { min-width: 0; max-height: min(68vh, 620px); overflow: auto; padding: .25rem; border: 1px solid var(--line, #bac2bd); background: #fff; }
+.ohada-statement-choice { display: block; width: 100%; min-height: 2rem; padding: .24rem .45rem; border: 0; border-radius: 0; background: transparent; color: var(--text, #18211c); text-align: left; font: inherit; cursor: pointer; }
+.ohada-statement-choice:hover { background: #eef3ef; }
+.ohada-statement-choice.is-selected { background: #0878d1; color: #fff; }
+.ohada-statement-choice:focus-visible { outline: 2px solid #174f82; outline-offset: -2px; }
+.ohada-statement-separator { height: .9rem; margin: .1rem 0; border-bottom: 1px dashed #778079; }
+.ohada-statements-side { display: flex; flex-direction: column; align-items: stretch; justify-content: space-between; gap: 1rem; }
+.ohada-statements-side .btn { width: 100%; }
+.ohada-statement-preview { display: grid; gap: .8rem; }
+.ohada-statement-preview-heading h3 { margin: .2rem 0 0; font-size: 1.05rem; }
+.ohada-statement-preview .alert { margin: 0; }
+.ohada-statement-preview-ready { margin: .2rem 0; }
+@media (max-width: 680px) {
+  .ohada-statements-layout { grid-template-columns: 1fr; min-height: 0; }
+  .ohada-statements-side { flex-direction: row; justify-content: flex-end; }
+  .ohada-statements-side .btn { width: auto; }
+}

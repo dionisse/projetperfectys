@@ -24,6 +24,7 @@
   var AibSuppliersReport = window.PerfectoAibSuppliersReport;
   var NominativeDeclarationReport = window.PerfectoNominativeDeclarationReport;
   var BicAdvancesReport = window.PerfectoBicAdvancesReport;
+  var OhadaFinancialStatements = window.PerfectoOhadaFinancialStatements;
   var CashOperations = window.PerfectoCashOperations;
   var AccountMovements = window.PerfectoAccountMovements;
   var AccountingExchange = window.PerfectoAccountingExchange;
@@ -25995,6 +25996,60 @@
     });
   }
 
+  function viewOhadaFinancialStatements(backLink) {
+    var selectedItem = OhadaFinancialStatements.item(OhadaFinancialStatements.DEFAULT_SELECTED_KEY) || OhadaFinancialStatements.ITEMS.find(function (item) { return !item.separator; });
+    var listItems = OhadaFinancialStatements.ITEMS.map(function (item) {
+      if (item.separator) return '<div class="ohada-statement-separator" aria-hidden="true"></div>';
+      var selected = selectedItem && item.key === selectedItem.key;
+      return '<button type="button" class="ohada-statement-choice' + (selected ? ' is-selected' : '') + '" role="option" aria-selected="' + (selected ? 'true' : 'false') + '" data-ohada-statement="' + esc(item.key) + '">' + esc(item.label) + '</button>';
+    }).join('');
+    return '<div class="edition-report-detail-view ohada-financial-statements-detail">' + backLink +
+      '<div class="page-header"><div><span class="page-kicker">DÉCLARATIONS PÉRIODIQUES · OHADA</span><h2>Tableaux financiers et Liasse fiscale</h2></div></div>' +
+      '<div class="ohada-statements-layout"><div class="ohada-statements-list-wrap" role="listbox" aria-label="États financiers et fiscaux">' + listItems + '</div><div class="ohada-statements-side"><button type="button" class="btn btn-primary" data-ohada-edit>Éditer l’état sélectionné</button><button type="button" class="btn btn-ghost" data-ohada-close>Fermer</button></div></div>' +
+      '<div class="ohada-statements-result" id="ohada-statements-result" aria-live="polite"></div></div>';
+  }
+
+  function ohadaFinancialStatementPreview(preview) {
+    var exercise = preview.exercise ? 'Exercice ' + preview.exercise : 'Exercice non renseigné';
+    return '<article class="ohada-statement-preview"><div class="ohada-statement-preview-heading"><div><span class="page-kicker">APERÇU · ' + esc(exercise) + '</span><h3>' + esc(preview.label) + '</h3></div></div>' +
+      '<div class="alert warning"><div><strong>Aucun tableau chiffré n’est généré à ce stade.</strong> Le format de restitution, les correspondances entre les comptes du dossier et les rubriques OHADA, ainsi que les règles fiscales applicables doivent être confirmés avant de produire des montants.</div></div>' +
+      '<div class="empty-state">Aperçu de sélection uniquement · aucune ligne financière ou fiscale calculée.</div></article>';
+  }
+
+  function bindOhadaFinancialStatements() {
+    var list = $('.ohada-statements-list-wrap');
+    if (!list) return;
+    var result = $('#ohada-statements-result');
+    var selectedKey = (OhadaFinancialStatements.item(OhadaFinancialStatements.DEFAULT_SELECTED_KEY) || OhadaFinancialStatements.ITEMS.find(function (item) { return !item.separator; }) || {}).key || '';
+    list.addEventListener('click', function (event) {
+      var choice = event.target.closest('[data-ohada-statement]');
+      if (!choice) return;
+      selectedKey = choice.getAttribute('data-ohada-statement');
+      $$('[data-ohada-statement]', list).forEach(function (item) {
+        var selected = item === choice;
+        item.classList.toggle('is-selected', selected);
+        item.setAttribute('aria-selected', selected ? 'true' : 'false');
+      });
+    });
+    list.addEventListener('keydown', function (event) {
+      if (event.target.matches('[data-ohada-statement]') && (event.key === 'Enter' || event.key === ' ')) {
+        event.preventDefault();
+        event.target.click();
+      }
+    });
+    $('[data-ohada-edit]').addEventListener('click', function () {
+      if (!selectedKey) { toast('Sélectionnez un état dans la liste.', 'warning'); return; }
+      var preview;
+      try { preview = OhadaFinancialStatements.buildPreview(selectedKey, S.exercise()); }
+      catch (error) { toast(error.message || 'Impossible d’ouvrir cet aperçu.', 'warning'); return; }
+      result.innerHTML = '<div class="alert info ohada-statement-preview-ready">Aperçu de sélection ouvert en plein écran; aucun montant n’a été calculé.</div>';
+      openReportPreview('Aperçu — ' + preview.label, ohadaFinancialStatementPreview(preview));
+    });
+    $('[data-ohada-close]').addEventListener('click', function () {
+      navigate('#/menu?g=declarations&t=vat-difference');
+    });
+  }
+
   function editionReportChildView(child, groupId, tabId) {
     var backLabel = groupId === 'editions' && tabId === 'journals' ? 'Tous les éléments Journaux' : 'Tous les états';
     var backLink = '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(accountingMenuHash(groupId, tabId)) + '">← ' + esc(backLabel) + '</a>';
@@ -26153,6 +26208,8 @@
       exchangeFeature = viewNominativeDeclaration('');
     } else if (group.id === 'declarations' && tab.id === 'bic-advances') {
       exchangeFeature = viewBicAdvancesReport('');
+    } else if (group.id === 'declarations' && tab.id === 'ohada-statements') {
+      exchangeFeature = viewOhadaFinancialStatements('');
     } else if (isJournalEntrySubmenu) {
       exchangeFeature = viewEntryJournalSelector();
     } else if (group.id === 'saisie' && tab.id === 'live-cash') {
@@ -27495,6 +27552,7 @@
       if (menuParams.g === 'declarations' && menuParams.t === 'aib-suppliers') bindAibSuppliersReport();
       if (menuParams.g === 'declarations' && menuParams.t === 'nominative-statement') bindNominativeDeclaration();
       if (menuParams.g === 'declarations' && menuParams.t === 'bic-advances') bindBicAdvancesReport();
+      if (menuParams.g === 'declarations' && menuParams.t === 'ohada-statements') bindOhadaFinancialStatements();
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && (menuParams.c === 'journal-lines' || menuParams.c === 'journal-modified-pieces' || menuParams.c === 'journal-unbalanced-pieces' || menuParams.c === 'journal-entry-totals' || menuParams.c === 'journal-individual-account-totals' || menuParams.c === 'journal-summary-account-totals' || menuParams.c === 'journal-third-party-totals' || menuParams.c === 'journal-analytic-center-totals' || menuParams.c === 'journal-currency-totals')) bindJournalLinesReport();
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && menuParams.c === 'journal-allocation-sheet') bindJournalAllocationSheet();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-balance') bindGeneralBalanceReport();
