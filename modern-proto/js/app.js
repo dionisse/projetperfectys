@@ -22,6 +22,7 @@
   var VatPaymentReport = window.PerfectoVatPaymentReport;
   var VatDetailReport = window.PerfectoVatDetailReport;
   var AibSuppliersReport = window.PerfectoAibSuppliersReport;
+  var NominativeDeclarationReport = window.PerfectoNominativeDeclarationReport;
   var CashOperations = window.PerfectoCashOperations;
   var AccountMovements = window.PerfectoAccountMovements;
   var AccountingExchange = window.PerfectoAccountingExchange;
@@ -25805,6 +25806,70 @@
     loadYear(Number(S.exercise()) || new Date().getFullYear());
   }
 
+  function viewNominativeDeclaration(backLink) {
+    var periods = aibSuppliersPeriodOptions();
+    var options = periods.map(function (period) { return '<option value="' + esc(period.value) + '">' + esc(period.label) + '</option>'; }).join('');
+    var checkboxes = NominativeDeclarationReport.COLUMNS.map(function (column) {
+      return '<label class="nominative-column-option"><input type="checkbox" name="nominative-column" value="' + esc(column.key) + '" checked><span>' + esc(column.label) + '</span></label>';
+    }).join('');
+    return '<div class="edition-report-detail-view nominative-declaration-detail">' + backLink +
+      '<div class="page-header"><div><span class="page-kicker">DÉCLARATIONS PÉRIODIQUES · ÉTAT NOMINATIF</span><h2>État nominatif à joindre à la déclaration</h2><p>Sélectionnez le mois de référence et les colonnes à restituer.</p></div></div>' +
+      '<form id="nominative-declaration-form" novalidate><fieldset class="card nominative-selection-card"><legend>Sélection</legend><div class="nominative-period-field"><label for="nominative-period">Mois de référence</label><select id="nominative-period" required><option value="">— Choisir un mois —</option>' + options + '</select></div><div class="nominative-columns"><strong>Colonnes à imprimer</strong><div class="nominative-columns-grid">' + checkboxes + '</div></div><div class="nominative-actions"><button type="button" class="btn btn-primary" data-nominative-validate>Valider</button><button type="button" class="btn btn-ghost" data-nominative-cancel>Annuler</button></div></fieldset></form>' +
+      '<div class="alert warning nominative-source-note"><div><strong>Disponibilité des données.</strong> Les écritures comptables ne relient pas encore une retenue AIB à un fournisseur et à son N°INSAE/IFU. Le rapport n’affichera que des lignes provenant d’une source structurée; il ne déduira pas un fournisseur ni un prélèvement d’une référence comptable.</div></div>' +
+      '<div class="nominative-generated-count" id="nominative-generated-count">Lignes générées : 0</div><div id="nominative-declaration-result" aria-live="polite"></div></div>';
+  }
+
+  function nominativeDeclarationSelectedColumns(form) {
+    var selected = Object.create(null);
+    $$('input[name="nominative-column"]:checked', form).forEach(function (input) { selected[input.value] = true; });
+    return selected;
+  }
+
+  function nominativeDeclarationPreviewMarkup(report, columns) {
+    var visibleColumns = NominativeDeclarationReport.COLUMNS.filter(function (column) { return columns[column.key]; });
+    var header = visibleColumns.map(function (column) { return '<th>' + esc(column.label) + '</th>'; }).join('');
+    var body = report.rows.map(function (row) {
+      return '<tr>' + visibleColumns.map(function (column) {
+        var value = row[column.key];
+        if (column.key === 'withholding') return '<td class="num">' + (value == null ? '—' : esc(amount(value)) + ' XOF') + '</td>';
+        return '<td>' + esc(value || '—') + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    if (!report.rows.length) body = '<tr><td colspan="' + Math.max(1, visibleColumns.length) + '" class="nominative-empty-cell">Aucune ligne nominative disponible pour ce mois.</td></tr>';
+    var monthOption = aibSuppliersPeriodOptions().find(function (item) { return item.value === report.period; });
+    return '<article class="nominative-preview"><div class="nominative-preview-heading"><div><span class="page-kicker">APERÇU · ' + esc(monthOption ? monthOption.label : report.period) + '</span><h3>État nominatif à joindre à la déclaration</h3></div><span class="nominative-generated-count">Lignes générées : ' + report.generatedLineCount + '</span></div>' +
+      '<div class="nominative-table-wrap"><table class="data-table nominative-preview-table"><thead><tr>' + header + '</tr></thead><tbody>' + body + '</tbody></table></div>' +
+      '<div class="alert warning"><div><strong>Aucune ligne ou somme n’est inventée.</strong> Le lien entre retenue AIB, fournisseur et N°INSAE/IFU devra être raccordé aux données source avant de produire un état nominatif alimenté.</div></div></article>';
+  }
+
+  function bindNominativeDeclaration() {
+    var form = $('#nominative-declaration-form');
+    if (!form) return;
+    var period = $('#nominative-period', form);
+    var count = $('#nominative-generated-count');
+    var result = $('#nominative-declaration-result');
+    $('[data-nominative-cancel]', form).addEventListener('click', function () {
+      form.reset();
+      result.innerHTML = '';
+      count.textContent = 'Lignes générées : 0';
+    });
+    $('[data-nominative-validate]', form).addEventListener('click', function () {
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period.value)) { toast('Choisissez un mois de référence.', 'warning'); return; }
+      var columns = nominativeDeclarationSelectedColumns(form);
+      if (!Object.keys(columns).length) { toast('Cochez au moins une colonne à imprimer.', 'warning'); return; }
+      var report;
+      try { report = NominativeDeclarationReport.build({ period: period.value, records: [] }); }
+      catch (error) { toast(error.message || 'Impossible de produire l’état nominatif.', 'warning'); return; }
+      count.textContent = 'Lignes générées : ' + report.generatedLineCount;
+      result.innerHTML = '<section class="nominative-result"><div class="nominative-result-header"><div><span class="page-kicker">PÉRIODE · ' + esc(report.period) + '</span><h3>Résultat de la sélection</h3></div><span class="nominative-generated-count">Lignes générées : ' + report.generatedLineCount + '</span></div>' +
+        '<div class="empty-state">Aucune ligne nominative n’est rattachée à cette période dans les sources disponibles.</div><button type="button" class="btn btn-primary" data-nominative-open-preview>Ouvrir l’aperçu plein écran</button></section>';
+      $('[data-nominative-open-preview]', result).addEventListener('click', function () {
+        openReportPreview('Aperçu — État nominatif · ' + report.period, nominativeDeclarationPreviewMarkup(report, columns));
+      });
+      result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
   function editionReportChildView(child, groupId, tabId) {
     var backLabel = groupId === 'editions' && tabId === 'journals' ? 'Tous les éléments Journaux' : 'Tous les états';
     var backLink = '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(accountingMenuHash(groupId, tabId)) + '">← ' + esc(backLabel) + '</a>';
@@ -25959,6 +26024,8 @@
       exchangeFeature = viewVatDetailReport('');
     } else if (group.id === 'declarations' && tab.id === 'aib-suppliers') {
       exchangeFeature = viewAibSuppliersReport('');
+    } else if (group.id === 'declarations' && tab.id === 'nominative-statement') {
+      exchangeFeature = viewNominativeDeclaration('');
     } else if (isJournalEntrySubmenu) {
       exchangeFeature = viewEntryJournalSelector();
     } else if (group.id === 'saisie' && tab.id === 'live-cash') {
@@ -27299,6 +27366,7 @@
       if (menuParams.g === 'declarations' && menuParams.t === 'vat-payment') bindVatPaymentReport();
       if (menuParams.g === 'declarations' && menuParams.t === 'vat-detail') bindVatDetailReport();
       if (menuParams.g === 'declarations' && menuParams.t === 'aib-suppliers') bindAibSuppliersReport();
+      if (menuParams.g === 'declarations' && menuParams.t === 'nominative-statement') bindNominativeDeclaration();
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && (menuParams.c === 'journal-lines' || menuParams.c === 'journal-modified-pieces' || menuParams.c === 'journal-unbalanced-pieces' || menuParams.c === 'journal-entry-totals' || menuParams.c === 'journal-individual-account-totals' || menuParams.c === 'journal-summary-account-totals' || menuParams.c === 'journal-third-party-totals' || menuParams.c === 'journal-analytic-center-totals' || menuParams.c === 'journal-currency-totals')) bindJournalLinesReport();
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && menuParams.c === 'journal-allocation-sheet') bindJournalAllocationSheet();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-balance') bindGeneralBalanceReport();
