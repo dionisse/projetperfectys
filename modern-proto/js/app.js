@@ -23,6 +23,7 @@
   var VatDetailReport = window.PerfectoVatDetailReport;
   var AibSuppliersReport = window.PerfectoAibSuppliersReport;
   var NominativeDeclarationReport = window.PerfectoNominativeDeclarationReport;
+  var BicAdvancesReport = window.PerfectoBicAdvancesReport;
   var CashOperations = window.PerfectoCashOperations;
   var AccountMovements = window.PerfectoAccountMovements;
   var AccountingExchange = window.PerfectoAccountingExchange;
@@ -25870,6 +25871,130 @@
     });
   }
 
+  function bicAdvancesConfigurationKey(year) {
+    var dossier = S.currentDossier() || {};
+    return 'perfecto-bic-advances.v1:' + String(dossier.id || 'default') + ':' + String(year || 'non-date');
+  }
+
+  function bicAdvancesAccountConfiguration(year) {
+    try {
+      var saved = localStorage.getItem(bicAdvancesConfigurationKey(year));
+      var parsed = saved ? JSON.parse(saved) : null;
+      return parsed && typeof parsed.account === 'string' ? parsed.account : '447CL';
+    } catch (error) { return '447CL'; }
+  }
+
+  function bicAdvancesPeriodOptions() { return aibSuppliersPeriodOptions(); }
+
+  function viewBicAdvancesReport(backLink) {
+    var periods = bicAdvancesPeriodOptions();
+    var initialYear = Number(S.exercise()) || new Date().getFullYear();
+    var options = periods.map(function (period) { return '<option value="' + esc(period.value) + '">' + esc(period.label.replace(' - ', ' ')) + '</option>'; }).join('');
+    var checkboxes = BicAdvancesReport.COLUMNS.map(function (column) {
+      return '<label class="bic-advances-column-option"><input type="checkbox" name="bic-advances-column" value="' + esc(column.key) + '" checked><span>' + esc(column.label) + '</span></label>';
+    }).join('');
+    return '<div class="edition-report-detail-view bic-advances-report-detail">' + backLink +
+      '<div class="page-header"><div><span class="page-kicker">DÉCLARATIONS PÉRIODIQUES · ACOMPTES BIC</span><h2>Acomptes BIC sur ventes détaillés par client</h2></div></div>' +
+      '<form id="bic-advances-form" novalidate><fieldset class="card bic-advances-period-card"><legend>Sélection</legend><div class="bic-advances-month-field"><label for="bic-advances-period">Mois</label><select id="bic-advances-period" required><option value="">— Choisir un mois —</option>' + options + '</select></div></fieldset>' +
+        '<fieldset class="card bic-advances-account-card"><legend>Comptes de l’État enregistrant les acomptes collectés</legend><div class="bic-advances-account-field"><label for="bic-advances-account">Comptes</label><input id="bic-advances-account" type="text" value="' + esc(bicAdvancesAccountConfiguration(initialYear)) + '" autocomplete="off" aria-label="Compte(s) enregistrant les acomptes collectés"><button type="button" class="btn btn-ghost" data-bic-advances-account-picker aria-label="Sélectionner dans le plan comptable">…</button></div><small class="muted">447CL est la valeur de la capture; modifiable pour le dossier et l’année.</small></fieldset>' +
+        '<div class="bic-advances-output-layout"><fieldset class="card bic-advances-columns-card"><legend>Colonnes à imprimer</legend><div class="bic-advances-columns-grid">' + checkboxes + '</div></fieldset><div class="bic-advances-actions"><button type="button" class="btn btn-primary" data-bic-advances-validate>Valider</button><button type="button" class="btn btn-ghost" data-bic-advances-cancel>Annuler</button></div></div>' +
+      '</form><div class="alert warning bic-advances-source-note"><div><strong>Limite des sources actuelles.</strong> Les écritures ne rattachent pas encore un acompte collecté à un client et à son N°INSAE/IFU. Le compte choisi sert de paramétrage; aucun client ni montant ne sera déduit du seul compte comptable.</div></div>' +
+      '<div class="bic-advances-generated-count" id="bic-advances-generated-count">Lignes générées : 0</div><div id="bic-advances-result" aria-live="polite"></div></div>';
+  }
+
+  function bicAdvancesSelectedColumns(form) {
+    var selected = Object.create(null);
+    $$('input[name="bic-advances-column"]:checked', form).forEach(function (input) { selected[input.value] = true; });
+    return selected;
+  }
+
+  function bicAdvancesPreviewMarkup(report, columns, accountCodes) {
+    var visibleColumns = BicAdvancesReport.COLUMNS.filter(function (column) { return columns[column.key]; });
+    var header = visibleColumns.map(function (column) { return '<th>' + esc(column.label) + '</th>'; }).join('');
+    var body = report.rows.map(function (row) {
+      return '<tr>' + visibleColumns.map(function (column) {
+        var value = row[column.key];
+        if (column.key === 'advance') return '<td class="num">' + (value == null ? '—' : esc(amount(value)) + ' XOF') + '</td>';
+        return '<td>' + esc(value || '—') + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    if (!report.rows.length) body = '<tr><td colspan="' + Math.max(1, visibleColumns.length) + '" class="bic-advances-empty-cell">Aucune ligne client liée à un acompte collecté pour ce mois.</td></tr>';
+    var monthOption = bicAdvancesPeriodOptions().find(function (item) { return item.value === report.period; });
+    return '<article class="bic-advances-preview"><div class="bic-advances-preview-heading"><div><span class="page-kicker">APERÇU · ' + esc(monthOption ? monthOption.label.replace(' - ', ' ') : report.period) + '</span><h3>Acomptes BIC sur ventes détaillés par client</h3></div><span class="bic-advances-generated-count">Lignes générées : ' + report.generatedLineCount + '</span></div>' +
+      '<p><strong>Compte(s) configuré(s) :</strong> ' + esc(accountCodes || 'Non renseigné') + '</p>' +
+      '<div class="bic-advances-table-wrap"><table class="data-table bic-advances-preview-table"><thead><tr>' + header + '</tr></thead><tbody>' + body + '</tbody></table></div>' +
+      '<div class="alert warning"><div><strong>Aucun client ou acompte n’est inventé.</strong> Le détail nominatif et les montants devront provenir d’une source reliée aux écritures avant la production d’un état alimenté.</div></div></article>';
+  }
+
+  function openBicAdvancesAccountPicker(input) {
+    var accounts = S.accounts().slice().sort(function (left, right) { return String(left.code).localeCompare(String(right.code), 'fr', { numeric: true }); });
+    var selected = String(input.value || '').split(/[;,\s]+/);
+    var rows = accounts.map(function (account, index) {
+      var code = String(account.code);
+      var hasChildren = accounts.some(function (candidate) { return String(candidate.code).length > code.length && String(candidate.code).indexOf(code) === 0; });
+      var token = code + (hasChildren ? '*' : '');
+      var checked = selected.indexOf(token) !== -1 || selected.indexOf(code) !== -1 ? ' checked' : '';
+      return '<label class="bic-advances-picker-row" data-bic-picker-text="' + esc(code + ' ' + (account.label || '')) + '"><input type="checkbox" data-bic-picker-account value="' + esc(token) + '" id="bic-advances-account-' + index + '"' + checked + '><span class="bic-advances-picker-code">' + esc(token) + '</span><span>' + esc(account.label || '') + '</span></label>';
+    }).join('');
+    var body = '<div class="bic-advances-picker"><p class="small muted">Le code 447CL de la capture n’est pas forcément un compte du plan. Laissez la sélection annulée pour le conserver, ou choisissez les comptes réels du dossier.</p><div class="bic-advances-picker-list" role="group" aria-label="Comptes du plan comptable">' + (rows || '<div class="empty-state">Aucun compte disponible.</div>') + '</div></div>';
+    openModal('Sélection des comptes', 'Comptes des acomptes collectés', body, '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="button" class="btn btn-primary" data-bic-picker-apply>Appliquer</button>', true);
+    var modalRoot = $('#modal-root');
+    $('[data-bic-picker-apply]', modalRoot).addEventListener('click', function () {
+      input.value = $$('[data-bic-picker-account]:checked', modalRoot).map(function (checkbox) { return checkbox.value; }).join(', ');
+      closeModal();
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.focus();
+    });
+  }
+
+  function bindBicAdvancesReport() {
+    var form = $('#bic-advances-form');
+    if (!form) return;
+    var period = $('#bic-advances-period', form);
+    var accountInput = $('#bic-advances-account', form);
+    var result = $('#bic-advances-result');
+    var count = $('#bic-advances-generated-count');
+    var accountDrafts = Object.create(null);
+    var loadedYear = Number(S.exercise()) || new Date().getFullYear();
+    function loadYear(year) {
+      accountInput.value = accountDrafts[year] != null ? accountDrafts[year] : bicAdvancesAccountConfiguration(year);
+      loadedYear = year;
+      result.innerHTML = '';
+      count.textContent = 'Lignes générées : 0';
+    }
+    period.addEventListener('change', function () {
+      var year = Number(period.value.slice(0, 4));
+      if (year) loadYear(year);
+    });
+    accountInput.addEventListener('input', function () { accountDrafts[loadedYear] = accountInput.value; });
+    $('[data-bic-advances-account-picker]', form).addEventListener('click', function () { openBicAdvancesAccountPicker(accountInput); });
+    $('[data-bic-advances-cancel]', form).addEventListener('click', function () {
+      form.reset();
+      accountDrafts = Object.create(null);
+      loadedYear = Number(S.exercise()) || new Date().getFullYear();
+      loadYear(loadedYear);
+    });
+    $('[data-bic-advances-validate]', form).addEventListener('click', function () {
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period.value)) { toast('Choisissez un mois de référence.', 'warning'); return; }
+      var columns = bicAdvancesSelectedColumns(form);
+      if (!Object.keys(columns).length) { toast('Cochez au moins une colonne à imprimer.', 'warning'); return; }
+      var accountCodes = accountInput.value.trim();
+      if (!accountCodes) { toast('Renseignez au moins un compte pour les acomptes collectés.', 'warning'); return; }
+      var year = Number(period.value.slice(0, 4));
+      try { localStorage.setItem(bicAdvancesConfigurationKey(year), JSON.stringify({ account: accountCodes })); }
+      catch (error) { toast('Le compte est utilisé pour cet aperçu, mais n’a pas pu être enregistré localement.', 'warning'); }
+      var report;
+      try { report = BicAdvancesReport.build({ period: period.value, records: [] }); }
+      catch (error) { toast(error.message || 'Impossible de produire l’état.', 'warning'); return; }
+      count.textContent = 'Lignes générées : ' + report.generatedLineCount;
+      result.innerHTML = '<section class="bic-advances-result"><div class="bic-advances-result-header"><div><span class="page-kicker">PÉRIODE · ' + esc(report.period) + '</span><h3>Résultat de la sélection</h3></div><span class="bic-advances-generated-count">Lignes générées : ' + report.generatedLineCount + '</span></div><div class="empty-state">Aucune ligne client reliée aux acomptes collectés n’est disponible pour cette période.</div><button type="button" class="btn btn-primary" data-bic-advances-open-preview>Ouvrir l’aperçu plein écran</button></section>';
+      $('[data-bic-advances-open-preview]', result).addEventListener('click', function () {
+        openReportPreview('Aperçu — Acomptes BIC par client · ' + report.period, bicAdvancesPreviewMarkup(report, columns, accountCodes));
+      });
+      result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
   function editionReportChildView(child, groupId, tabId) {
     var backLabel = groupId === 'editions' && tabId === 'journals' ? 'Tous les éléments Journaux' : 'Tous les états';
     var backLink = '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(accountingMenuHash(groupId, tabId)) + '">← ' + esc(backLabel) + '</a>';
@@ -26026,6 +26151,8 @@
       exchangeFeature = viewAibSuppliersReport('');
     } else if (group.id === 'declarations' && tab.id === 'nominative-statement') {
       exchangeFeature = viewNominativeDeclaration('');
+    } else if (group.id === 'declarations' && tab.id === 'bic-advances') {
+      exchangeFeature = viewBicAdvancesReport('');
     } else if (isJournalEntrySubmenu) {
       exchangeFeature = viewEntryJournalSelector();
     } else if (group.id === 'saisie' && tab.id === 'live-cash') {
@@ -27367,6 +27494,7 @@
       if (menuParams.g === 'declarations' && menuParams.t === 'vat-detail') bindVatDetailReport();
       if (menuParams.g === 'declarations' && menuParams.t === 'aib-suppliers') bindAibSuppliersReport();
       if (menuParams.g === 'declarations' && menuParams.t === 'nominative-statement') bindNominativeDeclaration();
+      if (menuParams.g === 'declarations' && menuParams.t === 'bic-advances') bindBicAdvancesReport();
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && (menuParams.c === 'journal-lines' || menuParams.c === 'journal-modified-pieces' || menuParams.c === 'journal-unbalanced-pieces' || menuParams.c === 'journal-entry-totals' || menuParams.c === 'journal-individual-account-totals' || menuParams.c === 'journal-summary-account-totals' || menuParams.c === 'journal-third-party-totals' || menuParams.c === 'journal-analytic-center-totals' || menuParams.c === 'journal-currency-totals')) bindJournalLinesReport();
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && menuParams.c === 'journal-allocation-sheet') bindJournalAllocationSheet();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-balance') bindGeneralBalanceReport();

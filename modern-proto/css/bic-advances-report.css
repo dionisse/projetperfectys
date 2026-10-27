@@ -1,0 +1,45 @@
+.bic-advances-report-detail { display: grid; gap: .8rem; max-width: 980px; margin-inline: auto; }
+.bic-advances-report-detail > .page-header { margin: 0; }
+.bic-advances-report-detail > .page-header h2 { margin: .2rem 0; font-size: 1.18rem; }
+.bic-advances-period-card, .bic-advances-account-card, .bic-advances-columns-card { min-width: 0; margin: 0; padding: .85rem 1rem; border: 1px solid var(--line, #d8dfdb); border-radius: .75rem; background: #fff; }
+.bic-advances-period-card legend, .bic-advances-account-card legend, .bic-advances-columns-card legend { padding: 0 .35rem; font-weight: 800; }
+.bic-advances-month-field { display: grid; grid-template-columns: 120px minmax(190px, 280px); align-items: center; justify-content: center; gap: .75rem; padding: .45rem 0 .85rem; }
+.bic-advances-month-field label, .bic-advances-account-field label { font-weight: 600; }
+.bic-advances-account-field { display: grid; grid-template-columns: 125px minmax(0, 1fr) 42px; align-items: center; gap: .6rem; max-width: 650px; margin: .25rem auto .5rem; }
+.bic-advances-account-field input { background: #fffef0; border-color: #d7c95a; font-family: ui-monospace, monospace; font-weight: 700; }
+.bic-advances-account-field .btn { min-width: 2.6rem; padding: .35rem; font-size: 1.1rem; }
+.bic-advances-account-card > small { display: block; margin-left: max(0px, calc((100% - 650px) / 2 + 125px)); font-size: .76rem; }
+.bic-advances-output-layout { display: grid; grid-template-columns: minmax(0, 1fr) 160px; gap: .7rem; align-items: stretch; }
+.bic-advances-columns-card { min-height: 118px; }
+.bic-advances-columns-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem 1rem; padding: .25rem .1rem; }
+.bic-advances-column-option { display: flex; align-items: center; gap: .55rem; padding: .12rem .2rem; font-size: .9rem; cursor: pointer; }
+.bic-advances-column-option input { width: auto; }
+.bic-advances-actions { display: flex; flex-direction: column; justify-content: center; gap: .55rem; }
+.bic-advances-actions .btn { width: 100%; }
+.bic-advances-source-note { margin: 0; font-size: .82rem; line-height: 1.5; }
+.bic-advances-generated-count { color: var(--muted, #64748b); font-size: .84rem; font-weight: 700; }
+.bic-advances-result { display: grid; justify-items: start; gap: .75rem; padding: .55rem 0; }
+.bic-advances-result-header, .bic-advances-preview-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .6rem; width: 100%; }
+.bic-advances-result-header h3, .bic-advances-preview-heading h3 { margin: .2rem 0 0; font-size: 1rem; }
+.bic-advances-preview { display: grid; gap: .85rem; }
+.bic-advances-preview p { margin: 0; }
+.bic-advances-table-wrap { width: 100%; overflow: auto; border: 1px solid var(--line, #e3e8e5); border-radius: .6rem; }
+.bic-advances-preview-table { min-width: 560px; }
+.bic-advances-preview-table th, .bic-advances-preview-table td { white-space: nowrap; }
+.bic-advances-preview-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.bic-advances-empty-cell { color: var(--muted, #64748b); text-align: center; }
+.bic-advances-picker-list { display: grid; max-height: 56vh; overflow: auto; border: 1px solid var(--line, #d5dcd8); }
+.bic-advances-picker-row { display: grid; grid-template-columns: 1.2rem 95px minmax(0, 1fr); align-items: center; gap: .55rem; padding: .42rem .55rem; border-bottom: 1px solid var(--line, #e8ece9); cursor: pointer; }
+.bic-advances-picker-row:nth-child(even) { background: #f8faf8; }
+.bic-advances-picker-row input { width: auto; }
+.bic-advances-picker-code { font-family: ui-monospace, monospace; font-weight: 700; }
+@media (max-width: 620px) {
+  .bic-advances-month-field { grid-template-columns: 1fr; gap: .35rem; }
+  .bic-advances-account-field { grid-template-columns: 1fr 42px; }
+  .bic-advances-account-field label { grid-column: 1 / -1; }
+  .bic-advances-account-card > small { margin-left: 0; }
+  .bic-advances-output-layout { grid-template-columns: 1fr; }
+  .bic-advances-columns-grid { grid-template-columns: 1fr; }
+  .bic-advances-actions { flex-direction: row; justify-content: flex-end; }
+  .bic-advances-actions .btn { width: auto; }
+}
