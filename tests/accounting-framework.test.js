@@ -84,6 +84,15 @@ const viewEnd = appSource.indexOf('function viewGeneralAccountNatures()', viewSt
 assert.ok(viewStart >= 0 && viewEnd > viewStart, 'la vue du référentiel est déclarée');
 const sandbox = {
   AccountingFramework: Framework,
+  BalanceItems: require('../modern-proto/js/accounting-balance-items.js'),
+  S: {
+    financialStatementsMappingsConfiguration: () => ({ mappings: {} }),
+    currentDossier: () => ({ id: 'framework-test' })
+  },
+  hasDemoPermission: () => false,
+  getActiveDemoMember: () => null,
+  accountingAccessContext: () => ({}),
+  isPhoneViewport: () => false,
   ui: { financialFramework: { q: 'initial search' } },
   esc(value) {
     return String(value == null ? '' : value)

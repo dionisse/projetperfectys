@@ -729,7 +729,7 @@ assert.match(appSource, /function generalLedgerReportLayoutView\([\s\S]*general-
 assert.match(appSource, /function generalLedgerReportPrintableHtml\([\s\S]*GRAND LIVRE DES COMPTES[\s\S]*reports à nouveau[\s\S]*page-break/);
 assert.match(generalLedgerSource, /priorEntriesIncludedInRunningBalance: true[\s\S]*sourceReferenceOnly: true[\s\S]*noAccountingMutation: true/);
 assert.match(configurationCss, /\.general-ledger-column-grid[\s\S]*\.general-ledger-account-section/);
-assert.match(serviceWorkerSource, /perfecto-static-v142/);
+assert.match(serviceWorkerSource, /perfecto-static-v143/);
 assert.equal(nav.getTab('declarations', 'vat-difference').status, 'active');
 assert.match(appSource, /group\.id === 'declarations' && tab\.id === 'vat-difference'[\s\S]*viewVatDifferenceReport/);
 assert.match(appSource, /function vatDifferenceConfigurationKey\([\s\S]*function openVatDifferenceAccountPicker/);
@@ -759,7 +759,7 @@ assert.ok(findTab('parametres', 'financial-framework').reason.includes('aucune �
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'financial-framework'[\s\S]*viewFinancialFramework\(\)/,
   'le référentiel SYSCOHADA s’ouvre depuis le bon sous-menu Paramètres');
 assert.match(appSource, /function viewFinancialFramework\(\)[\s\S]*metadata\.rowCount/);
-assert.match(appSource, /Référentiel SYSCOHADA révisé · consultation seule[\s\S]*Débit\/Crédit/);
+assert.match(appSource, /Référentiel SYSCOHADA révisé · source conservée[\s\S]*Débit\/Crédit/);
 assert.match(appSource, /Cellule vide dans le PDF/,
   'la vue distingue les deux colonnes et laisse les cellules vides sans calcul comptable');
 assert.match(appSource, /function bindFinancialFramework\(\)[\s\S]*AccountingFramework\.search[\s\S]*row\.hidden/,
@@ -768,7 +768,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v142/);
+assert.match(serviceWorkerSource, /perfecto-static-v143/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

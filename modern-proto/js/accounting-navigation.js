@@ -237,7 +237,7 @@
         { id: 'period-close', label: 'Clôture périodique au 31/12/N', status: 'partial', reason: 'La gestion réversible des périodes mensuelles est disponible ; la clôture annuelle complète reste à construire.', actions: [{ label: 'Ouvrir la gestion des périodes', route: 'periods' }] },
         { id: 'tax-adjustments', label: 'Déductions et réintégrations fiscales', status: 'planned', reason: 'Traitement fiscal à construire après validation des règles.' },
         { id: 'supplementary-expenses', label: 'Charges supplétives avant résultat intermédiaire', status: 'inactive', reason: 'Traitement de gestion/analytique, inactif dans la comptabilité générale.' },
-        { id: 'calculate-result', label: 'Calcul du résultat et génération des états financiers', status: 'planned', reason: 'Traitement général à construire après les contrôles de clôture.' },
+        { id: 'calculate-result', label: 'Calcul du résultat et génération des états financiers', status: 'partial', reason: 'Préparation non clôturante à partir des écritures validées et des correspondances du cadre comptable. Les comparatifs, flux et notes sans source restent à compléter dans le rapport de données manquantes.', actions: [{ label: 'Calculer le résultat et générer les états financiers', route: 'financial-result' }] },
         { id: 'definitive-close', label: 'Arrêt définitif des comptes de l’exercice', status: 'planned', irreversible: true, reason: 'Sera irréversible. Une copie exportée du dossier et une confirmation explicite seront obligatoires.' },
         { id: 'next-year', label: 'Passage automatique à N+1', status: 'planned', reason: 'À construire après la clôture et le report des soldes.' }
       ]

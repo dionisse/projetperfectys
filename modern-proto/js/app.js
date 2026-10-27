@@ -93,7 +93,7 @@
     balance: '⚖︎', journal: '≡', ledger: '⌕', periods: '◷', settings: '⚙︎'
   };
 
-  var ROUTES = ['login', 'launcher', 'organization', 'payroll', 'sales', 'dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings', 'menu'];
+  var ROUTES = ['login', 'launcher', 'organization', 'payroll', 'sales', 'dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'financial-result', 'settings', 'menu'];
 
   var TITLES = {
     login: ['Connexion', 'Accès à votre espace PERFECTO'],
@@ -111,6 +111,7 @@
     journal: ['Journal des écritures', 'Écritures validées, par journal'],
     ledger: ['Grand livre', 'Mouvements et solde progressif par compte'],
     periods: ['Périodes comptables', 'Ouverture et clôture des exercices'],
+    'financial-result': ['Calcul du résultat', 'Préparation non clôturante des états financiers OHADA'],
     settings: ['Données & application', 'Sauvegarde, restauration et installation'],
     menu: ['Comptabilité générale', 'Menus et fonctions du dossier']
   };
@@ -247,7 +248,7 @@
   ];
   var launcherUi = { filter: 'all', query: '' };
   var DEMO_ORGANIZATION_ID = 'demo-org';
-  var ACCOUNTING_ROUTES = ['dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'settings', 'menu'];
+  var ACCOUNTING_ROUTES = ['dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'financial-result', 'settings', 'menu'];
   var PHONE_REPORT_ROUTES = ['balance', 'journal', 'ledger'];
   var PHONE_BREAKPOINT = 700;
   var ACCESS_MODULES = [{ id: 'organization', name: 'Organisation & accès', status: 'available', route: 'organization', scopeable: false }].concat(ModuleRegistry.all());
@@ -272,7 +273,7 @@
       accounts: 'definitions', journals: 'definitions',
       entry: 'saisie', entries: 'saisie',
       balance: 'editions', journal: 'editions', ledger: 'editions',
-      periods: 'fin-exercice', settings: 'parametres'
+      periods: 'fin-exercice', 'financial-result': 'fin-exercice', settings: 'parametres'
     };
     return routeGroups[route] || '';
   }
@@ -1040,6 +1041,7 @@
       case 'journal': html = viewJournal(); break;
       case 'ledger': html = viewLedger(); break;
       case 'periods': html = viewPeriods(); break;
+      case 'financial-result': html = viewFinancialResult(); break;
       case 'settings': html = viewSettings(); break;
       case 'menu': html = viewAccountingMenu(parsed.params); break;
       default: html = viewLogin();
@@ -14803,35 +14805,56 @@
   function viewFinancialFramework() {
     var metadata = AccountingFramework.metadata;
     var records = AccountingFramework.all();
+    var configuration = S.financialStatementsMappingsConfiguration();
+    var overrides = configuration.mappings || {};
+    var dossier = S.currentDossier();
+    var canConfigure = hasDemoPermission(getActiveDemoMember(), 'accounting', 'accounting.configure', accountingAccessContext(dossier));
+    var editable = canConfigure && !isPhoneViewport();
+    var postLabels = Object.create(null);
+    BalanceItems.all().forEach(function (post) { postLabels[String(post.code)] = post.label; });
+    records.forEach(function (record) {
+      if (record.debit) postLabels[String(record.debit.code)] = record.debit.label;
+      if (record.credit) postLabels[String(record.credit.code)] = record.credit.label;
+    });
+    var postOptions = Object.keys(postLabels).sort().map(function (code) {
+      return '<option value="' + esc(code) + '">' + esc(postLabels[code]) + '</option>';
+    }).join('');
 
-    function mappingCells(posting, side) {
-      if (!posting) {
-        return '<td class="financial-framework-empty-cell" aria-label="Cellule vide dans le PDF"></td>' +
-          '<td class="financial-framework-empty-cell" aria-label="Cellule vide dans le PDF"></td>';
-      }
-      return '<td class="financial-framework-post-code"><code>&lt;' + esc(posting.code) + '&gt;</code></td>' +
-        '<td class="financial-framework-post-label" data-post-side="' + side + '">' + esc(posting.label) + '</td>';
+    function mappingCells(record, side) {
+      var override = overrides[String(record.code)];
+      var code = override ? String(override[side] || '') : String(record[side] && record[side].code || '');
+      var label = postLabels[code] || (record[side] && record[side].label) || '';
+      var control = editable
+        ? '<input class="financial-framework-post-input" type="text" maxlength="8" list="financial-framework-post-code-list" data-financial-framework-post-code="' + side + '" data-account-code="' + esc(record.code) + '" aria-label="Poste ' + (side === 'debit' ? 'Débit' : 'Crédit') + ' pour le compte ' + esc(record.code) + '" value="' + esc(code) + '">'
+        : (code ? '<code>&lt;' + esc(code) + '&gt;</code>' : '<span class="financial-framework-empty-cell">Cellule vide dans le PDF</span>');
+      var labelDisplay = !editable && !label ? 'Cellule vide dans le PDF' : label;
+      return '<td class="financial-framework-post-code">' + control + '</td>' +
+        '<td class="financial-framework-post-label" data-post-side="' + side + '">' + esc(labelDisplay) + '</td>';
     }
 
     var rows = records.map(function (record) {
       return '<tr data-financial-framework-row data-account-code="' + esc(record.code) + '" title="Source PDF · page ' + record.page + '">' +
         '<th scope="row" class="financial-framework-account-code">' + esc(record.code) + '</th>' +
         '<td class="financial-framework-account-label">' + esc(record.label) + '</td>' +
-        mappingCells(record.debit, 'debit') + mappingCells(record.credit, 'credit') +
+        mappingCells(record, 'debit') + mappingCells(record, 'credit') +
       '</tr>';
     }).join('');
     var query = esc(ui.financialFramework.q || '');
+    var permissionNotice = !canConfigure
+      ? '<div class="alert warning financial-framework-note">Consultation seule : un droit explicite « Modifier la configuration comptable du dossier » est nécessaire pour corriger les rattachements.</div>'
+      : (isPhoneViewport() ? '<div class="alert info financial-framework-note">Consultation seule sur téléphone ; les corrections sont réservées à un ordinateur ou une tablette.</div>' : '');
 
     return '<div class="financial-framework-workspace">' +
-      '<div class="alert info financial-framework-note"><div><strong>Référentiel SYSCOHADA révisé · consultation seule.</strong> Les codes et libellés des postes Débit/Crédit sont repris du document fourni. Les cases vides restent vides ; ce référentiel n’active aucun calcul ni aucune écriture comptable.</div></div>' +
+      '<div class="alert info financial-framework-note"><div><strong>Référentiel SYSCOHADA révisé · source conservée.</strong> Les valeurs initiales proviennent du PDF fourni. Les corrections sont enregistrées séparément par dossier ; elles ne modifient ni le référentiel source, ni les écritures comptables.</div></div>' + permissionNotice +
       '<div class="financial-framework-summary" aria-label="Contenu du référentiel">' +
         '<div><small>Lignes du PDF</small><strong>' + metadata.rowCount + '</strong></div>' +
         '<div><small>Avec rattachement</small><strong>' + metadata.mappedRowCount + '</strong></div>' +
         '<div><small>Sans rattachement</small><strong>' + metadata.unmappedRowCount + '</strong></div>' +
         '<div><small>Pages source</small><strong>' + metadata.sourcePages + '</strong></div>' +
       '</div>' +
-      '<section class="exchange-card financial-framework-card"><div class="supplier-directory-head"><div><h4>Comptes et postes des tableaux financiers</h4><p>Chaque compte garde sa ligne source et ses deux colonnes de rattachement, Débit et Crédit.</p></div><span id="financial-framework-result-count" class="financial-framework-result-count" aria-live="polite">' + records.length + ' / ' + records.length + ' lignes</span></div>' +
+      '<section class="exchange-card financial-framework-card"><div class="supplier-directory-head"><div><h4>Comptes et postes des tableaux financiers</h4><p>Chaque compte garde deux rattachements indépendants : Débit et Crédit.</p></div><span id="financial-framework-result-count" class="financial-framework-result-count" aria-live="polite">' + records.length + ' / ' + records.length + ' lignes</span></div>' +
         '<div class="financial-framework-search"><label class="field" for="financial-framework-search"><span>Rechercher un compte ou un poste</span><input id="financial-framework-search" type="search" value="' + query + '" placeholder="Code, intitulé ou poste · ex. 401, client, DA" autocomplete="off"></label></div>' +
+        (editable ? '<datalist id="financial-framework-post-code-list">' + postOptions + '</datalist>' : '') +
         '<div id="financial-framework-table-wrap" class="financial-framework-table-wrap" role="region" aria-label="Référentiel comptable SYSCOHADA révisé" tabindex="0">' +
           '<table class="financial-framework-table"><caption class="sr-only">' + esc(metadata.standard) + ' · comptes, intitulés et rattachements Débit/Crédit</caption>' +
             '<colgroup span="1"></colgroup><colgroup span="1"></colgroup><colgroup span="2"></colgroup><colgroup span="2"></colgroup>' +
@@ -14841,7 +14864,8 @@
           '</table>' +
         '</div>' +
         '<div id="financial-framework-empty" class="empty-state financial-framework-empty" hidden><strong>Aucun compte ni poste correspondant</strong><span>Essayez un autre code, un intitulé ou un code/libellé de poste.</span></div>' +
-        '<p class="small muted financial-framework-source-note">Source : « ' + esc(metadata.sourceFile) + ' » · ' + metadata.sourcePages + ' pages. Certains libellés sont tronqués dans la source ; ils sont conservés tels quels, sans compléter les lettres manquantes.</p>' +
+        (editable ? '<div class="financial-framework-edit-actions"><button type="button" class="btn btn-primary" data-financial-framework-save>Enregistrer les correspondances du dossier</button></div>' : '') +
+        '<p class="small muted financial-framework-source-note">Source : « ' + esc(metadata.sourceFile) + ' » · ' + metadata.sourcePages + ' pages. Les codes peuvent être recherchés ou saisis ; les cases vides du référentiel restent vides jusqu’à correction explicite.</p>' +
       '</section>' +
     '</div>';
   }
@@ -25996,6 +26020,187 @@
     });
   }
 
+  function financialResultPreflight() {
+    var dossier = S.currentDossier();
+    var rowsByAccount = Object.create(null);
+    S.balance().forEach(function (row) {
+      rowsByAccount[String(row.code)] = Object.assign({}, row, { debit: Number(row.debit) || 0, credit: Number(row.credit) || 0 });
+    });
+    var openingBalanceCount = 0;
+    S.openingBalances().forEach(function (opening) {
+      if (!opening || !opening.accountCode || !opening.date || opening.date >= dossier.cycleStart) return;
+      var code = String(opening.accountCode);
+      if (!rowsByAccount[code]) rowsByAccount[code] = { code: code, label: code, cls: Number(code.charAt(0)), nature: '—', debit: 0, credit: 0 };
+      rowsByAccount[code].debit += Number(opening.debit) || 0;
+      rowsByAccount[code].credit += Number(opening.credit) || 0;
+      openingBalanceCount += 1;
+    });
+    var rows = Object.keys(rowsByAccount).map(function (code) { return rowsByAccount[code]; })
+      .filter(function (row) { return row.debit !== 0 || row.credit !== 0; })
+      .sort(function (a, b) { return a.code.localeCompare(b.code); });
+    var mappingConfig = S.financialStatementsMappingsConfiguration();
+    var computed = OhadaFinancialStatements.computeStatementData({ balance: rows, mappings: mappingConfig.mappings });
+    var posted = S.postedEntries();
+    return {
+      balance: rows,
+      openingBalanceCount: openingBalanceCount,
+      postedCount: posted.length,
+      summary: computed.summary,
+      gaps: computed.gaps,
+      hasHiddenConfidentialAccounts: typeof S.hasHiddenConfidentialAccounts === 'function' && S.hasHiddenConfidentialAccounts()
+    };
+  }
+
+  function viewFinancialResult() {
+    var dossier = S.currentDossier();
+    var preflight = financialResultPreflight();
+    var generation = S.ohadaResultGeneration();
+    var hasBalance = (preflight.postedCount > 0 || preflight.openingBalanceCount > 0) && preflight.balance.length > 0;
+    var canGenerate = hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.export', accountingAccessContext(dossier));
+    var balanced = preflight.summary.balanced;
+    var existingNotice = !generation.generatedAt ? '' : (generation.stale
+      ? '<div class="alert warning"><div><strong>La génération active est périmée.</strong> Elle reste disponible en consultation et téléchargement. Le nouveau calcul la remplacera dans l’application.</div></div>'
+      : '<div class="alert info"><div>Une génération existe déjà pour ce dossier. Cette nouvelle génération la remplacera dans l’application ; les fichiers déjà téléchargés sur l’appareil ne peuvent pas être effacés à distance.</div></div>');
+    var downloadButtons = generation.generatedAt
+      ? '<div class="financial-result-downloads"><button type="button" class="btn btn-ghost" data-ohada-download="workbook"' + (preflight.hasHiddenConfidentialAccounts ? ' disabled' : '') + '>Télécharger le classeur actif</button><button type="button" class="btn btn-ghost" data-ohada-download="report"' + (preflight.hasHiddenConfidentialAccounts ? ' disabled' : '') + '>Télécharger le rapport séparé</button></div>'
+      : '';
+    var blockReason = preflight.hasHiddenConfidentialAccounts
+      ? 'Des comptes confidentiels sont masqués. Un utilisateur autorisé doit activer leur consultation avant la génération complète.'
+        : (!hasBalance ? 'Aucune écriture validée ou ligne de report à nouveau non nulle n’est disponible dans le cycle actif.'
+        : (!balanced ? 'Les débits et crédits cumulés, reports à nouveau inclus, ne s’équilibrent pas ; la génération est bloquée.'
+          : (!canGenerate ? 'Le droit « data.export » est requis pour générer les fichiers.' : '')));
+    return '<div class="financial-result-workspace">' +
+      '<div class="page-header"><div><span class="page-kicker">FIN D’EXERCICE · ÉTATS FINANCIERS</span><h2>Calcul du résultat et génération des états financiers</h2><p>Préparation à partir des écritures validées du cycle actif ; aucune écriture n’est créée et aucune clôture définitive n’est effectuée.</p></div><a class="btn btn-ghost" href="#/menu?g=fin-exercice&amp;t=balance-checks">← Fin d’exercice</a></div>' +
+      existingNotice + downloadButtons +
+      '<div class="alert info"><div><strong>Le modèle OHADA intégré est conservé en lecture seule.</strong> Les expressions des formules et la mise en page du classeur sont préservées. Les postes sans source ou correspondance restent vides et figurent dans un rapport distinct. Les règles fiscales non confirmées ne sont pas appliquées.</div></div>' +
+      '<section class="exchange-card financial-result-card"><h3>Contrôle préalable · ' + esc(dossier.name || dossier.clientName || 'Dossier actif') + '</h3>' +
+        '<dl class="financial-result-metrics"><div><dt>Cycle</dt><dd>' + esc(dossier.cycleStart || '') + ' au ' + esc(dossier.cycleEnd || '') + '</dd></div>' +
+        '<div><dt>Écritures validées du cycle</dt><dd>' + preflight.postedCount + '</dd></div>' +
+        '<div><dt>Lignes de reports à nouveau reprises</dt><dd>' + preflight.openingBalanceCount + '</dd></div>' +
+        '<div><dt>Comptes mouvementés</dt><dd>' + preflight.summary.accountCount + '</dd></div>' +
+        '<div><dt>Total débits cumulés · RAN inclus</dt><dd>' + esc(S.money(preflight.summary.totalDebit)) + '</dd></div>' +
+        '<div><dt>Total crédits cumulés · RAN inclus</dt><dd>' + esc(S.money(preflight.summary.totalCredit)) + '</dd></div>' +
+        '<div><dt>Équilibre</dt><dd>' + (balanced ? 'Équilibré' : 'À contrôler') + '</dd></div>' +
+        '<div><dt>Comptes rattachés</dt><dd>' + preflight.summary.mappedAccountCount + '</dd></div>' +
+        '<div><dt>Comptes sans rattachement</dt><dd>' + preflight.summary.unmappedAccountCount + '</dd></div></dl>' +
+        (blockReason ? '<div class="alert warning"><div>' + esc(blockReason) + '</div></div>' : '') +
+        '<p class="small muted">Les correspondances peuvent être corrigées dans Paramètres → Cadre comptable et postes des tableaux financiers. Les montants du TFT, les comparatifs et les notes sans source exploitable seront signalés, et non déduits.</p>' +
+        '<div class="financial-result-actions"><a class="btn btn-ghost" href="#/menu?g=parametres&amp;t=financial-framework">Vérifier les correspondances</a><button type="button" class="btn btn-primary" data-financial-result-generate' + (blockReason ? ' disabled' : '') + '>Calculer et générer les états financiers</button></div>' +
+        '<div class="financial-result-status" role="status" aria-live="polite"></div>' +
+      '</section></div>';
+  }
+
+  function downloadActiveOhadaSnapshot(fileKind) {
+    var dossier = S.currentDossier();
+    var generation = S.ohadaResultGeneration();
+    if (!generation.generatedAt) { toast('Aucune génération des états financiers n’est disponible pour ce dossier.', 'warning'); return; }
+    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.export', accountingAccessContext(dossier))) {
+      toast('Téléchargement refusé : le droit « data.export » est requis.', 'warning');
+      return;
+    }
+    if (typeof S.hasHiddenConfidentialAccounts === 'function' && S.hasHiddenConfidentialAccounts()) {
+      toast('Téléchargement refusé : des comptes confidentiels sont masqués pour votre profil.', 'warning');
+      return;
+    }
+    OhadaFinancialStatements.readActiveSnapshot(dossier.id).then(function (snapshot) {
+      if (!snapshot || snapshot.resultId !== generation.resultId || !snapshot.workbookBytes) {
+        toast('Le fichier actif est introuvable dans le stockage local. Relancez le calcul du résultat.', 'error');
+        return;
+      }
+      if (fileKind === 'report') {
+        downloadFile(snapshot.gapFilename || 'Rapport-donnees-manquantes-OHADA.csv', snapshot.gapReport || '', 'text/csv;charset=utf-8');
+        toast('Rapport séparé des données manquantes téléchargé.', 'success');
+      } else {
+        downloadFile(snapshot.workbookFilename || 'Tableaux-financiers-OHADA.xlsx', snapshot.workbookBytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        toast(generation.stale
+          ? 'Ancienne génération téléchargée. Elle est périmée depuis la dernière écriture validée ; relancez le calcul pour l’actualiser.'
+          : 'Classeur OHADA téléchargé.', generation.stale ? 'warning' : 'success');
+      }
+    }).catch(function (error) { toast(error && error.message || 'Lecture du classeur OHADA impossible.', 'error'); });
+  }
+
+  function bindFinancialResult() {
+    $$('[data-ohada-download]').forEach(function (downloadButton) {
+      downloadButton.addEventListener('click', function () { downloadActiveOhadaSnapshot(downloadButton.getAttribute('data-ohada-download')); });
+    });
+    var button = $('[data-financial-result-generate]');
+    if (!button) return;
+    button.addEventListener('click', function () {
+      var dossier = S.currentDossier();
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.export', accountingAccessContext(dossier))) {
+        toast('Génération refusée : le droit « data.export » est requis.', 'warning');
+        return;
+      }
+      var status = $('.financial-result-status');
+      button.disabled = true;
+      button.textContent = 'Calcul en cours…';
+      if (status) status.textContent = 'Lecture du modèle local et préparation de la copie…';
+      var previousSnapshotPromise = OhadaFinancialStatements.readActiveSnapshot(dossier.id).catch(function () { return null; });
+      Promise.all([previousSnapshotPromise, OhadaFinancialStatements.loadTemplate()]).then(function (results) {
+        var previousSnapshot = results[0];
+        var templateBytes = results[1];
+        var activeDossier = S.currentDossier();
+        if (!activeDossier || activeDossier.id !== dossier.id) throw new Error('Le dossier actif a changé ; aucune génération n’a été enregistrée.');
+        var preflight = financialResultPreflight();
+        if (!preflight.postedCount || !preflight.balance.length) throw new Error('Aucune écriture validée non nulle n’est disponible dans le cycle actif.');
+        if (!preflight.summary.balanced) throw new Error('La balance du cycle n’est plus équilibrée ; contrôlez les données avant de recommencer.');
+        var mappingConfig = S.financialStatementsMappingsConfiguration();
+        var printedInformationRows = S.printedReportInformationConfiguration().rows;
+        var generatedAt = new Date().toISOString();
+        var resultId = 'OHADA-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+        var workbook = OhadaFinancialStatements.generateWorkbook(templateBytes, {
+          dossierName: activeDossier.name || activeDossier.clientName || '',
+          cycleStart: activeDossier.cycleStart,
+          cycleEnd: activeDossier.cycleEnd,
+          printedInformationRows: printedInformationRows,
+          balance: preflight.balance,
+          mappings: mappingConfig.mappings
+        });
+        var gapReport = OhadaFinancialStatements.buildGapReport(workbook.gaps, workbook.summary, {
+          dossierName: activeDossier.name || activeDossier.clientName || '',
+          printedInformationRows: printedInformationRows
+        });
+        var filePart = safeFilePart(activeDossier.reference || activeDossier.name);
+        var filename = 'Tableaux-financiers-OHADA-' + filePart + '-' + String(activeDossier.cycleEnd || '').replace(/-/g, '') + '.xlsx';
+        var gapFilename = 'Rapport-donnees-manquantes-OHADA-' + filePart + '-' + String(activeDossier.cycleEnd || '').replace(/-/g, '') + '.csv';
+        var snapshot = {
+          resultId: resultId,
+          generatedAt: generatedAt,
+          cycleStart: activeDossier.cycleStart,
+          cycleEnd: activeDossier.cycleEnd,
+          workbookBytes: workbook.bytes,
+          workbookFilename: filename,
+          gapReport: gapReport,
+          gapFilename: gapFilename,
+          summary: workbook.summary,
+          gapCount: workbook.gaps.length
+        };
+        return OhadaFinancialStatements.saveActiveSnapshot(activeDossier.id, snapshot).then(function () {
+          var saved = S.saveOhadaResultGeneration({
+            generatedAt: generatedAt,
+            resultId: resultId,
+            cycleStart: activeDossier.cycleStart,
+            cycleEnd: activeDossier.cycleEnd,
+            summary: workbook.summary
+          });
+          if (!saved.ok) {
+            var rollback = previousSnapshot
+              ? OhadaFinancialStatements.saveActiveSnapshot(activeDossier.id, previousSnapshot)
+              : OhadaFinancialStatements.deleteActiveSnapshot(activeDossier.id);
+            return rollback.then(function () { throw new Error((saved.errors || ['État généré mais non enregistré.']).join(' ')); });
+          }
+          toast('Calcul du résultat terminé. La génération active est conservée dans ce navigateur ; utilisez les deux boutons de téléchargement.', 'success');
+          render();
+        });
+      }).catch(function (error) {
+        if (status) status.textContent = error && error.message || 'La génération des états financiers a échoué.';
+        toast(error && error.message || 'La génération des états financiers a échoué.', 'error');
+        button.disabled = false;
+        button.textContent = 'Calculer et générer les états financiers';
+      });
+    });
+  }
+
   function viewOhadaFinancialStatements(backLink) {
     var selectedItem = OhadaFinancialStatements.item(OhadaFinancialStatements.DEFAULT_SELECTED_KEY) || OhadaFinancialStatements.ITEMS.find(function (item) { return !item.separator; });
     var listItems = OhadaFinancialStatements.ITEMS.map(function (item) {
@@ -26039,6 +26244,16 @@
     });
     $('[data-ohada-edit]').addEventListener('click', function () {
       if (!selectedKey) { toast('Sélectionnez un état dans la liste.', 'warning'); return; }
+      if (selectedKey === 'financial-statements') {
+        var generation = S.ohadaResultGeneration();
+        if (!generation.generatedAt) {
+          result.innerHTML = '<div class="alert warning ohada-statement-preview-ready"><div><strong>Aucun résultat n’a encore été généré pour ce dossier.</strong> Les états sont accessibles après le calcul du résultat, sans attendre l’arrêt définitif des comptes.</div><a class="btn btn-primary" href="#/financial-result">Ouvrir le calcul du résultat</a></div>';
+          return;
+        }
+        result.innerHTML = '<div class="alert ' + (generation.stale ? 'warning' : 'info') + ' ohada-statement-preview-ready"><div><strong>' + (generation.stale ? 'Génération périmée mais consultable.' : 'Génération active disponible.') + '</strong> ' + (generation.stale ? 'Une écriture a été validée depuis le dernier calcul. Vous pouvez télécharger cette version et relancer le calcul pour l’actualiser.' : 'Téléchargez le classeur modifiable ou le rapport des données à compléter.') + '</div><div class="ohada-statement-download-actions"><button type="button" class="btn btn-primary" data-ohada-download="workbook">Télécharger le classeur Excel</button><button type="button" class="btn btn-ghost" data-ohada-download="report">Télécharger le rapport séparé</button><a class="btn btn-ghost" href="#/financial-result">Nouvelle génération</a></div></div>';
+        $$('[data-ohada-download]', result).forEach(function (button) { button.addEventListener('click', function () { downloadActiveOhadaSnapshot(button.getAttribute('data-ohada-download')); }); });
+        return;
+      }
       var preview;
       try { preview = OhadaFinancialStatements.buildPreview(selectedKey, S.exercise()); }
       catch (error) { toast(error.message || 'Impossible d’ouvrir cet aperçu.', 'warning'); return; }
@@ -27064,6 +27279,35 @@
 
     input.addEventListener('input', applyFilter);
     applyFilter();
+    var saveMappings = $('[data-financial-framework-save]');
+    if (saveMappings) saveMappings.addEventListener('click', function () {
+      var dossier = S.currentDossier();
+      if (isPhoneViewport() || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'accounting.configure', accountingAccessContext(dossier))) {
+        toast('Modification refusée : un droit explicite sur ce dossier est requis.', 'warning');
+        return;
+      }
+      var allowedPosts = Object.create(null);
+      BalanceItems.all().forEach(function (post) { allowedPosts[String(post.code)] = true; });
+      AccountingFramework.all().forEach(function (record) {
+        if (record.debit) allowedPosts[String(record.debit.code)] = true;
+        if (record.credit) allowedPosts[String(record.credit.code)] = true;
+      });
+      var mappings = Object.create(null);
+      var invalid = '';
+      $$('[data-financial-framework-post-code]', tableBody).forEach(function (control) {
+        var account = control.getAttribute('data-account-code');
+        var side = control.getAttribute('data-financial-framework-post-code');
+        var code = String(control.value || '').trim().toUpperCase();
+        if (code && !allowedPosts[code]) invalid = code;
+        if (!mappings[account]) mappings[account] = { debit: '', credit: '' };
+        mappings[account][side] = code;
+      });
+      if (invalid) { toast('Le poste « ' + invalid + ' » ne figure pas dans les référentiels disponibles.', 'warning'); return; }
+      var saved = S.saveFinancialStatementsMappingsConfiguration({ mappings: mappings });
+      if (!saved.ok) { toast((saved.errors || ['Enregistrement impossible.']).join(' '), 'error'); return; }
+      toast('Correspondances enregistrées pour le dossier actif. Les écritures restent inchangées.', 'success');
+      render();
+    });
   }
 
   function bindAnalyticalNatures() {
@@ -27620,6 +27864,11 @@
       if (!isPhoneViewport() && menuParams.g === 'saisie' && (!menuParams.t || menuParams.t === 'journal-entry')) bindEntryJournalSelector();
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'live-cash') bindAccountingCashOperations();
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'reconciliation') bindPointageView();
+      return;
+    }
+
+    if (route === 'financial-result') {
+      bindFinancialResult();
       return;
     }
 
@@ -29057,6 +29306,9 @@
     }
 
     window.addEventListener('hashchange', render);
+    window.addEventListener('perfecto:ohada-result-stale', function () {
+      toast('Une donnée utilisée pour les états financiers a changé depuis la génération (écriture validée, report à nouveau, informations communes ou correspondances). Les états restent consultables ; relancez le calcul du résultat pour les actualiser.', 'warning');
+    });
     if (window.matchMedia) {
       var phoneQuery = window.matchMedia('(max-width: ' + PHONE_BREAKPOINT + 'px)');
       if (phoneQuery.addEventListener) phoneQuery.addEventListener('change', render);

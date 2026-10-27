@@ -58,7 +58,7 @@ assert.ok(html.indexOf('js/accounting-plan-edition-report.js') < html.indexOf('j
 assert.match(html, /css\/accounting-plan-edition\.css/);
 assert.match(sw, /\.\/js\/accounting-plan-edition-report\.js/);
 assert.match(sw, /\.\/css\/accounting-plan-edition\.css/);
-assert.match(sw, /perfecto-static-v142/);
+assert.match(sw, /perfecto-static-v143/);
 assert.match(css, /\.accounting-plan-edition-table-wrap[\s\S]*overflow-x: auto/);
 assert.match(css, /body\.report-preview-printing[\s\S]*\.accounting-plan-edition-table/);
 assert.match(css, /min-width: 0 !important/);

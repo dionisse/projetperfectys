@@ -1800,8 +1800,119 @@
     return clone(dossier && dossier.currenciesConfiguration || defaultCurrenciesConfiguration());
   }
 
+  function ohadaStorageKey(dossierId) {
+    return 'perfecto.ohada.dossier.v1.' + String(dossierId || activeFolderId || DEFAULT_FOLDER_ID);
+  }
+
+  function readOhadaLocalState(dossierId) {
+    try {
+      var raw = global.localStorage.getItem(ohadaStorageKey(dossierId));
+      var value = raw ? JSON.parse(raw) : {};
+      return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    } catch (_error) { return {}; }
+  }
+
+  function writeOhadaLocalState(value, dossierId) {
+    try {
+      global.localStorage.setItem(ohadaStorageKey(dossierId), JSON.stringify(value || {}));
+      return true;
+    } catch (_error) { return false; }
+  }
+
+  function financialStatementsMappingsConfiguration() {
+    var state = readOhadaLocalState();
+    var mappings = state.mappings && typeof state.mappings === 'object' && !Array.isArray(state.mappings) ? state.mappings : {};
+    var clean = Object.create(null);
+    Object.keys(mappings).forEach(function (code) {
+      var row = mappings[code];
+      if (!/^\d{1,8}$/.test(code) || !row || typeof row !== 'object') return;
+      clean[code] = {
+        debit: String(row.debit == null ? '' : row.debit).trim().toUpperCase().slice(0, 8),
+        credit: String(row.credit == null ? '' : row.credit).trim().toUpperCase().slice(0, 8)
+      };
+    });
+    return { mappings: clean, updatedAt: String(state.mappingsUpdatedAt || '') };
+  }
+
+  function saveFinancialStatementsMappingsConfiguration(input) {
+    var source = input && input.mappings && typeof input.mappings === 'object' && !Array.isArray(input.mappings) ? input.mappings : null;
+    if (!source) return { ok: false, errors: ['Les correspondances doivent être transmises sous forme de lignes de comptes.'] };
+    var mappings = Object.create(null);
+    var errors = [];
+    Object.keys(source).forEach(function (code) {
+      var row = source[code];
+      if (!/^\d{1,8}$/.test(code) || !row || typeof row !== 'object' || Array.isArray(row)) {
+        errors.push('Ligne de correspondance invalide pour le compte « ' + code + ' ».');
+        return;
+      }
+      var debit = String(row.debit == null ? '' : row.debit).trim().toUpperCase();
+      var credit = String(row.credit == null ? '' : row.credit).trim().toUpperCase();
+      if ((debit && !/^[A-Z0-9]{1,8}$/.test(debit)) || (credit && !/^[A-Z0-9]{1,8}$/.test(credit))) {
+        errors.push('Code de poste invalide pour le compte « ' + code + ' ».');
+        return;
+      }
+      mappings[code] = { debit: debit, credit: credit };
+    });
+    if (errors.length) return { ok: false, errors: errors };
+    var state = readOhadaLocalState();
+    state.mappings = mappings;
+    state.mappingsUpdatedAt = new Date().toISOString();
+    if (!writeOhadaLocalState(state)) return { ok: false, errors: ['Enregistrement local impossible ; les correspondances précédentes sont conservées.'] };
+    markOhadaResultStale();
+    return { ok: true, errors: [], configuration: financialStatementsMappingsConfiguration() };
+  }
+
+  function ohadaResultGeneration() {
+    var state = readOhadaLocalState();
+    var generation = state.generation && typeof state.generation === 'object' ? state.generation : {};
+    return {
+      generatedAt: String(generation.generatedAt || ''),
+      stale: generation.stale === true,
+      staleAt: String(generation.staleAt || ''),
+      resultId: String(generation.resultId || ''),
+      cycleStart: String(generation.cycleStart || ''),
+      cycleEnd: String(generation.cycleEnd || ''),
+      summary: generation.summary && typeof generation.summary === 'object' ? clone(generation.summary) : null
+    };
+  }
+
+  function saveOhadaResultGeneration(input) {
+    var source = input && typeof input === 'object' ? input : {};
+    if (!source.generatedAt || !source.resultId || !source.cycleStart || !source.cycleEnd) {
+      return { ok: false, errors: ['Les dates du cycle et l’identifiant de génération sont requis.'] };
+    }
+    var state = readOhadaLocalState();
+    state.generation = {
+      generatedAt: String(source.generatedAt).slice(0, 40),
+      resultId: String(source.resultId).slice(0, 100),
+      cycleStart: String(source.cycleStart).slice(0, 20),
+      cycleEnd: String(source.cycleEnd).slice(0, 20),
+      summary: source.summary && typeof source.summary === 'object' ? clone(source.summary) : null,
+      stale: false,
+      staleAt: ''
+    };
+    if (!writeOhadaLocalState(state)) return { ok: false, errors: ['État généré, mais son indicateur local n’a pas pu être enregistré.'] };
+    return { ok: true, generation: ohadaResultGeneration() };
+  }
+
+  function markOhadaResultStale() {
+    var state = readOhadaLocalState();
+    if (!state.generation || !state.generation.generatedAt || state.generation.stale === true) return false;
+    state.generation.stale = true;
+    state.generation.staleAt = new Date().toISOString();
+    var saved = writeOhadaLocalState(state);
+    if (saved && typeof global.dispatchEvent === 'function' && typeof global.CustomEvent === 'function') {
+      global.dispatchEvent(new global.CustomEvent('perfecto:ohada-result-stale', { detail: { dossierId: activeFolderId } }));
+    }
+    return saved;
+  }
+
   function confidentialAccountAccessIsEnabled() {
     return confidentialAccountAccessEnabled && confidentialAccountAccessDossierId === activeFolderId;
+  }
+
+  function hasHiddenConfidentialAccounts() {
+    return !confidentialAccountAccessIsEnabled() && Object.keys(confidentialAccountCodesForDossier(activeFolderId)).length > 0;
   }
 
   function setConfidentialAccountAccess(supervisorAllowed) {
@@ -2681,6 +2792,7 @@
       folderCatalog = previousCatalog;
       return { ok: false, errors: ['Impossible d’enregistrer les informations communes dans ce navigateur. Les valeurs précédentes sont conservées.'] };
     }
+    markOhadaResultStale();
     return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
   }
 
@@ -3853,6 +3965,7 @@
       state = previousState;
       return { ok: false, errors: ['Impossible d’enregistrer le report dans ce dossier.'] };
     }
+    markOhadaResultStale();
     return { ok: true, errors: [], openingBalance: clone(record) };
   }
 
@@ -3875,6 +3988,7 @@
       state = previousState;
       return { ok: false, errors: ['Impossible d’enregistrer les modifications du report.'] };
     }
+    markOhadaResultStale();
     return { ok: true, errors: [], openingBalance: clone(record) };
   }
 
@@ -3889,6 +4003,7 @@
       state = previousState;
       return { ok: false, errors: ['Suppression impossible : stockage local indisponible ou plein. Le report est conservé.'] };
     }
+    markOhadaResultStale();
     return { ok: true, errors: [], openingBalance: clone(removed) };
   }
 
@@ -4104,6 +4219,7 @@
       state = previousState;
       return { ok: false, errors: ['Transfert annulé : le registre local n’a pas pu être enregistré. Aucune ligne de report n’a été modifiée.'] };
     }
+    markOhadaResultStale();
     var conflicts = preview.decisions.filter(function (item) { return item.action === 'conflict'; });
     return {
       ok: true,
@@ -5868,7 +5984,8 @@
     record.id = 'e-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
     record.createdAt = new Date().toISOString();
     st.entries.push(record);
-    save();
+    var persisted = save();
+    if (persisted && record.status === 'posted') markOhadaResultStale();
     return { ok: true, errors: [], entry: record };
   }
 
@@ -5951,6 +6068,7 @@
     existing.status = 'posted';
     existing.postedAt = new Date().toISOString();
     save();
+    markOhadaResultStale();
     return { ok: true, errors: [], entry: existing };
   }
 
@@ -7421,6 +7539,7 @@
     dossiers: visibleDossiers,
     currentDossier: visibleCurrentDossier,
     confidentialAccountsConfiguration: confidentialAccountsConfiguration,
+    hasHiddenConfidentialAccounts: hasHiddenConfidentialAccounts,
     setConfidentialAccountAccess: setConfidentialAccountAccess,
     addConfidentialAccount: addConfidentialAccount,
     updateConfidentialAccount: updateConfidentialAccount,
@@ -7442,6 +7561,11 @@
     saveAccountControlsConfiguration: saveAccountControlsConfiguration,
     printedReportInformationConfiguration: printedReportInformationConfiguration,
     savePrintedReportInformationConfiguration: savePrintedReportInformationConfiguration,
+    financialStatementsMappingsConfiguration: financialStatementsMappingsConfiguration,
+    saveFinancialStatementsMappingsConfiguration: saveFinancialStatementsMappingsConfiguration,
+    ohadaResultGeneration: ohadaResultGeneration,
+    saveOhadaResultGeneration: saveOhadaResultGeneration,
+    markOhadaResultStale: markOhadaResultStale,
     currenciesConfiguration: currenciesConfiguration,
     saveCurrenciesConfiguration: saveCurrenciesConfiguration,
     saveAnalyticalAllocationKeysConfiguration: saveAnalyticalAllocationKeysConfiguration,
