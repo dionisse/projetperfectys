@@ -55,6 +55,7 @@ const app = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'ap
 const nav = require('../modern-proto/js/accounting-navigation.js');
 const html = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'index.html'), 'utf8');
 const worker = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'service-worker.js'), 'utf8');
+const css = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'css', 'vat-payment-report.css'), 'utf8');
 assert.equal(nav.getTab('declarations', 'vat-payment').status, 'active');
 assert.match(app, /group\.id === 'declarations' && tab\.id === 'vat-payment'[\s\S]*viewVatPaymentReport/);
 assert.match(app, /menuParams\.g === 'declarations' && menuParams\.t === 'vat-payment'\) bindVatPaymentReport\(\)/);
@@ -64,4 +65,6 @@ assert.match(html, /js\/vat-payment-report\.js/);
 assert.match(html, /css\/vat-payment-report\.css/);
 assert.match(worker, /vat-payment-report\.js/);
 assert.match(worker, /vat-payment-report\.css/);
+assert.match(css, /\.vat-payment-mapping-table[\s\S]*font-size: \.76rem/);
+assert.match(css, /\.vat-payment-mapping-scroll[\s\S]*max-height: min\(60vh, 540px\)/);
 console.log('OK · état de paiement TVA, rubriques, période et mouvements validés');

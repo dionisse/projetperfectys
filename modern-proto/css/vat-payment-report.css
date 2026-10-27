@@ -1,53 +1,58 @@
 .vat-payment-report-detail {
   display: grid;
-  gap: 1rem;
+  gap: .7rem;
+  font-size: .82rem;
 }
 
 .vat-payment-report-detail > .page-header { margin-bottom: 0; }
-.vat-payment-report-detail > .page-header p { margin: .35rem 0 0; color: var(--muted, #64748b); }
-.vat-payment-form { display: grid; gap: 1rem; }
-.vat-payment-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(320px, .85fr); gap: 1rem; align-items: start; }
-.vat-payment-accounts-card, .vat-payment-period-card, .vat-payment-extra-card, .vat-payment-method-card, .vat-payment-declarant-card, .vat-payment-options-card { padding: 1rem; }
+.vat-payment-report-detail > .page-header h2 { margin: .15rem 0; font-size: 1.15rem; }
+.vat-payment-report-detail > .page-header p { margin: .2rem 0 0; color: var(--muted, #64748b); font-size: .75rem; }
+.vat-payment-form { display: grid; gap: .7rem; }
+.vat-payment-layout { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(280px, .85fr); gap: .7rem; align-items: start; }
+.vat-payment-accounts-card, .vat-payment-period-card, .vat-payment-extra-card, .vat-payment-method-card, .vat-payment-declarant-card, .vat-payment-options-card { padding: .75rem; }
 .vat-payment-accounts-card { min-width: 0; }
 .vat-payment-card-heading, .vat-payment-preview-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
-.vat-payment-card-heading h3, .vat-payment-preview-heading h3 { margin: .2rem 0; font-size: 1.05rem; }
-.vat-payment-card-heading p { margin: .25rem 0 0; color: var(--muted, #64748b); font-size: .84rem; line-height: 1.45; }
-.vat-payment-year-badge { flex: 0 0 auto; border-radius: 999px; background: #edf4f0; padding: .35rem .65rem; color: var(--primary, #245c4d); font-size: .75rem; font-weight: 700; }
-.vat-payment-mapping-scroll { max-height: 670px; margin-top: .9rem; overflow: auto; border: 1px solid var(--line, #e3e8e5); border-radius: .65rem; background: #fff; }
-.vat-payment-mapping-table { width: 100%; min-width: 570px; border-collapse: separate; border-spacing: 0; font-size: .86rem; }
-.vat-payment-mapping-table th, .vat-payment-mapping-table td { padding: .45rem .55rem; border-bottom: 1px solid #e7ebe8; text-align: left; vertical-align: middle; }
+.vat-payment-card-heading h3, .vat-payment-preview-heading h3 { margin: .15rem 0; font-size: .94rem; }
+.vat-payment-card-heading p { margin: .2rem 0 0; color: var(--muted, #64748b); font-size: .75rem; line-height: 1.35; }
+.vat-payment-year-badge { flex: 0 0 auto; border-radius: 999px; background: #edf4f0; padding: .25rem .5rem; color: var(--primary, #245c4d); font-size: .68rem; font-weight: 700; }
+.vat-payment-mapping-scroll { max-height: min(60vh, 540px); margin-top: .6rem; overflow: auto; border: 1px solid var(--line, #e3e8e5); border-radius: .55rem; background: #fff; }
+.vat-payment-mapping-table { width: 100%; min-width: 500px; border-collapse: separate; border-spacing: 0; font-size: .76rem; }
+.vat-payment-mapping-table th, .vat-payment-mapping-table td { padding: .29rem .4rem; border-bottom: 1px solid #e7ebe8; text-align: left; vertical-align: middle; }
 .vat-payment-mapping-table thead th { position: sticky; top: 0; z-index: 3; background: #edf1ee; color: #27342d; font-weight: 800; }
-.vat-payment-mapping-table thead th:first-child { width: 43%; }
-.vat-payment-mapping-table tbody th[scope="row"] { width: 43%; font-weight: 500; }
-.vat-payment-map-section th { position: sticky; top: 2.7rem; z-index: 2; background: #d7dbd8; color: #24312b; font-weight: 800; }
-.vat-payment-map-section:first-child th { top: 2.7rem; }
+.vat-payment-mapping-table thead th:first-child { width: 42%; }
+.vat-payment-mapping-table tbody th[scope="row"] { width: 42%; font-weight: 500; }
+.vat-payment-map-section th { position: sticky; top: 2.25rem; z-index: 2; background: #d7dbd8; color: #24312b; font-weight: 800; }
+.vat-payment-map-section:first-child th { top: 2.25rem; }
 .vat-payment-map-row:nth-child(even) { background: #fbfcf2; }
 .vat-payment-map-row:nth-child(odd) { background: #fff; }
-.vat-payment-account-input { display: grid; grid-template-columns: minmax(90px, 1fr) auto; gap: .35rem; align-items: center; }
-.vat-payment-account-input input { min-width: 0; width: 100%; padding: .42rem .5rem; font-size: .82rem; }
-.vat-payment-account-input .btn { white-space: nowrap; }
-.vat-payment-map-footer { display: flex; align-items: center; gap: .7rem; padding-top: .75rem; }
-.vat-payment-map-footer small { line-height: 1.4; }
-.vat-payment-details-column { display: grid; gap: .75rem; }
-.vat-payment-details-column .field { margin: 0 0 .7rem; }
+.vat-payment-account-input { display: grid; grid-template-columns: minmax(80px, 1fr) auto; gap: .25rem; align-items: center; }
+.vat-payment-account-input input { min-width: 0; width: 100%; padding: .29rem .38rem; font-size: .72rem; }
+.vat-payment-account-input .btn { padding: .27rem .38rem; font-size: .68rem; white-space: nowrap; }
+.vat-payment-map-footer { display: flex; align-items: center; gap: .55rem; padding-top: .55rem; }
+.vat-payment-map-footer small { font-size: .7rem; line-height: 1.3; }
+.vat-payment-details-column { display: grid; gap: .55rem; }
+.vat-payment-details-column .field { margin: 0 0 .5rem; }
 .vat-payment-details-column .field:last-child { margin-bottom: 0; }
 .vat-payment-details-column fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
-.vat-payment-details-column legend { margin-bottom: .8rem; font-weight: 800; }
-.vat-payment-details-column .field label { display: block; margin-bottom: .35rem; font-weight: 600; }
-.vat-payment-period-fields { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: .5rem; align-items: end; margin-bottom: .8rem; }
+.vat-payment-details-column legend { margin-bottom: .55rem; font-size: .8rem; font-weight: 800; }
+.vat-payment-details-column .field label { display: block; margin-bottom: .25rem; font-size: .75rem; font-weight: 600; }
+.vat-payment-details-column input { padding: .35rem .45rem; font-size: .76rem; }
+.vat-payment-period-fields { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: .35rem; align-items: end; margin-bottom: .55rem; }
 .vat-payment-period-fields .field { min-width: 0; }
-.vat-payment-period-separator { padding-bottom: .65rem; color: var(--muted, #64748b); }
-.vat-payment-method-options { display: flex; flex-wrap: wrap; gap: 1.2rem; margin-bottom: .8rem; }
-.vat-payment-method-options label, .vat-payment-checkbox { display: inline-flex; align-items: center; gap: .5rem; font-weight: 600; }
+.vat-payment-period-separator { padding-bottom: .5rem; color: var(--muted, #64748b); }
+.vat-payment-method-options { display: flex; flex-wrap: wrap; gap: .9rem; margin-bottom: .6rem; font-size: .77rem; }
+.vat-payment-method-options label, .vat-payment-checkbox { display: inline-flex; align-items: center; gap: .4rem; font-size: .76rem; font-weight: 600; }
 .vat-payment-method-options input, .vat-payment-checkbox input { width: auto; }
-.vat-payment-options-card { display: grid; grid-template-columns: auto minmax(220px, 1fr) minmax(240px, 1.2fr); align-items: center; gap: 1rem; }
+.vat-payment-options-card { display: grid; grid-template-columns: auto minmax(200px, 1fr) minmax(220px, 1.2fr); align-items: center; gap: .7rem; }
 .vat-payment-options-card .field { margin: 0; }
-.vat-payment-options-card .field label { display: block; margin-bottom: .35rem; font-weight: 600; }
+.vat-payment-options-card .field label { display: block; margin-bottom: .25rem; font-size: .75rem; font-weight: 600; }
+.vat-payment-options-card input[type="text"] { padding: .32rem .4rem; font-size: .74rem; }
 .vat-payment-checkbox { white-space: nowrap; }
 .vat-payment-petroleum { justify-self: end; }
-.vat-payment-caution { margin: 0; line-height: 1.55; }
-.vat-payment-actions, .vat-payment-preview-actions { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-.vat-payment-generated { color: var(--muted, #64748b); font-size: .88rem; font-weight: 700; }
+.vat-payment-caution { margin: 0; font-size: .76rem; line-height: 1.4; }
+.vat-payment-actions, .vat-payment-preview-actions { display: flex; align-items: center; justify-content: space-between; gap: .7rem; }
+.vat-payment-actions .btn { padding: .42rem .7rem; font-size: .78rem; }
+.vat-payment-generated { color: var(--muted, #64748b); font-size: .78rem; font-weight: 700; }
 #vat-payment-result { scroll-margin-top: 1.25rem; }
 .vat-payment-preview { display: grid; gap: 1rem; padding-top: .5rem; }
 .vat-payment-preview-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem 1rem; margin: 0; padding: 1rem; border: 1px solid var(--line, #e3e8e5); border-radius: .7rem; background: #fff; }
@@ -69,7 +74,7 @@
 .vat-payment-picker .field { margin-bottom: .75rem; }
 .vat-payment-printable .vat-payment-preview-actions { display: none; }
 
-@media (max-width: 1000px) {
+@media (max-width: 1050px) {
   .vat-payment-layout { grid-template-columns: 1fr; }
   .vat-payment-details-column { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
   .vat-payment-accounts-card { order: 2; }

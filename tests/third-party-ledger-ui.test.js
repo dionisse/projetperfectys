@@ -55,7 +55,7 @@ assert.doesNotMatch(reportSource, /record\.thirdParty\b/);
 assert.ok(htmlSource.indexOf('js/third-party-balance-report.js') < htmlSource.indexOf('js/third-party-ledger-report.js'));
 assert.ok(htmlSource.indexOf('js/third-party-ledger-report.js') < htmlSource.indexOf('js/app.js'));
 assert.match(serviceWorkerSource, /\.\/js\/third-party-ledger-report\.js/);
-assert.match(serviceWorkerSource, /perfecto-static-v135/);
+assert.match(serviceWorkerSource, /perfecto-static-v136/);
 assert.match(cssSource, /\.third-party-ledger-filter-grid[\s\S]*\.third-party-ledger-column-grid[\s\S]*\.third-party-ledger-table/);
 assert.match(cssSource, /\.report-preview-content \.third-party-ledger-print[\s\S]*font-size:\s*8pt/);
 assert.match(cssSource, /\.report-preview-overlay\s*,[\s\S]*position:\s*fixed[\s\S]*inset:\s*0/);
