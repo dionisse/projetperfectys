@@ -24,12 +24,16 @@ assert.deepEqual(report.ROWS.map(row => row.label), [
 ]);
 const defaults = report.defaults(2025);
 assert.ok(Object.values(defaults.accounts).every(codes => codes.length === 0), 'aucun compte de rubrique fiscale n’est supposé');
+assert.equal(defaults.serviceVatBasis, '', 'le régime de services reste à confirmer pour chaque dossier');
+assert.equal(report.normalise({ serviceVatBasis: 'unknown' }, 2025).serviceVatBasis, '');
+assert.equal(report.normalise({ serviceVatBasis: 'cash' }, 2025).serviceVatBasis, '', 'les anciennes configurations sans preuve de confirmation restent à confirmer');
+assert.equal(report.normalise({ serviceVatBasis: 'debits', serviceVatBasisConfirmed: true }, 2025).serviceVatBasis, 'debits');
 assert.equal(report.accountMatches('44521', ['4452*']), true);
 assert.equal(report.accountMatches('44521', ['4432']), false);
 
 const config = report.normalise({ accounts: {
   taxableSales: ['70*'], collectedSales: ['4431'], fullDeductibleOperatingPurchases: ['4452']
-} }, 2025);
+}, serviceExigibleVatAccounts: ['4438'] }, 2025);
 const result = report.calculateMovements({
   from: '2025-07-01', to: '2025-07-31', configuration: config,
   accounts: [{ code: '7011', label: 'Ventes dans la Région' }, { code: '4431', label: 'TVA facturée sur ventes' }, { code: '4452', label: 'TVA récupérable sur achats' }],
@@ -37,17 +41,21 @@ const result = report.calculateMovements({
     { status: 'posted', date: '2025-07-03', lines: [
       { account: '7011', debit: 0, credit: 12000 },
       { account: '4431', debit: 0, credit: 2160 },
+      { account: '4438', debit: 0, credit: 400 },
       { account: '4452', debit: 180, credit: 0 }
     ] },
     { status: 'draft', date: '2025-07-15', lines: [{ account: '7011', debit: 0, credit: 9000 }] },
     { status: 'posted', date: '2025-08-01', lines: [{ account: '7011', debit: 0, credit: 5000 }] },
-    { status: 'posted', date: '2025-06-30', lines: [{ account: '7011', debit: 0, credit: 2000 }] }
+    { status: 'posted', date: '2025-06-30', lines: [{ account: '7011', debit: 0, credit: 2000 }] },
+    { status: 'posted', date: '2025-07-28', journal: 'OD', description: 'Liquidation TVA du mois de juillet', lines: [{ account: '4431', debit: 2160, credit: 0 }] }
   ]
 });
 assert.equal(result.matchedLineCount, 3);
+assert.equal(result.excludedLiquidationCount, 1, 'les écritures de liquidation TVA sont écartées des mouvements de déclaration');
 assert.equal(result.rows.find(row => row.key === 'taxableSales').creditTotal, 12000);
 assert.equal(result.rows.find(row => row.key === 'taxableSales').debitTotal, 0);
 assert.equal(result.rows.find(row => row.key === 'collectedSales').creditTotal, 2160);
+assert.equal(result.serviceExigibleMovement.netCredit, 400, 'le compte distinct de TVA exigible sur services est relevé séparément');
 assert.equal(result.rows.find(row => row.key === 'fullDeductibleOperatingPurchases').debitTotal, 180);
 assert.equal('amountDue' in result, false, 'aucun montant à payer ne doit être supposé');
 
@@ -65,6 +73,12 @@ assert.match(app, /vatPaymentAllocationMarkup\(configuration\)/);
 assert.match(app, /data-vat-allocation-add/);
 assert.match(app, /calculateReleasedVat/);
 assert.match(app, /serviceVatBasis/);
+assert.match(app, /À confirmer pour ce dossier/);
+assert.match(app, /serviceExigibleVatAccounts/);
+assert.match(app, /data-vat-declaration-download/);
+assert.match(html, /js\/vat-declaration-workbook\.js/);
+assert.match(worker, /vat-declaration-workbook\.js/);
+assert.match(worker, /vat-declaration-template\.xlsx/);
 assert.match(html, /js\/vat-payment-report\.js/);
 assert.match(html, /js\/vat-payment-allocation\.js/);
 assert.match(html, /css\/vat-payment-report\.css/);

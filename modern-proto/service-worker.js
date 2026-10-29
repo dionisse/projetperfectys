@@ -3,12 +3,13 @@
  * Stratégie : réseau d'abord (contenu toujours à jour), cache en secours hors ligne.
  */
 
-const CACHE_NAME = 'perfecto-static-v147';
+const CACHE_NAME = 'perfecto-static-v149';
 const APP_SHELL = [
   './',
   './index.html',
   './assets/OHADAr-template.xlsx',
   './assets/aib-suppliers-template.xlsx',
+  './assets/vat-declaration-template.xlsx',
   './css/modern.css',
   './css/accounting-configuration.css',
   './css/table-design-system.css',
@@ -53,6 +54,7 @@ const APP_SHELL = [
   './js/vat-difference-report.js',
   './js/vat-payment-report.js',
   './js/vat-payment-allocation.js',
+  './js/vat-declaration-workbook.js',
   './js/vat-detail-report.js',
   './js/aib-suppliers-report.js',
   './js/nominative-declaration-report.js',

@@ -31,9 +31,12 @@ const release = allocation.calculateReleasedVat({
   entries, allocations: [first], period: '2026-02', decimalPlaces: 0,
   customerAccounts: config.customerAccounts, suspenseAccounts: config.suspenseAccounts
 });
-assert.equal(release.ok, true);
-assert.equal(release.total, 90000);
-assert.equal(release.rows[0].vatReleased, 90000);
+assert.equal(release.ok, false, 'un prorata TTC ne constitue pas une ventilation déclarative');
+assert.equal(release.confirmed, false);
+assert.equal(release.total, null, 'montant déclaratif inconnu sans ventilation TVA par ligne');
+assert.equal(release.candidateTotal, 90000);
+assert.equal(release.rows[0].candidateVatReleased, 90000);
+assert.match(release.gaps.map(item => item.message).join(' '), /ventilation TVA par ligne/);
 
 const overInvoice = allocation.validateAllocation({ id: 'a2', invoiceEntryId: 'inv-1', receiptEntryId: 'pay-1', amountTtc: 600000 }, Object.assign({ entries, allocations: [first] }, config));
 assert.equal(overInvoice.ok, false);
@@ -51,5 +54,11 @@ const twoRates = allocation.calculateReleasedVat({
   ] }), entries[1]],
   allocations: [first], period: '2026-02', customerAccounts: ['411*'], suspenseAccounts: ['4459*']
 });
-assert.equal(twoRates.total, 90000, 'le ratio utilise la TVA réellement portée sur la facture');
+assert.equal(twoRates.total, null, 'une pièce potentiellement multi-taux n’est pas déclarée au prorata TTC');
+assert.equal(twoRates.candidateTotal, 90000);
+const noAllocations = allocation.calculateReleasedVat({
+  entries, allocations: [], period: '2026-02', customerAccounts: ['411*'], suspenseAccounts: ['4459*']
+});
+assert.equal(noAllocations.total, null, 'l’absence d’affectation ne vaut pas montant nul');
+assert.match(noAllocations.gaps.map(item => item.message).join(' '), /reste inconnu/);
 console.log('OK · affectations facture-règlement et TVA exigible sur encaissement');

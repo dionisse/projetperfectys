@@ -54,7 +54,7 @@
     var errors = [];
     var invoice = findEntry(options.entries, input.invoiceEntryId);
     var receipt = findEntry(options.entries, input.receiptEntryId);
-    var customers = cleanCodes(options.customerAccounts && options.customerAccounts.length ? options.customerAccounts : ['41']);
+    var customers = cleanCodes(options.customerAccounts);
     var suspense = cleanCodes(options.suspenseAccounts);
     var allocated = Number(input.amountTtc);
     if (!invoice || invoice.status !== 'posted') errors.push('Choisissez une facture comptabilisée et validée.');
@@ -91,7 +91,7 @@
     var entries = Array.isArray(options.entries) ? options.entries : [];
     var allocations = Array.isArray(options.allocations) ? options.allocations : [];
     var period = String(options.period || '');
-    var customerAccounts = cleanCodes(options.customerAccounts && options.customerAccounts.length ? options.customerAccounts : ['41']);
+    var customerAccounts = cleanCodes(options.customerAccounts);
     var suspenseAccounts = cleanCodes(options.suspenseAccounts);
     var places = Math.max(0, Math.min(6, Number(options.decimalPlaces) || 0));
     var round = function (value) { var factor = Math.pow(10, places); return Math.round((Number(value) + Number.EPSILON) * factor) / factor; };
@@ -104,6 +104,7 @@
     });
     var rows = [];
     var total = 0;
+    if (!periodRows.length) gaps.push({ message: 'Aucune affectation facture–règlement validée pour cette période; le montant reste inconnu et non assimilé à zéro.' });
     periodRows.forEach(function (allocation) {
       var invoice = findEntry(entries, allocation.invoiceEntryId);
       var receipt = findEntry(entries, allocation.receiptEntryId);
@@ -122,12 +123,13 @@
       rows.push({
         allocationId: allocation.id || '', invoiceEntryId: invoice.id, receiptEntryId: receipt.id,
         invoiceReference: String(invoice.reference || ''), receiptReference: String(receipt.reference || ''),
-        paymentDate: String(receipt.date || ''), allocatedTtc: round(amountTtc), vatReleased: released,
-        basis: 'Prorata du montant TTC affecté à la pièce; à contrôler si la pièce comporte plusieurs régimes ou taux.'
+        paymentDate: String(receipt.date || ''), allocatedTtc: round(amountTtc), candidateVatReleased: released,
+        basis: 'Estimation au prorata TTC, non déclarative : la ventilation de TVA par ligne/fait générateur n’est pas fournie par les écritures.'
       });
       total += released;
     });
-    return { ok: gaps.length === 0, period: period, total: round(total), rows: rows, gaps: gaps };
+    if (rows.length) gaps.push({ message: 'Les estimations au prorata TTC ne sont pas reprises dans la déclaration sans ventilation TVA par ligne et contrôle des acomptes; montant exigible laissé inconnu.' });
+    return { ok: false, confirmed: false, period: period, total: null, candidateTotal: round(total), rows: rows, gaps: gaps };
   }
 
   root.PerfectoVatPaymentAllocation = {

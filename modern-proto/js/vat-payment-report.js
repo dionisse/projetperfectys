@@ -36,8 +36,8 @@
     var accounts = {};
     ROWS.forEach(function (row) { accounts[row.key] = []; });
     return {
-      schemaVersion: 2, year: Number(year) || null, accounts: accounts,
-      customerAccounts: [], pendingServiceVatAccounts: [], serviceVatBasis: 'cash'
+      schemaVersion: 3, year: Number(year) || null, accounts: accounts,
+      customerAccounts: [], pendingServiceVatAccounts: [], serviceExigibleVatAccounts: [], serviceVatBasis: '', serviceVatBasisConfirmed: false, prorataPercent: ''
     };
   }
 
@@ -49,7 +49,10 @@
     });
     result.customerAccounts = cleanCodes(source.customerAccounts);
     result.pendingServiceVatAccounts = cleanCodes(source.pendingServiceVatAccounts);
-    result.serviceVatBasis = source.serviceVatBasis === 'debits' ? 'debits' : 'cash';
+    result.serviceExigibleVatAccounts = cleanCodes(source.serviceExigibleVatAccounts);
+    result.serviceVatBasisConfirmed = source.serviceVatBasisConfirmed === true && (source.serviceVatBasis === 'debits' || source.serviceVatBasis === 'cash');
+    result.serviceVatBasis = result.serviceVatBasisConfirmed ? source.serviceVatBasis : '';
+    result.prorataPercent = source.prorataPercent == null ? '' : String(source.prorataPercent).trim();
     result.year = Number(year) || Number(source.year) || null;
     return result;
   }
@@ -60,6 +63,14 @@
       var prefix = selector.replace(/\*$/, '');
       return accountCode.indexOf(prefix) === 0;
     });
+  }
+
+  function isVatLiquidation(entry) {
+    if (!entry) return false;
+    if (entry.sourceSystem === 'PERFECTO-VAT-LIQUIDATION' || entry.vatEntryType === 'liquidation') return true;
+    var journal = String(entry.journal || '').toUpperCase();
+    var label = String(entry.description || entry.reference || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr');
+    return (journal === 'OD' || journal === 'TVA') && (/(?:liquidation|liquider).{0,40}tva/.test(label) || /tva.{0,40}liquidation/.test(label));
   }
 
   function calculateMovements(options) {
@@ -76,13 +87,24 @@
       byKey[row.key] = { key: row.key, label: row.label, section: row.section, nature: row.nature, selectors: configuration.accounts[row.key].slice(), accounts: Object.create(null) };
     });
     var matchedLineCount = 0;
+    var excludedLiquidationCount = 0;
+    var serviceExigibleAccounts = Object.create(null);
+    var serviceExigibleMatchedLineCount = 0;
     (options.entries || []).forEach(function (entry) {
       if (!entry || entry.status !== 'posted' || !/^\d{4}-\d{2}-\d{2}$/.test(String(entry.date || '')) || entry.date < from || entry.date > to) return;
+      if (isVatLiquidation(entry)) { excludedLiquidationCount += 1; return; }
       (entry.lines || []).forEach(function (line) {
         var code = String(line.account == null ? '' : line.account);
         var debit = Number(line.debit) || 0;
         var credit = Number(line.credit) || 0;
         if (!debit && !credit) return;
+        if (accountMatches(code, configuration.serviceExigibleVatAccounts)) {
+          var serviceAccount = serviceExigibleAccounts[code];
+          if (!serviceAccount) serviceAccount = serviceExigibleAccounts[code] = { code: code, label: accountLabels[code] || code, debit: 0, credit: 0 };
+          serviceAccount.debit += debit;
+          serviceAccount.credit += credit;
+          serviceExigibleMatchedLineCount += 1;
+        }
         var matched = false;
         ROWS.forEach(function (row) {
           if (!accountMatches(code, configuration.accounts[row.key])) return;
@@ -111,7 +133,21 @@
       item.netCredit = round(item.creditTotal - item.debitTotal);
       return item;
     });
-    return { from: from, to: to, rows: rows, matchedLineCount: matchedLineCount };
+    var serviceAccounts = Object.keys(serviceExigibleAccounts).sort(function (left, right) { return left.localeCompare(right, 'fr', { numeric: true }); }).map(function (code) {
+      var item = serviceExigibleAccounts[code];
+      item.debit = round(item.debit);
+      item.credit = round(item.credit);
+      item.netCredit = round(item.credit - item.debit);
+      return item;
+    });
+    var serviceExigibleMovement = {
+      selectors: configuration.serviceExigibleVatAccounts.slice(), accounts: serviceAccounts,
+      debitTotal: round(serviceAccounts.reduce(function (sum, item) { return sum + item.debit; }, 0)),
+      creditTotal: round(serviceAccounts.reduce(function (sum, item) { return sum + item.credit; }, 0)),
+      netCredit: round(serviceAccounts.reduce(function (sum, item) { return sum + item.credit - item.debit; }, 0)),
+      matchedLineCount: serviceExigibleMatchedLineCount
+    };
+    return { from: from, to: to, rows: rows, matchedLineCount: matchedLineCount, excludedLiquidationCount: excludedLiquidationCount, serviceExigibleMovement: serviceExigibleMovement };
   }
 
   root.PerfectoVatPaymentReport = {

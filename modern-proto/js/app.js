@@ -25207,9 +25207,9 @@
       return '<tr><td>' + esc(invoice ? label(invoice) : 'Pièce facture introuvable') + '</td><td>' + esc(receipt ? label(receipt) : 'Pièce règlement introuvable') + '</td><td class="num">' + esc(amount(allocation.amountTtc)) + '</td><td><button type="button" class="btn btn-ghost btn-sm" data-vat-allocation-delete="' + esc(allocation.id) + '">Supprimer</button></td></tr>';
     }).join('');
     return '<section class="card vat-payment-allocation-card"><div class="vat-payment-card-heading"><div><span class="page-kicker">TVA SUR ENCAISSEMENTS · SERVICES</span><h3>Affectations facture–règlement</h3><p>Les pièces proposées sont validées. Un règlement partiel peut être affecté à une facture; l’affectation reste à contrôler par le comptable.</p></div></div>' +
-      '<div class="vat-payment-allocation-config"><div class="field"><label for="vat-payment-service-basis">Exigibilité des prestations de services</label><select id="vat-payment-service-basis"><option value="cash"' + (configuration.serviceVatBasis === 'cash' ? ' selected' : '') + '>À l’encaissement</option><option value="debits"' + (configuration.serviceVatBasis === 'debits' ? ' selected' : '') + '>Régime des débits (option confirmée)</option></select></div>' +
+      '<div class="vat-payment-allocation-config"><div class="field"><label for="vat-payment-service-basis">Exigibilité des prestations de services</label><select id="vat-payment-service-basis"><option value=""' + (!configuration.serviceVatBasis ? ' selected' : '') + '>À confirmer pour ce dossier</option><option value="cash"' + (configuration.serviceVatBasis === 'cash' ? ' selected' : '') + '>À l’encaissement</option><option value="debits"' + (configuration.serviceVatBasis === 'debits' ? ' selected' : '') + '>Régime des débits (option confirmée)</option></select></div>' +
       '<div class="field"><label for="vat-payment-customer-accounts">Comptes clients à rapprocher</label><input id="vat-payment-customer-accounts" value="' + esc((configuration.customerAccounts || []).join(', ')) + '" placeholder="Codes ou préfixes du dossier"><small>Ex. sélection depuis le plan comptable; aucun compte n’est imposé.</small></div>' +
-      '<div class="field"><label for="vat-payment-suspense-accounts">Comptes de TVA en attente sur services</label><input id="vat-payment-suspense-accounts" value="' + esc((configuration.pendingServiceVatAccounts || []).join(', ')) + '" placeholder="Codes ou préfixes du dossier"><small>Ne pas reprendre un compte déjà affecté à une autre rubrique.</small></div></div>' +
+      '<div class="field"><label for="vat-payment-suspense-accounts">Comptes de TVA en attente sur services</label><input id="vat-payment-suspense-accounts" value="' + esc((configuration.pendingServiceVatAccounts || []).join(', ')) + '" placeholder="Codes ou préfixes du dossier"><small>Ne pas reprendre un compte déjà affecté à une autre rubrique.</small></div><div class="field"><label for="vat-payment-service-exigible-accounts">Comptes de TVA exigible sur services</label><input id="vat-payment-service-exigible-accounts" value="' + esc((configuration.serviceExigibleVatAccounts || []).join(', ')) + '" placeholder="Comptes de TVA après encaissement"><small>Mapping distinct si le transfert comptable est déjà enregistré.</small></div><div class="field"><label for="vat-payment-prorata">Prorata de déduction validé (%)</label><input id="vat-payment-prorata" type="number" min="0" max="100" step="1" value="' + esc(configuration.prorataPercent) + '" placeholder="À confirmer par le comptable"><small>Ce taux sert aux comptes configurés « au prorata »; aucun taux n’est prérempli.</small></div></div>'
       '<div class="vat-payment-allocation-entry"><div class="field"><label for="vat-payment-allocation-invoice">Facture de service</label><select id="vat-payment-allocation-invoice"><option value="">Choisir une facture</option>' + invoiceOptions + '</select></div><div class="field"><label for="vat-payment-allocation-receipt">Règlement</label><select id="vat-payment-allocation-receipt"><option value="">Choisir un règlement</option>' + receiptOptions + '</select></div><div class="field"><label for="vat-payment-allocation-amount">Montant TTC affecté</label><input id="vat-payment-allocation-amount" type="number" min="0.01" step="any" placeholder="Montant affecté"></div><button type="button" class="btn btn-ghost" data-vat-allocation-add>Ajouter l’affectation</button></div>' +
       '<div id="vat-payment-allocation-errors" class="vat-payment-allocation-errors" aria-live="polite"></div>' +
       (rows ? '<div class="table-wrap vat-payment-allocation-table-wrap"><table class="data-table"><thead><tr><th>Facture</th><th>Règlement</th><th>Montant affecté (XOF)</th><th>Action</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<p class="small muted">Aucune affectation facture–règlement enregistrée.</p>') +
@@ -25243,7 +25243,7 @@
           '</section>' +
           '<div class="vat-payment-details-column">' +
             '<section class="card vat-payment-period-card"><div class="vat-payment-card-heading"><div><span class="page-kicker">PÉRIODE DÉCLARÉE</span><h3>Période</h3></div></div><div class="vat-payment-period-fields"><div class="field"><label for="vat-payment-from">Du</label><input id="vat-payment-from" type="date" required></div><span class="vat-payment-period-separator" aria-hidden="true">—</span><div class="field"><label for="vat-payment-to">Au</label><input id="vat-payment-to" type="date" required></div></div><div class="field"><label for="vat-payment-credit">Crédit reporté (XOF)</label><input id="vat-payment-credit" type="number" min="0" step="any" placeholder="À renseigner"></div></section>' +
-            '<section class="card vat-payment-extra-card"><fieldset><legend>Reversement complémentaire</legend><div class="field"><label for="vat-payment-extra-amount">Montant (XOF)</label><input id="vat-payment-extra-amount" type="number" min="0" step="any" placeholder="À renseigner"></div><div class="field"><label for="vat-payment-extra-reason">Motif</label><input id="vat-payment-extra-reason" type="text" maxlength="240"></div></fieldset></section>' +
+            '<section class="card vat-payment-extra-card"><fieldset><legend>Régularisations de TVA</legend><div class="field"><label for="vat-payment-extra-deduction">Complément de déduction · ligne 10 (XOF)</label><input id="vat-payment-extra-deduction" type="number" min="0" step="any" placeholder="À renseigner"></div><div class="field"><label for="vat-payment-extra-deduction-reason">Motif / justificatifs</label><input id="vat-payment-extra-deduction-reason" type="text" maxlength="240"></div><div class="field"><label for="vat-payment-extra-amount">Reversement à effectuer · ligne 11 (XOF)</label><input id="vat-payment-extra-amount" type="number" min="0" step="any" placeholder="À renseigner"></div><div class="field"><label for="vat-payment-extra-reason">Motif du reversement</label><input id="vat-payment-extra-reason" type="text" maxlength="240"></div></fieldset></section>' +
             '<section class="card vat-payment-method-card"><fieldset><legend>Mode de règlement</legend><div class="vat-payment-method-options"><label><input type="radio" name="vat-payment-method" value="cash"> Espèces</label><label><input type="radio" name="vat-payment-method" value="cheque"> Chèque</label></div><div class="field"><label for="vat-payment-cheque">Chèque</label><input id="vat-payment-cheque" type="text" disabled></div><div class="field"><label for="vat-payment-bank">Banque</label><input id="vat-payment-bank" type="text" disabled></div></fieldset></section>' +
             '<section class="card vat-payment-declarant-card"><fieldset><legend>Déclarant</legend><div class="field"><label for="vat-payment-city">Ville</label><input id="vat-payment-city" type="text" maxlength="120"></div><div class="field"><label for="vat-payment-declarant-date">Date</label><input id="vat-payment-declarant-date" type="date"></div></fieldset></section>' +
           '</div>' +
@@ -25261,6 +25261,8 @@
       from: $('#vat-payment-from', form).value,
       to: $('#vat-payment-to', form).value,
       credit: $('#vat-payment-credit', form).value,
+      extraDeduction: $('#vat-payment-extra-deduction', form).value,
+      extraDeductionReason: $('#vat-payment-extra-deduction-reason', form).value.trim(),
       extraAmount: $('#vat-payment-extra-amount', form).value,
       extraReason: $('#vat-payment-extra-reason', form).value.trim(),
       paymentMethod: selectedMode ? selectedMode.value : '',
@@ -25290,9 +25292,35 @@
       rowsHtml += '<tr><th scope="row">' + esc(definition.label) + '<small class="vat-payment-source-codes">' + esc(codes) + '</small></th><td>' + accountText + '</td><td class="num">' + esc(amount(row.debitTotal)) + '</td><td class="num">' + esc(amount(row.creditTotal)) + '</td></tr>';
     });
     var mode = declaration.paymentMethod === 'cash' ? 'Espèces' : 'Chèque';
-    var declarationSummary = '<dl class="vat-payment-preview-details"><div><dt>Période</dt><dd>' + esc(dateLabel(declaration.from)) + ' – ' + esc(dateLabel(declaration.to)) + '</dd></div><div><dt>Crédit reporté saisi</dt><dd>' + esc(declaration.credit || 'Non renseigné') + (declaration.credit ? ' XOF' : '') + '</dd></div><div><dt>Reversement complémentaire</dt><dd>' + esc(declaration.extraAmount || 'Non renseigné') + (declaration.extraAmount ? ' XOF' : '') + (declaration.extraReason ? ' · ' + esc(declaration.extraReason) : '') + '</dd></div><div><dt>Mode de règlement</dt><dd>' + esc(mode) + (declaration.paymentMethod === 'cheque' ? ' · ' + esc(declaration.cheque) + ' · ' + esc(declaration.bank) : '') + '</dd></div><div><dt>Déclarant</dt><dd>' + esc(declaration.city || 'Ville non renseignée') + (declaration.declarantDate ? ' · ' + esc(dateLabel(declaration.declarantDate)) : '') + '</dd></div><div><dt>Options</dt><dd>' + (declaration.pharmacy ? 'Pharmacie' + (declaration.cosmeticsRate ? ' · Prorata cosmétiques : ' + esc(declaration.cosmeticsRate) : '') : 'Pharmacie non sélectionnée') + (declaration.petroleum ? ' · Format produits pétroliers' : '') + '</dd></div></dl>';
-    var serviceRelease = report.serviceVatRelease ? '<section class="vat-payment-service-release"><h4>TVA sur services exigible par encaissements</h4><p>Montant proposé pour la période : <strong>' + (report.serviceVatRelease.total == null ? 'Non calculable' : esc(amount(report.serviceVatRelease.total)) + ' XOF') + '</strong></p>' + (report.serviceVatRelease.rows.length ? '<ul>' + report.serviceVatRelease.rows.map(function (item) { return '<li>' + esc(item.invoiceReference || item.invoiceEntryId) + ' · règlement ' + esc(item.receiptReference || item.receiptEntryId) + ' du ' + esc(dateLabel(item.paymentDate)) + ' : ' + esc(amount(item.vatReleased)) + ' XOF</li>'; }).join('') + '</ul>' : '<p class="small muted">Aucune affectation exigible trouvée pour cette période.</p>') + (report.serviceVatRelease.gaps.length ? '<div class="alert warning"><strong>À vérifier :</strong> ' + report.serviceVatRelease.gaps.map(function (gap) { return esc(gap.message); }).join('<br>') + '</div>' : '') + '<p class="small muted">Proposition fondée sur le prorata de TVA de la facture appliqué au TTC affecté; elle n’est pas ajoutée aux comptes 443 et ne crée aucune écriture.</p></section>' : '';
-    return '<section class="vat-payment-preview"><div class="vat-payment-preview-heading"><div><span class="page-kicker">APERÇU DE CONTRÔLE</span><h3>État de paiement TVA</h3></div><span class="vat-payment-generated">Lignes générées : ' + report.matchedLineCount + '</span></div>' + declarationSummary + serviceRelease +
+    var declarationSummary = '<dl class="vat-payment-preview-details"><div><dt>Période</dt><dd>' + esc(dateLabel(declaration.from)) + ' – ' + esc(dateLabel(declaration.to)) + '</dd></div><div><dt>Crédit reporté saisi</dt><dd>' + esc(declaration.credit || 'Non renseigné') + (declaration.credit ? ' XOF' : '') + '</dd></div><div><dt>Complément de déduction · ligne 10</dt><dd>' + esc(declaration.extraDeduction || 'Non renseigné') + (declaration.extraDeduction ? ' XOF' : '') + (declaration.extraDeductionReason ? ' · ' + esc(declaration.extraDeductionReason) : '') + '</dd></div><div><dt>Reversement · ligne 11</dt><dd>' + esc(declaration.extraAmount || 'Non renseigné') + (declaration.extraAmount ? ' XOF' : '') + (declaration.extraReason ? ' · ' + esc(declaration.extraReason) : '') + '</dd></div><div><dt>Mode de règlement</dt><dd>' + esc(mode) + (declaration.paymentMethod === 'cheque' ? ' · ' + esc(declaration.cheque) + ' · ' + esc(declaration.bank) : '') + '</dd></div><div><dt>Déclarant</dt><dd>' + esc(declaration.city || 'Ville non renseignée') + (declaration.declarantDate ? ' · ' + esc(dateLabel(declaration.declarantDate)) : '') + '</dd></div><div><dt>Options</dt><dd>' + (declaration.pharmacy ? 'Pharmacie' + (declaration.cosmeticsRate ? ' · Prorata cosmétiques : ' + esc(declaration.cosmeticsRate) : '') : 'Pharmacie non sélectionnée') + (declaration.petroleum ? ' · Format produits pétroliers' : '') + '</dd></div></dl>';
+    var serviceExigibleMovement = report.serviceExigibleMovement && report.serviceExigibleMovement.selectors.length ? '<section class="vat-payment-service-release"><h4>Mouvements comptabilisés · TVA exigible sur services</h4><p>Comptes configurés : ' + esc(report.serviceExigibleMovement.selectors.join(', ')) + ' · net créditeur de la période : <strong>' + esc(amount(report.serviceExigibleMovement.netCredit)) + ' XOF</strong></p>' + (report.serviceExigibleMovement.accounts.length ? '<ul>' + report.serviceExigibleMovement.accounts.map(function (item) { return '<li>' + esc(item.code + ' · ' + item.label) + ' : débit ' + esc(amount(item.debit)) + ' / crédit ' + esc(amount(item.credit)) + '</li>'; }).join('') + '</ul>' : '<p class="small muted">Aucun mouvement validé sur ces comptes.</p>') + '</section>' : '';
+    var serviceRelease = report.serviceVatRelease ? '<section class="vat-payment-service-release"><h4>TVA sur services exigible par encaissements</h4><p>Montant utilisable pour la déclaration : <strong>' + (report.serviceVatRelease.confirmed && report.serviceVatRelease.total != null ? esc(amount(report.serviceVatRelease.total)) + ' XOF' : 'Inconnu — non repris') + '</strong></p>' + (report.serviceVatRelease.rows.length ? '<ul>' + report.serviceVatRelease.rows.map(function (item) { return '<li>' + esc(item.invoiceReference || item.invoiceEntryId) + ' · règlement ' + esc(item.receiptReference || item.receiptEntryId) + ' du ' + esc(dateLabel(item.paymentDate)) + ' : estimation de contrôle ' + esc(amount(item.candidateVatReleased)) + ' XOF (non déclarative)</li>'; }).join('') + '</ul>' : '<p class="small muted">Aucune affectation exploitable trouvée pour cette période.</p>') + (report.serviceVatRelease.gaps.length ? '<div class="alert warning"><strong>À vérifier :</strong> ' + report.serviceVatRelease.gaps.map(function (gap) { return esc(gap.message); }).join('<br>') + '</div>' : '') + '<p class="small muted">La ventilation de TVA par ligne et les acomptes doivent être contrôlés; l’estimation au prorata TTC n’est jamais portée automatiquement sur la déclaration.</p></section>' : '';
+    var filing = '';
+    if (report.declarationPreparation) {
+      var prepared = report.declarationPreparation;
+      var computed = prepared.calculated;
+      var named = computed.values;
+      var declarationRows = [
+        ['01', 'Opérations exonérées sauf exportations', named.mVenExo],
+        ['02', 'Exportations taxables', named.mVenExp],
+        ['03', 'Exportations non taxables', named.mVenExpExo],
+        ['04', 'Autres opérations taxables', named.mVenTVA],
+        ['05', 'Total chiffre d’affaires hors TVA', computed.totals.bases],
+        ['06', 'Livraisons à soi-même', named.mLivTVA],
+        ['07', 'Crédit reporté', named.mCrRep],
+        ['08', 'TVA déductible · biens et services', named.mTVAAch],
+        ['09', 'TVA déductible · immobilisations', named.mTVAIm],
+        ['10', 'Complément de déduction', named.mTVAReg],
+        ['11', 'Reversement', named.augAPayer],
+        ['12', 'Total déductions', computed.totals.deductions],
+        ['13', 'TVA brute exigible', named.mTVABrut],
+        ['14', 'TVA déductible (ligne 12)', computed.totals.deductions],
+        ['15', 'TVA nette à payer', computed.totals.vatDue],
+        ['16', 'Crédit à reporter', computed.totals.creditToCarry]
+      ];
+      filing = '<section class="vat-payment-filing-preview"><div class="vat-payment-card-heading"><div><span class="page-kicker">FORMULAIRE DGI · PRÉREMPLISSAGE</span><h3>Montants proposés pour le classeur</h3><p>' + (computed.gaps.length ? 'Préremplissage partiel : les cellules inconnues restent vides. Consultez le CSV des points à vérifier.' : 'Calculs issus des correspondances et saisies de cette préparation.') + '</p></div><span class="vat-payment-generated">' + (computed.completeness.net ? 'Net calculé' : 'À compléter') + '</span></div><div class="table-wrap vat-payment-filing-table-wrap"><table class="data-table vat-payment-filing-table"><thead><tr><th>Ligne</th><th>Rubrique</th><th class="num">Montant (XOF)</th></tr></thead><tbody>' + declarationRows.map(function (item) { return '<tr><th scope="row">' + item[0] + '</th><td>' + esc(item[1]) + '</td><td class="num">' + (item[2] == null || item[2] === '' ? '<span class="small muted">À compléter</span>' : esc(amount(item[2]))) + '</td></tr>'; }).join('') + '</tbody></table></div><div class="vat-payment-preview-actions"><button type="button" class="btn btn-primary" data-vat-declaration-download> Télécharger le classeur TVA </button><button type="button" class="btn btn-ghost" data-vat-declaration-gaps>Télécharger les points à vérifier (CSV)</button></div></section>';
+    }
+    return '<section class="vat-payment-preview"><div class="vat-payment-preview-heading"><div><span class="page-kicker">APERÇU DE CONTRÔLE</span><h3>État de paiement TVA</h3></div><span class="vat-payment-generated">Lignes générées : ' + report.matchedLineCount + (report.excludedLiquidationCount ? ' · Liquidations exclues : ' + report.excludedLiquidationCount : '') + '</span></div>' + declarationSummary + serviceExigibleMovement + serviceRelease + filing +
       '<div class="table-wrap vat-payment-preview-table-wrap"><table class="data-table vat-payment-preview-table"><thead><tr><th>Rubrique</th><th>Compte(s) mouvementé(s)</th><th>Débit (XOF)</th><th>Crédit (XOF)</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>' +
       '<p class="exchange-footnote">Mouvements des écritures validées uniquement, à leur date comptable. Ce relevé ne calcule pas la TVA nette due et ne constitue pas une déclaration finalisée.</p>' +
       '<div class="vat-payment-preview-actions"><button type="button" class="btn btn-primary" data-vat-payment-open-preview>Ouvrir l’aperçu plein écran</button></div></section>';
@@ -25301,6 +25329,18 @@
   function vatPaymentPrintableHtml(configuration, declaration, report) {
     var preview = vatPaymentPreviewMarkup(configuration, declaration, report);
     return '<article class="vat-payment-printable">' + preview.replace(/<div class="vat-payment-preview-actions">[\s\S]*?<\/div><\/section>$/, '</section>') + '</article>';
+  }
+
+  function downloadVatFile(data, mimeType, filename) {
+    var blob = data instanceof Blob ? data : new Blob([data], { type: mimeType });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
 
   function bindVatPaymentReport() {
@@ -25317,7 +25357,9 @@
       $$("[data-vat-payment-code]", form).forEach(function (input) { input.value = configuration.accounts[input.getAttribute('data-vat-payment-code')].join(', '); });
       $('#vat-payment-customer-accounts', form).value = configuration.customerAccounts.join(', ');
       $('#vat-payment-suspense-accounts', form).value = configuration.pendingServiceVatAccounts.join(', ');
+      $('#vat-payment-service-exigible-accounts', form).value = configuration.serviceExigibleVatAccounts.join(', ');
       $('#vat-payment-service-basis', form).value = configuration.serviceVatBasis;
+      $('#vat-payment-prorata', form).value = configuration.prorataPercent;
       $('#vat-payment-config-year', form).textContent = 'Référentiel ' + configYear;
       $('#vat-payment-allocation-panel', form).innerHTML = vatPaymentAllocationMarkup(configuration);
     };
@@ -25375,11 +25417,25 @@
       allocationPanel.innerHTML = vatPaymentAllocationMarkup(allocationConfiguration);
     });
     allocationPanel.addEventListener('change', function (event) {
-      if (!event.target.matches('#vat-payment-customer-accounts, #vat-payment-suspense-accounts, #vat-payment-service-basis')) return;
+      if (!event.target.matches('#vat-payment-customer-accounts, #vat-payment-suspense-accounts, #vat-payment-service-exigible-accounts, #vat-payment-service-basis, #vat-payment-prorata')) return;
+      var accountFields = ['#vat-payment-customer-accounts', '#vat-payment-suspense-accounts', '#vat-payment-service-exigible-accounts'];
+      var invalidAccountField = accountFields.some(function (selector) {
+        var field = $(selector, form);
+        return field.value.split(/[\s,;]+/).filter(Boolean).some(function (token) { return !/^[0-9]+\*?$/.test(token); });
+      });
+      var prorataField = $('#vat-payment-prorata', form);
+      var prorataValue = prorataField.value === '' ? NaN : Number(prorataField.value);
+      if (invalidAccountField || (prorataField.value !== '' && (!Number.isFinite(prorataValue) || prorataValue < 0 || prorataValue > 100))) {
+        $('#vat-payment-allocation-errors', form).innerHTML = '<div class="alert warning">Vérifiez le format numérique des comptes et du prorata (0 à 100 %). Les valeurs saisies n’ont pas été enregistrées.</div>';
+        return;
+      }
       var config = vatPaymentConfiguration(configYear);
       config.customerAccounts = VatPaymentReport.cleanCodes($('#vat-payment-customer-accounts', form).value);
       config.pendingServiceVatAccounts = VatPaymentReport.cleanCodes($('#vat-payment-suspense-accounts', form).value);
-      config.serviceVatBasis = $('#vat-payment-service-basis', form).value === 'debits' ? 'debits' : 'cash';
+      config.serviceExigibleVatAccounts = VatPaymentReport.cleanCodes($('#vat-payment-service-exigible-accounts', form).value);
+      config.serviceVatBasis = ['cash', 'debits'].indexOf($('#vat-payment-service-basis', form).value) >= 0 ? $('#vat-payment-service-basis', form).value : '';
+      config.serviceVatBasisConfirmed = !!config.serviceVatBasis;
+      config.prorataPercent = $('#vat-payment-prorata', form).value;
       try { localStorage.setItem(vatPaymentConfigurationKey(configYear), JSON.stringify(config)); }
       catch (error) { toast('Le paramétrage d’exigibilité ne peut pas être mémorisé dans ce navigateur.', 'warning'); }
       allocationPanel.innerHTML = vatPaymentAllocationMarkup(config);
@@ -25409,6 +25465,11 @@
       if (!/^\d{4}-\d{2}-\d{2}$/.test(declaration.from) || !/^\d{4}-\d{2}-\d{2}$/.test(declaration.to)) errors.push('Renseignez les deux dates de la période.');
       else if (declaration.from > declaration.to) errors.push('La date de début doit précéder la date de fin.');
       else if (declaration.from.slice(0, 4) !== declaration.to.slice(0, 4)) errors.push('La période et ses correspondances fiscales doivent rester dans la même année civile.');
+      else {
+        var declaredMonth = declaration.from.slice(0, 7);
+        var declaredMonthLastDay = new Date(Date.UTC(Number(declaredMonth.slice(0, 4)), Number(declaredMonth.slice(5, 7)), 0)).getUTCDate();
+        if (declaration.from !== declaredMonth + '-01' || declaration.to !== declaredMonth + '-' + String(declaredMonthLastDay).padStart(2, '0')) errors.push('La déclaration TVA doit couvrir un mois civil complet.');
+      }
       if (!declaration.paymentMethod) errors.push('Choisissez un mode de règlement.');
       if (declaration.paymentMethod === 'cheque' && (!declaration.cheque || !declaration.bank)) errors.push('Renseignez le numéro de chèque et la banque.');
       var configuration = VatPaymentReport.defaults(configYear);
@@ -25420,11 +25481,19 @@
       });
       var customerTokens = $('#vat-payment-customer-accounts', form).value.split(/[\s,;]+/).filter(Boolean);
       var pendingVatTokens = $('#vat-payment-suspense-accounts', form).value.split(/[\s,;]+/).filter(Boolean);
+      var serviceExigibleTokens = $('#vat-payment-service-exigible-accounts', form).value.split(/[\s,;]+/).filter(Boolean);
       if (customerTokens.some(function (token) { return !/^[0-9]+\*?$/.test(token); })) errors.push('Format invalide pour les comptes clients.');
       if (pendingVatTokens.some(function (token) { return !/^[0-9]+\*?$/.test(token); })) errors.push('Format invalide pour les comptes de TVA en attente.');
+      if (serviceExigibleTokens.some(function (token) { return !/^[0-9]+\*?$/.test(token); })) errors.push('Format invalide pour les comptes de TVA exigible sur services.');
       configuration.customerAccounts = VatPaymentReport.cleanCodes(customerTokens);
       configuration.pendingServiceVatAccounts = VatPaymentReport.cleanCodes(pendingVatTokens);
-      configuration.serviceVatBasis = $('#vat-payment-service-basis', form).value === 'debits' ? 'debits' : 'cash';
+      configuration.serviceExigibleVatAccounts = VatPaymentReport.cleanCodes(serviceExigibleTokens);
+      configuration.serviceVatBasis = ['cash', 'debits'].indexOf($('#vat-payment-service-basis', form).value) >= 0 ? $('#vat-payment-service-basis', form).value : '';
+      configuration.serviceVatBasisConfirmed = !!configuration.serviceVatBasis;
+      if (!configuration.serviceVatBasis) errors.push('Confirmez le régime d’exigibilité des prestations de services pour ce dossier.');
+      configuration.prorataPercent = $('#vat-payment-prorata', form).value;
+      var prorataNumber = configuration.prorataPercent === '' ? NaN : Number(configuration.prorataPercent);
+      if (configuration.prorataPercent !== '' && (!Number.isFinite(prorataNumber) || prorataNumber < 0 || prorataNumber > 100)) errors.push('Le prorata de déduction doit être compris entre 0 et 100 %.');
       var mappingRows = VatPaymentReport.ROWS;
       var prefixOf = function (code) { return code.slice(-1) === '*' ? code.slice(0, -1) : code; };
       for (var leftIndex = 0; leftIndex < mappingRows.length; leftIndex++) {
@@ -25451,10 +25520,31 @@
         });
         if (overlapsSuspense) errors.push('Les comptes de TVA en attente ne doivent pas être inclus dans les mouvements de TVA exigible de « ' + key + ' ».');
       });
+      var overlapExigibleSales = ['collectedSales', 'collectedInternalConsumption'].some(function (key) {
+        return configuration.serviceExigibleVatAccounts.some(function (service) {
+          var servicePrefix = prefixOf(service);
+          return configuration.accounts[key].some(function (selected) {
+            var selectedPrefix = prefixOf(selected);
+            return servicePrefix.indexOf(selectedPrefix) === 0 || selectedPrefix.indexOf(servicePrefix) === 0;
+          });
+        });
+      });
+      if (overlapExigibleSales) errors.push('Les comptes de TVA exigible sur services doivent être distincts des comptes déjà repris dans les mouvements de TVA collectée.');
+      var overlapServiceSuspense = configuration.serviceExigibleVatAccounts.some(function (service) {
+        var servicePrefix = prefixOf(service);
+        return configuration.pendingServiceVatAccounts.some(function (pending) {
+          var pendingPrefix = prefixOf(pending);
+          return servicePrefix.indexOf(pendingPrefix) === 0 || pendingPrefix.indexOf(servicePrefix) === 0;
+        });
+      });
+      if (overlapServiceSuspense) errors.push('Les comptes de TVA en attente et de TVA exigible sur services doivent être distincts.');
       var extra = Number(declaration.extraAmount || 0);
       var credit = Number(declaration.credit || 0);
-      if (!Number.isFinite(extra) || extra < 0 || !Number.isFinite(credit) || credit < 0) errors.push('Le crédit reporté et le reversement complémentaire doivent être des montants positifs ou nuls.');
-      if (extra > 0 && !declaration.extraReason) errors.push('Indiquez le motif du reversement complémentaire.');
+      var extraDeduction = declaration.extraDeduction === '' ? null : Number(declaration.extraDeduction);
+      if (!Number.isFinite(extra) || extra < 0 || !Number.isFinite(credit) || credit < 0) errors.push('Le crédit reporté et le reversement à effectuer doivent être des montants positifs ou nuls.');
+      if (extraDeduction != null && (!Number.isFinite(extraDeduction) || extraDeduction < 0)) errors.push('Le complément de déduction doit être un montant positif ou nul.');
+      if (extra > 0 && !declaration.extraReason) errors.push('Indiquez le motif du reversement à effectuer.');
+      if (extraDeduction > 0 && !declaration.extraDeductionReason) errors.push('Indiquez le motif ou les justificatifs du complément de déduction.');
       if (errors.length) { toast(errors[0], 'warning'); return; }
       configYear = Number(declaration.from.slice(0, 4));
       configuration = VatPaymentReport.normalise(configuration, configYear);
@@ -25465,6 +25555,7 @@
         entries: S.entries(), accounts: S.accounts(), from: declaration.from, to: declaration.to,
         configuration: configuration, decimalPlaces: S.accountingConfiguration().decimalPlaces
       });
+      report.decimalPlaces = S.accountingConfiguration().decimalPlaces;
       if (configuration.serviceVatBasis === 'cash') {
         var serviceMonth = declaration.from.slice(0, 7);
         var lastDay = /^\d{4}-(0[1-9]|1[0-2])$/.test(serviceMonth)
@@ -25479,11 +25570,35 @@
           })
           : { ok: false, total: null, rows: [], gaps: [{ message: 'La période doit couvrir un mois civil complet pour calculer les encaissements TVA.' }] };
       }
+      var printedRows = S.printedReportInformationConfiguration().rows;
+      var declarationPreparation = {
+        period: declaration.from.slice(0, 7), declaration: declaration, configuration: configuration,
+        movementReport: report, serviceVatRelease: report.serviceVatRelease || null,
+        decimalPlaces: report.decimalPlaces
+      };
+      declarationPreparation.calculated = VatDeclarationWorkbook.calculate(declarationPreparation);
+      report.declarationPreparation = declarationPreparation;
       $('#vat-payment-config-year', form).textContent = 'Référentiel ' + configYear;
-      $('#vat-payment-generated', form).textContent = 'Lignes générées : ' + report.matchedLineCount;
+      $('#vat-payment-generated', form).textContent = 'Lignes générées : ' + report.matchedLineCount + (report.excludedLiquidationCount ? ' · Liquidations exclues : ' + report.excludedLiquidationCount : '');
       result.innerHTML = (saveWarning ? '<div class="alert warning">' + esc(saveWarning) + 'L’aperçu reste disponible pour cette session.</div>' : '') + vatPaymentPreviewMarkup(configuration, declaration, report);
       var openPreview = $('[data-vat-payment-open-preview]', result);
       openPreview.addEventListener('click', function () { openReportPreview('Aperçu — État de paiement TVA', vatPaymentPrintableHtml(configuration, declaration, report)); });
+      var workbookButton = $('[data-vat-declaration-download]', result);
+      workbookButton.addEventListener('click', function () {
+        workbookButton.disabled = true;
+        workbookButton.textContent = 'Génération…';
+        VatDeclarationWorkbook.loadTemplate().then(function (template) {
+          var generated = VatDeclarationWorkbook.generateWorkbook(template, declarationPreparation, printedRows);
+          downloadVatFile(generated.bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'declaration-tva-' + declarationPreparation.period + '.xlsx');
+          toast(generated.complete ? 'Classeur de déclaration TVA téléchargé.' : 'Classeur prérempli; consultez le CSV des points à vérifier avant dépôt.', generated.complete ? 'success' : 'warning');
+        }).catch(function (error) { toast(error.message || 'Impossible de générer le classeur TVA.', 'warning'); })
+          .finally(function () { workbookButton.disabled = false; workbookButton.textContent = 'Télécharger le classeur TVA'; });
+      });
+      var gapsButton = $('[data-vat-declaration-gaps]', result);
+      gapsButton.addEventListener('click', function () {
+        var csv = VatDeclarationWorkbook.buildGapCsv(declarationPreparation, printedRows);
+        downloadVatFile(csv, 'text/csv;charset=utf-8', 'points-a-verifier-tva-' + declarationPreparation.period + '.csv');
+      });
       result.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     updateChequeFields();
