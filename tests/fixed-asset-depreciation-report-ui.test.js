@@ -53,7 +53,7 @@ assert.ok(htmlSource.indexOf('js/fixed-asset-depreciation-report.js') < htmlSour
 assert.match(htmlSource, /css\/fixed-asset-depreciation-report\.css/);
 assert.match(serviceWorkerSource, /\.\/js\/fixed-asset-depreciation-report\.js/);
 assert.match(serviceWorkerSource, /\.\/css\/fixed-asset-depreciation-report\.css/);
-assert.match(serviceWorkerSource, /perfecto-static-v146/);
+assert.match(serviceWorkerSource, /perfecto-static-v147/);
 assert.match(cssSource, /\.fixed-asset-depreciation-table-wrap \{ width: 100%; max-width: 100%; min-width: 0; overflow-x: auto/);
 assert.match(cssSource, /max-width: 640px[\s\S]*\.fixed-asset-depreciation-table \{ min-width: 660px; font-size: 6\.5pt/);
 assert.match(cssSource, /body\.report-preview-printing[\s\S]*\.fixed-asset-depreciation-table/);

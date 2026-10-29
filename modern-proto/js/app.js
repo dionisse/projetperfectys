@@ -25162,6 +25162,60 @@
     }
   }
 
+  function vatPaymentAllocationKey() {
+    var dossier = S.currentDossier() || {};
+    return 'perfecto-vat-payment-allocations:' + String(dossier.id || 'default');
+  }
+
+  function vatPaymentAllocations() {
+    try {
+      var saved = localStorage.getItem(vatPaymentAllocationKey());
+      var rows = saved ? JSON.parse(saved) : [];
+      return Array.isArray(rows) ? rows : [];
+    } catch (error) { return []; }
+  }
+
+  function saveVatPaymentAllocations(rows) {
+    localStorage.setItem(vatPaymentAllocationKey(), JSON.stringify(rows));
+  }
+
+  function vatPaymentAllocationCandidates(configuration) {
+    var entries = S.entries().filter(function (entry) { return entry && entry.status === 'posted'; });
+    var customers = configuration.customerAccounts || [];
+    var suspense = configuration.pendingServiceVatAccounts || [];
+    var invoices = entries.filter(function (entry) {
+      return customers.length && suspense.length &&
+        VatPaymentAllocation.invoiceGross(entry, customers) > 0 && VatPaymentAllocation.pendingVat(entry, suspense) > 0;
+    });
+    var receipts = entries.filter(function (entry) {
+      return customers.length && VatPaymentAllocation.receiptApplied(entry, customers) > 0 &&
+        (entry.lines || []).some(function (line) { return String(line.account || '').charAt(0) === '5' && Number(line.debit) > 0; });
+    });
+    return { invoices: invoices, receipts: receipts };
+  }
+
+  function vatPaymentAllocationMarkup(configuration) {
+    var candidates = vatPaymentAllocationCandidates(configuration);
+    var label = function (entry) {
+      return [entry.date, entry.reference, entry.description].filter(Boolean).join(' · ');
+    };
+    var invoiceOptions = candidates.invoices.map(function (entry) { return '<option value="' + esc(entry.id) + '">' + esc(label(entry)) + '</option>'; }).join('');
+    var receiptOptions = candidates.receipts.map(function (entry) { return '<option value="' + esc(entry.id) + '">' + esc(label(entry)) + '</option>'; }).join('');
+    var rows = vatPaymentAllocations().map(function (allocation) {
+      var invoice = S.entries().find(function (entry) { return entry.id === allocation.invoiceEntryId; });
+      var receipt = S.entries().find(function (entry) { return entry.id === allocation.receiptEntryId; });
+      return '<tr><td>' + esc(invoice ? label(invoice) : 'Pièce facture introuvable') + '</td><td>' + esc(receipt ? label(receipt) : 'Pièce règlement introuvable') + '</td><td class="num">' + esc(amount(allocation.amountTtc)) + '</td><td><button type="button" class="btn btn-ghost btn-sm" data-vat-allocation-delete="' + esc(allocation.id) + '">Supprimer</button></td></tr>';
+    }).join('');
+    return '<section class="card vat-payment-allocation-card"><div class="vat-payment-card-heading"><div><span class="page-kicker">TVA SUR ENCAISSEMENTS · SERVICES</span><h3>Affectations facture–règlement</h3><p>Les pièces proposées sont validées. Un règlement partiel peut être affecté à une facture; l’affectation reste à contrôler par le comptable.</p></div></div>' +
+      '<div class="vat-payment-allocation-config"><div class="field"><label for="vat-payment-service-basis">Exigibilité des prestations de services</label><select id="vat-payment-service-basis"><option value="cash"' + (configuration.serviceVatBasis === 'cash' ? ' selected' : '') + '>À l’encaissement</option><option value="debits"' + (configuration.serviceVatBasis === 'debits' ? ' selected' : '') + '>Régime des débits (option confirmée)</option></select></div>' +
+      '<div class="field"><label for="vat-payment-customer-accounts">Comptes clients à rapprocher</label><input id="vat-payment-customer-accounts" value="' + esc((configuration.customerAccounts || []).join(', ')) + '" placeholder="Codes ou préfixes du dossier"><small>Ex. sélection depuis le plan comptable; aucun compte n’est imposé.</small></div>' +
+      '<div class="field"><label for="vat-payment-suspense-accounts">Comptes de TVA en attente sur services</label><input id="vat-payment-suspense-accounts" value="' + esc((configuration.pendingServiceVatAccounts || []).join(', ')) + '" placeholder="Codes ou préfixes du dossier"><small>Ne pas reprendre un compte déjà affecté à une autre rubrique.</small></div></div>' +
+      '<div class="vat-payment-allocation-entry"><div class="field"><label for="vat-payment-allocation-invoice">Facture de service</label><select id="vat-payment-allocation-invoice"><option value="">Choisir une facture</option>' + invoiceOptions + '</select></div><div class="field"><label for="vat-payment-allocation-receipt">Règlement</label><select id="vat-payment-allocation-receipt"><option value="">Choisir un règlement</option>' + receiptOptions + '</select></div><div class="field"><label for="vat-payment-allocation-amount">Montant TTC affecté</label><input id="vat-payment-allocation-amount" type="number" min="0.01" step="any" placeholder="Montant affecté"></div><button type="button" class="btn btn-ghost" data-vat-allocation-add>Ajouter l’affectation</button></div>' +
+      '<div id="vat-payment-allocation-errors" class="vat-payment-allocation-errors" aria-live="polite"></div>' +
+      (rows ? '<div class="table-wrap vat-payment-allocation-table-wrap"><table class="data-table"><thead><tr><th>Facture</th><th>Règlement</th><th>Montant affecté (XOF)</th><th>Action</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<p class="small muted">Aucune affectation facture–règlement enregistrée.</p>') +
+      '<p class="small muted">Cette fonction calcule une proposition d’exigibilité à partir de la TVA réellement portée sur la facture et du TTC affecté. Elle ne crée pas d’écriture comptable.</p></section>';
+  }
+
   function vatPaymentAccountMappingRows(configuration) {
     var html = '';
     var section = '';
@@ -25194,6 +25248,7 @@
             '<section class="card vat-payment-declarant-card"><fieldset><legend>Déclarant</legend><div class="field"><label for="vat-payment-city">Ville</label><input id="vat-payment-city" type="text" maxlength="120"></div><div class="field"><label for="vat-payment-declarant-date">Date</label><input id="vat-payment-declarant-date" type="date"></div></fieldset></section>' +
           '</div>' +
         '</div>' +
+        '<div id="vat-payment-allocation-panel">' + vatPaymentAllocationMarkup(configuration) + '</div>' +
         '<section class="card vat-payment-options-card"><label class="vat-payment-checkbox"><input id="vat-payment-pharmacy" type="checkbox"> <span>Pharmacie</span></label><div class="field vat-payment-cosmetics-field"><label for="vat-payment-cosmetics-rate">Prorata cosmétiques</label><input id="vat-payment-cosmetics-rate" type="text" inputmode="decimal" disabled placeholder="Disponible si Pharmacie est sélectionné"></div><label class="vat-payment-checkbox vat-payment-petroleum"><input id="vat-payment-petroleum" type="checkbox"> <span>Format d’importation des produits pétroliers</span></label></section>' +
         '<div class="alert warning vat-payment-caution"><div><strong>Calcul fiscal non automatisé à ce stade.</strong> Les comptes sélectionnés sont extraits en mouvements débit/crédit sur la période. Aucun montant net à payer n’est calculé : la règle de déductibilité au prorata, les retenues et leur traitement déclaratif doivent être confirmés avant d’appliquer une formule. Aucune écriture comptable n’est créée.</div></div>' +
         '<div class="vat-payment-actions"><span class="vat-payment-generated" id="vat-payment-generated">Lignes générées : 0</span><div><button type="button" class="btn btn-ghost" data-vat-payment-cancel>Annuler</button> <button type="submit" class="btn btn-primary">Valider</button></div></div>' +
@@ -25236,7 +25291,8 @@
     });
     var mode = declaration.paymentMethod === 'cash' ? 'Espèces' : 'Chèque';
     var declarationSummary = '<dl class="vat-payment-preview-details"><div><dt>Période</dt><dd>' + esc(dateLabel(declaration.from)) + ' – ' + esc(dateLabel(declaration.to)) + '</dd></div><div><dt>Crédit reporté saisi</dt><dd>' + esc(declaration.credit || 'Non renseigné') + (declaration.credit ? ' XOF' : '') + '</dd></div><div><dt>Reversement complémentaire</dt><dd>' + esc(declaration.extraAmount || 'Non renseigné') + (declaration.extraAmount ? ' XOF' : '') + (declaration.extraReason ? ' · ' + esc(declaration.extraReason) : '') + '</dd></div><div><dt>Mode de règlement</dt><dd>' + esc(mode) + (declaration.paymentMethod === 'cheque' ? ' · ' + esc(declaration.cheque) + ' · ' + esc(declaration.bank) : '') + '</dd></div><div><dt>Déclarant</dt><dd>' + esc(declaration.city || 'Ville non renseignée') + (declaration.declarantDate ? ' · ' + esc(dateLabel(declaration.declarantDate)) : '') + '</dd></div><div><dt>Options</dt><dd>' + (declaration.pharmacy ? 'Pharmacie' + (declaration.cosmeticsRate ? ' · Prorata cosmétiques : ' + esc(declaration.cosmeticsRate) : '') : 'Pharmacie non sélectionnée') + (declaration.petroleum ? ' · Format produits pétroliers' : '') + '</dd></div></dl>';
-    return '<section class="vat-payment-preview"><div class="vat-payment-preview-heading"><div><span class="page-kicker">APERÇU DE CONTRÔLE</span><h3>État de paiement TVA</h3></div><span class="vat-payment-generated">Lignes générées : ' + report.matchedLineCount + '</span></div>' + declarationSummary +
+    var serviceRelease = report.serviceVatRelease ? '<section class="vat-payment-service-release"><h4>TVA sur services exigible par encaissements</h4><p>Montant proposé pour la période : <strong>' + (report.serviceVatRelease.total == null ? 'Non calculable' : esc(amount(report.serviceVatRelease.total)) + ' XOF') + '</strong></p>' + (report.serviceVatRelease.rows.length ? '<ul>' + report.serviceVatRelease.rows.map(function (item) { return '<li>' + esc(item.invoiceReference || item.invoiceEntryId) + ' · règlement ' + esc(item.receiptReference || item.receiptEntryId) + ' du ' + esc(dateLabel(item.paymentDate)) + ' : ' + esc(amount(item.vatReleased)) + ' XOF</li>'; }).join('') + '</ul>' : '<p class="small muted">Aucune affectation exigible trouvée pour cette période.</p>') + (report.serviceVatRelease.gaps.length ? '<div class="alert warning"><strong>À vérifier :</strong> ' + report.serviceVatRelease.gaps.map(function (gap) { return esc(gap.message); }).join('<br>') + '</div>' : '') + '<p class="small muted">Proposition fondée sur le prorata de TVA de la facture appliqué au TTC affecté; elle n’est pas ajoutée aux comptes 443 et ne crée aucune écriture.</p></section>' : '';
+    return '<section class="vat-payment-preview"><div class="vat-payment-preview-heading"><div><span class="page-kicker">APERÇU DE CONTRÔLE</span><h3>État de paiement TVA</h3></div><span class="vat-payment-generated">Lignes générées : ' + report.matchedLineCount + '</span></div>' + declarationSummary + serviceRelease +
       '<div class="table-wrap vat-payment-preview-table-wrap"><table class="data-table vat-payment-preview-table"><thead><tr><th>Rubrique</th><th>Compte(s) mouvementé(s)</th><th>Débit (XOF)</th><th>Crédit (XOF)</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>' +
       '<p class="exchange-footnote">Mouvements des écritures validées uniquement, à leur date comptable. Ce relevé ne calcule pas la TVA nette due et ne constitue pas une déclaration finalisée.</p>' +
       '<div class="vat-payment-preview-actions"><button type="button" class="btn btn-primary" data-vat-payment-open-preview>Ouvrir l’aperçu plein écran</button></div></section>';
@@ -25259,7 +25315,11 @@
       configYear = Number(year) || configYear;
       var configuration = vatPaymentConfiguration(configYear);
       $$("[data-vat-payment-code]", form).forEach(function (input) { input.value = configuration.accounts[input.getAttribute('data-vat-payment-code')].join(', '); });
+      $('#vat-payment-customer-accounts', form).value = configuration.customerAccounts.join(', ');
+      $('#vat-payment-suspense-accounts', form).value = configuration.pendingServiceVatAccounts.join(', ');
+      $('#vat-payment-service-basis', form).value = configuration.serviceVatBasis;
       $('#vat-payment-config-year', form).textContent = 'Référentiel ' + configYear;
+      $('#vat-payment-allocation-panel', form).innerHTML = vatPaymentAllocationMarkup(configuration);
     };
     var updateChequeFields = function () {
       var selected = $('input[name="vat-payment-method"]:checked', form);
@@ -25279,6 +25339,51 @@
     });
     $$('[data-vat-payment-picker]', form).forEach(function (button) { button.addEventListener('click', function () { openVatPaymentAccountPicker(button.getAttribute('data-vat-payment-picker'), form); }); });
     currentPicker.addEventListener('click', function () { if (currentField) openVatPaymentAccountPicker(currentField, form); });
+    var allocationPanel = $('#vat-payment-allocation-panel', form);
+    allocationPanel.addEventListener('click', function (event) {
+      var addButton = event.target.closest('[data-vat-allocation-add]');
+      var deleteButton = event.target.closest('[data-vat-allocation-delete]');
+      if (deleteButton) {
+        var remaining = vatPaymentAllocations().filter(function (row) { return row.id !== deleteButton.getAttribute('data-vat-allocation-delete'); });
+        try { saveVatPaymentAllocations(remaining); } catch (error) { toast('Impossible d’enregistrer les affectations dans ce navigateur.', 'warning'); return; }
+        allocationPanel.innerHTML = vatPaymentAllocationMarkup(vatPaymentConfiguration(configYear));
+        return;
+      }
+      if (!addButton) return;
+      var allocationConfiguration = vatPaymentConfiguration(configYear);
+      allocationConfiguration.customerAccounts = VatPaymentReport.cleanCodes($('#vat-payment-customer-accounts', form).value);
+      allocationConfiguration.pendingServiceVatAccounts = VatPaymentReport.cleanCodes($('#vat-payment-suspense-accounts', form).value);
+      var candidate = {
+        id: 'vat-alloc-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+        invoiceEntryId: $('#vat-payment-allocation-invoice', form).value,
+        receiptEntryId: $('#vat-payment-allocation-receipt', form).value,
+        amountTtc: $('#vat-payment-allocation-amount', form).value
+      };
+      var existingAllocations = vatPaymentAllocations();
+      var checked = VatPaymentAllocation.validateAllocation(candidate, {
+        entries: S.entries(), allocations: existingAllocations,
+        customerAccounts: allocationConfiguration.customerAccounts,
+        suspenseAccounts: allocationConfiguration.pendingServiceVatAccounts
+      });
+      var errors = $('#vat-payment-allocation-errors', form);
+      if (!checked.ok) { errors.innerHTML = '<div class="alert warning">' + checked.errors.map(esc).join('<br>') + '</div>'; return; }
+      candidate.amountTtc = Number(candidate.amountTtc);
+      existingAllocations.push(candidate);
+      try { saveVatPaymentAllocations(existingAllocations); }
+      catch (error) { errors.innerHTML = '<div class="alert warning">Impossible d’enregistrer l’affectation dans ce navigateur.</div>'; return; }
+      try { localStorage.setItem(vatPaymentConfigurationKey(configYear), JSON.stringify(allocationConfiguration)); } catch (error) { /* L’affectation reste persistée séparément. */ }
+      allocationPanel.innerHTML = vatPaymentAllocationMarkup(allocationConfiguration);
+    });
+    allocationPanel.addEventListener('change', function (event) {
+      if (!event.target.matches('#vat-payment-customer-accounts, #vat-payment-suspense-accounts, #vat-payment-service-basis')) return;
+      var config = vatPaymentConfiguration(configYear);
+      config.customerAccounts = VatPaymentReport.cleanCodes($('#vat-payment-customer-accounts', form).value);
+      config.pendingServiceVatAccounts = VatPaymentReport.cleanCodes($('#vat-payment-suspense-accounts', form).value);
+      config.serviceVatBasis = $('#vat-payment-service-basis', form).value === 'debits' ? 'debits' : 'cash';
+      try { localStorage.setItem(vatPaymentConfigurationKey(configYear), JSON.stringify(config)); }
+      catch (error) { toast('Le paramétrage d’exigibilité ne peut pas être mémorisé dans ce navigateur.', 'warning'); }
+      allocationPanel.innerHTML = vatPaymentAllocationMarkup(config);
+    });
     fromInput.addEventListener('change', function () {
       var year = Number(String(fromInput.value || '').slice(0, 4));
       if (year && year !== configYear) hydrateMappings(year);
@@ -25313,6 +25418,13 @@
         if (tokens.some(function (token) { return !/^[0-9]+\*?$/.test(token); })) errors.push('Format de compte invalide dans la rubrique « ' + key + ' ».');
         configuration.accounts[key] = VatPaymentReport.cleanCodes(input.value);
       });
+      var customerTokens = $('#vat-payment-customer-accounts', form).value.split(/[\s,;]+/).filter(Boolean);
+      var pendingVatTokens = $('#vat-payment-suspense-accounts', form).value.split(/[\s,;]+/).filter(Boolean);
+      if (customerTokens.some(function (token) { return !/^[0-9]+\*?$/.test(token); })) errors.push('Format invalide pour les comptes clients.');
+      if (pendingVatTokens.some(function (token) { return !/^[0-9]+\*?$/.test(token); })) errors.push('Format invalide pour les comptes de TVA en attente.');
+      configuration.customerAccounts = VatPaymentReport.cleanCodes(customerTokens);
+      configuration.pendingServiceVatAccounts = VatPaymentReport.cleanCodes(pendingVatTokens);
+      configuration.serviceVatBasis = $('#vat-payment-service-basis', form).value === 'debits' ? 'debits' : 'cash';
       var mappingRows = VatPaymentReport.ROWS;
       var prefixOf = function (code) { return code.slice(-1) === '*' ? code.slice(0, -1) : code; };
       for (var leftIndex = 0; leftIndex < mappingRows.length; leftIndex++) {
@@ -25329,6 +25441,16 @@
           if (overlaps) errors.push('Une même plage de comptes est affectée à plusieurs rubriques : « ' + mappingRows[leftIndex].label + ' » et « ' + mappingRows[rightIndex].label + ' ».');
         }
       }
+      ['collectedSales', 'collectedInternalConsumption'].forEach(function (key) {
+        var overlapsSuspense = configuration.pendingServiceVatAccounts.some(function (pending) {
+          var pendingPrefix = prefixOf(pending);
+          return configuration.accounts[key].some(function (selected) {
+            var selectedPrefix = prefixOf(selected);
+            return pendingPrefix.indexOf(selectedPrefix) === 0 || selectedPrefix.indexOf(pendingPrefix) === 0;
+          });
+        });
+        if (overlapsSuspense) errors.push('Les comptes de TVA en attente ne doivent pas être inclus dans les mouvements de TVA exigible de « ' + key + ' ».');
+      });
       var extra = Number(declaration.extraAmount || 0);
       var credit = Number(declaration.credit || 0);
       if (!Number.isFinite(extra) || extra < 0 || !Number.isFinite(credit) || credit < 0) errors.push('Le crédit reporté et le reversement complémentaire doivent être des montants positifs ou nuls.');
@@ -25343,6 +25465,20 @@
         entries: S.entries(), accounts: S.accounts(), from: declaration.from, to: declaration.to,
         configuration: configuration, decimalPlaces: S.accountingConfiguration().decimalPlaces
       });
+      if (configuration.serviceVatBasis === 'cash') {
+        var serviceMonth = declaration.from.slice(0, 7);
+        var lastDay = /^\d{4}-(0[1-9]|1[0-2])$/.test(serviceMonth)
+          ? new Date(Date.UTC(Number(serviceMonth.slice(0, 4)), Number(serviceMonth.slice(5, 7)), 0)).getUTCDate() : 0;
+        var completeMonth = declaration.from === serviceMonth + '-01' && declaration.to === serviceMonth + '-' + String(lastDay).padStart(2, '0');
+        report.serviceVatRelease = completeMonth
+          ? VatPaymentAllocation.calculateReleasedVat({
+            entries: S.entries(), allocations: vatPaymentAllocations(), period: serviceMonth,
+            customerAccounts: configuration.customerAccounts,
+            suspenseAccounts: configuration.pendingServiceVatAccounts,
+            decimalPlaces: S.accountingConfiguration().decimalPlaces
+          })
+          : { ok: false, total: null, rows: [], gaps: [{ message: 'La période doit couvrir un mois civil complet pour calculer les encaissements TVA.' }] };
+      }
       $('#vat-payment-config-year', form).textContent = 'Référentiel ' + configYear;
       $('#vat-payment-generated', form).textContent = 'Lignes générées : ' + report.matchedLineCount;
       result.innerHTML = (saveWarning ? '<div class="alert warning">' + esc(saveWarning) + 'L’aperçu reste disponible pour cette session.</div>' : '') + vatPaymentPreviewMarkup(configuration, declaration, report);

@@ -35,7 +35,10 @@
   function defaults(year) {
     var accounts = {};
     ROWS.forEach(function (row) { accounts[row.key] = []; });
-    return { schemaVersion: 1, year: Number(year) || null, accounts: accounts };
+    return {
+      schemaVersion: 2, year: Number(year) || null, accounts: accounts,
+      customerAccounts: [], pendingServiceVatAccounts: [], serviceVatBasis: 'cash'
+    };
   }
 
   function normalise(configuration, year) {
@@ -44,6 +47,9 @@
     ROWS.forEach(function (row) {
       result.accounts[row.key] = cleanCodes(source.accounts && source.accounts[row.key]);
     });
+    result.customerAccounts = cleanCodes(source.customerAccounts);
+    result.pendingServiceVatAccounts = cleanCodes(source.pendingServiceVatAccounts);
+    result.serviceVatBasis = source.serviceVatBasis === 'debits' ? 'debits' : 'cash';
     result.year = Number(year) || Number(source.year) || null;
     return result;
   }

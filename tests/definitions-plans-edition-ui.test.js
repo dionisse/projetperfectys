@@ -35,7 +35,7 @@ assert.match(html, /css\/definitions-plans-edition\.css/);
 assert.match(html, /js\/definitions-plans-edition-reports\.js/);
 assert.match(sw, /\.\/css\/definitions-plans-edition\.css/);
 assert.match(sw, /\.\/js\/definitions-plans-edition-reports\.js/);
-assert.match(sw, /perfecto-static-v146/);
+assert.match(sw, /perfecto-static-v147/);
 assert.match(css, /\.definitions-plans-edition-filter-grid[\s\S]*grid-template-columns/);
 assert.doesNotMatch(app, /definitions-plans-edition-window|definitions-plans-edition-titlebar/);
 assert.match(css, /body\.report-preview-printing[\s\S]*\.definitions-plans-edition-print/);

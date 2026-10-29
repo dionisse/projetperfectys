@@ -72,6 +72,20 @@
 .vat-payment-picker-row[hidden] { display: none; }
 .vat-payment-picker-code { color: var(--primary, #245c4d); font-variant-numeric: tabular-nums; font-weight: 700; }
 .vat-payment-picker .field { margin-bottom: .75rem; }
+.vat-payment-allocation-card { display: grid; gap: .65rem; padding: .8rem; }
+.vat-payment-allocation-config { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .6rem; }
+.vat-payment-allocation-config .field, .vat-payment-allocation-entry .field { margin: 0; }
+.vat-payment-allocation-config label, .vat-payment-allocation-entry label { display: block; margin-bottom: .25rem; font-size: .76rem; font-weight: 650; }
+.vat-payment-allocation-config input, .vat-payment-allocation-config select, .vat-payment-allocation-entry input, .vat-payment-allocation-entry select { width: 100%; min-width: 0; padding: .38rem .45rem; font-size: .76rem; }
+.vat-payment-allocation-config small { display: block; margin-top: .2rem; font-size: .68rem; }
+.vat-payment-allocation-entry { display: grid; grid-template-columns: 1.2fr 1.2fr .8fr auto; gap: .5rem; align-items: end; }
+.vat-payment-allocation-table-wrap { max-height: 18rem; overflow: auto; }
+.vat-payment-allocation-table-wrap td { vertical-align: middle; }
+.vat-payment-allocation-errors:empty { display: none; }
+.vat-payment-service-release { padding: .8rem; border: 1px solid var(--line, #e3e8e5); border-radius: .65rem; background: #fbfcfb; }
+.vat-payment-service-release h4 { margin: 0 0 .35rem; }
+.vat-payment-service-release p { margin: .25rem 0; }
+.vat-payment-service-release ul { margin: .4rem 0; padding-left: 1.25rem; }
 .vat-payment-printable .vat-payment-preview-actions { display: none; }
 
 @media (max-width: 1050px) {
@@ -81,6 +95,7 @@
 }
 @media (max-width: 650px) {
   .vat-payment-details-column { grid-template-columns: 1fr; }
+  .vat-payment-allocation-config, .vat-payment-allocation-entry { grid-template-columns: 1fr; }
   .vat-payment-options-card { grid-template-columns: 1fr; align-items: start; }
   .vat-payment-petroleum { justify-self: start; }
   .vat-payment-preview-details { grid-template-columns: 1fr; }

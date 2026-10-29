@@ -61,10 +61,17 @@ assert.match(app, /group\.id === 'declarations' && tab\.id === 'vat-payment'[\s\
 assert.match(app, /menuParams\.g === 'declarations' && menuParams\.t === 'vat-payment'\) bindVatPaymentReport\(\)/);
 assert.match(app, /vat-payment-pharmacy[\s\S]*rate\.disabled = !event\.target\.checked/);
 assert.match(app, /openReportPreview\('Aperçu — État de paiement TVA'/);
+assert.match(app, /vatPaymentAllocationMarkup\(configuration\)/);
+assert.match(app, /data-vat-allocation-add/);
+assert.match(app, /calculateReleasedVat/);
+assert.match(app, /serviceVatBasis/);
 assert.match(html, /js\/vat-payment-report\.js/);
+assert.match(html, /js\/vat-payment-allocation\.js/);
 assert.match(html, /css\/vat-payment-report\.css/);
 assert.match(worker, /vat-payment-report\.js/);
+assert.match(worker, /vat-payment-allocation\.js/);
 assert.match(worker, /vat-payment-report\.css/);
 assert.match(css, /\.vat-payment-mapping-table[\s\S]*font-size: \.76rem/);
 assert.match(css, /\.vat-payment-mapping-scroll[\s\S]*max-height: min\(60vh, 540px\)/);
+assert.match(css, /\.vat-payment-allocation-entry[\s\S]*grid-template-columns/);
 console.log('OK · état de paiement TVA, rubriques, période et mouvements validés');
