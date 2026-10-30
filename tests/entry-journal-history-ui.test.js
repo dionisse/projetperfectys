@@ -21,7 +21,11 @@ const entries = [
   { id: 'same-date-later', journal: 'AC', date: '2026-01-02', reference: 'AC-03', sourceReference: 'FACT-03', status: 'posted', lines: [{ account: '512', debit: 10, credit: 0 }], updatedAt: '2026-01-02T10:00:00.000Z' },
   { id: 'other-journal', journal: 'BQ', date: '2026-01-03', reference: 'BQ-01', status: 'posted', lines: [] }
 ];
+let canManageAttachments = true;
 const sandbox = {
+  hasDemoPermission: () => canManageAttachments,
+  getActiveDemoMember: () => ({}),
+  accountingAccessContext: () => ({}),
   S: {
     entries: () => entries,
     journal: code => ({ code }),
@@ -50,6 +54,10 @@ assert.match(historyHtml, /FACT-02/);
 assert.match(historyHtml, /601 ·/);
 assert.match(historyHtml, /401 ·/);
 assert.equal((historyHtml.match(/data-action="manage-entry-attachments"/g) || []).length, 3, 'chaque pièce du journal expose l’accès aux justificatifs');
+canManageAttachments = false;
+const readOnlyHistoryHtml = sandbox.renderHistory('AC');
+assert.equal((readOnlyHistoryHtml.match(/data-action="manage-entry-attachments"/g) || []).length, 3, 'le contrôle reste visible même sans droit de gestion');
+assert.match(readOnlyHistoryHtml, /disabled title="Droit entryAttachments\.manage requis"/);
 assert.equal((historyHtml.match(/entry-journal-piece-separator/g) || []).length, 3, 'chaque pièce possède une ligne de séparation récapitulative');
 assert.ok(historyHtml.includes('Total de la pièce N° AC-02</strong> · 2 lignes'));
 assert.ok(historyHtml.includes('<td class="num"><strong>100</strong></td>'), 'le séparateur affiche les totaux de la pièce');

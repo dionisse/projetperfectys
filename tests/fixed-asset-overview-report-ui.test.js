@@ -51,7 +51,7 @@ assert.ok(htmlSource.indexOf('js/fixed-asset-overview-report.js') < htmlSource.i
 assert.match(htmlSource, /css\/fixed-asset-overview-report\.css/);
 assert.match(serviceWorkerSource, /\.\/js\/fixed-asset-overview-report\.js/);
 assert.match(serviceWorkerSource, /\.\/css\/fixed-asset-overview-report\.css/);
-assert.match(serviceWorkerSource, /perfecto-static-v154/);
+assert.match(serviceWorkerSource, /perfecto-static-v155/);
 assert.match(cssSource, /\.fixed-asset-overview-filter-grid[\s\S]*\.fixed-asset-overview-columns-grid[\s\S]*\.fixed-asset-overview-table/);
 assert.match(cssSource, /\.fixed-asset-overview-table-wrap \{ width: 100%; max-width: 100%; min-width: 0; overflow-x: auto/);
 assert.match(cssSource, /\.fixed-asset-overview-table \{ width: 100%; min-width: 780px; table-layout: fixed; border-collapse: collapse; font-size: 7pt/);

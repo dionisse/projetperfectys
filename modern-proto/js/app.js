@@ -469,7 +469,6 @@
         return { moduleId: 'accounting', actionId: 'module.view' };
       case 'open-entry':
         return { moduleId: 'accounting', actionId: 'module.view' };
-      case 'manage-entry-attachments':
       case 'remove-entry-attachment':
         return { moduleId: 'accounting', actionId: 'entryAttachments.manage' };
       case 'edit-posted-entry':
@@ -2767,6 +2766,7 @@
 
   function entryJournalHistoryHtml(journalCode) {
     var journal = S.journal(journalCode);
+    var canManageAttachments = hasDemoPermission(getActiveDemoMember(), 'accounting', 'entryAttachments.manage', accountingAccessContext());
     var entries = entryJournalHistoryEntries(journalCode);
     var rows = [];
     entries.forEach(function (entry) {
@@ -2793,7 +2793,7 @@
         '<td class="num"><strong>' + amount(totals.debit) + '</strong></td>' +
         '<td class="num"><strong>' + amount(totals.credit) + '</strong></td>' +
         '<td colspan="2"></td>' +
-        '<td><button type="button" class="btn btn-ghost btn-sm entry-attachments-manage-button" data-action="manage-entry-attachments" data-id="' + esc(entry.id) + '" aria-label="Ajouter ou consulter les justificatifs de la pièce ' + esc(entry.reference) + '">📎 Justificatifs</button></td></tr>');
+        '<td><button type="button" class="btn btn-ghost btn-sm entry-attachments-manage-button" data-action="manage-entry-attachments" data-id="' + esc(entry.id) + '"' + (canManageAttachments ? '' : ' disabled title="Droit entryAttachments.manage requis"') + ' aria-label="Ajouter ou consulter les justificatifs de la pièce ' + esc(entry.reference) + '">📎 Justificatifs</button></td></tr>');
     });
     return '<section class="card panel entry-journal-history" aria-labelledby="entry-journal-history-title">' +
       '<div class="panel-header"><div><h3 id="entry-journal-history-title">Pièces du journal · ' + esc(journal ? journalDisplayName(journal) : journalCode || 'Non sélectionné') + '</h3>' +
@@ -2977,6 +2977,7 @@
   /* ----------------------------- Pièces comptables ------------------------- */
   function viewEntries() {
     var filter = ui.entries;
+    var canManageAttachments = hasDemoPermission(getActiveDemoMember(), 'accounting', 'entryAttachments.manage', accountingAccessContext());
     var list = sortedEntries(S.entries()).filter(function (e) {
       var text = (e.reference + ' ' + (e.sourceReference || '') + ' ' + (e.description || '')).toLowerCase();
       if (filter.q && text.indexOf(filter.q.toLowerCase()) === -1) return false;
@@ -3013,7 +3014,7 @@
             '<td class="muted">' + esc(e.description || '—') + '</td>' +
             '<td class="num">' + amount(entryAmount(e)) + '</td>' +
             '<td>' + statusBadge(e.status) + '</td>' +
-            '<td><button type="button" class="btn btn-ghost btn-sm entry-attachments-manage-button" data-action="manage-entry-attachments" data-id="' + esc(e.id) + '" aria-label="Ajouter ou consulter les justificatifs de la pièce ' + esc(e.reference) + '">📎 Gérer</button></td>' +
+            '<td><button type="button" class="btn btn-ghost btn-sm entry-attachments-manage-button" data-action="manage-entry-attachments" data-id="' + esc(e.id) + '"' + (canManageAttachments ? '' : ' disabled title="Droit entryAttachments.manage requis"') + ' aria-label="Ajouter ou consulter les justificatifs de la pièce ' + esc(e.reference) + '">📎 Gérer</button></td>' +
           '</tr>';
         }).join('') : '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">▤</div><strong>Aucune pièce</strong>Aucune pièce ne correspond à ces critères.</div></td></tr>') +
       '</tbody></table></div>' +
@@ -3157,6 +3158,7 @@
     if (!e) { toast('Pièce introuvable.', 'error'); return; }
     var t = S.totals(e.lines);
     var journal = S.journal(e.journal);
+    var canManageAttachments = hasDemoPermission(getActiveDemoMember(), 'accounting', 'entryAttachments.manage', accountingAccessContext());
 
     var body = '<div class="form-grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:16px">' +
       '<div class="total-item"><span>Date</span><strong>' + dateLabel(e.date) + '</strong></div>' +
@@ -3165,7 +3167,7 @@
       '<div class="total-item"><span>Statut</span><div>' + statusBadge(e.status) + '</div></div>' +
       '</div>' +
       '<p class="muted" style="margin-bottom:16px"><strong>Référence :</strong> ' + esc(e.sourceReference || '—') + '<br><strong>Libellé :</strong> ' + esc(e.description || 'Aucun libellé') + '</p>' +
-      '<p><button type="button" class="btn btn-ghost btn-sm entry-attachments-manage-button" data-action="manage-entry-attachments" data-id="' + esc(e.id) + '">📎 Ajouter ou consulter les justificatifs</button></p>' +
+      '<p><button type="button" class="btn btn-ghost btn-sm entry-attachments-manage-button" data-action="manage-entry-attachments" data-id="' + esc(e.id) + '"' + (canManageAttachments ? '' : ' disabled title="Droit entryAttachments.manage requis"') + '>📎 Ajouter ou consulter les justificatifs</button></p>' +
       '<div class="table-wrap"><table class="data-table">' +
         '<thead><tr><th scope="col">Compte</th><th scope="col">Intitulé</th><th scope="col" class="num">Débit</th><th scope="col" class="num">Crédit</th></tr></thead><tbody>' +
         e.lines.map(function (l) {
