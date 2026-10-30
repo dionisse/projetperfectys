@@ -365,6 +365,7 @@
       case 'open-dossier':
         return { moduleId: 'accounting', actionId: 'module.view' };
       case 'open-next-exercise':
+      case 'open-linked-exercise':
         return { moduleId: 'accounting', actionId: 'module.view' };
       case 'create-next-exercise':
         return { moduleId: 'organization', actionId: 'organization.manageDossiers' };
@@ -23770,16 +23771,25 @@
     var source = S.currentDossier();
     var defaultYear = Number(source.exerciseYear) + 1;
     if (ui.nextExercise.sourceDossierId !== source.id) {
-      ui.nextExercise = { sourceDossierId: source.id, cycleStart: defaultYear + '-01-01', cycleEnd: defaultYear + '-12-31' };
+      var savedSuccessor = S.dossiers().find(function (dossier) {
+        return dossier.exerciseContinuity && dossier.exerciseContinuity.previousDossierId === source.id;
+      }) || null;
+      ui.nextExercise = {
+        sourceDossierId: source.id,
+        cycleStart: savedSuccessor ? savedSuccessor.cycleStart : defaultYear + '-01-01',
+        cycleEnd: savedSuccessor ? savedSuccessor.cycleEnd : defaultYear + '-12-31'
+      };
     }
     var preflight = S.nextExercisePreflight(ui.nextExercise.cycleStart, ui.nextExercise.cycleEnd);
     var errors = preflight.errors.length
       ? '<div class="alert warning"><strong>Passage non autorisé à ce stade.</strong><ul>' + preflight.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul>' +
         (!preflight.closeRecord ? '<a class="btn btn-ghost btn-sm" href="#/menu?g=fin-exercice&amp;t=definitive-close">Ouvrir l’arrêt définitif de N</a>' : '') + '</div>'
       : '<div class="alert success"><strong>Contrôles de l’exercice source satisfaits.</strong> Vous pouvez préparer le dossier de N+1 sans modifier N.</div>';
-    var nextAction = preflight.existingDossier
-      ? '<button type="button" class="btn btn-primary" data-action="open-next-exercise" data-id="' + esc(preflight.existingDossier.id) + '" data-source-id="' + esc(source.id) + '"' + (!preflight.canContinue ? ' disabled' : '') + '>Ouvrir le dossier N+1 existant et contrôler son report</button>'
-      : '<button type="button" class="btn btn-primary" data-action="create-next-exercise"' + (!preflight.canCreate ? ' disabled' : '') + '>Créer le dossier N+1 et préparer le report</button>';
+    var nextAction = preflight.linkedSuccessor
+      ? '<button type="button" class="btn btn-primary" data-action="open-next-exercise" data-id="' + esc(preflight.linkedSuccessor.id) + '" data-source-id="' + esc(source.id) + '">Ouvrir l’exercice N+1 lié et contrôler son report</button>'
+      : (preflight.existingDossier
+        ? '<button type="button" class="btn btn-primary" data-action="open-next-exercise" data-id="' + esc(preflight.existingDossier.id) + '" data-source-id="' + esc(source.id) + '"' + (!preflight.canContinue ? ' disabled' : '') + '>Ouvrir le dossier N+1 existant et contrôler son report</button>'
+        : '<button type="button" class="btn btn-primary" data-action="create-next-exercise"' + (!preflight.canCreate ? ' disabled' : '') + '>Créer le dossier N+1 et préparer le report</button>');
     return '<section class="periods-summary definitive-close-panel next-exercise-panel">' +
       '<div class="alert info"><strong>Passage automatique à N+1.</strong> Le dossier source N reste scellé et inchangé. Par défaut, N+1 couvre le <strong>01/01/' + defaultYear + ' au 31/12/' + defaultYear + '</strong>. Les dates peuvent être ajustées si nécessaire, mais le début doit suivre immédiatement la fin du cycle source.</div>' +
       '<div class="definitive-close-facts">' +
@@ -23796,7 +23806,9 @@
         '<label class="field" for="next-exercise-end"><span>Fin du cycle N+1</span><input id="next-exercise-end" type="date" data-filter="nextExercise:cycleEnd" value="' + esc(preflight.targetEnd) + '"></label>' +
       '</div>' +
       '<div class="alert info"><div><strong>Éléments préparés :</strong> plan comptable, journaux et paramètres explicites du dossier source sont repris. Les écritures N ne sont pas copiées ; les reports calculés restent dans le registre Reports à nouveau partagé avec Saisie. Les immobilisations, tiers, données analytiques et autres registres opérationnels ne sont pas dupliqués automatiquement.</div></div>' +
-      (preflight.existingDossier ? '<div class="alert info">Un dossier cible existe déjà : <strong>' + esc(preflight.existingDossier.reference) + '</strong>. Il sera réutilisé sans écraser ses données ; les conflits éventuels apparaîtront dans l’aperçu des reports.</div>' : '') +
+      (preflight.linkedSuccessor
+        ? '<div class="alert info"><strong>Lien permanent enregistré.</strong> N est relié à ' + esc(preflight.linkedSuccessor.reference) + ' · ' + esc(dateLabel(preflight.linkedSuccessor.cycleStart)) + ' au ' + esc(dateLabel(preflight.linkedSuccessor.cycleEnd)) + '. Ce lien reste dans le dossier N+1 indépendamment du transfert des soldes.</div>'
+        : (preflight.existingDossier ? '<div class="alert info">Un dossier cible existe déjà : <strong>' + esc(preflight.existingDossier.reference) + '</strong>. Il sera réutilisé sans écraser ses données et lié à N ; les conflits éventuels apparaîtront dans l’aperçu des reports.</div>' : '')) +
       '<div class="exchange-preview-footer">' + nextAction + '</div>' +
     '</section>';
   }
@@ -23890,6 +23902,12 @@
     if (!prepared.ok) toast(prepared.errors[0] || 'Le dossier N+1 est ouvert, mais la source n’a pas pu être lue.', 'warning');
     else if (!prepared.plan.ok) toast(prepared.plan.errors[0] || 'Le dossier N+1 est créé ; le report nécessite un contrôle.', 'warning');
     else toast('Dossier N+1 prêt. Vérifiez l’aperçu des reports avant de confirmer le transfert.', 'success');
+  }
+
+  function openLinkedExercise(dossierId) {
+    var switched = S.switchDossier(dossierId);
+    if (!switched.ok) { toast(switched.errors[0] || 'Impossible d’ouvrir l’exercice lié.', 'error'); return; }
+    navigate('#/menu?g=fin-exercice&t=next-year');
   }
 
   function createNextExerciseFromMenu() {
@@ -24085,6 +24103,12 @@
     var audit = S.auditOpeningBalances();
     var totals = audit.totals;
     var sources = openingBalanceSourceDossiers(dossier);
+    var continuity = dossier.exerciseContinuity || null;
+    var continuitySource = continuity ? S.dossiers().find(function (item) { return item.id === continuity.previousDossierId; }) : null;
+    var continuityBanner = continuity ? '<div class="alert info opening-balance-continuity"><div><strong>Lien permanent entre exercices.</strong> ' +
+      esc(continuitySource ? continuitySource.reference : continuity.previousReference || 'Exercice précédent') + ' (' + esc(dateLabel(continuity.previousCycleStart)) + ' au ' + esc(dateLabel(continuity.previousCycleEnd)) + ') → ' +
+      esc(dossier.reference) + ' (' + esc(dateLabel(continuity.targetCycleStart)) + ' au ' + esc(dateLabel(continuity.targetCycleEnd)) + '). Le lien est conservé dans ce dossier, même si aucun report n’a encore été appliqué. ' +
+      '<button type="button" class="btn btn-ghost btn-sm" data-action="open-linked-exercise" data-id="' + esc(continuity.previousDossierId) + '">Ouvrir N</button></div></div>' : '';
     var rowsHtml = visibleRows.map(function (record) {
       var account = S.account(record.accountCode);
       var selectedRow = selected && selected.id === record.id;
@@ -24102,6 +24126,7 @@
     var auditClass = audit.balanced ? 'is-balanced' : 'is-unbalanced';
     return '<div class="exchange-workspace opening-balances-workspace" id="opening-balances-workspace">' +
       '<div class="alert info opening-balances-intro"><div><strong>' + esc(dossier.reference) + ' · Exercice ' + esc(dossier.exerciseYear) + '</strong><br>Reports datés du ' + esc(dateLabel(S.expectedOpeningBalanceDate())) + ' (veille du début du cycle). Les reports sont un registre distinct : aucune écriture de journal n’est créée.</div></div>' +
+      continuityBanner +
       '<div class="exchange-summary-grid opening-balance-summary-grid"><div><small>Nombre de lignes</small><strong>' + totals.count + '</strong></div><div><small>Total débit</small><strong>' + esc(money(totals.debit)) + '</strong></div><div><small>Total crédit</small><strong>' + esc(money(totals.credit)) + '</strong></div><div><small>Contrôle</small><strong class="' + auditClass + '">' + auditStatus + (totals.difference ? ' · écart ' + esc(money(totals.difference)) : '') + '</strong></div></div>' +
       '<div class="opening-balances-toolbar"><div class="opening-balance-command-row">' +
         '<button type="button" class="btn btn-primary" data-action="new-opening-balance">＋ Insérer</button>' +
@@ -29207,6 +29232,9 @@
         break;
       case 'open-next-exercise':
         openPreparedNextExercise(trigger.getAttribute('data-source-id'), id);
+        break;
+      case 'open-linked-exercise':
+        openLinkedExercise(id);
         break;
       case 'read-opening-balance-source':
         readOpeningBalanceSource();

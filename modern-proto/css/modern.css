@@ -3433,3 +3433,8 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
   .journal-unbalanced-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .journal-unbalanced-filter-row { align-items: stretch; }
 }
+
+/* Continuité persistante et navigation entre les dossiers N et N+1 */
+.opening-balance-continuity { align-items: flex-start; margin: 0 0 12px; line-height: 1.55; }
+.opening-balance-continuity .btn { margin: 8px 0 0; }
+.next-exercise-panel .alert.info { align-items: flex-start; }

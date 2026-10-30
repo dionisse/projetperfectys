@@ -1650,6 +1650,32 @@
     };
   }
 
+  function normalizeExerciseContinuity(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value) || !value.previousDossierId) return null;
+    return {
+      relationship: 'next-exercise',
+      previousDossierId: String(value.previousDossierId).slice(0, 160),
+      previousReference: String(value.previousReference || '').slice(0, 120),
+      previousCycleStart: String(value.previousCycleStart || '').slice(0, 10),
+      previousCycleEnd: String(value.previousCycleEnd || '').slice(0, 10),
+      targetCycleStart: String(value.targetCycleStart || '').slice(0, 10),
+      targetCycleEnd: String(value.targetCycleEnd || '').slice(0, 10),
+      linkedAt: String(value.linkedAt || '').slice(0, 40)
+    };
+  }
+
+  function exerciseContinuityForNext(sourceDossier, targetStart, targetEnd) {
+    return normalizeExerciseContinuity({
+      previousDossierId: sourceDossier.id,
+      previousReference: sourceDossier.reference,
+      previousCycleStart: sourceDossier.cycleStart,
+      previousCycleEnd: sourceDossier.cycleEnd,
+      targetCycleStart: targetStart,
+      targetCycleEnd: targetEnd,
+      linkedAt: new Date().toISOString()
+    });
+  }
+
   function normalizeDossier(record, index) {
     var legacyName = String(record && (record.clientName || record.name) || (index === 0 ? DEFAULT_FOLDER_NAME : 'Dossier de démonstration')).trim();
     var exerciseYear = Number(record && (record.exerciseYear || record.cycleYear)) || EXERCICE;
@@ -1693,6 +1719,7 @@
       confidentialAccountsConfiguration: normalizeConfidentialAccountsConfiguration(record && record.confidentialAccountsConfiguration),
       generalAccountNaturesConfiguration: normalizeGeneralAccountNaturesConfiguration(record && record.generalAccountNaturesConfiguration),
       reference: String(record && record.reference || referenceFor(accountingTypeCode, clientCode, exerciseYear)),
+      exerciseContinuity: normalizeExerciseContinuity(record && record.exerciseContinuity),
       seeded: record && record.seeded !== false
     };
   }
@@ -2094,6 +2121,7 @@
       printedReportInformationConfiguration: normalizePrintedReportInformationConfiguration(input.printedReportInformationConfiguration),
       currenciesConfiguration: normalizeCurrenciesConfiguration(input.currenciesConfiguration),
       confidentialAccountsConfiguration: normalizeConfidentialAccountsConfiguration(input.confidentialAccountsConfiguration),
+      exerciseContinuity: normalizeExerciseContinuity(input.exerciseContinuity),
       reference: reference,
       seeded: false
     };
@@ -2186,10 +2214,20 @@
       return item.id !== sourceDossier.id && item.clientCode === sourceDossier.clientCode && item.accountingTypeCode === sourceDossier.accountingTypeCode &&
         item.cycleStart === targetStart && item.cycleEnd === targetEnd;
     }) || null;
+    var linkedSuccessor = folderCatalog.find(function (item) {
+      return item.exerciseContinuity && item.exerciseContinuity.previousDossierId === sourceDossier.id;
+    }) || null;
     if (referenceCollision) errors.push('Un autre dossier utilise déjà la référence ' + expectedReference + ' avec un cycle différent. Vérifiez le dossier existant avant de poursuivre.');
+    if (existingDossier && existingDossier.exerciseContinuity && existingDossier.exerciseContinuity.previousDossierId !== sourceDossier.id) {
+      errors.push('Le dossier N+1 sélectionné est déjà lié à un autre exercice source. Aucune liaison ne sera remplacée.');
+    }
+    if (linkedSuccessor && (!existingDossier || linkedSuccessor.id !== existingDossier.id)) {
+      errors.push('Cet exercice N est déjà lié au dossier suivant ' + linkedSuccessor.reference + '. Ouvrez ce dossier plutôt que d’en créer un second.');
+    }
     return {
       canContinue: !errors.length && !!existingDossier,
-      canCreate: !errors.length && !existingDossier,
+      canOpenLinked: !!linkedSuccessor,
+      canCreate: !errors.length && !existingDossier && !linkedSuccessor,
       errors: errors,
       sourceCycleStart: st.cycleStart,
       sourceCycleEnd: st.cycleEnd,
@@ -2207,6 +2245,7 @@
       expectedTargetEnd: targetYear + '-12-31',
       expectedTargetReference: expectedReference,
       existingDossier: existingDossier ? visibleDossierRecord(existingDossier) : null,
+      linkedSuccessor: linkedSuccessor ? visibleDossierRecord(linkedSuccessor) : null,
       closeRecord: record ? clone(record) : null
     };
   }
@@ -2220,9 +2259,20 @@
     var preflight = nextExercisePreflight(cycleStart, cycleEnd);
     if (preflight.errors.length) return { ok: false, errors: preflight.errors, preflight: preflight };
     if (preflight.existingDossier) {
+      var existingRecord = folderById(preflight.existingDossier.id);
+      var linkedNow = false;
+      if (existingRecord && !existingRecord.exerciseContinuity) {
+        var previousCatalogForLink = clone(folderCatalog);
+        existingRecord.exerciseContinuity = exerciseContinuityForNext(sourceDossier, preflight.targetStart, preflight.targetEnd);
+        if (!saveFolderCatalog()) {
+          folderCatalog = previousCatalogForLink;
+          return { ok: false, errors: ['La liaison permanente entre N et N+1 n’a pas pu être enregistrée. Le dossier cible n’a pas été ouvert.'], preflight: preflight };
+        }
+        linkedNow = true;
+      }
       var reused = switchFolder(preflight.existingDossier.id);
       if (!reused.ok) return { ok: false, errors: reused.errors || ['Impossible d’ouvrir le dossier N+1 existant.'], preflight: preflight };
-      return { ok: true, created: false, dossier: visibleDossierRecord(reused.dossier), sourceDossierId: sourceDossier.id, preflight: preflight };
+      return { ok: true, created: false, linked: linkedNow, dossier: visibleDossierRecord(reused.dossier), sourceDossierId: sourceDossier.id, preflight: preflight };
     }
     if (!preflight.canCreate) return { ok: false, errors: ['Le dossier N+1 ne peut pas être créé à partir de cet aperçu.'], preflight: preflight };
 
@@ -2250,7 +2300,8 @@
       accountControlsConfiguration: sourceDossier.accountControlsConfiguration,
       printedReportInformationConfiguration: sourceDossier.printedReportInformationConfiguration,
       currenciesConfiguration: sourceDossier.currenciesConfiguration,
-      confidentialAccountsConfiguration: sourceDossier.confidentialAccountsConfiguration
+      confidentialAccountsConfiguration: sourceDossier.confidentialAccountsConfiguration,
+      exerciseContinuity: exerciseContinuityForNext(sourceDossier, preflight.targetStart, preflight.targetEnd)
     });
     if (!created.ok) return { ok: false, errors: created.errors, preflight: preflight };
     var targetId = created.dossier.id;
