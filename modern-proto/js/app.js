@@ -2294,11 +2294,12 @@
       html += '<div class="empty-state"><div class="empty-icon">▤</div><strong>Aucune pièce</strong>Saisissez votre première écriture comptable.</div>';
     } else {
       html += '<div class="table-wrap"><table class="data-table">' +
-        '<thead><tr><th scope="col">Date</th><th scope="col">Référence</th><th scope="col">Libellé</th><th scope="col" class="num">Montant</th><th scope="col">Statut</th></tr></thead><tbody>' +
+        '<thead><tr><th scope="col">Date</th><th scope="col">N° de pièce</th><th scope="col">Référence</th><th scope="col">Libellé</th><th scope="col" class="num">Montant</th><th scope="col">Statut</th></tr></thead><tbody>' +
         recent.map(function (e) {
           return '<tr class="clickable" data-action="open-entry" data-id="' + esc(e.id) + '">' +
             '<td class="nowrap">' + dateLabel(e.date) + '</td>' +
             '<td><strong>' + esc(e.reference) + '</strong></td>' +
+            '<td>' + esc(e.sourceReference || '—') + '</td>' +
             '<td class="muted">' + esc(e.description || '—') + '</td>' +
             '<td class="num">' + amount(entryAmount(e)) + '</td>' +
             '<td>' + statusBadge(e.status) + '</td>' +
@@ -2545,7 +2546,7 @@
             ? 'Inactif · consultation uniquement'
             : (canCreateEntries ? 'Saisie disponible' : 'Consultation · droit de saisie absent')));
       var draftCell = drafts.length
-        ? '<div class="entry-journal-draft"><span class="badge draft">' + drafts.length + ' brouillon' + (drafts.length > 1 ? 's' : '') + '</span><small>' + esc(drafts[0].reference || 'Référence non disponible') + (drafts.length > 1 ? ' · et ' + (drafts.length - 1) + ' autre(s)' : '') + '</small></div>'
+        ? '<div class="entry-journal-draft"><span class="badge draft">' + drafts.length + ' brouillon' + (drafts.length > 1 ? 's' : '') + '</span><small>N° ' + esc(drafts[0].reference || 'non disponible') + (drafts[0].sourceReference ? ' · Réf. ' + esc(drafts[0].sourceReference) : '') + (drafts.length > 1 ? ' · et ' + (drafts.length - 1) + ' autre(s)' : '') + '</small></div>'
         : '<span class="muted">Aucune</span>';
       var rowClasses = 'clickable entry-journal-row' + (record.code === selectedEntryJournalCode ? ' is-selected' : '') + (!fillable || !canCreateEntries ? ' is-readonly' : '');
       var rowLabel = journalDisplayName(record) + ' · ' + item.count + ' pièce(s) · ' + (fillable && canCreateEntries ? 'saisie disponible' : 'consultation uniquement');
@@ -2636,6 +2637,7 @@
         return {
           id: existing.id, status: 'draft',
           reference: existing.reference,
+          sourceReference: existing.sourceReference || '',
           journal: existing.journal,
           date: existing.date,
           description: existing.description,
@@ -2649,6 +2651,7 @@
         return {
           id: existing.id, status: 'posted',
           reference: existing.reference,
+          sourceReference: existing.sourceReference || '',
           journal: existing.journal,
           date: existing.date,
           description: existing.description,
@@ -2672,6 +2675,7 @@
     return {
       id: null,
       reference: journal ? S.nextReference(journal, date) : '',
+      sourceReference: '',
       journal: journal,
       date: date,
       description: '',
@@ -2695,22 +2699,29 @@
   function entryJournalHistoryHtml(journalCode) {
     var journal = S.journal(journalCode);
     var entries = entryJournalHistoryEntries(journalCode);
-    var rows = entries.map(function (entry) {
-      var totals = S.totals(entry.lines || []);
-      return '<tr class="clickable" data-action="open-entry" data-id="' + esc(entry.id) + '" tabindex="0" aria-label="Consulter la pièce ' + esc(entry.reference) + '">' +
-        '<td class="nowrap">' + dateLabel(entry.date) + '</td>' +
-        '<td><button type="button" class="btn btn-ghost btn-sm" data-action="open-entry" data-id="' + esc(entry.id) + '">' + esc(entry.reference) + '</button></td>' +
-        '<td>' + esc(entry.description || '—') + '</td>' +
-        '<td>' + statusBadge(entry.status) + '</td>' +
-        '<td class="num">' + amount(totals.debit) + '</td>' +
-        '<td class="num">' + amount(totals.credit) + '</td>' +
-      '</tr>';
-    }).join('');
+    var rows = [];
+    entries.forEach(function (entry) {
+      var lines = Array.isArray(entry.lines) && entry.lines.length ? entry.lines : [{}];
+      lines.forEach(function (line) {
+        var account = line.account ? S.account(line.account) : null;
+        var accountLabel = line.account ? String(line.account) + (account && account.label ? ' · ' + account.label : '') : '—';
+        rows.push('<tr class="clickable" data-action="open-entry" data-id="' + esc(entry.id) + '" aria-label="Consulter la pièce ' + esc(entry.reference) + '">' +
+          '<td class="nowrap">' + dateLabel(entry.date) + '</td>' +
+          '<td><button type="button" class="btn btn-ghost btn-sm" data-action="open-entry" data-id="' + esc(entry.id) + '">' + esc(entry.reference) + '</button></td>' +
+          '<td>' + esc(accountLabel) + '</td>' +
+          '<td>' + esc(entry.sourceReference || '—') + '</td>' +
+          '<td class="num">' + (Number(line.debit) ? amount(line.debit) : '—') + '</td>' +
+          '<td class="num">' + (Number(line.credit) ? amount(line.credit) : '—') + '</td>' +
+          '<td>' + esc(entry.description || '—') + '</td>' +
+          '<td>' + statusBadge(entry.status) + '</td>' +
+        '</tr>');
+      });
+    });
     return '<section class="card panel entry-journal-history" aria-labelledby="entry-journal-history-title">' +
       '<div class="panel-header"><div><h3 id="entry-journal-history-title">Pièces du journal · ' + esc(journal ? journalDisplayName(journal) : journalCode || 'Non sélectionné') + '</h3>' +
       '<p class="sub">' + entries.length + ' pièce(s) · du plus récent au plus ancien · sélectionnez une ligne pour consulter son détail.</p></div></div>' +
       (entries.length
-        ? '<div class="table-wrap"><table class="data-table"><thead><tr><th scope="col">Date</th><th scope="col">Référence</th><th scope="col">Libellé</th><th scope="col">Statut</th><th scope="col" class="num">Débit</th><th scope="col" class="num">Crédit</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+        ? '<div class="table-wrap"><table class="data-table"><thead><tr><th scope="col">Date</th><th scope="col">N° de pièce</th><th scope="col">Compte</th><th scope="col">Référence</th><th scope="col" class="num">Débit</th><th scope="col" class="num">Crédit</th><th scope="col">Libellé</th><th scope="col">Statut</th></tr></thead><tbody>' + rows.join('') + '</tbody></table></div>'
         : '<div class="empty-state"><strong>Aucune pièce pour ce journal.</strong><span>Les brouillons enregistrés et les pièces validées apparaîtront ici.</span></div>') +
       '</section>';
   }
@@ -2735,7 +2746,7 @@
     var model = defaultEntryModel(params || {});
     if (model.blockedEntry) {
       return pageHeader('Correction de pièce indisponible', 'Les pièces validées restent traçables et ne peuvent être corrigées que dans la fenêtre autorisée.', '<a class="btn btn-ghost" href="#/entries">← Retour aux pièces</a>') +
-        '<div class="alert warning"><div><strong>La pièce ' + esc(model.blockedEntry.reference) + ' ne peut pas être modifiée.</strong><ul>' + (model.editPreflight.errors || []).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div></div>' +
+        '<div class="alert warning"><div><strong>La pièce N° ' + esc(model.blockedEntry.reference) + ' ne peut pas être modifiée.</strong><ul>' + (model.editPreflight.errors || []).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div></div>' +
         entryJournalHistoryHtml(model.blockedEntry.journal);
     }
     var editing = !!model.id;
@@ -2752,9 +2763,9 @@
       returnLink);
 
     if (editingPosted) {
-      html += '<div class="alert info">Pièce validée <strong>' + esc(model.reference) + '</strong> · version actuelle conservée dans l’historique de correction.</div>';
+      html += '<div class="alert info">Pièce validée N° <strong>' + esc(model.reference) + '</strong> · version actuelle conservée dans l’historique de correction.</div>';
     } else if (editing) {
-      html += '<div class="alert info">Brouillon <strong>' + esc(model.reference) + '</strong> en cours de modification.</div>';
+      html += '<div class="alert info">Brouillon N° <strong>' + esc(model.reference) + '</strong> en cours de modification.</div>';
     }
 
     html += '<form id="entry-form" class="card panel" data-entry-id="' + esc(model.id || '') + '" data-entry-status="' + esc(model.status || 'draft') + '" novalidate>' +
@@ -2762,9 +2773,12 @@
       (editingPosted ? '<div class="alert warning entry-amendment-notice"><div><strong>Correction d’une pièce déjà validée.</strong> ' + model.editPreflight.laterPostedCount + ' pièce(s) validée(s) suivent cette pièce ; la correction sera refusée au-delà de deux. La version précédente sera conservée dans l’historique. Motif obligatoire.</div></div>' : '') +
       '<div id="period-notice">' + (closed ? '<div class="alert warning">⚠️ La période sélectionnée est clôturée : enregistrement et validation seront refusés.</div>' : '') + '</div>' +
       '<div class="form-grid">' +
-        '<div class="field"><label for="e-reference">Référence</label>' +
+        '<div class="field"><label for="e-reference">N° de pièce</label>' +
           '<input id="e-reference" name="reference" type="text" required value="' + esc(model.reference) + '" data-auto="' + (editing ? 'false' : 'true') + '" autocomplete="off">' +
-          '<span class="hint">Unique, proposée automatiquement par journal.</span></div>' +
+          '<span class="hint">Numéro propre au journal, proposé automatiquement et unique.</span></div>' +
+        '<div class="field"><label for="e-source-reference">Référence</label>' +
+          '<input id="e-source-reference" name="sourceReference" type="text" maxlength="120" value="' + esc(model.sourceReference || '') + '" placeholder="N° indiqué sur la facture ou le justificatif" autocomplete="off">' +
+          '<span class="hint">Saisie manuelle depuis la facture ou la pièce justificative.</span></div>' +
         '<div class="field"><label for="e-journal">Journal</label>' +
           '<select id="e-journal" name="journal" required>' + journalOptions(model.journal) + '</select><span class="hint">Les comptes proposés sont filtrés selon les autorisations du journal.</span></div>' +
         '<div class="field"><label for="e-date">Date</label>' +
@@ -2807,6 +2821,7 @@
     return {
       id: form.getAttribute('data-entry-id') || null,
       reference: $('#e-reference').value.trim(),
+      sourceReference: $('#e-source-reference').value.trim(),
       journal: $('#e-journal').value,
       date: $('#e-date').value,
       description: $('#e-description').value,
@@ -2885,7 +2900,7 @@
   function viewEntries() {
     var filter = ui.entries;
     var list = sortedEntries(S.entries()).filter(function (e) {
-      var text = (e.reference + ' ' + (e.description || '')).toLowerCase();
+      var text = (e.reference + ' ' + (e.sourceReference || '') + ' ' + (e.description || '')).toLowerCase();
       if (filter.q && text.indexOf(filter.q.toLowerCase()) === -1) return false;
       if (filter.status && e.status !== filter.status) return false;
       if (filter.journal && e.journal !== filter.journal) return false;
@@ -2898,7 +2913,7 @@
     html += '<div class="card"><div class="panel">' +
       '<div class="filter-row">' +
         '<div class="field grow"><label for="f-entries-q">Rechercher</label>' +
-          '<input id="f-entries-q" type="search" data-filter="entries:q" value="' + esc(filter.q) + '" placeholder="Référence ou libellé…"></div>' +
+          '<input id="f-entries-q" type="search" data-filter="entries:q" value="' + esc(filter.q) + '" placeholder="N° de pièce, référence ou libellé…"></div>' +
         '<div class="field"><label for="f-entries-status">Statut</label><select id="f-entries-status" data-filter="entries:status">' +
           '<option value="">Tous</option>' +
           '<option value="posted"' + (filter.status === 'posted' ? ' selected' : '') + '>Validées</option>' +
@@ -2909,18 +2924,19 @@
       '</div>' +
       '<div class="table-wrap"><table class="data-table">' +
         '<caption>' + list.length + ' pièce(s) — montants exprimés en XOF</caption>' +
-        '<thead><tr><th scope="col">Date</th><th scope="col">Référence</th><th scope="col">Journal</th><th scope="col">Libellé</th>' +
+        '<thead><tr><th scope="col">Date</th><th scope="col">N° de pièce</th><th scope="col">Journal</th><th scope="col">Référence</th><th scope="col">Libellé</th>' +
         '<th scope="col" class="num">Montant</th><th scope="col">Statut</th></tr></thead><tbody>' +
         (list.length ? list.map(function (e) {
           return '<tr class="clickable" data-action="open-entry" data-id="' + esc(e.id) + '">' +
             '<td class="nowrap">' + dateLabel(e.date) + '</td>' +
             '<td><button type="button" class="btn btn-ghost btn-sm" data-action="open-entry" data-id="' + esc(e.id) + '">' + esc(e.reference) + '</button></td>' +
             '<td>' + esc(journalDisplayName(S.journal(e.journal)) || e.journal) + '</td>' +
+            '<td>' + esc(e.sourceReference || '—') + '</td>' +
             '<td class="muted">' + esc(e.description || '—') + '</td>' +
             '<td class="num">' + amount(entryAmount(e)) + '</td>' +
             '<td>' + statusBadge(e.status) + '</td>' +
           '</tr>';
-        }).join('') : '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">▤</div><strong>Aucune pièce</strong>Aucune pièce ne correspond à ces critères.</div></td></tr>') +
+        }).join('') : '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">▤</div><strong>Aucune pièce</strong>Aucune pièce ne correspond à ces critères.</div></td></tr>') +
       '</tbody></table></div>' +
     '</div></div>';
 
@@ -2933,7 +2949,7 @@
       var account = S.account(line.account);
       return '<li><strong>' + esc(line.account) + '</strong> ' + esc(account ? account.label : '') + ' · Débit ' + esc(amount(line.debit || 0)) + ' · Crédit ' + esc(amount(line.credit || 0)) + '</li>';
     }).join('');
-    return '<details class="entry-revision-snapshot"><summary>' + esc(title) + ' · ' + esc(snapshot.reference || 'Sans référence') + ' · ' + esc(dateLabel(snapshot.date)) + '</summary><div><p>' + esc(snapshot.description || 'Aucun libellé') + '</p><ul>' + lines + '</ul></div></details>';
+    return '<details class="entry-revision-snapshot"><summary>' + esc(title) + ' · N° ' + esc(snapshot.reference || 'Non renseigné') + ' · ' + esc(dateLabel(snapshot.date)) + '</summary><div><p>Référence : ' + esc(snapshot.sourceReference || '—') + '</p><p>' + esc(snapshot.description || 'Aucun libellé') + '</p><ul>' + lines + '</ul></div></details>';
   }
 
   function openEntryModal(id) {
@@ -2942,12 +2958,13 @@
     var t = S.totals(e.lines);
     var journal = S.journal(e.journal);
 
-    var body = '<div class="form-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:16px">' +
+    var body = '<div class="form-grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:16px">' +
       '<div class="total-item"><span>Date</span><strong>' + dateLabel(e.date) + '</strong></div>' +
+      '<div class="total-item"><span>N° de pièce</span><strong>' + esc(e.reference) + '</strong></div>' +
       '<div class="total-item"><span>Journal</span><strong>' + esc(journal ? journalDisplayName(journal) : e.journal) + '</strong></div>' +
       '<div class="total-item"><span>Statut</span><div>' + statusBadge(e.status) + '</div></div>' +
       '</div>' +
-      '<p class="muted" style="margin-bottom:16px">' + esc(e.description || 'Aucun libellé') + '</p>' +
+      '<p class="muted" style="margin-bottom:16px"><strong>Référence :</strong> ' + esc(e.sourceReference || '—') + '<br><strong>Libellé :</strong> ' + esc(e.description || 'Aucun libellé') + '</p>' +
       '<div class="table-wrap"><table class="data-table">' +
         '<thead><tr><th scope="col">Compte</th><th scope="col">Intitulé</th><th scope="col" class="num">Débit</th><th scope="col" class="num">Crédit</th></tr></thead><tbody>' +
         e.lines.map(function (l) {
@@ -3002,7 +3019,7 @@
     }
     footer += '<button type="button" class="btn btn-ghost" data-action="close-modal">Fermer</button>';
 
-    openModal('Pièce ' + e.reference, 'Détail de l’écriture comptable', body, footer, true);
+    openModal('Pièce N° ' + e.reference, 'Détail de l’écriture comptable', body, footer, true);
   }
 
   /* --------------------------------- Balance ------------------------------- */
@@ -14519,11 +14536,12 @@
       } else {
         html += '<div class="table-wrap"><table class="data-table">' +
           '<caption>Grand livre ' + esc(acc.code) + ' — ' + esc(acc.label) + '</caption>' +
-          '<thead><tr><th scope="col">Date</th><th scope="col">Référence</th><th scope="col">Journal</th><th scope="col">Libellé</th>' +
+          '<thead><tr><th scope="col">Date</th><th scope="col">N° de pièce</th><th scope="col">Référence</th><th scope="col">Journal</th><th scope="col">Libellé</th>' +
           '<th scope="col" class="num">Débit</th><th scope="col" class="num">Crédit</th><th scope="col" class="num">Solde progressif</th></tr></thead><tbody>' +
           data.rows.map(function (r) {
             return '<tr><td class="nowrap">' + dateLabel(r.date) + '</td>' +
               '<td><button type="button" class="btn btn-ghost btn-sm" data-action="open-entry" data-id="' + esc(findEntryId(r.reference)) + '">' + esc(r.reference) + '</button></td>' +
+              '<td>' + esc(r.sourceReference || '—') + '</td>' +
               '<td>' + esc(journalDisplayName(S.journal(r.journal)) || r.journal) + '</td>' +
               '<td class="muted">' + esc(r.description || '—') + '</td>' +
               '<td class="num">' + (r.debit ? amount(r.debit) : '—') + '</td>' +
@@ -22721,7 +22739,7 @@
       commissioningDate: '',
       status: 'en-cours',
       grossCost: candidate.amount,
-      invoiceReference: entry.reference,
+      invoiceReference: entry.sourceReference || '',
       forceValues: linkedAsset ? {
         assetAccountCode: candidate.accountCode,
         sourceEntryLineAccountCode: candidate.accountCode,
@@ -22758,7 +22776,7 @@
       return choices.map(function (choice) { return '<option value="' + esc(choice[0]) + '"' + (String(choice[0]) === String(selected || '') ? ' selected' : '') + '>' + esc(choice[1]) + '</option>'; }).join('');
     };
     var body = '<form id="fixed-asset-form" novalidate><div id="fixed-asset-errors" aria-live="assertive"></div>' +
-      (defaults.sourceEntryId ? '<div class="alert info"><div><strong>Fiche liée à la pièce ' + esc(linkedSourceEntry ? linkedSourceEntry.reference : defaults.sourceEntryId) + '.</strong> Compte, date, montant et référence sont proposés depuis la ligne sélectionnée. Vérifiez la désignation, la nature, l’état et les paramètres ; aucune règle d’amortissement n’est calculée.</div></div>' : '') +
+      (defaults.sourceEntryId ? '<div class="alert info"><div><strong>Fiche liée à la pièce N° ' + esc(linkedSourceEntry ? linkedSourceEntry.reference : defaults.sourceEntryId) + '.</strong> Compte, date et montant sont proposés depuis la ligne sélectionnée ; la référence de facture est reprise si elle a été saisie. Vérifiez la désignation, la nature, l’état et les paramètres ; aucune règle d’amortissement n’est calculée.</div></div>' : '') +
       '<div class="fixed-asset-form-sections">' +
         '<section class="fixed-asset-form-section"><h4>Identification et état</h4><div class="fixed-asset-form-grid">' +
           '<div class="field"><label for="fixed-asset-code">Code d’inventaire <span aria-hidden="true">*</span></label><input id="fixed-asset-code" name="code" type="text" maxlength="32" value="' + value('code', suggestedCode) + '" placeholder="Ex. IMMO-0001" required autocomplete="off"><span class="hint">Code proposé automatiquement, modifiable et non réutilisé.</span></div>' +

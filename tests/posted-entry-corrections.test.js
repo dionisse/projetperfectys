@@ -21,7 +21,7 @@ for (const file of ['accounting-chart.js', 'store.js']) {
 const S = sandbox.window.PerfectoStore;
 const date = S.currentDossier().cycleStart;
 function payload(reference, debitAccount = '601', amount = 100) {
-  return { reference, journal: 'OD', date, description: 'Pièce de test ' + reference, lines: [
+  return { reference, sourceReference: 'FACT-' + reference, journal: 'OD', date, description: 'Pièce de test ' + reference, lines: [
     { account: debitAccount, debit: amount, credit: 0 },
     { account: '401', debit: 0, credit: amount }
   ] };
@@ -48,7 +48,7 @@ const noReason = S.updatePostedEntry(second.id, Object.assign({}, payload(second
 assert.equal(noReason.ok, false, 'le motif de correction est obligatoire');
 const secondDraft = S.entry(second.id);
 const beforePostedAt = secondDraft.postedAt;
-const revised = S.updatePostedEntry(second.id, Object.assign({}, payload(second.reference), { description: 'Libellé corrigé' }), 'Libellé initial erroné');
+const revised = S.updatePostedEntry(second.id, Object.assign({}, payload(second.reference), { sourceReference: 'FACTURE-REV-02', description: 'Libellé corrigé' }), 'Libellé initial erroné');
 assert.equal(revised.ok, true, revised.errors && revised.errors.join(' '));
 assert.equal(revised.entry.status, 'posted', 'une correction maintient la pièce validée');
 assert.equal(revised.entry.postedAt, beforePostedAt, 'l’ordre de validation ne change pas après correction');
@@ -56,6 +56,9 @@ assert.equal(revised.entry.revisionHistory.length, 1);
 assert.equal(revised.entry.revisionHistory[0].reason, 'Libellé initial erroné');
 assert.equal(revised.entry.revisionHistory[0].before.description, secondDraft.description);
 assert.equal(revised.entry.revisionHistory[0].after.description, 'Libellé corrigé');
+assert.equal(revised.entry.sourceReference, 'FACTURE-REV-02', 'la référence facture reste saisissable et modifiable indépendamment du numéro de pièce');
+assert.equal(revised.entry.revisionHistory[0].before.sourceReference, secondDraft.sourceReference);
+assert.equal(revised.entry.revisionHistory[0].after.sourceReference, 'FACTURE-REV-02');
 assert.equal(S.postedEntryEditPreflight(second.id).revisionCount, 1);
 const forbiddenOldEdit = S.updatePostedEntry(first.id, Object.assign({}, payload(first.reference), { description: 'Trop tard' }), 'Correction tardive');
 assert.equal(forbiddenOldEdit.ok, false);

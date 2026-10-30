@@ -16,13 +16,13 @@ const renderEnd = appSource.indexOf('function lineRowHtml(', renderStart + 1);
 const historyFunction = appSource.slice(start, end);
 const historyRenderer = appSource.slice(renderStart, renderEnd);
 const entries = [
-  { id: 'old', journal: 'AC', date: '2025-12-31', reference: 'AC-01', status: 'draft', lines: [] },
-  { id: 'newest', journal: 'AC', date: '2026-01-02', reference: 'AC-02', status: 'posted', lines: [], createdAt: '2026-01-02T08:00:00.000Z' },
-  { id: 'same-date-later', journal: 'AC', date: '2026-01-02', reference: 'AC-03', status: 'posted', lines: [], updatedAt: '2026-01-02T10:00:00.000Z' },
+  { id: 'old', journal: 'AC', date: '2025-12-31', reference: 'AC-01', sourceReference: 'F-01', status: 'draft', lines: [{ account: '401', debit: 0, credit: 100 }] },
+  { id: 'newest', journal: 'AC', date: '2026-01-02', reference: 'AC-02', sourceReference: 'FACT-02', status: 'posted', lines: [{ account: '601', debit: 100, credit: 0 }, { account: '401', debit: 0, credit: 100 }], createdAt: '2026-01-02T08:00:00.000Z' },
+  { id: 'same-date-later', journal: 'AC', date: '2026-01-02', reference: 'AC-03', sourceReference: 'FACT-03', status: 'posted', lines: [{ account: '512', debit: 10, credit: 0 }], updatedAt: '2026-01-02T10:00:00.000Z' },
   { id: 'other-journal', journal: 'BQ', date: '2026-01-03', reference: 'BQ-01', status: 'posted', lines: [] }
 ];
 const sandbox = {
-  S: { entries: () => entries, journal: code => ({ code }), totals: () => ({ debit: 0, credit: 0 }) },
+  S: { entries: () => entries, journal: code => ({ code }), account: code => ({ label: 'Compte ' + code }), totals: () => ({ debit: 0, credit: 0 }) },
   esc: value => String(value),
   dateLabel: value => value,
   amount: value => String(value),
@@ -34,10 +34,23 @@ assert.deepEqual(Array.from(sandbox.historyEntries('AC'), entry => entry.id), ['
 const historyHtml = sandbox.renderHistory('AC');
 assert.ok(historyHtml.indexOf('AC-03') < historyHtml.indexOf('AC-02') && historyHtml.indexOf('AC-02') < historyHtml.indexOf('AC-01'));
 assert.doesNotMatch(historyHtml, /BQ-01/, 'les pièces d’un autre journal sont exclues');
+const historyHeadings = ['Date', 'N° de pièce', 'Compte', 'Référence', 'Débit', 'Crédit', 'Libellé', 'Statut'];
+let previousHeadingPosition = -1;
+historyHeadings.forEach(heading => {
+  const position = historyHtml.indexOf('<th scope="col"' + (heading === 'Débit' || heading === 'Crédit' ? ' class="num"' : '') + '>' + heading + '</th>');
+  assert.ok(position > previousHeadingPosition, 'la colonne « ' + heading + ' » respecte l’ordre demandé');
+  previousHeadingPosition = position;
+});
+assert.match(historyHtml, /FACT-02/);
+assert.match(historyHtml, /601 ·/);
+assert.match(historyHtml, /401 ·/);
 
 assert.match(appSource, /return html \+ '<div id="entry-journal-history-container">' \+ entryJournalHistoryHtml\(model\.journal\)/,
   'la liste est rendue directement sous le formulaire');
 assert.match(appSource, /Pièces du journal · /);
+assert.match(appSource, /label for="e-reference">N° de pièce/);
+assert.match(appSource, /label for="e-source-reference">Référence/);
+assert.match(appSource, /sourceReference: \$\('#e-source-reference'\)\.value\.trim\(\)/);
 assert.match(appSource, /data-action="open-entry"/);
 assert.match(appSource, /var historyContainer = \$\('#entry-journal-history-container'\);[\s\S]*entryJournalHistoryHtml\(input\.value\)/,
   'le journal sélectionné actualise immédiatement la liste affichée');

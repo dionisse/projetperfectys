@@ -6442,7 +6442,7 @@
 
   /**
    * Valide une pièce. Renvoie { ok, errors: [], entry }.
-   * Règles : référence unique, journal et comptes existants, débit XOR crédit,
+   * Règles : numéro de pièce unique, journal et comptes existants, débit XOR crédit,
    * au moins deux lignes, période ouverte, équilibre si validation définitive.
    */
   function validateEntry(payload, options) {
@@ -6450,15 +6450,16 @@
     var errors = [];
     var st = load();
     var reference = String(payload.reference || '').trim();
+    var sourceReference = String(payload.sourceReference || '').trim().slice(0, 120);
     var journalCode = payload.journal;
     var journalRecord = journal(journalCode);
     var date = payload.date;
     var lines = payload.lines || [];
     var configuration = accountingConfiguration();
 
-    if (!reference) errors.push('La référence de la pièce est obligatoire.');
+    if (!reference) errors.push('Le numéro de pièce est obligatoire.');
     if (!opts.ignoreUnique && st.entries.some(function (e) { return e.reference === reference && e.id !== payload.id; })) {
-      errors.push('La référence « ' + reference + ' » existe déjà.');
+      errors.push('Le numéro de pièce « ' + reference + ' » existe déjà.');
     }
     if (!journalRecord) {
       errors.push('Le journal sélectionné est inconnu.');
@@ -6543,6 +6544,7 @@
     var normalizedEntry = {
       id: payload.id || null,
       reference: reference,
+      sourceReference: sourceReference,
       journal: journalCode,
       date: date,
       description: String(payload.description || '').trim(),
@@ -6647,6 +6649,7 @@
   function entryContentSignature(record) {
     return JSON.stringify({
       reference: record && record.reference || '',
+      sourceReference: record && record.sourceReference || '',
       journal: record && record.journal || '',
       date: record && record.date || '',
       description: record && record.description || '',
@@ -6761,11 +6764,11 @@
       modifiedAt: revisedEntry.updatedAt,
       reason: reason,
       before: {
-        reference: current.reference, journal: current.journal, date: current.date,
+        reference: current.reference, sourceReference: current.sourceReference || '', journal: current.journal, date: current.date,
         description: current.description || '', lines: clone(current.lines || [])
       },
       after: {
-        reference: revisedEntry.reference, journal: revisedEntry.journal, date: revisedEntry.date,
+        reference: revisedEntry.reference, sourceReference: revisedEntry.sourceReference || '', journal: revisedEntry.journal, date: revisedEntry.date,
         description: revisedEntry.description || '', lines: clone(revisedEntry.lines || [])
       }
     });
@@ -7863,7 +7866,7 @@
     visibleEntryRecords(postedEntries(), codeMap).forEach(function (record) {
       record.lines.forEach(function (line) {
         if (accountCodeFromLine(line) !== code) return;
-        rows.push({ date: record.date, reference: record.reference, journal: record.journal, description: record.description,
+        rows.push({ date: record.date, reference: record.reference, sourceReference: record.sourceReference || '', journal: record.journal, description: record.description,
           debit: Number(line.debit) || 0, credit: Number(line.credit) || 0 });
       });
     });
