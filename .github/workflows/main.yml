@@ -65,6 +65,7 @@ jobs:
           node tests/nominative-declaration-report.test.js
           node tests/bic-advances-report.test.js
           node tests/ohada-financial-statements.test.js
+          node tests/is-declaration.test.js
           node tests/ohada-result-state.test.js
           node tests/table-design-system.test.js
           node tests/journal-lines-report.test.js

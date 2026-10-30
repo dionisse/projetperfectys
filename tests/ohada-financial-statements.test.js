@@ -11,8 +11,8 @@ const report = globalThis.PerfectoOhadaFinancialStatements;
 
 assert.equal(report.DEFAULT_SELECTED_KEY, 'financial-statements');
 assert.deepEqual(report.ITEMS.filter(item => !item.separator).map(item => item.label), [
-  'Tableaux financiers OHADA révisé',
-  'Déclaration fiscale (IS)',
+  'Générer les tableaux financiers OHADA',
+  'Déclaration fiscales IS',
   'Déclaration IRPP',
   'Déclaration des honoraires',
   'Ensemble des postes détaillés par comptes',
@@ -24,7 +24,7 @@ assert.deepEqual(report.ITEMS.filter(item => !item.separator).map(item => item.l
 ]);
 assert.throws(() => report.buildPreview('missing', 2026), /Sélectionnez un état/);
 const preview = report.buildPreview(report.DEFAULT_SELECTED_KEY, 2026);
-assert.equal(preview.label, 'Tableaux financiers OHADA révisé');
+assert.equal(preview.label, 'Générer les tableaux financiers OHADA');
 assert.equal(preview.exercise, 2026);
 assert.equal(preview.generatedLineCount, 0);
 assert.deepEqual(preview.financialRows, []);

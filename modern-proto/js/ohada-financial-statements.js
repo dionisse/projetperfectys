@@ -26,8 +26,8 @@
   var DB_STORE = 'active-snapshots';
   var DEFAULT_SELECTED_KEY = 'financial-statements';
   var ITEMS = [
-    { key: 'financial-statements', label: 'Tableaux financiers OHADA révisé' },
-    { key: 'is-declaration', label: 'Déclaration fiscale (IS)' },
+    { key: 'financial-statements', label: 'Générer les tableaux financiers OHADA' },
+    { key: 'is-declaration', label: 'Déclaration fiscales IS' },
     { key: 'irpp-declaration', label: 'Déclaration IRPP' },
     { key: 'fees-declaration', label: 'Déclaration des honoraires' },
     { key: 'separator-1', separator: true },
@@ -334,6 +334,7 @@
       if (/^[TRX]/.test(item.code)) incomeCodes[item.code] = item;
     });
     var values = Object.create(null);
+    var postTotals = Object.create(null);
     var gaps = [];
     var mappedAccountCount = 0;
     var unmappedAccountCount = 0;
@@ -375,6 +376,10 @@
           if (matchGroup(code, group.depreciation)) depreciation = true;
         }
       });
+      var postTotal = postTotals[postCode];
+      if (!postTotal) postTotal = postTotals[postCode] = { code: postCode, debit: 0, credit: 0, normalDebit: 0, normalCredit: 0, depreciationDebit: 0, depreciationCredit: 0 };
+      postTotal[side] += amount;
+      postTotal[(depreciation ? 'depreciation' : 'normal') + (side === 'debit' ? 'Debit' : 'Credit')] += amount;
       var actRow = postCode;
       if (assetCodes[actRow] && !incomeCodes[actRow]) {
         var assetCell = depreciation ? 'E' : 'D';
@@ -399,6 +404,7 @@
     var totalCredit = balances.reduce(function (sum, row) { return sum + (Number(row.credit) || 0); }, 0);
     return {
       values: values,
+      postTotals: postTotals,
       gaps: gaps,
       summary: {
         accountCount: balances.length,

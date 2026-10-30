@@ -25,6 +25,7 @@
   var NominativeDeclarationReport = window.PerfectoNominativeDeclarationReport;
   var BicAdvancesReport = window.PerfectoBicAdvancesReport;
   var OhadaFinancialStatements = window.PerfectoOhadaFinancialStatements;
+  var IsDeclaration = window.PerfectoIsDeclaration;
   var CashOperations = window.PerfectoCashOperations;
   var AccountMovements = window.PerfectoAccountMovements;
   var AccountingExchange = window.PerfectoAccountingExchange;
@@ -26534,7 +26535,7 @@
       return '<button type="button" class="ohada-statement-choice' + (selected ? ' is-selected' : '') + '" role="option" aria-selected="' + (selected ? 'true' : 'false') + '" data-ohada-statement="' + esc(item.key) + '">' + esc(item.label) + '</button>';
     }).join('');
     return '<div class="edition-report-detail-view ohada-financial-statements-detail">' + backLink +
-      '<div class="page-header"><div><span class="page-kicker">DÉCLARATIONS PÉRIODIQUES · OHADA</span><h2>Tableaux financiers et Liasse fiscale</h2></div></div>' +
+      '<div class="page-header"><div><span class="page-kicker">ÉTATS ET DÉCLARATIONS ASSOCIÉS</span><h2>Tableaux financiers OHADA révisé</h2></div></div>' +
       '<div class="ohada-statements-layout"><div class="ohada-statements-list-wrap" role="listbox" aria-label="États financiers et fiscaux">' + listItems + '</div><div class="ohada-statements-side"><button type="button" class="btn btn-primary" data-ohada-edit>Éditer l’état sélectionné</button><button type="button" class="btn btn-ghost" data-ohada-close>Fermer</button></div></div>' +
       '<div class="ohada-statements-result" id="ohada-statements-result" aria-live="polite"></div></div>';
   }
@@ -26544,6 +26545,57 @@
     return '<article class="ohada-statement-preview"><div class="ohada-statement-preview-heading"><div><span class="page-kicker">APERÇU · ' + esc(exercise) + '</span><h3>' + esc(preview.label) + '</h3></div></div>' +
       '<div class="alert warning"><div><strong>Aucun tableau chiffré n’est généré à ce stade.</strong> Le format de restitution, les correspondances entre les comptes du dossier et les rubriques OHADA, ainsi que les règles fiscales applicables doivent être confirmés avant de produire des montants.</div></div>' +
       '<div class="empty-state">Aperçu de sélection uniquement · aucune ligne financière ou fiscale calculée.</div></article>';
+  }
+
+  function isDeclarationKey(dossier) { return 'perfecto.is-declaration.v1:' + String(dossier && dossier.id || 'default') + ':' + String(dossier && dossier.cycleStart || 'non-date') + ':' + String(dossier && dossier.cycleEnd || 'non-date'); }
+  function readIsDeclaration(dossier) {
+    try { var x=JSON.parse(localStorage.getItem(isDeclarationKey(dossier))||'{}'); return {configuration:IsDeclaration.normalise(x.configuration),manual:x.manual||{},companyType:x.companyType||'',regime:x.regime||''}; }
+    catch(_e) { return {configuration:IsDeclaration.defaults(),manual:{},companyType:'',regime:''}; }
+  }
+  function isDeclarationView(dossier) {
+    var state=readIsDeclaration(dossier), cfg=state.configuration;
+    var maps=IsDeclaration.POST_MAPPINGS.map(function(r){return '<label class="is-map-row"><span><strong>'+esc(r.cell)+'</strong> · '+esc(r.label)+'</span><input data-is-map="'+esc(r.cell)+'" value="'+esc(cfg.mappings[r.cell].join(', '))+'" placeholder="Codes de postes OHADA"></label>';})
+      .concat(IsDeclaration.BALANCE_MAPPINGS.map(function(r){var k='IS3!'+r.cells.join(',');return '<label class="is-map-row"><span><strong>'+esc(k)+'</strong> · '+esc(r.label)+'</span><input data-is-map="'+esc(k)+'" value="'+esc(cfg.mappings[k].join(', '))+'" placeholder="Codes de postes OHADA"></label>'; })).join('');
+    var sections=[['IS1','Identité et renseignements généraux'],['IS2','Résultat taxable et ajustements'],['IS3','Actif et passif'],['IS4','Liquidation et imputations']];
+    var manual=sections.map(function(group){var fields=IsDeclaration.MANUAL_FIELDS.filter(function(f){return f.key.indexOf(group[0]+'!')===0;});return '<details class="is-manual-section"'+(group[0]==='IS2'?' open':'')+'><summary>'+esc(group[1])+' · '+fields.length+' champs</summary><div class="is-manual-grid">'+fields.map(function(f){var min=(f.key==='IS2!H35'||f.key==='IS2!H7')?'':' min="0"';return '<label class="is-manual-row"><span><strong>'+esc(f.key)+'</strong> · '+esc(f.label)+'</span><input type="number" step="any"'+min+' data-is-manual="'+esc(f.key)+'" value="'+esc(state.manual[f.key]||'')+'" placeholder="À compléter si applicable"></label>';}).join('')+'</div></details>';}).join('');
+    var info=S.printedReportInformationConfiguration().rows||[];var infoHtml=info.filter(function(x){return x&&!x.separator;}).map(function(x){return '<div><dt>'+esc(x.label)+'</dt><dd>'+esc(x.value||'À compléter dans Paramètres → Informations des éditions')+'</dd></div>';}).join('');
+    var pre=financialResultPreflight();
+    return '<section class="is-declaration-workspace"><button type="button" class="btn btn-ghost btn-sm" data-is-back>← Retour aux états</button><div class="page-header"><div><span class="page-kicker">TABLEAUX FINANCIERS OHADA RÉVISÉ · MOD 2011 IS</span><h2>Déclaration fiscales IS</h2><p>'+esc(dossier&& (dossier.name||dossier.clientName)||'Dossier actif')+' · '+esc(dossier&&dossier.cycleStart||'')+' au '+esc(dossier&&dossier.cycleEnd||'')+'</p></div><a class="btn btn-ghost" href="#/menu?g=parametres&amp;t=print-information">Informations du dossier</a></div>'+
+      '<div class="alert warning"><div><strong>Préparation à contrôler avant dépôt.</strong> Les taux imprimés dans le modèle ('+IsDeclaration.TAX_RATES.industrial+' %, '+IsDeclaration.TAX_RATES.other+' %, minimum '+IsDeclaration.TAX_RATES.minimum+' %) ne sont pas validés comme règles actuelles : les montants d’impôt restent à calculer et saisir après vérification. Aucune correspondance OHADA n’est activée par défaut; aucun exemple du classeur n’est repris.</div></div>'+
+      '<dl class="is-identity-summary">'+infoHtml+'</dl><form id="is-declaration-form" novalidate><div class="is-declaration-controls"><label>Type de société <select data-is-type><option value="">À confirmer</option><option value="industrial"'+(state.companyType==='industrial'?' selected':'')+'>Société industrielle · taux imprimé '+IsDeclaration.TAX_RATES.industrial+' %</option><option value="other"'+(state.companyType==='other'?' selected':'')+'>Autres sociétés · taux imprimé '+IsDeclaration.TAX_RATES.other+' %</option></select></label><label>Régime d’imposition <select data-is-regime><option value="">À confirmer</option><option value="normal"'+(state.regime==='normal'?' selected':'')+'>Réel normal</option><option value="simplified"'+(state.regime==='simplified'?' selected':'')+'>Réel simplifié</option></select></label></div>'+
+      '<details class="is-declaration-details"><summary>Correspondances OHADA par rubrique (modifiables)</summary><p>Codes de postes à vérifier; le rattachement compte → poste est géré dans <a href="#/menu?g=parametres&amp;t=financial-framework">Paramètres → Cadre comptable</a>.</p><div class="is-map-grid">'+maps+'</div></details>'+
+      '<details class="is-declaration-details" open><summary>Données manuelles et remplacements justifiés</summary><p>Une cellule vide ne vaut pas zéro. Complétez seulement les montants documentés.</p>'+manual+'</details>'+
+      '<div class="is-declaration-actions"><button type="button" class="btn btn-primary" data-is-preview'+(pre.hasHiddenConfidentialAccounts?' disabled':'')+'>Préparer l’aperçu</button><button type="button" class="btn btn-ghost" data-is-xlsx disabled>Télécharger le classeur IS</button><button type="button" class="btn btn-ghost" data-is-csv disabled>Télécharger le CSV des points à vérifier</button></div><div id="is-declaration-status" class="is-declaration-status" role="status" aria-live="polite">'+(pre.hasHiddenConfidentialAccounts?'Balance partiellement masquée : accès autorisé requis avant préparation.':'Balance : '+pre.summary.mappedAccountCount+' comptes rattachés, '+pre.summary.unmappedAccountCount+' sans rattachement.')+'</div></form><div id="is-declaration-result"></div></section>';
+  }
+  function collectIsDeclaration(form,dossier) {
+    var maps={};var prev=readIsDeclaration(dossier);Object.keys(prev.configuration.mappings).forEach(function(k){maps[k]=prev.configuration.mappings[k].slice();});
+    $$('[data-is-map]',form).forEach(function(x){maps[x.getAttribute('data-is-map')]=x.value.split(/[;,\s]+/).filter(Boolean);});
+    var manual={};$$('[data-is-manual]',form).forEach(function(x){manual[x.getAttribute('data-is-manual')]=x.value;});
+    var state={configuration:IsDeclaration.normalise({mappings:maps}),manual:manual,companyType:$('[data-is-type]',form).value,regime:$('[data-is-regime]',form).value};
+    localStorage.setItem(isDeclarationKey(dossier),JSON.stringify(state));return state;
+  }
+  function prepareIsDeclaration(state,dossier) {
+    var pre=financialResultPreflight();
+    if(pre.hasHiddenConfidentialAccounts)throw Error('Préparation bloquée : certains comptes confidentiels sont masqués pour ce profil.');
+    var printed=S.printedReportInformationConfiguration().rows||[];
+    var calc=IsDeclaration.calculate({balance:pre.balance,accountMappings:S.financialStatementsMappingsConfiguration().mappings,configuration:state.configuration,manual:state.manual,printedInformationRows:printed,cycleStart:dossier.cycleStart,cycleEnd:dossier.cycleEnd,companyType:state.companyType,regime:state.regime});
+    if(!pre.balance.length)calc.gaps.push({sheet:'OHADA',cell:'',field:'Balance',message:'Aucune balance disponible; seules les saisies manuelles pourraient alimenter la déclaration.',action:'Vérifier les écritures validées et les reports.'});
+    if(pre.balance.length&&!pre.summary.balanced)calc.gaps.push({sheet:'OHADA',cell:'',field:'Équilibre',message:'Balance déséquilibrée; contrôler les montants OHADA.',action:'Réconcilier les totaux avant dépôt.'});
+    calc.complete=calc.gaps.length===0;return {calculated:calc,printedInformationRows:printed,preflight:pre};
+  }
+  function isDeclarationPreview(prepared) {
+    var c=prepared.calculated,t=c.totals;var items=[['IS2 · H14','Total des produits',t.products,t.products==null?'Incomplet · correspondances à confirmer':'Balance OHADA · correspondances configurées'],['IS2 · H34','Total des charges',t.expenses,t.expenses==null?'Incomplet · correspondances à confirmer':'Balance OHADA · correspondances configurées'],['IS2 · H36','Résultat avant impôt',t.beforeTax,t.beforeTax==null?'Incomplet · données source manquantes':'Calculé selon les lignes du modèle'],['IS2 · H44','Résultat taxable saisi après validation',t.taxableResult,t.taxableResult==null?'Inconnu · saisie/validation requise':'Saisie manuelle · traitement fiscal à valider'],['IS4 · O3','Impôt minimum selon modèle',t.minimumTax,t.minimumTax==null?'Inconnu · saisie/validation requise':'Saisie manuelle · base/taux à vérifier'],['IS4 · O4/O5','Impôt selon type choisi',t.tax,t.tax==null?'Inconnu · saisie/validation requise':'Saisie manuelle · règle fiscale à valider'],['IS4 · O14','Solde à payer',t.due,t.due==null?'Incomplet · montants à vérifier':'Calcul arithmétique du modèle · à contrôler']];
+    return '<section class="is-declaration-preview"><h3>'+(c.complete?'Préparation complète à contrôler':'Préparation partielle · à compléter')+'</h3><p>Points à vérifier : '+c.gaps.length+'</p><div class="table-wrap"><table class="data-table"><thead><tr><th>Cellule</th><th>Rubrique</th><th class="num">Montant proposé (XOF)</th><th>Origine / statut</th></tr></thead><tbody>'+items.map(function(x){return '<tr><th>'+esc(x[0])+'</th><td>'+esc(x[1])+'</td><td class="num">'+(x[2]==null?'À compléter':esc(S.money(x[2])))+'</td><td>'+esc(x[3])+'</td></tr>';}).join('')+'</tbody></table></div><details><summary>Afficher les points à vérifier</summary><ul>'+c.gaps.slice(0,40).map(function(g){return '<li><strong>'+esc(g.sheet+' '+g.cell+' '+g.field)+'</strong> — '+esc(g.message)+'</li>';}).join('')+'</ul></details></section>';
+  }
+  function bindIsDeclaration() {
+    var form=$('#is-declaration-form');if(!form)return;var dossier=S.currentDossier(),result=$('#is-declaration-result'),status=$('#is-declaration-status'),current=null;
+    var xlsx=$('[data-is-xlsx]',form),csv=$('[data-is-csv]',form);
+    var back=$('[data-is-back]');if(back)back.addEventListener('click',function(){var result=form.closest('.is-declaration-workspace').parentNode;result.innerHTML='';});
+    function invalidate(){if(current){current=null;xlsx.disabled=true;csv.disabled=true;result.innerHTML='';status.textContent='Données modifiées : recalculer l’aperçu avant export.';}}
+    form.addEventListener('input',invalidate);form.addEventListener('change',invalidate);
+    $('[data-is-preview]',form).addEventListener('click',function(){try{var active=S.currentDossier();if(!active||!dossier||active.id!==dossier.id)throw Error('Le dossier actif a changé.');current=prepareIsDeclaration(collectIsDeclaration(form,active),active);result.innerHTML=isDeclarationPreview(current);xlsx.disabled=false;csv.disabled=false;status.textContent='Préparation enregistrée. Les cellules inconnues restent vides; consultez le CSV.';}catch(e){toast(e.message||'Préparation impossible.','error');}});
+    xlsx.addEventListener('click',function(){if(!current)return;var active=S.currentDossier();if(!active||active.id!==dossier.id){toast('Le dossier actif a changé; recalculer la préparation.','warning');return;}if(!hasDemoPermission(getActiveDemoMember(),'accounting','data.export',accountingAccessContext(dossier))){toast('Le droit data.export est requis.','warning');return;}if(S.hasHiddenConfidentialAccounts&&S.hasHiddenConfidentialAccounts()){toast('Export bloqué : comptes confidentiels masqués.','warning');return;}xlsx.disabled=true;IsDeclaration.loadTemplate().then(function(bytes){var out=IsDeclaration.generateWorkbook(bytes,current);downloadFile('Declaration-IS-'+safeFilePart(dossier.reference||dossier.name)+'-'+String(dossier.cycleEnd||'').replace(/-/g,'')+'.xlsx',out.bytes,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');status.textContent='Classeur IS téléchargé. Vérifier les points signalés avant dépôt.';}).catch(function(e){toast(e.message||'Génération XLSX impossible.','error');}).finally(function(){xlsx.disabled=!current;});});
+    csv.addEventListener('click',function(){if(!current)return;var active=S.currentDossier();if(!active||active.id!==dossier.id){toast('Le dossier actif a changé; recalculer la préparation.','warning');return;}if(!hasDemoPermission(getActiveDemoMember(),'accounting','data.export',accountingAccessContext(dossier))){toast('Le droit data.export est requis.','warning');return;}downloadFile('Points-a-verifier-IS-'+safeFilePart(dossier.reference||dossier.name)+'.csv',IsDeclaration.buildGapCsv(current),'text/csv;charset=utf-8');});
   }
 
   function bindOhadaFinancialStatements() {
@@ -26569,6 +26621,11 @@
     });
     $('[data-ohada-edit]').addEventListener('click', function () {
       if (!selectedKey) { toast('Sélectionnez un état dans la liste.', 'warning'); return; }
+      if (selectedKey === 'is-declaration') {
+        var dossier=S.currentDossier();
+        if(!dossier){toast('Aucun dossier actif.','warning');return;}
+        result.innerHTML=isDeclarationView(dossier);bindIsDeclaration();return;
+      }
       if (selectedKey === 'financial-statements') {
         var generation = S.ohadaResultGeneration();
         if (!generation.generatedAt) {

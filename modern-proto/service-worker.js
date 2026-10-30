@@ -3,13 +3,14 @@
  * Stratégie : réseau d'abord (contenu toujours à jour), cache en secours hors ligne.
  */
 
-const CACHE_NAME = 'perfecto-static-v149';
+const CACHE_NAME = 'perfecto-static-v150';
 const APP_SHELL = [
   './',
   './index.html',
   './assets/OHADAr-template.xlsx',
   './assets/aib-suppliers-template.xlsx',
   './assets/vat-declaration-template.xlsx',
+  './assets/is-declaration-template.xlsx',
   './css/modern.css',
   './css/accounting-configuration.css',
   './css/table-design-system.css',
@@ -32,6 +33,7 @@ const APP_SHELL = [
   './css/nominative-declaration-report.css',
   './css/bic-advances-report.css',
   './css/ohada-financial-statements.css',
+  './css/is-declaration.css',
   './js/accounting-chart.js',
   './js/accounting-framework.js',
   './js/store.js',
@@ -60,6 +62,7 @@ const APP_SHELL = [
   './js/nominative-declaration-report.js',
   './js/bic-advances-report.js',
   './js/ohada-financial-statements.js',
+  './js/is-declaration.js',
   './js/currency-balance-report.js',
   './js/currency-supplementary-reports.js',
   './js/budget-reports.js',
