@@ -11,6 +11,7 @@
   var AccountingNavigation = window.PerfectoAccountingNavigation;
   var AccountingBridge = window.PerfectoAccountingBridge;
   var AccountingFramework = window.PerfectoAccountingFramework;
+  var AccountSearch = window.PerfectoAccountSearch;
   var FinancialFrameworkEditionReport = window.PerfectoAccountingFrameworkEdition;
   var BalanceItems = window.PerfectoBalanceItems;
   var BalanceItemsEditionReport = window.PerfectoBalanceItemsEdition;
@@ -83,6 +84,21 @@
 
   function $(selector, root) { return (root || document).querySelector(selector); }
   function $$(selector, root) { return Array.prototype.slice.call((root || document).querySelectorAll(selector)); }
+
+  function filterAccountPickerRows(rows, query, textAttribute) {
+    var needle = String(query || '').trim();
+    (rows || []).forEach(function (row) {
+      var checkbox = row.querySelector('input[type="checkbox"]');
+      var code = checkbox ? checkbox.value : '';
+      var text = row.getAttribute(textAttribute || 'data-picker-text') || '';
+      var linkedCodes = row.getAttribute('data-account-codes');
+      var codePrefix = AccountSearch.codeQuery(needle);
+      var linkedCodeMatch = !!(codePrefix && linkedCodes && linkedCodes.split(/[\s,;]+/).some(function (linkedCode) {
+        return String(linkedCode).toLocaleLowerCase('fr').indexOf(codePrefix) === 0;
+      }));
+      row.hidden = !!needle && !linkedCodeMatch && !AccountSearch.matches(code, text, needle);
+    });
+  }
 
   function money(value) { return S.money(value); }
   function amount(value) { return S.amount(value); }
@@ -1962,9 +1978,9 @@
       var normalizedLabel = label.toLocaleLowerCase('fr');
       if (!byLabel[normalizedLabel]) byLabel[normalizedLabel] = [];
       byLabel[normalizedLabel].push(account);
-      options.push('<option value="' + esc(code + ' — ' + label) + '" label="Compte imputable · classe ' + esc(account.cls) + '"></option>');
+      options.push({ account: account, html: '<option value="' + esc(code + ' — ' + label) + '" label="Compte imputable · classe ' + esc(account.cls) + '"></option>' });
     });
-    entryAccountCatalogCache[key] = { accounts: accounts, byCode: byCode, byLabel: byLabel, optionsHtml: options.join('') };
+    entryAccountCatalogCache[key] = { accounts: accounts, byCode: byCode, byLabel: byLabel, options: options, optionsHtml: options.map(function (option) { return option.html; }).join('') };
     return entryAccountCatalogCache[key];
   }
 
@@ -1987,8 +2003,18 @@
     return labelMatches.length === 1 ? labelMatches[0] : null;
   }
 
-  function entryAccountDatalist(journalCode) {
-    return entryAccountCatalog(journalCode).optionsHtml;
+  function entryAccountDatalist(journalCode, query) {
+    var catalog = entryAccountCatalog(journalCode);
+    if (!String(query || '').trim()) return catalog.optionsHtml;
+    return catalog.options.filter(function (option) {
+      return AccountSearch.matches(option.account.code, option.account.label, query);
+    }).map(function (option) { return option.html; }).join('');
+  }
+
+  function refreshEntryAccountDatalist(input) {
+    var list = $('#entry-account-suggestions');
+    if (!list) return;
+    list.innerHTML = entryAccountDatalist(($('#e-journal') || {}).value || '', input ? input.value : '');
   }
 
   function entryDescriptionDatalist(journalCode) {
@@ -2098,6 +2124,7 @@
         var account = resolveEntryAccount(input.value, ($('#e-journal') || {}).value || '');
         if (account) input.value = account.code;
       }
+      refreshEntryAccountDatalist(input);
       entryAccountInputStatus(input);
       refreshEntryCounterpartSuggestions();
     };
@@ -2336,8 +2363,8 @@
     var standardCount = allAccounts.filter(function (account) { return !account.legacy; }).length;
     var list = allAccounts.filter(function (a) {
       if (filter.status !== 'all' && (a.legacy || a.active === false)) return false;
-      var text = [a.code, a.label, a.classLabel, a.subclass, a.subclassLabel, a.usage, a.nature].join(' ').toLowerCase();
-      if (filter.q && text.indexOf(filter.q.toLowerCase()) === -1) return false;
+      var text = [a.label, a.classLabel, a.subclass, a.subclassLabel, a.usage, a.nature].join(' ');
+      if (filter.q && !AccountSearch.matches(a.code, text, filter.q)) return false;
       if (filter.cls && String(a.cls) !== filter.cls) return false;
       if (filter.nature && a.nature !== filter.nature) return false;
       return true;
@@ -2948,8 +2975,7 @@
   function viewBalance() {
     var filter = ui.balance;
     var rows = S.balance().filter(function (r) {
-      var text = (r.code + ' ' + r.label).toLowerCase();
-      if (filter.q && text.indexOf(filter.q.toLowerCase()) === -1) return false;
+      if (filter.q && !AccountSearch.matches(r.code, r.label, filter.q)) return false;
       if (filter.cls && String(r.cls) !== filter.cls) return false;
       return true;
     });
@@ -3419,6 +3445,13 @@
     return '<label class="journal-lines-column-option aged-balance-column-option"><input type="checkbox" data-aged-balance-column="' + esc(column.key) + '"' + (session.columns[column.key] ? ' checked' : '') + '><span>' + esc(column.label) + '</span></label>';
   }
 
+  function agedBalanceAccountDatalist(accounts, value) {
+    var token = String(value || '').split(/[\s,;]+/).pop().replace(/^-/, '');
+    return (accounts || []).filter(function (account) {
+      return !token || token === '*' || AccountSearch.matches(account.code, account.label, token);
+    }).map(function (account) { return '<option value="' + esc(account.code) + '">' + esc(account.label) + '</option>'; }).join('');
+  }
+
   function agedBalanceReportSelectionView(session) {
     var natureOptions = AgedBalanceReport.NATURES.map(function (nature) {
       return '<option value="' + esc(nature.key) + '"' + (session.filters.nature === nature.key ? ' selected' : '') + '>' + esc(nature.label) + '</option>';
@@ -3426,7 +3459,7 @@
     var accounts = S.accounts().filter(function (account) { return account.active !== false && account.postable !== false; }).slice().sort(function (left, right) {
       return String(left.code).localeCompare(String(right.code), 'fr', { numeric: true });
     });
-    var accountHints = accounts.map(function (account) { return '<option value="' + esc(account.code) + '">' + esc(account.label) + '</option>'; }).join('');
+    var accountHints = agedBalanceAccountDatalist(accounts, session.filters.accounts);
     var registerCount = S.agedBalanceItems().length;
     var standardColumns = AGED_BALANCE_COLUMN_DEFINITIONS.filter(function (column) { return !column.ageBucket; });
     return agedBalanceReportSteps('selection') +
@@ -3862,6 +3895,11 @@
       if (selectionForm) {
         var natureInput = $('#aged-balance-nature', selectionForm);
         var accountInput = $('#aged-balance-accounts', selectionForm);
+        var accountHintList = $('#aged-balance-account-suggestions', selectionForm);
+        if (accountInput && accountHintList) accountInput.addEventListener('input', function () {
+          var hintAccounts = S.accounts().filter(function (account) { return account.active !== false && account.postable !== false; });
+          accountHintList.innerHTML = agedBalanceAccountDatalist(hintAccounts, accountInput.value);
+        });
         if (natureInput && accountInput) {
           var lastNatureKey = natureInput.value;
           natureInput.addEventListener('change', function () {
@@ -4009,7 +4047,7 @@
     var allToggle = $('#general-balance-picker-all', modalRoot);
     if (search) search.addEventListener('input', function () {
       var query = search.value.trim().toLocaleLowerCase();
-      pickerRows.forEach(function (row) { row.hidden = !!query && row.getAttribute('data-picker-text').toLocaleLowerCase().indexOf(query) === -1; });
+      filterAccountPickerRows(pickerRows, query);
     });
     var accountCheckboxes = $$('[data-general-balance-picker-account]', modalRoot);
     if (allToggle) allToggle.addEventListener('change', function () {
@@ -4352,7 +4390,7 @@
       var currencyChecks = $$('[data-currency-balance-picker-currency]', modalRoot);
       if (currencySearch) currencySearch.addEventListener('input', function () {
         var query = currencySearch.value.trim().toLocaleLowerCase();
-        currencyRows.forEach(function (row) { row.hidden = !!query && row.getAttribute('data-picker-text').toLocaleLowerCase().indexOf(query) === -1; });
+        filterAccountPickerRows(currencyRows, query);
       });
       if (allCurrencies) allCurrencies.addEventListener('change', function () { currencyChecks.forEach(function (checkbox) { checkbox.checked = allCurrencies.checked; }); });
       currencyChecks.forEach(function (checkbox) { checkbox.addEventListener('change', function () {
@@ -4391,7 +4429,7 @@
     var accountChecks = $$('[data-currency-balance-picker-account]', modalRoot);
     if (accountSearch) accountSearch.addEventListener('input', function () {
       var query = accountSearch.value.trim().toLocaleLowerCase();
-      accountPickerRows.forEach(function (row) { row.hidden = !!query && row.getAttribute('data-picker-text').toLocaleLowerCase().indexOf(query) === -1; });
+      filterAccountPickerRows(accountPickerRows, query);
     });
     if (allAccounts) allAccounts.addEventListener('change', function () { accountChecks.forEach(function (checkbox) { checkbox.checked = allAccounts.checked; }); });
     accountChecks.forEach(function (checkbox) { checkbox.addEventListener('change', function () {
@@ -7766,7 +7804,7 @@
     var checkboxes = $$('[data-fixed-asset-additional-code]', modalRoot);
     if (search) search.addEventListener('input', function () {
       var query = search.value.trim().toLocaleLowerCase();
-      pickerRows.forEach(function (row) { row.hidden = !!query && row.getAttribute('data-picker-text').toLocaleLowerCase().indexOf(query) === -1; });
+      filterAccountPickerRows(pickerRows, query);
     });
     if (allToggle) allToggle.addEventListener('change', function () { checkboxes.forEach(function (checkbox) { checkbox.checked = allToggle.checked; }); });
     checkboxes.forEach(function (checkbox) {
@@ -15546,7 +15584,7 @@
     var checkboxes = $$('[data-financial-framework-edition-picker-code]', modalRoot);
     if (search) search.addEventListener('input', function () {
       var query = search.value.trim().toLocaleLowerCase();
-      pickerRows.forEach(function (row) { row.hidden = !!query && row.getAttribute('data-picker-text').toLocaleLowerCase().indexOf(query) === -1; });
+      filterAccountPickerRows(pickerRows, query);
     });
     if (allToggle) allToggle.addEventListener('change', function () { checkboxes.forEach(function (checkbox) { checkbox.checked = allToggle.checked; }); });
     checkboxes.forEach(function (checkbox) {
@@ -15919,7 +15957,7 @@
     var boxes = $$('[data-associated-items-picker-code]', modalRoot);
     if (search) search.addEventListener('input', function () {
       var needle = search.value.trim().toLocaleLowerCase();
-      optionRows.forEach(function (row) { row.hidden = needle && row.getAttribute('data-picker-text').toLocaleLowerCase().indexOf(needle) === -1; });
+      filterAccountPickerRows(optionRows, needle);
     });
     if (all) all.addEventListener('change', function () { boxes.forEach(function (box) { box.checked = all.checked; }); });
     boxes.forEach(function (box) { box.addEventListener('change', function () { if (!box.checked && all) all.checked = false; }); });
@@ -16110,7 +16148,7 @@
     var boxes = $$('[data-definitions-plans-picker-code]', root);
     if (search) search.addEventListener('input', function () {
       var needle = search.value.trim().toLocaleLowerCase();
-      optionRows.forEach(function (row) { row.hidden = needle && row.getAttribute('data-picker-text').toLocaleLowerCase().indexOf(needle) === -1; });
+      filterAccountPickerRows(optionRows, needle);
     });
     if (all) all.addEventListener('change', function () { boxes.forEach(function (box) { box.checked = all.checked; }); });
     boxes.forEach(function (box) { box.addEventListener('change', function () { if (!box.checked && all) all.checked = false; }); });
@@ -16238,7 +16276,7 @@
     var checkboxes = $$('[data-accounting-plan-edition-picker-code]', modalRoot);
     if (search) search.addEventListener('input', function () {
       var query = search.value.trim().toLocaleLowerCase();
-      pickerRows.forEach(function (row) { row.hidden = !!query && row.getAttribute('data-picker-text').toLocaleLowerCase().indexOf(query) === -1; });
+      filterAccountPickerRows(pickerRows, query);
     });
     if (allToggle) allToggle.addEventListener('change', function () { checkboxes.forEach(function (checkbox) { checkbox.checked = allToggle.checked; }); });
     checkboxes.forEach(function (checkbox) {
@@ -16551,7 +16589,7 @@
     var rows = records.map(function (post, index) {
       var checked = selectAll || (current.valid && BalanceItemsEditionReport.postMatches(post.code, current));
       var searchText = post.code + ' ' + post.label + ' ' + BalanceItemsEditionReport.formatAccounts(post);
-      return '<label class="journal-lines-picker-option balance-items-edition-picker-option" data-picker-text="' + esc(searchText) + '"><input type="checkbox" data-balance-items-edition-picker-code value="' + esc(post.code) + '" id="' + prefix + '-' + index + '"' + (checked ? ' checked' : '') + '><strong>' + esc(post.code) + '</strong><span>' + esc(post.label) + '</span></label>';
+      return '<label class="journal-lines-picker-option balance-items-edition-picker-option" data-picker-text="' + esc(searchText) + '" data-account-codes="' + esc((post.accounts || []).join(' ')) + '"><input type="checkbox" data-balance-items-edition-picker-code value="' + esc(post.code) + '" id="' + prefix + '-' + index + '"' + (checked ? ' checked' : '') + '><strong>' + esc(post.code) + '</strong><span>' + esc(post.label) + '</span></label>';
     }).join('');
     var body = '<div class="journal-lines-picker"><div class="field"><label for="' + prefix + '-search">Rechercher un poste</label><input id="' + prefix + '-search" type="search" placeholder="Code, intitulé ou compte"></div>' +
       '<label class="journal-lines-picker-all"><input id="' + prefix + '-all" type="checkbox"' + (selectAll ? ' checked' : '') + '>Tous les postes du PDF</label>' +
@@ -16565,7 +16603,7 @@
     var checkboxes = $$('[data-balance-items-edition-picker-code]', modalRoot);
     if (search) search.addEventListener('input', function () {
       var query = search.value.trim().toLocaleLowerCase();
-      pickerRows.forEach(function (row) { row.hidden = !!query && row.getAttribute('data-picker-text').toLocaleLowerCase().indexOf(query) === -1; });
+      filterAccountPickerRows(pickerRows, query);
     });
     if (allToggle) allToggle.addEventListener('change', function () { checkboxes.forEach(function (checkbox) { checkbox.checked = allToggle.checked; }); });
     checkboxes.forEach(function (checkbox) {
@@ -17864,6 +17902,11 @@
     }).filter(function (item) {
       if (!lineQuery) return true;
       var metadata = item.sourceMetadata;
+      if (AccountSearch.codeQuery(lineQuery)) {
+        return AccountSearch.matches(item.line.sourceRow, '', lineQuery) ||
+          AccountSearch.matches(item.line.account, '', lineQuery) ||
+          AccountSearch.matches(metadata.auxiliaryAccount, '', lineQuery);
+      }
       return [item.index + 1, item.line.sourceRow, item.line.account, item.line.accountLabel,
         metadata.auxiliaryAccount, metadata.auxiliaryLabel].join(' ').toLocaleLowerCase().indexOf(lineQuery) !== -1;
     });
@@ -25916,7 +25959,7 @@
     var pickerRows = $$('.vat-difference-picker-row', modalRoot);
     search.addEventListener('input', function () {
       var query = search.value.trim().toLocaleLowerCase();
-      pickerRows.forEach(function (row) { row.hidden = !!query && row.getAttribute('data-vat-picker-text').toLocaleLowerCase().indexOf(query) === -1; });
+      filterAccountPickerRows(pickerRows, query, 'data-vat-picker-text');
     });
     $('[data-vat-difference-picker-apply]', modalRoot).addEventListener('click', function () {
       input.value = $$('[data-vat-difference-picker-account]:checked', modalRoot).map(function (checkbox) { return checkbox.value; }).join(', ');
@@ -26401,7 +26444,7 @@
     var pickerRows = $$('.vat-payment-picker-row', modalRoot);
     search.addEventListener('input', function () {
       var query = search.value.trim().toLocaleLowerCase();
-      pickerRows.forEach(function (row) { row.hidden = !!query && row.getAttribute('data-vat-payment-picker-text').toLocaleLowerCase().indexOf(query) === -1; });
+      filterAccountPickerRows(pickerRows, query, 'data-vat-payment-picker-text');
     });
     $('[data-vat-payment-picker-apply]', modalRoot).addEventListener('click', function () {
       input.value = $$('[data-vat-payment-picker-account]:checked', modalRoot).map(function (checkbox) { return checkbox.value; }).join(', ');
@@ -26733,7 +26776,7 @@
     var modalRoot = $('#modal-root');
     $('#aib-suppliers-picker-search', modalRoot).addEventListener('input', function (event) {
       var query = event.target.value.trim().toLocaleLowerCase();
-      $$('.aib-suppliers-picker-row', modalRoot).forEach(function (row) { row.hidden = !!query && row.getAttribute('data-aib-picker-text').toLocaleLowerCase().indexOf(query) === -1; });
+      filterAccountPickerRows($$('.aib-suppliers-picker-row', modalRoot), query, 'data-aib-picker-text');
     });
     $('[data-aib-picker-apply]', modalRoot).addEventListener('click', function () {
       input.value = AibSuppliersReport.cleanAccounts($$('[data-aib-picker-account]:checked', modalRoot).map(function (checkbox) { return checkbox.value; })).join(', ');
@@ -28442,7 +28485,7 @@
       var pickerRows = $$('.account-controls-picker-row', modalRoot);
       if (search) search.addEventListener('input', function () {
         var query = search.value.trim().toLocaleLowerCase();
-        pickerRows.forEach(function (row) { row.hidden = !!query && row.getAttribute('data-picker-text').toLocaleLowerCase().indexOf(query) === -1; });
+        filterAccountPickerRows(pickerRows, query);
       });
       modalRoot.addEventListener('click', function (event) {
         var applyButton = event.target.closest ? event.target.closest('[data-account-controls-picker-apply]') : null;
@@ -29594,7 +29637,7 @@
         var positioned = positioningRows.find(function (record) { return String(record.accountCode).toLocaleLowerCase('fr') === positionValue; }) ||
           positioningRows.find(function (record) {
             var account = S.account(record.accountCode);
-            return String(record.accountCode + ' ' + (account && account.label || '') + ' ' + record.label).toLocaleLowerCase('fr').indexOf(positionValue) !== -1;
+            return AccountSearch.matches(record.accountCode, [account && account.label || '', record.label].join(' '), positionValue);
           });
         if (!positioned) { toast('Aucun report ne correspond à « ' + ui.openingBalances.position + ' ». ', 'warning'); break; }
         ui.openingBalances.selectedId = positioned.id;

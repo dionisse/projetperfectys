@@ -6,6 +6,9 @@
 (function (root) {
   'use strict';
 
+  var AccountSearch = root.PerfectoAccountSearch;
+  if (!AccountSearch && typeof require === 'function') AccountSearch = require('./account-search.js');
+
   function compareCode(a, b) {
     return String(a == null ? '' : a).localeCompare(String(b == null ? '' : b), undefined, { numeric: true, sensitivity: 'base' });
   }
@@ -132,8 +135,12 @@
       return normalize([node.code, node.label, node.auxiliaryType, node.accountCode, node.account && node.account.subclassLabel].join(' '));
     }
 
+    var codePrefix = AccountSearch && AccountSearch.codeQuery(needle);
+
     function visit(node, forceDescendants) {
-      var matches = !!needle && searchText(node).indexOf(needle) !== -1;
+      var matches = !!needle && (codePrefix
+        ? [node.code, node.accountCode].some(function (code) { return String(code || '').toLocaleLowerCase().indexOf(codePrefix) === 0; })
+        : searchText(node).indexOf(needle) !== -1);
       var force = forceDescendants || (matches && node.kind !== 'auxiliary');
       var children = (node.children || []).map(function (child) { return visit(child, force); }).filter(Boolean);
       var typeAllowed = mode === 'all' || (mode === 'general' && node.kind !== 'auxiliary') || (mode === 'auxiliary' && node.kind === 'auxiliary');

@@ -6,6 +6,9 @@
 (function (root) {
   'use strict';
 
+  var AccountSearch = root.PerfectoAccountSearch;
+  if (!AccountSearch && typeof require === 'function') AccountSearch = require('./account-search.js');
+
   var metadata = Object.freeze({
     "standard": "SYSCOHADA révisé",
     "sourceFile": "cadre comptable syscohada révisé.pdf",
@@ -6234,7 +6237,13 @@
   function search(query) {
     var needle = normalize(query).trim();
     if (!needle) return ROWS;
+    var codePrefix = AccountSearch && AccountSearch.codeQuery(needle);
     return ROWS.filter(function (row) {
+      if (codePrefix) {
+        return [row.code, row.debit && row.debit.code, row.credit && row.credit.code].some(function (code) {
+          return String(code || '').toLocaleLowerCase('fr').indexOf(codePrefix) === 0;
+        });
+      }
       var fields = [row.code, row.label];
       if (row.debit) fields.push(row.debit.code, row.debit.label);
       if (row.credit) fields.push(row.credit.code, row.credit.label);

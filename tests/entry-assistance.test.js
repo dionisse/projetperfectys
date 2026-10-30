@@ -21,7 +21,10 @@ const accounts = [
   { code: '401000', label: 'Fournisseurs', cls: 4, active: true, postable: true },
   { code: '512000', label: 'Banque', cls: 5, active: true, postable: true },
   { code: '570000', label: 'Caisse inactive', cls: 5, active: false, postable: true },
-  { code: '601100', label: 'Achats', cls: 6, active: true, postable: true }
+  { code: '601100', label: 'Achats', cls: 6, active: true, postable: true },
+  { code: '230100', label: 'Immobilisations', cls: 2, active: true, postable: true },
+  { code: '601230', label: 'Compte dont le code contient 23', cls: 6, active: true, postable: true },
+  { code: '123230', label: 'Compte dont le code contient 23', cls: 1, active: true, postable: true }
 ];
 const entries = [
   { status: 'posted', journal: 'AC', description: 'Facture fournisseur', lines: [{ account: '601000' }, { account: '401000' }, { account: '401000' }] },
@@ -35,6 +38,7 @@ const sandbox = {
   entryAccountCatalogCache: Object.create(null),
   entryCounterpartIndexCache: null,
   esc: value => String(value),
+  AccountSearch: require('../modern-proto/js/account-search.js'),
   S: {
     entries: () => { entryReads += 1; return entries; },
     accounts: () => accounts,
@@ -49,11 +53,12 @@ vm.runInNewContext(
   extractFunction('entryAccountCatalog', 'allowedEntryAccounts') +
   extractFunction('allowedEntryAccounts', 'resolveEntryAccount') +
   extractFunction('resolveEntryAccount', 'entryAccountDatalist') +
+  extractFunction('entryAccountDatalist', 'entryDescriptionDatalist') +
   extractFunction('entryDescriptionDatalist', 'entryCounterpartIndex') +
   extractFunction('entryCounterpartIndex', 'entryAccountInputStatus') +
   'globalThis.entryDescriptionDatalist = entryDescriptionDatalist;' +
   extractFunction('entryCounterpartSuggestions', 'refreshEntryCounterpartSuggestions') +
-  'globalThis.resolveEntryAccount = resolveEntryAccount; globalThis.entryCounterpartSuggestions = entryCounterpartSuggestions;',
+  'globalThis.resolveEntryAccount = resolveEntryAccount; globalThis.entryAccountDatalist = entryAccountDatalist; globalThis.entryCounterpartSuggestions = entryCounterpartSuggestions;',
   sandbox
 );
 
@@ -63,6 +68,9 @@ assert.equal(sandbox.resolveEntryAccount('Fournisseurs', 'AC').code, '401000', '
 assert.equal(sandbox.resolveEntryAccount('Achats', 'AC'), null, 'un intitulé partagé reste ambigu et n’est pas choisi au hasard');
 assert.equal(sandbox.resolveEntryAccount('512000', 'AC'), null, 'un compte interdit par le journal n’est pas reconnu comme choix valide');
 assert.equal(sandbox.resolveEntryAccount('compte inconnu', 'AC'), null, 'un compte absent du plan n’est pas inventé');
+const prefixOptions = sandbox.entryAccountDatalist('AC', '23');
+assert.match(prefixOptions, /230100 — Immobilisations/);
+assert.doesNotMatch(prefixOptions, /601230|123230/, 'la suggestion par numéro exige un préfixe de code, pas une occurrence au milieu');
 
 const suggestions = sandbox.entryCounterpartSuggestions('AC', ['601000']);
 assert.equal(

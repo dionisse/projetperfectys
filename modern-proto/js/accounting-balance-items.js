@@ -5,10 +5,12 @@
  */
 (function (root, factory) {
   'use strict';
-  var api = factory();
+  var AccountSearch = root.PerfectoAccountSearch;
+  if (!AccountSearch && typeof require === 'function') AccountSearch = require('./account-search.js');
+  var api = factory(AccountSearch);
   root.PerfectoBalanceItems = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof window !== 'undefined' ? window : globalThis, function () {
+})(typeof window !== 'undefined' ? window : globalThis, function (AccountSearch) {
   'use strict';
 
   var metadata = Object.freeze({
@@ -814,7 +816,12 @@
   function search(query) {
     var needle = String(query == null ? '' : query).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr').trim();
     if (!needle) return POSTS;
+    var codePrefix = AccountSearch && AccountSearch.codeQuery(needle);
     return POSTS.filter(function (post) {
+      if (codePrefix) {
+        var codes = [post.code].concat(post.accounts || []).join(' ').split(/[\s,;]+/).filter(Boolean);
+        return codes.some(function (code) { return String(code).toLocaleLowerCase('fr').indexOf(codePrefix) === 0; });
+      }
       var fields = [post.code, post.label].concat(post.accounts);
       return fields.join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr').indexOf(needle) !== -1;
     });
