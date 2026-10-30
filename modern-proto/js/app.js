@@ -26602,7 +26602,8 @@
   }
   function bindIbaDeclaration() {
     var form=$('#iba-declaration-form');if(!form)return;var dossier=S.currentDossier(),result=$('#iba-declaration-result'),status=$('#iba-declaration-status'),prepared=null,exportButton=$('[data-iba-export]',form),printButton=$('[data-iba-print]',form);
-    var back=$('[data-iba-back]');if(back)back.addEventListener('click',function(){form.closest('.iba-declaration-workspace').parentNode.innerHTML='';});
+    var layout=form.closest('.edition-report-detail-view')&&$('.ohada-statements-layout',form.closest('.edition-report-detail-view'));
+    var back=$('[data-iba-back]');if(back)back.addEventListener('click',function(){if(layout)layout.hidden=false;form.closest('.iba-declaration-workspace').parentNode.innerHTML='';});
     $('[data-iba-ohada-suggestion]',form).addEventListener('click',function(){try{var suggestion=ibaOhadaProfitSuggestion();var message='Proposition depuis les postes OHADA mappés : produits '+S.money(suggestion.income)+' − charges '+S.money(suggestion.expenses)+' = '+S.money(suggestion.profit)+'. Cette somme suppose que tous ces postes sont pertinents pour la déclaration et attribuables au Bénin. La conserver ?';if(!window.confirm(message))return;var field=$('[data-iba-field="accountingResultBenin"]',form);field.value=String(suggestion.profit);field.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){toast(e.message||'Impossible de proposer un résultat OHADA.','warning');}});
     function invalidate(){if(prepared){prepared=null;exportButton.disabled=true;printButton.disabled=true;result.innerHTML='';status.textContent='Données modifiées : recalculer avant export ou impression.';}}
     form.addEventListener('input',invalidate);form.addEventListener('change',invalidate);
@@ -26667,6 +26668,12 @@
     if (!list) return;
     var result = $('#ohada-statements-result');
     var selectedKey = (OhadaFinancialStatements.item(OhadaFinancialStatements.DEFAULT_SELECTED_KEY) || OhadaFinancialStatements.ITEMS.find(function (item) { return !item.separator; }) || {}).key || '';
+    function openIbaDeclarationForm() {
+      var dossier=S.currentDossier();
+      if(!dossier){toast('Aucun dossier actif.','warning');return;}
+      var layout=$('.ohada-statements-layout');if(layout)layout.hidden=true;
+      result.innerHTML=ibaDeclarationView(dossier);bindIbaDeclaration();
+    }
     list.addEventListener('click', function (event) {
       var choice = event.target.closest('[data-ohada-statement]');
       if (!choice) return;
@@ -26676,6 +26683,8 @@
         item.classList.toggle('is-selected', selected);
         item.setAttribute('aria-selected', selected ? 'true' : 'false');
       });
+      if(selectedKey==='iba-declaration')openIbaDeclarationForm();
+      else result.innerHTML='';
     });
     list.addEventListener('keydown', function (event) {
       if (event.target.matches('[data-ohada-statement]') && (event.key === 'Enter' || event.key === ' ')) {
@@ -26685,11 +26694,7 @@
     });
     $('[data-ohada-edit]').addEventListener('click', function () {
       if (!selectedKey) { toast('Sélectionnez un état dans la liste.', 'warning'); return; }
-      if (selectedKey === 'iba-declaration') {
-        var dossier=S.currentDossier();
-        if(!dossier){toast('Aucun dossier actif.','warning');return;}
-        result.innerHTML=ibaDeclarationView(dossier);bindIbaDeclaration();return;
-      }
+      if (selectedKey === 'iba-declaration') { openIbaDeclarationForm(); return; }
       if (selectedKey === 'is-declaration') {
         var dossier=S.currentDossier();
         if(!dossier){toast('Aucun dossier actif.','warning');return;}

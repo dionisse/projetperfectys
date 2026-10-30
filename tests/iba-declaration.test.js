@@ -97,6 +97,7 @@ assert.ok(statements.ITEMS.some(x => x.key === 'iba-declaration' && /Déclaratio
 assert.match(html, /css\/iba-declaration\.css/);
 assert.match(html, /js\/iba-declaration\.js/);
 assert.match(app, /bindIbaDeclaration/);
+assert.match(app, /if\(selectedKey==='iba-declaration'\)openIbaDeclarationForm\(\)/);
 assert.match(app, /Proposer le résultat depuis la balance OHADA/);
 assert.match(worker, /js\/iba-declaration\.js/);
 assert.match(worker, /css\/iba-declaration\.css/);
