@@ -39,7 +39,7 @@ assert.deepEqual(Array.from(sandbox.historyEntries('AC'), entry => entry.id), ['
 const historyHtml = sandbox.renderHistory('AC');
 assert.ok(historyHtml.indexOf('AC-03') < historyHtml.indexOf('AC-02') && historyHtml.indexOf('AC-02') < historyHtml.indexOf('AC-01'));
 assert.doesNotMatch(historyHtml, /BQ-01/, 'les pièces d’un autre journal sont exclues');
-const historyHeadings = ['Date', 'N° de pièce', 'Compte', 'Référence', 'Débit', 'Crédit', 'Libellé', 'Statut'];
+const historyHeadings = ['Date', 'N° de pièce', 'Compte', 'Débit', 'Crédit', 'Référence', 'Libellé', 'Statut'];
 let previousHeadingPosition = -1;
 historyHeadings.forEach(heading => {
   const position = historyHtml.indexOf('<th scope="col"' + (heading === 'Débit' || heading === 'Crédit' ? ' class="num"' : '') + '>' + heading + '</th>');
