@@ -3477,9 +3477,11 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .entry-revision-snapshot ul { margin: 4px 0 0 16px; }
 .entry-journal-history { margin-top: 18px; }
 .entry-journal-history .table-wrap { max-height: 560px; overflow: auto; }
-.entry-journal-history .data-table { font-size: .72rem; line-height: 1.25; }
-.entry-journal-history .data-table th { padding: 6px 7px; font-size: .62rem; }
-.entry-journal-history .data-table td { padding: 5px 7px; }
+.entry-journal-history .data-table { font-size: .68rem; line-height: 1.2; }
+.entry-journal-history .data-table th { padding: 5px 6px; font-size: .58rem; }
+.entry-journal-history .data-table td { padding: 4px 6px; }
+.entry-journal-history .data-table .btn { padding: 4px 7px; font-size: .68rem; }
+.entry-journal-history .data-table .badge { padding: 2px 6px; font-size: .62rem; }
 .entry-journal-history tbody tr[data-action="open-entry"] { cursor: pointer; }
 .entry-journal-history tbody tr[data-action="open-entry"]:hover { background: #f2f7f3; }
 .entry-journal-history tbody tr.entry-journal-piece-separator { border-top: 2px solid #b8cbbd; border-bottom: 1px solid #dbe7dd; background: #f2f7f3; color: #304b3d; }
