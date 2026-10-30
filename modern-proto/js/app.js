@@ -609,6 +609,7 @@
       case 'close-all-cycle-periods':
         return { moduleId: 'accounting', actionId: 'period.close' };
       case 'open-period':
+      case 'reopen-all-cycle-periods':
         return { moduleId: 'accounting', actionId: 'period.reopen' };
       case 'reset-data':
         return { moduleId: 'accounting', actionId: 'data.reset' };
@@ -14212,19 +14213,23 @@
     ui.periods.year = year;
     var list = S.periodStats(year);
     var openCount = list.filter(function (p) { return p.status === 'open'; }).length;
+    var closedCount = list.length - openCount;
     var years = [year];
     var closeAllAction = openCount
       ? '<button type="button" class="btn btn-primary btn-sm" data-action="close-all-cycle-periods">◷ Clôturer en une fois les ' + openCount + ' périodes ouvertes</button>'
       : '';
+    var reopenAllAction = closedCount
+      ? '<button type="button" class="btn btn-ghost btn-sm" data-action="reopen-all-cycle-periods">↻ Réouvrir en une fois les ' + closedCount + ' périodes clôturées</button>'
+      : '';
 
     var html = pageHeader('Périodes comptables', 'Une période clôturée refuse les nouvelles pièces et la validation des brouillons.',
-      closeAllAction + '<div class="field"><label class="sr-only" for="f-periods-year">Exercice</label>' +
+      closeAllAction + reopenAllAction + '<div class="field"><label class="sr-only" for="f-periods-year">Exercice</label>' +
         '<select id="f-periods-year" data-filter="periods:year">' +
         years.map(function (y) { return '<option value="' + y + '"' + (y === year ? ' selected' : '') + '>Exercice ' + y + '</option>'; }).join('') +
         '</select></div>');
 
-    html += '<div class="alert info">Exercice <strong>' + year + '</strong> (' + dateLabel(dossier.cycleStart) + ' au ' + dateLabel(dossier.cycleEnd) + ') : ' + openCount + ' période(s) ouverte(s) sur ' + list.length + '. ' +
-      'Vous pouvez clôturer toutes les périodes ouvertes du cycle en une seule confirmation ; elles restent réouvrables individuellement. Cette opération ne clôture pas définitivement l’exercice et ne modifie aucune pièce.</div>';
+    html += '<div class="alert info">Exercice <strong>' + year + '</strong> (' + dateLabel(dossier.cycleStart) + ' au ' + dateLabel(dossier.cycleEnd) + ') : ' + openCount + ' période(s) ouverte(s) et ' + closedCount + ' clôturée(s) sur ' + list.length + '. ' +
+      'Vous pouvez clôturer ou réouvrir en une seule confirmation toutes les périodes correspondantes du cycle actif. Les pièces ne sont jamais modifiées ; l’arrêt définitif de l’exercice reste séparé.</div>';
 
     html += '<div class="period-grid">' + list.map(function (p) {
       var isOpen = p.status === 'open';
@@ -29315,6 +29320,29 @@
         toast(batchResult.closedCount
           ? batchResult.closedCount + ' période(s) du cycle clôturée(s) en une fois. Aucune pièce n’a été modifiée.'
           : 'Aucune période n’a changé : elles étaient déjà clôturées.', 'success');
+        render();
+        break;
+      }
+      case 'reopen-all-cycle-periods': {
+        var activeDossierForPeriodReopen = S.currentDossier();
+        var closedCyclePeriods = S.periodStats(S.exercise()).filter(function (item) { return item.status === 'closed'; });
+        if (!closedCyclePeriods.length) {
+          toast('Aucune période clôturée à réouvrir dans le cycle actif.', 'info');
+          break;
+        }
+        var closedPeriodNames = closedCyclePeriods.map(function (item) { return S.monthLabel(item.month) + ' ' + item.year; }).join(', ');
+        var reopenConfirmation = 'Réouvrir en une fois les ' + closedCyclePeriods.length + ' période(s) clôturée(s) du cycle ' +
+          dateLabel(activeDossierForPeriodReopen.cycleStart) + ' au ' + dateLabel(activeDossierForPeriodReopen.cycleEnd) + ' ? ' +
+          closedPeriodNames + '. Les nouvelles pièces et validations de brouillons redeviendront possibles dans ces périodes. Aucune pièce ne sera modifiée ou supprimée.';
+        if (!window.confirm(reopenConfirmation)) break;
+        var reopenResult = S.reopenClosedCyclePeriods();
+        if (!reopenResult.ok) {
+          toast((reopenResult.errors || ['Réouverture groupée impossible.']).join(' '), 'error');
+          break;
+        }
+        toast(reopenResult.reopenedCount
+          ? reopenResult.reopenedCount + ' période(s) du cycle réouverte(s) en une fois. Aucune pièce n’a été modifiée.'
+          : 'Aucune période n’a changé : elles étaient déjà ouvertes.', 'success');
         render();
         break;
       }

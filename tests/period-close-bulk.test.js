@@ -50,13 +50,34 @@ const repeated = S.closeOpenCyclePeriods();
 assert.equal(repeated.ok, true);
 assert.equal(repeated.closedCount, 0, 'une relance ne change pas les périodes déjà clôturées');
 
-const reopen = activeCyclePeriods[0];
-S.setPeriod(reopen.year, reopen.month, 'open');
-storageWritesBlocked = true;
-const failedSave = S.closeOpenCyclePeriods();
-storageWritesBlocked = false;
-assert.equal(failedSave.ok, false);
-assert.equal(failedSave.closedCount, 0);
-assert.equal(S.periodStatus(reopen.year, reopen.month), 'open', 'échec de sauvegarde : état en mémoire restauré, aucune clôture partielle');
+const reopened = S.reopenClosedCyclePeriods();
+assert.equal(reopened.ok, true);
+assert.equal(reopened.reopenedCount, activeCyclePeriods.length, 'toutes les périodes clôturées du cycle sont réouvertes ensemble');
+assert.equal(S.periodStats(year).filter(period => period.status === 'closed').length, 0);
+assert.equal(S.periodStatus(year - 1, 12), 'open', 'la réouverture ne touche pas les mois hors cycle');
+assert.equal(JSON.stringify(S.entries()), entriesBefore, 'la réouverture ne modifie aucune pièce');
+const repeatedReopen = S.reopenClosedCyclePeriods();
+assert.equal(repeatedReopen.ok, true);
+assert.equal(repeatedReopen.reopenedCount, 0, 'une relance ne change pas les périodes déjà ouvertes');
 
-console.log('Clôture périodique groupée : cycle actif, relançable et atomique — OK');
+const sample = activeCyclePeriods[0];
+S.setPeriod(sample.year, sample.month, 'closed');
+storageWritesBlocked = true;
+const failedReopen = S.reopenClosedCyclePeriods();
+storageWritesBlocked = false;
+assert.equal(failedReopen.ok, false);
+assert.equal(failedReopen.reopenedCount, 0);
+assert.equal(S.periodStatus(sample.year, sample.month), 'closed', 'échec de sauvegarde : aucune réouverture partielle');
+const reopenedSingle = S.reopenClosedCyclePeriods();
+assert.equal(reopenedSingle.ok, true);
+assert.equal(reopenedSingle.reopenedCount, 1);
+
+S.setPeriod(sample.year, sample.month, 'open');
+storageWritesBlocked = true;
+const failedClose = S.closeOpenCyclePeriods();
+storageWritesBlocked = false;
+assert.equal(failedClose.ok, false);
+assert.equal(failedClose.closedCount, 0);
+assert.equal(S.periodStatus(sample.year, sample.month), 'open', 'échec de sauvegarde : état en mémoire restauré, aucune clôture partielle');
+
+console.log('Clôture périodique groupée : fermeture/réouverture du cycle, idempotence et atomicité — OK');

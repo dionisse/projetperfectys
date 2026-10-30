@@ -623,6 +623,12 @@ assert.match(appSource, /case 'close-all-cycle-periods'[\s\S]*S\.closeOpenCycleP
   'la clôture groupée appelle la mutation atomique du registre de périodes');
 assert.match(appSource, /case 'close-all-cycle-periods':[\s\S]*period\.close/,
   'la clôture groupée conserve le droit comptable period.close');
+assert.match(appSource, /data-action="reopen-all-cycle-periods"[\s\S]*Réouvrir en une fois les/,
+  'la gestion des périodes propose aussi une action de réouverture groupée');
+assert.match(appSource, /case 'reopen-all-cycle-periods'[\s\S]*S\.reopenClosedCyclePeriods\(\)/,
+  'la réouverture groupée utilise la mutation atomique du registre de périodes');
+assert.match(appSource, /case 'reopen-all-cycle-periods':[\s\S]*period\.reopen/,
+  'la réouverture groupée conserve le droit comptable period.reopen');
 assert.equal(findTab('fin-exercice', 'definitive-close').irreversible, true);
 assert.equal(findTab('fin-exercice', 'definitive-close').status, 'planned');
 assert.equal(findTab('parametres', 'dossier-configuration').label, 'Configuration de la Comptabilité');

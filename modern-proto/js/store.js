@@ -5845,6 +5845,31 @@
     };
   }
 
+  function reopenClosedCyclePeriods() {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Réouverture groupée bloquée : contrôlez ou restaurez d’abord la base du dossier.'], reopenedCount: 0, periods: [] };
+    var cycleMonthKeys = Object.create(null);
+    cyclePeriods(st.cycleStart, st.cycleEnd).forEach(function (item) {
+      cycleMonthKeys[item.year + '-' + item.month] = true;
+    });
+    var closedPeriods = st.periods.filter(function (item) {
+      return item && item.status === 'closed' && cycleMonthKeys[Number(item.year) + '-' + Number(item.month)];
+    });
+    if (!closedPeriods.length) return { ok: true, errors: [], reopenedCount: 0, periods: [] };
+    var previousState = clone(st);
+    closedPeriods.forEach(function (item) { item.status = 'open'; });
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Réouverture groupée impossible : l’enregistrement local a échoué. Aucune période n’a été modifiée.'], reopenedCount: 0, periods: [] };
+    }
+    return {
+      ok: true,
+      errors: [],
+      reopenedCount: closedPeriods.length,
+      periods: closedPeriods.map(function (item) { return { year: Number(item.year), month: Number(item.month) }; })
+    };
+  }
+
   /* ---------------- Écritures ---------------- */
   function nextReference(journalCode, date) {
     var dateValue = String(date || '');
@@ -7717,6 +7742,7 @@
     periodStatus: periodStatus,
     setPeriod: setPeriod,
     closeOpenCyclePeriods: closeOpenCyclePeriods,
+    reopenClosedCyclePeriods: reopenClosedCyclePeriods,
     nextReference: nextReference,
     totals: totals,
     validateEntry: visibleValidateEntry,
