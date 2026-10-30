@@ -64,6 +64,10 @@ const review = S.saveTaxAdjustmentReview({ sourceEntryId: sourceEntry.id, source
 assert.equal(review.ok, true, (review.errors || []).join(' '));
 assert.equal(S.taxAdjustmentReviews().length, 1);
 assert.equal(S.saveTaxAdjustmentReview({ sourceEntryId: sourceEntry.id, sourceLineIndex: 1, ruleId: 'is-exempt-security-income', decision: 'article15-government', overrideAmount: 100, note: '' }).ok, false, 'la confirmation article 15 exige une justification');
+assert.equal(S.saveTaxAdjustmentReview({ sourceEntryId: sourceEntry.id, sourceLineIndex: 1, ruleId: 'is-sumptuous-expense', decision: 'article33-reintegration', note: '' }).ok, false, 'la réintégration Article 33 exige de confirmer l’exception');
+const article33Review = S.saveTaxAdjustmentReview({ sourceEntryId: sourceEntry.id, sourceLineIndex: 1, ruleId: 'is-sumptuous-expense', decision: 'article33-reintegration', note: 'Activité non principale confirmée.' });
+assert.equal(article33Review.ok, true, (article33Review.errors || []).join(' '));
+assert.equal(S.deleteTaxAdjustmentReview(sourceEntry.id, 1, 'is-sumptuous-expense').ok, true);
 assert.equal(S.deleteTaxAdjustmentReview(sourceEntry.id, 0, 'is-profit-tax').ok, true);
 assert.equal(S.taxAdjustmentReviews().length, 0);
 

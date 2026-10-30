@@ -20,6 +20,8 @@ assert.match(app, /taxAdjustmentAnalysis/);
 assert.match(app, /Reporter les propositions dans IS/);
 assert.match(app, /conditions de fond et de preuve/);
 assert.match(app, /Article 15 confirmé/);
+assert.match(app, /article33-reintegration/);
+assert.match(app, /branche principale/);
 assert.match(app, /apply-tax-adjustments-is/);
 assert.match(app, /article15-standard/);
 assert.match(taxEngine, /article: '15'/);

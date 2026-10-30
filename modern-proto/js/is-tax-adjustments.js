@@ -9,9 +9,10 @@
   var RULES = [
     { id: 'is-profit-tax', article: '35', label: 'Impôt sur les bénéfices comptabilisé', explanation: 'L’article 35 exclut l’impôt sur les bénéfices des impôts déductibles. Détection limitée aux comptes SYSCOHADA explicitement rattachés à l’impôt de l’exercice et aux rappels sur résultats antérieurs.' },
     { id: 'is-penalty', article: '36', label: 'Amende, pénalité ou sanction comptabilisée', explanation: 'L’article 36 rend non déductibles les transactions, amendes, confiscations, pénalités et sanctions visées. Vérifier la nature, la pièce et le rattachement légal.' },
-    { id: 'is-exempt-security-income', article: '15', label: 'Revenu mobilier susceptible d’exonération', explanation: 'L’article 15 vise certains revenus nets de valeurs et capitaux mobiliers figurant à l’actif et atteints par l’IRCM ou exonérés. Après confirmation et saisie du revenu net justifié, le montant déductible proposé est de 70% en règle générale ou 100% pour les produits des titres publics béninois visés.' }
+    { id: 'is-exempt-security-income', article: '15', label: 'Revenu mobilier susceptible d’exonération', explanation: 'L’article 15 vise certains revenus nets de valeurs et capitaux mobiliers figurant à l’actif et atteints par l’IRCM ou exonérés. Après confirmation et saisie du revenu net justifié, le montant déductible proposé est de 70% en règle générale ou 100% pour les produits des titres publics béninois visés.' },
+    { id: 'is-sumptuous-expense', article: '33', label: 'Dépense somptuaire potentielle', explanation: 'L’article 33 exclut certaines dépenses de chasse, pêche sportive, bateaux de plaisance, avions de tourisme, résidences d’agrément et autres dépenses somptuaires, sauf si cette activité constitue la branche principale. Le compte ne prouve pas cette condition : confirmation humaine obligatoire.' }
   ];
-  function norm(value) { return String(value == null ? '' : value).toLocaleLowerCase('fr').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim(); }
+  function norm(value) { return String(value == null ? '' : value).toLocaleLowerCase('fr').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[’']/g, ' ').replace(/\s+/g, ' ').trim(); }
   function lineAmount(line) { var d = Number(line && line.debit) || 0, c = Number(line && line.credit) || 0, n = d - c; return Number.isFinite(n) ? n : 0; }
   function isCharge(account) { return !!(account && account.nature === 'Charge' && (Number(account.cls) === 6 || Number(account.cls) === 8)); }
   function matchingRule(account) {
@@ -19,6 +20,7 @@
     var code = String(account.code == null ? '' : account.code).trim(), label = norm(account.label);
     if (Number(account.cls) === 7 && account.nature === 'Produit' && ['7721', '7722', '7745', '7746'].indexOf(code) !== -1 && /\b(revenus?|produits?).*\b(titres?|participations?|obligations?)\b/.test(label)) return RULES[2];
     if (!isCharge(account)) return null;
+    if (/\b(chasse|peche sportive|bateaux? de plaisance|avions? de tourisme|residences? d agrement|depenses? somptuaires?)\b/.test(label)) return RULES[3];
     var standardTax = ['89', '891', '8911', '8912', '8913', '892'].indexOf(code) !== -1 && String(account.chartOriginCode || '') === code && String(account.subclass || '') === '89';
     var explicitTax = ['891', '892'].indexOf(code) !== -1 && /\bimpots?\b/.test(label) && /\b(resultats?|benefices?)\b/.test(label);
     if (standardTax || explicitTax) return RULES[0];
@@ -53,8 +55,9 @@
         if (!rule) { if (isCharge(account) && raw > 0) unclassifiedExpenseLineCount++; return; }
         var isIncome = rule.id === 'is-exempt-security-income', amount = isIncome ? -raw : raw;
         if (!amount) return;
+        var isSumptuous = rule.id === 'is-sumptuous-expense';
         var key = reviewKey(entry.id, lineIndex, rule.id), review = reviews[key] || null, decision = review && review.decision;
-        if (isIncome && decision === 'automatic') decision = 'awaiting-qualification';
+        if ((isIncome || isSumptuous) && decision === 'automatic') decision = 'awaiting-qualification';
         var positiveSide = isIncome ? 'credit' : 'debit';
         var side = amount > 0 ? positiveSide : (positiveSide === 'debit' ? 'credit' : 'debit');
         var postingCode = postingFor(account.code, side, overrides, framework);
@@ -64,8 +67,9 @@
         if (inBase && decision !== 'exclude') {
           if (isIncome && decision === 'article15-standard') included = (amount < 0 ? -1 : 1) * Number(review.overrideAmount) * 0.7;
           else if (isIncome && decision === 'article15-government') included = (amount < 0 ? -1 : 1) * Number(review.overrideAmount);
+          else if (isSumptuous && decision === 'article33-reintegration') included = amount;
           else if (decision === 'override') included = (amount < 0 ? -1 : 1) * Number(review.overrideAmount);
-          else if (!isIncome) included = amount;
+          else if (!isIncome && !isSumptuous) included = amount;
         }
         proposals.push({ key: key, sourceEntryId: String(entry.id || ''), sourceLineIndex: lineIndex,
           entryReference: String(entry.reference || ''), entryDate: String(entry.date || ''), journal: String(entry.journal || ''),
@@ -73,7 +77,7 @@
           ruleId: rule.id, article: rule.article, ruleLabel: rule.label, explanation: rule.explanation,
           direction: isIncome ? 'deduction' : 'reintegration', proposedAmount: amount, includedAmount: included,
           inIncomeStatementBase: inBase, postingCode: postingCode, postingSide: side,
-          decision: inBase ? (decision || (isIncome ? 'awaiting-qualification' : 'automatic')) : 'not-in-is-base',
+          decision: inBase ? (decision || ((isIncome || isSumptuous) ? 'awaiting-qualification' : 'automatic')) : 'not-in-is-base',
           reviewed: !!review, reviewNote: String(review && review.note || '') });
       });
     });
@@ -82,8 +86,8 @@
     var automaticDeductions = Math.max(0, proposals.reduce(function (s, p) { return s + (p.inIncomeStatementBase && p.direction === 'deduction' ? p.includedAmount : 0); }, 0));
     var manualReintegrations = 0, manualDeductions = 0, manualReintegrationCount = 0, manualDeductionCount = 0;
     (Array.isArray(input.manualAdjustments) ? input.manualAdjustments : []).forEach(function (r) { var n = Number(r && r.amount); if (!Number.isFinite(n) || n <= 0) return; if (r.direction === 'reintegration') { manualReintegrations += n; manualReintegrationCount++; } if (r.direction === 'deduction') { manualDeductions += n; manualDeductionCount++; } });
-    var awaiting = proposals.filter(function (p) { return p.inIncomeStatementBase && p.ruleId === 'is-exempt-security-income' && p.decision === 'awaiting-qualification'; }).length;
-    var importable = proposals.filter(function (p) { return p.inIncomeStatementBase && p.decision !== 'exclude' && p.decision !== 'not-in-is-base' && !(p.ruleId === 'is-exempt-security-income' && p.decision === 'awaiting-qualification'); }).length;
+    var awaiting = proposals.filter(function (p) { return p.inIncomeStatementBase && ['is-exempt-security-income', 'is-sumptuous-expense'].indexOf(p.ruleId) >= 0 && p.decision === 'awaiting-qualification'; }).length;
+    var importable = proposals.filter(function (p) { return p.inIncomeStatementBase && p.decision !== 'exclude' && p.decision !== 'not-in-is-base' && !(['is-exempt-security-income', 'is-sumptuous-expense'].indexOf(p.ruleId) >= 0 && p.decision === 'awaiting-qualification'); }).length;
     return { proposals: proposals, rules: RULES.map(function (r) { return Object.assign({}, r); }), automaticReintegrations: automaticReintegrations,
       automaticDeductions: automaticDeductions, manualReintegrations: manualReintegrations, manualDeductions: manualDeductions,
       reintegrationsToImport: automaticReintegrations + manualReintegrations, deductionsToImport: automaticDeductions + manualDeductions,

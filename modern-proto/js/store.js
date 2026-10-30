@@ -5639,13 +5639,15 @@
     var amount = input.overrideAmount === '' || input.overrideAmount == null ? null : Number(input.overrideAmount);
     var errors = [];
     if (!entryId || !Number.isInteger(lineIndex) || lineIndex < 0) errors.push('La ligne comptable source est invalide.');
-    if (['is-profit-tax', 'is-penalty', 'is-exempt-security-income'].indexOf(ruleId) < 0) errors.push('La règle fiscale source est inconnue.');
-    if (['automatic', 'exclude', 'override', 'article15-standard', 'article15-government'].indexOf(decision) < 0) errors.push('Choisissez une décision de revue valide.');
+    if (['is-profit-tax', 'is-penalty', 'is-exempt-security-income', 'is-sumptuous-expense'].indexOf(ruleId) < 0) errors.push('La règle fiscale source est inconnue.');
+    if (['automatic', 'exclude', 'override', 'article15-standard', 'article15-government', 'article33-reintegration'].indexOf(decision) < 0) errors.push('Choisissez une décision de revue valide.');
     var usesAmount = ['override', 'article15-standard', 'article15-government'].indexOf(decision) >= 0;
     if (usesAmount && (!Number.isFinite(amount) || amount < 0)) errors.push('Le montant saisi doit être un nombre positif ou nul.');
     if (note.length > 500) errors.push('La note ne peut pas dépasser 500 caractères.');
     if (usesAmount && !note) errors.push('Justifiez le montant ou confirmez les conditions d’application.');
     if (ruleId !== 'is-exempt-security-income' && ['article15-standard', 'article15-government'].indexOf(decision) >= 0) errors.push('Ce traitement de l’article 15 ne correspond pas à cette règle.');
+    if (decision === 'article33-reintegration' && ruleId !== 'is-sumptuous-expense') errors.push('La confirmation de l’article 33 ne correspond pas à cette règle.');
+    if (ruleId === 'is-sumptuous-expense' && decision === 'article33-reintegration' && !note) errors.push('Confirmez par une note que l’activité n’est pas la branche principale.');
     var source = st.entries.find(function (entry) { return entry && entry.id === entryId && entry.status === 'posted' && entry.date >= st.cycleStart && entry.date <= st.cycleEnd && Array.isArray(entry.lines) && lineIndex < entry.lines.length; });
     if (!source) errors.push('La ligne source doit appartenir à une écriture validée du cycle actif.');
     if (errors.length) return { ok: false, errors: errors };
