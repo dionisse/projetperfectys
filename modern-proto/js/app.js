@@ -672,6 +672,7 @@
         return { moduleId: 'accounting', actionId: 'data.export' };
       case 'add-line':
       case 'remove-line':
+      case 'add-suggested-counterpart':
         return { moduleId: 'accounting', actionId: parseHash().params.id ? 'draft.edit' : 'draft.create' };
       default:
         return null;
@@ -1937,6 +1938,123 @@
     });
   }
 
+  function allowedEntryAccounts(journalCode) {
+    return postingAccounts().filter(function (account) {
+      var cls = Number(account.cls || String(account.code).charAt(0));
+      return cls >= 1 && cls <= 8 && (!journalCode || S.journalAllowsAccount(journalCode, account.code));
+    });
+  }
+
+  function resolveEntryAccount(text, journalCode) {
+    var query = String(text || '').trim();
+    if (!query) return null;
+    var accounts = allowedEntryAccounts(journalCode);
+    var lower = query.toLocaleLowerCase('fr');
+    var exactCode = accounts.find(function (account) { return String(account.code).toLocaleLowerCase('fr') === lower; });
+    if (exactCode) return exactCode;
+    var codePrefix = query.match(/^([^\s]+)\s+[—–-]\s*/);
+    if (codePrefix) {
+      var codeMatch = accounts.find(function (account) { return String(account.code).toLocaleLowerCase('fr') === codePrefix[1].toLocaleLowerCase('fr'); });
+      if (codeMatch) return codeMatch;
+    }
+    var labelMatches = accounts.filter(function (account) { return String(account.label || '').trim().toLocaleLowerCase('fr') === lower; });
+    return labelMatches.length === 1 ? labelMatches[0] : null;
+  }
+
+  function entryAccountDatalist(journalCode) {
+    return allowedEntryAccounts(journalCode).map(function (account) {
+      var label = String(account.label || '');
+      return '<option value="' + esc(account.code + ' — ' + label) + '" label="Compte imputable · classe ' + esc(account.cls) + '"></option>';
+    }).join('');
+  }
+
+  function entryAccountInputStatus(input) {
+    if (!input) return;
+    var status = input.parentNode && input.parentNode.querySelector('.entry-account-status');
+    if (!status) return;
+    var account = resolveEntryAccount(input.value, ($('#e-journal') || {}).value || '');
+    var query = String(input.value || '').trim();
+    var ambiguousLabel = query && allowedEntryAccounts(($('#e-journal') || {}).value || '').filter(function (candidate) {
+      return String(candidate.label || '').trim().toLocaleLowerCase('fr') === query.toLocaleLowerCase('fr');
+    }).length > 1;
+    status.classList.toggle('is-recognized', !!account);
+    status.classList.toggle('is-unrecognized', !!query && !account);
+    status.textContent = account
+      ? 'Compte reconnu : ' + account.code + ' · ' + account.label
+      : (ambiguousLabel ? 'Intitulé ambigu : précisez le code du compte.' : (query ? 'Saisissez un code ou un intitulé exact proposé pour ce journal.' : 'Saisissez un code ou un intitulé ; la liste se filtre pendant la frappe.'));
+  }
+
+  function entryCounterpartSuggestions(journalCode, accountsInPiece) {
+    var selectedCodes = (accountsInPiece || []).map(String).filter(Boolean);
+    if (!selectedCodes.length) return [];
+    var selected = Object.create(null);
+    selectedCodes.forEach(function (code) { selected[code] = true; });
+    var counts = Object.create(null);
+    S.entries().forEach(function (entry) {
+      if (!entry || entry.status !== 'posted' || !Array.isArray(entry.lines)) return;
+      var entryCodes = [];
+      entry.lines.forEach(function (line) {
+        var code = String(line && line.account || '');
+        if (code && entryCodes.indexOf(code) === -1) entryCodes.push(code);
+      });
+      if (!selectedCodes.some(function (code) { return entryCodes.indexOf(code) !== -1; })) return;
+      entryCodes.forEach(function (code) {
+        if (selected[code]) return;
+        var account = S.account(code);
+        if (!account || account.active === false || account.postable === false || (journalCode && !S.journalAllowsAccount(journalCode, code))) return;
+        if (!counts[code]) counts[code] = { account: account, entries: 0, sameJournal: 0 };
+        counts[code].entries += 1;
+        if (entry.journal === journalCode) counts[code].sameJournal += 1;
+      });
+    });
+    return Object.keys(counts).map(function (code) { return counts[code]; }).sort(function (left, right) {
+      return right.sameJournal - left.sameJournal || right.entries - left.entries || String(left.account.code).localeCompare(String(right.account.code));
+    }).slice(0, 6);
+  }
+
+  function refreshEntryCounterpartSuggestions() {
+    var box = $('#entry-counterpart-suggestions');
+    var journal = $('#e-journal');
+    if (!box || !journal) return;
+    var accountsInPiece = $$('#lines-body [data-field="account"]').map(function (input) {
+      var account = resolveEntryAccount(input.value, journal.value);
+      return account ? account.code : '';
+    }).filter(Boolean);
+    var suggestions = entryCounterpartSuggestions(journal.value, accountsInPiece);
+    if (!accountsInPiece.length) {
+      box.innerHTML = '<div class="entry-assistance-empty">Renseignez d’abord un compte pour rechercher des contreparties déjà observées.</div>';
+      return;
+    }
+    if (!suggestions.length) {
+      box.innerHTML = '<div class="entry-assistance-empty">Aucune contrepartie comparable n’a été observée dans les pièces validées de ce dossier. Aucune correspondance n’est inventée ; utilisez la recherche de comptes.</div>';
+      return;
+    }
+    var canAdd = hasDemoPermission(getActiveDemoMember(), 'accounting', parseHash().params.id ? 'draft.edit' : 'draft.create', accountingAccessContext());
+    box.innerHTML = '<div class="entry-counterpart-list">' + suggestions.map(function (item) {
+      return '<button type="button" class="entry-counterpart-suggestion" data-action="add-suggested-counterpart" data-account-code="' + esc(item.account.code) + '"' + (canAdd ? '' : ' hidden') + '><strong>' + esc(item.account.code) + ' · ' + esc(item.account.label) + '</strong><span>' + item.entries + ' pièce(s) validée(s) associée(s)' + (item.sameJournal ? ' · ' + item.sameJournal + ' dans ce journal' : '') + '</span><small>Ajouter le compte uniquement</small></button>';
+    }).join('') + '</div>';
+  }
+
+  function bindEntryAccountInput(input) {
+    if (!input) return;
+    var refresh = function (canonicalize) {
+      if (canonicalize) {
+        var account = resolveEntryAccount(input.value, ($('#e-journal') || {}).value || '');
+        if (account) input.value = account.code;
+      }
+      entryAccountInputStatus(input);
+      refreshEntryCounterpartSuggestions();
+    };
+    input.addEventListener('input', function () { refresh(false); });
+    input.addEventListener('change', function () { refresh(true); updateEntryTotals(); });
+    input.addEventListener('blur', function () {
+      var account = resolveEntryAccount(input.value, ($('#e-journal') || {}).value || '');
+      if (account) input.value = account.code;
+      entryAccountInputStatus(input);
+    });
+    entryAccountInputStatus(input);
+  }
+
   function accountOptions(selected, journalCode) {
     var groups = {
       1: 'Classe 1 — Ressources durables',
@@ -2470,8 +2588,10 @@
     var decimalPlaces = S.accountingConfiguration().decimalPlaces;
     var amountStep = decimalPlaces ? String(1 / Math.pow(10, decimalPlaces)) : '1';
     var amountInputMode = decimalPlaces ? 'decimal' : 'numeric';
+    var account = resolveEntryAccount(line.account, journalCode);
+    var accountValue = account ? account.code : String(line.account || '');
     return '<div class="line-row">' +
-      '<select data-field="account" aria-label="Compte de la ligne">' + accountOptions(line.account, journalCode) + '</select>' +
+      '<div class="line-account-entry"><input type="text" data-field="account" list="entry-account-suggestions" value="' + esc(accountValue) + '" placeholder="Code ou intitulé du compte" autocomplete="off" aria-label="Compte de la ligne, code ou intitulé"><small class="entry-account-status">Saisissez un code ou un intitulé ; la liste se filtre pendant la frappe.</small></div>' +
       '<input type="number" data-field="debit" min="0" step="' + amountStep + '" inputmode="' + amountInputMode + '" value="' + esc(line.debit) + '" placeholder="0" aria-label="Montant au débit">' +
       '<input type="number" data-field="credit" min="0" step="' + amountStep + '" inputmode="' + amountInputMode + '" value="' + esc(line.credit) + '" placeholder="0" aria-label="Montant au crédit">' +
       '<button type="button" class="line-remove" data-action="remove-line" aria-label="Supprimer cette ligne">✕</button>' +
@@ -2489,7 +2609,7 @@
       : '<a class="btn btn-ghost" href="#/entries">← Retour aux pièces</a>';
 
     var html = pageHeader(editing ? 'Modifier le brouillon' : 'Saisie d’écriture',
-      editing ? 'La pièce reste modifiable tant qu’elle n’est pas validée.' : 'Journal sélectionné : ' + journalDisplayName(selectedJournal) + ' · saisie multiligne avec contrôle d’équilibre en temps réel.',
+      editing ? 'La pièce reste modifiable tant qu’elle n’est pas validée.' : 'Journal sélectionné : ' + journalDisplayName(selectedJournal) + ' · saisie multiligne avec recherche de comptes et contrôle d’équilibre en temps réel.',
       returnLink);
 
     if (editing) {
@@ -2516,12 +2636,15 @@
         '<button type="button" class="btn btn-ghost btn-sm" data-action="add-line">＋ Ajouter une ligne</button></div>' +
 
       '<div class="lines-head" aria-hidden="true"><span>Compte</span><span>Débit (XOF)</span><span>Crédit (XOF)</span><span></span></div>' +
+      '<datalist id="entry-account-suggestions">' + entryAccountDatalist(model.journal) + '</datalist>' +
       '<div class="lines-editor" id="lines-body">' + model.lines.map(function (line) { return lineRowHtml(line, model.journal); }).join('') + '</div>' +
+      '<section class="entry-assistance" aria-labelledby="entry-assistance-title"><div><h4 id="entry-assistance-title">Contreparties possibles</h4><p>Suggestions fondées uniquement sur des pièces validées de ce dossier contenant les comptes saisis. Elles n’imposent ni compte, ni sens, ni montant.</p></div><div id="entry-counterpart-suggestions" aria-live="polite"></div></section>' +
 
       '<div class="entry-footer">' +
         '<div class="totals-inline">' +
           '<div class="total-item"><span>Total débit</span><strong id="total-debit">0</strong></div>' +
           '<div class="total-item"><span>Total crédit</span><strong id="total-credit">0</strong></div>' +
+          '<div class="total-item"><span>Écart restant</span><strong id="entry-difference">0 XOF</strong></div>' +
           '<div class="total-item"><span>Contrôle</span><span class="balance-chip" id="balance-chip">Équilibrée</span></div>' +
         '</div>' +
         '<div class="entry-actions">' +
@@ -2545,8 +2668,10 @@
       date: $('#e-date').value,
       description: $('#e-description').value,
       lines: rows.map(function (row) {
+        var accountInput = row.querySelector('[data-field="account"]');
+        var account = resolveEntryAccount(accountInput.value, $('#e-journal').value);
         return {
-          account: row.querySelector('[data-field="account"]').value,
+          account: account ? account.code : accountInput.value.trim(),
           debit: row.querySelector('[data-field="debit"]').value,
           credit: row.querySelector('[data-field="credit"]').value
         };
@@ -2569,9 +2694,11 @@
     var debitEl = $('#total-debit');
     var creditEl = $('#total-credit');
     var chip = $('#balance-chip');
+    var difference = $('#entry-difference');
     if (!debitEl || !creditEl || !chip) return;
     debitEl.textContent = amount(t.debit) + ' XOF';
     creditEl.textContent = amount(t.credit) + ' XOF';
+    if (difference) difference.textContent = amount(Math.abs(t.debit - t.credit)) + ' XOF';
     chip.textContent = t.balanced ? '✓ Équilibrée' : (t.debit === 0 && t.credit === 0 ? 'Aucun montant' : 'Déséquilibrée');
     chip.classList.toggle('unbalanced', !t.balanced);
   }
@@ -28819,10 +28946,10 @@
           syncReferenceFromContext();
           updatePeriodNotice();
           if (id === 'e-journal') {
-            $$('#lines-body [data-field="account"]').forEach(function (select) {
-              var selectedAccount = select.value;
-              select.innerHTML = accountOptions(selectedAccount, input.value);
-            });
+            var accountList = $('#entry-account-suggestions');
+            if (accountList) accountList.innerHTML = entryAccountDatalist(input.value);
+            $$('#lines-body [data-field="account"]').forEach(function (accountInput) { entryAccountInputStatus(accountInput); });
+            refreshEntryCounterpartSuggestions();
           }
         });
       });
@@ -28838,9 +28965,8 @@
         });
       });
 
-      $$('#lines-body [data-field="account"]').forEach(function (select) {
-        select.addEventListener('change', updateEntryTotals);
-      });
+      $$('#lines-body [data-field="account"]').forEach(bindEntryAccountInput);
+      refreshEntryCounterpartSuggestions();
 
       form.addEventListener('submit', function (event) {
         event.preventDefault();
@@ -29679,6 +29805,20 @@
         render();
         break;
       }
+      case 'add-suggested-counterpart': {
+        var suggestedCode = trigger.getAttribute('data-account-code');
+        var suggestedAccount = resolveEntryAccount(suggestedCode, ($('#e-journal') || {}).value || '');
+        if (!suggestedAccount) { toast('Ce compte n’est plus autorisé dans le journal actif.', 'warning'); break; }
+        var suggestedBody = $('#lines-body');
+        if (!suggestedBody) break;
+        suggestedBody.insertAdjacentHTML('beforeend', lineRowHtml({ account: suggestedAccount.code, debit: '', credit: '' }, ($('#e-journal') || {}).value || ''));
+        bindNewLine(suggestedBody.lastElementChild);
+        updateEntryTotals();
+        refreshEntryCounterpartSuggestions();
+        var suggestedInput = suggestedBody.lastElementChild && suggestedBody.lastElementChild.querySelector('[data-field="account"]');
+        if (suggestedInput) suggestedInput.focus();
+        break;
+      }
       case 'add-line': {
         var body = $('#lines-body');
         if (body) {
@@ -29698,6 +29838,7 @@
           }
           row.remove();
           updateEntryTotals();
+          refreshEntryCounterpartSuggestions();
         }
         break;
       }
@@ -30106,8 +30247,7 @@
         updateEntryTotals();
       });
     });
-    var sel = $('[data-field="account"]', row);
-    if (sel) sel.addEventListener('change', updateEntryTotals);
+    bindEntryAccountInput($('[data-field="account"]', row));
   }
 
   function openServiceModal(id) {

@@ -3438,3 +3438,27 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .opening-balance-continuity { align-items: flex-start; margin: 0 0 12px; line-height: 1.55; }
 .opening-balance-continuity .btn { margin: 8px 0 0; }
 .next-exercise-panel .alert.info { align-items: flex-start; }
+
+/* Saisie d’écriture dynamique : recherche directe et suggestions explicables */
+.line-account-entry { display: grid; min-width: 0; gap: 3px; }
+.line-account-entry input { width: 100%; min-width: 0; }
+.entry-account-status { min-height: 1em; color: var(--muted); font-size: .62rem; line-height: 1.25; }
+.entry-account-status.is-recognized { color: #26734b; }
+.entry-account-status.is-unrecognized { color: #9a5a14; }
+.entry-assistance { display: grid; gap: 10px; margin-top: 14px; padding: 13px; border: 1px solid #dfe9e1; border-radius: 10px; background: #f8fbf8; }
+.entry-assistance h4 { margin: 0; color: #304b3d; font-size: .8rem; }
+.entry-assistance p { max-width: 900px; margin: 4px 0 0; color: #68776d; font-size: .65rem; line-height: 1.5; }
+.entry-assistance-empty { color: #718077; font-size: .65rem; line-height: 1.5; }
+.entry-counterpart-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.entry-counterpart-suggestion { display: grid; gap: 4px; justify-items: start; padding: 9px 10px; border: 1px solid #dce6de; border-radius: 8px; background: #fff; color: inherit; text-align: left; cursor: pointer; }
+.entry-counterpart-suggestion:hover, .entry-counterpart-suggestion:focus-visible { border-color: #79a88c; box-shadow: 0 0 0 2px rgba(69, 132, 91, .12); outline: none; }
+.entry-counterpart-suggestion strong { color: #345442; font-size: .68rem; }
+.entry-counterpart-suggestion span, .entry-counterpart-suggestion small { color: #718077; font-size: .6rem; line-height: 1.4; }
+.entry-counterpart-suggestion small { color: #39735a; font-weight: 750; }
+@media (max-width: 900px) {
+  .entry-counterpart-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .entry-counterpart-list { grid-template-columns: minmax(0, 1fr); }
+  .entry-assistance { padding: 10px; }
+}
