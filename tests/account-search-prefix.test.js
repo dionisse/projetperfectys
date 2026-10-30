@@ -60,7 +60,8 @@ assert.ok(frameworkMatches.length > 0);
 assert.ok(frameworkMatches.every(row => [row.code, row.debit && row.debit.code, row.credit && row.credit.code]
   .some(code => String(code || '').startsWith('23'))), 'le référentiel ne retourne que les codes commençant par 23');
 
-assert.match(appSource, /AccountSearch\.matches\(option\.account\.code, option\.account\.label, query\)/);
+assert.match(appSource, /record\.codeLower\.indexOf\(codePrefix\) === 0/);
+assert.match(appSource, /record\.searchText\.indexOf\(normalizedNeedle\) !== -1/);
 assert.match(appSource, /refreshEntryAccountDatalist\(input\)/);
 assert.match(appSource, /function viewAccounts[\s\S]*AccountSearch\.matches\(a\.code/);
 assert.match(appSource, /function viewBalance[\s\S]*AccountSearch\.matches\(r\.code/);

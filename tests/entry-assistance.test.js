@@ -33,6 +33,7 @@ const entries = [
 ];
 const accountByCode = Object.fromEntries(accounts.map(account => [account.code, account]));
 let entryReads = 0;
+let catalogJournalReads = 0;
 const sandbox = {
   postingAccounts: () => accounts.filter(account => account.active !== false && account.postable !== false),
   entryAccountCatalogCache: Object.create(null),
@@ -44,6 +45,12 @@ const sandbox = {
     accounts: () => accounts,
     currentDossier: () => ({ id: 'test-dossier' }),
     account: code => accountByCode[String(code)] || null,
+    journal: journalCode => {
+      catalogJournalReads += 1;
+      return journalCode === 'AC'
+        ? { authorizedAccounts: accounts.filter(account => account.code !== '512000').map(account => account.code) }
+        : null;
+    },
     journalAllowsAccount: (journalCode, accountCode) => !(journalCode === 'AC' && accountCode === '512000')
   }
 };
@@ -71,6 +78,15 @@ assert.equal(sandbox.resolveEntryAccount('compte inconnu', 'AC'), null, 'un comp
 const prefixOptions = sandbox.entryAccountDatalist('AC', '23');
 assert.match(prefixOptions, /230100 — Immobilisations/);
 assert.doesNotMatch(prefixOptions, /601230|123230/, 'la suggestion par numéro exige un préfixe de code, pas une occurrence au milieu');
+assert.equal(sandbox.entryAccountDatalist('AC', ''), '', 'aucun gros catalogue n’est injecté dans la datalist tant que la saisie est vide');
+assert.equal(catalogJournalReads, 1, 'les autorisations du journal sont chargées une fois au lieu d’être relues pour chaque compte');
+for (let index = 0; index < 60; index += 1) {
+  accounts.push({ code: '699' + String(index).padStart(3, '0'), label: 'Compte de test ' + index, cls: 6, active: true, postable: true });
+}
+vm.runInNewContext('entryAccountCatalogCache = Object.create(null)', sandbox);
+const cappedOptions = sandbox.entryAccountDatalist('AC', '699');
+assert.equal((cappedOptions.match(/<option /g) || []).length, 40, 'la liste de suggestions est limitée aux 40 premières correspondances');
+assert.doesNotMatch(cappedOptions, /699040/, 'les correspondances supplémentaires ne sont pas injectées en masse dans le DOM');
 
 const suggestions = sandbox.entryCounterpartSuggestions('AC', ['601000']);
 assert.equal(

@@ -1964,13 +1964,18 @@
     var dossier = S.currentDossier();
     var key = String(dossier && dossier.id || '') + '|' + String(journalCode || '');
     if (entryAccountCatalogCache[key]) return entryAccountCatalogCache[key];
+    var journal = journalCode ? S.journal(journalCode) : null;
+    var authorizedCodes = journal && journal.authorizedAccounts;
+    var authorizedSet = Object.create(null);
+    if (Array.isArray(authorizedCodes)) authorizedCodes.forEach(function (code) { authorizedSet[String(code)] = true; });
+    var allAccountsAuthorized = !journalCode || authorizedCodes === '*';
     var accounts = postingAccounts().filter(function (account) {
       var cls = Number(account.cls || String(account.code).charAt(0));
-      return cls >= 1 && cls <= 8 && (!journalCode || S.journalAllowsAccount(journalCode, account.code));
+      return cls >= 1 && cls <= 8 && (allAccountsAuthorized || !!(journal && authorizedSet[String(account.code)]));
     });
     var byCode = Object.create(null);
     var byLabel = Object.create(null);
-    var options = [];
+    var searchRecords = [];
     accounts.forEach(function (account) {
       var code = String(account.code);
       var label = String(account.label || '').trim();
@@ -1978,9 +1983,15 @@
       var normalizedLabel = label.toLocaleLowerCase('fr');
       if (!byLabel[normalizedLabel]) byLabel[normalizedLabel] = [];
       byLabel[normalizedLabel].push(account);
-      options.push({ account: account, html: '<option value="' + esc(code + ' — ' + label) + '" label="Compte imputable · classe ' + esc(account.cls) + '"></option>' });
+      searchRecords.push({
+        account: account,
+        code: code,
+        label: label,
+        codeLower: code.toLocaleLowerCase('fr'),
+        searchText: AccountSearch.normalize(code + ' ' + label)
+      });
     });
-    entryAccountCatalogCache[key] = { accounts: accounts, byCode: byCode, byLabel: byLabel, options: options, optionsHtml: options.map(function (option) { return option.html; }).join('') };
+    entryAccountCatalogCache[key] = { accounts: accounts, byCode: byCode, byLabel: byLabel, searchRecords: searchRecords };
     return entryAccountCatalogCache[key];
   }
 
@@ -2005,10 +2016,20 @@
 
   function entryAccountDatalist(journalCode, query) {
     var catalog = entryAccountCatalog(journalCode);
-    if (!String(query || '').trim()) return catalog.optionsHtml;
-    return catalog.options.filter(function (option) {
-      return AccountSearch.matches(option.account.code, option.account.label, query);
-    }).map(function (option) { return option.html; }).join('');
+    var needle = String(query || '').trim();
+    if (!needle) return '';
+    var codePrefix = AccountSearch.codeQuery(needle);
+    var normalizedNeedle = codePrefix ? '' : AccountSearch.normalize(needle);
+    var options = [];
+    var limit = 40;
+    for (var index = 0; index < catalog.searchRecords.length && options.length < limit; index += 1) {
+      var record = catalog.searchRecords[index];
+      var matches = codePrefix
+        ? record.codeLower.indexOf(codePrefix) === 0
+        : record.searchText.indexOf(normalizedNeedle) !== -1;
+      if (matches) options.push('<option value="' + esc(record.code + ' — ' + record.label) + '" label="Compte imputable · classe ' + esc(record.account.cls) + '"></option>');
+    }
+    return options.join('');
   }
 
   function refreshEntryAccountDatalist(input) {
@@ -2038,9 +2059,13 @@
     S.entries().forEach(function (entry) {
       if (!entry || entry.status !== 'posted' || !Array.isArray(entry.lines)) return;
       var codes = [];
+      var seenCodes = Object.create(null);
       entry.lines.forEach(function (line) {
         var code = String(line && line.account || '');
-        if (code && codes.indexOf(code) === -1) codes.push(code);
+        if (code && !seenCodes[code]) {
+          seenCodes[code] = true;
+          codes.push(code);
+        }
       });
       var record = { journal: entry.journal, codes: codes };
       codes.forEach(function (code) {
@@ -2064,7 +2089,7 @@
     status.classList.toggle('is-unrecognized', !!query && !account);
     status.textContent = account
       ? 'Compte reconnu : ' + account.code + ' · ' + account.label
-      : (ambiguousLabel ? 'Intitulé ambigu : précisez le code du compte.' : (query ? 'Saisissez un code ou un intitulé exact proposé pour ce journal.' : 'Saisissez un code ou un intitulé ; la liste se filtre pendant la frappe.'));
+      : (ambiguousLabel ? 'Intitulé ambigu : précisez le code du compte.' : (query ? 'Saisissez un code ou un intitulé exact proposé pour ce journal.' : 'Tapez un début de code ou d’intitulé pour afficher jusqu’à 40 suggestions.'));
   }
 
   function entryCounterpartSuggestions(journalCode, accountsInPiece) {
@@ -2126,7 +2151,7 @@
       }
       refreshEntryAccountDatalist(input);
       entryAccountInputStatus(input);
-      refreshEntryCounterpartSuggestions();
+      if (canonicalize) refreshEntryCounterpartSuggestions();
     };
     input.addEventListener('input', function () { refresh(false); });
     input.addEventListener('change', function () { refresh(true); updateEntryTotals(); });
@@ -2740,7 +2765,7 @@
     var account = resolveEntryAccount(line.account, journalCode);
     var accountValue = account ? account.code : String(line.account || '');
     return '<div class="line-row">' +
-      '<div class="line-account-entry"><input type="text" data-field="account" list="entry-account-suggestions" value="' + esc(accountValue) + '" placeholder="Code ou intitulé du compte" autocomplete="off" aria-label="Compte de la ligne, code ou intitulé"><small class="entry-account-status">Saisissez un code ou un intitulé ; la liste se filtre pendant la frappe.</small></div>' +
+      '<div class="line-account-entry"><input type="text" data-field="account" list="entry-account-suggestions" value="' + esc(accountValue) + '" placeholder="Code ou intitulé du compte" autocomplete="off" aria-label="Compte de la ligne, code ou intitulé"><small class="entry-account-status">Tapez un début de code ou d’intitulé pour afficher jusqu’à 40 suggestions.</small></div>' +
       '<input type="number" data-field="debit" min="0" step="' + amountStep + '" inputmode="' + amountInputMode + '" value="' + esc(line.debit) + '" placeholder="0" aria-label="Montant au débit">' +
       '<input type="number" data-field="credit" min="0" step="' + amountStep + '" inputmode="' + amountInputMode + '" value="' + esc(line.credit) + '" placeholder="0" aria-label="Montant au crédit">' +
       '<button type="button" class="line-remove" data-action="remove-line" aria-label="Supprimer cette ligne">✕</button>' +
