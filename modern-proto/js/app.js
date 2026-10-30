@@ -606,6 +606,7 @@
           actionId: trigger && trigger.getAttribute('data-fixed-asset-mode') === 'edit' ? 'fixedAssets.edit' : 'fixedAssets.create'
         };
       case 'close-period':
+      case 'close-all-cycle-periods':
         return { moduleId: 'accounting', actionId: 'period.close' };
       case 'open-period':
         return { moduleId: 'accounting', actionId: 'period.reopen' };
@@ -14212,15 +14213,18 @@
     var list = S.periodStats(year);
     var openCount = list.filter(function (p) { return p.status === 'open'; }).length;
     var years = [year];
+    var closeAllAction = openCount
+      ? '<button type="button" class="btn btn-primary btn-sm" data-action="close-all-cycle-periods">◷ Clôturer en une fois les ' + openCount + ' périodes ouvertes</button>'
+      : '';
 
     var html = pageHeader('Périodes comptables', 'Une période clôturée refuse les nouvelles pièces et la validation des brouillons.',
-      '<div class="field"><label class="sr-only" for="f-periods-year">Exercice</label>' +
+      closeAllAction + '<div class="field"><label class="sr-only" for="f-periods-year">Exercice</label>' +
         '<select id="f-periods-year" data-filter="periods:year">' +
         years.map(function (y) { return '<option value="' + y + '"' + (y === year ? ' selected' : '') + '>Exercice ' + y + '</option>'; }).join('') +
         '</select></div>');
 
     html += '<div class="alert info">Exercice <strong>' + year + '</strong> (' + dateLabel(dossier.cycleStart) + ' au ' + dateLabel(dossier.cycleEnd) + ') : ' + openCount + ' période(s) ouverte(s) sur ' + list.length + '. ' +
-      'La clôture est immédiate et persistée localement.</div>';
+      'Vous pouvez clôturer toutes les périodes ouvertes du cycle en une seule confirmation ; elles restent réouvrables individuellement. Cette opération ne clôture pas définitivement l’exercice et ne modifie aucune pièce.</div>';
 
     html += '<div class="period-grid">' + list.map(function (p) {
       var isOpen = p.status === 'open';
@@ -26999,6 +27003,8 @@
       exchangeFeature = viewFundamentalBalanceChecks();
     } else if (group.id === 'fin-exercice' && tab.id === 'depreciation') {
       exchangeFeature = viewYearEndDepreciation();
+    } else if (group.id === 'fin-exercice' && tab.id === 'period-close') {
+      exchangeFeature = viewPeriods();
     } else if (group.id === 'fin-exercice' && tab.id === 'opening-transfer' && selectedChild && selectedChild.id === 'opening-transfer-build') {
       exchangeFeature = viewOpeningTransferBuild();
     } else if (group.id === 'saisie' && tab.id === 'opening-balances') {
@@ -29287,6 +29293,29 @@
           row.remove();
           updateEntryTotals();
         }
+        break;
+      }
+      case 'close-all-cycle-periods': {
+        var activeDossierForPeriodClose = S.currentDossier();
+        var openCyclePeriods = S.periodStats(S.exercise()).filter(function (item) { return item.status === 'open'; });
+        if (!openCyclePeriods.length) {
+          toast('Aucune période ouverte à clôturer dans le cycle actif.', 'info');
+          break;
+        }
+        var periodNames = openCyclePeriods.map(function (item) { return S.monthLabel(item.month) + ' ' + item.year; }).join(', ');
+        var batchConfirmation = 'Clôturer en une fois les ' + openCyclePeriods.length + ' période(s) ouverte(s) du cycle ' +
+          dateLabel(activeDossierForPeriodClose.cycleStart) + ' au ' + dateLabel(activeDossierForPeriodClose.cycleEnd) + ' ?\n\n' +
+          periodNames + '\n\nLes nouvelles pièces et validations de brouillons seront refusées dans ces périodes. Aucune pièce ne sera modifiée ou supprimée ; chaque période pourra ensuite être réouverte individuellement. Cette action ne constitue pas une clôture définitive de l’exercice.';
+        if (!window.confirm(batchConfirmation)) break;
+        var batchResult = S.closeOpenCyclePeriods();
+        if (!batchResult.ok) {
+          toast((batchResult.errors || ['Clôture groupée impossible.']).join(' '), 'error');
+          break;
+        }
+        toast(batchResult.closedCount
+          ? batchResult.closedCount + ' période(s) du cycle clôturée(s) en une fois. Aucune pièce n’a été modifiée.'
+          : 'Aucune période n’a changé : elles étaient déjà clôturées.', 'success');
+        render();
         break;
       }
       case 'close-period': {

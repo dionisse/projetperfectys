@@ -614,6 +614,15 @@ assert.match(appSource, /menuParams\.g === 'fin-exercice' && menuParams\.t === '
   'les interactions du transfert utilisent les mêmes liaisons que Saisie → Reports à nouveau');
 assert.equal(findTab('fin-exercice', 'period-close').status, 'partial');
 assert.equal(findTab('fin-exercice', 'period-close').actions[0].route, 'periods');
+assert.ok(findTab('fin-exercice', 'period-close').reason.includes('une seule confirmation'));
+assert.match(menuRenderer, /group\.id === 'fin-exercice' && tab\.id === 'period-close'[\s\S]*viewPeriods\(\)/,
+  'le sous-menu de fin d’exercice affiche la gestion des périodes existante');
+assert.match(appSource, /data-action="close-all-cycle-periods"[\s\S]*Clôturer en une fois les/,
+  'la gestion des périodes propose une action de clôture groupée');
+assert.match(appSource, /case 'close-all-cycle-periods'[\s\S]*S\.closeOpenCyclePeriods\(\)/,
+  'la clôture groupée appelle la mutation atomique du registre de périodes');
+assert.match(appSource, /case 'close-all-cycle-periods':[\s\S]*period\.close/,
+  'la clôture groupée conserve le droit comptable period.close');
 assert.equal(findTab('fin-exercice', 'definitive-close').irreversible, true);
 assert.equal(findTab('fin-exercice', 'definitive-close').status, 'planned');
 assert.equal(findTab('parametres', 'dossier-configuration').label, 'Configuration de la Comptabilité');
