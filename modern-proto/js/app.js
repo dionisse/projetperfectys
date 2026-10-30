@@ -2701,7 +2701,9 @@
     var entries = entryJournalHistoryEntries(journalCode);
     var rows = [];
     entries.forEach(function (entry) {
-      var lines = Array.isArray(entry.lines) && entry.lines.length ? entry.lines : [{}];
+      var entryLines = Array.isArray(entry.lines) ? entry.lines : [];
+      var lines = entryLines.length ? entryLines : [{}];
+      var totals = S.totals(entryLines);
       lines.forEach(function (line) {
         var account = line.account ? S.account(line.account) : null;
         var accountLabel = line.account ? String(line.account) + (account && account.label ? ' · ' + account.label : '') : '—';
@@ -2716,6 +2718,11 @@
           '<td>' + statusBadge(entry.status) + '</td>' +
         '</tr>');
       });
+      rows.push('<tr class="entry-journal-piece-separator" aria-label="Total de la pièce N° ' + esc(entry.reference) + ', ' + entryLines.length + ' ligne(s)">' +
+        '<td colspan="4"><strong>Total de la pièce N° ' + esc(entry.reference) + '</strong> · ' + entryLines.length + ' ligne' + (entryLines.length === 1 ? '' : 's') + '</td>' +
+        '<td class="num"><strong>' + amount(totals.debit) + '</strong></td>' +
+        '<td class="num"><strong>' + amount(totals.credit) + '</strong></td>' +
+        '<td colspan="2"></td></tr>');
     });
     return '<section class="card panel entry-journal-history" aria-labelledby="entry-journal-history-title">' +
       '<div class="panel-header"><div><h3 id="entry-journal-history-title">Pièces du journal · ' + esc(journal ? journalDisplayName(journal) : journalCode || 'Non sélectionné') + '</h3>' +

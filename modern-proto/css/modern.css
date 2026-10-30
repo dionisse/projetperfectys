@@ -3479,4 +3479,6 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .entry-journal-history .table-wrap { max-height: 560px; overflow: auto; }
 .entry-journal-history tbody tr[data-action="open-entry"] { cursor: pointer; }
 .entry-journal-history tbody tr[data-action="open-entry"]:hover { background: #f2f7f3; }
+.entry-journal-history tbody tr.entry-journal-piece-separator { border-top: 2px solid #b8cbbd; border-bottom: 1px solid #dbe7dd; background: #f2f7f3; color: #304b3d; }
+.entry-journal-history tbody tr.entry-journal-piece-separator td { padding-top: 9px; padding-bottom: 9px; }
 .entry-journal-history .empty-state { padding: 20px; }

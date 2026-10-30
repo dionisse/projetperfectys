@@ -22,7 +22,12 @@ const entries = [
   { id: 'other-journal', journal: 'BQ', date: '2026-01-03', reference: 'BQ-01', status: 'posted', lines: [] }
 ];
 const sandbox = {
-  S: { entries: () => entries, journal: code => ({ code }), account: code => ({ label: 'Compte ' + code }), totals: () => ({ debit: 0, credit: 0 }) },
+  S: {
+    entries: () => entries,
+    journal: code => ({ code }),
+    account: code => ({ label: 'Compte ' + code }),
+    totals: lines => (lines || []).reduce((sum, line) => ({ debit: sum.debit + (Number(line.debit) || 0), credit: sum.credit + (Number(line.credit) || 0) }), { debit: 0, credit: 0 })
+  },
   esc: value => String(value),
   dateLabel: value => value,
   amount: value => String(value),
@@ -44,6 +49,9 @@ historyHeadings.forEach(heading => {
 assert.match(historyHtml, /FACT-02/);
 assert.match(historyHtml, /601 ·/);
 assert.match(historyHtml, /401 ·/);
+assert.equal((historyHtml.match(/entry-journal-piece-separator/g) || []).length, 3, 'chaque pièce possède une ligne de séparation récapitulative');
+assert.ok(historyHtml.includes('Total de la pièce N° AC-02</strong> · 2 lignes'));
+assert.ok(historyHtml.includes('<td class="num"><strong>100</strong></td>'), 'le séparateur affiche les totaux de la pièce');
 
 assert.match(appSource, /return html \+ '<div id="entry-journal-history-container">' \+ entryJournalHistoryHtml\(model\.journal\)/,
   'la liste est rendue directement sous le formulaire');
