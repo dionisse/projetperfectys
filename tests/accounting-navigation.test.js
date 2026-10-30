@@ -584,7 +584,16 @@ assert.ok(findTab('saisie', 'opening-balances').reason.includes('relançable'));
 assert.ok(findTab('saisie', 'opening-balances').reason.includes('factures'));
 assert.equal(findTab('fin-exercice', 'opening-transfer').status, 'partial');
 assert.equal(findTab('fin-exercice', 'opening-transfer').actions[0].tab, 'opening-balances');
+assert.equal(findTab('fin-exercice', 'opening-transfer').children[0].id, 'opening-transfer-build');
+assert.equal(findTab('fin-exercice', 'opening-transfer').children[0].label, 'Construire le report à nouveau à N+1');
+assert.equal(findTab('fin-exercice', 'opening-transfer').children[0].status, 'partial');
 assert.ok(findTab('fin-exercice', 'opening-transfer').reason.includes('ne clôture pas définitivement'));
+assert.match(menuRenderer, /group\.id === 'fin-exercice' && tab\.id === 'opening-transfer' && selectedChild && selectedChild\.id === 'opening-transfer-build'[\s\S]*viewOpeningTransferBuild\(\)/,
+  'le sous-élément fin d’exercice ouvre l’écran de construction du report');
+assert.match(appSource, /function viewOpeningTransferBuild\(\)[\s\S]*viewOpeningBalances\(\)/,
+  'Passage à N+1 réutilise le rendu et le registre Reports à nouveau');
+assert.match(appSource, /menuParams\.g === 'fin-exercice' && menuParams\.t === 'opening-transfer' && menuParams\.c === 'opening-transfer-build'\) bindOpeningBalancesView\(\)/,
+  'les interactions du transfert utilisent les mêmes liaisons que Saisie → Reports à nouveau');
 assert.equal(findTab('fin-exercice', 'period-close').status, 'partial');
 assert.equal(findTab('fin-exercice', 'period-close').actions[0].route, 'periods');
 assert.equal(findTab('fin-exercice', 'definitive-close').irreversible, true);

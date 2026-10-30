@@ -23652,6 +23652,14 @@
       previewHtml + '</section>';
   }
 
+  function viewOpeningTransferBuild() {
+    var dossier = S.currentDossier();
+    return '<div class="opening-transfer-build-workspace">' +
+      '<div class="alert info"><div><strong>Passage à N+1 · dossier cible ' + esc(dossier.reference) + '.</strong> Cet accès de fin d’exercice utilise directement le registre Reports à nouveau du dossier actif. Les lignes transférées ici sont donc les mêmes que celles visibles et gérables dans Saisie → Reports à nouveau.</div></div>' +
+      viewOpeningBalances() +
+      '</div>';
+  }
+
   function viewOpeningBalances() {
     var dossier = S.currentDossier();
     if (openingBalanceTransferSession && openingBalanceTransferSession.targetDossierId !== dossier.id) openingBalanceTransferSession = null;
@@ -26913,6 +26921,8 @@
       exchangeFeature = viewFixedAssetLocations();
     } else if (group.id === 'definitions' && tab.id === 'fixed-assets') {
       exchangeFeature = viewFixedAssets();
+    } else if (group.id === 'fin-exercice' && tab.id === 'opening-transfer' && selectedChild && selectedChild.id === 'opening-transfer-build') {
+      exchangeFeature = viewOpeningTransferBuild();
     } else if (group.id === 'saisie' && tab.id === 'opening-balances') {
       exchangeFeature = viewOpeningBalances();
     } else if (group.id === 'parametres' && tab.id === 'dossier-configuration') {
@@ -28307,6 +28317,7 @@
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'fixed-asset-locations') bindFixedAssetLocationView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'fixed-assets') bindFixedAssetView();
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'opening-balances') bindOpeningBalancesView();
+      if (!isPhoneViewport() && menuParams.g === 'fin-exercice' && menuParams.t === 'opening-transfer' && menuParams.c === 'opening-transfer-build') bindOpeningBalancesView();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-other') bindAccountingExchangeImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' &&
           (menuParams.t === 'import-fec' || (menuParams.t === 'centralize-auxiliary' && menuParams.c === 'centralize-auxiliary-fec'))) bindAccountingFecImport();

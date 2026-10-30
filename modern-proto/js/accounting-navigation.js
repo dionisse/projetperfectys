@@ -231,7 +231,9 @@
     },
     {
       id: 'fin-exercice', label: 'Opérations de fin d’exercice', icon: '◷', defaultTab: 'balance-checks', tabs: [
-        { id: 'opening-transfer', label: 'Passage à N+1 · reports à nouveau', status: 'partial', reason: 'Le registre, son contrôle et le transfert relançable sont accessibles dans Saisie → Reports à nouveau. Cette action ne clôture pas définitivement l’exercice et ne valide aucune écriture.', actions: [{ label: 'Ouvrir les reports à nouveau', route: 'menu', group: 'saisie', tab: 'opening-balances' }] },
+        { id: 'opening-transfer', label: 'Passage à N+1 · reports à nouveau', status: 'partial', reason: 'Construisez et contrôlez le report du dossier précédent vers le dossier N+1. Le transfert et le registre sont partagés avec Saisie → Reports à nouveau ; cette action ne clôture pas définitivement l’exercice et ne valide aucune écriture.', actions: [{ label: 'Ouvrir les reports à nouveau', route: 'menu', group: 'saisie', tab: 'opening-balances' }], children: [
+          { id: 'opening-transfer-build', label: 'Construire le report à nouveau à N+1', status: 'partial', reason: 'Utilise le même registre, le même aperçu et les mêmes contrôles que Saisie → Reports à nouveau. Aucun solde n’est inventé et aucune écriture de clôture n’est générée.' }
+        ] },
         { id: 'balance-checks', label: 'Vérification des équilibres fondamentaux', status: 'planned', reason: 'Contrôles généraux à construire avant les traitements de clôture.' },
         { id: 'depreciation', label: 'Calcul automatique des amortissements au 31/12/N', status: 'planned', reason: 'Dépend du référentiel des immobilisations et des paramètres validés.' },
         { id: 'period-close', label: 'Clôture périodique au 31/12/N', status: 'partial', reason: 'La gestion réversible des périodes mensuelles est disponible ; la clôture annuelle complète reste à construire.', actions: [{ label: 'Ouvrir la gestion des périodes', route: 'periods' }] },
