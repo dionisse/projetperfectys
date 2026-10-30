@@ -144,6 +144,7 @@
   };
 
   var selectedEntryJournalCode = '';
+  var definitiveCloseBackup = { scope: '', downloaded: false };
   var analyticalNatureSelectedId = 'activity-domains';
   var fixedAssetAccountsSelectedId = 'fixed-assets-class-21';
   var fixedAssetAccountsSelectedDossierId = '';
@@ -627,6 +628,7 @@
         };
       case 'close-period':
       case 'close-all-cycle-periods':
+      case 'finalize-definitive-close':
         return { moduleId: 'accounting', actionId: 'period.close' };
       case 'open-period':
       case 'reopen-all-cycle-periods':
@@ -648,6 +650,7 @@
       case 'download-fec-source':
         return { moduleId: 'accounting', actionId: 'data.export' };
       case 'export-json':
+      case 'download-definitive-close-backup':
       case 'export-accounts-csv':
       case 'export-balance-csv':
       case 'export-accounting-exchange':
@@ -14226,6 +14229,74 @@
     return found ? found.id : '';
   }
 
+  /* ---------------------- Arrêt définitif de l’exercice ------------------- */
+  function definitiveCloseBackupFingerprint(backupJson) {
+    try {
+      var payload = JSON.parse(backupJson || S.exportJson());
+      return payload && payload.data ? JSON.stringify(payload.data) : '';
+    } catch (err) { return ''; }
+  }
+
+  function viewDefinitiveClose() {
+    var dossier = S.currentDossier();
+    var preflight = S.definitiveClosePreflight();
+    var scope = [dossier.id, preflight.cycleStart, preflight.cycleEnd].join('|');
+    if (definitiveCloseBackup.scope !== scope) definitiveCloseBackup = { scope: scope, downloaded: false, backupJson: '', fingerprint: '' };
+    if (definitiveCloseBackup.downloaded && definitiveCloseBackup.fingerprint !== definitiveCloseBackupFingerprint()) {
+      definitiveCloseBackup = { scope: scope, downloaded: false, backupJson: '', fingerprint: '' };
+    }
+    var record = preflight.record;
+    if (preflight.finalized && record) {
+      return '<section class="periods-summary definitive-close-panel">' +
+        '<div class="alert warning"><strong>Arrêt définitif enregistré — opération irréversible.</strong> Les comptes de ce cycle sont scellés. La réouverture et les modifications comptables sont bloquées.</div>' +
+        '<dl class="definitive-close-facts">' +
+          '<div><dt>Dossier</dt><dd>' + esc(dossier.name || dossier.clientName || '') + '</dd></div>' +
+          '<div><dt>Cycle arrêté</dt><dd>' + esc(dateLabel(record.cycleStart)) + ' au ' + esc(dateLabel(record.cycleEnd)) + '</dd></div>' +
+          '<div><dt>Date d’enregistrement</dt><dd>' + esc(new Date(record.finalizedAt).toLocaleString('fr-FR')) + '</dd></div>' +
+          '<div><dt>Copie préalable déclarée</dt><dd>' + esc(record.backupFileName || 'Non renseignée') + '</dd></div>' +
+          '<div><dt>Totaux validés constatés</dt><dd>Débit ' + amount(record.totals && record.totals.debit || 0) + ' XOF · Crédit ' + amount(record.totals && record.totals.credit || 0) + ' XOF</dd></div>' +
+        '</dl><p class="exchange-footnote">Aucune écriture de résultat, d’affectation ni de clôture n’a été créée par cette opération.</p></section>';
+    }
+    var blockers = preflight.errors.length
+      ? '<div class="alert warning"><strong>Arrêt non autorisé à ce stade.</strong><ul>' + preflight.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>'
+      : '<div class="alert success"><strong>Contrôles comptables satisfaits.</strong> L’arrêt reste distinct du calcul du résultat et de la préparation des états financiers.</div>';
+    return '<section class="periods-summary definitive-close-panel">' +
+      '<div class="alert warning"><strong>Opération irréversible.</strong> Après confirmation, le dossier sera scellé et ne pourra pas être réouvert. Le calcul du résultat et les états financiers peuvent être préparés séparément avant cet arrêt. Aucun résultat ni aucune écriture de clôture ne seront générés ici.</div>' +
+      '<div class="definitive-close-facts">' +
+        '<div><span>Cycle du dossier</span><strong>' + esc(dateLabel(preflight.cycleStart)) + ' au ' + esc(dateLabel(preflight.cycleEnd)) + '</strong></div>' +
+        '<div><span>Périodes clôturées</span><strong>' + preflight.closedPeriodCount + ' / ' + preflight.expectedPeriodCount + '</strong></div>' +
+        '<div><span>Écritures validées du cycle</span><strong>' + preflight.postedEntryCount + '</strong></div>' +
+        '<div><span>Brouillons restant à traiter</span><strong>' + preflight.draftEntryCount + '</strong></div>' +
+        '<div><span>Total débit validé</span><strong>' + amount(preflight.debit) + ' XOF</strong></div>' +
+        '<div><span>Total crédit validé</span><strong>' + amount(preflight.credit) + ' XOF</strong></div>' +
+      '</div>' + blockers +
+      '<div class="definitive-close-backup"><h3>1. Exporter une copie complète</h3>' +
+        '<p>Téléchargez le JSON du dossier actif et conservez-le hors de l’application avant de poursuivre.</p>' +
+        '<button type="button" class="btn btn-secondary" data-action="download-definitive-close-backup"' + (!preflight.canFinalize ? ' disabled' : '') + '>↓ Télécharger la sauvegarde JSON complète</button> ' +
+        (definitiveCloseBackup.downloaded ? '<span class="badge posted">Sauvegarde téléchargée dans cette session</span>' : '<span class="badge draft">Sauvegarde requise</span>') +
+      '</div>' +
+      '<div class="definitive-close-confirm"><h3>2. Confirmer l’arrêt</h3>' +
+        '<label class="checkbox-line"><input type="checkbox" data-definitive-close-backup-ack' + (!definitiveCloseBackup.downloaded ? ' disabled' : '') + '> J’atteste avoir téléchargé la copie et l’avoir conservée hors de l’application.</label>' +
+        '<label for="definitive-close-confirmation">Saisissez exactement <strong>ARRET DEFINITIF DES COMPTES</strong></label>' +
+        '<input id="definitive-close-confirmation" type="text" autocomplete="off" maxlength="80" data-definitive-close-confirmation placeholder="ARRET DEFINITIF DES COMPTES"' + (!definitiveCloseBackup.downloaded ? ' disabled' : '') + '>' +
+        '<button type="button" class="btn btn-danger" data-action="finalize-definitive-close"' + (!preflight.canFinalize || !definitiveCloseBackup.downloaded ? ' disabled' : '') + '>Sceller définitivement les comptes du cycle</button>' +
+      '</div></section>';
+  }
+
+  function bindDefinitiveClose() {
+    var ack = $('[data-definitive-close-backup-ack]');
+    var confirmation = $('[data-definitive-close-confirmation]');
+    var button = $('[data-action="finalize-definitive-close"]');
+    if (!button || !ack || !confirmation) return;
+    function refresh() {
+      var canFinalize = S.definitiveClosePreflight().canFinalize && definitiveCloseBackup.downloaded;
+      button.disabled = !canFinalize || !ack.checked || confirmation.value.trim() !== 'ARRET DEFINITIF DES COMPTES';
+    }
+    ack.addEventListener('change', refresh);
+    confirmation.addEventListener('input', refresh);
+    refresh();
+  }
+
   /* --------------------------------- Périodes ------------------------------ */
   function viewPeriods() {
     var dossier = S.currentDossier();
@@ -27195,6 +27266,8 @@
       exchangeFeature = viewYearEndDepreciation();
     } else if (group.id === 'fin-exercice' && tab.id === 'period-close') {
       exchangeFeature = viewPeriods();
+    } else if (group.id === 'fin-exercice' && tab.id === 'definitive-close') {
+      exchangeFeature = viewDefinitiveClose();
     } else if (group.id === 'fin-exercice' && tab.id === 'tax-adjustments') {
       exchangeFeature = viewTaxAdjustments();
     } else if (group.id === 'fin-exercice' && tab.id === 'opening-transfer' && selectedChild && selectedChild.id === 'opening-transfer-build') {
@@ -28594,6 +28667,7 @@
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'fixed-assets') bindFixedAssetView();
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'opening-balances') bindOpeningBalancesView();
       if (!isPhoneViewport() && menuParams.g === 'fin-exercice' && menuParams.t === 'depreciation') bindYearEndDepreciation();
+      if (!isPhoneViewport() && menuParams.g === 'fin-exercice' && menuParams.t === 'definitive-close') bindDefinitiveClose();
       if (!isPhoneViewport() && menuParams.g === 'fin-exercice' && menuParams.t === 'opening-transfer' && menuParams.c === 'opening-transfer-build') bindOpeningBalancesView();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-other') bindAccountingExchangeImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' &&
@@ -29779,6 +29853,48 @@
         var journalsDossier = S.currentDossier();
         downloadFile('perfecto-' + safeFilePart(journalsDossier.reference) + '-journaux.csv', AccountingExchange.exportJournals(S.journals()), 'text/csv;charset=utf-8');
         toast('Journaux exportés au format CSV Excel.', 'success');
+        break;
+      }
+      case 'download-definitive-close-backup': {
+        var closeDossier = S.currentDossier();
+        var closePreflight = S.definitiveClosePreflight();
+        if (!closePreflight.canFinalize) { toast('Traitez d’abord les contrôles affichés avant de créer la copie d’arrêt.', 'warning'); render(); break; }
+        var closeBackupFileName = 'perfecto-' + safeFilePart(closeDossier.reference) + '-sauvegarde-avant-arret-definitif-' + S.todayIso() + '.json';
+        try {
+          var closeBackupJson = S.exportJson();
+          downloadFile(closeBackupFileName, closeBackupJson, 'application/json;charset=utf-8');
+          definitiveCloseBackup = {
+            scope: [closeDossier.id, closePreflight.cycleStart, closePreflight.cycleEnd].join('|'),
+            downloaded: true,
+            backupJson: closeBackupJson,
+            fingerprint: definitiveCloseBackupFingerprint(closeBackupJson)
+          };
+          toast('Sauvegarde JSON complète téléchargée. Conservez-la hors de l’application.', 'success');
+          render();
+        } catch (backupError) {
+          toast(backupError.message || 'Le téléchargement de la sauvegarde a échoué.', 'error');
+        }
+        break;
+      }
+      case 'finalize-definitive-close': {
+        var closeAck = $('[data-definitive-close-backup-ack]');
+        var closeConfirmation = $('[data-definitive-close-confirmation]');
+        if (!closeAck || !closeAck.checked || !closeConfirmation || closeConfirmation.value.trim() !== 'ARRET DEFINITIF DES COMPTES') {
+          toast('Téléchargez la sauvegarde, cochez l’attestation et saisissez la confirmation exacte.', 'warning');
+          break;
+        }
+        if (definitiveCloseBackup.fingerprint !== definitiveCloseBackupFingerprint()) {
+          definitiveCloseBackup = { scope: definitiveCloseBackup.scope, downloaded: false, backupJson: '', fingerprint: '' };
+          toast('Le dossier a changé depuis l’export. Téléchargez une nouvelle sauvegarde à jour avant de confirmer.', 'warning');
+          render();
+          break;
+        }
+        if (!window.confirm('Dernière confirmation : sceller irréversiblement les comptes du cycle ? Le calcul du résultat et les états financiers ne sont pas effectués par cette action.')) break;
+        var closeFileName = 'perfecto-' + safeFilePart(S.currentDossier().reference) + '-sauvegarde-avant-arret-definitif-' + S.todayIso() + '.json';
+        var closeResult = S.finalizeDefinitiveClose({ backupDownloaded: definitiveCloseBackup.downloaded, backupAcknowledged: closeAck.checked, backupFileName: closeFileName, backupJson: definitiveCloseBackup.backupJson, confirmation: closeConfirmation.value });
+        if (!closeResult.ok) { toast(closeResult.errors[0] || 'Arrêt définitif impossible.', 'error'); render(); break; }
+        toast('Arrêt définitif enregistré. Le dossier est désormais scellé et ne peut pas être réouvert.', 'success');
+        render();
         break;
       }
       case 'export-json':

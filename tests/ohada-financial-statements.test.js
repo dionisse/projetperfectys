@@ -141,7 +141,7 @@ const worker = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'servi
 const workflow = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'main.yml'), 'utf8');
 assert.equal(nav.getTab('declarations', 'ohada-statements').status, 'active');
 assert.equal(nav.getTab('fin-exercice', 'calculate-result').status, 'partial');
-assert.equal(nav.getTab('fin-exercice', 'definitive-close').status, 'planned', 'la clôture définitive reste séparée');
+assert.equal(nav.getTab('fin-exercice', 'definitive-close').status, 'active', 'la clôture définitive est disponible, mais reste séparée du résultat');
 assert.match(app, /function viewOhadaFinancialStatements[\s\S]*Éditer l’état sélectionné/);
 assert.match(app, /selectedKey === 'financial-statements'[\s\S]*downloadActiveOhadaSnapshot/);
 assert.match(app, /function viewFinancialResult[\s\S]*Date d’arrêté/);

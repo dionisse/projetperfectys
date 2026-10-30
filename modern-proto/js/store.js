@@ -1048,6 +1048,7 @@
   }
 
   var state = null;
+  var definitiveCloseLock = false;
   var folderCatalog = null;
   var activeFolderId = null;
   var recoveryIssue = null;
@@ -2123,6 +2124,7 @@
     var dossier = folderById(activeFolderId);
     if (!dossier) return { ok: false, errors: ['Dossier actif introuvable.'] };
     var currentState = load();
+    if (currentState.definitiveClose && currentState.definitiveClose.finalized) return { ok: false, errors: ['Configuration bloquée : l’arrêt définitif a scellé ce dossier et son cycle.'] };
     if (recoveryIssue) return { ok: false, errors: ['Configuration bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
 
     var cycleStart = String(input.cycleStart == null ? dossier.cycleStart : input.cycleStart);
@@ -2937,9 +2939,10 @@
     ensureFolderCatalog();
     if (!folderById(folderId)) return { ok: false, errors: ['Dossier client introuvable.'] };
     if (folderId === activeFolderId) return { ok: true, errors: [], dossier: currentDossier(), folder: currentDossier() };
-    if (state && !recoveryIssue && !save()) return { ok: false, errors: ['Impossible d’enregistrer le dossier actif avant le changement.'] };
+    if (state && !recoveryIssue && !(state.definitiveClose && state.definitiveClose.finalized) && !save()) return { ok: false, errors: ['Impossible d’enregistrer le dossier actif avant le changement.'] };
     activeFolderId = folderId;
     state = null;
+    definitiveCloseLock = false;
     recoveryIssue = null;
     try { global.localStorage.setItem(ACTIVE_DOSSIER_STORAGE_KEY, activeFolderId); } catch (err) { /* la sélection restera en mémoire */ }
     return { ok: true, errors: [], dossier: currentDossier(), folder: currentDossier(), state: load() };
@@ -3003,7 +3006,16 @@
   }
 
   function load() {
-    if (state) return state;
+    if (state) {
+      if (definitiveCloseLock) {
+        try {
+          var sealedRaw = global.localStorage.getItem(currentFolderStorageKey());
+          var sealedState = sealedRaw ? JSON.parse(sealedRaw) : null;
+          if (sealedState && sealedState.definitiveClose && sealedState.definitiveClose.finalized === true) state = sealedState;
+        } catch (sealedReadError) { /* le dernier état scellé en mémoire reste la référence */ }
+      }
+      return state;
+    }
     ensureFolderCatalog();
     var raw = null;
     try {
@@ -3103,10 +3115,21 @@
     try {
       ensureFolderCatalog();
       var storageKey = currentFolderStorageKey();
-      var serialized = JSON.stringify(state);
       var previous = global.localStorage.getItem(storageKey);
+      if (previous) {
+        var persisted = JSON.parse(previous);
+        if (persisted && persisted.definitiveClose && persisted.definitiveClose.finalized === true) {
+          // Une fois l’arrêt définitif enregistré, aucune écriture de l’état comptable
+          // ne peut remplacer le dossier scellé (y compris reset/import/réouverture).
+          definitiveCloseLock = true;
+          state = persisted;
+          return false;
+        }
+      }
+      var serialized = JSON.stringify(state);
       if (previous && previous !== serialized) snapshotPreviousState(previous);
       global.localStorage.setItem(storageKey, serialized);
+      if (state.definitiveClose && state.definitiveClose.finalized === true) definitiveCloseLock = true;
       return true;
     } catch (err) {
       return false;
@@ -5972,6 +5995,7 @@
 
   function setPeriod(year, month, status) {
     var st = load();
+    if (st.definitiveClose && st.definitiveClose.finalized) return null;
     ensureYear(year);
     var p = period(year, month);
     p.status = status;
@@ -5981,6 +6005,7 @@
 
   function closeOpenCyclePeriods() {
     var st = load();
+    if (st.definitiveClose && st.definitiveClose.finalized) return { ok: false, errors: ['Opération impossible : l’arrêt définitif du dossier est irréversible.'], closedCount: 0, periods: [] };
     if (recoveryIssue) return { ok: false, errors: ['Clôture groupée bloquée : contrôlez ou restaurez d’abord la base du dossier.'], closedCount: 0, periods: [] };
     var cycleMonthKeys = Object.create(null);
     cyclePeriods(st.cycleStart, st.cycleEnd).forEach(function (item) {
@@ -6006,6 +6031,7 @@
 
   function reopenClosedCyclePeriods() {
     var st = load();
+    if (st.definitiveClose && st.definitiveClose.finalized) return { ok: false, errors: ['Réouverture impossible : l’arrêt définitif du dossier est irréversible.'], reopenedCount: 0, periods: [] };
     if (recoveryIssue) return { ok: false, errors: ['Réouverture groupée bloquée : contrôlez ou restaurez d’abord la base du dossier.'], reopenedCount: 0, periods: [] };
     var cycleMonthKeys = Object.create(null);
     cyclePeriods(st.cycleStart, st.cycleEnd).forEach(function (item) {
@@ -6027,6 +6053,101 @@
       reopenedCount: closedPeriods.length,
       periods: closedPeriods.map(function (item) { return { year: Number(item.year), month: Number(item.month) }; })
     };
+  }
+
+  var DEFINITIVE_CLOSE_CONFIRMATION = 'ARRET DEFINITIF DES COMPTES';
+
+  function definitiveClosePreflight() {
+    var st = load();
+    var cycle = cyclePeriods(st.cycleStart, st.cycleEnd);
+    var monthKeys = Object.create(null);
+    cycle.forEach(function (item) { monthKeys[Number(item.year) + '-' + Number(item.month)] = true; });
+    var cyclePeriodsState = (st.periods || []).filter(function (item) {
+      return item && monthKeys[Number(item.year) + '-' + Number(item.month)];
+    });
+    var closedPeriods = cyclePeriodsState.filter(function (item) { return item.status === 'closed'; });
+    var openPeriods = cycle.filter(function (expected) {
+      return !cyclePeriodsState.some(function (item) { return Number(item.year) === expected.year && Number(item.month) === expected.month && item.status === 'closed'; });
+    });
+    var cycleEntries = (st.entries || []).filter(function (entry) {
+      return entry && String(entry.date || '') >= st.cycleStart && String(entry.date || '') <= st.cycleEnd;
+    });
+    var drafts = cycleEntries.filter(function (entry) { return entry.status !== 'posted'; });
+    var posted = cycleEntries.filter(function (entry) { return entry.status === 'posted'; });
+    var debit = 0;
+    var credit = 0;
+    posted.forEach(function (entry) {
+      (entry.lines || []).forEach(function (line) {
+        debit += Number(line.debit) || 0;
+        credit += Number(line.credit) || 0;
+      });
+    });
+    var precision = Math.pow(10, accountingConfiguration().decimalPlaces || 0);
+    var balanced = Math.round(debit * precision) === Math.round(credit * precision);
+    var finalized = !!(st.definitiveClose && st.definitiveClose.finalized === true);
+    var errors = [];
+    if (recoveryIssue) errors.push('Le dossier nécessite un contrôle ou une réparation avant l’arrêt définitif.');
+    if (!cycle.length || !parseIsoDate(st.cycleStart) || !parseIsoDate(st.cycleEnd)) errors.push('Les dates du cycle comptable sont absentes ou invalides.');
+    if (openPeriods.length) errors.push('Toutes les périodes du cycle doivent être clôturées au préalable.');
+    if (drafts.length) errors.push('Le cycle contient des écritures non validées ; supprimez-les ou traitez-les avant l’arrêt définitif.');
+    if (!balanced) errors.push('Les écritures validées du cycle ne présentent pas des totaux débit/crédit équilibrés.');
+    if (finalized) errors.push('L’arrêt définitif est déjà enregistré et ne peut pas être annulé.');
+    return {
+      canFinalize: !errors.length && !finalized,
+      finalized: finalized,
+      cycleStart: st.cycleStart,
+      cycleEnd: st.cycleEnd,
+      expectedPeriodCount: cycle.length,
+      closedPeriodCount: closedPeriods.length,
+      openPeriods: openPeriods.map(function (item) { return { year: item.year, month: item.month }; }),
+      postedEntryCount: posted.length,
+      draftEntryCount: drafts.length,
+      debit: debit,
+      credit: credit,
+      balanced: balanced,
+      errors: errors,
+      record: st.definitiveClose ? clone(st.definitiveClose) : null
+    };
+  }
+
+  function finalizeDefinitiveClose(input) {
+    var st = load();
+    input = input && typeof input === 'object' ? input : {};
+    if (st.definitiveClose && st.definitiveClose.finalized) return { ok: false, errors: ['L’arrêt définitif est déjà enregistré et ne peut pas être annulé.'] };
+    var preflight = definitiveClosePreflight();
+    var errors = preflight.errors.slice();
+    var fileName = String(input.backupFileName || '').trim().slice(0, 180);
+    var backupPayload = null;
+    try { backupPayload = JSON.parse(String(input.backupJson || '')); } catch (backupParseError) { backupPayload = null; }
+    var backupMatchesCurrentState = false;
+    if (backupPayload && backupPayload.application === 'PERFECTO' && backupPayload.module === 'Comptabilité générale SYSCOHADA' &&
+        backupPayload.version === 1 && backupPayload.dossier && backupPayload.dossier.id === activeFolderId && backupPayload.data) {
+      try {
+        backupMatchesCurrentState = JSON.stringify(backupPayload.data) === JSON.stringify(visibleStateForConfidentialAccounts(st, activeFolderId));
+      } catch (backupCompareError) { backupMatchesCurrentState = false; }
+    }
+    if (!input.backupDownloaded || !fileName || !backupMatchesCurrentState) errors.push('Téléchargez une copie JSON complète et à jour du dossier avant de confirmer l’arrêt définitif.');
+    if (input.backupAcknowledged !== true) errors.push('Confirmez explicitement que la copie exportée a été téléchargée et conservée hors de l’application.');
+    if (String(input.confirmation || '').trim() !== DEFINITIVE_CLOSE_CONFIRMATION) errors.push('Saisissez exactement « ' + DEFINITIVE_CLOSE_CONFIRMATION + ' » pour confirmer l’opération irréversible.');
+    if (errors.length) return { ok: false, errors: errors, preflight: preflight };
+
+    var previousState = clone(st);
+    st.definitiveClose = {
+      finalized: true,
+      cycleStart: st.cycleStart,
+      cycleEnd: st.cycleEnd,
+      finalizedAt: new Date().toISOString(),
+      backupFileName: fileName,
+      backupAcknowledged: true,
+      backupAcknowledgedAt: new Date().toISOString(),
+      confirmationText: DEFINITIVE_CLOSE_CONFIRMATION,
+      totals: { debit: preflight.debit, credit: preflight.credit }
+    };
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Arrêt définitif impossible : l’enregistrement local a échoué. Le dossier reste inchangé.'] };
+    }
+    return { ok: true, errors: [], record: clone(st.definitiveClose) };
   }
 
   /* ---------------- Écritures ---------------- */
@@ -7909,6 +8030,8 @@
     setPeriod: setPeriod,
     closeOpenCyclePeriods: closeOpenCyclePeriods,
     reopenClosedCyclePeriods: reopenClosedCyclePeriods,
+    definitiveClosePreflight: definitiveClosePreflight,
+    finalizeDefinitiveClose: finalizeDefinitiveClose,
     nextReference: nextReference,
     totals: totals,
     validateEntry: visibleValidateEntry,

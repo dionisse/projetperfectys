@@ -630,7 +630,7 @@ assert.match(appSource, /case 'reopen-all-cycle-periods'[\s\S]*S\.reopenClosedCy
 assert.match(appSource, /case 'reopen-all-cycle-periods':[\s\S]*period\.reopen/,
   'la réouverture groupée conserve le droit comptable period.reopen');
 assert.equal(findTab('fin-exercice', 'definitive-close').irreversible, true);
-assert.equal(findTab('fin-exercice', 'definitive-close').status, 'planned');
+assert.equal(findTab('fin-exercice', 'definitive-close').status, 'active');
 assert.equal(findTab('parametres', 'dossier-configuration').label, 'Configuration de la Comptabilité');
 assert.equal(findTab('parametres', 'dossier-configuration').actions[0].route, 'settings', 'les sauvegardes restent accessibles séparément');
 assert.equal(findTab('parametres', 'sections-accounts').status, 'partial', 'le paramétrage est accessible, sans activer les traitements analytiques');
