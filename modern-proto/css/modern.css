@@ -3475,6 +3475,20 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .entry-revision-snapshot { margin-top: 5px; font-size: .62rem; }
 .entry-revision-snapshot summary { color: #52685a; cursor: pointer; }
 .entry-revision-snapshot ul { margin: 4px 0 0 16px; }
+.entry-attachments-local-note { margin-bottom: 14px; line-height: 1.5; }
+.entry-attachments-upload { display: grid; gap: 7px; margin: 14px 0 18px; padding: 14px; border: 1px dashed #b8cbbd; border-radius: 9px; background: #f8fbf8; }
+.entry-attachments-upload label { font-weight: 750; color: #304b3d; }
+.entry-attachments-upload input { max-width: 100%; }
+.entry-attachments-upload small { color: var(--muted); line-height: 1.45; }
+.entry-attachments-status { margin-bottom: 12px; }
+.entry-attachments-list-title { margin: 18px 0 9px; font-size: .95rem; }
+.entry-attachments-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.entry-attachment-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+.entry-attachment-metadata { display: grid; gap: 3px; min-width: 0; overflow-wrap: anywhere; }
+.entry-attachment-metadata span { color: var(--muted); font-size: .76rem; }
+.entry-attachment-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.entry-attachments-empty { padding: 16px; }
+.entry-attachments-manage-button { white-space: nowrap; }
 .entry-journal-history { margin-top: 18px; }
 .entry-journal-history .table-wrap { max-height: 560px; overflow: auto; }
 .entry-journal-history .data-table { font-size: .68rem; line-height: 1.2; }

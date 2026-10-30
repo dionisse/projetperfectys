@@ -18,6 +18,7 @@
     { id: 'draft.create', label: 'Créer une écriture / un brouillon' },
     { id: 'draft.edit', label: 'Modifier un brouillon' },
     { id: 'draft.delete', label: 'Supprimer un brouillon' },
+    { id: 'entryAttachments.manage', label: 'Gérer les justificatifs des pièces comptables' },
     { id: 'entry.validate', label: 'Valider une écriture' },
     { id: 'centralization.cancel', label: 'Annuler une centralisation interne' },
     { id: 'accounts.create', label: 'Créer un compte comptable' },

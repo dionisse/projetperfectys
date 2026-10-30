@@ -58,6 +58,7 @@
   var FecImport = window.PerfectoFecImport;
   var BankStatement = window.PerfectoBankStatement;
   var BankStatementStorage = window.PerfectoBankStatementStorage;
+  var EntryAttachmentsStorage = window.PerfectoEntryAttachmentsStorage;
   var AccountingConsolidation = window.PerfectoAccountingConsolidation;
   var BalanceRecalculation = window.PerfectoBalanceRecalculation;
   var PayrollHR = window.PerfectoPayrollHR;
@@ -161,6 +162,8 @@
   };
 
   var selectedEntryJournalCode = '';
+  var entryAttachmentsModalContext = null;
+  var entryAttachmentObjectUrls = [];
   var definitiveCloseBackup = { scope: '', entriesDownloaded: false, backupDownloaded: false, backupJson: '', entriesFileName: '', backupFileName: '', fingerprint: '' };
   var analyticalNatureSelectedId = 'activity-domains';
   var fixedAssetAccountsSelectedId = 'fixed-assets-class-21';
@@ -466,6 +469,9 @@
         return { moduleId: 'accounting', actionId: 'module.view' };
       case 'open-entry':
         return { moduleId: 'accounting', actionId: 'module.view' };
+      case 'manage-entry-attachments':
+      case 'remove-entry-attachment':
+        return { moduleId: 'accounting', actionId: 'entryAttachments.manage' };
       case 'edit-posted-entry':
         return { moduleId: 'accounting', actionId: 'draft.edit' };
       case 'select-entry-journal':
@@ -855,6 +861,8 @@
     var root = $('#modal-root');
     if (!root) return;
     if (root.innerHTML) root.innerHTML = '';
+    clearEntryAttachmentPreviewUrls();
+    entryAttachmentsModalContext = null;
     document.body.style.overflow = '';
     if (!silent && lastFocused && document.contains(lastFocused)) lastFocused.focus();
     lastFocused = null;
@@ -2993,7 +3001,7 @@
       '<div class="table-wrap"><table class="data-table">' +
         '<caption>' + list.length + ' pièce(s) — montants exprimés en XOF</caption>' +
         '<thead><tr><th scope="col">Date</th><th scope="col">N° de pièce</th><th scope="col">Journal</th><th scope="col">Référence</th><th scope="col">Libellé</th>' +
-        '<th scope="col" class="num">Montant</th><th scope="col">Statut</th></tr></thead><tbody>' +
+        '<th scope="col" class="num">Montant</th><th scope="col">Statut</th><th scope="col">Justificatifs</th></tr></thead><tbody>' +
         (list.length ? list.map(function (e) {
           return '<tr class="clickable" data-action="open-entry" data-id="' + esc(e.id) + '">' +
             '<td class="nowrap">' + dateLabel(e.date) + '</td>' +
@@ -3003,12 +3011,134 @@
             '<td class="muted">' + esc(e.description || '—') + '</td>' +
             '<td class="num">' + amount(entryAmount(e)) + '</td>' +
             '<td>' + statusBadge(e.status) + '</td>' +
+            '<td><button type="button" class="btn btn-ghost btn-sm entry-attachments-manage-button" data-action="manage-entry-attachments" data-id="' + esc(e.id) + '" aria-label="Ajouter ou consulter les justificatifs de la pièce ' + esc(e.reference) + '">📎 Gérer</button></td>' +
           '</tr>';
-        }).join('') : '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">▤</div><strong>Aucune pièce</strong>Aucune pièce ne correspond à ces critères.</div></td></tr>') +
+        }).join('') : '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">▤</div><strong>Aucune pièce</strong>Aucune pièce ne correspond à ces critères.</div></td></tr>') +
       '</tbody></table></div>' +
     '</div></div>';
 
     return html;
+  }
+
+  function clearEntryAttachmentPreviewUrls() {
+    entryAttachmentObjectUrls.forEach(function (url) {
+      try { URL.revokeObjectURL(url); } catch (error) { /* ignore URL cleanup failures */ }
+    });
+    entryAttachmentObjectUrls = [];
+  }
+
+  function entryAttachmentFileSize(size) {
+    size = Number(size) || 0;
+    if (size < 1024) return size + ' octet(s)';
+    if (size < 1024 * 1024) return (size / 1024).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' Ko';
+    return (size / (1024 * 1024)).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' Mo';
+  }
+
+  function entryAttachmentsModalHtml(entry, records, status) {
+    var fileRows = records.map(function (record) {
+      var url = '';
+      if (record.blob && window.URL && typeof window.URL.createObjectURL === 'function') {
+        url = window.URL.createObjectURL(record.blob);
+        entryAttachmentObjectUrls.push(url);
+      }
+      var addedAt = record.createdAt ? new Date(record.createdAt).toLocaleString('fr-FR') : '';
+      return '<li class="entry-attachment-item"><div class="entry-attachment-metadata"><strong>' + esc(record.name) + '</strong><span>' + esc(entryAttachmentFileSize(record.size)) + (addedAt ? ' · Ajouté le ' + esc(addedAt) : '') + '</span></div><div class="entry-attachment-actions">' +
+        (url ? '<a class="btn btn-ghost btn-sm" href="' + esc(url) + '" target="_blank" rel="noopener">Ouvrir</a><a class="btn btn-ghost btn-sm" href="' + esc(url) + '" download="' + esc(record.name) + '">Télécharger</a>' : '') +
+        '<button type="button" class="btn btn-ghost btn-sm" data-action="remove-entry-attachment" data-id="' + esc(entry.id) + '" data-attachment-id="' + esc(record.id) + '">Retirer</button></div></li>';
+    }).join('');
+    var statusHtml = status && status.message
+      ? '<div class="alert ' + (status.error ? 'error' : 'info') + ' entry-attachments-status" role="status">' + esc(status.message) + '</div>'
+      : '<div class="entry-attachments-status" role="status" aria-live="polite"></div>';
+    return '<div id="entry-attachments-manager" data-entry-id="' + esc(entry.id) + '">' +
+      '<div class="alert warning entry-attachments-local-note"><strong>Mode test local.</strong> Les fichiers sont conservés dans IndexedDB sur ce navigateur/appareil. Ils ne sont pas encore envoyés sur Google Drive et ne sont pas inclus dans la sauvegarde JSON. L’intégration Drive est prévue pour le mode production.</div>' +
+      statusHtml +
+      '<div class="entry-attachments-upload"><label for="entry-attachment-files">Ajouter un ou plusieurs justificatifs</label><input id="entry-attachment-files" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple><small>Formats acceptés : PDF, JPG/JPEG et PNG. Vous pouvez répéter la sélection pour ajouter d’autres fichiers à cette pièce.</small></div>' +
+      '<h3 class="entry-attachments-list-title">Fichiers associés · ' + records.length + '</h3>' +
+      (records.length ? '<ul class="entry-attachments-list">' + fileRows + '</ul>' : '<div class="empty-state entry-attachments-empty"><strong>Aucun justificatif joint.</strong><span>Ajoutez ici les factures, quittances, bons de commande ou autres preuves de cette pièce.</span></div>') +
+      '</div>';
+  }
+
+  function loadEntryAttachments(context, status) {
+    if (!context || entryAttachmentsModalContext !== context) return;
+    var manager = $('#entry-attachments-manager');
+    if (!manager) return;
+    EntryAttachmentsStorage.list(context.dossierId, context.entryId).then(function (records) {
+      if (entryAttachmentsModalContext !== context) return;
+      clearEntryAttachmentPreviewUrls();
+      var currentEntry = S.entry(context.entryId);
+      manager = $('#entry-attachments-manager');
+      if (!manager || !currentEntry) return;
+      manager.innerHTML = entryAttachmentsModalHtml(currentEntry, records, status);
+      var fileInput = $('#entry-attachment-files', manager);
+      if (!fileInput) return;
+      fileInput.addEventListener('change', function () {
+        var files = Array.prototype.slice.call(fileInput.files || []);
+        if (!files.length) return;
+        if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'entryAttachments.manage', accountingAccessContext())) {
+          toast('Ajout refusé : le droit de gestion des justificatifs n’est pas accordé.', 'warning');
+          fileInput.value = '';
+          return;
+        }
+        var invalidFiles = files.map(function (file) { return EntryAttachmentsStorage.validateFile(file); }).filter(function (result) { return !result.ok; });
+        if (invalidFiles.length) {
+          fileInput.value = '';
+          loadEntryAttachments(context, { error: true, message: invalidFiles.map(function (result) { return result.errors.join(' '); }).join(' ') });
+          return;
+        }
+        fileInput.disabled = true;
+        var statusNode = $('.entry-attachments-status', manager);
+        if (statusNode) {
+          statusNode.className = 'alert info entry-attachments-status';
+          statusNode.textContent = 'Enregistrement de ' + files.length + ' fichier(s) dans le stockage local…';
+        }
+        files.reduce(function (promise, file) {
+          return promise.then(function () { return EntryAttachmentsStorage.save(context.dossierId, context.entryId, file); });
+        }, Promise.resolve()).then(function () {
+          loadEntryAttachments(context, { message: files.length + ' fichier(s) ajouté(s) à la pièce.' });
+        }).catch(function (error) {
+          loadEntryAttachments(context, { error: true, message: error && error.message || 'Enregistrement local des fichiers impossible. Vérifiez l’espace disponible dans le navigateur.' });
+        });
+      });
+    }).catch(function (error) {
+      if (entryAttachmentsModalContext !== context) return;
+      manager = $('#entry-attachments-manager');
+      if (manager) manager.innerHTML = '<div class="alert error" role="alert">' + esc(error && error.message || 'Lecture des justificatifs impossible.') + '</div>';
+    });
+  }
+
+  function openEntryAttachmentsModal(entryId) {
+    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'entryAttachments.manage', accountingAccessContext())) {
+      toast('Action refusée : le droit de gestion des justificatifs n’est pas accordé.', 'warning');
+      return;
+    }
+    var entry = S.entry(entryId);
+    var dossier = S.currentDossier();
+    if (!entry || !dossier) { toast('Pièce comptable introuvable dans le dossier actif.', 'error'); return; }
+    if (!EntryAttachmentsStorage || !EntryAttachmentsStorage.available()) {
+      toast('Le stockage local des justificatifs n’est pas disponible dans ce navigateur.', 'error');
+      return;
+    }
+    openModal('Justificatifs · ' + esc(entry.reference), 'Ajout de preuves à la pièce comptable',
+      '<div id="entry-attachments-manager" data-entry-id="' + esc(entry.id) + '"><p class="muted">Chargement des fichiers…</p></div>',
+      '<button type="button" class="btn btn-ghost" data-action="close-modal">Fermer</button>', true);
+    var context = { entryId: entry.id, dossierId: dossier.id, token: Date.now() + '-' + Math.random() };
+    entryAttachmentsModalContext = context;
+    loadEntryAttachments(context);
+  }
+
+  function removeEntryAttachment(entryId, attachmentId) {
+    var context = entryAttachmentsModalContext;
+    if (!context || context.entryId !== entryId) return;
+    if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'entryAttachments.manage', accountingAccessContext())) {
+      toast('Retrait refusé : le droit de gestion des justificatifs n’est pas accordé.', 'warning');
+      return;
+    }
+    if (!window.confirm('Retirer définitivement ce fichier de la pièce dans le stockage local de démonstration ?')) return;
+    EntryAttachmentsStorage.remove(context.dossierId, context.entryId, attachmentId).then(function () {
+      loadEntryAttachments(context, { message: 'Justificatif retiré de la pièce.' });
+    }).catch(function (error) {
+      loadEntryAttachments(context, { error: true, message: error && error.message || 'Retrait du justificatif impossible.' });
+    });
   }
 
   function entryRevisionSnapshotHtml(snapshot, title) {
@@ -29928,6 +30058,12 @@
       case 'open-entry':
         if (id) openEntryModal(id);
         break;
+      case 'manage-entry-attachments':
+        if (id) openEntryAttachmentsModal(id);
+        break;
+      case 'remove-entry-attachment':
+        if (id) removeEntryAttachment(id, trigger.getAttribute('data-attachment-id'));
+        break;
       case 'edit-posted-entry': {
         var editPostedPreflight = S.postedEntryEditPreflight(id);
         if (!editPostedPreflight.canEdit) { toast(editPostedPreflight.errors[0] || 'La correction de cette pièce n’est plus autorisée.', 'warning'); closeModal(true); render(); break; }
@@ -29966,9 +30102,17 @@
         if (!window.confirm('Supprimer définitivement ce brouillon ?')) break;
         var removed = S.deleteDraft(id);
         if (!removed.ok) { toast(removed.errors[0] || 'Suppression impossible.', 'error'); break; }
-        toast('Brouillon supprimé.', 'success');
-        closeModal(true);
-        render();
+        var deletedDraftId = id;
+        var deletedDraftDossierId = S.currentDossier().id;
+        EntryAttachmentsStorage.removeAll(deletedDraftDossierId, deletedDraftId).then(function (removedAttachmentCount) {
+          toast('Brouillon supprimé' + (removedAttachmentCount ? ' avec ' + removedAttachmentCount + ' justificatif(s)' : '') + '.', 'success');
+          closeModal(true);
+          render();
+        }).catch(function () {
+          toast('Brouillon supprimé. Certains justificatifs locaux peuvent rester à nettoyer dans ce navigateur.', 'warning');
+          closeModal(true);
+          render();
+        });
         break;
       }
       case 'new-account':
