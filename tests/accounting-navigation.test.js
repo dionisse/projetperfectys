@@ -588,6 +588,14 @@ assert.equal(findTab('fin-exercice', 'opening-transfer').children[0].id, 'openin
 assert.equal(findTab('fin-exercice', 'opening-transfer').children[0].label, 'Construire le report à nouveau à N+1');
 assert.equal(findTab('fin-exercice', 'opening-transfer').children[0].status, 'partial');
 assert.ok(findTab('fin-exercice', 'opening-transfer').reason.includes('ne clôture pas définitivement'));
+assert.equal(findTab('fin-exercice', 'balance-checks').status, 'partial');
+assert.ok(findTab('fin-exercice', 'balance-checks').reason.includes('pièces validées du cycle'));
+assert.match(menuRenderer, /group\.id === 'fin-exercice' && tab\.id === 'balance-checks'[\s\S]*viewFundamentalBalanceChecks\(\)/,
+  'la vérification des équilibres est intégrée au sous-menu de fin d’exercice');
+assert.match(appSource, /function viewFundamentalBalanceChecks\(\)[\s\S]*viewAccountingBalanceRecalculation\(\)/,
+  'le contrôle de fin d’exercice réutilise le recalcul indépendant existant');
+assert.match(appSource, /isBalanceRecalculationMenu[\s\S]*parsed\.params\.g === 'fin-exercice' && parsed\.params\.t === 'balance-checks'/,
+  'les résultats du contrôle restent affichés pendant les rendus du sous-menu');
 assert.match(menuRenderer, /group\.id === 'fin-exercice' && tab\.id === 'opening-transfer' && selectedChild && selectedChild\.id === 'opening-transfer-build'[\s\S]*viewOpeningTransferBuild\(\)/,
   'le sous-élément fin d’exercice ouvre l’écran de construction du report');
 assert.match(appSource, /function viewOpeningTransferBuild\(\)[\s\S]*viewOpeningBalances\(\)/,

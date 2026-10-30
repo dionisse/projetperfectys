@@ -970,7 +970,10 @@
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'cancel-centralization')) centralizationCancellationSession = null;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'consolidate-before-result')) consolidationBeforeResultSession = null;
     if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'consolidate-after-result')) consolidationAfterResultSession = null;
-    if (!(route === 'menu' && parsed.params.g === 'fichier' && parsed.params.t === 'recalculate-balances')) balanceRecalculationSession = null;
+    var isBalanceRecalculationMenu = route === 'menu' &&
+      ((parsed.params.g === 'fichier' && parsed.params.t === 'recalculate-balances') ||
+       (parsed.params.g === 'fin-exercice' && parsed.params.t === 'balance-checks'));
+    if (!isBalanceRecalculationMenu) balanceRecalculationSession = null;
     if (!(route === 'menu' && parsed.params.g === 'saisie' && parsed.params.t === 'opening-balances')) openingBalanceTransferSession = null;
 
     var activeMember = getActiveDemoMember();
@@ -20523,6 +20526,13 @@
   function exportAccountingConsolidationBeforeResult() { exportAccountingConsolidation('before'); }
   function exportAccountingConsolidationAfterResult() { exportAccountingConsolidation('after'); }
 
+  function viewFundamentalBalanceChecks() {
+    return '<div class="fundamental-balance-checks-workspace">' +
+      '<div class="alert info"><div><strong>Contrôle indépendant, en lecture seule.</strong> Cette vérification relit les pièces validées du cycle, contrôle l’équilibre de chaque pièce et des totaux, puis compare le détail par compte à la balance générale. Les reports à nouveau restent dans leur registre dédié ; aucun résultat de clôture ni aucune correction n’est généré.</div></div>' +
+      viewAccountingBalanceRecalculation() +
+      '</div>';
+  }
+
   function viewAccountingBalanceRecalculation() {
     var dossier = S.currentDossier();
     return '<div class="exchange-workspace balance-recalculation-workspace">' +
@@ -26921,6 +26931,8 @@
       exchangeFeature = viewFixedAssetLocations();
     } else if (group.id === 'definitions' && tab.id === 'fixed-assets') {
       exchangeFeature = viewFixedAssets();
+    } else if (group.id === 'fin-exercice' && tab.id === 'balance-checks') {
+      exchangeFeature = viewFundamentalBalanceChecks();
     } else if (group.id === 'fin-exercice' && tab.id === 'opening-transfer' && selectedChild && selectedChild.id === 'opening-transfer-build') {
       exchangeFeature = viewOpeningTransferBuild();
     } else if (group.id === 'saisie' && tab.id === 'opening-balances') {
