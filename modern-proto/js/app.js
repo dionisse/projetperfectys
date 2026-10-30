@@ -2785,19 +2785,21 @@
           '<td class="num">' + (Number(line.credit) ? amount(line.credit) : '—') + '</td>' +
           '<td>' + esc(entry.description || '—') + '</td>' +
           '<td>' + statusBadge(entry.status) + '</td>' +
+          '<td></td>' +
         '</tr>');
       });
       rows.push('<tr class="entry-journal-piece-separator" aria-label="Total de la pièce N° ' + esc(entry.reference) + ', ' + entryLines.length + ' ligne(s)">' +
         '<td colspan="4"><strong>Total de la pièce N° ' + esc(entry.reference) + '</strong> · ' + entryLines.length + ' ligne' + (entryLines.length === 1 ? '' : 's') + '</td>' +
         '<td class="num"><strong>' + amount(totals.debit) + '</strong></td>' +
         '<td class="num"><strong>' + amount(totals.credit) + '</strong></td>' +
-        '<td colspan="2"></td></tr>');
+        '<td colspan="2"></td>' +
+        '<td><button type="button" class="btn btn-ghost btn-sm entry-attachments-manage-button" data-action="manage-entry-attachments" data-id="' + esc(entry.id) + '" aria-label="Ajouter ou consulter les justificatifs de la pièce ' + esc(entry.reference) + '">📎 Justificatifs</button></td></tr>');
     });
     return '<section class="card panel entry-journal-history" aria-labelledby="entry-journal-history-title">' +
       '<div class="panel-header"><div><h3 id="entry-journal-history-title">Pièces du journal · ' + esc(journal ? journalDisplayName(journal) : journalCode || 'Non sélectionné') + '</h3>' +
       '<p class="sub">' + entries.length + ' pièce(s) · du plus récent au plus ancien · sélectionnez une ligne pour consulter son détail.</p></div></div>' +
       (entries.length
-        ? '<div class="table-wrap"><table class="data-table"><thead><tr><th scope="col">Date</th><th scope="col">N° de pièce</th><th scope="col">Compte</th><th scope="col">Référence</th><th scope="col" class="num">Débit</th><th scope="col" class="num">Crédit</th><th scope="col">Libellé</th><th scope="col">Statut</th></tr></thead><tbody>' + rows.join('') + '</tbody></table></div>'
+        ? '<div class="table-wrap"><table class="data-table"><thead><tr><th scope="col">Date</th><th scope="col">N° de pièce</th><th scope="col">Compte</th><th scope="col">Référence</th><th scope="col" class="num">Débit</th><th scope="col" class="num">Crédit</th><th scope="col">Libellé</th><th scope="col">Statut</th><th scope="col">Justificatifs</th></tr></thead><tbody>' + rows.join('') + '</tbody></table></div>'
         : '<div class="empty-state"><strong>Aucune pièce pour ce journal.</strong><span>Les brouillons enregistrés et les pièces validées apparaîtront ici.</span></div>') +
       '</section>';
   }
@@ -3163,6 +3165,7 @@
       '<div class="total-item"><span>Statut</span><div>' + statusBadge(e.status) + '</div></div>' +
       '</div>' +
       '<p class="muted" style="margin-bottom:16px"><strong>Référence :</strong> ' + esc(e.sourceReference || '—') + '<br><strong>Libellé :</strong> ' + esc(e.description || 'Aucun libellé') + '</p>' +
+      '<p><button type="button" class="btn btn-ghost btn-sm entry-attachments-manage-button" data-action="manage-entry-attachments" data-id="' + esc(e.id) + '">📎 Ajouter ou consulter les justificatifs</button></p>' +
       '<div class="table-wrap"><table class="data-table">' +
         '<thead><tr><th scope="col">Compte</th><th scope="col">Intitulé</th><th scope="col" class="num">Débit</th><th scope="col" class="num">Crédit</th></tr></thead><tbody>' +
         e.lines.map(function (l) {

@@ -39,7 +39,7 @@ assert.deepEqual(Array.from(sandbox.historyEntries('AC'), entry => entry.id), ['
 const historyHtml = sandbox.renderHistory('AC');
 assert.ok(historyHtml.indexOf('AC-03') < historyHtml.indexOf('AC-02') && historyHtml.indexOf('AC-02') < historyHtml.indexOf('AC-01'));
 assert.doesNotMatch(historyHtml, /BQ-01/, 'les pièces d’un autre journal sont exclues');
-const historyHeadings = ['Date', 'N° de pièce', 'Compte', 'Référence', 'Débit', 'Crédit', 'Libellé', 'Statut'];
+const historyHeadings = ['Date', 'N° de pièce', 'Compte', 'Référence', 'Débit', 'Crédit', 'Libellé', 'Statut', 'Justificatifs'];
 let previousHeadingPosition = -1;
 historyHeadings.forEach(heading => {
   const position = historyHtml.indexOf('<th scope="col"' + (heading === 'Débit' || heading === 'Crédit' ? ' class="num"' : '') + '>' + heading + '</th>');
@@ -49,6 +49,7 @@ historyHeadings.forEach(heading => {
 assert.match(historyHtml, /FACT-02/);
 assert.match(historyHtml, /601 ·/);
 assert.match(historyHtml, /401 ·/);
+assert.equal((historyHtml.match(/data-action="manage-entry-attachments"/g) || []).length, 3, 'chaque pièce du journal expose l’accès aux justificatifs');
 assert.equal((historyHtml.match(/entry-journal-piece-separator/g) || []).length, 3, 'chaque pièce possède une ligne de séparation récapitulative');
 assert.ok(historyHtml.includes('Total de la pièce N° AC-02</strong> · 2 lignes'));
 assert.ok(historyHtml.includes('<td class="num"><strong>100</strong></td>'), 'le séparateur affiche les totaux de la pièce');
