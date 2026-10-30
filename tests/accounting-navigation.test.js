@@ -590,6 +590,16 @@ assert.equal(findTab('fin-exercice', 'opening-transfer').children[0].status, 'pa
 assert.ok(findTab('fin-exercice', 'opening-transfer').reason.includes('ne clôture pas définitivement'));
 assert.equal(findTab('fin-exercice', 'balance-checks').status, 'partial');
 assert.ok(findTab('fin-exercice', 'balance-checks').reason.includes('pièces validées du cycle'));
+assert.equal(findTab('fin-exercice', 'depreciation').status, 'partial');
+assert.ok(findTab('fin-exercice', 'depreciation').reason.includes('aucune écriture AMO n’est générée'));
+assert.match(menuRenderer, /group\.id === 'fin-exercice' && tab\.id === 'depreciation'[\s\S]*viewYearEndDepreciation\(\)/,
+  'le calcul des amortissements est intégré au sous-menu de fin d’exercice');
+assert.match(appSource, /function viewYearEndDepreciation\(\)[\s\S]*cycleEnd[\s\S]*12-31[\s\S]*Aucune écriture AMO n’est créée/,
+  'le calcul est limité aux cycles clos au 31 décembre et reste non comptabilisant');
+assert.match(appSource, /function bindYearEndDepreciation\(\)[\s\S]*FixedAssetDepreciation\.simulate\(S\.fixedAssets\(\)/,
+  'le sous-menu utilise le moteur de simulation des fiches d’immobilisations');
+assert.match(appSource, /menuParams\.g === 'fin-exercice' && menuParams\.t === 'depreciation'\) bindYearEndDepreciation\(\)/,
+  'les conventions explicites et le lancement du calcul sont liés au sous-menu');
 assert.match(menuRenderer, /group\.id === 'fin-exercice' && tab\.id === 'balance-checks'[\s\S]*viewFundamentalBalanceChecks\(\)/,
   'la vérification des équilibres est intégrée au sous-menu de fin d’exercice');
 assert.match(appSource, /function viewFundamentalBalanceChecks\(\)[\s\S]*viewAccountingBalanceRecalculation\(\)/,

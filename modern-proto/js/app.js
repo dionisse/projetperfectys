@@ -21932,6 +21932,70 @@
     });
   }
 
+  function viewYearEndDepreciation() {
+    var dossier = S.currentDossier();
+    var year = String(dossier.cycleEnd || '').slice(0, 4) || String(dossier.exerciseYear || 'N');
+    var reachesDecember31 = /^\d{4}-12-31$/.test(String(dossier.cycleEnd || ''));
+    var conventions = FixedAssetDepreciation.conventions;
+    var options = '<option value="">Choisir explicitement une convention…</option>' + Object.keys(conventions).map(function (key) {
+      return '<option value="' + esc(key) + '">' + esc(conventions[key]) + '</option>';
+    }).join('');
+    var cycleNotice = reachesDecember31
+      ? '<div class="alert info"><div><strong>Échéance vérifiée : 31/12/' + esc(year) + '.</strong> Le calcul porte sur le cycle enregistré du ' + esc(S.dateLabel(dossier.cycleStart)) + ' au ' + esc(S.dateLabel(dossier.cycleEnd)) + '. Seules les fiches et paramètres renseignés dans le dossier sont utilisés.</div></div>'
+      : '<div class="alert warning"><div><strong>Calcul au 31/12/N indisponible pour ce dossier.</strong> Le cycle enregistré se termine le ' + esc(S.dateLabel(dossier.cycleEnd)) + ', et non le 31 décembre. Aucun calcul hors période n’est lancé ; vérifiez les dates du dossier avant de poursuivre.</div></div>';
+    var form = reachesDecember31
+      ? '<form id="year-end-depreciation-form" class="fixed-asset-simulation-form" novalidate>' +
+          '<label class="field"><span>Convention de calcul <span aria-hidden="true">*</span></span><select id="year-end-depreciation-convention" required>' + options + '</select><span class="hint">Aucune convention n’est présélectionnée. Choisissez une hypothèse explicite ; les fiches incompatibles ou incomplètes seront listées à part.</span></label>' +
+          '<button type="submit" class="btn btn-primary">Calculer l’aperçu au 31/12/' + esc(year) + '</button>' +
+        '</form><div id="year-end-depreciation-output" class="fixed-asset-simulation-output" aria-live="polite"><div class="empty-state registry-empty"><h3>Calcul non lancé</h3><p>Choisissez une convention pour établir l’aperçu à partir des fiches du dossier.</p></div></div>'
+      : '<div class="empty-state registry-empty"><h3>Vérification de période requise</h3><p>Le calcul reste bloqué tant que la date de fin du cycle n’est pas le 31 décembre.</p></div>';
+    return '<div class="exchange-workspace year-end-depreciation-workspace">' +
+      '<section class="exchange-card year-end-depreciation-card"><p class="page-kicker">FIN D’EXERCICE · IMMOBILISATIONS</p><h4>Calcul automatique des amortissements au 31/12/N</h4>' +
+      '<p>Dossier ' + esc(dossier.reference || dossier.name) + ' · exercice ' + esc(year) + '</p>' + cycleNotice +
+      '<div class="alert warning"><div><strong>Aperçu non comptabilisant.</strong> Le calcul réutilise les méthodes et paramètres enregistrés ; à ce stade, seule la méthode linéaire est simulée. Les conventions dégressive, unités d’œuvre, règles d’arrondi, valeurs déjà amorties, cessions et validation comptable/fiscale restent à confirmer. Aucune écriture AMO n’est créée et aucun montant n’est enregistré.</div></div>' +
+      form +
+      '<p class="exchange-footnote">Les biens « à définir », non amortissables, financiers, en cours ou retirés, ainsi que les fiches incomplètes, ne sont pas calculés silencieusement : leur motif est indiqué dans les exclusions.</p></section>' +
+      '</div>';
+  }
+
+  function bindYearEndDepreciation() {
+    var form = $('#year-end-depreciation-form');
+    if (!form) return;
+    var dossier = S.currentDossier();
+    var convention = $('#year-end-depreciation-convention', form);
+    var output = $('#year-end-depreciation-output');
+    form.addEventListener('change', function () {
+      output.innerHTML = '<div class="empty-state registry-empty"><h3>Paramètre modifié</h3><p>Relancez le calcul pour actualiser l’aperçu.</p></div>';
+    });
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'module.view', accountingAccessContext(dossier))) {
+        toast('Accès refusé : le droit de consultation comptable n’est pas accordé.', 'warning');
+        return;
+      }
+      var activeDossier = S.currentDossier();
+      if (!activeDossier || activeDossier.id !== dossier.id || activeDossier.cycleStart !== dossier.cycleStart || activeDossier.cycleEnd !== dossier.cycleEnd) {
+        output.innerHTML = '<div class="alert warning" role="alert"><strong>Le dossier ou son cycle a changé.</strong> Rechargez le sous-menu avant de relancer le calcul.</div>';
+        return;
+      }
+      if (!/^\d{4}-12-31$/.test(String(activeDossier.cycleEnd || ''))) {
+        output.innerHTML = '<div class="alert warning" role="alert">Le cycle actif ne se termine pas au 31 décembre ; aucun calcul n’a été exécuté.</div>';
+        return;
+      }
+      if (!convention.value || !Object.prototype.hasOwnProperty.call(FixedAssetDepreciation.conventions, convention.value)) {
+        output.innerHTML = '<div class="alert error" role="alert">Choisissez explicitement une convention de calcul.</div>';
+        convention.focus();
+        return;
+      }
+      var result = FixedAssetDepreciation.simulate(S.fixedAssets(), activeDossier.cycleStart, activeDossier.cycleEnd, convention.value);
+      if (!result.ok) {
+        output.innerHTML = '<div class="alert error" role="alert">' + esc((result.errors || ['Le calcul ne peut pas être effectué.']).join(' ')) + '</div>';
+        return;
+      }
+      output.innerHTML = fixedAssetDepreciationSimulationHtml(result);
+    });
+  }
+
   function refreshFixedAssetRows() {
     var records = S.fixedAssets();
     var filter = ui.fixedAssets || { q: '', status: 'all', assetType: 'all' };
@@ -26933,6 +26997,8 @@
       exchangeFeature = viewFixedAssets();
     } else if (group.id === 'fin-exercice' && tab.id === 'balance-checks') {
       exchangeFeature = viewFundamentalBalanceChecks();
+    } else if (group.id === 'fin-exercice' && tab.id === 'depreciation') {
+      exchangeFeature = viewYearEndDepreciation();
     } else if (group.id === 'fin-exercice' && tab.id === 'opening-transfer' && selectedChild && selectedChild.id === 'opening-transfer-build') {
       exchangeFeature = viewOpeningTransferBuild();
     } else if (group.id === 'saisie' && tab.id === 'opening-balances') {
@@ -28329,6 +28395,7 @@
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'fixed-asset-locations') bindFixedAssetLocationView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'fixed-assets') bindFixedAssetView();
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'opening-balances') bindOpeningBalancesView();
+      if (!isPhoneViewport() && menuParams.g === 'fin-exercice' && menuParams.t === 'depreciation') bindYearEndDepreciation();
       if (!isPhoneViewport() && menuParams.g === 'fin-exercice' && menuParams.t === 'opening-transfer' && menuParams.c === 'opening-transfer-build') bindOpeningBalancesView();
       if (!isPhoneViewport() && menuParams.g === 'fichier' && menuParams.t === 'import-other') bindAccountingExchangeImport();
       if (!isPhoneViewport() && menuParams.g === 'fichier' &&
