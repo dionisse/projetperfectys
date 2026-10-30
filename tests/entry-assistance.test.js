@@ -108,6 +108,26 @@ assert.match(lineRenderer, /type="text" data-field="account" list="entry-account
 assert.match(appSource, /<datalist id="entry-account-suggestions">[\s\S]*entryAccountDatalist\(model\.journal\)/);
 assert.match(appSource, /data-action="add-suggested-counterpart"/);
 assert.match(appSource, /Ajouter le compte uniquement/);
+assert.match(appSource, /rawValue === suggestionValue[\s\S]*completeEntryAccountSuggestion\(input, account\)/);
+const suggestionList = { innerHTML: '<option value="601000 — Achats"></option>' };
+let debitFocused = false;
+const suggestionSelectionSandbox = {
+  $: selector => selector === '#entry-account-suggestions' ? suggestionList : null,
+  entryAccountInputStatus: () => {}
+};
+vm.runInNewContext(extractFunction('completeEntryAccountSuggestion', 'bindEntryAccountInput') + 'globalThis.completeSuggestion = completeEntryAccountSuggestion;', suggestionSelectionSandbox);
+const debitInput = { focus: () => { debitFocused = true; } };
+const suggestionRow = { querySelector: selector => selector === '[data-field="debit"]' ? debitInput : null };
+const suggestionInput = {
+  value: '601000 — Achats',
+  attributes: {},
+  setAttribute: function (name, value) { this.attributes[name] = value; },
+  closest: selector => selector === '.line-row' ? suggestionRow : null
+};
+suggestionSelectionSandbox.completeSuggestion(suggestionInput, { code: '601000', label: 'Achats' });
+assert.equal(suggestionInput.value, '601000', 'le compte sélectionné est normalisé immédiatement');
+assert.equal(suggestionList.innerHTML, '', 'les suggestions disparaissent après la sélection');
+assert.equal(debitFocused, true, 'le focus passe au champ de saisie suivant pour poursuivre la pièce');
 assert.match(appSource, /debit: '', credit: ''/);
 assert.match(appSource, /id="entry-difference"/);
 assert.match(appSource, /Saisissez un code ou un intitulé exact proposé pour ce journal/);

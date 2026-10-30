@@ -2142,6 +2142,17 @@
     }).join('') + '</div>';
   }
 
+  function completeEntryAccountSuggestion(input, account) {
+    input.value = account.code;
+    input.setAttribute('data-suggestion-selected', 'true');
+    var list = $('#entry-account-suggestions');
+    if (list) list.innerHTML = '';
+    entryAccountInputStatus(input);
+    var row = input.closest('.line-row');
+    var debitInput = row && row.querySelector('[data-field="debit"]');
+    if (debitInput) debitInput.focus();
+  }
+
   function bindEntryAccountInput(input) {
     if (!input) return;
     var refresh = function (canonicalize) {
@@ -2153,8 +2164,33 @@
       entryAccountInputStatus(input);
       if (canonicalize) refreshEntryCounterpartSuggestions();
     };
-    input.addEventListener('input', function () { refresh(false); });
-    input.addEventListener('change', function () { refresh(true); updateEntryTotals(); });
+    input.addEventListener('input', function () {
+      input.removeAttribute('data-suggestion-selected');
+      var rawValue = String(input.value || '');
+      var account = resolveEntryAccount(rawValue, ($('#e-journal') || {}).value || '');
+      var suggestionValue = account && String(account.code) + ' — ' + String(account.label || '').trim();
+      if (suggestionValue && rawValue === suggestionValue) {
+        completeEntryAccountSuggestion(input, account);
+        return;
+      }
+      refresh(false);
+    });
+    input.addEventListener('change', function () {
+      var suggestionSelected = input.getAttribute('data-suggestion-selected') === 'true';
+      var rawValue = String(input.value || '');
+      var selectedAccount = resolveEntryAccount(rawValue, ($('#e-journal') || {}).value || '');
+      var selectedSuggestionValue = selectedAccount && String(selectedAccount.code) + ' — ' + String(selectedAccount.label || '').trim();
+      input.removeAttribute('data-suggestion-selected');
+      if (suggestionSelected) {
+        entryAccountInputStatus(input);
+        refreshEntryCounterpartSuggestions();
+      } else if (selectedSuggestionValue && rawValue === selectedSuggestionValue) {
+        completeEntryAccountSuggestion(input, selectedAccount);
+        input.removeAttribute('data-suggestion-selected');
+        refreshEntryCounterpartSuggestions();
+      } else refresh(true);
+      updateEntryTotals();
+    });
     input.addEventListener('blur', function () {
       var account = resolveEntryAccount(input.value, ($('#e-journal') || {}).value || '');
       if (account) input.value = account.code;
