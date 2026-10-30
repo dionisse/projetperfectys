@@ -30469,7 +30469,8 @@
         var y = Number(trigger.getAttribute('data-year'));
         var m = Number(trigger.getAttribute('data-month'));
         if (!window.confirm('Clôturer ' + S.monthLabel(m) + ' ' + y + ' ? Les nouvelles pièces et la validation de brouillons seront refusées sur cette période.')) break;
-        S.setPeriod(y, m, 'closed');
+        var closedPeriod = S.setPeriod(y, m, 'closed');
+        if (!closedPeriod) { toast('Clôture impossible : le dossier est peut-être scellé ou le stockage local est indisponible.', 'error'); break; }
         toast('Période ' + S.monthLabel(m) + ' ' + y + ' clôturée.', 'success');
         render();
         break;
@@ -30477,14 +30478,16 @@
       case 'open-period': {
         var oy = Number(trigger.getAttribute('data-year'));
         var om = Number(trigger.getAttribute('data-month'));
-        S.setPeriod(oy, om, 'open');
+        var openedPeriod = S.setPeriod(oy, om, 'open');
+        if (!openedPeriod) { toast('Réouverture impossible : le dossier est peut-être scellé ou le stockage local est indisponible.', 'error'); break; }
         toast('Période ' + S.monthLabel(om) + ' ' + oy + ' réouverte.', 'success');
         render();
         break;
       }
       case 'reset-data':
         if (!window.confirm('Réinitialiser les données du dossier « ' + S.currentDossier().name + ' » ? Un point de restauration propre à ce dossier sera conservé avant le remplacement.')) break;
-        S.reset();
+        var resetState = S.reset();
+        if (!resetState) { toast('Réinitialisation impossible : le point de restauration n’a pas pu être créé ou le stockage local est indisponible.', 'error'); break; }
         toast('Données de démonstration restaurées. L’état précédent reste récupérable localement.', 'success');
         render();
         break;

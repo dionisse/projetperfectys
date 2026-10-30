@@ -35,13 +35,13 @@ assert.match(html, /css\/definitions-plans-edition\.css/);
 assert.match(html, /js\/definitions-plans-edition-reports\.js/);
 assert.match(sw, /\.\/css\/definitions-plans-edition\.css/);
 assert.match(sw, /\.\/js\/definitions-plans-edition-reports\.js/);
-assert.match(sw, /perfecto-static-v158/);
+assert.match(sw, /perfecto-static-v159/);
 assert.match(css, /\.definitions-plans-edition-filter-grid[\s\S]*grid-template-columns/);
 assert.doesNotMatch(app, /definitions-plans-edition-window|definitions-plans-edition-titlebar/);
 assert.match(css, /body\.report-preview-printing[\s\S]*\.definitions-plans-edition-print/);
 assert.match(workflow, /modern-proto\/js\/definitions-plans-edition-reports\.js/);
 assert.match(workflow, /modern-proto\/css\/definitions-plans-edition\.css/);
-assert.match(workflow, /node tests\/definitions-plans-edition-reports\.test\.js/);
-assert.match(workflow, /node tests\/definitions-plans-edition-ui\.test\.js/);
+assert.match(workflow, /run: npm test/);
+assert.match(workflow, /run: npm test/);
 
 console.log('Éditions Tiers et Plan des journaux : menu, sélection, aperçu plein écran et ressources vérifiés.');

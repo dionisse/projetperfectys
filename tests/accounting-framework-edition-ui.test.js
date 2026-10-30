@@ -40,12 +40,12 @@ assert.ok(html.indexOf('js/accounting-framework-edition-report.js') < html.index
 assert.match(html, /css\/financial-framework-edition\.css/);
 assert.match(sw, /\.\/js\/accounting-framework-edition-report\.js/);
 assert.match(sw, /\.\/css\/financial-framework-edition\.css/);
-assert.match(sw, /perfecto-static-v158/);
+assert.match(sw, /perfecto-static-v159/);
 assert.match(css, /\.financial-framework-edition-table-wrap[\s\S]*overflow-x: auto/);
 assert.match(css, /body\.report-preview-printing[\s\S]*\.financial-framework-edition-table/);
 assert.match(workflow, /modern-proto\/js\/accounting-framework-edition-report\.js/);
 assert.match(workflow, /modern-proto\/css\/financial-framework-edition\.css/);
-assert.match(workflow, /node tests\/accounting-framework-edition\.test\.js/);
-assert.match(workflow, /node tests\/accounting-framework-edition-ui\.test\.js/);
+assert.match(workflow, /run: npm test/);
+assert.match(workflow, /run: npm test/);
 
 console.log('Cadre comptable : sous-menu, sélection, mise en page, aperçu plein écran, exports et ressources vérifiés.');

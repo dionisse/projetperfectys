@@ -3,7 +3,7 @@
  * Stratégie : réseau d'abord (contenu toujours à jour), cache en secours hors ligne.
  */
 
-const CACHE_NAME = 'perfecto-static-v158';
+const CACHE_NAME = 'perfecto-static-v159';
 const APP_SHELL = [
   './',
   './index.html',
@@ -118,7 +118,10 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME)
       .then((cache) => cache.addAll(APP_SHELL))
       .then(() => self.skipWaiting())
-      .catch(() => self.skipWaiting())
+      .catch((error) => {
+        console.error('Installation annulée : le cache complet de l’application n’a pas pu être créé.', error);
+        return caches.delete(CACHE_NAME).then(() => { throw error; });
+      })
   );
 });
 

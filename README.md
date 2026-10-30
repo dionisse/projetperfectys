@@ -496,31 +496,13 @@ tests/fixed-asset-additional-reports-ui.test.js navigation, sélection, aperçu 
 
 ## Tests
 
+La suite complète, sans dépendances à installer :
+
 ```bash
-node tests/store.test.js
-node tests/workspaces.test.js
-node tests/modules.test.js
-node tests/permissions.test.js
-node tests/accounting-navigation.test.js
-node tests/fixed-asset-depreciation.test.js
-node tests/fixed-asset-depreciation-report.test.js
-node tests/fixed-asset-depreciation-report-ui.test.js
-node tests/fixed-asset-overview-report.test.js
-node tests/fixed-asset-overview-report-ui.test.js
-node tests/fixed-asset-additional-reports.test.js
-node tests/fixed-asset-additional-reports-ui.test.js
-node tests/table-design-system.test.js
-node tests/confidential-accounts.test.js
-node tests/accounting-framework.test.js
-node tests/accounting-framework-edition.test.js
-node tests/accounting-framework-edition-ui.test.js
-node tests/balance-items-edition.test.js
-node tests/balance-items-edition-ui.test.js
-node tests/account-lifecycle.test.js
-node tests/centralization-cancellation.test.js
+npm test
 ```
 
-Les tests couvrent les règles comptables, la transcription exhaustive des 532 lignes du cadre comptable (codes, intitulés, pages et rattachements Débit/Crédit, y compris les cases vides) et des 92 postes/166 lignes du PDF Postes du Bilan (compte rendu à 167 avec l’en-tête, sans poste ajouté), les migrations, les références et le cycle de vie sécurisé des comptes et des répertoires clients, fournisseurs, débiteurs/créditeurs divers et personnel, les codes réservés, les cycles et l’isolation des dossiers clients, le masquage des comptes confidentiels et des pièces qui les contiennent, le catalogue modulaire, la politique d’accès de démonstration (refus par défaut, organisation, actions et portée par identifiant de dossier), la hiérarchie du menu, le style partagé de l’ensemble des tableaux (entêtes, quadrillage, zébrage et cache hors ligne), les relevés tabulaires (mappage, contrôle des montants, suggestions non pointantes), les tableaux des immobilisations (registre explicite, code matériel non déduit, champs de mouvements/amortissements et VNC sans source laissés vides, filtres liés aux méthodes enregistrées) et l’annulation des centralisations internes (provenance, écriture inverse, immuabilité, anti-doublon et brouillons). La CI GitHub Actions exécute ces scénarios ainsi qu’un contrôle de syntaxe et un test de service HTTP.
+Les tests couvrent les règles comptables, la transcription exhaustive des 532 lignes du cadre comptable (codes, intitulés, pages et rattachements Débit/Crédit, y compris les cases vides) et des 92 postes/166 lignes du PDF Postes du Bilan (compte rendu à 167 avec l’en-tête, sans poste ajouté), les migrations, les références et le cycle de vie sécurisé des comptes et des répertoires clients, fournisseurs, débiteurs/créditeurs divers et personnel, les codes réservés, les cycles et l’isolation des dossiers clients, le masquage des comptes confidentiels et des pièces qui les contiennent, le catalogue modulaire, la politique d’accès de démonstration (refus par défaut, organisation, actions et portée par identifiant de dossier), la hiérarchie du menu, le style partagé des tableaux, les relevés tabulaires, les tableaux des immobilisations, l’annulation des centralisations internes, le refus des écritures non persistées et l’installation du cache PWA complet. La CI GitHub Actions exécute désormais la suite complète `npm test`, en plus du contrôle de syntaxe et du test de service HTTP.
 
 ## Limites de cette prévisualisation
 

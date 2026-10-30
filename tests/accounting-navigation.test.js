@@ -18,6 +18,9 @@ const serviceWorkerSource = fs.readFileSync(path.join(__dirname, '..', 'modern-p
 const menuRendererStart = appSource.indexOf('function viewAccountingMenu(params) {');
 const menuRendererEnd = appSource.indexOf('function bindEntryJournalSelector()', menuRendererStart);
 const menuRenderer = appSource.slice(menuRendererStart, menuRendererEnd);
+assert.match(appSource, /var closedPeriod = S\.setPeriod\([\s\S]*if \(!closedPeriod\)[\s\S]*Clôture impossible/);
+assert.match(appSource, /var openedPeriod = S\.setPeriod\([\s\S]*if \(!openedPeriod\)[\s\S]*Réouverture impossible/);
+assert.match(appSource, /var resetState = S\.reset\(\)[\s\S]*if \(!resetState\)[\s\S]*Réinitialisation impossible/);
 
 const groups = nav.all();
 assert.deepEqual(groups.map(group => group.id), [
@@ -785,7 +788,7 @@ assert.match(appSource, /function generalLedgerReportLayoutView\([\s\S]*general-
 assert.match(appSource, /function generalLedgerReportPrintableHtml\([\s\S]*GRAND LIVRE DES COMPTES[\s\S]*reports à nouveau[\s\S]*page-break/);
 assert.match(generalLedgerSource, /priorEntriesIncludedInRunningBalance: true[\s\S]*sourceReferenceOnly: true[\s\S]*noAccountingMutation: true/);
 assert.match(configurationCss, /\.general-ledger-column-grid[\s\S]*\.general-ledger-account-section/);
-assert.match(serviceWorkerSource, /perfecto-static-v158/);
+assert.match(serviceWorkerSource, /perfecto-static-v159/);
 assert.equal(nav.getTab('declarations', 'vat-difference').status, 'active');
 assert.match(appSource, /group\.id === 'declarations' && tab\.id === 'vat-difference'[\s\S]*viewVatDifferenceReport/);
 assert.match(appSource, /function vatDifferenceConfigurationKey\([\s\S]*function openVatDifferenceAccountPicker/);
@@ -824,7 +827,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v158/);
+assert.match(serviceWorkerSource, /perfecto-static-v159/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

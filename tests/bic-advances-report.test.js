@@ -34,5 +34,5 @@ assert.match(html, /js\/bic-advances-report\.js/);
 assert.match(html, /css\/bic-advances-report\.css/);
 assert.match(worker, /bic-advances-report\.js/);
 assert.match(worker, /bic-advances-report\.css/);
-assert.match(workflow, /node tests\/bic-advances-report\.test\.js/);
+assert.match(workflow, /run: npm test/);
 console.log('OK · sélection mensuelle Acomptes BIC par client, sans données inventées');

@@ -5,6 +5,7 @@
   "description": "Serveur statique sans build pour l’aperçu PERFECTO et Bolt AI.",
   "scripts": {
     "dev": "node scripts/static-server.js",
-    "start": "node scripts/static-server.js"
+    "start": "node scripts/static-server.js",
+    "test": "node --test tests/*.test.js"
   }
 }

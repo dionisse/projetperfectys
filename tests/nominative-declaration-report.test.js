@@ -38,5 +38,5 @@ assert.match(html, /js\/nominative-declaration-report\.js/);
 assert.match(html, /css\/nominative-declaration-report\.css/);
 assert.match(worker, /nominative-declaration-report\.js/);
 assert.match(worker, /nominative-declaration-report\.css/);
-assert.match(workflow, /node tests\/nominative-declaration-report\.test\.js/);
+assert.match(workflow, /run: npm test/);
 console.log('OK · sélection mensuelle et colonnes nominatives sans données inventées');

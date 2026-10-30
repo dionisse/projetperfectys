@@ -38,13 +38,13 @@ assert.match(html, /css\/associated-items-edition\.css/);
 assert.match(sw, /\.\/js\/accounting-associated-items\.js/);
 assert.match(sw, /\.\/js\/account-associated-items-edition-report\.js/);
 assert.match(sw, /\.\/css\/associated-items-edition\.css/);
-assert.match(sw, /perfecto-static-v158/);
+assert.match(sw, /perfecto-static-v159/);
 assert.match(css, /\.associated-items-edition-print[\s\S]*table-layout: fixed/);
 assert.match(css, /body\.report-preview-printing[\s\S]*\.associated-items-edition-print/);
 assert.match(workflow, /modern-proto\/js\/accounting-associated-items\.js/);
 assert.match(workflow, /modern-proto\/js\/account-associated-items-edition-report\.js/);
 assert.match(workflow, /modern-proto\/css\/associated-items-edition\.css/);
-assert.match(workflow, /node tests\/accounting-associated-items-edition\.test\.js/);
-assert.match(workflow, /node tests\/account-associated-items-edition-ui\.test\.js/);
+assert.match(workflow, /run: npm test/);
+assert.match(workflow, /run: npm test/);
 
 console.log('Postes associés aux comptes : sous-menu, filtre, colonnes, aperçu plein écran et ressources vérifiés.');

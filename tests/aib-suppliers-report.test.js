@@ -188,5 +188,5 @@ assert.match(worker, /aib-suppliers-report\.js/);
 assert.match(worker, /aib-suppliers-report\.css/);
 assert.match(worker, /aib-suppliers-template\.xlsx/);
 assert.match(workflow, /modern-proto\/assets\/aib-suppliers-template\.xlsx/);
-assert.match(workflow, /node tests\/aib-suppliers-report\.test\.js/);
+assert.match(workflow, /run: npm test/);
 console.log('OK · analyse AIB mensuelle configurée, rapprochement 4478 et rapport d’écarts');

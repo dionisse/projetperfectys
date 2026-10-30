@@ -74,6 +74,11 @@ assert.equal(reopenedSingle.reopenedCount, 1);
 
 S.setPeriod(sample.year, sample.month, 'open');
 storageWritesBlocked = true;
+const failedSingleClose = S.setPeriod(sample.year, sample.month, 'closed');
+storageWritesBlocked = false;
+assert.equal(failedSingleClose, null, 'une clôture individuelle non sauvegardée est refusée');
+assert.equal(S.periodStatus(sample.year, sample.month), 'open', 'l’état reste ouvert après l’échec de sauvegarde');
+storageWritesBlocked = true;
 const failedClose = S.closeOpenCyclePeriods();
 storageWritesBlocked = false;
 assert.equal(failedClose.ok, false);

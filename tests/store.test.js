@@ -255,6 +255,48 @@ test('une suppression de brouillon échoue sans l’effacer si le stockage est p
   assert.ok(S.entry(draft.entry.id), 'le brouillon reste présent en mémoire si l’enregistrement échoue');
 });
 
+test('création, modification et validation refusent un succès si le stockage échoue', () => {
+  const beforeCount = S.entries().length;
+  storageWritesBlocked = true;
+  const failedCreate = S.createEntry({
+    reference: 'OD-2026-STORAGE-FAIL-CREATE', journal: 'OD', date: '2026-06-07', description: 'Création non persistée',
+    lines: [{ account: '622100', debit: 300, credit: 0 }, { account: '401100', debit: 0, credit: 300 }]
+  }, 'draft');
+  storageWritesBlocked = false;
+  assert.equal(failedCreate.ok, false);
+  assert.equal(S.entries().length, beforeCount, 'une pièce non sauvegardée ne reste pas en mémoire');
+
+  const draft = S.createEntry({
+    reference: 'OD-2026-STORAGE-FAIL-UPDATE', journal: 'OD', date: '2026-06-08', description: 'Description initiale',
+    lines: [{ account: '622100', debit: 400, credit: 0 }, { account: '401100', debit: 0, credit: 400 }]
+  }, 'draft');
+  assert.equal(draft.ok, true, draft.errors.join(' '));
+
+  storageWritesBlocked = true;
+  const failedUpdate = S.updateDraft(draft.entry.id, {
+    reference: draft.entry.reference, journal: draft.entry.journal, date: draft.entry.date,
+    description: 'Modification non persistée', lines: draft.entry.lines
+  });
+  storageWritesBlocked = false;
+  assert.equal(failedUpdate.ok, false);
+  assert.equal(S.entry(draft.entry.id).description, 'Description initiale', 'l’ancienne version reste en mémoire');
+
+  storageWritesBlocked = true;
+  const failedPost = S.postEntry(draft.entry.id);
+  storageWritesBlocked = false;
+  assert.equal(failedPost.ok, false);
+  assert.equal(S.entry(draft.entry.id).status, 'draft', 'la pièce reste brouillon après un échec de sauvegarde');
+});
+
+test('la réinitialisation refuse de continuer sans point de restauration', () => {
+  const beforeEntries = JSON.stringify(S.entries());
+  storageWritesBlocked = true;
+  const reset = S.reset();
+  storageWritesBlocked = false;
+  assert.equal(reset, null);
+  assert.equal(JSON.stringify(S.entries()), beforeEntries, 'aucune donnée n’est remplacée sans sauvegarde préalable');
+});
+
 test('brouillons exclus de la balance', () => {
   const draftTotal = S.entries()
     .filter((e) => e.status === 'draft')

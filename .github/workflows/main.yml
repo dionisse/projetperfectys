@@ -49,64 +49,8 @@ jobs:
             echo "Syntaxe OK : $file"
           done
 
-      - name: Run accounting framework, reconciliation, balance recalculation, database repair, folder, module, access policy, navigation and cancellation tests
-        run: |
-          node tests/store.test.js
-          node tests/workspaces.test.js
-          node tests/modules.test.js
-          node tests/permissions.test.js
-          node tests/accounting-navigation.test.js
-          node tests/vat-difference-report.test.js
-          node tests/vat-payment-report.test.js
-          node tests/vat-payment-allocation.test.js
-          node tests/vat-declaration-workbook.test.js
-          node tests/vat-detail-report.test.js
-          node tests/aib-suppliers-report.test.js
-          node tests/nominative-declaration-report.test.js
-          node tests/bic-advances-report.test.js
-          node tests/ohada-financial-statements.test.js
-          node tests/is-declaration.test.js
-          node tests/iba-declaration.test.js
-          node tests/ohada-result-state.test.js
-          node tests/table-design-system.test.js
-          node tests/journal-lines-report.test.js
-          node tests/account-movements.test.js
-          node tests/analytical-centers.test.js
-          node tests/reconciliation-workflows.test.js
-          node tests/bank-statement.test.js
-          node tests/accounting-chart.test.js
-          node tests/accounting-plan-edition.test.js
-          node tests/accounting-plan-edition-ui.test.js
-          node tests/definitions-plans-edition-reports.test.js
-          node tests/definitions-plans-edition-ui.test.js
-          node tests/accounting-associated-items-edition.test.js
-          node tests/account-associated-items-edition-ui.test.js
-          node tests/accounting-framework.test.js
-          node tests/accounting-framework-edition.test.js
-          node tests/accounting-framework-edition-ui.test.js
-          node tests/balance-items-edition.test.js
-          node tests/balance-items-edition-ui.test.js
-          node tests/account-lifecycle.test.js
-          node tests/payroll-centralization.test.js
-          node tests/payroll-hr.test.js
-          node tests/sales-centralization.test.js
-          node tests/sales-stock-invoicing.test.js
-          node tests/accounting-exchange.test.js
-          node tests/accounting-consolidation.test.js
-          node tests/accounting-balance-recalculation.test.js
-          node tests/accounting-database-repair.test.js
-          node tests/confidential-accounts.test.js
-          node tests/centralization-cancellation.test.js
-
-      - name: Run fixed-asset report tests
-        run: |
-          node tests/fixed-asset-depreciation.test.js
-          node tests/fixed-asset-depreciation-report.test.js
-          node tests/fixed-asset-depreciation-report-ui.test.js
-          node tests/fixed-asset-overview-report.test.js
-          node tests/fixed-asset-overview-report-ui.test.js
-          node tests/fixed-asset-additional-reports.test.js
-          node tests/fixed-asset-additional-reports-ui.test.js
+      - name: Run complete test suite
+        run: npm test
 
       - name: Smoke test static server
         run: |

@@ -58,13 +58,13 @@ assert.ok(html.indexOf('js/accounting-plan-edition-report.js') < html.indexOf('j
 assert.match(html, /css\/accounting-plan-edition\.css/);
 assert.match(sw, /\.\/js\/accounting-plan-edition-report\.js/);
 assert.match(sw, /\.\/css\/accounting-plan-edition\.css/);
-assert.match(sw, /perfecto-static-v158/);
+assert.match(sw, /perfecto-static-v159/);
 assert.match(css, /\.accounting-plan-edition-table-wrap[\s\S]*overflow-x: auto/);
 assert.match(css, /body\.report-preview-printing[\s\S]*\.accounting-plan-edition-table/);
 assert.match(css, /min-width: 0 !important/);
 assert.match(workflow, /modern-proto\/js\/accounting-plan-edition-report\.js/);
 assert.match(workflow, /modern-proto\/css\/accounting-plan-edition\.css/);
-assert.match(workflow, /node tests\/accounting-plan-edition\.test\.js/);
-assert.match(workflow, /node tests\/accounting-plan-edition-ui\.test\.js/);
+assert.match(workflow, /run: npm test/);
+assert.match(workflow, /run: npm test/);
 
 console.log('Plan comptable : sous-menu, session nettoyée par route, lecture S.accounts(), aperçu plein écran, exports et ressources vérifiés.');

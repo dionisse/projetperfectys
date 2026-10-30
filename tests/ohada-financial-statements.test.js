@@ -157,5 +157,5 @@ assert.match(worker, /assets\/OHADAr-template\.xlsx/);
 assert.match(worker, /ohada-financial-statements\.js/);
 assert.match(workflow, /modern-proto\/assets\/OHADAr-template\.xlsx/);
 assert.match(workflow, /\/modern-proto\/assets\/OHADAr-template\.xlsx/);
-assert.match(workflow, /node tests\/ohada-financial-statements\.test\.js/);
+assert.match(workflow, /run: npm test/);
 console.log('OK · modèle OHADA immuable, formules préservées, données source, rapport des écarts et génération non clôturante');

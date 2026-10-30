@@ -3356,10 +3356,15 @@
 
   function reset() {
     ensureFolderCatalog();
-    if (recoveryIssue) return state;
+    if (recoveryIssue) return null;
+    var previousState = clone(load());
+    if (!writeBackupSnapshot(previousState)) return null;
     var dossier = folderById(activeFolderId);
     state = initialState(!dossier || dossier.seeded !== false, dossier);
-    save();
+    if (!save()) {
+      state = previousState;
+      return null;
+    }
     return state;
   }
 
@@ -6242,10 +6247,14 @@
   function setPeriod(year, month, status) {
     var st = load();
     if (st.definitiveClose && st.definitiveClose.finalized) return null;
+    var previousState = clone(st);
     ensureYear(year);
     var p = period(year, month);
     p.status = status;
-    save();
+    if (!save()) {
+      state = previousState;
+      return null;
+    }
     return p;
   }
 
@@ -6636,13 +6645,18 @@
     }
 
     var st = load();
+    var previousState = clone(st);
     ensureYear(Number(result.entry.date.slice(0, 4)));
     var record = result.entry;
     record.id = 'e-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
     record.createdAt = new Date().toISOString();
     st.entries.push(record);
     var persisted = save();
-    if (persisted && record.status === 'posted') markOhadaResultStale();
+    if (!persisted) {
+      state = previousState;
+      return { ok: false, errors: ['Enregistrement impossible : le stockage local est indisponible ou plein. La pièce n’a pas été créée.'] };
+    }
+    if (record.status === 'posted') markOhadaResultStale();
     return { ok: true, errors: [], entry: record };
   }
 
@@ -6677,14 +6691,19 @@
     var result = validateEntry(payload, { requireBalanced: false, status: 'draft', allowInactiveJournal: allowInactiveJournal });
     if (!result.ok) return result;
     var st = load();
+    var previousState = clone(st);
     var idx = st.entries.findIndex(function (e) { return e.id === id; });
+    if (idx < 0) return { ok: false, errors: ['Pièce introuvable.'] };
     var changed = entryContentSignature(existing) !== entryContentSignature(result.entry);
     var updatedEntry = Object.assign({}, existing, result.entry, { id: id });
     if (changed) {
       updatedEntry.updatedAt = new Date().toISOString();
     }
     st.entries[idx] = updatedEntry;
-    save();
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Modification impossible : le stockage local est indisponible ou plein. La version précédente a été conservée.'] };
+    }
     return { ok: true, errors: [], entry: st.entries[idx] };
   }
 
@@ -6822,9 +6841,13 @@
       var invalidFixedAssetLinks = fixedAssetEntryLinkErrors(existing);
       if (missingFixedAssetLines.length || invalidFixedAssetLinks.length) return { ok: false, errors: fixedAssetValidationError(existing, missingFixedAssetLines).concat(invalidFixedAssetLinks) };
     }
+    var previousState = clone(st);
     existing.status = 'posted';
     existing.postedAt = new Date().toISOString();
-    save();
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Validation impossible : le stockage local est indisponible ou plein. La pièce reste en brouillon.'] };
+    }
     markOhadaResultStale();
     return { ok: true, errors: [], entry: existing };
   }
