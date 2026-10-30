@@ -26,6 +26,7 @@
   var BicAdvancesReport = window.PerfectoBicAdvancesReport;
   var OhadaFinancialStatements = window.PerfectoOhadaFinancialStatements;
   var IsDeclaration = window.PerfectoIsDeclaration;
+  var IsTaxAdjustments = window.PerfectoIsTaxAdjustments;
   var IbaDeclaration = window.PerfectoIbaDeclaration;
   var CashOperations = window.PerfectoCashOperations;
   var AccountMovements = window.PerfectoAccountMovements;
@@ -569,6 +570,12 @@
           moduleId: 'accounting',
           actionId: trigger && trigger.getAttribute('data-tax-adjustment-mode') === 'edit' ? 'taxAdjustments.edit' : 'taxAdjustments.create'
         };
+      case 'edit-tax-adjustment-review':
+      case 'save-tax-adjustment-review':
+      case 'reset-tax-adjustment-review':
+        return { moduleId: 'accounting', actionId: 'taxAdjustments.edit' };
+      case 'apply-tax-adjustments-is':
+        return { moduleId: 'accounting', actionId: 'taxAdjustments.edit' };
       case 'new-opening-balance':
         return { moduleId: 'accounting', actionId: 'openingBalances.create' };
       case 'edit-opening-balance':
@@ -22021,30 +22028,37 @@
       : (direction === 'deduction' ? 'Déduction proposée' : 'À qualifier');
   }
 
-  function viewTaxAdjustments() {
-    var dossier = S.currentDossier();
-    var records = S.taxAdjustments().slice().sort(function (left, right) {
-      return String(right.updatedAt || right.createdAt || '').localeCompare(String(left.updatedAt || left.createdAt || '')) || String(left.description).localeCompare(String(right.description), 'fr');
+  function taxAdjustmentAnalysis() {
+    if (S.hasHiddenConfidentialAccounts && S.hasHiddenConfidentialAccounts()) return { blocked: true, proposals: [], automaticReintegrations: null, automaticDeductions: null, automaticProposalCount: 0, awaitingQualificationCount: 0, outsideIsBaseCount: 0, manualReintegrations: 0, manualDeductions: 0, reintegrationsToImport: null, deductionsToImport: null, manualReintegrationCount: 0, manualDeductionCount: 0, unclassifiedExpenseLineCount: null };
+    var declaration = readIsDeclaration(S.currentDossier()), expensePosts = [], incomePosts = [];
+    IsDeclaration.POST_MAPPINGS.forEach(function (mapping) {
+      var target = mapping.nature === 'expense' ? expensePosts : incomePosts;
+      (declaration.configuration.mappings[mapping.cell] || []).forEach(function (post) { if (target.indexOf(post) < 0) target.push(post); });
     });
-    var reintegrationCount = records.filter(function (record) { return record.direction === 'reintegration'; }).length;
-    var deductionCount = records.filter(function (record) { return record.direction === 'deduction'; }).length;
-    var toQualifyCount = records.length - reintegrationCount - deductionCount;
-    var rows = records.map(function (record) {
-      return '<tr><td><span class="tax-adjustment-direction tax-adjustment-' + esc(record.direction) + '">' + esc(taxAdjustmentDirectionLabel(record.direction)) + '</span><br><small>À vérifier</small></td>' +
-        '<td><strong>' + esc(record.description) + '</strong></td><td class="num">' + esc(amount(record.amount)) + ' XOF</td>' +
-        '<td>' + esc(record.sourceDocument || '—') + '</td><td>' + esc(record.taxReference || '—') + '</td>' +
-        '<td><div class="supplier-row-actions"><button type="button" class="btn btn-ghost btn-sm" data-action="edit-tax-adjustment" data-id="' + esc(record.id) + '">Modifier</button><button type="button" class="btn btn-ghost btn-sm btn-danger-quiet" data-action="delete-tax-adjustment" data-id="' + esc(record.id) + '">Supprimer</button></div></td></tr>';
+    var financial = S.financialStatementsMappingsConfiguration();
+    var analysis = IsTaxAdjustments.analyze({ accounts: S.accounts(), entries: S.postedEntries(), reviews: S.taxAdjustmentReviews(), manualAdjustments: S.taxAdjustments(), accountMappings: financial.mappings, financialFramework: AccountingFramework.all(), expensePostCodes: expensePosts, incomePostCodes: incomePosts });
+    analysis.blocked = false;
+    return analysis;
+  }
+
+  function viewTaxAdjustments() {
+    var dossier = S.currentDossier(), analysis = taxAdjustmentAnalysis();
+    var records = S.taxAdjustments().slice().sort(function (a, b) { return String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')); });
+    var rows = analysis.proposals.map(function (p) {
+      var labels = { 'awaiting-qualification': 'À confirmer — aucune déduction', 'article15-standard': 'Article 15 confirmé · 70%', 'article15-government': 'Article 15 confirmé · 100%', automatic: 'Réintégration automatique', exclude: 'Exclu par l’utilisateur', override: 'Montant corrigé', 'not-in-is-base': 'Hors base IS H36' };
+      var visibleAmount = !p.inIncomeStatementBase || ['exclude', 'awaiting-qualification'].indexOf(p.decision) >= 0 ? 'Non repris' : amount(p.includedAmount);
+      var cls = !p.inIncomeStatementBase || ['exclude', 'awaiting-qualification'].indexOf(p.decision) >= 0 ? 'to-qualify' : (p.direction === 'deduction' ? 'deduction' : 'reintegration');
+      var controls = p.inIncomeStatementBase ? '<button type="button" class="btn btn-ghost btn-sm" data-action="edit-tax-adjustment-review" data-entry-id="' + esc(p.sourceEntryId) + '" data-line-index="' + p.sourceLineIndex + '" data-rule-id="' + esc(p.ruleId) + '">Revoir</button>' + (p.reviewed ? ' <button type="button" class="btn btn-ghost btn-sm" data-action="reset-tax-adjustment-review" data-entry-id="' + esc(p.sourceEntryId) + '" data-line-index="' + p.sourceLineIndex + '" data-rule-id="' + esc(p.ruleId) + '">Rétablir</button>' : '') : '<small>Vérifier la correspondance IS.</small>';
+      return '<tr><td><strong>Art. ' + esc(p.article) + '</strong><br><small>' + esc(p.ruleLabel) + '</small></td><td>' + esc(p.entryDate) + ' · ' + esc(p.entryReference || p.sourceEntryId) + '<br><small>' + esc(p.entryDescription || '—') + '</small></td><td>' + esc(p.accountCode) + ' · ' + esc(p.accountLabel) + '</td><td class="num">' + esc(amount(p.proposedAmount)) + '</td><td><span class="tax-adjustment-direction tax-adjustment-' + cls + '">' + esc(labels[p.decision] || p.decision) + '</span><br><small>Retenu : ' + esc(visibleAmount) + '</small>' + (p.reviewNote ? '<br><small>' + esc(p.reviewNote) + '</small>' : '') + '</td><td>' + controls + '</td></tr>';
     }).join('');
-    var list = records.length
-      ? '<div class="table-wrap exchange-table-wrap tax-adjustment-table-wrap"><table class="exchange-mapping-table tax-adjustment-table"><thead><tr><th>Qualification proposée / état</th><th>Motif ou description</th><th class="num">Montant XOF</th><th>Justificatif / référence source</th><th>Référence fiscale saisie</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
-      : '<div class="empty-state registry-empty"><strong>Aucun ajustement fiscal n’est consigné pour ce cycle.</strong><span>Aucune donnée d’exemple n’est préremplie.</span></div>';
-    return '<div class="exchange-workspace tax-adjustments-workspace">' +
-      '<div class="alert info"><div><strong>Registre préparatoire · ' + esc(dossier.reference) + ' · cycle ' + esc(S.dateLabel(dossier.cycleStart)) + ' au ' + esc(S.dateLabel(dossier.cycleEnd)) + '.</strong> Consignez les éléments à examiner avec leur montant et leurs références. « Réintégration proposée » et « Déduction proposée » sont des qualifications de travail, pas une validation de déductibilité ou de réintégration.</div></div>' +
-      '<div class="alert warning"><div><strong>Aucun transfert automatique vers les déclarations.</strong> Les rubriques IS2 H38 « Charges non déductibles » et H39 « Déductions autorisées », ainsi que les champs IBA d’ajustements, restent saisis et contrôlés séparément. Le rapprochement de ce registre avec ces rubriques devra éviter les omissions et doubles inclusions après validation des règles et justificatifs.</div></div>' +
-      '<div class="exchange-summary-grid tax-adjustment-summary"><div><small>Éléments consignés</small><strong>' + records.length + '</strong></div><div><small>Réintégrations proposées</small><strong>' + reintegrationCount + '</strong></div><div><small>Déductions proposées</small><strong>' + deductionCount + '</strong></div><div><small>À qualifier</small><strong>' + toQualifyCount + '</strong></div></div>' +
-      '<section class="exchange-card tax-adjustment-card"><div class="supplier-directory-head"><div><h4>Ajustements à examiner</h4><p>Les montants sont conservés comme éléments documentaires ; aucun résultat fiscal ou montant imposable n’est calculé.</p></div><button type="button" class="btn btn-primary" data-action="new-tax-adjustment">＋ Ajouter un élément</button></div>' + list + '</section>' +
-      '<p class="exchange-footnote">Les enregistrements sont isolés au dossier et au cycle comptable actif. Pour poursuivre le traitement déclaratif, ouvrez <a href="#/menu?g=declarations&amp;t=ohada-statements">Tableaux financiers OHADA / IS / IBA</a>.</p>' +
-      '</div>';
+    var automaticList = analysis.blocked ? '<div class="alert error"><div>Analyse et report bloqués : ce profil ne voit pas tous les comptes confidentiels.</div></div>' : (rows ? '<div class="table-wrap exchange-table-wrap tax-adjustment-table-wrap"><table class="exchange-mapping-table tax-adjustment-table"><thead><tr><th>Règle</th><th>Écriture validée</th><th>Compte</th><th class="num">Montant source</th><th>Décision / retenu</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<div class="empty-state registry-empty"><strong>Aucune ligne reconnue par les règles explicites.</strong><span>Les autres cas restent à examiner manuellement.</span></div>');
+    var manualRows = records.map(function (r) { return '<tr><td>' + esc(taxAdjustmentDirectionLabel(r.direction)) + '</td><td>' + esc(r.description) + '</td><td class="num">' + esc(amount(r.amount)) + ' XOF</td><td>' + esc(r.sourceDocument || '—') + '</td><td>' + esc(r.taxReference || '—') + '</td><td><button type="button" class="btn btn-ghost btn-sm" data-action="edit-tax-adjustment" data-id="' + esc(r.id) + '">Modifier</button> <button type="button" class="btn btn-ghost btn-sm btn-danger-quiet" data-action="delete-tax-adjustment" data-id="' + esc(r.id) + '">Supprimer</button></td></tr>'; }).join('');
+    var manualList = manualRows ? '<div class="table-wrap exchange-table-wrap tax-adjustment-table-wrap"><table class="exchange-mapping-table tax-adjustment-table"><thead><tr><th>Qualification</th><th>Description</th><th class="num">Montant</th><th>Source</th><th>Référence</th><th>Actions</th></tr></thead><tbody>' + manualRows + '</tbody></table></div>' : '<div class="empty-state registry-empty"><strong>Aucun ajustement manuel consigné.</strong></div>';
+    return '<div class="exchange-workspace tax-adjustments-workspace"><div class="alert info"><div><strong>Propositions IS · ' + esc(dossier.reference) + ' · cycle ' + esc(S.dateLabel(dossier.cycleStart)) + ' au ' + esc(S.dateLabel(dossier.cycleEnd)) + '.</strong> Chaque proposition peut être corrigée, confirmée ou exclue avant report.</div></div>' +
+      '<div class="alert warning"><div><strong>Couverture limitée.</strong> Le CGI impose des conditions de fond et de preuve (notamment art. 20–44) qui ne figurent pas toujours au grand livre. Elles restent à confirmer; aucune déduction n’est inférée des seuls comptes.</div></div>' +
+      '<div class="exchange-summary-grid tax-adjustment-summary"><div><small>Réintégrations automatiques</small><strong>' + (analysis.blocked ? 'Bloqué' : esc(amount(analysis.automaticReintegrations))) + '</strong></div><div><small>Déductions art. 15 confirmées</small><strong>' + (analysis.blocked ? 'Bloqué' : esc(amount(analysis.automaticDeductions))) + '</strong></div><div><small>Article 15 à confirmer</small><strong>' + analysis.awaitingQualificationCount + '</strong></div><div><small>Charges sans règle</small><strong>' + (analysis.blocked ? '—' : analysis.unclassifiedExpenseLineCount) + '</strong></div></div>' +
+      '<section class="exchange-card tax-adjustment-card"><div class="supplier-directory-head"><div><h4>Règles automatiques identifiables · CGI 2026</h4><p>Art. 35 : impôt sur les bénéfices; art. 36 : sanctions explicites; art. 15 : revenus de titres sous conditions. Le revenu net, l’IRCM/l’exonération et l’éligibilité restent à confirmer.</p></div></div>' + automaticList + '<div class="alert warning tax-adjustment-import-note">Le report remplacera H38/H39 après confirmation. Contrôlez les montants; les autres situations restent à traiter.</div><div class="exchange-preview-footer"><button type="button" class="btn btn-primary" data-action="apply-tax-adjustments-is"' + (analysis.blocked ? ' disabled' : '') + '>Reporter les propositions dans IS</button></div></section>' +
+      '<section class="exchange-card tax-adjustment-card"><div class="supplier-directory-head"><div><h4>Ajustements manuels à examiner</h4></div><button type="button" class="btn btn-primary" data-action="new-tax-adjustment">＋ Ajouter un élément</button></div>' + manualList + '</section><p class="exchange-footnote">Seuls H38/H39 sont préremplis; H44 et l’impôt ne sont pas calculés. Les cellules IS restent modifiables. Le registre est isolé au dossier et au cycle actif.</p></div>';
   }
 
   function openTaxAdjustmentModal(id) {
@@ -22096,6 +22110,56 @@
       toast(existing ? 'Élément fiscal mis à jour pour examen.' : 'Élément fiscal enregistré pour examen.', 'success');
       render();
     });
+  }
+
+  function openTaxAdjustmentReviewModal(sourceEntryId, sourceLineIndex, ruleId) {
+    var proposal = taxAdjustmentAnalysis().proposals.find(function (p) { return p.sourceEntryId === sourceEntryId && p.sourceLineIndex === Number(sourceLineIndex) && p.ruleId === ruleId; });
+    if (!proposal) { toast('Proposition fiscale introuvable dans le cycle actif.', 'warning'); return; }
+    var existing = S.taxAdjustmentReviews().find(function (r) { return r.key === proposal.key; }), isArticle15 = proposal.ruleId === 'is-exempt-security-income';
+    var choices = isArticle15 ? [['automatic', 'À qualifier : ne rien déduire'], ['article15-standard', 'Confirmer : déduction calculée à 70%'], ['article15-government', 'Confirmer titres publics béninois : déduction à 100%'], ['override', 'Saisir le montant de déduction corrigé'], ['exclude', 'Exclure']] : [['automatic', 'Reprendre le montant détecté'], ['override', 'Corriger le montant'], ['exclude', 'Exclure']];
+    var selected = existing && existing.decision || 'automatic';
+    var opts = choices.map(function (c) { return '<option value="' + c[0] + '"' + (selected === c[0] ? ' selected' : '') + '>' + c[1] + '</option>'; }).join('');
+    var savedAmount = existing && existing.overrideAmount != null ? existing.overrideAmount : '';
+    var body = '<form id="tax-adjustment-review-form" novalidate><div id="tax-adjustment-review-errors" aria-live="assertive"></div><div class="alert info"><div><strong>CGI, article ' + esc(proposal.article) + ' · ' + esc(proposal.ruleLabel) + '.</strong> ' + esc(proposal.explanation) + '<br>Compte ' + esc(proposal.accountCode) + ' · source ' + esc(proposal.entryReference || proposal.sourceEntryId) + ' · montant comptabilisé ' + esc(amount(proposal.proposedAmount)) + '.</div></div><div class="form-grid tax-adjustment-form-grid"><div class="field"><label for="tax-adjustment-review-decision">Traitement</label><select id="tax-adjustment-review-decision">' + opts + '</select></div><div class="field"><label id="tax-adjustment-review-amount-label" for="tax-adjustment-review-amount">Base nette XOF</label><input id="tax-adjustment-review-amount" type="number" min="0" step="any" value="' + esc(savedAmount) + '"><span class="hint">' + (isArticle15 ? 'Confirmez l’actif, l’IRCM acquitté ou l’exonération et le revenu net sur justificatifs. La règle standard retranche la quote-part forfaitaire de frais de 30%.' : 'Une correction doit être justifiée.') + '</span></div><div class="field tax-adjustment-description-field"><label for="tax-adjustment-review-note">Justification obligatoire pour toute correction ou confirmation</label><textarea id="tax-adjustment-review-note" rows="3" maxlength="500">' + esc(existing && existing.note || '') + '</textarea></div></div></form>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="submit" class="btn btn-primary" form="tax-adjustment-review-form">Enregistrer la revue</button>';
+    openModal('Revoir une proposition IS', 'Article ' + esc(proposal.article) + ' · ' + esc(proposal.entryReference || proposal.sourceEntryId), body, footer, true);
+    var select = $('#tax-adjustment-review-decision'), input = $('#tax-adjustment-review-amount'), label = $('#tax-adjustment-review-amount-label');
+    var previousDecision = select.value;
+    function updateAmountField() {
+      var d = select.value;
+      if (isArticle15 && ((previousDecision === 'override') !== (d === 'override'))) input.value = '';
+      previousDecision = d;
+      var required = ['override', 'article15-standard', 'article15-government'].indexOf(d) >= 0;
+      input.required = required; input.disabled = !required;
+      label.textContent = isArticle15 ? (d === 'override' ? 'Montant de déduction corrigé XOF' : 'Revenu net justifié XOF') : 'Montant retenu XOF';
+    }
+    select.addEventListener('change', updateAmountField); updateAmountField();
+    $('#tax-adjustment-review-form').addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'taxAdjustments.edit', accountingAccessContext())) { toast('Action refusée : permission de revue fiscale requise.', 'warning'); return; }
+      var decision = select.value;
+      var result = S.saveTaxAdjustmentReview({ sourceEntryId: proposal.sourceEntryId, sourceLineIndex: proposal.sourceLineIndex, ruleId: proposal.ruleId, decision: decision, overrideAmount: ['override', 'article15-standard', 'article15-government'].indexOf(decision) >= 0 ? input.value : null, note: $('#tax-adjustment-review-note').value });
+      if (!result.ok) { $('#tax-adjustment-review-errors').innerHTML = '<div class="alert error"><ul>' + result.errors.map(function (e) { return '<li>' + esc(e) + '</li>'; }).join('') + '</ul></div>'; return; }
+      closeModal(true); toast('Revue fiscale enregistrée.', 'success'); render();
+    });
+  }
+
+  function applyTaxAdjustmentsToIs() {
+    var dossier = S.currentDossier(), analysis = taxAdjustmentAnalysis();
+    if (!dossier || analysis.blocked) { toast('Report IS bloqué : vérifiez le dossier et les accès aux comptes.', 'warning'); return; }
+    if (!analysis.automaticProposalCount && !analysis.manualReintegrationCount && !analysis.manualDeductionCount) { toast('Aucun montant confirmé à reporter; les éléments à qualifier ne valent pas zéro.', 'warning'); return; }
+    var current = readIsDeclaration(dossier), old = String(current.manual['IS2!H38'] || '').trim() || String(current.manual['IS2!H39'] || '').trim();
+    var message = 'Reporter les propositions confirmées dans H38/H39 ?\n\nH38 · Réintégrations : ' + amount(analysis.reintegrationsToImport) + ' XOF\nH39 · Déductions : ' + amount(analysis.deductionsToImport) + ' XOF\n\n' + (old ? 'Les valeurs actuelles seront remplacées. ' : '') + 'Les cellules resteront modifiables.';
+    if (!window.confirm(message)) return;
+    current.manual['IS2!H38'] = String(analysis.reintegrationsToImport); current.manual['IS2!H39'] = String(analysis.deductionsToImport);
+    try { localStorage.setItem(isDeclarationKey(dossier), JSON.stringify(current)); } catch (_e) { toast('Enregistrement dans la préparation IS impossible.', 'error'); return; }
+    toast('Propositions reportées dans H38/H39; contrôlez-les dans la déclaration IS.', 'success'); navigate('#/menu?g=declarations&t=ohada-statements');
+  }
+
+  function resetTaxAdjustmentReview(entryId, lineIndex, ruleId) {
+    var result = S.deleteTaxAdjustmentReview(entryId, lineIndex, ruleId);
+    if (!result.ok) { toast((result.errors || ['Réinitialisation impossible.']).join(' '), 'error'); return; }
+    render();
   }
 
   function deleteTaxAdjustment(id) {
@@ -26821,6 +26885,7 @@
     var pre=financialResultPreflight();
     return '<section class="is-declaration-workspace"><button type="button" class="btn btn-ghost btn-sm" data-is-back>← Retour aux états</button><div class="page-header"><div><span class="page-kicker">TABLEAUX FINANCIERS OHADA RÉVISÉ · MOD 2011 IS</span><h2>Déclaration fiscales IS</h2><p>'+esc(dossier&& (dossier.name||dossier.clientName)||'Dossier actif')+' · '+esc(dossier&&dossier.cycleStart||'')+' au '+esc(dossier&&dossier.cycleEnd||'')+'</p></div><a class="btn btn-ghost" href="#/menu?g=parametres&amp;t=print-information">Informations du dossier</a></div>'+
       '<div class="alert warning"><div><strong>Préparation à contrôler avant dépôt.</strong> Les taux imprimés dans le modèle ('+IsDeclaration.TAX_RATES.industrial+' %, '+IsDeclaration.TAX_RATES.other+' %, minimum '+IsDeclaration.TAX_RATES.minimum+' %) ne sont pas validés comme règles actuelles : les montants d’impôt restent à calculer et saisir après vérification. Aucune correspondance OHADA n’est activée par défaut; aucun exemple du classeur n’est repris.</div></div>'+
+      '<div class="alert info"><div>Préparer H38/H39 depuis le registre IS : <a href="#/menu?g=fin-exercice&amp;t=tax-adjustments">Ouvrir Déductions et réintégrations fiscales</a>. Le transfert explicite remplace les valeurs saisies dans H38/H39 après confirmation; elles restent modifiables ici.</div></div>'+
       '<dl class="is-identity-summary">'+infoHtml+'</dl><form id="is-declaration-form" novalidate><div class="is-declaration-controls"><label>Type de société <select data-is-type><option value="">À confirmer</option><option value="industrial"'+(state.companyType==='industrial'?' selected':'')+'>Société industrielle · taux imprimé '+IsDeclaration.TAX_RATES.industrial+' %</option><option value="other"'+(state.companyType==='other'?' selected':'')+'>Autres sociétés · taux imprimé '+IsDeclaration.TAX_RATES.other+' %</option></select></label><label>Régime d’imposition <select data-is-regime><option value="">À confirmer</option><option value="normal"'+(state.regime==='normal'?' selected':'')+'>Réel normal</option><option value="simplified"'+(state.regime==='simplified'?' selected':'')+'>Réel simplifié</option></select></label></div>'+
       '<details class="is-declaration-details"><summary>Correspondances OHADA par rubrique (modifiables)</summary><p>Codes de postes à vérifier; le rattachement compte → poste est géré dans <a href="#/menu?g=parametres&amp;t=financial-framework">Paramètres → Cadre comptable</a>.</p><div class="is-map-grid">'+maps+'</div></details>'+
       '<details class="is-declaration-details" open><summary>Données manuelles et remplacements justifiés</summary><p>Une cellule vide ne vaut pas zéro. Complétez seulement les montants documentés.</p>'+manual+'</details>'+
@@ -28905,6 +28970,15 @@
         break;
       case 'delete-tax-adjustment':
         deleteTaxAdjustment(id);
+        break;
+      case 'edit-tax-adjustment-review':
+        openTaxAdjustmentReviewModal(trigger.getAttribute('data-entry-id'), trigger.getAttribute('data-line-index'), trigger.getAttribute('data-rule-id'));
+        break;
+      case 'reset-tax-adjustment-review':
+        resetTaxAdjustmentReview(trigger.getAttribute('data-entry-id'), trigger.getAttribute('data-line-index'), trigger.getAttribute('data-rule-id'));
+        break;
+      case 'apply-tax-adjustments-is':
+        applyTaxAdjustmentsToIs();
         break;
       case 'new-opening-balance':
         openingBalanceAuditResult = null;

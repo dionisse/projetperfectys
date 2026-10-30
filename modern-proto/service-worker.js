@@ -64,6 +64,7 @@ const APP_SHELL = [
   './js/bic-advances-report.js',
   './js/ohada-financial-statements.js',
   './js/is-declaration.js',
+  './js/is-tax-adjustments.js',
   './js/iba-declaration.js',
   './js/currency-balance-report.js',
   './js/currency-supplementary-reports.js',

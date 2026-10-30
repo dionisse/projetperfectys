@@ -42,6 +42,7 @@ assert.equal(created.taxAdjustment.direction, 'reintegration');
 assert.equal(created.taxAdjustment.amount, 125000);
 assert.equal(created.taxAdjustment.cycleStart, S.currentDossier().cycleStart);
 assert.equal(S.taxAdjustments().length, 1);
+assert.equal(S.taxAdjustmentReviews().length, 0);
 assert.equal(S.entries().length, 4, 'la saisie au registre ne crée aucune écriture comptable');
 
 const updated = S.updateTaxAdjustment(created.taxAdjustment.id, {
@@ -57,6 +58,14 @@ const failedCreate = S.createTaxAdjustment({ direction: 'to-qualify', descriptio
 storageWritesBlocked = false;
 assert.equal(failedCreate.ok, false);
 assert.equal(S.taxAdjustments().length, 1, 'une erreur de sauvegarde ne laisse pas une ligne fantôme en mémoire');
+const sourceEntry = S.entries().find(entry => entry && entry.status === 'posted');
+assert.ok(sourceEntry && sourceEntry.lines.length);
+const review = S.saveTaxAdjustmentReview({ sourceEntryId: sourceEntry.id, sourceLineIndex: 0, ruleId: 'is-profit-tax', decision: 'override', overrideAmount: 250, note: 'Correction documentée' });
+assert.equal(review.ok, true, (review.errors || []).join(' '));
+assert.equal(S.taxAdjustmentReviews().length, 1);
+assert.equal(S.saveTaxAdjustmentReview({ sourceEntryId: sourceEntry.id, sourceLineIndex: 1, ruleId: 'is-exempt-security-income', decision: 'article15-government', overrideAmount: 100, note: '' }).ok, false, 'la confirmation article 15 exige une justification');
+assert.equal(S.deleteTaxAdjustmentReview(sourceEntry.id, 0, 'is-profit-tax').ok, true);
+assert.equal(S.taxAdjustmentReviews().length, 0);
 
 const removed = S.deleteTaxAdjustment(created.taxAdjustment.id);
 assert.equal(removed.ok, true);

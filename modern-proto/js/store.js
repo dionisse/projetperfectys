@@ -997,6 +997,7 @@
       entries: withSeedEntries === false ? [] : seedEntries(),
       importSourceFiles: [],
       taxAdjustments: [],
+      taxAdjustmentReviews: [],
       periods: cyclePeriods(cycleStart, cycleEnd),
       deletedStandardAccountCodes: [],
       supplierRegistryVersion: SUPPLIER_REGISTRY_VERSION,
@@ -5617,6 +5618,59 @@
     return { ok: true, errors: [], taxAdjustment: clone(removed) };
   }
 
+  function taxAdjustmentReviewKey(sourceEntryId, sourceLineIndex, ruleId) {
+    return String(sourceEntryId || '') + ':' + String(sourceLineIndex) + ':' + String(ruleId || '');
+  }
+
+  function taxAdjustmentReviews() {
+    var st = load();
+    return clone((Array.isArray(st.taxAdjustmentReviews) ? st.taxAdjustmentReviews : []).filter(function (record) {
+      return record && record.cycleStart === st.cycleStart && record.cycleEnd === st.cycleEnd;
+    }));
+  }
+
+  function saveTaxAdjustmentReview(input) {
+    var st = load(); input = input || {};
+    if (recoveryIssue) return { ok: false, errors: ['Modification bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var entryId = String(input.sourceEntryId || '').trim();
+    var lineIndex = input.sourceLineIndex === '' || input.sourceLineIndex == null ? NaN : Number(input.sourceLineIndex);
+    var ruleId = String(input.ruleId || '').trim(), decision = String(input.decision || '').trim();
+    var note = String(input.note == null ? '' : input.note).trim();
+    var amount = input.overrideAmount === '' || input.overrideAmount == null ? null : Number(input.overrideAmount);
+    var errors = [];
+    if (!entryId || !Number.isInteger(lineIndex) || lineIndex < 0) errors.push('La ligne comptable source est invalide.');
+    if (['is-profit-tax', 'is-penalty', 'is-exempt-security-income'].indexOf(ruleId) < 0) errors.push('La règle fiscale source est inconnue.');
+    if (['automatic', 'exclude', 'override', 'article15-standard', 'article15-government'].indexOf(decision) < 0) errors.push('Choisissez une décision de revue valide.');
+    var usesAmount = ['override', 'article15-standard', 'article15-government'].indexOf(decision) >= 0;
+    if (usesAmount && (!Number.isFinite(amount) || amount < 0)) errors.push('Le montant saisi doit être un nombre positif ou nul.');
+    if (note.length > 500) errors.push('La note ne peut pas dépasser 500 caractères.');
+    if (usesAmount && !note) errors.push('Justifiez le montant ou confirmez les conditions d’application.');
+    if (ruleId !== 'is-exempt-security-income' && ['article15-standard', 'article15-government'].indexOf(decision) >= 0) errors.push('Ce traitement de l’article 15 ne correspond pas à cette règle.');
+    var source = st.entries.find(function (entry) { return entry && entry.id === entryId && entry.status === 'posted' && entry.date >= st.cycleStart && entry.date <= st.cycleEnd && Array.isArray(entry.lines) && lineIndex < entry.lines.length; });
+    if (!source) errors.push('La ligne source doit appartenir à une écriture validée du cycle actif.');
+    if (errors.length) return { ok: false, errors: errors };
+    var records = Array.isArray(st.taxAdjustmentReviews) ? st.taxAdjustmentReviews : (st.taxAdjustmentReviews = []);
+    var key = taxAdjustmentReviewKey(entryId, lineIndex, ruleId), index = records.findIndex(function (r) { return r && r.key === key; });
+    var before = clone(st), reviewed = { key: key, sourceEntryId: entryId, sourceLineIndex: lineIndex, ruleId: ruleId,
+      decision: decision, overrideAmount: usesAmount ? amount : null, note: note,
+      cycleStart: String(st.cycleStart || ''), cycleEnd: String(st.cycleEnd || ''), updatedAt: new Date().toISOString() };
+    if (index < 0) records.push(reviewed); else records[index] = reviewed;
+    if (!save()) { state = before; return { ok: false, errors: ['Impossible d’enregistrer la revue fiscale.'] }; }
+    return { ok: true, errors: [], review: clone(reviewed) };
+  }
+
+  function deleteTaxAdjustmentReview(sourceEntryId, sourceLineIndex, ruleId) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Modification bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var records = Array.isArray(st.taxAdjustmentReviews) ? st.taxAdjustmentReviews : (st.taxAdjustmentReviews = []);
+    var key = taxAdjustmentReviewKey(sourceEntryId, sourceLineIndex, ruleId);
+    var index = records.findIndex(function (r) { return r && r.key === key && r.cycleStart === st.cycleStart && r.cycleEnd === st.cycleEnd; });
+    if (index < 0) return { ok: false, errors: ['Revue fiscale introuvable dans le cycle actif.'] };
+    var before = clone(st), removed = records.splice(index, 1)[0];
+    if (!save()) { state = before; return { ok: false, errors: ['Impossible de rétablir la proposition automatique.'] }; }
+    return { ok: true, errors: [], review: clone(removed) };
+  }
+
   function agedBalanceNatureInfo(nature) {
     if (nature === 'clients') return { key: 'clients', label: 'Clients', partyType: 'client' };
     if (nature === 'suppliers') return { key: 'suppliers', label: 'Fournisseurs', partyType: 'supplier' };
@@ -7795,6 +7849,9 @@
     createTaxAdjustment: createTaxAdjustment,
     updateTaxAdjustment: updateTaxAdjustment,
     deleteTaxAdjustment: deleteTaxAdjustment,
+    taxAdjustmentReviews: taxAdjustmentReviews,
+    saveTaxAdjustmentReview: saveTaxAdjustmentReview,
+    deleteTaxAdjustmentReview: deleteTaxAdjustmentReview,
     agedBalanceItems: agedBalanceItems,
     agedBalanceSettlements: agedBalanceSettlements,
     agedBalanceItem: function (id) {
