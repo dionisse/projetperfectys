@@ -28085,7 +28085,7 @@
         '<nav class="accounting-subtabs" role="tablist" aria-orientation="vertical" aria-label="Sous-menus ' + esc(group.label) + '">' + tabs + '</nav>' +
         '<div class="accounting-menu-detail">' +
           statusLegend +
-          '<section class="accounting-menu-panel" id="accounting-menu-tabpanel" role="tabpanel" aria-labelledby="accounting-tab-' + esc(tab.id) + '">' +
+          '<section class="accounting-menu-panel' + (group.id === 'saisie' && tab.id === 'journal-entry' ? ' accounting-menu-panel-journal-entry' : '') + '" id="accounting-menu-tabpanel" role="tabpanel" aria-labelledby="accounting-tab-' + esc(tab.id) + '">' +
             '<div class="accounting-menu-panel-head"><div><p class="page-kicker">' + (selectedChild ? 'ÉLÉMENT DU SOUS-MENU' : 'SOUS-MENU') + '</p><h3>' + esc(selectedChild ? selectedChild.label : (tab.id === 'orders-accounts' ? 'Comptes de suivi des marchés accordés' : (tab.id === 'order-natures' ? 'Natures des marchés accordés' : (tab.id === 'account-controls' ? 'Suivi des comptes' : tab.label)))) + '</h3></div>' + menuStatusBadge(selectedChild ? selectedChild.status : tab.status) + '</div>' +
             details + irreversible +
             (childList ? '<div class="menu-children-wrap"><h4>Éléments de ce sous-menu</h4>' + childList + '</div>' : '') +

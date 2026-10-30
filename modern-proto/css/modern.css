@@ -2305,6 +2305,7 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
   font-size: 1.02rem;
   letter-spacing: -.02em;
 }
+.accounting-menu-panel-journal-entry .accounting-menu-panel-head h3 { font-size: .83rem; }
 .menu-status {
   display: inline-flex;
   flex: 0 0 auto;

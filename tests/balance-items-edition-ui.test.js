@@ -43,7 +43,7 @@ assert.match(html, /css\/balance-items-edition\.css/);
 assert.match(sw, /\.\/js\/accounting-balance-items\.js/);
 assert.match(sw, /\.\/js\/balance-items-edition-report\.js/);
 assert.match(sw, /\.\/css\/balance-items-edition\.css/);
-assert.match(sw, /perfecto-static-v156/);
+assert.match(sw, /perfecto-static-v157/);
 assert.match(css, /\.balance-items-edition-table-wrap[\s\S]*overflow-x: auto/);
 assert.match(css, /body\.report-preview-printing[\s\S]*\.balance-items-edition-table/);
 assert.match(workflow, /modern-proto\/js\/accounting-balance-items\.js/);
