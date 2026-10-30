@@ -39,7 +39,7 @@ assert.deepEqual(Array.from(sandbox.historyEntries('AC'), entry => entry.id), ['
 const historyHtml = sandbox.renderHistory('AC');
 assert.ok(historyHtml.indexOf('AC-03') < historyHtml.indexOf('AC-02') && historyHtml.indexOf('AC-02') < historyHtml.indexOf('AC-01'));
 assert.doesNotMatch(historyHtml, /BQ-01/, 'les pièces d’un autre journal sont exclues');
-const historyHeadings = ['Date', 'N° de pièce', 'Compte', 'Débit', 'Crédit', 'Référence', 'Libellé', 'Statut'];
+const historyHeadings = ['Date', 'N° de pièce', 'Compte', 'Référence', 'Débit', 'Crédit', 'Libellé', 'Statut'];
 let previousHeadingPosition = -1;
 historyHeadings.forEach(heading => {
   const position = historyHtml.indexOf('<th scope="col"' + (heading === 'Débit' || heading === 'Crédit' ? ' class="num"' : '') + '>' + heading + '</th>');
@@ -58,6 +58,11 @@ assert.match(appSource, /return html \+ '<div id="entry-journal-history-containe
 assert.match(appSource, /Pièces du journal · /);
 assert.match(appSource, /label for="e-reference">N° de pièce/);
 assert.match(appSource, /label for="e-source-reference">Référence/);
+const entryFormStart = appSource.indexOf('function viewEntryForm(');
+const entryFormEnd = appSource.indexOf('function collectEntryForm(', entryFormStart);
+const entryFormSource = appSource.slice(entryFormStart, entryFormEnd);
+assert.ok(entryFormSource.indexOf('entry-assistance') < entryFormSource.indexOf('id="e-source-reference"'), 'la référence est placée après les lignes de saisie');
+assert.match(entryFormSource, /entry-source-reference-field[\s\S]*?<\/div>' \+\s*'<div class="field entry-description-field"/, 'le champ Référence est juste avant le champ Libellé');
 assert.match(appSource, /sourceReference: \$\('#e-source-reference'\)\.value\.trim\(\)/);
 assert.match(appSource, /data-action="open-entry"/);
 assert.match(appSource, /var historyContainer = \$\('#entry-journal-history-container'\);[\s\S]*entryJournalHistoryHtml\(input\.value\)/,

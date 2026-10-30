@@ -2772,24 +2772,24 @@
           '<td class="nowrap">' + dateLabel(entry.date) + '</td>' +
           '<td><button type="button" class="btn btn-ghost btn-sm" data-action="open-entry" data-id="' + esc(entry.id) + '">' + esc(entry.reference) + '</button></td>' +
           '<td>' + esc(accountLabel) + '</td>' +
+          '<td>' + esc(entry.sourceReference || '—') + '</td>' +
           '<td class="num">' + (Number(line.debit) ? amount(line.debit) : '—') + '</td>' +
           '<td class="num">' + (Number(line.credit) ? amount(line.credit) : '—') + '</td>' +
-          '<td>' + esc(entry.sourceReference || '—') + '</td>' +
           '<td>' + esc(entry.description || '—') + '</td>' +
           '<td>' + statusBadge(entry.status) + '</td>' +
         '</tr>');
       });
       rows.push('<tr class="entry-journal-piece-separator" aria-label="Total de la pièce N° ' + esc(entry.reference) + ', ' + entryLines.length + ' ligne(s)">' +
-        '<td colspan="3"><strong>Total de la pièce N° ' + esc(entry.reference) + '</strong> · ' + entryLines.length + ' ligne' + (entryLines.length === 1 ? '' : 's') + '</td>' +
+        '<td colspan="4"><strong>Total de la pièce N° ' + esc(entry.reference) + '</strong> · ' + entryLines.length + ' ligne' + (entryLines.length === 1 ? '' : 's') + '</td>' +
         '<td class="num"><strong>' + amount(totals.debit) + '</strong></td>' +
         '<td class="num"><strong>' + amount(totals.credit) + '</strong></td>' +
-        '<td colspan="3"></td></tr>');
+        '<td colspan="2"></td></tr>');
     });
     return '<section class="card panel entry-journal-history" aria-labelledby="entry-journal-history-title">' +
       '<div class="panel-header"><div><h3 id="entry-journal-history-title">Pièces du journal · ' + esc(journal ? journalDisplayName(journal) : journalCode || 'Non sélectionné') + '</h3>' +
       '<p class="sub">' + entries.length + ' pièce(s) · du plus récent au plus ancien · sélectionnez une ligne pour consulter son détail.</p></div></div>' +
       (entries.length
-        ? '<div class="table-wrap"><table class="data-table"><thead><tr><th scope="col">Date</th><th scope="col">N° de pièce</th><th scope="col">Compte</th><th scope="col" class="num">Débit</th><th scope="col" class="num">Crédit</th><th scope="col">Référence</th><th scope="col">Libellé</th><th scope="col">Statut</th></tr></thead><tbody>' + rows.join('') + '</tbody></table></div>'
+        ? '<div class="table-wrap"><table class="data-table"><thead><tr><th scope="col">Date</th><th scope="col">N° de pièce</th><th scope="col">Compte</th><th scope="col">Référence</th><th scope="col" class="num">Débit</th><th scope="col" class="num">Crédit</th><th scope="col">Libellé</th><th scope="col">Statut</th></tr></thead><tbody>' + rows.join('') + '</tbody></table></div>'
         : '<div class="empty-state"><strong>Aucune pièce pour ce journal.</strong><span>Les brouillons enregistrés et les pièces validées apparaîtront ici.</span></div>') +
       '</section>';
   }
@@ -2844,9 +2844,6 @@
         '<div class="field"><label for="e-reference">N° de pièce</label>' +
           '<input id="e-reference" name="reference" type="text" required value="' + esc(model.reference) + '" data-auto="' + (editing ? 'false' : 'true') + '" autocomplete="off">' +
           '<span class="hint">Numéro propre au journal, proposé automatiquement et unique.</span></div>' +
-        '<div class="field"><label for="e-source-reference">Référence</label>' +
-          '<input id="e-source-reference" name="sourceReference" type="text" maxlength="120" value="' + esc(model.sourceReference || '') + '" placeholder="N° indiqué sur la facture ou le justificatif" autocomplete="off">' +
-          '<span class="hint">Saisie manuelle depuis la facture ou la pièce justificative.</span></div>' +
         '<div class="field"><label for="e-journal">Journal</label>' +
           '<select id="e-journal" name="journal" required>' + journalOptions(model.journal) + '</select><span class="hint">Les comptes proposés sont filtrés selon les autorisations du journal.</span></div>' +
         '<div class="field"><label for="e-date">Date</label>' +
@@ -2861,6 +2858,9 @@
       '<datalist id="entry-account-suggestions">' + entryAccountDatalist(model.journal) + '</datalist>' +
       '<div class="lines-editor" id="lines-body">' + model.lines.map(function (line) { return lineRowHtml(line, model.journal); }).join('') + '</div>' +
       '<section class="entry-assistance" aria-labelledby="entry-assistance-title"><div><h4 id="entry-assistance-title">Contreparties possibles</h4><p>Suggestions fondées uniquement sur des pièces validées de ce dossier contenant les comptes saisis. Elles n’imposent ni compte, ni sens, ni montant.</p></div><div id="entry-counterpart-suggestions" aria-live="polite"></div></section>' +
+      '<div class="field entry-source-reference-field"><label for="e-source-reference">Référence</label>' +
+        '<input id="e-source-reference" name="sourceReference" type="text" maxlength="120" value="' + esc(model.sourceReference || '') + '" placeholder="N° indiqué sur la facture ou le justificatif" autocomplete="off">' +
+        '<span class="hint">Saisie manuelle depuis la facture ou la pièce justificative.</span></div>' +
       '<div class="field entry-description-field"><label for="e-description">Libellé</label><datalist id="entry-description-suggestions">' + entryDescriptionDatalist(model.journal) + '</datalist><input id="e-description" name="description" type="text" list="entry-description-suggestions" value="' + esc(model.description) + '" placeholder="Objet de la pièce" autocomplete="off"><span class="hint">Saisissez librement ou choisissez un libellé déjà utilisé dans ce journal.</span></div>' +
       (editingPosted ? '<div class="field entry-amendment-reason"><label for="e-amendment-reason">Motif de correction <span aria-hidden="true">*</span></label><textarea id="e-amendment-reason" rows="2" maxlength="500" required placeholder="Expliquez pourquoi la pièce validée est corrigée"></textarea></div>' : '') +
 
