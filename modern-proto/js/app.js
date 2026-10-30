@@ -144,7 +144,7 @@
   };
 
   var selectedEntryJournalCode = '';
-  var definitiveCloseBackup = { scope: '', downloaded: false };
+  var definitiveCloseBackup = { scope: '', entriesDownloaded: false, backupDownloaded: false, backupJson: '', entriesFileName: '', backupFileName: '', fingerprint: '' };
   var analyticalNatureSelectedId = 'activity-domains';
   var fixedAssetAccountsSelectedId = 'fixed-assets-class-21';
   var fixedAssetAccountsSelectedDossierId = '';
@@ -651,6 +651,7 @@
         return { moduleId: 'accounting', actionId: 'data.export' };
       case 'export-json':
       case 'download-definitive-close-backup':
+      case 'download-definitive-close-entries':
       case 'export-accounts-csv':
       case 'export-balance-csv':
       case 'export-accounting-exchange':
@@ -14241,9 +14242,9 @@
     var dossier = S.currentDossier();
     var preflight = S.definitiveClosePreflight();
     var scope = [dossier.id, preflight.cycleStart, preflight.cycleEnd].join('|');
-    if (definitiveCloseBackup.scope !== scope) definitiveCloseBackup = { scope: scope, downloaded: false, backupJson: '', fingerprint: '' };
-    if (definitiveCloseBackup.downloaded && definitiveCloseBackup.fingerprint !== definitiveCloseBackupFingerprint()) {
-      definitiveCloseBackup = { scope: scope, downloaded: false, backupJson: '', fingerprint: '' };
+    if (definitiveCloseBackup.scope !== scope) definitiveCloseBackup = { scope: scope, entriesDownloaded: false, backupDownloaded: false, backupJson: '', entriesFileName: '', backupFileName: '', fingerprint: '' };
+    if ((definitiveCloseBackup.entriesDownloaded || definitiveCloseBackup.backupDownloaded) && definitiveCloseBackup.fingerprint !== definitiveCloseBackupFingerprint()) {
+      definitiveCloseBackup = { scope: scope, entriesDownloaded: false, backupDownloaded: false, backupJson: '', entriesFileName: '', backupFileName: '', fingerprint: '' };
     }
     var record = preflight.record;
     if (preflight.finalized && record) {
@@ -14253,6 +14254,8 @@
           '<div><dt>Dossier</dt><dd>' + esc(dossier.name || dossier.clientName || '') + '</dd></div>' +
           '<div><dt>Cycle arrêté</dt><dd>' + esc(dateLabel(record.cycleStart)) + ' au ' + esc(dateLabel(record.cycleEnd)) + '</dd></div>' +
           '<div><dt>Date d’enregistrement</dt><dd>' + esc(new Date(record.finalizedAt).toLocaleString('fr-FR')) + '</dd></div>' +
+          '<div><dt>Fichier des écritures déclaré</dt><dd>' + esc(record.exerciseEntriesFileName || 'Non renseigné') + '</dd></div>' +
+          '<div><dt>Écritures exportées</dt><dd>' + Number(record.exerciseEntriesCount || 0) + '</dd></div>' +
           '<div><dt>Copie préalable déclarée</dt><dd>' + esc(record.backupFileName || 'Non renseignée') + '</dd></div>' +
           '<div><dt>Totaux validés constatés</dt><dd>Débit ' + amount(record.totals && record.totals.debit || 0) + ' XOF · Crédit ' + amount(record.totals && record.totals.credit || 0) + ' XOF</dd></div>' +
         '</dl><p class="exchange-footnote">Aucune écriture de résultat, d’affectation ni de clôture n’a été créée par cette opération.</p></section>';
@@ -14270,16 +14273,21 @@
         '<div><span>Total débit validé</span><strong>' + amount(preflight.debit) + ' XOF</strong></div>' +
         '<div><span>Total crédit validé</span><strong>' + amount(preflight.credit) + ' XOF</strong></div>' +
       '</div>' + blockers +
-      '<div class="definitive-close-backup"><h3>1. Exporter une copie complète</h3>' +
-        '<p>Téléchargez le JSON du dossier actif et conservez-le hors de l’application avant de poursuivre.</p>' +
-        '<button type="button" class="btn btn-secondary" data-action="download-definitive-close-backup"' + (!preflight.canFinalize ? ' disabled' : '') + '>↓ Télécharger la sauvegarde JSON complète</button> ' +
-        (definitiveCloseBackup.downloaded ? '<span class="badge posted">Sauvegarde téléchargée dans cette session</span>' : '<span class="badge draft">Sauvegarde requise</span>') +
+      '<div class="definitive-close-backup"><h3>1. Exporter le fichier complet des écritures</h3>' +
+        '<p>Le CSV PERFECTO-ÉCHANGE v1 rassemble toutes les lignes des écritures validées de ce cycle. Son export est contrôlé avant téléchargement.</p>' +
+        '<button type="button" class="btn btn-secondary" data-action="download-definitive-close-entries"' + (!preflight.canFinalize ? ' disabled' : '') + '>↓ Télécharger les écritures complètes de l’exercice (CSV)</button> ' +
+        (definitiveCloseBackup.entriesDownloaded ? '<span class="badge posted">Fichier des écritures téléchargé dans cette session</span>' : '<span class="badge draft">Fichier des écritures requis</span>') +
       '</div>' +
-      '<div class="definitive-close-confirm"><h3>2. Confirmer l’arrêt</h3>' +
-        '<label class="checkbox-line"><input type="checkbox" data-definitive-close-backup-ack' + (!definitiveCloseBackup.downloaded ? ' disabled' : '') + '> J’atteste avoir téléchargé la copie et l’avoir conservée hors de l’application.</label>' +
+      '<div class="definitive-close-backup"><h3>2. Exporter la copie complète du dossier</h3>' +
+        '<p>Téléchargez aussi le JSON du dossier actif et conservez les deux fichiers hors de l’application avant de poursuivre.</p>' +
+        '<button type="button" class="btn btn-secondary" data-action="download-definitive-close-backup"' + (!preflight.canFinalize || !definitiveCloseBackup.entriesDownloaded ? ' disabled' : '') + '>↓ Télécharger la sauvegarde JSON complète</button> ' +
+        (definitiveCloseBackup.backupDownloaded ? '<span class="badge posted">Sauvegarde téléchargée dans cette session</span>' : '<span class="badge draft">Sauvegarde requise</span>') +
+      '</div>' +
+      '<div class="definitive-close-confirm"><h3>3. Confirmer l’arrêt</h3>' +
+        '<label class="checkbox-line"><input type="checkbox" data-definitive-close-backup-ack' + (!definitiveCloseBackup.entriesDownloaded || !definitiveCloseBackup.backupDownloaded ? ' disabled' : '') + '> J’atteste avoir téléchargé le fichier complet des écritures et la copie JSON, puis les avoir conservés hors de l’application.</label>' +
         '<label for="definitive-close-confirmation">Saisissez exactement <strong>ARRET DEFINITIF DES COMPTES</strong></label>' +
-        '<input id="definitive-close-confirmation" type="text" autocomplete="off" maxlength="80" data-definitive-close-confirmation placeholder="ARRET DEFINITIF DES COMPTES"' + (!definitiveCloseBackup.downloaded ? ' disabled' : '') + '>' +
-        '<button type="button" class="btn btn-danger" data-action="finalize-definitive-close"' + (!preflight.canFinalize || !definitiveCloseBackup.downloaded ? ' disabled' : '') + '>Sceller définitivement les comptes du cycle</button>' +
+        '<input id="definitive-close-confirmation" type="text" autocomplete="off" maxlength="80" data-definitive-close-confirmation placeholder="ARRET DEFINITIF DES COMPTES"' + (!definitiveCloseBackup.entriesDownloaded || !definitiveCloseBackup.backupDownloaded ? ' disabled' : '') + '>' +
+        '<button type="button" class="btn btn-danger" data-action="finalize-definitive-close"' + (!preflight.canFinalize || !definitiveCloseBackup.entriesDownloaded || !definitiveCloseBackup.backupDownloaded ? ' disabled' : '') + '>Sceller définitivement les comptes du cycle</button>' +
       '</div></section>';
   }
 
@@ -14289,7 +14297,7 @@
     var button = $('[data-action="finalize-definitive-close"]');
     if (!button || !ack || !confirmation) return;
     function refresh() {
-      var canFinalize = S.definitiveClosePreflight().canFinalize && definitiveCloseBackup.downloaded;
+      var canFinalize = S.definitiveClosePreflight().canFinalize && definitiveCloseBackup.entriesDownloaded && definitiveCloseBackup.backupDownloaded;
       button.disabled = !canFinalize || !ack.checked || confirmation.value.trim() !== 'ARRET DEFINITIF DES COMPTES';
     }
     ack.addEventListener('change', refresh);
@@ -29855,18 +29863,55 @@
         toast('Journaux exportés au format CSV Excel.', 'success');
         break;
       }
+      case 'download-definitive-close-entries': {
+        var entriesDossier = S.currentDossier();
+        var entriesPreflight = S.definitiveClosePreflight();
+        if (!entriesPreflight.canFinalize) { toast('Traitez d’abord les contrôles affichés avant de créer les fichiers de sauvegarde.', 'warning'); render(); break; }
+        var entriesSnapshot = S.exportJson();
+        var entriesFingerprint = definitiveCloseBackupFingerprint(entriesSnapshot);
+        var entriesFileName = 'perfecto-' + safeFilePart(entriesDossier.reference) + '-exercice-' + String(entriesPreflight.cycleStart).slice(0, 4) + '-ecritures-completes.csv';
+        try {
+          var entriesCsv = AccountingExchange.exportEntries({ dossier: entriesDossier, accounts: S.accounts(), journals: S.journals() }, S.entries());
+          downloadFile(entriesFileName, entriesCsv, 'text/csv;charset=utf-8');
+          var sameSnapshot = definitiveCloseBackup.scope === [entriesDossier.id, entriesPreflight.cycleStart, entriesPreflight.cycleEnd].join('|') && definitiveCloseBackup.fingerprint === entriesFingerprint;
+          definitiveCloseBackup = {
+            scope: [entriesDossier.id, entriesPreflight.cycleStart, entriesPreflight.cycleEnd].join('|'),
+            entriesDownloaded: true,
+            backupDownloaded: sameSnapshot && definitiveCloseBackup.backupDownloaded,
+            backupJson: sameSnapshot ? definitiveCloseBackup.backupJson : '',
+            entriesFileName: entriesFileName,
+            backupFileName: sameSnapshot ? definitiveCloseBackup.backupFileName : '',
+            fingerprint: entriesFingerprint
+          };
+          toast('Fichier complet des écritures de l’exercice téléchargé au format CSV PERFECTO-ÉCHANGE v1.', 'success');
+          render();
+        } catch (entriesExportError) {
+          toast(entriesExportError.message || 'Le fichier complet des écritures n’a pas pu être généré.', 'error');
+        }
+        break;
+      }
       case 'download-definitive-close-backup': {
         var closeDossier = S.currentDossier();
         var closePreflight = S.definitiveClosePreflight();
-        if (!closePreflight.canFinalize) { toast('Traitez d’abord les contrôles affichés avant de créer la copie d’arrêt.', 'warning'); render(); break; }
+        if (!closePreflight.canFinalize || !definitiveCloseBackup.entriesDownloaded) { toast('Téléchargez d’abord le fichier complet des écritures de l’exercice.', 'warning'); render(); break; }
         var closeBackupFileName = 'perfecto-' + safeFilePart(closeDossier.reference) + '-sauvegarde-avant-arret-definitif-' + S.todayIso() + '.json';
         try {
           var closeBackupJson = S.exportJson();
+          var currentCloseFingerprint = definitiveCloseBackupFingerprint(closeBackupJson);
+          if (!definitiveCloseBackup.entriesDownloaded || definitiveCloseBackup.fingerprint !== currentCloseFingerprint) {
+            definitiveCloseBackup = { scope: [closeDossier.id, closePreflight.cycleStart, closePreflight.cycleEnd].join('|'), entriesDownloaded: false, backupDownloaded: false, backupJson: '', entriesFileName: '', backupFileName: '', fingerprint: '' };
+            toast('Le dossier a changé depuis l’export des écritures. Téléchargez à nouveau le fichier CSV complet.', 'warning');
+            render();
+            break;
+          }
           downloadFile(closeBackupFileName, closeBackupJson, 'application/json;charset=utf-8');
           definitiveCloseBackup = {
             scope: [closeDossier.id, closePreflight.cycleStart, closePreflight.cycleEnd].join('|'),
-            downloaded: true,
+            entriesDownloaded: true,
+            backupDownloaded: true,
             backupJson: closeBackupJson,
+            entriesFileName: definitiveCloseBackup.entriesFileName,
+            backupFileName: closeBackupFileName,
             fingerprint: definitiveCloseBackupFingerprint(closeBackupJson)
           };
           toast('Sauvegarde JSON complète téléchargée. Conservez-la hors de l’application.', 'success');
@@ -29879,19 +29924,19 @@
       case 'finalize-definitive-close': {
         var closeAck = $('[data-definitive-close-backup-ack]');
         var closeConfirmation = $('[data-definitive-close-confirmation]');
-        if (!closeAck || !closeAck.checked || !closeConfirmation || closeConfirmation.value.trim() !== 'ARRET DEFINITIF DES COMPTES') {
-          toast('Téléchargez la sauvegarde, cochez l’attestation et saisissez la confirmation exacte.', 'warning');
+        if (!closeAck || !closeAck.checked || !closeConfirmation || closeConfirmation.value.trim() !== 'ARRET DEFINITIF DES COMPTES' || !definitiveCloseBackup.entriesDownloaded || !definitiveCloseBackup.backupDownloaded) {
+          toast('Téléchargez les deux fichiers, cochez l’attestation et saisissez la confirmation exacte.', 'warning');
           break;
         }
         if (definitiveCloseBackup.fingerprint !== definitiveCloseBackupFingerprint()) {
-          definitiveCloseBackup = { scope: definitiveCloseBackup.scope, downloaded: false, backupJson: '', fingerprint: '' };
+          definitiveCloseBackup = { scope: definitiveCloseBackup.scope, entriesDownloaded: false, backupDownloaded: false, backupJson: '', entriesFileName: '', backupFileName: '', fingerprint: '' };
           toast('Le dossier a changé depuis l’export. Téléchargez une nouvelle sauvegarde à jour avant de confirmer.', 'warning');
           render();
           break;
         }
         if (!window.confirm('Dernière confirmation : sceller irréversiblement les comptes du cycle ? Le calcul du résultat et les états financiers ne sont pas effectués par cette action.')) break;
         var closeFileName = 'perfecto-' + safeFilePart(S.currentDossier().reference) + '-sauvegarde-avant-arret-definitif-' + S.todayIso() + '.json';
-        var closeResult = S.finalizeDefinitiveClose({ backupDownloaded: definitiveCloseBackup.downloaded, backupAcknowledged: closeAck.checked, backupFileName: closeFileName, backupJson: definitiveCloseBackup.backupJson, confirmation: closeConfirmation.value });
+        var closeResult = S.finalizeDefinitiveClose({ backupDownloaded: definitiveCloseBackup.backupDownloaded, backupAcknowledged: closeAck.checked, backupFileName: closeFileName, backupJson: definitiveCloseBackup.backupJson, entriesDownloaded: definitiveCloseBackup.entriesDownloaded, exerciseEntriesFileName: definitiveCloseBackup.entriesFileName, exerciseEntriesCount: S.definitiveClosePreflight().postedEntryCount, confirmation: closeConfirmation.value });
         if (!closeResult.ok) { toast(closeResult.errors[0] || 'Arrêt définitif impossible.', 'error'); render(); break; }
         toast('Arrêt définitif enregistré. Le dossier est désormais scellé et ne peut pas être réouvert.', 'success');
         render();

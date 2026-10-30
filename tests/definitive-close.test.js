@@ -48,7 +48,7 @@ assert.equal(check.postedEntryCount, 0);
 assert.equal(check.balanced, true, 'aucun mouvement n’est simulé pour rendre le dossier équilibré');
 
 const withoutEvidence = S.finalizeDefinitiveClose({
-  backupDownloaded: true, backupAcknowledged: true, backupFileName: 'dossier.json', backupJson: S.exportJson(), confirmation: 'ARRET DEFINITIF DES COMPTES'
+  backupDownloaded: true, backupAcknowledged: true, backupFileName: 'dossier.json', backupJson: S.exportJson(), entriesDownloaded: true, exerciseEntriesFileName: 'ecritures-exercice.csv', exerciseEntriesCount: S.definitiveClosePreflight().postedEntryCount, confirmation: 'ARRET DEFINITIF DES COMPTES'
 });
 assert.equal(withoutEvidence.ok, false, 'aucun arrêt possible avant clôture des périodes');
 assert.equal(S.definitiveClosePreflight().finalized, false);
@@ -66,30 +66,38 @@ assert.equal(staleCopyResult.ok, false, 'une sauvegarde antérieure à une modif
 assert.match(staleCopyResult.errors.join(' '), /à jour/);
 
 const missingAcknowledgement = S.finalizeDefinitiveClose({
-  backupDownloaded: true, backupAcknowledged: false, backupFileName: 'dossier.json', backupJson: S.exportJson(), confirmation: 'ARRET DEFINITIF DES COMPTES'
+  backupDownloaded: true, backupAcknowledged: false, backupFileName: 'dossier.json', backupJson: S.exportJson(), entriesDownloaded: true, exerciseEntriesFileName: 'ecritures-exercice.csv', exerciseEntriesCount: S.definitiveClosePreflight().postedEntryCount, confirmation: 'ARRET DEFINITIF DES COMPTES'
 });
 assert.equal(missingAcknowledgement.ok, false);
 assert.match(missingAcknowledgement.errors.join(' '), /Confirmez explicitement/);
 const wrongConfirmation = S.finalizeDefinitiveClose({
-  backupDownloaded: true, backupAcknowledged: true, backupFileName: 'dossier.json', backupJson: S.exportJson(), confirmation: 'OUI'
+  backupDownloaded: true, backupAcknowledged: true, backupFileName: 'dossier.json', backupJson: S.exportJson(), entriesDownloaded: true, exerciseEntriesFileName: 'ecritures-exercice.csv', exerciseEntriesCount: S.definitiveClosePreflight().postedEntryCount, confirmation: 'OUI'
 });
 assert.equal(wrongConfirmation.ok, false);
 assert.match(wrongConfirmation.errors.join(' '), /Saisissez exactement/);
+const missingEntriesFile = S.finalizeDefinitiveClose({
+  backupDownloaded: true, backupAcknowledged: true, backupFileName: 'dossier.json', backupJson: S.exportJson(),
+  confirmation: 'ARRET DEFINITIF DES COMPTES'
+});
+assert.equal(missingEntriesFile.ok, false, 'le fichier complet des écritures est une condition obligatoire distincte du JSON');
+assert.match(missingEntriesFile.errors.join(' '), /fichier complet des écritures/);
 
 h.blockStorageWrites(true);
 const failedSave = S.finalizeDefinitiveClose({
-  backupDownloaded: true, backupAcknowledged: true, backupFileName: 'dossier.json', backupJson: S.exportJson(), confirmation: 'ARRET DEFINITIF DES COMPTES'
+  backupDownloaded: true, backupAcknowledged: true, backupFileName: 'dossier.json', backupJson: S.exportJson(), entriesDownloaded: true, exerciseEntriesFileName: 'ecritures-exercice.csv', exerciseEntriesCount: S.definitiveClosePreflight().postedEntryCount, confirmation: 'ARRET DEFINITIF DES COMPTES'
 });
 h.blockStorageWrites(false);
 assert.equal(failedSave.ok, false, 'un échec de persistance annule atomiquement le scellement');
 assert.equal(S.definitiveClosePreflight().finalized, false);
 
 const finalized = S.finalizeDefinitiveClose({
-  backupDownloaded: true, backupAcknowledged: true, backupFileName: 'dossier-sauvegarde.json', backupJson: S.exportJson(), confirmation: 'ARRET DEFINITIF DES COMPTES'
+  backupDownloaded: true, backupAcknowledged: true, backupFileName: 'dossier-sauvegarde.json', backupJson: S.exportJson(), entriesDownloaded: true, exerciseEntriesFileName: 'ecritures-exercice.csv', exerciseEntriesCount: S.definitiveClosePreflight().postedEntryCount, confirmation: 'ARRET DEFINITIF DES COMPTES'
 });
 assert.equal(finalized.ok, true, finalized.errors && finalized.errors.join(' '));
 assert.equal(finalized.record.backupAcknowledged, true);
 assert.equal(finalized.record.backupFileName, 'dossier-sauvegarde.json');
+assert.equal(finalized.record.exerciseEntriesFileName, 'ecritures-exercice.csv');
+assert.equal(finalized.record.exerciseEntriesCount, 0);
 assert.equal(S.entries().length, 0, 'l’arrêt n’ajoute aucune écriture de clôture');
 assert.equal(S.definitiveClosePreflight().finalized, true);
 assert.equal(S.definitiveClosePreflight().canFinalize, false);
@@ -110,6 +118,8 @@ const app = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'ap
 assert.match(app, /function viewDefinitiveClose\(\)/);
 assert.match(app, /group\.id === 'fin-exercice' && tab\.id === 'definitive-close'/);
 assert.match(app, /download-definitive-close-backup/);
+assert.match(app, /download-definitive-close-entries/);
+assert.match(app, /PERFECTO-ÉCHANGE v1/);
 assert.match(app, /finalize-definitive-close/);
 assert.match(app, /ARRET DEFINITIF DES COMPTES/);
 

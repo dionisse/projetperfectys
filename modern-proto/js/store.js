@@ -6117,6 +6117,11 @@
     var preflight = definitiveClosePreflight();
     var errors = preflight.errors.slice();
     var fileName = String(input.backupFileName || '').trim().slice(0, 180);
+    var exerciseEntriesFileName = String(input.exerciseEntriesFileName || '').trim().slice(0, 180);
+    var exerciseEntriesCount = Number(input.exerciseEntriesCount);
+    if (!input.entriesDownloaded || !exerciseEntriesFileName || !Number.isInteger(exerciseEntriesCount) || exerciseEntriesCount !== preflight.postedEntryCount) {
+      errors.push('Téléchargez le fichier complet des écritures validées de l’exercice avant de confirmer l’arrêt définitif.');
+    }
     var backupPayload = null;
     try { backupPayload = JSON.parse(String(input.backupJson || '')); } catch (backupParseError) { backupPayload = null; }
     var backupMatchesCurrentState = false;
@@ -6138,6 +6143,8 @@
       cycleEnd: st.cycleEnd,
       finalizedAt: new Date().toISOString(),
       backupFileName: fileName,
+      exerciseEntriesFileName: exerciseEntriesFileName,
+      exerciseEntriesCount: exerciseEntriesCount,
       backupAcknowledged: true,
       backupAcknowledgedAt: new Date().toISOString(),
       confirmationText: DEFINITIVE_CLOSE_CONFIRMATION,
