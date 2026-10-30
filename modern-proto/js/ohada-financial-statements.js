@@ -28,7 +28,7 @@
   var ITEMS = [
     { key: 'financial-statements', label: 'Générer les tableaux financiers OHADA' },
     { key: 'is-declaration', label: 'Déclaration fiscales IS' },
-    { key: 'irpp-declaration', label: 'Déclaration IRPP' },
+    { key: 'iba-declaration', label: 'Déclaration IBA — Impôt sur les bénéfices d’affaires' },
     { key: 'fees-declaration', label: 'Déclaration des honoraires' },
     { key: 'separator-1', separator: true },
     { key: 'all-items-by-account', label: 'Ensemble des postes détaillés par comptes' },

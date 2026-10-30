@@ -226,7 +226,7 @@
         { id: 'nominative-statement', label: 'État nominatif à joindre à la déclaration', status: 'active', reason: 'Sélection mensuelle des colonnes Fournisseur, N°INSAE/IFU et Prélèvement effectué, avec aperçu plein écran. Aucun détail nominatif n’est produit tant que les retenues AIB ne sont pas reliées aux fournisseurs dans une source structurée.' },
         { id: 'bic-advances', label: 'Acomptes BIC sur ventes détaillés par client', status: 'active', reason: 'Sélection du mois, paramétrage modifiable des comptes collecteurs (447CL prérempli selon la capture), colonnes Client, Acompte collecté et N°INSAE/IFU, avec aperçu plein écran. Les lignes nominatives restent vides tant qu’aucune donnée client/acompte liée n’est disponible.' },
         { id: 'dossier-specific', label: 'États spécifiques au dossier', status: 'review', reason: 'Contenu à préciser dossier par dossier ; reste inactif jusqu’à votre décision.' },
-        { id: 'ohada-statements', label: 'Tableaux financiers OHADA révisé', status: 'active', reason: 'Sélecteur et aperçu plein écran des états financiers et fiscaux de la capture. Le contenu chiffré reste inactif jusqu’à validation du format, des correspondances de comptes et des règles fiscales applicables.' }
+        { id: 'ohada-statements', label: 'Tableaux financiers OHADA révisé', status: 'active', reason: 'États financiers OHADA, préparation IS et proposition de déclaration IBA. Les déclarations fiscales signalent les données ou règles non vérifiées et ne transmettent aucun dépôt au service des impôts.' }
       ]
     },
     {

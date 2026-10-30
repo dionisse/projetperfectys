@@ -13,7 +13,7 @@ assert.equal(report.DEFAULT_SELECTED_KEY, 'financial-statements');
 assert.deepEqual(report.ITEMS.filter(item => !item.separator).map(item => item.label), [
   'Générer les tableaux financiers OHADA',
   'Déclaration fiscales IS',
-  'Déclaration IRPP',
+  'Déclaration IBA — Impôt sur les bénéfices d’affaires',
   'Déclaration des honoraires',
   'Ensemble des postes détaillés par comptes',
   'Charges détaillées par comptes',
