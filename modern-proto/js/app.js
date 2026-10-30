@@ -140,7 +140,8 @@
     personnel: { q: '' },
     fixedAssets: { q: '', status: 'all', assetType: 'all' },
     financialFramework: { q: '' },
-    financialResult: { asOfDate: '' }
+    financialResult: { asOfDate: '' },
+    nextExercise: { sourceDossierId: '', cycleStart: '', cycleEnd: '' }
   };
 
   var selectedEntryJournalCode = '';
@@ -363,6 +364,10 @@
         return { moduleId: 'organization', actionId: 'organization.manageDossiers' };
       case 'open-dossier':
         return { moduleId: 'accounting', actionId: 'module.view' };
+      case 'open-next-exercise':
+        return { moduleId: 'accounting', actionId: 'module.view' };
+      case 'create-next-exercise':
+        return { moduleId: 'organization', actionId: 'organization.manageDossiers' };
       case 'open-module':
         return { moduleId: trigger && trigger.getAttribute('data-module-id'), actionId: 'module.view' };
       case 'create-demo-payroll-run':
@@ -23761,6 +23766,41 @@
     });
   }
 
+  function viewNextYear() {
+    var source = S.currentDossier();
+    var defaultYear = Number(source.exerciseYear) + 1;
+    if (ui.nextExercise.sourceDossierId !== source.id) {
+      ui.nextExercise = { sourceDossierId: source.id, cycleStart: defaultYear + '-01-01', cycleEnd: defaultYear + '-12-31' };
+    }
+    var preflight = S.nextExercisePreflight(ui.nextExercise.cycleStart, ui.nextExercise.cycleEnd);
+    var errors = preflight.errors.length
+      ? '<div class="alert warning"><strong>Passage non autorisé à ce stade.</strong><ul>' + preflight.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul>' +
+        (!preflight.closeRecord ? '<a class="btn btn-ghost btn-sm" href="#/menu?g=fin-exercice&amp;t=definitive-close">Ouvrir l’arrêt définitif de N</a>' : '') + '</div>'
+      : '<div class="alert success"><strong>Contrôles de l’exercice source satisfaits.</strong> Vous pouvez préparer le dossier de N+1 sans modifier N.</div>';
+    var nextAction = preflight.existingDossier
+      ? '<button type="button" class="btn btn-primary" data-action="open-next-exercise" data-id="' + esc(preflight.existingDossier.id) + '" data-source-id="' + esc(source.id) + '"' + (!preflight.canContinue ? ' disabled' : '') + '>Ouvrir le dossier N+1 existant et contrôler son report</button>'
+      : '<button type="button" class="btn btn-primary" data-action="create-next-exercise"' + (!preflight.canCreate ? ' disabled' : '') + '>Créer le dossier N+1 et préparer le report</button>';
+    return '<section class="periods-summary definitive-close-panel next-exercise-panel">' +
+      '<div class="alert info"><strong>Passage automatique à N+1.</strong> Le dossier source N reste scellé et inchangé. Par défaut, N+1 couvre le <strong>01/01/' + defaultYear + ' au 31/12/' + defaultYear + '</strong>. Les dates peuvent être ajustées si nécessaire, mais le début doit suivre immédiatement la fin du cycle source.</div>' +
+      '<div class="definitive-close-facts">' +
+        '<div><span>Dossier source</span><strong>' + esc(source.reference) + '</strong></div>' +
+        '<div><span>Cycle source</span><strong>' + esc(dateLabel(source.cycleStart)) + ' au ' + esc(dateLabel(source.cycleEnd)) + '</strong></div>' +
+        '<div><span>Écritures validées source</span><strong>' + preflight.sourcePostedEntryCount + '</strong></div>' +
+        '<div><span>Périodes clôturées</span><strong>' + (preflight.sourcePeriodCount - preflight.sourceOpenPeriodCount) + ' / ' + preflight.sourcePeriodCount + '</strong></div>' +
+        '<div><span>Total débit validé en N</span><strong>' + amount(preflight.sourceDebit) + ' XOF</strong></div>' +
+        '<div><span>Total crédit validé en N</span><strong>' + amount(preflight.sourceCredit) + ' XOF</strong></div>' +
+        '<div><span>Référence cible prévue</span><strong>' + esc(preflight.expectedTargetReference) + '</strong></div>' +
+        '<div><span>Sauvegardes déclarées à l’arrêt de N</span><strong>' + esc(preflight.closeRecord ? preflight.closeRecord.exerciseEntriesFileName + ' · ' + preflight.closeRecord.backupFileName : 'Absentes') + '</strong></div>' +
+      '</div>' + errors +
+      '<div class="form-grid next-exercise-dates"><label class="field" for="next-exercise-start"><span>Début du cycle N+1</span><input id="next-exercise-start" type="date" data-filter="nextExercise:cycleStart" value="' + esc(preflight.targetStart) + '"></label>' +
+        '<label class="field" for="next-exercise-end"><span>Fin du cycle N+1</span><input id="next-exercise-end" type="date" data-filter="nextExercise:cycleEnd" value="' + esc(preflight.targetEnd) + '"></label>' +
+      '</div>' +
+      '<div class="alert info"><div><strong>Éléments préparés :</strong> plan comptable, journaux et paramètres explicites du dossier source sont repris. Les écritures N ne sont pas copiées ; les reports calculés restent dans le registre Reports à nouveau partagé avec Saisie. Les immobilisations, tiers, données analytiques et autres registres opérationnels ne sont pas dupliqués automatiquement.</div></div>' +
+      (preflight.existingDossier ? '<div class="alert info">Un dossier cible existe déjà : <strong>' + esc(preflight.existingDossier.reference) + '</strong>. Il sera réutilisé sans écraser ses données ; les conflits éventuels apparaîtront dans l’aperçu des reports.</div>' : '') +
+      '<div class="exchange-preview-footer">' + nextAction + '</div>' +
+    '</section>';
+  }
+
   function openingBalanceSourceDossiers(targetDossier) {
     if (!targetDossier || !targetDossier.cycleStart) return [];
     var sourceCycleEnd = OpeningBalances.dayBefore(targetDossier.cycleStart);
@@ -23796,17 +23836,21 @@
     }));
   }
 
-  function readOpeningBalanceSource() {
+  function prepareOpeningBalanceSourceSession(sourceId) {
     var targetDossier = S.currentDossier();
-    var sourceSelect = $('#opening-balance-source');
-    var sourceId = sourceSelect ? sourceSelect.value : ui.openingBalances.sourceDossierId;
-    if (!sourceId) { toast('Sélectionnez un dossier de l’exercice immédiatement précédent.', 'warning'); return; }
     var sourceRead = S.readDossierStateSnapshot(sourceId);
     if (!sourceRead.ok) {
       openingBalanceTransferSession = null;
-      toast(sourceRead.errors[0] || 'Lecture du dossier source impossible.', 'error');
-      render();
-      return;
+      return { ok: false, errors: sourceRead.errors || ['Lecture du dossier source impossible.'] };
+    }
+    var sourceClose = sourceRead.state.definitiveClose;
+    var sourcePostedCount = (sourceRead.state.entries || []).filter(function (entry) {
+      return entry && entry.status === 'posted' && entry.date >= sourceRead.dossier.cycleStart && entry.date <= sourceRead.dossier.cycleEnd;
+    }).length;
+    if (!sourceClose || sourceClose.finalized !== true || sourceClose.cycleStart !== sourceRead.dossier.cycleStart || sourceClose.cycleEnd !== sourceRead.dossier.cycleEnd ||
+        !sourceClose.exerciseEntriesFileName || !sourceClose.backupFileName || Number(sourceClose.exerciseEntriesCount) !== sourcePostedCount) {
+      openingBalanceTransferSession = null;
+      return { ok: false, errors: ['Le transfert vers N+1 exige un arrêt définitif enregistré et les sauvegardes complètes de l’exercice source.'] };
     }
     var plan = OpeningBalances.buildTransfer(sourceRead.state, sourceRead.dossier, targetDossier, S.accounts());
     var preview = S.openingBalanceTransferPreview(sourceRead.dossier.id, plan.accountBalances, plan.rows);
@@ -23820,9 +23864,42 @@
       preview: preview,
       readAt: new Date().toISOString()
     };
+    return { ok: true, plan: plan, preview: preview, source: sourceRead.dossier };
+  }
+
+  function readOpeningBalanceSource() {
+    var sourceSelect = $('#opening-balance-source');
+    var sourceId = sourceSelect ? sourceSelect.value : ui.openingBalances.sourceDossierId;
+    if (!sourceId) { toast('Sélectionnez un dossier de l’exercice immédiatement précédent.', 'warning'); return; }
+    var prepared = prepareOpeningBalanceSourceSession(sourceId);
+    if (!prepared.ok) {
+      toast(prepared.errors[0] || 'Lecture du dossier source impossible.', 'error');
+      render();
+      return;
+    }
     render();
-    if (!plan.ok) toast(plan.errors[0] || 'Aucun report transférable n’a été calculé.', 'warning');
+    if (!prepared.plan.ok) toast(prepared.plan.errors[0] || 'Aucun report transférable n’a été calculé.', 'warning');
     else toast('Lecture non destructive terminée : contrôlez les comptes avant le transfert.', 'success');
+  }
+
+  function openPreparedNextExercise(sourceId, targetId) {
+    var switched = S.switchDossier(targetId);
+    if (!switched.ok) { toast(switched.errors[0] || 'Impossible d’ouvrir le dossier N+1.', 'error'); return; }
+    var prepared = prepareOpeningBalanceSourceSession(sourceId);
+    navigate('#/menu?g=fin-exercice&t=opening-transfer&c=opening-transfer-build');
+    if (!prepared.ok) toast(prepared.errors[0] || 'Le dossier N+1 est ouvert, mais la source n’a pas pu être lue.', 'warning');
+    else if (!prepared.plan.ok) toast(prepared.plan.errors[0] || 'Le dossier N+1 est créé ; le report nécessite un contrôle.', 'warning');
+    else toast('Dossier N+1 prêt. Vérifiez l’aperçu des reports avant de confirmer le transfert.', 'success');
+  }
+
+  function createNextExerciseFromMenu() {
+    var source = S.currentDossier();
+    var preflight = S.nextExercisePreflight(ui.nextExercise.cycleStart, ui.nextExercise.cycleEnd);
+    if (!preflight.canCreate) { toast(preflight.errors[0] || 'Le dossier N+1 ne peut pas être créé.', 'warning'); render(); return; }
+    if (!window.confirm('Créer le dossier ' + preflight.expectedTargetReference + ' du ' + preflight.targetStart + ' au ' + preflight.targetEnd + ' ? Le dossier N reste inchangé. Les soldes seront seulement prévisualisés ; aucun report ne sera appliqué sans une seconde confirmation.')) return;
+    var created = S.createNextExerciseDossier({ cycleStart: preflight.targetStart, cycleEnd: preflight.targetEnd });
+    if (!created.ok) { toast(created.errors[0] || 'Création du dossier N+1 impossible.', 'error'); render(); return; }
+    openPreparedNextExercise(source.id, created.dossier.id);
   }
 
   function applyOpeningBalanceTransferFromSession() {
@@ -23856,6 +23933,7 @@
       toast(freshPlan.errors[0] || 'Aucune ligne ni aucun report antérieur modifié à appliquer.', 'warning');
       return;
     }
+    if (!window.confirm('Confirmer l’inscription de ' + freshPlan.rows.length + ' ligne(s) de report à la date du ' + freshPlan.targetDate + ' ? Total débit : ' + money(freshPlan.totals.debit) + ' XOF ; total crédit : ' + money(freshPlan.totals.credit) + ' XOF. Aucune écriture de journal ne sera créée.')) return;
     var result = S.applyOpeningBalanceTransfer(sourceRead.dossier, freshPlan);
     if (!result.ok) { toast(result.errors[0] || 'Transfert impossible.', 'error'); return; }
     openingBalanceAuditResult = null;
@@ -27276,6 +27354,8 @@
       exchangeFeature = viewPeriods();
     } else if (group.id === 'fin-exercice' && tab.id === 'definitive-close') {
       exchangeFeature = viewDefinitiveClose();
+    } else if (group.id === 'fin-exercice' && tab.id === 'next-year') {
+      exchangeFeature = viewNextYear();
     } else if (group.id === 'fin-exercice' && tab.id === 'tax-adjustments') {
       exchangeFeature = viewTaxAdjustments();
     } else if (group.id === 'fin-exercice' && tab.id === 'opening-transfer' && selectedChild && selectedChild.id === 'opening-transfer-build') {
@@ -29122,6 +29202,12 @@
         }, 0);
         break;
       }
+      case 'create-next-exercise':
+        createNextExerciseFromMenu();
+        break;
+      case 'open-next-exercise':
+        openPreparedNextExercise(trigger.getAttribute('data-source-id'), id);
+        break;
       case 'read-opening-balance-source':
         readOpeningBalanceSource();
         break;

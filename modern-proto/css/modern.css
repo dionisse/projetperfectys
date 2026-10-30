@@ -774,6 +774,8 @@ input[readonly] { background: var(--bg-subtle); color: var(--muted); }
   background: #fff;
 }
 .definitive-close-backup h3, .definitive-close-confirm h3 { margin: 0; font-size: 1rem; }
+.next-exercise-dates { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.next-exercise-panel .exchange-preview-footer { justify-content: flex-start; }
 .definitive-close-backup p { margin: 0; color: var(--muted); }
 .definitive-close-confirm label:not(.checkbox-line) { display: grid; gap: 6px; }
 .definitive-close-confirm input[type="text"] { width: min(100%, 420px); min-height: 42px; padding: 9px 11px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); }
@@ -783,6 +785,7 @@ input[readonly] { background: var(--bg-subtle); color: var(--muted); }
 @media (max-width: 640px) {
   .definitive-close-panel { padding: 12px; }
   .definitive-close-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .next-exercise-dates { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ---------- Ledger ---------- */

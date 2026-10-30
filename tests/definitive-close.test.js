@@ -20,11 +20,12 @@ function createHarness() {
   const sandbox = { window: {}, localStorage, Intl, JSON, Date, Math, String, Number, Object, Array };
   sandbox.window.localStorage = localStorage;
   vm.createContext(sandbox);
-  ['accounting-chart.js', 'store.js'].forEach(file => {
+  ['accounting-chart.js', 'store.js', 'opening-balances.js'].forEach(file => {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', file), 'utf8'), sandbox, { filename: file });
   });
   return {
     store: sandbox.window.PerfectoStore,
+    openingBalances: sandbox.window.PerfectoOpeningBalances,
     values,
     blockStorageWrites(value) { storageWritesBlocked = value; }
   };
@@ -109,11 +110,48 @@ S.reset();
 assert.equal(S.definitiveClosePreflight().finalized, true, 'la réinitialisation ne peut effacer l’arrêt définitif');
 assert.equal(S.entries().length, 0);
 
+const nonContiguousNext = S.nextExercisePreflight('2027-01-02', '2027-12-31');
+assert.equal(nonContiguousNext.canCreate, false, 'un intervalle entre N et N+1 n’est pas automatiquement comblé');
+assert.match(nonContiguousNext.errors.join(' '), /lendemain/);
+const nextPreflight = S.nextExercisePreflight();
+assert.equal(nextPreflight.canCreate, true, nextPreflight.errors.join(' '));
+assert.equal(nextPreflight.targetStart, '2027-01-01', 'N+1 démarre par défaut le 1er janvier de l’année suivante');
+assert.equal(nextPreflight.targetEnd, '2027-12-31', 'N+1 se termine par défaut le 31 décembre');
+const sourceAccountCount = S.accounts().length;
+const nextExercise = S.createNextExerciseDossier();
+assert.equal(nextExercise.ok, true, nextExercise.errors && nextExercise.errors.join(' '));
+assert.equal(nextExercise.created, true);
+assert.equal(Object.prototype.hasOwnProperty.call(nextExercise.dossier, 'confidentialAccountsConfiguration'), false, 'la nouvelle API ne divulgue pas le paramétrage confidentiel');
+assert.equal(S.currentDossier().cycleStart, '2027-01-01');
+assert.equal(S.currentDossier().cycleEnd, '2027-12-31');
+assert.equal(S.entries().length, 0, 'les écritures de N ne sont pas copiées dans N+1');
+assert.equal(S.accounts().length, sourceAccountCount, 'le plan comptable explicite est repris sans copier les mouvements');
+assert.equal(S.periods().every(period => period.status === 'open'), true, 'les périodes du nouveau cycle sont ouvertes');
+assert.equal(nextExercise.sourceDossierId, created.dossier.id);
+const sourceSnapshot = S.readDossierStateSnapshot(created.dossier.id);
+assert.equal(sourceSnapshot.ok, true, sourceSnapshot.errors && sourceSnapshot.errors.join(' '));
+const transferPlan = h.openingBalances.buildTransfer(sourceSnapshot.state, sourceSnapshot.dossier, S.currentDossier(), S.accounts());
+assert.equal(transferPlan.ok, true, transferPlan.errors.join(' '));
+assert.equal(transferPlan.targetDate, '2027-01-01');
+const sharedPreview = S.openingBalanceTransferPreview(created.dossier.id, transferPlan.accountBalances, transferPlan.rows);
+assert.ok(Array.isArray(sharedPreview.decisions), 'l’aperçu de N+1 passe par le même registre Reports à nouveau');
+assert.equal(S.switchDossier(created.dossier.id).ok, true);
+const existingNextPreflight = S.nextExercisePreflight();
+assert.equal(existingNextPreflight.canContinue, true);
+assert.equal(Object.prototype.hasOwnProperty.call(existingNextPreflight.existingDossier, 'confidentialAccountsConfiguration'), false, 'l’aperçu ne divulgue pas la configuration confidentielle du dossier cible');
+const reusedExercise = S.createNextExerciseDossier();
+assert.equal(reusedExercise.ok, true, reusedExercise.errors && reusedExercise.errors.join(' '));
+assert.equal(reusedExercise.created, false, 'un second passage réutilise le même dossier au lieu de créer un doublon');
+assert.equal(reusedExercise.dossier.id, nextExercise.dossier.id);
+
 const navigation = require('../modern-proto/js/accounting-navigation.js');
 const closeTab = navigation.getTab('fin-exercice', 'definitive-close');
 assert.ok(closeTab);
 assert.equal(closeTab.status, 'active');
 assert.equal(closeTab.irreversible, true);
+const nextYearTab = navigation.getTab('fin-exercice', 'next-year');
+assert.ok(nextYearTab);
+assert.equal(nextYearTab.status, 'partial');
 const app = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'app.js'), 'utf8');
 assert.match(app, /function viewDefinitiveClose\(\)/);
 assert.match(app, /group\.id === 'fin-exercice' && tab\.id === 'definitive-close'/);
@@ -122,5 +160,10 @@ assert.match(app, /download-definitive-close-entries/);
 assert.match(app, /PERFECTO-ÉCHANGE v1/);
 assert.match(app, /finalize-definitive-close/);
 assert.match(app, /ARRET DEFINITIF DES COMPTES/);
+assert.match(app, /function viewNextYear\(\)/);
+assert.match(app, /group\.id === 'fin-exercice' && tab\.id === 'next-year'/);
+assert.match(app, /navigate\('#\/menu\?g=fin-exercice&t=opening-transfer&c=opening-transfer-build'\)/);
+assert.match(app, /function viewOpeningTransferBuild\(\)[\s\S]*viewOpeningBalances\(\)/);
+assert.match(app, /Le transfert vers N\+1 exige un arrêt définitif enregistré/);
 
-console.log('Arrêt définitif : contrôles du cycle, sauvegarde, attestation, confirmation exacte, scellement atomique et irréversibilité vérifiés.');
+console.log('Arrêt définitif et passage N+1 : contrôles, dates par défaut, création idempotente et reports partagés vérifiés.');

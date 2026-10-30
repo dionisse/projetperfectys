@@ -2083,17 +2083,17 @@
       cycleStart: cycleStart,
       cycleEnd: cycleEnd,
       accountingConfiguration: normalizeAccountingConfiguration(input.accountingConfiguration, cycleStart, cycleEnd),
-      analyticalSectionsConfiguration: defaultAnalyticalSectionsConfiguration(),
-      analyticalAllocationKeysConfiguration: defaultAnalyticalAllocationKeysConfiguration(),
-      analyticalNaturesConfiguration: defaultAnalyticalNaturesConfiguration(),
-      generalAccountNaturesConfiguration: defaultGeneralAccountNaturesConfiguration(),
-      fixedAssetAccountsConfiguration: defaultFixedAssetAccountsConfiguration(),
-      orderAccountsConfiguration: defaultOrderAccountsConfiguration(),
-      orderNaturesConfiguration: defaultOrderNaturesConfiguration(),
-      accountControlsConfiguration: defaultAccountControlsConfiguration(),
-      printedReportInformationConfiguration: defaultPrintedReportInformationConfiguration(),
-      currenciesConfiguration: defaultCurrenciesConfiguration(),
-      confidentialAccountsConfiguration: defaultConfidentialAccountsConfiguration(),
+      analyticalSectionsConfiguration: normalizeAnalyticalSectionsConfiguration(input.analyticalSectionsConfiguration),
+      analyticalAllocationKeysConfiguration: normalizeAnalyticalAllocationKeysConfiguration(input.analyticalAllocationKeysConfiguration),
+      analyticalNaturesConfiguration: normalizeAnalyticalNaturesConfiguration(input.analyticalNaturesConfiguration),
+      generalAccountNaturesConfiguration: normalizeGeneralAccountNaturesConfiguration(input.generalAccountNaturesConfiguration),
+      fixedAssetAccountsConfiguration: normalizeFixedAssetAccountsConfiguration(input.fixedAssetAccountsConfiguration),
+      orderAccountsConfiguration: normalizeOrderAccountsConfiguration(input.orderAccountsConfiguration),
+      orderNaturesConfiguration: normalizeOrderNaturesConfiguration(input.orderNaturesConfiguration),
+      accountControlsConfiguration: normalizeAccountControlsConfiguration(input.accountControlsConfiguration),
+      printedReportInformationConfiguration: normalizePrintedReportInformationConfiguration(input.printedReportInformationConfiguration),
+      currenciesConfiguration: normalizeCurrenciesConfiguration(input.currenciesConfiguration),
+      confidentialAccountsConfiguration: normalizeConfidentialAccountsConfiguration(input.confidentialAccountsConfiguration),
       reference: reference,
       seeded: false
     };
@@ -2116,6 +2116,173 @@
       cycleStart: EXERCICE + '-01-01',
       cycleEnd: EXERCICE + '-12-31'
     });
+  }
+
+  function nextExercisePreflight(cycleStartInput, cycleEndInput) {
+    ensureFolderCatalog();
+    var sourceDossier = currentDossier();
+    var st = load();
+    var targetYear = Number(sourceDossier.exerciseYear) + 1;
+    var targetStart = String(cycleStartInput || targetYear + '-01-01');
+    var targetEnd = String(cycleEndInput || targetYear + '-12-31');
+    var targetStartDate = parseIsoDate(targetStart);
+    var targetEndDate = parseIsoDate(targetEnd);
+    var errors = [];
+    var record = st.definitiveClose && st.definitiveClose.finalized ? st.definitiveClose : null;
+    var sourcePeriods = cyclePeriods(st.cycleStart, st.cycleEnd);
+    var openPeriods = sourcePeriods.filter(function (expected) {
+      return !(st.periods || []).some(function (period) {
+        return Number(period.year) === expected.year && Number(period.month) === expected.month && period.status === 'closed';
+      });
+    });
+    var sourceEntries = (st.entries || []).filter(function (entry) {
+      return entry && String(entry.date || '') >= st.cycleStart && String(entry.date || '') <= st.cycleEnd;
+    });
+    var outOfCycleEntryCount = (st.entries || []).filter(function (entry) {
+      return entry && (String(entry.date || '') < st.cycleStart || String(entry.date || '') > st.cycleEnd);
+    }).length;
+    var draftCount = sourceEntries.filter(function (entry) { return entry.status !== 'posted'; }).length;
+    var debit = 0;
+    var credit = 0;
+    sourceEntries.filter(function (entry) { return entry.status === 'posted'; }).forEach(function (entry) {
+      (entry.lines || []).forEach(function (line) {
+        debit += Number(line.debit) || 0;
+        credit += Number(line.credit) || 0;
+      });
+    });
+    var precision = Math.pow(10, accountingConfiguration().decimalPlaces || 0);
+    var balanced = Math.round(debit * precision) === Math.round(credit * precision);
+    var expectedStart = '';
+    var sourceEndDate = parseIsoDate(st.cycleEnd);
+    if (sourceEndDate) {
+      sourceEndDate.setUTCDate(sourceEndDate.getUTCDate() + 1);
+      expectedStart = sourceEndDate.getUTCFullYear() + '-' + String(sourceEndDate.getUTCMonth() + 1).padStart(2, '0') + '-' + String(sourceEndDate.getUTCDate()).padStart(2, '0');
+    }
+    if (recoveryIssue) errors.push('La base source nécessite une réparation contrôlée avant le passage à N+1.');
+    if (!record) errors.push('L’arrêt définitif de l’exercice source doit être enregistré avant le passage à N+1.');
+    if (st.cycleStart !== sourceDossier.cycleStart || st.cycleEnd !== sourceDossier.cycleEnd) errors.push('Le cycle enregistré dans la base ne correspond pas au dossier source.');
+    if (record && (record.cycleStart !== st.cycleStart || record.cycleEnd !== st.cycleEnd)) errors.push('L’arrêt définitif ne correspond plus au cycle du dossier source.');
+    if (record && (!record.exerciseEntriesFileName || !record.backupFileName)) errors.push('Le fichier complet des écritures et la sauvegarde JSON de l’exercice source doivent figurer dans la trace de son arrêt définitif.');
+    if (record && Number(record.exerciseEntriesCount) !== sourceEntries.length - draftCount) errors.push('Le nombre d’écritures de la sauvegarde ne correspond pas au registre actuel du dossier source.');
+    if (record && (!record.totals || !Number.isFinite(Number(record.totals.debit)) || !Number.isFinite(Number(record.totals.credit)) ||
+        Math.round(Number(record.totals.debit) * precision) !== Math.round(debit * precision) || Math.round(Number(record.totals.credit) * precision) !== Math.round(credit * precision))) {
+      errors.push('Les totaux enregistrés à l’arrêt définitif ne correspondent plus aux écritures validées de la source.');
+    }
+    if (openPeriods.length) errors.push('Toutes les périodes de l’exercice source doivent être clôturées.');
+    if (draftCount) errors.push('Le dossier source contient encore des écritures non validées.');
+    if (outOfCycleEntryCount) errors.push('Le dossier source contient des écritures hors cycle qui doivent être contrôlées avant le report.');
+    if (!balanced) errors.push('Les écritures validées de l’exercice source ne sont pas équilibrées.');
+    if (!parseIsoDate(st.cycleStart) || !parseIsoDate(st.cycleEnd) || st.cycleEnd < st.cycleStart) errors.push('Les dates du cycle source sont absentes ou invalides.');
+    if (!targetStartDate || !targetEndDate || targetEnd < targetStart) errors.push('Les dates de l’exercice N+1 sont invalides ou inversées.');
+    if (targetStartDate && targetStartDate.getUTCFullYear() !== targetYear) errors.push('Le début du cycle cible doit se situer en N+1 (' + targetYear + ').');
+    if (targetStart !== expectedStart) errors.push('Le cycle N+1 doit commencer le lendemain de la fin du cycle source (' + (expectedStart || 'date inconnue') + ').');
+    if (targetStartDate && targetEndDate && cyclePeriods(targetStart, targetEnd).length > 18) errors.push('Le cycle N+1 ne peut pas dépasser 18 mois dans cette version.');
+    var expectedReference = referenceFor(sourceDossier.accountingTypeCode, sourceDossier.clientCode, targetYear);
+    var referenceCollision = folderCatalog.find(function (item) {
+      return item.id !== sourceDossier.id && String(item.reference).toLocaleLowerCase() === expectedReference.toLocaleLowerCase() &&
+        (item.cycleStart !== targetStart || item.cycleEnd !== targetEnd);
+    }) || null;
+    var existingDossier = folderCatalog.find(function (item) {
+      return item.id !== sourceDossier.id && item.clientCode === sourceDossier.clientCode && item.accountingTypeCode === sourceDossier.accountingTypeCode &&
+        item.cycleStart === targetStart && item.cycleEnd === targetEnd;
+    }) || null;
+    if (referenceCollision) errors.push('Un autre dossier utilise déjà la référence ' + expectedReference + ' avec un cycle différent. Vérifiez le dossier existant avant de poursuivre.');
+    return {
+      canContinue: !errors.length && !!existingDossier,
+      canCreate: !errors.length && !existingDossier,
+      errors: errors,
+      sourceCycleStart: st.cycleStart,
+      sourceCycleEnd: st.cycleEnd,
+      sourcePostedEntryCount: sourceEntries.length - draftCount,
+      sourceDraftCount: draftCount,
+      sourceOutOfCycleEntryCount: outOfCycleEntryCount,
+      sourceOpenPeriodCount: openPeriods.length,
+      sourcePeriodCount: sourcePeriods.length,
+      sourceDebit: debit,
+      sourceCredit: credit,
+      targetYear: targetYear,
+      targetStart: targetStart,
+      targetEnd: targetEnd,
+      expectedTargetStart: targetYear + '-01-01',
+      expectedTargetEnd: targetYear + '-12-31',
+      expectedTargetReference: expectedReference,
+      existingDossier: existingDossier ? visibleDossierRecord(existingDossier) : null,
+      closeRecord: record ? clone(record) : null
+    };
+  }
+
+  function createNextExerciseDossier(input) {
+    input = input && typeof input === 'object' ? input : {};
+    var sourceDossier = currentDossier();
+    var sourceState = load();
+    var cycleStart = String(input.cycleStart || (Number(sourceDossier.exerciseYear) + 1) + '-01-01');
+    var cycleEnd = String(input.cycleEnd || (Number(sourceDossier.exerciseYear) + 1) + '-12-31');
+    var preflight = nextExercisePreflight(cycleStart, cycleEnd);
+    if (preflight.errors.length) return { ok: false, errors: preflight.errors, preflight: preflight };
+    if (preflight.existingDossier) {
+      var reused = switchFolder(preflight.existingDossier.id);
+      if (!reused.ok) return { ok: false, errors: reused.errors || ['Impossible d’ouvrir le dossier N+1 existant.'], preflight: preflight };
+      return { ok: true, created: false, dossier: visibleDossierRecord(reused.dossier), sourceDossierId: sourceDossier.id, preflight: preflight };
+    }
+    if (!preflight.canCreate) return { ok: false, errors: ['Le dossier N+1 ne peut pas être créé à partir de cet aperçu.'], preflight: preflight };
+
+    var previousCatalog = clone(folderCatalog);
+    var created = createDossier({
+      clientName: sourceDossier.clientName,
+      clientCode: sourceDossier.clientCode,
+      accountingTypeLabel: sourceDossier.accountingTypeLabel,
+      accountingTypeCode: sourceDossier.accountingTypeCode,
+      address: sourceDossier.address,
+      ifu: sourceDossier.ifu,
+      rccm: sourceDossier.rccm,
+      email: sourceDossier.email,
+      phone: sourceDossier.phone,
+      cycleStart: preflight.targetStart,
+      cycleEnd: preflight.targetEnd,
+      accountingConfiguration: sourceDossier.accountingConfiguration,
+      analyticalSectionsConfiguration: sourceDossier.analyticalSectionsConfiguration,
+      analyticalAllocationKeysConfiguration: sourceDossier.analyticalAllocationKeysConfiguration,
+      analyticalNaturesConfiguration: sourceDossier.analyticalNaturesConfiguration,
+      generalAccountNaturesConfiguration: sourceDossier.generalAccountNaturesConfiguration,
+      fixedAssetAccountsConfiguration: sourceDossier.fixedAssetAccountsConfiguration,
+      orderAccountsConfiguration: sourceDossier.orderAccountsConfiguration,
+      orderNaturesConfiguration: sourceDossier.orderNaturesConfiguration,
+      accountControlsConfiguration: sourceDossier.accountControlsConfiguration,
+      printedReportInformationConfiguration: sourceDossier.printedReportInformationConfiguration,
+      currenciesConfiguration: sourceDossier.currenciesConfiguration,
+      confidentialAccountsConfiguration: sourceDossier.confidentialAccountsConfiguration
+    });
+    if (!created.ok) return { ok: false, errors: created.errors, preflight: preflight };
+    var targetId = created.dossier.id;
+    var switched = switchFolder(targetId);
+    if (!switched.ok) {
+      folderCatalog = previousCatalog;
+      saveFolderCatalog();
+      return { ok: false, errors: switched.errors || ['Impossible d’activer le dossier N+1.'], preflight: preflight };
+    }
+    var targetBeforeCopy = clone(state);
+    state.accounts = clone(sourceState.accounts || []);
+    state.accountChartVersion = sourceState.accountChartVersion || ACCOUNTING_CHART_VERSION;
+    state.deletedStandardAccountCodes = clone(sourceState.deletedStandardAccountCodes || []);
+    state.journals = clone(sourceState.journals || defaultJournalRecords());
+    state.journalRegistryVersion = sourceState.journalRegistryVersion || JOURNAL_REGISTRY_VERSION;
+    state.journalCodeHistory = clone(sourceState.journalCodeHistory || []);
+    state.exercise = preflight.targetYear;
+    state.cycleStart = preflight.targetStart;
+    state.cycleEnd = preflight.targetEnd;
+    if (!save()) {
+      state = targetBeforeCopy;
+      try { global.localStorage.removeItem(currentFolderStorageKey()); global.localStorage.removeItem(currentBackupStorageKey()); } catch (cleanupError) { /* le nettoyage local est best effort */ }
+      folderCatalog = previousCatalog;
+      saveFolderCatalog();
+      activeFolderId = sourceDossier.id;
+      state = sourceState;
+      definitiveCloseLock = true;
+      recoveryIssue = null;
+      try { global.localStorage.setItem(ACTIVE_DOSSIER_STORAGE_KEY, activeFolderId); } catch (activeFolderError) { /* conserver la sélection en mémoire */ }
+      return { ok: false, errors: ['Création de N+1 annulée : le plan comptable et les journaux n’ont pas pu être enregistrés dans le nouveau dossier.'], preflight: preflight };
+    }
+    return { ok: true, created: true, dossier: visibleDossierRecord(currentDossier()), sourceDossierId: sourceDossier.id, preflight: preflight };
   }
 
   function updateAccountingConfiguration(input) {
@@ -7914,6 +8081,8 @@
     initializeGeneralAccountNaturesConfiguration: initializeGeneralAccountNaturesConfiguration,
     currentStorageKey: currentFolderStorageKey,
     createDossier: createDossier,
+    nextExercisePreflight: nextExercisePreflight,
+    createNextExerciseDossier: createNextExerciseDossier,
     readDossierStateSnapshot: visibleReadDossierStateSnapshot,
     switchDossier: visibleSwitchFolder,
     folders: visibleDossiers,
