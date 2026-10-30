@@ -3475,3 +3475,8 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .entry-revision-snapshot { margin-top: 5px; font-size: .62rem; }
 .entry-revision-snapshot summary { color: #52685a; cursor: pointer; }
 .entry-revision-snapshot ul { margin: 4px 0 0 16px; }
+.entry-journal-history { margin-top: 18px; }
+.entry-journal-history .table-wrap { max-height: 560px; overflow: auto; }
+.entry-journal-history tbody tr[data-action="open-entry"] { cursor: pointer; }
+.entry-journal-history tbody tr[data-action="open-entry"]:hover { background: #f2f7f3; }
+.entry-journal-history .empty-state { padding: 20px; }

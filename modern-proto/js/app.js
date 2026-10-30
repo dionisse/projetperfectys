@@ -2682,6 +2682,39 @@
     };
   }
 
+  function entryJournalHistoryEntries(journalCode) {
+    return S.entries().filter(function (entry) {
+      return entry && entry.journal === journalCode;
+    }).slice().sort(function (left, right) {
+      return String(right.date || '').localeCompare(String(left.date || '')) ||
+        String(right.updatedAt || right.postedAt || right.createdAt || '').localeCompare(String(left.updatedAt || left.postedAt || left.createdAt || '')) ||
+        String(right.reference || '').localeCompare(String(left.reference || ''), 'fr', { numeric: true });
+    });
+  }
+
+  function entryJournalHistoryHtml(journalCode) {
+    var journal = S.journal(journalCode);
+    var entries = entryJournalHistoryEntries(journalCode);
+    var rows = entries.map(function (entry) {
+      var totals = S.totals(entry.lines || []);
+      return '<tr class="clickable" data-action="open-entry" data-id="' + esc(entry.id) + '" tabindex="0" aria-label="Consulter la pièce ' + esc(entry.reference) + '">' +
+        '<td class="nowrap">' + dateLabel(entry.date) + '</td>' +
+        '<td><button type="button" class="btn btn-ghost btn-sm" data-action="open-entry" data-id="' + esc(entry.id) + '">' + esc(entry.reference) + '</button></td>' +
+        '<td>' + esc(entry.description || '—') + '</td>' +
+        '<td>' + statusBadge(entry.status) + '</td>' +
+        '<td class="num">' + amount(totals.debit) + '</td>' +
+        '<td class="num">' + amount(totals.credit) + '</td>' +
+      '</tr>';
+    }).join('');
+    return '<section class="card panel entry-journal-history" aria-labelledby="entry-journal-history-title">' +
+      '<div class="panel-header"><div><h3 id="entry-journal-history-title">Pièces du journal · ' + esc(journal ? journalDisplayName(journal) : journalCode || 'Non sélectionné') + '</h3>' +
+      '<p class="sub">' + entries.length + ' pièce(s) · du plus récent au plus ancien · sélectionnez une ligne pour consulter son détail.</p></div></div>' +
+      (entries.length
+        ? '<div class="table-wrap"><table class="data-table"><thead><tr><th scope="col">Date</th><th scope="col">Référence</th><th scope="col">Libellé</th><th scope="col">Statut</th><th scope="col" class="num">Débit</th><th scope="col" class="num">Crédit</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+        : '<div class="empty-state"><strong>Aucune pièce pour ce journal.</strong><span>Les brouillons enregistrés et les pièces validées apparaîtront ici.</span></div>') +
+      '</section>';
+  }
+
   function lineRowHtml(line, journalCode) {
     var decimalPlaces = S.accountingConfiguration().decimalPlaces;
     var amountStep = decimalPlaces ? String(1 / Math.pow(10, decimalPlaces)) : '1';
@@ -2702,7 +2735,8 @@
     var model = defaultEntryModel(params || {});
     if (model.blockedEntry) {
       return pageHeader('Correction de pièce indisponible', 'Les pièces validées restent traçables et ne peuvent être corrigées que dans la fenêtre autorisée.', '<a class="btn btn-ghost" href="#/entries">← Retour aux pièces</a>') +
-        '<div class="alert warning"><div><strong>La pièce ' + esc(model.blockedEntry.reference) + ' ne peut pas être modifiée.</strong><ul>' + (model.editPreflight.errors || []).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div></div>';
+        '<div class="alert warning"><div><strong>La pièce ' + esc(model.blockedEntry.reference) + ' ne peut pas être modifiée.</strong><ul>' + (model.editPreflight.errors || []).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div></div>' +
+        entryJournalHistoryHtml(model.blockedEntry.journal);
     }
     var editing = !!model.id;
     var editingPosted = model.status === 'posted';
@@ -2763,7 +2797,7 @@
       '</div>' +
     '</form>';
 
-    return html;
+    return html + '<div id="entry-journal-history-container">' + entryJournalHistoryHtml(model.journal) + '</div>';
   }
 
   function collectEntryForm() {
@@ -29200,6 +29234,8 @@
             var descriptionList = $('#entry-description-suggestions');
             if (accountList) accountList.innerHTML = entryAccountDatalist(input.value);
             if (descriptionList) descriptionList.innerHTML = entryDescriptionDatalist(input.value);
+            var historyContainer = $('#entry-journal-history-container');
+            if (historyContainer) historyContainer.innerHTML = entryJournalHistoryHtml(input.value);
             $$('#lines-body [data-field="account"]').forEach(function (accountInput) { entryAccountInputStatus(accountInput); });
             refreshEntryCounterpartSuggestions();
           }
@@ -29292,7 +29328,8 @@
         if (!result.ok) { showFormErrors(result.errors); return; }
 
         toast(isPostedAmendment ? 'Correction de la pièce ' + result.entry.reference + ' enregistrée avec son historique.' : (mode === 'posted' ? 'Pièce ' + result.entry.reference + ' validée.' : 'Brouillon ' + result.entry.reference + ' enregistré.'), 'success');
-        navigate('#/entries');
+        var entryRouteContext = parseHash().params.from === 'journal-list' ? '&from=journal-list' : '';
+        navigate('#/entry?journal=' + encodeURIComponent(result.entry.journal) + entryRouteContext);
       });
 
       return;
