@@ -2495,6 +2495,17 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
 .exchange-mapping-table th { color: #718078; background: #f8faf8; font-size: .58rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .exchange-mapping-table td { color: #52645b; }
 .exchange-mapping-table td strong { color: #314940; white-space: nowrap; }
+.tax-adjustment-table { min-width: 980px; }
+.tax-adjustment-table td:first-child { min-width: 150px; }
+.tax-adjustment-direction { display: inline-block; padding: 3px 7px; border: 1px solid #dce6df; border-radius: 999px; color: #52645b; background: #f7f9f7; font-size: .61rem; font-weight: 750; }
+.tax-adjustment-reintegration { border-color: #ead8b0; color: #765d26; background: #fcf7e9; }
+.tax-adjustment-deduction { border-color: #cbe1d8; color: #236b58; background: #f0f8f4; }
+.tax-adjustment-to-qualify { border-color: #dfe4e1; color: #68746d; background: #f7f8f7; }
+.tax-adjustment-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tax-adjustment-description-field { grid-column: 1 / -1; }
+.tax-adjustment-form-grid input,
+.tax-adjustment-form-grid select,
+.tax-adjustment-form-grid textarea { width: 100%; }
 .centralization-cancellation-workspace tr.is-selected { background: #eff7f3; box-shadow: inset 3px 0 #16877d; }
 .exchange-mapping-table select { width: 100%; min-width: 210px; min-height: 35px; padding: 6px 8px; border: 1px solid #dfe7e0; border-radius: 5px; color: #33483f; background: #fff; font: inherit; }
 .exchange-context-confirm { display: flex; align-items: flex-start; gap: 9px; padding: 11px 12px; border: 1px solid #ead8b0; border-radius: 7px; color: #65552f; background: #fbf6e9; font-size: .69rem; line-height: 1.5; }

@@ -996,6 +996,7 @@
       journalCodeHistory: defaultJournalRecords().map(function (journal) { return normalizeJournalCode(journal.code); }).concat(RETIRED_JOURNAL_CODES),
       entries: withSeedEntries === false ? [] : seedEntries(),
       importSourceFiles: [],
+      taxAdjustments: [],
       periods: cyclePeriods(cycleStart, cycleEnd),
       deletedStandardAccountCodes: [],
       supplierRegistryVersion: SUPPLIER_REGISTRY_VERSION,
@@ -5521,6 +5522,101 @@
     return { ok: true, errors: [], fixedAsset: clone(record) };
   }
 
+  function taxAdjustmentRecordsForState(st) {
+    return Array.isArray(st.taxAdjustments) ? st.taxAdjustments : (st.taxAdjustments = []);
+  }
+
+  function validateTaxAdjustmentInput(input) {
+    input = input || {};
+    var direction = String(input.direction == null ? 'to-qualify' : input.direction).trim();
+    var description = String(input.description == null ? '' : input.description).trim();
+    var amount = input.amount === '' || input.amount == null ? NaN : Number(input.amount);
+    var sourceDocument = String(input.sourceDocument == null ? '' : input.sourceDocument).trim();
+    var taxReference = String(input.taxReference == null ? '' : input.taxReference).trim();
+    var errors = [];
+    if (['to-qualify', 'reintegration', 'deduction'].indexOf(direction) === -1) errors.push('Choisissez une qualification proposée valide.');
+    if (!description) errors.push('Le motif de l’ajustement est obligatoire.');
+    else if (description.length > 500) errors.push('Le motif ne peut pas dépasser 500 caractères.');
+    if (!Number.isSafeInteger(amount) || amount <= 0) errors.push('Le montant déclaré doit être un entier XOF supérieur à zéro.');
+    if (sourceDocument.length > 200) errors.push('La référence du justificatif ne peut pas dépasser 200 caractères.');
+    if (taxReference.length > 160) errors.push('La référence fiscale ou déclarative ne peut pas dépasser 160 caractères.');
+    return {
+      ok: errors.length === 0,
+      errors: errors,
+      value: { direction: direction, description: description, amount: amount, sourceDocument: sourceDocument, taxReference: taxReference }
+    };
+  }
+
+  function taxAdjustments() {
+    var st = load();
+    return clone(taxAdjustmentRecordsForState(st).filter(function (record) {
+      return record && record.cycleStart === st.cycleStart && record.cycleEnd === st.cycleEnd;
+    }));
+  }
+
+  function createTaxAdjustment(input) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Ajout bloqué : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var validation = validateTaxAdjustmentInput(input);
+    if (!validation.ok) return validation;
+    var records = taxAdjustmentRecordsForState(st);
+    var previousState = clone(st);
+    var id;
+    do { id = 'TAX-' + String(st.exercise) + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6); }
+    while (records.some(function (record) { return record && record.id === id; }));
+    var timestamp = new Date().toISOString();
+    var record = Object.assign({
+      id: id,
+      cycleStart: String(st.cycleStart || ''),
+      cycleEnd: String(st.cycleEnd || ''),
+      createdAt: timestamp,
+      updatedAt: timestamp
+    }, validation.value);
+    records.push(record);
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer cet ajustement fiscal dans le dossier actif.'] };
+    }
+    return { ok: true, errors: [], taxAdjustment: clone(record) };
+  }
+
+  function updateTaxAdjustment(id, input) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Modification bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var records = taxAdjustmentRecordsForState(st);
+    var index = records.findIndex(function (record) {
+      return record && record.id === String(id || '') && record.cycleStart === st.cycleStart && record.cycleEnd === st.cycleEnd;
+    });
+    if (index < 0) return { ok: false, errors: ['Ajustement fiscal introuvable dans le cycle actif.'] };
+    var validation = validateTaxAdjustmentInput(input);
+    if (!validation.ok) return validation;
+    var previousState = clone(st);
+    var updated = Object.assign({}, records[index], validation.value, { updatedAt: new Date().toISOString() });
+    records[index] = updated;
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Impossible d’enregistrer les modifications de cet ajustement fiscal.'] };
+    }
+    return { ok: true, errors: [], taxAdjustment: clone(updated) };
+  }
+
+  function deleteTaxAdjustment(id) {
+    var st = load();
+    if (recoveryIssue) return { ok: false, errors: ['Suppression bloquée : contrôlez ou restaurez d’abord la base de ce dossier.'] };
+    var records = taxAdjustmentRecordsForState(st);
+    var index = records.findIndex(function (record) {
+      return record && record.id === String(id || '') && record.cycleStart === st.cycleStart && record.cycleEnd === st.cycleEnd;
+    });
+    if (index < 0) return { ok: false, errors: ['Ajustement fiscal introuvable dans le cycle actif.'] };
+    var previousState = clone(st);
+    var removed = records.splice(index, 1)[0];
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Suppression impossible : l’ajustement fiscal est conservé.'] };
+    }
+    return { ok: true, errors: [], taxAdjustment: clone(removed) };
+  }
+
   function agedBalanceNatureInfo(nature) {
     if (nature === 'clients') return { key: 'clients', label: 'Clients', partyType: 'client' };
     if (nature === 'suppliers') return { key: 'suppliers', label: 'Fournisseurs', partyType: 'supplier' };
@@ -7695,6 +7791,10 @@
     auditOpeningBalances: visibleAuditOpeningBalances,
     openingBalanceTransferPreview: visibleOpeningBalanceTransferPreview,
     applyOpeningBalanceTransfer: visibleApplyOpeningBalanceTransfer,
+    taxAdjustments: taxAdjustments,
+    createTaxAdjustment: createTaxAdjustment,
+    updateTaxAdjustment: updateTaxAdjustment,
+    deleteTaxAdjustment: deleteTaxAdjustment,
     agedBalanceItems: agedBalanceItems,
     agedBalanceSettlements: agedBalanceSettlements,
     agedBalanceItem: function (id) {
