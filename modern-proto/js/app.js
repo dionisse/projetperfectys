@@ -449,6 +449,9 @@
       case 'open-third-party-collective-cycle-detail':
         return { moduleId: 'accounting', actionId: 'module.view' };
       case 'open-entry':
+        return { moduleId: 'accounting', actionId: 'module.view' };
+      case 'edit-posted-entry':
+        return { moduleId: 'accounting', actionId: 'draft.edit' };
       case 'select-entry-journal':
       case 'open-entry-journal-consultation':
       case 'open-entry-journal-close':
@@ -737,7 +740,7 @@
       var editing = !!form.getAttribute('data-entry-id');
       $$('[data-mode]', form).forEach(function (button) {
         var mode = button.getAttribute('data-mode');
-        var actions = mode === 'posted'
+        var actions = mode === 'posted' || mode === 'amend-posted'
           ? [editing ? 'draft.edit' : 'draft.create', 'entry.validate']
           : [editing ? 'draft.edit' : 'draft.create'];
         var context = accountingAccessContext();
@@ -1938,34 +1941,89 @@
     });
   }
 
-  function allowedEntryAccounts(journalCode) {
-    return postingAccounts().filter(function (account) {
+  var entryAccountCatalogCache = Object.create(null);
+  var entryCounterpartIndexCache = null;
+
+  function entryAccountCatalog(journalCode) {
+    var dossier = S.currentDossier();
+    var key = String(dossier && dossier.id || '') + '|' + String(journalCode || '');
+    if (entryAccountCatalogCache[key]) return entryAccountCatalogCache[key];
+    var accounts = postingAccounts().filter(function (account) {
       var cls = Number(account.cls || String(account.code).charAt(0));
       return cls >= 1 && cls <= 8 && (!journalCode || S.journalAllowsAccount(journalCode, account.code));
     });
+    var byCode = Object.create(null);
+    var byLabel = Object.create(null);
+    var options = [];
+    accounts.forEach(function (account) {
+      var code = String(account.code);
+      var label = String(account.label || '').trim();
+      byCode[code.toLocaleLowerCase('fr')] = account;
+      var normalizedLabel = label.toLocaleLowerCase('fr');
+      if (!byLabel[normalizedLabel]) byLabel[normalizedLabel] = [];
+      byLabel[normalizedLabel].push(account);
+      options.push('<option value="' + esc(code + ' — ' + label) + '" label="Compte imputable · classe ' + esc(account.cls) + '"></option>');
+    });
+    entryAccountCatalogCache[key] = { accounts: accounts, byCode: byCode, byLabel: byLabel, optionsHtml: options.join('') };
+    return entryAccountCatalogCache[key];
+  }
+
+  function allowedEntryAccounts(journalCode) {
+    return entryAccountCatalog(journalCode).accounts;
   }
 
   function resolveEntryAccount(text, journalCode) {
     var query = String(text || '').trim();
     if (!query) return null;
-    var accounts = allowedEntryAccounts(journalCode);
+    var catalog = entryAccountCatalog(journalCode);
     var lower = query.toLocaleLowerCase('fr');
-    var exactCode = accounts.find(function (account) { return String(account.code).toLocaleLowerCase('fr') === lower; });
-    if (exactCode) return exactCode;
+    if (catalog.byCode[lower]) return catalog.byCode[lower];
     var codePrefix = query.match(/^([^\s]+)\s+[—–-]\s*/);
     if (codePrefix) {
-      var codeMatch = accounts.find(function (account) { return String(account.code).toLocaleLowerCase('fr') === codePrefix[1].toLocaleLowerCase('fr'); });
+      var codeMatch = catalog.byCode[codePrefix[1].toLocaleLowerCase('fr')];
       if (codeMatch) return codeMatch;
     }
-    var labelMatches = accounts.filter(function (account) { return String(account.label || '').trim().toLocaleLowerCase('fr') === lower; });
+    var labelMatches = catalog.byLabel[lower] || [];
     return labelMatches.length === 1 ? labelMatches[0] : null;
   }
 
   function entryAccountDatalist(journalCode) {
-    return allowedEntryAccounts(journalCode).map(function (account) {
-      var label = String(account.label || '');
-      return '<option value="' + esc(account.code + ' — ' + label) + '" label="Compte imputable · classe ' + esc(account.cls) + '"></option>';
-    }).join('');
+    return entryAccountCatalog(journalCode).optionsHtml;
+  }
+
+  function entryDescriptionDatalist(journalCode) {
+    var seen = Object.create(null);
+    var labels = S.entries().filter(function (entry) {
+      return entry && entry.journal === journalCode && String(entry.description || '').trim();
+    }).sort(function (left, right) {
+      return String(right.createdAt || right.updatedAt || right.date || '').localeCompare(String(left.createdAt || left.updatedAt || left.date || ''));
+    }).map(function (entry) { return String(entry.description || '').trim(); }).filter(function (label) {
+      var key = label.toLocaleLowerCase('fr');
+      if (seen[key]) return false;
+      seen[key] = true;
+      return true;
+    }).slice(0, 12);
+    return labels.map(function (label) { return '<option value="' + esc(label) + '"></option>'; }).join('');
+  }
+
+  function entryCounterpartIndex() {
+    if (entryCounterpartIndexCache) return entryCounterpartIndexCache;
+    var byAccount = Object.create(null);
+    S.entries().forEach(function (entry) {
+      if (!entry || entry.status !== 'posted' || !Array.isArray(entry.lines)) return;
+      var codes = [];
+      entry.lines.forEach(function (line) {
+        var code = String(line && line.account || '');
+        if (code && codes.indexOf(code) === -1) codes.push(code);
+      });
+      var record = { journal: entry.journal, codes: codes };
+      codes.forEach(function (code) {
+        if (!byAccount[code]) byAccount[code] = [];
+        byAccount[code].push(record);
+      });
+    });
+    entryCounterpartIndexCache = byAccount;
+    return entryCounterpartIndexCache;
   }
 
   function entryAccountInputStatus(input) {
@@ -1974,9 +2032,8 @@
     if (!status) return;
     var account = resolveEntryAccount(input.value, ($('#e-journal') || {}).value || '');
     var query = String(input.value || '').trim();
-    var ambiguousLabel = query && allowedEntryAccounts(($('#e-journal') || {}).value || '').filter(function (candidate) {
-      return String(candidate.label || '').trim().toLocaleLowerCase('fr') === query.toLocaleLowerCase('fr');
-    }).length > 1;
+    var catalog = entryAccountCatalog(($('#e-journal') || {}).value || '');
+    var ambiguousLabel = query && (catalog.byLabel[query.toLocaleLowerCase('fr')] || []).length > 1;
     status.classList.toggle('is-recognized', !!account);
     status.classList.toggle('is-unrecognized', !!query && !account);
     status.textContent = account
@@ -1990,21 +2047,20 @@
     var selected = Object.create(null);
     selectedCodes.forEach(function (code) { selected[code] = true; });
     var counts = Object.create(null);
-    S.entries().forEach(function (entry) {
-      if (!entry || entry.status !== 'posted' || !Array.isArray(entry.lines)) return;
-      var entryCodes = [];
-      entry.lines.forEach(function (line) {
-        var code = String(line && line.account || '');
-        if (code && entryCodes.indexOf(code) === -1) entryCodes.push(code);
-      });
-      if (!selectedCodes.some(function (code) { return entryCodes.indexOf(code) !== -1; })) return;
-      entryCodes.forEach(function (code) {
-        if (selected[code]) return;
-        var account = S.account(code);
-        if (!account || account.active === false || account.postable === false || (journalCode && !S.journalAllowsAccount(journalCode, code))) return;
-        if (!counts[code]) counts[code] = { account: account, entries: 0, sameJournal: 0 };
-        counts[code].entries += 1;
-        if (entry.journal === journalCode) counts[code].sameJournal += 1;
+    var seenEntries = [];
+    var index = entryCounterpartIndex();
+    selectedCodes.forEach(function (sourceCode) {
+      (index[sourceCode] || []).forEach(function (entry) {
+        if (seenEntries.indexOf(entry) !== -1) return;
+        seenEntries.push(entry);
+        entry.codes.forEach(function (code) {
+          if (selected[code]) return;
+          var account = S.account(code);
+          if (!account || account.active === false || account.postable === false || (journalCode && !S.journalAllowsAccount(journalCode, code))) return;
+          if (!counts[code]) counts[code] = { account: account, entries: 0, sameJournal: 0 };
+          counts[code].entries += 1;
+          if (entry.journal === journalCode) counts[code].sameJournal += 1;
+        });
       });
     });
     return Object.keys(counts).map(function (code) { return counts[code]; }).sort(function (left, right) {
@@ -2551,11 +2607,26 @@
       var existing = S.entry(params.id);
       if (existing && existing.status === 'draft') {
         return {
-          id: existing.id,
+          id: existing.id, status: 'draft',
           reference: existing.reference,
           journal: existing.journal,
           date: existing.date,
           description: existing.description,
+          amendmentReason: '',
+          lines: existing.lines.map(function (l) { return { account: l.account, debit: l.debit || '', credit: l.credit || '' }; })
+        };
+      }
+      if (existing && existing.status === 'posted') {
+        var editPreflight = S.postedEntryEditPreflight(existing.id);
+        if (!editPreflight.canEdit) return { blockedEntry: existing, editPreflight: editPreflight };
+        return {
+          id: existing.id, status: 'posted',
+          reference: existing.reference,
+          journal: existing.journal,
+          date: existing.date,
+          description: existing.description,
+          amendmentReason: '',
+          editPreflight: editPreflight,
           lines: existing.lines.map(function (l) { return { account: l.account, debit: l.debit || '', credit: l.credit || '' }; })
         };
       }
@@ -2599,8 +2670,15 @@
   }
 
   function viewEntryForm(params) {
+    entryAccountCatalogCache = Object.create(null);
+    entryCounterpartIndexCache = null;
     var model = defaultEntryModel(params || {});
+    if (model.blockedEntry) {
+      return pageHeader('Correction de pièce indisponible', 'Les pièces validées restent traçables et ne peuvent être corrigées que dans la fenêtre autorisée.', '<a class="btn btn-ghost" href="#/entries">← Retour aux pièces</a>') +
+        '<div class="alert warning"><div><strong>La pièce ' + esc(model.blockedEntry.reference) + ' ne peut pas être modifiée.</strong><ul>' + (model.editPreflight.errors || []).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div></div>';
+    }
     var editing = !!model.id;
+    var editingPosted = model.status === 'posted';
     var returnToJournalList = params && params.from === 'journal-list';
     var selectedJournal = S.journal(model.journal);
     var closed = S.periodStatus(Number(model.date.slice(0, 4)), Number(model.date.slice(5, 7))) === 'closed';
@@ -2608,16 +2686,19 @@
       ? '<a class="btn btn-ghost" href="' + accountingMenuHash('saisie', 'journal-entry') + '">← Retour aux journaux</a>'
       : '<a class="btn btn-ghost" href="#/entries">← Retour aux pièces</a>';
 
-    var html = pageHeader(editing ? 'Modifier le brouillon' : 'Saisie d’écriture',
-      editing ? 'La pièce reste modifiable tant qu’elle n’est pas validée.' : 'Journal sélectionné : ' + journalDisplayName(selectedJournal) + ' · saisie multiligne avec recherche de comptes et contrôle d’équilibre en temps réel.',
+    var html = pageHeader(editingPosted ? 'Corriger une pièce validée' : (editing ? 'Modifier le brouillon' : 'Saisie d’écriture'),
+      editingPosted ? 'Correction de pièce validée, avec historique conservé.' : (editing ? 'La pièce reste modifiable tant qu’elle n’est pas validée.' : 'Journal sélectionné : ' + journalDisplayName(selectedJournal) + ' · saisie multiligne avec recherche de comptes et contrôle d’équilibre en temps réel.'),
       returnLink);
 
-    if (editing) {
+    if (editingPosted) {
+      html += '<div class="alert info">Pièce validée <strong>' + esc(model.reference) + '</strong> · version actuelle conservée dans l’historique de correction.</div>';
+    } else if (editing) {
       html += '<div class="alert info">Brouillon <strong>' + esc(model.reference) + '</strong> en cours de modification.</div>';
     }
 
-    html += '<form id="entry-form" class="card panel" data-entry-id="' + esc(model.id || '') + '" novalidate>' +
+    html += '<form id="entry-form" class="card panel" data-entry-id="' + esc(model.id || '') + '" data-entry-status="' + esc(model.status || 'draft') + '" novalidate>' +
       '<div id="form-errors" aria-live="assertive"></div>' +
+      (editingPosted ? '<div class="alert warning entry-amendment-notice"><div><strong>Correction d’une pièce déjà validée.</strong> ' + model.editPreflight.laterPostedCount + ' pièce(s) validée(s) suivent cette pièce ; la correction sera refusée au-delà de deux. La version précédente sera conservée dans l’historique. Motif obligatoire.</div></div>' : '') +
       '<div id="period-notice">' + (closed ? '<div class="alert warning">⚠️ La période sélectionnée est clôturée : enregistrement et validation seront refusés.</div>' : '') + '</div>' +
       '<div class="form-grid">' +
         '<div class="field"><label for="e-reference">Référence</label>' +
@@ -2627,8 +2708,6 @@
           '<select id="e-journal" name="journal" required>' + journalOptions(model.journal) + '</select><span class="hint">Les comptes proposés sont filtrés selon les autorisations du journal.</span></div>' +
         '<div class="field"><label for="e-date">Date</label>' +
           '<input id="e-date" name="date" type="date" min="' + esc(S.currentDossier().cycleStart) + '" max="' + esc(S.accountingConfiguration().entryAllowedUntil) + '" required value="' + esc(model.date) + '"></div>' +
-        '<div class="field"><label for="e-description">Libellé</label>' +
-          '<input id="e-description" name="description" type="text" value="' + esc(model.description) + '" placeholder="Objet de la pièce"></div>' +
       '</div>' +
 
       '<div class="panel-header" style="margin-top:22px"><div><h3>Lignes de l’écriture</h3>' +
@@ -2639,6 +2718,8 @@
       '<datalist id="entry-account-suggestions">' + entryAccountDatalist(model.journal) + '</datalist>' +
       '<div class="lines-editor" id="lines-body">' + model.lines.map(function (line) { return lineRowHtml(line, model.journal); }).join('') + '</div>' +
       '<section class="entry-assistance" aria-labelledby="entry-assistance-title"><div><h4 id="entry-assistance-title">Contreparties possibles</h4><p>Suggestions fondées uniquement sur des pièces validées de ce dossier contenant les comptes saisis. Elles n’imposent ni compte, ni sens, ni montant.</p></div><div id="entry-counterpart-suggestions" aria-live="polite"></div></section>' +
+      '<div class="field entry-description-field"><label for="e-description">Libellé</label><datalist id="entry-description-suggestions">' + entryDescriptionDatalist(model.journal) + '</datalist><input id="e-description" name="description" type="text" list="entry-description-suggestions" value="' + esc(model.description) + '" placeholder="Objet de la pièce" autocomplete="off"><span class="hint">Saisissez librement ou choisissez un libellé déjà utilisé dans ce journal.</span></div>' +
+      (editingPosted ? '<div class="field entry-amendment-reason"><label for="e-amendment-reason">Motif de correction <span aria-hidden="true">*</span></label><textarea id="e-amendment-reason" rows="2" maxlength="500" required placeholder="Expliquez pourquoi la pièce validée est corrigée"></textarea></div>' : '') +
 
       '<div class="entry-footer">' +
         '<div class="totals-inline">' +
@@ -2648,8 +2729,9 @@
           '<div class="total-item"><span>Contrôle</span><span class="balance-chip" id="balance-chip">Équilibrée</span></div>' +
         '</div>' +
         '<div class="entry-actions">' +
-          '<button type="submit" class="btn btn-ghost" data-mode="draft">💾 ' + (editing ? 'Mettre à jour' : 'Enregistrer le brouillon') + '</button>' +
-          '<button type="submit" class="btn btn-primary" data-mode="posted">✓ Valider la pièce</button>' +
+          (editingPosted
+            ? '<button type="submit" class="btn btn-primary" data-mode="amend-posted">✓ Enregistrer et valider la correction</button>'
+            : '<button type="submit" class="btn btn-ghost" data-mode="draft">💾 ' + (editing ? 'Mettre à jour' : 'Enregistrer le brouillon') + '</button><button type="submit" class="btn btn-primary" data-mode="posted">✓ Valider la pièce</button>') +
         '</div>' +
       '</div>' +
     '</form>';
@@ -2749,7 +2831,7 @@
       return true;
     });
 
-    var html = pageHeader('Pièces comptables', 'Brouillons modifiables, pièces validées immuables.',
+    var html = pageHeader('Pièces comptables', 'Brouillons modifiables ; pièces validées corrigibles dans la limite de deux pièces postérieures, avec historique.',
       '<a class="btn btn-primary" href="#/entry">＋ Nouvelle écriture</a>');
 
     html += '<div class="card"><div class="panel">' +
@@ -2784,6 +2866,15 @@
     return html;
   }
 
+  function entryRevisionSnapshotHtml(snapshot, title) {
+    snapshot = snapshot || {};
+    var lines = (Array.isArray(snapshot.lines) ? snapshot.lines : []).map(function (line) {
+      var account = S.account(line.account);
+      return '<li><strong>' + esc(line.account) + '</strong> ' + esc(account ? account.label : '') + ' · Débit ' + esc(amount(line.debit || 0)) + ' · Crédit ' + esc(amount(line.credit || 0)) + '</li>';
+    }).join('');
+    return '<details class="entry-revision-snapshot"><summary>' + esc(title) + ' · ' + esc(snapshot.reference || 'Sans référence') + ' · ' + esc(dateLabel(snapshot.date)) + '</summary><div><p>' + esc(snapshot.description || 'Aucun libellé') + '</p><ul>' + lines + '</ul></div></details>';
+  }
+
   function openEntryModal(id) {
     var e = S.entry(id);
     if (!e) { toast('Pièce introuvable.', 'error'); return; }
@@ -2808,6 +2899,12 @@
       '</tbody><tfoot><tr><td colspan="2">Totaux</td><td class="num">' + amount(t.debit) + '</td><td class="num">' + amount(t.credit) + '</td></tr></tfoot></table></div>' +
       '<div class="alert ' + (t.balanced ? 'success' : 'warning') + '" style="margin-top:16px">' +
         (t.balanced ? '✅ Pièce équilibrée.' : '⚠️ Pièce déséquilibrée (brouillon).') + '</div>';
+    var revisionHistory = Array.isArray(e.revisionHistory) ? e.revisionHistory : [];
+    if (revisionHistory.length) {
+      body += '<details class="entry-revision-history" style="margin-top:16px"><summary>Historique des corrections · ' + revisionHistory.length + '</summary><ol>' + revisionHistory.map(function (revision) {
+        return '<li><strong>Correction ' + revision.revision + '</strong> · ' + esc(revision.modifiedAt ? new Date(revision.modifiedAt).toLocaleString('fr-FR') : '') + '<p>Motif : ' + esc(revision.reason) + '</p>' + entryRevisionSnapshotHtml(revision.before, 'Avant') + entryRevisionSnapshotHtml(revision.after, 'Après') + '</li>';
+      }).join('') + '</ol></details>';
+    }
     var isCancellationEntry = CentralizationCancellation.isCancellationEntry(e);
     var isSystemManagedJournal = !!(journal && (journal.systemManaged || journal.retired));
     if (isSystemManagedJournal) {
@@ -2822,6 +2919,17 @@
     }
 
     var footer = '';
+    if (e.status === 'posted') {
+      var amendmentPreflight = S.postedEntryEditPreflight(e.id);
+      if (amendmentPreflight.canEdit && !isSystemManagedJournal && !isCancellationEntry &&
+          hasDemoPermission(getActiveDemoMember(), 'accounting', 'draft.edit', accountingAccessContext()) &&
+          hasDemoPermission(getActiveDemoMember(), 'accounting', 'entry.validate', accountingAccessContext())) {
+        footer += '<button type="button" class="btn btn-primary" data-action="edit-posted-entry" data-id="' + esc(e.id) + '">✎ Corriger cette pièce</button>';
+        body += '<div class="alert info" style="margin-top:16px">Correction disponible : ' + amendmentPreflight.laterPostedCount + ' pièce(s) validée(s) la suivent (maximum autorisé : deux).</div>';
+      } else if (!amendmentPreflight.canEdit) {
+        body += '<div class="alert warning" style="margin-top:16px"><strong>Correction indisponible.</strong> ' + (amendmentPreflight.errors || []).map(esc).join(' ') + '</div>';
+      }
+    }
     if (e.status === 'draft') {
       if (!isSystemManagedJournal) {
         footer += '<button type="button" class="btn btn-danger" data-action="delete-draft" data-id="' + esc(e.id) + '">× Supprimer</button>';
@@ -21944,7 +22052,12 @@
     if (id && !existing) { toast('Emplacement d’immobilisation introuvable dans le dossier actif.', 'error'); return; }
     var records = S.fixedAssetLocations();
     var suggestedCode = existing ? existing.code : S.nextFixedAssetLocationCode();
-    var value = function (key, fallback) { return esc(existing && existing[key] != null ? existing[key] : (fallback == null ? '' : fallback)); };
+    var value = function (key, fallback) {
+      if (defaults.forceValues && Object.prototype.hasOwnProperty.call(defaults.forceValues, key)) return esc(defaults.forceValues[key]);
+      if (existing && existing[key] != null) return esc(existing[key]);
+      if (Object.prototype.hasOwnProperty.call(defaults, key)) return esc(defaults[key]);
+      return esc(fallback == null ? '' : fallback);
+    };
     var parentOptions = fixedAssetLocationParentOptions(records, existing && existing.parentId, existing && existing.id);
     var body = '<form id="fixed-asset-location-form" novalidate><div id="fixed-asset-location-errors" aria-live="assertive"></div>' +
       '<div class="form-grid fixed-asset-location-form-grid">' +
@@ -22466,10 +22579,92 @@
     fixedAssetDepreciationFieldVisibility();
   }
 
-  function openFixedAssetModal(id) {
+  function fixedAssetEntryCandidates(entry) {
+    if (!entry || !Array.isArray(entry.lines)) return [];
+    var configuration = S.fixedAssetAccountsConfiguration();
+    var rows = (Array.isArray(configuration.rows) ? configuration.rows : []).concat(Array.isArray(configuration.additionalRows) ? configuration.additionalRows : []);
+    var patterns = [];
+    rows.forEach(function (row) {
+      String(row && row.grossValueAccount || '').split(/[;,\s|]+/).forEach(function (pattern) {
+        pattern = pattern.trim();
+        if (pattern && patterns.indexOf(pattern) === -1) patterns.push(pattern);
+      });
+    });
+    return entry.lines.map(function (line, index) {
+      var code = String(line && line.account || '');
+      var debit = Number(line && line.debit) || 0;
+      var matched = debit > 0 && patterns.some(function (pattern) {
+        return pattern.slice(-1) === '*' ? code.indexOf(pattern.slice(0, -1)) === 0 : code === pattern;
+      });
+      return matched ? { index: index, accountCode: code, amount: debit } : null;
+    }).filter(Boolean);
+  }
+
+  function fixedAssetEntryLinksMissing(entry) {
+    var assets = S.fixedAssets();
+    return fixedAssetEntryCandidates(entry).filter(function (line) {
+      return !assets.some(function (asset) {
+        return asset.sourceEntryId === entry.id && Number(asset.sourceEntryLineIndex) === line.index &&
+          asset.sourceEntryLineAccountCode === line.accountCode && Number(asset.sourceEntryLineAmount) === line.amount &&
+          asset.assetAccountCode === line.accountCode;
+      });
+    });
+  }
+
+  function fixedAssetTypeFromAccount(code) {
+    code = String(code || '');
+    if (/^(20|21)/.test(code)) return 'incorporelle';
+    if (/^(22|23|24)/.test(code)) return 'corporelle';
+    if (/^(26|27)/.test(code)) return 'financiere';
+    return '';
+  }
+
+  function openFixedAssetForEntry(entryId) {
+    var entry = S.entry(entryId);
+    if (!entry || entry.status !== 'draft') return false;
+    var assets = S.fixedAssets();
+    var linkedForEntry = assets.filter(function (asset) { return asset.sourceEntryId === entry.id; });
+    var candidate = fixedAssetEntryCandidates(entry).find(function (line) {
+      var linked = linkedForEntry.find(function (asset) { return Number(asset.sourceEntryLineIndex) === line.index; }) ||
+        linkedForEntry.find(function (asset) { return asset.sourceEntryLineAccountCode === line.accountCode && Number(asset.sourceEntryLineAmount) === line.amount; });
+      return !linked || Number(linked.sourceEntryLineIndex) !== line.index || linked.sourceEntryLineAccountCode !== line.accountCode || Number(linked.sourceEntryLineAmount) !== line.amount || linked.assetAccountCode !== line.accountCode;
+    });
+    if (!candidate) return false;
+    var linkedAsset = linkedForEntry.find(function (asset) { return Number(asset.sourceEntryLineIndex) === candidate.index; }) ||
+      linkedForEntry.find(function (asset) { return asset.sourceEntryLineAccountCode === candidate.accountCode && Number(asset.sourceEntryLineAmount) === candidate.amount; }) || null;
+    var type = fixedAssetTypeFromAccount(candidate.accountCode);
+    var defaults = {
+      sourceEntryId: entry.id,
+      sourceEntryLineIndex: candidate.index,
+      sourceEntryLineAccountCode: candidate.accountCode,
+      sourceEntryLineAmount: candidate.amount,
+      assetType: type,
+      assetAccountCode: candidate.accountCode,
+      acquisitionDate: entry.date,
+      commissioningDate: '',
+      status: 'en-cours',
+      grossCost: candidate.amount,
+      invoiceReference: entry.reference,
+      forceValues: linkedAsset ? {
+        assetAccountCode: candidate.accountCode,
+        sourceEntryLineAccountCode: candidate.accountCode,
+        sourceEntryLineIndex: candidate.index,
+        sourceEntryLineAmount: candidate.amount,
+        grossCost: candidate.amount,
+        assetType: type
+      } : null
+    };
+    openFixedAssetModal(linkedAsset ? linkedAsset.id : null, defaults);
+    return true;
+  }
+
+  function openFixedAssetModal(id, defaults) {
+    defaults = defaults && typeof defaults === 'object' ? defaults : {};
     var existing = id ? S.fixedAsset(id) : null;
     if (id && !existing) { toast('Élément immobilisé introuvable dans le dossier actif.', 'error'); return; }
-    var assetType = existing ? existing.assetType : 'corporelle';
+    var assetType = defaults.forceValues && Object.prototype.hasOwnProperty.call(defaults.forceValues, 'assetType')
+      ? defaults.forceValues.assetType
+      : (existing ? existing.assetType : (Object.prototype.hasOwnProperty.call(defaults, 'assetType') ? defaults.assetType : 'corporelle'));
     var preferredAssetAccountCode = { corporelle: '231', incorporelle: '212', financiere: '271' }[assetType];
     var assetPrefixes = { corporelle: ['22', '23', '24'], incorporelle: ['20', '21'], financiere: ['26', '27'] }[assetType] || [];
     var defaultAssetAccount = S.accounts().find(function (account) {
@@ -22479,18 +22674,20 @@
       return assetPrefixes.some(function (prefix) { return code.indexOf(prefix) === 0; }) && account.active !== false && account.postable !== false;
     });
     var today = S.todayIso();
+    var linkedSourceEntry = defaults.sourceEntryId ? S.entry(defaults.sourceEntryId) : null;
     var suggestedCode = existing ? existing.code : S.nextFixedAssetCode();
     var value = function (key, fallback) { return esc(existing && existing[key] != null ? existing[key] : (fallback == null ? '' : fallback)); };
     var options = function (choices, selected) {
       return choices.map(function (choice) { return '<option value="' + esc(choice[0]) + '"' + (String(choice[0]) === String(selected || '') ? ' selected' : '') + '>' + esc(choice[1]) + '</option>'; }).join('');
     };
     var body = '<form id="fixed-asset-form" novalidate><div id="fixed-asset-errors" aria-live="assertive"></div>' +
+      (defaults.sourceEntryId ? '<div class="alert info"><div><strong>Fiche liée à la pièce ' + esc(linkedSourceEntry ? linkedSourceEntry.reference : defaults.sourceEntryId) + '.</strong> Compte, date, montant et référence sont proposés depuis la ligne sélectionnée. Vérifiez la désignation, la nature, l’état et les paramètres ; aucune règle d’amortissement n’est calculée.</div></div>' : '') +
       '<div class="fixed-asset-form-sections">' +
         '<section class="fixed-asset-form-section"><h4>Identification et état</h4><div class="fixed-asset-form-grid">' +
           '<div class="field"><label for="fixed-asset-code">Code d’inventaire <span aria-hidden="true">*</span></label><input id="fixed-asset-code" name="code" type="text" maxlength="32" value="' + value('code', suggestedCode) + '" placeholder="Ex. IMMO-0001" required autocomplete="off"><span class="hint">Code proposé automatiquement, modifiable et non réutilisé.</span></div>' +
           '<div class="field"><label for="fixed-asset-name">Désignation <span aria-hidden="true">*</span></label><input id="fixed-asset-name" name="name" type="text" maxlength="150" value="' + value('name') + '" placeholder="Ex. Véhicule de service" required></div>' +
-          '<div class="field"><label for="fixed-asset-type">Nature <span aria-hidden="true">*</span></label><select id="fixed-asset-asset-type" name="assetType" required>' + options([['corporelle', 'Immobilisation corporelle'], ['incorporelle', 'Immobilisation incorporelle'], ['financiere', 'Immobilisation financière']], assetType) + '</select></div>' +
-          '<div class="field"><label for="fixed-asset-status">État <span aria-hidden="true">*</span></label><select id="fixed-asset-status" name="status" required>' + options([['en-service', 'En service'], ['en-cours', 'En cours / non mise en service'], ['retiree', 'Retiré de l’usage']], existing ? existing.status : 'en-service') + '</select></div>' +
+          '<div class="field"><label for="fixed-asset-type">Nature <span aria-hidden="true">*</span></label><select id="fixed-asset-asset-type" name="assetType" required>' + options([['', 'Choisir une nature…'], ['corporelle', 'Immobilisation corporelle'], ['incorporelle', 'Immobilisation incorporelle'], ['financiere', 'Immobilisation financière']], assetType) + '</select></div>' +
+          '<div class="field"><label for="fixed-asset-status">État <span aria-hidden="true">*</span></label><select id="fixed-asset-status" name="status" required>' + options([['en-service', 'En service'], ['en-cours', 'En cours / non mise en service'], ['retiree', 'Retiré de l’usage']], value('status', 'en-service')) + '</select></div>' +
           '<div class="field fixed-asset-description-field"><label for="fixed-asset-description">Description</label><textarea id="fixed-asset-description" name="description" rows="2" maxlength="500" placeholder="Caractéristiques et usage du bien">' + value('description') + '</textarea></div>' +
         '</div></section>' +
         '<section class="fixed-asset-form-section"><h4>Localisation et suivi physique</h4><div class="fixed-asset-form-grid">' +
@@ -22562,16 +22759,26 @@
         annualRatePercent: $('#fixed-asset-rate').value, unitOfProductionTotal: $('#fixed-asset-production-total').value,
         unitOfProductionUnit: $('#fixed-asset-production-unit').value,
         accumulatedDepreciationAccountCode: $('#fixed-asset-accumulated-account').value,
-        depreciationExpenseAccountCode: $('#fixed-asset-expense-account').value
+        depreciationExpenseAccountCode: $('#fixed-asset-expense-account').value,
+        sourceEntryId: existing ? existing.sourceEntryId : (defaults.sourceEntryId || ''),
+        sourceEntryLineIndex: defaults.forceValues && Object.prototype.hasOwnProperty.call(defaults.forceValues, 'sourceEntryLineIndex')
+          ? defaults.forceValues.sourceEntryLineIndex
+          : (existing ? existing.sourceEntryLineIndex : (defaults.sourceEntryLineIndex == null ? '' : defaults.sourceEntryLineIndex)),
+        sourceEntryLineAccountCode: existing ? existing.sourceEntryLineAccountCode : (defaults.sourceEntryLineAccountCode || ''),
+        sourceEntryLineAmount: existing ? existing.sourceEntryLineAmount : (defaults.sourceEntryLineAmount == null ? '' : defaults.sourceEntryLineAmount)
       };
       var result = existing ? S.updateFixedAsset(existing.id, input) : S.createFixedAsset(input);
       if (!result.ok) {
         $('#fixed-asset-errors').innerHTML = '<div class="alert error" role="alert"><ul style="margin:0 0 0 18px">' + result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
         return;
       }
+      var sourceEntryId = input.sourceEntryId;
       toast(existing ? 'Fiche d’immobilisation mise à jour.' : 'Élément ' + result.fixedAsset.code + ' enregistré.', 'success');
       closeModal(true);
       render();
+      if (sourceEntryId) window.setTimeout(function () {
+        if (!openFixedAssetForEntry(sourceEntryId)) toast('Les fiches requises sont définies. Vérifiez la pièce puis cliquez sur « Valider la pièce ».', 'info');
+      }, 0);
     });
   }
 
@@ -28947,7 +29154,9 @@
           updatePeriodNotice();
           if (id === 'e-journal') {
             var accountList = $('#entry-account-suggestions');
+            var descriptionList = $('#entry-description-suggestions');
             if (accountList) accountList.innerHTML = entryAccountDatalist(input.value);
+            if (descriptionList) descriptionList.innerHTML = entryDescriptionDatalist(input.value);
             $$('#lines-body [data-field="account"]').forEach(function (accountInput) { entryAccountInputStatus(accountInput); });
             refreshEntryCounterpartSuggestions();
           }
@@ -28971,23 +29180,66 @@
       form.addEventListener('submit', function (event) {
         event.preventDefault();
         var submitter = event.submitter;
-        var mode = submitter && submitter.getAttribute('data-mode') === 'posted' ? 'posted' : 'draft';
+        var requestedMode = submitter && submitter.getAttribute('data-mode') || 'draft';
+        var mode = requestedMode === 'posted' || requestedMode === 'amend-posted' ? requestedMode : 'draft';
         var payload = collectEntryForm();
         var editingId = payload.id;
+        var isPostedAmendment = mode === 'amend-posted';
         var requiredWriteActions = [editingId ? 'draft.edit' : 'draft.create'];
-        if (mode === 'posted') requiredWriteActions.push('entry.validate');
+        if (mode === 'posted' || isPostedAmendment) requiredWriteActions.push('entry.validate');
         if (!requiredWriteActions.every(function (actionId) { return hasDemoPermission(getActiveDemoMember(), 'accounting', actionId, accountingAccessContext()); })) {
           showFormErrors(['Action refusée par défaut : les droits de démonstration requis ne sont pas accordés.']);
           return;
         }
 
-        if (mode === 'posted') {
+        if (mode === 'posted' || isPostedAmendment) {
           var check = S.validateEntry(payload, { requireBalanced: true, status: 'posted' });
           if (!check.ok) { showFormErrors(check.errors); return; }
         }
 
+        if (isPostedAmendment) {
+          var amendmentReason = $('#e-amendment-reason');
+          if (!amendmentReason || !amendmentReason.value.trim()) { showFormErrors(['Le motif de correction est obligatoire.']); return; }
+          var amendmentCheck = S.postedEntryEditPreflight(editingId);
+          if (!amendmentCheck.canEdit) { showFormErrors(amendmentCheck.errors); return; }
+          if (!window.confirm('Confirmer la correction de la pièce validée ' + payload.reference + ' ? La version antérieure et le motif resteront conservés dans l’historique.')) return;
+        }
+
         var result;
-        if (editingId) {
+        if (isPostedAmendment) {
+          result = S.updatePostedEntry(editingId, payload, amendmentReason.value);
+        } else if (mode === 'posted' && fixedAssetEntryCandidates(payload).length) {
+          if (!editingId && !hasDemoPermission(getActiveDemoMember(), 'accounting', 'fixedAssets.create', accountingAccessContext())) {
+            showFormErrors(['Une ligne d’immobilisation est présente. Le droit fixedAssets.create est requis pour enregistrer sa fiche avant la validation de la pièce.']);
+            return;
+          }
+          result = editingId ? S.updateDraft(editingId, payload) : S.createEntry(payload, 'draft');
+          if (!result.ok) { showFormErrors(result.errors); return; }
+          var storedDraftId = result.entry.id;
+          var missingAssetLines = fixedAssetEntryLinksMissing(result.entry);
+          if (missingAssetLines.length) {
+            var assetForMissingLine = S.fixedAssets().find(function (asset) {
+              return asset.sourceEntryId === storedDraftId && Number(asset.sourceEntryLineIndex) === missingAssetLines[0].index;
+            }) || S.fixedAssets().find(function (asset) {
+              return asset.sourceEntryId === storedDraftId && asset.sourceEntryLineAccountCode === missingAssetLines[0].accountCode && Number(asset.sourceEntryLineAmount) === missingAssetLines[0].amount;
+            });
+            var assetPermission = assetForMissingLine ? 'fixedAssets.edit' : 'fixedAssets.create';
+            if (!hasDemoPermission(getActiveDemoMember(), 'accounting', assetPermission, accountingAccessContext())) {
+              showFormErrors(['La fiche de l’immobilisation doit être définie avant validation ; le droit ' + assetPermission + ' est requis. La pièce reste en brouillon.']);
+              return;
+            }
+            form.setAttribute('data-entry-id', storedDraftId);
+            form.setAttribute('data-entry-status', 'draft');
+            if (window.history && typeof window.history.replaceState === 'function') window.history.replaceState(null, '', '#/entry?id=' + encodeURIComponent(storedDraftId));
+            if (!openFixedAssetForEntry(storedDraftId)) {
+              showFormErrors(['La fiche d’immobilisation n’a pas pu être ouverte. La pièce est conservée en brouillon et n’a pas été validée.']);
+              return;
+            }
+            toast('Pièce conservée en brouillon. Définissez la fiche d’immobilisation avant de la valider.', 'info');
+            return;
+          }
+          result = S.postEntry(storedDraftId);
+        } else if (editingId) {
           result = S.updateDraft(editingId, payload);
           if (result.ok && mode === 'posted') result = S.postEntry(editingId);
         } else {
@@ -28996,7 +29248,7 @@
 
         if (!result.ok) { showFormErrors(result.errors); return; }
 
-        toast(mode === 'posted' ? 'Pièce ' + result.entry.reference + ' validée.' : 'Brouillon ' + result.entry.reference + ' enregistré.', 'success');
+        toast(isPostedAmendment ? 'Correction de la pièce ' + result.entry.reference + ' enregistrée avec son historique.' : (mode === 'posted' ? 'Pièce ' + result.entry.reference + ' validée.' : 'Brouillon ' + result.entry.reference + ' enregistré.'), 'success');
         navigate('#/entries');
       });
 
@@ -29510,6 +29762,13 @@
       case 'open-entry':
         if (id) openEntryModal(id);
         break;
+      case 'edit-posted-entry': {
+        var editPostedPreflight = S.postedEntryEditPreflight(id);
+        if (!editPostedPreflight.canEdit) { toast(editPostedPreflight.errors[0] || 'La correction de cette pièce n’est plus autorisée.', 'warning'); closeModal(true); render(); break; }
+        closeModal(true);
+        navigate('#/entry?id=' + encodeURIComponent(id) + '&from=entries');
+        break;
+      }
       case 'select-entry-journal':
         if (id) selectEntryJournal(id);
         break;

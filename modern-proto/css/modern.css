@@ -3462,3 +3462,16 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
   .entry-counterpart-list { grid-template-columns: minmax(0, 1fr); }
   .entry-assistance { padding: 10px; }
 }
+.entry-description-field { margin-top: 16px; padding: 12px 13px; border: 1px solid #dbe7dd; border-radius: 9px; background: #fbfdfb; }
+.entry-description-field label { color: #304b3d; font-weight: 800; }
+.entry-description-field input { min-height: 42px; font-size: .9rem; }
+.entry-amendment-notice { align-items: flex-start; margin-bottom: 12px; line-height: 1.5; }
+.entry-amendment-reason { margin-top: 12px; }
+.entry-amendment-reason textarea { width: 100%; min-height: 62px; }
+.entry-revision-history { padding: 10px 12px; border: 1px solid #dbe4dc; border-radius: 8px; background: #f9fbf9; font-size: .68rem; }
+.entry-revision-history > summary { color: #365342; font-weight: 800; cursor: pointer; }
+.entry-revision-history ol { display: grid; gap: 10px; margin: 10px 0 0 20px; padding: 0; }
+.entry-revision-history p { margin: 4px 0; }
+.entry-revision-snapshot { margin-top: 5px; font-size: .62rem; }
+.entry-revision-snapshot summary { color: #52685a; cursor: pointer; }
+.entry-revision-snapshot ul { margin: 4px 0 0 16px; }

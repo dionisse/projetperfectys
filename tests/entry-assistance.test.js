@@ -24,15 +24,21 @@ const accounts = [
   { code: '601100', label: 'Achats', cls: 6, active: true, postable: true }
 ];
 const entries = [
-  { status: 'posted', journal: 'AC', lines: [{ account: '601000' }, { account: '401000' }, { account: '401000' }] },
-  { status: 'posted', journal: 'OD', lines: [{ account: '601000' }, { account: '512000' }] },
-  { status: 'draft', journal: 'AC', lines: [{ account: '601000' }, { account: '570000' }] }
+  { status: 'posted', journal: 'AC', description: 'Facture fournisseur', lines: [{ account: '601000' }, { account: '401000' }, { account: '401000' }] },
+  { status: 'posted', journal: 'OD', description: 'Ajustement', lines: [{ account: '601000' }, { account: '512000' }] },
+  { status: 'draft', journal: 'AC', description: 'Facture fournisseur', lines: [{ account: '601000' }, { account: '570000' }] }
 ];
 const accountByCode = Object.fromEntries(accounts.map(account => [account.code, account]));
+let entryReads = 0;
 const sandbox = {
   postingAccounts: () => accounts.filter(account => account.active !== false && account.postable !== false),
+  entryAccountCatalogCache: Object.create(null),
+  entryCounterpartIndexCache: null,
+  esc: value => String(value),
   S: {
-    entries: () => entries,
+    entries: () => { entryReads += 1; return entries; },
+    accounts: () => accounts,
+    currentDossier: () => ({ id: 'test-dossier' }),
     account: code => accountByCode[String(code)] || null,
     journalAllowsAccount: (journalCode, accountCode) => !(journalCode === 'AC' && accountCode === '512000')
   }
@@ -40,8 +46,12 @@ const sandbox = {
 sandbox.globalThis = sandbox;
 
 vm.runInNewContext(
+  extractFunction('entryAccountCatalog', 'allowedEntryAccounts') +
   extractFunction('allowedEntryAccounts', 'resolveEntryAccount') +
   extractFunction('resolveEntryAccount', 'entryAccountDatalist') +
+  extractFunction('entryDescriptionDatalist', 'entryCounterpartIndex') +
+  extractFunction('entryCounterpartIndex', 'entryAccountInputStatus') +
+  'globalThis.entryDescriptionDatalist = entryDescriptionDatalist;' +
   extractFunction('entryCounterpartSuggestions', 'refreshEntryCounterpartSuggestions') +
   'globalThis.resolveEntryAccount = resolveEntryAccount; globalThis.entryCounterpartSuggestions = entryCounterpartSuggestions;',
   sandbox
@@ -60,6 +70,14 @@ assert.equal(
   JSON.stringify([['401000', 1, 1]]),
   'la suggestion utilise seulement les pièces validées observées, déduplique une même contrepartie dans une pièce, privilégie le journal courant et exclut les comptes non autorisés'
 );
+sandbox.entryCounterpartSuggestions('AC', ['601000']);
+assert.equal(entryReads, 1, 'l’index des pièces validées est réutilisé au lieu de rescanner le registre à chaque frappe');
+const labelOptions = sandbox.entryDescriptionDatalist('AC');
+assert.equal((labelOptions.match(/Facture fournisseur/g) || []).length, 1, 'les libellés déjà utilisés sont dédupliqués pour le journal sélectionné');
+assert.match(appSource, /entry-assistance-title[\s\S]*<div class="field entry-description-field"><label for="e-description">Libellé/);
+assert.match(appSource, /id="entry-description-suggestions">' \+ entryDescriptionDatalist\(model\.journal\)/);
+const entryView = appSource.slice(appSource.indexOf('function viewEntryForm('), appSource.indexOf('function collectEntryForm(', appSource.indexOf('function viewEntryForm(')));
+assert.ok(entryView.indexOf('entry-description-field') > entryView.indexOf('id="lines-body"'), 'le libellé est déplacé sous les lignes de saisie pour être repéré plus vite');
 
 const lineRenderer = appSource.slice(appSource.indexOf('function lineRowHtml('), appSource.indexOf('function viewEntryForm(', appSource.indexOf('function lineRowHtml(')));
 assert.match(lineRenderer, /type="text" data-field="account" list="entry-account-suggestions"/);

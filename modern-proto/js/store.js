@@ -5579,6 +5579,10 @@
       });
     });
     (Array.isArray(st.entries) ? st.entries : []).forEach(function (entryRecord) {
+      if (entryRecord && entryRecord.status === 'posted' && String(record.sourceEntryId || '') === String(entryRecord.id || '')) {
+        var sourceKey = 'source-entry:' + String(entryRecord.id);
+        if (!seen[sourceKey]) { seen[sourceKey] = true; count += 1; }
+      }
       (entryRecord && Array.isArray(entryRecord.lines) ? entryRecord.lines : []).forEach(function (line, index) {
         if (!isReference(line)) return;
         var key = entryRecord.id ? String(entryRecord.id) + ':' + index : 'entry:' + count;
@@ -5593,6 +5597,7 @@
   function fixedAssetProtectedFieldsChanged(previous, next) {
     var fields = [
       'code', 'assetType', 'assetAccountCode', 'accumulatedDepreciationAccountCode', 'depreciationExpenseAccountCode',
+      'sourceEntryId', 'sourceEntryLineIndex', 'sourceEntryLineAccountCode', 'sourceEntryLineAmount',
       'acquisitionDate', 'commissioningDate', 'grossCost', 'residualValue', 'depreciationStartDate',
       'depreciationMethod', 'usefulLifeMonths', 'annualRatePercent', 'unitOfProductionTotal', 'unitOfProductionUnit'
     ];
@@ -5619,6 +5624,10 @@
     var accumulatedDepreciationAccountCode = String(input.accumulatedDepreciationAccountCode == null ? '' : input.accumulatedDepreciationAccountCode).trim();
     var depreciationExpenseAccountCode = String(input.depreciationExpenseAccountCode == null ? '' : input.depreciationExpenseAccountCode).trim();
     var locationId = String(input.locationId == null ? '' : input.locationId).trim();
+    var sourceEntryId = String(input.sourceEntryId == null ? '' : input.sourceEntryId).trim().slice(0, 160);
+    var sourceEntryLineIndex = input.sourceEntryLineIndex == null || input.sourceEntryLineIndex === '' ? -1 : Number(input.sourceEntryLineIndex);
+    var sourceEntryLineAccountCode = String(input.sourceEntryLineAccountCode == null ? '' : input.sourceEntryLineAccountCode).trim().slice(0, 32);
+    var sourceEntryLineAmount = input.sourceEntryLineAmount == null || input.sourceEntryLineAmount === '' ? 0 : Number(input.sourceEntryLineAmount);
     var currentRecord = excludeId ? records.find(function (record) { return record.id === excludeId; }) : null;
     var currentCode = currentRecord ? normalizeFixedAssetCode(currentRecord.code) : '';
     var typeOptions = ['corporelle', 'incorporelle', 'financiere'];
@@ -5674,6 +5683,22 @@
     var assetAccount = fixedAssetAccount(assetAccountCode, assetType);
     if (!assetAccount) errors.push('Choisissez un compte actif et imputable de classe 2 correspondant à la nature du bien.');
     if (locationId && !fixedAssetLocations().some(function (location) { return String(location.id) === locationId; })) errors.push('La localisation sélectionnée n’existe plus dans le dossier actif.');
+    if (sourceEntryId) {
+      var sourceEntry = st.entries.find(function (record) { return record && record.id === sourceEntryId; });
+      if (!Number.isInteger(sourceEntryLineIndex) || sourceEntryLineIndex < 0) errors.push('La ligne de pièce source de l’immobilisation est invalide.');
+      if (!sourceEntryLineAccountCode || sourceEntryLineAccountCode !== assetAccountCode) errors.push('Le compte immobilisé doit correspondre à la ligne source désignée.');
+      if (!Number.isFinite(sourceEntryLineAmount) || sourceEntryLineAmount <= 0) errors.push('Le montant de la ligne source de l’immobilisation doit être positif.');
+      var sourceLine = sourceEntry && Array.isArray(sourceEntry.lines) ? sourceEntry.lines[sourceEntryLineIndex] : null;
+      if (!sourceEntry || (sourceEntry.status !== 'draft' && sourceEntry.status !== 'posted') || !sourceLine ||
+          sourceLine.account !== sourceEntryLineAccountCode || Number(sourceLine.debit) !== sourceEntryLineAmount) {
+        errors.push('La ligne source a changé ou n’existe plus ; relisez la pièce avant de lier l’immobilisation.');
+      }
+      if (records.some(function (record) { return record.id !== excludeId && record.sourceEntryId === sourceEntryId && Number(record.sourceEntryLineIndex) === sourceEntryLineIndex; })) {
+        errors.push('Une fiche d’immobilisation est déjà liée à cette ligne de pièce.');
+      }
+    } else if (sourceEntryLineIndex !== -1 || sourceEntryLineAccountCode || sourceEntryLineAmount) {
+      errors.push('Les détails de ligne source exigent une référence de pièce source valide.');
+    }
     var textFields = [
       ['manufacturer', 'Le fabricant', 100], ['model', 'Le modèle', 100], ['serialNumber', 'Le numéro de série', 100],
       ['vendor', 'Le fournisseur', 150], ['invoiceReference', 'La référence de facture', 100],
@@ -5700,6 +5725,9 @@
         invoiceReference: String(input.invoiceReference == null ? '' : input.invoiceReference).trim(),
         custodian: String(input.custodian == null ? '' : input.custodian).trim(),
         warrantyEndDate: warrantyEndDate, lastInventoryDate: lastInventoryDate,
+        sourceEntryId: sourceEntryId, sourceEntryLineIndex: sourceEntryId ? sourceEntryLineIndex : null,
+        sourceEntryLineAccountCode: sourceEntryId ? sourceEntryLineAccountCode : '',
+        sourceEntryLineAmount: sourceEntryId ? sourceEntryLineAmount : 0,
         notes: String(input.notes == null ? '' : input.notes).trim()
       }
     };
@@ -6527,6 +6555,70 @@
     return { ok: errors.length === 0, errors: errors, entry: normalizedEntry };
   }
 
+  function fixedAssetGrossValuePatterns() {
+    var configuration = fixedAssetAccountsConfiguration();
+    var rows = (Array.isArray(configuration.rows) ? configuration.rows : []).concat(Array.isArray(configuration.additionalRows) ? configuration.additionalRows : []);
+    return rows.reduce(function (patterns, row) {
+      String(row && row.grossValueAccount || '').split(/[;,\s|]+/).forEach(function (pattern) {
+        pattern = pattern.trim();
+        if (pattern && patterns.indexOf(pattern) === -1) patterns.push(pattern);
+      });
+      return patterns;
+    }, []);
+  }
+
+  function accountMatchesFixedAssetPattern(code, pattern) {
+    code = String(code || '');
+    pattern = String(pattern || '').trim();
+    if (!code || !pattern) return false;
+    return pattern.slice(-1) === '*' ? code.indexOf(pattern.slice(0, -1)) === 0 : code === pattern;
+  }
+
+  function fixedAssetEntryLinesToDefine(entryRecord) {
+    if (!entryRecord || !Array.isArray(entryRecord.lines)) return [];
+    var patterns = fixedAssetGrossValuePatterns();
+    return entryRecord.lines.map(function (line, index) {
+      var code = String(line && line.account || '');
+      var debit = Number(line && line.debit) || 0;
+      if (debit <= 0 || !patterns.some(function (pattern) { return accountMatchesFixedAssetPattern(code, pattern); })) return null;
+      return { index: index, accountCode: code, amount: debit };
+    }).filter(Boolean);
+  }
+
+  function fixedAssetEntryLineIsRegistered(entryRecord, line) {
+    if (!entryRecord || !line) return false;
+    return fixedAssets().some(function (asset) {
+      return asset.sourceEntryId === entryRecord.id && Number(asset.sourceEntryLineIndex) === line.index &&
+        asset.sourceEntryLineAccountCode === line.accountCode && Number(asset.sourceEntryLineAmount) === line.amount &&
+        asset.assetAccountCode === line.accountCode;
+    });
+  }
+
+  function fixedAssetEntryLinkErrors(entryRecord) {
+    if (!entryRecord || !entryRecord.id) return [];
+    var errors = [];
+    fixedAssets().filter(function (asset) { return asset.sourceEntryId === entryRecord.id; }).forEach(function (asset) {
+      var index = Number(asset.sourceEntryLineIndex);
+      var line = Array.isArray(entryRecord.lines) ? entryRecord.lines[index] : null;
+      if (!line || line.account !== asset.sourceEntryLineAccountCode || line.account !== asset.assetAccountCode ||
+          Number(line.debit) !== Number(asset.sourceEntryLineAmount)) {
+        errors.push('La fiche d’immobilisation ' + asset.code + ' liée à la ligne ' + (Number.isInteger(index) ? index + 1 : '?') + ' ne correspond plus à cette pièce. Corrigez ou supprimez cette liaison avant validation.');
+      }
+    });
+    return errors;
+  }
+
+  function missingFixedAssetEntryLines(entryRecord) {
+    return fixedAssetEntryLinesToDefine(entryRecord).filter(function (line) {
+      return !fixedAssetEntryLineIsRegistered(entryRecord, line);
+    });
+  }
+
+  function fixedAssetValidationError(entryRecord, missingLines) {
+    var accounts = (missingLines || missingFixedAssetEntryLines(entryRecord)).map(function (line) { return line.accountCode; });
+    return accounts.length ? ['Avant de valider cette écriture, définissez la fiche d’immobilisation liée au compte ' + accounts.join(', ') + '.'] : [];
+  }
+
   function createEntry(payload, status, options) {
     var createOptions = options || {};
     var result = validateEntry(payload, {
@@ -6535,6 +6627,11 @@
       systemSource: createOptions.systemSource
     });
     if (!result.ok) return result;
+    if (status === 'posted' && !createOptions.systemSource) {
+      var missingAssetLines = missingFixedAssetEntryLines(result.entry);
+      var assetLinkErrors = fixedAssetEntryLinkErrors(result.entry);
+      if (missingAssetLines.length || assetLinkErrors.length) return { ok: false, errors: fixedAssetValidationError(result.entry, missingAssetLines).concat(assetLinkErrors) };
+    }
 
     var st = load();
     ensureYear(Number(result.entry.date.slice(0, 4)));
@@ -6588,6 +6685,100 @@
     return { ok: true, errors: [], entry: st.entries[idx] };
   }
 
+  function postedEntryEditPreflight(id) {
+    var st = load();
+    var existing = st.entries.find(function (record) { return record && record.id === id; }) || null;
+    var errors = [];
+    if (!existing) errors.push('Pièce introuvable.');
+    else if (existing.status !== 'posted') errors.push('Cette action concerne uniquement une pièce déjà validée.');
+    if (st.definitiveClose && st.definitiveClose.finalized) errors.push('Le dossier est scellé par un arrêt définitif ; aucune correction n’est autorisée.');
+    if (existing && existing.status === 'posted') {
+      var journalRecord = journal(existing.journal);
+      if (existing.sourceSystem || (journalRecord && (journalRecord.systemManaged || journalRecord.retired))) {
+        errors.push('Cette pièce provient d’un import, d’un traitement automatique ou d’un journal retiré ; elle ne peut pas être modifiée ici.');
+      }
+      var orderedPosted = st.entries.map(function (record, index) { return { record: record, index: index }; }).filter(function (item) {
+        return item.record && item.record.status === 'posted';
+      }).sort(function (left, right) {
+        var leftTime = String(left.record.postedAt || left.record.createdAt || '');
+        var rightTime = String(right.record.postedAt || right.record.createdAt || '');
+        return leftTime.localeCompare(rightTime) || left.index - right.index;
+      });
+      var position = orderedPosted.findIndex(function (item) { return item.record.id === id; });
+      var laterPostedCount = position < 0 ? 0 : orderedPosted.length - position - 1;
+      if (position < 0) errors.push('L’ordre de validation de la pièce ne peut pas être établi.');
+      if (laterPostedCount > 2) errors.push('Cette pièce est trop ancienne pour être corrigée : plus de deux pièces ont été validées après elle.');
+      var year = Number(String(existing.date || '').slice(0, 4));
+      var month = Number(String(existing.date || '').slice(5, 7));
+      if (year && month && periodStatus(year, month) === 'closed') errors.push('La période de la pièce est clôturée ; aucune correction ne peut y être enregistrée.');
+      return {
+        ok: errors.length === 0,
+        canEdit: errors.length === 0,
+        errors: errors,
+        entryId: existing.id,
+        reference: existing.reference,
+        laterPostedCount: laterPostedCount,
+        maxLaterPostedCount: 2,
+        revisionCount: Array.isArray(existing.revisionHistory) ? existing.revisionHistory.length : 0,
+        finalized: !!(st.definitiveClose && st.definitiveClose.finalized)
+      };
+    }
+    return { ok: false, canEdit: false, errors: errors, entryId: id || '', laterPostedCount: 0, maxLaterPostedCount: 2, revisionCount: 0 };
+  }
+
+  function updatePostedEntry(id, payload, reason) {
+    var eligibility = postedEntryEditPreflight(id);
+    if (!eligibility.canEdit) return { ok: false, errors: eligibility.errors, preflight: eligibility };
+    var existing = entry(id);
+    reason = String(reason || '').trim();
+    if (!reason) return { ok: false, errors: ['Le motif de correction est obligatoire.'], preflight: eligibility };
+    if (reason.length > 500) return { ok: false, errors: ['Le motif de correction ne peut pas dépasser 500 caractères.'], preflight: eligibility };
+    payload = Object.assign({}, payload || {}, { id: id });
+    var existingJournal = journal(existing.journal);
+    var submittedJournal = journal(payload.journal);
+    var allowInactiveJournal = !!(existingJournal && submittedJournal && existingJournal.active === false && existingJournal.code === submittedJournal.code);
+    var validation = validateEntry(payload, { requireBalanced: true, status: 'posted', allowInactiveJournal: allowInactiveJournal });
+    if (!validation.ok) return validation;
+    var linkedAssetErrors = fixedAssetEntryLinkErrors(validation.entry);
+    if (linkedAssetErrors.length) return { ok: false, errors: linkedAssetErrors };
+    var st = load();
+    var index = st.entries.findIndex(function (record) { return record && record.id === id; });
+    if (index < 0 || st.entries[index].status !== 'posted') return { ok: false, errors: ['La pièce a changé depuis le contrôle de correction. Rechargez-la avant de poursuivre.'] };
+    var current = st.entries[index];
+    if (entryContentSignature(current) === entryContentSignature(validation.entry)) return { ok: false, errors: ['Aucune modification comptable n’a été saisie.'] };
+    var previousState = clone(st);
+    if (!writeBackupSnapshot(previousState)) return { ok: false, errors: ['Correction refusée : le point de restauration local n’a pas pu être créé. La pièce reste inchangée.'] };
+    var revisedEntry = Object.assign({}, current, validation.entry, {
+      id: current.id,
+      status: 'posted',
+      createdAt: current.createdAt,
+      postedAt: current.postedAt,
+      updatedAt: new Date().toISOString()
+    });
+    var revisionHistory = Array.isArray(current.revisionHistory) ? clone(current.revisionHistory) : [];
+    revisionHistory.push({
+      revision: revisionHistory.length + 1,
+      modifiedAt: revisedEntry.updatedAt,
+      reason: reason,
+      before: {
+        reference: current.reference, journal: current.journal, date: current.date,
+        description: current.description || '', lines: clone(current.lines || [])
+      },
+      after: {
+        reference: revisedEntry.reference, journal: revisedEntry.journal, date: revisedEntry.date,
+        description: revisedEntry.description || '', lines: clone(revisedEntry.lines || [])
+      }
+    });
+    revisedEntry.revisionHistory = revisionHistory;
+    st.entries[index] = revisedEntry;
+    if (!save()) {
+      state = previousState;
+      return { ok: false, errors: ['Correction impossible : l’enregistrement local a échoué. La version précédente a été conservée.'] };
+    }
+    markOhadaResultStale();
+    return { ok: true, errors: [], entry: clone(revisedEntry), preflight: eligibility };
+  }
+
   function postEntry(id) {
     var existing = entry(id);
     if (!existing) return { ok: false, errors: ['Pièce introuvable.'] };
@@ -6622,6 +6813,11 @@
     var t = totals(existing.lines);
     if (!t.balanced) {
       return { ok: false, errors: ['La pièce n’est pas équilibrée : validation impossible.'] };
+    }
+    if (!existing.sourceSystem) {
+      var missingFixedAssetLines = missingFixedAssetEntryLines(existing);
+      var invalidFixedAssetLinks = fixedAssetEntryLinkErrors(existing);
+      if (missingFixedAssetLines.length || invalidFixedAssetLinks.length) return { ok: false, errors: fixedAssetValidationError(existing, missingFixedAssetLines).concat(invalidFixedAssetLinks) };
     }
     existing.status = 'posted';
     existing.postedAt = new Date().toISOString();
@@ -7763,6 +7959,19 @@
     return updateDraft(id, payload);
   }
 
+  function visiblePostedEntryEditPreflight(id) {
+    var existing = entry(id);
+    if (!confidentialAccountAccessIsEnabled() && payloadReferencesConfidentialAccount(existing)) {
+      return { ok: false, canEdit: false, entryId: id || '', laterPostedCount: 0, maxLaterPostedCount: 2, revisionCount: 0, errors: ['Action refusée : ce profil ne peut pas corriger une pièce qui référence un compte confidentiel.'] };
+    }
+    return postedEntryEditPreflight(id);
+  }
+
+  function visibleUpdatePostedEntry(id, payload, reason) {
+    if (!confidentialAccountAccessIsEnabled() && (payloadReferencesConfidentialAccount(payload) || payloadReferencesConfidentialAccount(entry(id)))) return confidentialWriteDenied();
+    return updatePostedEntry(id, payload, reason);
+  }
+
   function visiblePostEntry(id) {
     if (!confidentialAccountAccessIsEnabled() && payloadReferencesConfidentialAccount(entry(id))) return confidentialWriteDenied();
     return postEntry(id);
@@ -8264,6 +8473,8 @@
     validateEntry: visibleValidateEntry,
     createEntry: visibleCreateEntry,
     updateDraft: visibleUpdateDraft,
+    postedEntryEditPreflight: visiblePostedEntryEditPreflight,
+    updatePostedEntry: visibleUpdatePostedEntry,
     postEntry: visiblePostEntry,
     deleteDraft: visibleDeleteDraft,
     addAccount: addAccount,
