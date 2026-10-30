@@ -192,6 +192,7 @@ assert.match(modernCss, /\.journal-card\s*\{[^}]*padding:\s*12px/s, 'Les cartes 
 assert.match(modernCss, /\.journal-description\s*\{[^}]*-webkit-line-clamp:\s*2/s, 'Les descriptions ne doivent pas agrandir les cartes');
 assert.match(menuRenderer, /group\.id === 'saisie' && tab\.id === 'journal-entry'[\s\S]*accounting-menu-panel-journal-entry/);
 assert.match(modernCss, /\.accounting-menu-panel-journal-entry \.accounting-menu-panel-head h3 \{ font-size: \.83rem; \}/, 'Le titre du sous-menu de saisie reprend la taille des titres des cartes Journaux');
+assert.match(modernCss, /\.page-header\.dashboard-featured h2 \{ font-size: \.83rem; \}/, 'Le titre du tableau de bord conserve la même taille harmonisée');
 assert.ok(findTab('definitions', 'journals').reason.includes('réservés au système'));
 assert.equal(findTab('saisie', 'journal-entry').status, 'active');
 assert.ok(findTab('saisie', 'journal-entry').reason.includes('double-clic'));
@@ -784,7 +785,7 @@ assert.match(appSource, /function generalLedgerReportLayoutView\([\s\S]*general-
 assert.match(appSource, /function generalLedgerReportPrintableHtml\([\s\S]*GRAND LIVRE DES COMPTES[\s\S]*reports à nouveau[\s\S]*page-break/);
 assert.match(generalLedgerSource, /priorEntriesIncludedInRunningBalance: true[\s\S]*sourceReferenceOnly: true[\s\S]*noAccountingMutation: true/);
 assert.match(configurationCss, /\.general-ledger-column-grid[\s\S]*\.general-ledger-account-section/);
-assert.match(serviceWorkerSource, /perfecto-static-v157/);
+assert.match(serviceWorkerSource, /perfecto-static-v158/);
 assert.equal(nav.getTab('declarations', 'vat-difference').status, 'active');
 assert.match(appSource, /group\.id === 'declarations' && tab\.id === 'vat-difference'[\s\S]*viewVatDifferenceReport/);
 assert.match(appSource, /function vatDifferenceConfigurationKey\([\s\S]*function openVatDifferenceAccountPicker/);
@@ -823,7 +824,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v157/);
+assert.match(serviceWorkerSource, /perfecto-static-v158/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

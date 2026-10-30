@@ -1198,6 +1198,7 @@ a { color: var(--primary-dark); }
   line-height: 1.08;
   letter-spacing: -.055em;
 }
+.page-header.dashboard-featured h2 { font-size: .83rem; }
 .page-header .page-description {
   max-width: 74ch;
   margin-top: 8px;
