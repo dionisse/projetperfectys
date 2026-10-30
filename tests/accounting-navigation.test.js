@@ -178,7 +178,18 @@ assert.ok(findTab('definitions', 'fixed-assets').reason.includes('non comptabili
 assert.ok(findTab('definitions', 'fixed-assets').reason.includes('choisie explicitement'));
 assert.ok(findTab('definitions', 'fixed-assets').reason.includes('restent à construire'));
 assert.equal(findTab('definitions', 'journals').status, 'active');
+assert.equal(findTab('definitions', 'journals').label, 'Journaux');
+assert.ok(findTab('definitions', 'journals').actions.some(action => action.route === 'journals'));
 assert.ok(findTab('definitions', 'journals').reason.includes('journaux libres'));
+const journalsViewStart = appSource.indexOf('function viewJournals() {');
+const journalsViewEnd = appSource.indexOf("/* --------------------------- Saisie d'écriture", journalsViewStart);
+const journalsView = appSource.slice(journalsViewStart, journalsViewEnd);
+const modernCss = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'css', 'modern.css'), 'utf8');
+assert.ok(journalsView.includes('class=\"journal-card-top\"'), 'Les journaux doivent être présentés sous forme de cartes numérotées');
+assert.ok(journalsView.includes('Ouvrir le journal'), 'Chaque carte doit permettre d’ouvrir le journal');
+assert.ok(journalsView.includes('Détails du journal'), 'Les informations détaillées restent accessibles sans alourdir les cartes');
+assert.match(modernCss, /\.journal-card\s*\{[^}]*padding:\s*12px/s, 'Les cartes de journaux doivent rester compactes');
+assert.match(modernCss, /\.journal-description\s*\{[^}]*-webkit-line-clamp:\s*2/s, 'Les descriptions ne doivent pas agrandir les cartes');
 assert.ok(findTab('definitions', 'journals').reason.includes('réservés au système'));
 assert.equal(findTab('saisie', 'journal-entry').status, 'active');
 assert.ok(findTab('saisie', 'journal-entry').reason.includes('double-clic'));
@@ -771,7 +782,7 @@ assert.match(appSource, /function generalLedgerReportLayoutView\([\s\S]*general-
 assert.match(appSource, /function generalLedgerReportPrintableHtml\([\s\S]*GRAND LIVRE DES COMPTES[\s\S]*reports à nouveau[\s\S]*page-break/);
 assert.match(generalLedgerSource, /priorEntriesIncludedInRunningBalance: true[\s\S]*sourceReferenceOnly: true[\s\S]*noAccountingMutation: true/);
 assert.match(configurationCss, /\.general-ledger-column-grid[\s\S]*\.general-ledger-account-section/);
-assert.match(serviceWorkerSource, /perfecto-static-v155/);
+assert.match(serviceWorkerSource, /perfecto-static-v156/);
 assert.equal(nav.getTab('declarations', 'vat-difference').status, 'active');
 assert.match(appSource, /group\.id === 'declarations' && tab\.id === 'vat-difference'[\s\S]*viewVatDifferenceReport/);
 assert.match(appSource, /function vatDifferenceConfigurationKey\([\s\S]*function openVatDifferenceAccountPicker/);
@@ -810,7 +821,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v155/);
+assert.match(serviceWorkerSource, /perfecto-static-v156/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

@@ -2534,34 +2534,37 @@
       '<div><strong>' + stats.length + '</strong><span>journaux au total</span></div>' +
     '</div>' +
     (managementAllowed ? '' : '<div class="alert info">La création, la modification et la saisie sont masquées sur téléphone. Utilisez le menu Éditions pour consulter les écritures.</div>') +
-    '<div class="alert info journal-system-note"><strong>Journaux système protégés.</strong> <code>AMO</code> (amortissements automatiques) et <code>RPE</code> (résultat de la période) restent réservés aux traitements système. <code>ABO</code> (abonnements) et <code>CEN</code> (centralisations) sont des journaux standards dédiés : leurs traitements spécifiques sont à construire. La centralisation de lots internes Paie &amp; RH et Ventes vers <code>Paie (PA)</code> et <code>Ventes (VTE)</code> reste distincte du futur transfert entre dossiers. La simulation d’amortissement demeure indicative et ne comptabilise rien.</div>' +
-    '<div class="journal-grid">' + stats.map(function (item) {
+    '<details class="alert info journal-system-note"><summary>À savoir sur les journaux système et dédiés</summary><p><strong>Journaux système protégés.</strong> <code>AMO</code> (amortissements automatiques) et <code>RPE</code> (résultat de la période) restent réservés aux traitements système. <code>ABO</code> (abonnements) et <code>CEN</code> (centralisations) sont des journaux standards dédiés : leurs traitements spécifiques sont à construire. La centralisation de lots internes Paie &amp; RH et Ventes vers <code>Paie (PA)</code> et <code>Ventes (VTE)</code> reste distincte du futur transfert entre dossiers. La simulation d’amortissement demeure indicative et ne comptabilise rien.</p></details>' +
+    '<div class="journal-grid" aria-label="Journaux du dossier">' + stats.map(function (item, index) {
       var record = item.journal;
       var systemManaged = !!record.systemManaged;
-      var kind = record.retired ? 'Historique retiré' : (systemManaged ? 'Automatique · système' : (record.isStandard ? 'Standard modifiable' : 'Créé par l’utilisateur'));
-      var activeLabel = record.active === false ? 'Inactif' : 'Actif';
-      var references = record.referencePrefix || record.code;
+      var retired = !!record.retired;
+      var inactive = record.active === false;
+      var kind = retired ? 'Historique retiré' : (systemManaged ? 'Automatique · système' : (record.isStandard ? 'Standard modifiable' : 'Créé par l’utilisateur'));
+      var stateLabel = retired ? 'Retiré' : (systemManaged ? 'Système' : (inactive ? 'Inactif' : 'Actif'));
+      var stateClass = retired || systemManaged ? 'plain' : (inactive ? 'draft' : 'posted');
+      var description = record.description || record.operationNature || ('Journal de type ' + record.type + '.');
       var count = S.journalEntryCount(record.id);
-      var actions = '<a class="btn btn-ghost btn-sm" href="#/journal?journal=' + encodeURIComponent(record.code) + '">Voir le journal</a>';
-      if (managementAllowed && !systemManaged && !record.retired) {
+      var actions = '<a class="btn btn-primary btn-sm" href="#/journal?journal=' + encodeURIComponent(record.code) + '">Ouvrir le journal <span aria-hidden="true">→</span></a>';
+      if (managementAllowed && !systemManaged && !retired) {
         actions += '<button type="button" class="btn btn-ghost btn-sm" data-action="edit-journal" data-id="' + esc(record.code) + '">Paramètres</button>';
       }
-      if (managementAllowed && !systemManaged && !record.retired && !record.isStandard) {
+      if (managementAllowed && !systemManaged && !retired && !record.isStandard) {
         actions += '<button type="button" class="btn btn-ghost btn-sm btn-danger" data-action="delete-journal" data-id="' + esc(record.code) + '"' + (count ? ' disabled title="Ce journal contient des écritures : il peut être désactivé, mais pas supprimé."' : '') + '>Supprimer</button>';
       }
-      return '<article class="journal-card' + (systemManaged ? ' system-managed' : '') + (record.retired ? ' journal-retired' : '') + (record.active === false ? ' journal-inactive' : '') + '">' +
-        '<div class="journal-head"><div><h3>' + esc(journalDisplayName(record)) + '</h3><span class="journal-meta">Type : ' + esc(record.type) + '</span></div></div>' +
-        '<div class="journal-tags"><span class="badge plain">' + esc(kind) + '</span><span class="badge ' + (record.active === false ? 'draft' : 'posted') + '">' + activeLabel + '</span></div>' +
-        '<dl>' +
-          '<dt>Préfixe des références</dt><dd>' + esc(references) + '-AAAA-001</dd>' +
+      return '<article class="journal-card' + (systemManaged ? ' system-managed' : '') + (retired ? ' journal-retired' : '') + (inactive ? ' journal-inactive' : '') + '">' +
+        '<div class="journal-card-top"><span class="journal-card-index">' + String(index + 1).padStart(2, '0') + '</span><span class="badge ' + stateClass + '">' + stateLabel + '</span></div>' +
+        '<h3>' + esc(journalDisplayName(record)) + '</h3>' +
+        '<p class="journal-description">' + esc(description) + '</p>' +
+        '<div class="journal-card-facts"><span>' + esc(kind) + '</span><span>' + item.count + ' pièce' + (item.count > 1 ? 's' : '') + ' · ' + item.posted + ' validée' + (item.posted > 1 ? 's' : '') + ' · ' + item.drafts + ' brouillon' + (item.drafts > 1 ? 's' : '') + '</span></div>' +
+        '<details class="journal-card-details"><summary>Détails du journal</summary><dl>' +
+          '<dt>Type</dt><dd>' + esc(record.type) + '</dd>' +
+          '<dt>Préfixe des références</dt><dd>' + esc(record.referencePrefix || record.code) + '-AAAA-001</dd>' +
           '<dt>Nature des opérations</dt><dd>' + esc(record.operationNature || '—') + '</dd>' +
           '<dt>Comptes autorisés</dt><dd class="journal-account-list">' + esc(record.authorizedAccounts === '*' ? 'Tous les comptes' : (Array.isArray(record.authorizedAccounts) ? record.authorizedAccounts.join(', ') : 'Tous les comptes')) + '</dd>' +
-          '<dt>Pièces sur le cycle</dt><dd>' + item.count + '</dd>' +
-          '<dt>Validées / brouillons</dt><dd>' + item.posted + ' / ' + item.drafts + '</dd>' +
-          '<dt>Total débit</dt><dd>' + amount(item.debit) + ' XOF</dd>' +
-          '<dt>Total crédit</dt><dd>' + amount(item.credit) + ' XOF</dd>' +
-        '</dl>' +
-        (record.description ? '<p class="journal-description">' + esc(record.description) + '</p>' : '') +
+          '<dt>Total débit validé</dt><dd>' + amount(item.debit) + ' XOF</dd>' +
+          '<dt>Total crédit validé</dt><dd>' + amount(item.credit) + ' XOF</dd>' +
+        '</dl></details>' +
         '<div class="journal-actions">' + actions + '</div>' +
       '</article>';
     }).join('') + '</div>';
