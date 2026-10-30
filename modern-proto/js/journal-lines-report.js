@@ -526,6 +526,7 @@
       return column.selectable && selectedKeys.indexOf(column.key) !== -1;
     });
     var totalsByCenter = new Map();
+    var unallocatedTotals = { lineCount: 0, debitUnits: 0, creditUnits: 0 };
 
     function registerReference(reference, center) {
       var normalized = normalizeAnalyticalCenterReference(reference);
@@ -554,31 +555,59 @@
         var sourceLines = entry.sourceMetadata && Array.isArray(entry.sourceMetadata.lines) ? entry.sourceMetadata.lines : [];
         (Array.isArray(entry.lines) ? entry.lines : []).forEach(function (line, lineIndex) {
           if (!line || typeof line !== 'object') return;
-          var references = analyticalCenterReferences(line, sourceLines[lineIndex] || {});
-          if (references.invalid || !references.values.length) return;
-          var center = null;
-          for (var refIndex = 0; refIndex < references.values.length; refIndex += 1) {
-            var reference = references.values[refIndex];
-            if (!centerByReference.has(reference)) return;
-            var matched = centerByReference.get(reference);
-            if (!matched || (center && center !== matched)) return;
-            center = matched;
-          }
-          if (!center || !center.code) return;
-          var centerCode = String(center.code).trim();
-          if (!centerCode || (selectedCenters.size && !selectedCenters.has(normalizeAnalyticalCenterReference(centerCode)))) return;
           var debit = Number(line.debit);
           var credit = Number(line.credit);
           if (!Number.isFinite(debit) || !Number.isFinite(credit) || debit < 0 || credit < 0 ||
               (debit > 0 && credit > 0) || (debit === 0 && credit === 0)) return;
-          var total = totalsByCenter.get(centerCode);
-          if (!total) {
-            total = { center: center, lineCount: 0, debitUnits: 0, creditUnits: 0 };
-            totalsByCenter.set(centerCode, total);
+
+          function addCenterAmount(center, amount) {
+            if (!center || !center.code || !Number.isFinite(amount) || amount <= 0) return;
+            var centerCode = String(center.code).trim();
+            if (!centerCode || (selectedCenters.size && !selectedCenters.has(normalizeAnalyticalCenterReference(centerCode)))) return;
+            var total = totalsByCenter.get(centerCode);
+            if (!total) {
+              total = { center: center, lineCount: 0, debitUnits: 0, creditUnits: 0 };
+              totalsByCenter.set(centerCode, total);
+            }
+            total.lineCount += 1;
+            if (debit > 0) total.debitUnits += Math.round(amount * precision);
+            else total.creditUnits += Math.round(amount * precision);
           }
-          total.lineCount += 1;
-          total.debitUnits += Math.round(debit * precision);
-          total.creditUnits += Math.round(credit * precision);
+
+          var analyticalSplits = Array.isArray(line.analyticSplits) ? line.analyticSplits : [];
+          var centerSplits = analyticalSplits.filter(function (split) {
+            return split && split.natureId === natureId;
+          });
+          if (centerSplits.length) {
+            centerSplits.forEach(function (split) {
+              (Array.isArray(split.allocations) ? split.allocations : []).forEach(function (allocation) {
+                if (!allocation) return;
+                var reference = normalizeAnalyticalCenterReference(allocation.centerId || '');
+                var center = reference && centerByReference.has(reference) ? centerByReference.get(reference) : null;
+                addCenterAmount(center, Number(allocation.amount));
+              });
+              var unallocatedAmount = Number(split.unallocatedAmount);
+              if (Number.isFinite(unallocatedAmount) && unallocatedAmount > 0) {
+                unallocatedTotals.lineCount += 1;
+                if (debit > 0) unallocatedTotals.debitUnits += Math.round(unallocatedAmount * precision);
+                else unallocatedTotals.creditUnits += Math.round(unallocatedAmount * precision);
+              }
+            });
+            return;
+          }
+
+          // Compatibilité historique : les références explicites antérieures restent consultables.
+          var references = analyticalCenterReferences(line, sourceLines[lineIndex] || {});
+          if (references.invalid || !references.values.length) return;
+          var legacyCenter = null;
+          for (var refIndex = 0; refIndex < references.values.length; refIndex += 1) {
+            var legacyReference = references.values[refIndex];
+            if (!centerByReference.has(legacyReference)) return;
+            var matched = centerByReference.get(legacyReference);
+            if (!matched || (legacyCenter && legacyCenter !== matched)) return;
+            legacyCenter = matched;
+          }
+          if (legacyCenter) addCenterAmount(legacyCenter, debit || credit);
         });
       });
     }
@@ -614,6 +643,27 @@
       lineCount: lineCount,
       rows: rows
     }] : [];
+    var unallocatedDebit = unallocatedTotals.debitUnits / precision;
+    var unallocatedCredit = unallocatedTotals.creditUnits / precision;
+    if (unallocatedTotals.lineCount) {
+      var unallocatedCells = {};
+      columns.forEach(function (column) {
+        switch (column.key) {
+          case 'analyticCode': unallocatedCells[column.key] = ''; break;
+          case 'analyticTitle': unallocatedCells[column.key] = 'À ventiler (sans centre)'; break;
+          case 'lineCount': unallocatedCells[column.key] = unallocatedTotals.lineCount; break;
+          case 'debit': unallocatedCells[column.key] = unallocatedDebit; break;
+          case 'credit': unallocatedCells[column.key] = unallocatedCredit; break;
+        }
+      });
+      groups.push({
+        code: 'analytical-unallocated',
+        title: 'Écarts · montants non attribués à un centre',
+        centerCount: 0,
+        lineCount: unallocatedTotals.lineCount,
+        rows: [{ kind: 'line', cells: unallocatedCells }]
+      });
+    }
     return {
       columns: columns,
       groups: groups,
@@ -622,7 +672,397 @@
       analyticalNature: natureId,
       analyticalNatureLabel: natureLabel,
       totalDebit: totalDebitUnits / precision,
-      totalCredit: totalCreditUnits / precision
+      totalCredit: totalCreditUnits / precision,
+      unallocatedLineCount: unallocatedTotals.lineCount,
+      unallocatedDebit: unallocatedDebit,
+      unallocatedCredit: unallocatedCredit
+    };
+  }
+
+  function normalizeAnalyticalMovementSearch(value) {
+    return String(value == null ? '' : value).trim().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLocaleUpperCase();
+  }
+
+  var ANALYTICAL_MOVEMENT_COLUMNS = [
+    { key: 'date', label: 'Date' },
+    { key: 'journal', label: 'Journal' },
+    { key: 'piece', label: 'N° pièce' },
+    { key: 'account', label: 'Compte' },
+    { key: 'accountTitle', label: 'Intitulé du compte' },
+    { key: 'destination', label: 'Centre / valeur analytique' },
+    { key: 'mode', label: 'Mode' },
+    { key: 'enteredValue', label: 'Valeur saisie' },
+    { key: 'debit', label: 'Débit analytique' },
+    { key: 'credit', label: 'Crédit analytique' },
+    { key: 'status', label: 'État' }
+  ];
+
+  function buildAnalyticalMovements(options) {
+    options = options || {};
+    var filters = options.filters || {};
+    var natureId = String(filters.analyticalNature || '');
+    var from = String(filters.from || '');
+    var to = String(filters.to || '');
+    var cycleStart = String(options.cycleStart || '');
+    var cycleEnd = String(options.cycleEnd || '');
+    var selectedJournal = String(filters.journal || '');
+    var selectedCenterId = String(filters.centerId || '');
+    var search = normalizeAnalyticalMovementSearch(filters.search || '');
+    var decimalPlaces = Number(options.decimalPlaces);
+    if (!Number.isInteger(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 4) decimalPlaces = 0;
+    var precision = Math.pow(10, decimalPlaces);
+    var entries = Array.isArray(options.entries) ? options.entries : [];
+    var centers = Array.isArray(options.analyticalCenters) ? options.analyticalCenters : [];
+    var accounts = Array.isArray(options.accounts) ? options.accounts : [];
+    var natures = Array.isArray(options.analyticalNatures) ? options.analyticalNatures : [];
+    var centerByReference = new Map();
+    var centerById = new Map();
+    var accountByCode = new Map(accounts.map(function (account) { return [String(account.code || ''), account]; }));
+    var nature = natures.find(function (record) { return record && record.id === natureId && !record.group; }) || null;
+    var errors = [];
+    var rows = [];
+    var sourceLineKeys = new Set();
+    var unallocated = { lineCount: 0, debitUnits: 0, creditUnits: 0 };
+    var totalDebitUnits = 0;
+    var totalCreditUnits = 0;
+    var unmatchedCenterCount = 0;
+    var unclassifiedAllocationCount = 0;
+
+    function registerCenter(reference, center) {
+      var key = normalizeAnalyticalCenterReference(reference);
+      if (!key) return;
+      if (centerByReference.has(key) && centerByReference.get(key) !== center) centerByReference.set(key, null);
+      else if (centerByReference.get(key) !== null) centerByReference.set(key, center);
+    }
+    centers.forEach(function (center) {
+      if (!center) return;
+      centerById.set(String(center.id || ''), center);
+      registerCenter(center.id, center);
+      registerCenter(center.code, center);
+    });
+
+    if (!natureId || !nature) errors.push('Choisissez une nature analytique valide pour consulter ses mouvements.');
+    if (from && to && from > to) errors.push('La période est inversée : la date de début doit précéder la date de fin.');
+    if (cycleStart && from && from < cycleStart || cycleEnd && to && to > cycleEnd) errors.push('La période sélectionnée doit rester comprise dans le cycle du dossier (' + cycleStart + ' au ' + cycleEnd + ').');
+
+    if (!errors.length && natureId === 'responsibility-centers') {
+      entries.forEach(function (entry, entryIndex) {
+        if (!entry || entry.status !== 'posted') return;
+        var date = String(entry.date || '');
+        if (from && date < from || to && date > to) return;
+        if (selectedJournal && String(entry.journal || '') !== selectedJournal) return;
+        var sourceLines = entry.sourceMetadata && Array.isArray(entry.sourceMetadata.lines) ? entry.sourceMetadata.lines : [];
+        (Array.isArray(entry.lines) ? entry.lines : []).forEach(function (line, lineIndex) {
+          if (!line || typeof line !== 'object') return;
+          var debit = Number(line.debit);
+          var credit = Number(line.credit);
+          if (!Number.isFinite(debit) || !Number.isFinite(credit) || debit < 0 || credit < 0 ||
+              (debit > 0 && credit > 0) || (debit === 0 && credit === 0)) return;
+          var accountCode = String(line.account || '').trim();
+          var account = accountByCode.get(accountCode) || null;
+          var lineKey = String(entry.id || entryIndex) + ':' + lineIndex;
+          var matchingSplits = (Array.isArray(line.analyticSplits) ? line.analyticSplits : []).filter(function (split) { return split && split.natureId === natureId; });
+
+          function addRow(center, destination, enteredValue, mode, analyticAmount, status, isUnallocated) {
+            analyticAmount = Number(analyticAmount);
+            if (!Number.isFinite(analyticAmount) || analyticAmount <= 0) return;
+            var centerId = center ? String(center.id || '') : '';
+            if (!isUnallocated && selectedCenterId && centerId !== selectedCenterId) return;
+            var searchText = normalizeAnalyticalMovementSearch([
+              date, entry.journal, entry.reference, accountCode, account && account.label,
+              destination, nature.genericName, nature.individualName
+            ].join(' '));
+            if (search && searchText.indexOf(search) === -1) return;
+            var units = Math.round(analyticAmount * precision);
+            var debitUnits = debit > 0 ? units : 0;
+            var creditUnits = credit > 0 ? units : 0;
+            var cells = {
+              date: date,
+              journal: String(entry.journal || ''),
+              piece: String(entry.reference || ''),
+              account: accountCode,
+              accountTitle: String(account && account.label || ''),
+              destination: destination,
+              mode: mode,
+              enteredValue: enteredValue == null ? '' : String(enteredValue),
+              debit: debitUnits / precision,
+              credit: creditUnits / precision,
+              status: status
+            };
+            rows.push({ kind: 'line', entry: entry, line: line, center: center, cells: cells });
+            sourceLineKeys.add(lineKey);
+            if (isUnallocated) {
+              unallocated.lineCount += 1;
+              unallocated.debitUnits += debitUnits;
+              unallocated.creditUnits += creditUnits;
+            } else {
+              totalDebitUnits += debitUnits;
+              totalCreditUnits += creditUnits;
+            }
+          }
+
+          if (matchingSplits.length) {
+            matchingSplits.forEach(function (split) {
+              (Array.isArray(split.allocations) ? split.allocations : []).forEach(function (allocation) {
+                if (!allocation) return;
+                var ref = normalizeAnalyticalCenterReference(allocation.centerId || '');
+                var center = ref && centerByReference.has(ref) ? centerByReference.get(ref) : null;
+                if (!center || (allocation.centerCode && allocation.centerCode !== center.code) || (allocation.centerName && allocation.centerName !== center.name)) {
+                  unmatchedCenterCount += 1;
+                  return;
+                }
+                addRow(center, String(center.code || '') + ' · ' + String(center.name || ''), allocation.value, split.mode === 'percentage' ? 'Pourcentage' : 'Montant', allocation.amount, 'Ventilé', false);
+              });
+              var remaining = Number(split.unallocatedAmount);
+              if (Number.isFinite(remaining) && remaining > 0) addRow(null, 'À ventiler (sans centre)', '', split.mode === 'percentage' ? 'Pourcentage' : 'Montant', remaining, 'À ventiler', true);
+            });
+            return;
+          }
+
+          // Les références historiques explicites restent visibles ; aucune correspondance partielle n’est retenue.
+          var legacy = analyticalCenterReferences(line, sourceLines[lineIndex] || {});
+          if (legacy.invalid || !legacy.values.length) return;
+          var legacyCenter = null;
+          for (var refIndex = 0; refIndex < legacy.values.length; refIndex += 1) {
+            var legacyReference = legacy.values[refIndex];
+            if (!centerByReference.has(legacyReference)) return;
+            var candidate = centerByReference.get(legacyReference);
+            if (!candidate || legacyCenter && legacyCenter !== candidate) return;
+            legacyCenter = candidate;
+          }
+          if (legacyCenter) addRow(legacyCenter, legacyCenter.code + ' · ' + legacyCenter.name, '', 'Historique', debit || credit, 'Référence historique', false);
+        });
+      });
+    } else if (!errors.length) {
+      entries.forEach(function (entry, entryIndex) {
+        if (!entry || entry.status !== 'posted') return;
+        var date = String(entry.date || '');
+        if (from && date < from || to && date > to) return;
+        if (selectedJournal && String(entry.journal || '') !== selectedJournal) return;
+        (Array.isArray(entry.lines) ? entry.lines : []).forEach(function (line, lineIndex) {
+          var debit = Number(line && line.debit);
+          var credit = Number(line && line.credit);
+          if (!line || !Number.isFinite(debit) || !Number.isFinite(credit) || debit < 0 || credit < 0 || (debit > 0 && credit > 0) || (debit === 0 && credit === 0)) return;
+          var accountCode = String(line.account || '').trim();
+          var account = accountByCode.get(accountCode) || null;
+          (Array.isArray(line.analyticSplits) ? line.analyticSplits : []).filter(function (split) { return split && split.natureId === natureId; }).forEach(function (split) {
+            (Array.isArray(split.allocations) ? split.allocations : []).forEach(function (allocation) {
+              var destination = String(allocation && allocation.valueLabel || '').trim();
+              var analyticAmount = Number(allocation && allocation.amount);
+              if (!destination || !Number.isFinite(analyticAmount) || analyticAmount <= 0) {
+                unclassifiedAllocationCount += 1;
+                return;
+              }
+              var searchText = normalizeAnalyticalMovementSearch([date, entry.journal, entry.reference, accountCode, account && account.label, destination, nature.genericName, nature.individualName].join(' '));
+              if (search && searchText.indexOf(search) === -1) return;
+              var units = Math.round(analyticAmount * precision);
+              var cells = {
+                date: date, journal: String(entry.journal || ''), piece: String(entry.reference || ''), account: accountCode,
+                accountTitle: String(account && account.label || ''), destination: destination,
+                mode: split.mode === 'percentage' ? 'Pourcentage' : 'Montant',
+                enteredValue: allocation.value == null ? '' : String(allocation.value),
+                debit: debit > 0 ? units / precision : 0,
+                credit: credit > 0 ? units / precision : 0,
+                status: 'Ventilé'
+              };
+              rows.push({ kind: 'line', entry: entry, line: line, cells: cells });
+              sourceLineKeys.add(String(entry.id || entryIndex) + ':' + lineIndex);
+              if (debit > 0) totalDebitUnits += units;
+              else totalCreditUnits += units;
+            });
+            var remaining = Number(split.unallocatedAmount);
+            if (Number.isFinite(remaining) && remaining > 0) {
+              var units = Math.round(remaining * precision);
+              var remainingSearch = normalizeAnalyticalMovementSearch([date, entry.journal, entry.reference, accountCode, account && account.label, nature.genericName, nature.individualName].join(' '));
+              if (!search || remainingSearch.indexOf(search) !== -1) {
+                rows.push({ kind: 'line', entry: entry, line: line, cells: {
+                  date: date, journal: String(entry.journal || ''), piece: String(entry.reference || ''), account: accountCode,
+                  accountTitle: String(account && account.label || ''), destination: 'À ventiler (sans centre)',
+                  mode: split.mode === 'percentage' ? 'Pourcentage' : 'Montant', enteredValue: '',
+                  debit: debit > 0 ? units / precision : 0, credit: credit > 0 ? units / precision : 0, status: 'À ventiler'
+                }});
+                unallocated.lineCount += 1;
+                if (debit > 0) unallocated.debitUnits += units;
+                else unallocated.creditUnits += units;
+              }
+            }
+          });
+        });
+      });
+    }
+
+    rows.sort(function (left, right) {
+      return compare(left.cells.date, right.cells.date) || compare(left.cells.journal, right.cells.journal) || compare(left.cells.piece, right.cells.piece) || compare(left.cells.account, right.cells.account) || compare(left.cells.destination, right.cells.destination);
+    });
+    var columns = ANALYTICAL_MOVEMENT_COLUMNS.map(function (column) { return Object.assign({}, column); });
+    var unallocatedDebit = unallocated.debitUnits / precision;
+    var unallocatedCredit = unallocated.creditUnits / precision;
+    var groups = rows.length ? [{
+      code: 'analytical-movements',
+      title: 'Mouvements analytiques · ' + String(nature && (nature.individualName || nature.genericName) || ''),
+      rows: rows
+    }] : [];
+    var allocationRows = rows.filter(function (row) { return row.cells.status === 'Ventilé'; });
+    return {
+      columns: columns,
+      groups: groups,
+      errors: errors,
+      rowCount: rows.length,
+      sourceLineCount: sourceLineKeys.size,
+      allocationCount: allocationRows.length,
+      totalDebit: totalDebitUnits / precision,
+      totalCredit: totalCreditUnits / precision,
+      unallocatedLineCount: unallocated.lineCount,
+      unallocatedDebit: unallocatedDebit,
+      unallocatedCredit: unallocatedCredit,
+      unmatchedCenterCount: unmatchedCenterCount,
+      unclassifiedAllocationCount: unclassifiedAllocationCount,
+      analyticalNature: natureId,
+      analyticalNatureLabel: nature ? String(nature.individualName || nature.genericName || '') : ''
+    };
+  }
+
+  function buildAnalyticalStatement(options) {
+    options = options || {};
+    var reportType = String(options.reportType || '');
+    var movements = buildAnalyticalMovements(options);
+    var natureLabel = movements.analyticalNatureLabel || '';
+    if (movements.errors.length) return Object.assign({}, movements, { reportType: reportType });
+    var sourceRows = movements.groups.reduce(function (result, group) { return result.concat(group.rows || []); }, []);
+    var assignedRows = sourceRows.filter(function (row) { return row.cells.status !== 'À ventiler'; });
+    var unallocatedRows = sourceRows.filter(function (row) { return row.cells.status === 'À ventiler'; });
+    var detailTypes = ['analytic-ledger', 'analytic-other-nature-ledger'];
+    var columns;
+    var grouped = [];
+
+    if (detailTypes.indexOf(reportType) !== -1) {
+      columns = movements.columns.map(function (column) { return Object.assign({}, column); });
+      grouped = assignedRows.map(function (row) { return row.cells; });
+    } else {
+      var groupKind = reportType === 'analytic-center-balance' || reportType === 'analytic-center-situation'
+        ? 'center'
+        : (reportType === 'analytic-general-account-balance' ? 'account' : 'nature-account');
+      var groupsByKey = new Map();
+      assignedRows.forEach(function (record) {
+        var cells = record.cells;
+        var key = groupKind === 'center'
+          ? String(record.center && record.center.id || cells.destination)
+          : (groupKind === 'account'
+            ? String(cells.account || '')
+            : String(cells.destination || '') + '\u001f' + String(cells.account || ''));
+        var bucket = groupsByKey.get(key);
+        if (!bucket) {
+          bucket = {
+            center: record.center || null,
+            destination: cells.destination,
+            account: cells.account,
+            accountTitle: cells.accountTitle,
+            sourceLines: new Set(),
+            debitUnits: 0,
+            creditUnits: 0
+          };
+          groupsByKey.set(key, bucket);
+        }
+        var entryId = String(record.entry && record.entry.id || record.cells.piece || '');
+        var lineIndex = record.entry && Array.isArray(record.entry.lines) ? record.entry.lines.indexOf(record.line) : -1;
+        bucket.sourceLines.add(entryId + ':' + lineIndex);
+        bucket.debitUnits += Math.round(Number(cells.debit || 0) * Math.pow(10, Number(options.decimalPlaces) || 0));
+        bucket.creditUnits += Math.round(Number(cells.credit || 0) * Math.pow(10, Number(options.decimalPlaces) || 0));
+      });
+      var precision = Math.pow(10, Number(options.decimalPlaces) || 0);
+      columns = groupKind === 'center'
+        ? [
+            { key: 'analyticCode', label: 'Code analytique' }, { key: 'analyticTitle', label: 'Centre analytique' },
+            { key: 'lineCount', label: 'Nombre de lignes' }, { key: 'debit', label: 'Débit analytique' },
+            { key: 'credit', label: 'Crédit analytique' }, { key: 'net', label: 'Solde net analytique' }
+          ]
+        : [
+            { key: groupKind === 'account' ? 'account' : 'destination', label: groupKind === 'account' ? 'Compte général' : 'Valeur analytique' }
+          ].concat(groupKind === 'account' ? [{ key: 'accountTitle', label: 'Intitulé du compte' }] : [
+            { key: 'account', label: 'Compte général' }, { key: 'accountTitle', label: 'Intitulé du compte' }
+          ]).concat([
+            { key: 'lineCount', label: 'Nombre de lignes' }, { key: 'debit', label: 'Débit analytique' },
+            { key: 'credit', label: 'Crédit analytique' }, { key: 'net', label: 'Solde net analytique' }
+          ]);
+      grouped = Array.from(groupsByKey.values()).sort(function (left, right) {
+        return compare(groupKind === 'center' ? left.center && left.center.code || left.destination : groupKind === 'account' ? left.account : left.destination,
+          groupKind === 'center' ? right.center && right.center.code || right.destination : groupKind === 'account' ? right.account : right.destination) || compare(left.account, right.account);
+      }).map(function (bucket) {
+        var debit = bucket.debitUnits / precision;
+        var credit = bucket.creditUnits / precision;
+        var values = {
+          analyticCode: bucket.center ? String(bucket.center.code || '') : '',
+          analyticTitle: bucket.center ? String(bucket.center.name || '') : '',
+          destination: bucket.destination,
+          account: bucket.account,
+          accountTitle: bucket.accountTitle,
+          lineCount: bucket.sourceLines.size,
+          debit: debit,
+          credit: credit,
+          net: debit - credit
+        };
+        var cells = {};
+        columns.forEach(function (column) { cells[column.key] = values[column.key] == null ? '' : values[column.key]; });
+        return cells;
+      });
+    }
+
+    var mainGroupTitle = reportType === 'analytic-center-balance'
+      ? 'Balance des centres · mouvements analytiques explicites'
+      : (reportType === 'analytic-other-nature-balance'
+        ? 'Balance détaillée par nature · ' + natureLabel
+        : (reportType === 'analytic-ledger'
+          ? 'Grand livre analytique · ' + natureLabel
+          : (reportType === 'analytic-other-nature-ledger'
+            ? 'Grand livre par autre nature · ' + natureLabel
+            : (reportType === 'analytic-center-situation'
+              ? 'Situation des centres · mouvements cumulés du cycle à date'
+              : (reportType === 'analytic-other-nature-situation'
+                ? 'Situation par autre nature · mouvements cumulés du cycle à date'
+                : 'Balance analytique par comptes généraux · ' + natureLabel)))));
+    var groups = grouped.length ? [{
+      code: 'analytical-statement', title: mainGroupTitle,
+      rowCount: grouped.length,
+      rows: grouped.map(function (cells) { return { kind: 'line', cells: cells }; })
+    }] : [];
+    if (unallocatedRows.length) {
+      var remainderCells;
+      if (detailTypes.indexOf(reportType) !== -1) {
+        remainderCells = unallocatedRows.map(function (row) { return row.cells; });
+      } else {
+        var remainderDebit = movements.unallocatedDebit;
+        var remainderCredit = movements.unallocatedCredit;
+        var remainderValues = {
+          analyticCode: '', analyticTitle: 'À ventiler (sans centre)', destination: 'À ventiler (sans centre)',
+          account: '', accountTitle: '', lineCount: movements.unallocatedLineCount,
+          debit: remainderDebit, credit: remainderCredit, net: remainderDebit - remainderCredit
+        };
+        var remainder = {};
+        columns.forEach(function (column) { remainder[column.key] = remainderValues[column.key] == null ? '' : remainderValues[column.key]; });
+        remainderCells = [remainder];
+      }
+      groups.push({
+        code: 'analytical-unallocated', title: 'Reliquats · « À ventiler » (sans attribution)',
+        rowCount: unallocatedRows.length,
+        rows: remainderCells.map(function (cells) { return { kind: 'line', cells: cells }; })
+      });
+    }
+    return {
+      reportType: reportType,
+      columns: columns,
+      groups: groups,
+      errors: [],
+      rowCount: grouped.length,
+      sourceLineCount: movements.sourceLineCount,
+      totalDebit: movements.totalDebit,
+      totalCredit: movements.totalCredit,
+      unallocatedLineCount: movements.unallocatedLineCount,
+      unallocatedDebit: movements.unallocatedDebit,
+      unallocatedCredit: movements.unallocatedCredit,
+      unmatchedCenterCount: movements.unmatchedCenterCount,
+      unclassifiedAllocationCount: movements.unclassifiedAllocationCount,
+      analyticalNature: movements.analyticalNature,
+      analyticalNatureLabel: natureLabel
     };
   }
 
@@ -1189,6 +1629,9 @@
     columnGroups: COLUMN_GROUPS.map(function (group) { return group.slice(); }),
     columnsForReport: columnsForReport,
     columnGroupsForReport: columnGroupsForReport,
+    analyticalMovementColumns: ANALYTICAL_MOVEMENT_COLUMNS.map(function (column) { return Object.assign({}, column); }),
+    buildAnalyticalMovements: buildAnalyticalMovements,
+    buildAnalyticalStatement: buildAnalyticalStatement,
     build: build,
     toMatrix: toMatrix,
     toTsv: toTsv

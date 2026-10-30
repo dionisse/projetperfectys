@@ -50,6 +50,21 @@ test('les natures analytiques exigent un droit explicite dans le dossier concern
   assert.ok(Permissions.actionsForModule('accounting').some(action => action.id === 'analyticalNatures.configure'));
 });
 
+test('les règles analytiques par compte exigent un droit explicite dans le dossier concerné', () => {
+  const dossier = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  const employee = {
+    role: 'employee', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view'] }] }
+  };
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'analyticalAccountRules.configure', dossier), false);
+  employee.grants.accounting[0].actions.push('analyticalAccountRules.configure');
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'analyticalAccountRules.configure', dossier), true);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'analyticalAccountRules.configure', {
+    organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-2'
+  }), false);
+  assert.ok(Permissions.actionsForModule('accounting').some(action => action.id === 'analyticalAccountRules.configure'));
+});
+
 test('les clés de répartition exigent un droit explicite dans le dossier concerné', () => {
   const dossier = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
   const employee = {
@@ -250,6 +265,7 @@ test('les actions disponibles sont décrites par module', () => {
   assert(actions.includes('module.view'));
   assert(actions.includes('accounting.configure'));
   assert(actions.includes('analyticalSections.configure'));
+  assert(actions.includes('analyticalAccountRules.configure'));
   assert(actions.includes('draft.create'));
   assert(actions.includes('entry.validate'));
   assert(actions.includes('centralization.cancel'));

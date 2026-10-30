@@ -17,12 +17,13 @@ const accounts = [
   { code: '601100', label: 'Achats de marchandises', cls: 6, nature: 'Charge', aux: false, active: true }
 ];
 const journals = [{ code: 'OD', label: 'Opérations diverses', type: 'Divers' }];
+const analyticalCenters = [{ id: 'ana-center-1', code: 'ATELIER', name: 'Atelier de production' }];
 const entries = [
   {
     id: 'entry-1', reference: 'OD-2026-900', journal: 'OD', date: '2026-02-12',
     description: 'Achat; pièce "A"\nligne 2', status: 'posted',
     lines: [
-      { account: '601100', debit: 125000, credit: 0 },
+      { account: '601100', debit: 125000, credit: 0, analyticSplits: [{ natureId: 'responsibility-centers', mode: 'amount', completeness: 'complete', roundingCenterId: '', allocations: [{ centerId: 'ana-center-1', centerCode: 'ATELIER', centerName: 'Atelier de production', value: '125000', amount: 125000 }] }] },
       { account: '401100', debit: 0, credit: 125000 }
     ]
   },
@@ -41,7 +42,7 @@ const entries = [
   }
 ];
 
-const csv = Exchange.exportEntries({ dossier, accounts, journals }, entries);
+const csv = Exchange.exportEntries({ dossier, accounts, journals, analyticalCenters }, entries);
 assert.ok(csv.charCodeAt(0) === 0xFEFF, 'Le CSV doit inclure le BOM UTF-8 attendu par Excel.');
 assert.ok(csv.includes('"FORMAT";"VERSION";'), 'Le CSV doit contenir l’en-tête du format versionné.');
 assert.ok(csv.includes("'=HYPERLINK"), 'Les cellules de texte commençant par une formule doivent être protégées pour Excel.');
@@ -53,6 +54,8 @@ assert.equal(parsed.entries.length, 2, 'Les brouillons ne sont pas exportés.');
 assert.equal(parsed.lineCount, 4);
 assert.equal(parsed.entries[0].description, 'Achat; pièce "A"\nligne 2');
 assert.equal(parsed.entries[0].lines.length, 2, 'Les lignes partageant une référence doivent être regroupées.');
+assert.equal(parsed.entries[0].lines[0].analyticSplits[0].allocations[0].centerCode, 'ATELIER', 'Le CSV conserve le code du centre analytique source.');
+assert.equal(parsed.entries[0].lines[0].analyticSplits[0].allocations[0].centerName, 'Atelier de production');
 assert.equal(parsed.entries[0].sourceId, 'entry-1');
 assert.equal(parsed.entries[0].sourceStatus, 'posted');
 assert.equal(parsed.entries[1].description, '=HYPERLINK("https://example.invalid")', 'La protection Excel doit être réversible à la lecture.');
@@ -63,13 +66,23 @@ assert.deepEqual(parsed.metadata, {
   dossierReference: 'COR-ESSAI2026',
   exercise: 2026
 });
+const legacyHeaders = Exchange.HEADERS.filter(header => header !== 'IMPUTATIONS_ANALYTIQUES_JSON');
+const legacyRows = [
+  { FORMAT: 'PERFECTO-ECHANGE', VERSION: '1', SYSTEME_SOURCE: 'SAGE', REFERENCE_DOSSIER: 'COR-OLD2026', EXERCICE: '2026', CODE_JOURNAL: 'OD', LIBELLE_JOURNAL: 'Opérations diverses', DATE: '2026-03-01', REFERENCE_PIECE: 'OD-OLD-1', LIBELLE_PIECE: 'Ancien échange v1', CODE_COMPTE: '601100', LIBELLE_COMPTE: 'Achats', CLASSE_COMPTE: '6', NATURE_COMPTE: 'Charge', DEBIT_XOF: '80', CREDIT_XOF: '0', STATUT_SOURCE: 'VALIDEE', ID_SOURCE: 'old-1' },
+  { FORMAT: 'PERFECTO-ECHANGE', VERSION: '1', SYSTEME_SOURCE: 'SAGE', REFERENCE_DOSSIER: 'COR-OLD2026', EXERCICE: '2026', CODE_JOURNAL: 'OD', LIBELLE_JOURNAL: 'Opérations diverses', DATE: '2026-03-01', REFERENCE_PIECE: 'OD-OLD-1', LIBELLE_PIECE: 'Ancien échange v1', CODE_COMPTE: '401100', LIBELLE_COMPTE: 'Fournisseurs', CLASSE_COMPTE: '4', NATURE_COMPTE: 'Passif', DEBIT_XOF: '0', CREDIT_XOF: '80', STATUT_SOURCE: 'VALIDEE', ID_SOURCE: 'old-1' }
+];
+const quoteCsv = value => '"' + String(value == null ? '' : value).replace(/"/g, '""') + '"';
+const legacyCsv = '\uFEFF' + [legacyHeaders.map(quoteCsv).join(';'), ...legacyRows.map(row => legacyHeaders.map(header => quoteCsv(row[header])).join(';'))].join('\r\n');
+const parsedLegacy = Exchange.parse(legacyCsv);
+assert.equal(parsedLegacy.ok, true, parsedLegacy.errors.join('\\n'));
+assert.deepEqual(parsedLegacy.entries[0].lines[0].analyticSplits, [], 'Les fichiers PERFECTO-ÉCHANGE v1 antérieurs sans colonne analytique restent lisibles.');
 
 const template = Exchange.template({ dossier });
 const parsedTemplate = Exchange.parse(template);
 assert.equal(parsedTemplate.ok, false, 'Un modèle vide ne doit pas être importable comme un lot comptable.');
 assert.ok(parsedTemplate.errors.some(error => error.includes('aucune ligne comptable')));
 
-const workbookBytes = Exchange.exportWorkbook({ dossier, accounts, journals }, entries);
+const workbookBytes = Exchange.exportWorkbook({ dossier, accounts, journals, analyticalCenters }, entries);
 assert.ok(workbookBytes instanceof Uint8Array);
 const workbookFiles = fflate.unzipSync(workbookBytes);
 assert.ok(workbookFiles['xl/workbook.xml']);
@@ -79,6 +92,7 @@ assert.ok(workbookXml.includes('name="Ecritures"'));
 const entriesSheetXml = new TextDecoder().decode(workbookFiles['xl/worksheets/sheet5.xml']);
 assert.ok(entriesSheetXml.includes('PERFECTO-ECHANGE'));
 assert.ok(entriesSheetXml.includes('OD-2026-900'));
+assert.ok(entriesSheetXml.includes('Atelier de production'), 'Le classeur conserve aussi les imputations analytiques explicites.');
 assert.ok(!entriesSheetXml.includes('OD-2026-902'), 'Le classeur exclut lui aussi les brouillons.');
 const workbookTemplate = fflate.unzipSync(Exchange.templateWorkbook({ dossier, accounts, journals }));
 const templateSheetXml = new TextDecoder().decode(workbookTemplate['xl/worksheets/sheet5.xml']);

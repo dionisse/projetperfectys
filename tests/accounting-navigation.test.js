@@ -64,7 +64,7 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Comptes tiers',
   'Lettrage',
   'Pointage',
-  'Centres d’analyse (analytique)',
+  'Centres analytiques',
   'Reports à nouveau',
   'Journaux',
   'Détail des lignes saisies',
@@ -214,8 +214,8 @@ assert.equal(accountMovementsTab.children[1].label, 'Comptes tiers');
 assert.equal(accountMovementsTab.children[1].status, 'partial');
 assert.ok(accountMovementsTab.children[1].reason.includes('agrégé'));
 assert.equal(accountMovementsTab.children[2].id, 'analytic-movements');
-assert.equal(accountMovementsTab.children[2].status, 'inactive');
-assert.ok(accountMovementsTab.reason.includes('grisée'));
+assert.equal(accountMovementsTab.children[2].status, 'active');
+assert.ok(accountMovementsTab.reason.includes('mouvements analytiques explicites sont disponibles en lecture'));
 assert.equal(findTab('saisie', 'matching').status, 'partial');
 assert.ok(findTab('saisie', 'matching').reason.includes('équilibrées'));
 assert.equal(findTab('saisie', 'reconciliation').status, 'partial');
@@ -224,8 +224,10 @@ assert.ok(findTab('saisie', 'reconciliation').reason.includes('confirmation'));
 assert.ok(findTab('saisie', 'reconciliation').reason.includes('aucune intégration Google Drive organisationnelle n’est connectée dans PERFECTO'));
 const analyticalCenters = findTab('definitions', 'responsibility-centers');
 assert.equal(analyticalCenters.status, 'partial');
-assert.ok(analyticalCenters.reason.includes('réservés à la comptabilité analytique'));
-assert.ok(analyticalCenters.reason.includes('inactifs'));
+assert.equal(analyticalCenters.label, 'Centres analytiques');
+assert.ok(analyticalCenters.reason.includes('partagé avec le Suivi Analytique'));
+assert.match(appSource, /Suivi Analytique · dossier [\s\S]*imputations des lignes sont intégrés au dossier de Comptabilité générale actif/);
+assert.match(appSource, /analytical-center-shortcuts[\s\S]*Sections et comptes[\s\S]*Clés de répartition[\s\S]*Natures analytiques[\s\S]*Cumul par centres/);
 assert.equal(findTab('fichier', 'export-other').status, 'partial');
 assert.equal(findTab('fichier', 'import-other').status, 'partial');
 assert.equal(findTab('fichier', 'import-fec').status, 'partial');
@@ -337,8 +339,8 @@ assert.match(appSource, /id="journal-lines-analytic-nature" name="analyticalNatu
   'la sélection reprend la nature analytique et les codes de centres de la capture');
 assert.match(appSource, /printer: isAnalyticCenterTotalsReport \|\| isCurrencyTotalsReport \? 'system' : 'pdf'[\s\S]*orientation: [\s\S]*isAnalyticCenterTotalsReport \|\| isCurrencyTotalsReport \? 'landscape'/,
   'la mise en page analytique démarre sur l’imprimante système et le paysage de la capture');
-assert.match(appSource, /lignes validées portant une référence analytique explicite et non ambiguë[\s\S]*Aucune imputation n’est créée/,
-  'le rapport analytique ne crée aucune imputation et n’attribue pas les lignes sans référence');
+assert.match(appSource, /Le cumul reprend les ventilations explicites des lignes validées[\s\S]*aucune ligne sans imputation n’est ventilée automatiquement/,
+  'le rapport analytique reprend seulement les ventilations explicites et ne complète pas les lignes non affectées');
 assert.equal(findTab('editions', 'journals').children.find(child => child.id === 'journal-currency-totals').status, 'active');
 assert.ok(findTab('editions', 'journals').children.find(child => child.id === 'journal-currency-totals').reason.includes('montant d’origine explicites'));
 assert.ok(findTab('editions', 'journals').children.find(child => child.id === 'journal-currency-totals').reason.includes('Aucun taux ni conversion'));
@@ -422,8 +424,8 @@ assert.equal(findTab('editions', 'journals').children.find(child => child.id ===
 assert.ok(findTab('editions', 'journals').children.find(child => child.id === 'journal-entry-totals').reason.includes('pièces validées'));
 assert.ok(findTab('editions', 'journals').children.find(child => child.id === 'journal-entry-totals').reason.includes('aperçu, export Excel/TXT'));
 assert.equal(findTab('editions', 'journals').children.find(child => child.id === 'journal-analytic-center-totals').status, 'active');
-assert.ok(findTab('editions', 'journals').children.find(child => child.id === 'journal-analytic-center-totals').reason.includes('référence explicite et non ambiguë'));
-assert.ok(findTab('editions', 'journals').children.find(child => child.id === 'journal-analytic-center-totals').reason.includes('aucune imputation'));
+assert.ok(findTab('editions', 'journals').children.find(child => child.id === 'journal-analytic-center-totals').reason.includes('ventilations explicites enregistrées'));
+assert.ok(findTab('editions', 'journals').children.find(child => child.id === 'journal-analytic-center-totals').reason.includes('Aucune ligne sans imputation'));
 assert.ok(findTab('editions', 'journals').children.find(child => child.id === 'journal-analytic-center-totals').reason.includes('export Excel/TXT'));
 assert.equal(findTab('editions', 'matching').status, 'active');
 assert.deepEqual(findTab('editions', 'matching').children.map(child => child.label), [
@@ -577,9 +579,9 @@ assert.equal(findTab('editions', 'foreign-currency').children.length, 5);
 assert.equal(findTab('editions', 'foreign-currency').status, 'active');
 assert.equal(findTab('editions', 'foreign-currency').children.find(child => child.id === 'currency-balance').status, 'active');
 assert.ok(findTab('editions', 'foreign-currency').children.filter(child => child.id.startsWith('currency-')).every(child => child.status === 'active'));
-assert.equal(findTab('editions', 'analytic-statements').status, 'inactive');
+assert.equal(findTab('editions', 'analytic-statements').status, 'active');
 assert.equal(findTab('editions', 'analytic-statements').children.length, 7);
-assert.ok(findTab('editions', 'analytic-statements').children.every(child => child.status === 'inactive'));
+assert.ok(findTab('editions', 'analytic-statements').children.every(child => child.status === 'active'));
 assert.equal(findTab('editions', 'supplier-orders').status, 'inactive');
 assert.equal(findTab('editions', 'budget').children.length, 10);
 assert.equal(findTab('editions', 'budget').status, 'active');
@@ -652,7 +654,7 @@ assert.equal(findTab('parametres', 'dossier-configuration').label, 'Configuratio
 assert.equal(findTab('parametres', 'dossier-configuration').actions[0].route, 'settings', 'les sauvegardes restent accessibles séparément');
 assert.equal(findTab('parametres', 'sections-accounts').status, 'partial', 'le paramétrage est accessible, sans activer les traitements analytiques');
 assert.equal(findTab('parametres', 'allocation-keys').status, 'partial');
-assert.ok(findTab('parametres', 'allocation-keys').reason.includes('aucun calcul ou transfert analytique'));
+assert.ok(findTab('parametres', 'allocation-keys').reason.includes('ne calculent ni ne transfèrent de ventilation automatiquement'));
 assert.equal(findTab('parametres', 'general-account-natures').status, 'partial');
 assert.ok(findTab('parametres', 'general-account-natures').reason.includes('contrôle des doublons'));
 assert.equal(findTab('parametres', 'print-information').status, 'partial');
@@ -688,7 +690,11 @@ assert.match(appSource, /function allocationKeyRowHtml\(kind, row, index, editab
 assert.match(appSource, /insertAdjacentHTML\('beforeend', allocationKeyRowHtml\(kind, \{\}, tbody\.querySelectorAll\('\[data-allocation-row\]'\)\.length, true\)\)/);
 assert.match(appSource, /data-allocation-action="display"[\s\S]*data-allocation-action="validate"[\s\S]*data-allocation-action="destination"[\s\S]*data-allocation-action="preview"/);
 assert.equal(findTab('parametres', 'analytic-natures').status, 'partial', 'le tableau des natures analytiques est consultable sans activer les opérations analytiques');
-assert.ok(findTab('parametres', 'analytic-natures').reason.includes('mouvements et calculs'));
+assert.ok(findTab('parametres', 'analytic-natures').reason.includes('imputations explicites des lignes comptables'));
+assert.equal(findTab('parametres', 'analytic-account-rules').status, 'active');
+assert.ok(findTab('parametres', 'analytic-account-rules').reason.includes('obligatoire ou facultatif'));
+assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'analytic-account-rules'[\s\S]*viewAnalyticalAccountRules\(\)/);
+assert.match(appSource, /menuParams\.g === 'parametres' && menuParams\.t === 'analytic-account-rules'\) bindAnalyticalAccountRules\(\)/);
 assert.match(menuRenderer, /group\.id === 'parametres' && tab\.id === 'analytic-natures'[\s\S]*viewAnalyticalNatures\(\)/);
 assert.match(appSource, /function viewAnalyticalNatures\(\)[\s\S]*Nom générique[\s\S]*Nom indiv\.[\s\S]*Comptes significatifs[\s\S]*Comptes à reporter[\s\S]*Modifier[\s\S]*Fermer/);
 assert.match(appSource, /function bindAnalyticalNatures\(\)[\s\S]*openAnalyticalNatureEditor/);
@@ -788,7 +794,7 @@ assert.match(appSource, /function generalLedgerReportLayoutView\([\s\S]*general-
 assert.match(appSource, /function generalLedgerReportPrintableHtml\([\s\S]*GRAND LIVRE DES COMPTES[\s\S]*reports à nouveau[\s\S]*page-break/);
 assert.match(generalLedgerSource, /priorEntriesIncludedInRunningBalance: true[\s\S]*sourceReferenceOnly: true[\s\S]*noAccountingMutation: true/);
 assert.match(configurationCss, /\.general-ledger-column-grid[\s\S]*\.general-ledger-account-section/);
-assert.match(serviceWorkerSource, /perfecto-static-v159/);
+assert.match(serviceWorkerSource, /perfecto-static-v164/);
 assert.equal(nav.getTab('declarations', 'vat-difference').status, 'active');
 assert.match(appSource, /group\.id === 'declarations' && tab\.id === 'vat-difference'[\s\S]*viewVatDifferenceReport/);
 assert.match(appSource, /function vatDifferenceConfigurationKey\([\s\S]*function openVatDifferenceAccountPicker/);
@@ -801,8 +807,8 @@ assert.match(appSource, /isAccountMovementsSubmenu && selectedChild && selectedC
   'la plateforme générale ne s’affiche que pour son enfant');
 assert.match(appSource, /isAccountMovementsSubmenu && selectedChild && selectedChild\.id === 'third-party-movements'[\s\S]*viewThirdPartyMovements\(\)/,
   'la plateforme des tiers ne s’affiche que pour son enfant');
-assert.match(appSource, /isAccountMovementsSubmenu && selectedChild && selectedChild\.id === 'analytic-movements'[\s\S]*analytic-disabled-note/,
-  'l’enfant analytique ne produit qu’un avis inactif');
+assert.match(appSource, /isAccountMovementsSubmenu && selectedChild && selectedChild\.id === 'analytic-movements'[\s\S]*viewAnalyticalMovements\(\)/,
+  'l’enfant analytique ouvre la vue de mouvements explicites');
 assert.equal((menuRenderer.match(/viewGeneralAccountMovements\(\)/g) || []).length, 1,
   'une seule référence à la plateforme générale existe et elle est gardée par la sélection de l’enfant');
 assert.equal((menuRenderer.match(/viewThirdPartyMovements\(\)/g) || []).length, 1,
@@ -827,7 +833,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v159/);
+assert.match(serviceWorkerSource, /perfecto-static-v164/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

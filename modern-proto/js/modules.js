@@ -22,15 +22,15 @@
     },
     {
       id: 'analytics',
-      name: 'Comptabilité analytique',
-      category: 'PILOTAGE',
-      description: 'Suivi des coûts, axes analytiques et analyse de la performance.',
+      name: 'Suivi Analytique',
+      category: 'COMPTABILITÉ · SYSCOHADA',
+      description: 'Imputations analytiques sur les lignes comptables, rattachées au dossier général actif.',
       icon: '∑',
       accent: 'analytics',
-      status: 'planned',
-      statusLabel: 'À VENIR',
-      version: 'En préparation',
-      route: null
+      status: 'partial',
+      statusLabel: 'PARTIEL · INTÉGRÉ',
+      version: 'Dans la Comptabilité générale',
+      route: 'menu?g=definitions&t=responsibility-centers'
     },
     {
       id: 'payroll-hr',

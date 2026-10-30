@@ -56,12 +56,14 @@
     'FORMAT', 'VERSION', 'SYSTEME_SOURCE', 'REFERENCE_DOSSIER', 'EXERCICE',
     'CODE_JOURNAL', 'LIBELLE_JOURNAL', 'DATE', 'REFERENCE_PIECE', 'LIBELLE_PIECE',
     'CODE_COMPTE', 'LIBELLE_COMPTE', 'CLASSE_COMPTE', 'NATURE_COMPTE',
-    'DEBIT_XOF', 'CREDIT_XOF', 'STATUT_SOURCE', 'ID_SOURCE'
+    'DEBIT_XOF', 'CREDIT_XOF', 'STATUT_SOURCE', 'ID_SOURCE', 'IMPUTATIONS_ANALYTIQUES_JSON'
   ];
+  var OPTIONAL_HEADERS = ['IMPUTATIONS_ANALYTIQUES_JSON'];
+  var ENTRY_REQUIRED_HEADERS = HEADERS.filter(function (header) { return OPTIONAL_HEADERS.indexOf(header) === -1; });
   var TEXT_HEADERS = [
     'SYSTEME_SOURCE', 'REFERENCE_DOSSIER', 'CODE_JOURNAL', 'LIBELLE_JOURNAL',
     'DATE', 'REFERENCE_PIECE', 'LIBELLE_PIECE', 'CODE_COMPTE', 'LIBELLE_COMPTE',
-    'NATURE_COMPTE', 'STATUT_SOURCE', 'ID_SOURCE'
+    'NATURE_COMPTE', 'STATUT_SOURCE', 'ID_SOURCE', 'IMPUTATIONS_ANALYTIQUES_JSON'
   ];
   var MAX_DATA_ROWS = 20000;
   var MAX_TEXT_LENGTH = 10000;
@@ -220,7 +222,7 @@
     if (duplicateHeaders.length) {
       return { ok: false, errors: ['Le fichier contient des colonnes répétées : ' + duplicateHeaders.join(', ') + '.'], entries: [], metadata: null };
     }
-    var missingHeaders = HEADERS.filter(function (header) { return headers.indexOf(header) === -1; });
+    var missingHeaders = HEADERS.filter(function (header) { return OPTIONAL_HEADERS.indexOf(header) === -1 && headers.indexOf(header) === -1; });
     var extraHeaders = headers.filter(function (header) { return HEADERS.indexOf(header) === -1; });
     if (missingHeaders.length || extraHeaders.length) {
       var schemaMessage = 'Colonnes attendues : ' + HEADERS.join(' ; ') + '.';
@@ -258,6 +260,23 @@
       if (!record.CODE_JOURNAL) errors.push('Ligne ' + rowNumber + ' : code journal obligatoire.');
       if (!record.REFERENCE_PIECE) errors.push('Ligne ' + rowNumber + ' : référence de pièce obligatoire.');
       if (record.LIBELLE_PIECE.length > MAX_TEXT_LENGTH) errors.push('Ligne ' + rowNumber + ' : libellé de pièce trop long.');
+      var analyticSplits = [];
+      if (record.IMPUTATIONS_ANALYTIQUES_JSON) {
+        if (record.IMPUTATIONS_ANALYTIQUES_JSON.length > MAX_TEXT_LENGTH) {
+          errors.push('Ligne ' + rowNumber + ' : données analytiques trop longues.');
+        } else {
+          try {
+            analyticSplits = JSON.parse(record.IMPUTATIONS_ANALYTIQUES_JSON);
+            if (!Array.isArray(analyticSplits) || analyticSplits.length > 12) {
+              errors.push('Ligne ' + rowNumber + ' : format des imputations analytiques invalide.');
+              analyticSplits = [];
+            }
+          } catch (analyticParseError) {
+            errors.push('Ligne ' + rowNumber + ' : JSON des imputations analytiques invalide.');
+            analyticSplits = [];
+          }
+        }
+      }
       if (!record.CODE_COMPTE) errors.push('Ligne ' + rowNumber + ' : code compte obligatoire.');
       if (!validIsoDate(record.DATE)) errors.push('Ligne ' + rowNumber + ' : date invalide ; format attendu AAAA-MM-JJ.');
 
@@ -319,6 +338,7 @@
         accountNature: record.NATURE_COMPTE,
         debit: debit,
         credit: credit,
+        analyticSplits: analyticSplits,
         sourceRow: rowNumber
       });
     });
@@ -620,6 +640,8 @@
     var journalMap = {};
     (data.accounts || []).forEach(function (account) { accountMap[account.code] = account; });
     (data.journals || []).forEach(function (journal) { journalMap[journal.code] = journal; });
+    var analyticalCenterMap = Object.create(null);
+    (data.analyticalCenters || []).forEach(function (center) { if (center && center.id) analyticalCenterMap[center.id] = center; });
     var posted = (entries || []).filter(function (entry) { return entry.status === 'posted'; })
       .filter(function (entry) { return entry.date >= dossier.cycleStart && entry.date <= dossier.cycleEnd; })
       .slice().sort(function (a, b) {
@@ -650,6 +672,19 @@
       var sourceId = entry.sourceId || entry.id || [entry.journal, entry.date, entry.reference].join(':');
       entry.lines.forEach(function (line) {
         var account = accountMap[line.account] || {};
+        var analyticalPayload = (Array.isArray(line.analyticSplits) ? line.analyticSplits : []).map(function (split) {
+          var copy = JSON.parse(JSON.stringify(split));
+          (Array.isArray(copy.allocations) ? copy.allocations : []).forEach(function (allocation) {
+            var center = allocation && allocation.centerId ? analyticalCenterMap[allocation.centerId] : null;
+            if (center) {
+              allocation.centerCode = center.code || '';
+              allocation.centerName = center.name || '';
+            }
+          });
+          return copy;
+        });
+        var analyticalJson = analyticalPayload.length ? JSON.stringify(analyticalPayload) : '';
+        if (analyticalJson.length > MAX_TEXT_LENGTH) throw new Error('Export bloqué : les imputations analytiques de la ligne du compte « ' + String(line.account || '') + ' » dépassent la taille autorisée.');
         rows.push({
           FORMAT: FORMAT,
           VERSION: VERSION,
@@ -668,7 +703,8 @@
           DEBIT_XOF: Number(line.debit) || 0,
           CREDIT_XOF: Number(line.credit) || 0,
           STATUT_SOURCE: entry.status === 'posted' ? 'VALIDEE' : 'BROUILLON',
-          ID_SOURCE: sourceId
+          ID_SOURCE: sourceId,
+          IMPUTATIONS_ANALYTIQUES_JSON: analyticalJson
         });
       });
     });
@@ -1352,7 +1388,7 @@
 
   function parseWorkbook(input) {
     try {
-      return parse(matrixCsv(readWorkbookRows(input, 'Ecritures', HEADERS)));
+      return parse(matrixCsv(readWorkbookRows(input, 'Ecritures', ENTRY_REQUIRED_HEADERS)));
     } catch (err) {
       return { ok: false, errors: [err.message || 'Classeur Excel illisible.'], entries: [], metadata: null };
     }

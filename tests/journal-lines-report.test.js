@@ -528,6 +528,31 @@ assert.deepEqual(analyticTotals.groups[0].rows[0].cells, {
 assert.equal(analyticTotals.groups[0].title, 'Cumul des saisies · Centres de responsabilité');
 assert.deepEqual(analyticalCenterRecords, analyticalCentersBefore, 'le cumul ne modifie pas le référentiel des centres');
 assert.deepEqual(analyticalEntries, analyticalEntriesBefore, 'le cumul ne modifie aucune pièce comptable');
+const allocatedAnalyticalEntries = [{
+  id: 'analytic-multi-center', reference: 'OD-MULTI', journal: 'OD', date: '2026-02-22', status: 'posted',
+  lines: [{
+      account: '601100', debit: 100, credit: 0,
+    analyticSplits: [{ natureId: 'responsibility-centers', mode: 'amount', completeness: 'partial', unallocatedAmount: 10, allocations: [
+      { centerId: 'center-1', amount: 40 }, { centerId: 'center-2', amount: 50 }
+    ] }]
+  }]
+}];
+const multiCenterTotals = Report.build({
+  reportType: 'analytic-center-totals', analyticalCenters: analyticalCenterRecords, entries: allocatedAnalyticalEntries,
+  decimalPlaces: 0,
+  filters: { analyticalNature: 'responsibility-centers', from: '2026-02-01', to: '2026-02-28' }
+});
+assert.deepEqual(multiCenterTotals.groups[0].rows.map(row => [row.cells.analyticCode, row.cells.debit, row.cells.credit]), [
+  ['ANA-0001', 40, 0], ['ANA-0002', 50, 0]
+], 'le cumul répartit le montant explicitement saisi entre les centres au lieu de compter deux fois la ligne générale');
+assert.equal(multiCenterTotals.totalDebit, 90);
+assert.equal(multiCenterTotals.unallocatedLineCount, 1);
+assert.equal(multiCenterTotals.unallocatedDebit, 10);
+assert.equal(multiCenterTotals.groups[1].code, 'analytical-unallocated');
+assert.deepEqual(multiCenterTotals.groups[1].rows[0].cells, {
+  analyticCode: '', analyticTitle: 'À ventiler (sans centre)', lineCount: 1, debit: 10, credit: 0
+}, 'le reliquat apparaît dans un groupe distinct, sans centre fictif ni inclusion dans les totaux par centre.');
+assert.ok(Report.toMatrix(multiCenterTotals).some(row => row[1] === 'À ventiler (sans centre)' && row[3] === 10), 'le reliquat reste visible dans l’export du rapport.');
 const analyticMatrix = Report.toMatrix(analyticTotals);
 assert.deepEqual(analyticMatrix[0], ['Code analytique', 'Intitulé', 'Nombre de lignes', 'Total des débits', 'Total des crédits']);
 assert.ok(analyticMatrix.some(row => row[0] === 'ANA-0001' && row[1] === 'Atelier Nord' && row[2] === 2 && row[3] === 100 && row[4] === 30),

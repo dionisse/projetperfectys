@@ -1228,6 +1228,28 @@
     return { rows: defaultAnalyticalNaturesRows(), updatedAt: '' };
   }
 
+  function normalizeAnalyticalAccountRulesConfiguration(value) {
+    var source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    var rows = Array.isArray(source.rules) ? source.rules : [];
+    return {
+      rules: rows.slice(0, 1000).map(function (rule) {
+        rule = rule && typeof rule === 'object' && !Array.isArray(rule) ? rule : {};
+        return {
+          id: String(rule.id || '').trim().slice(0, 180),
+          accountCode: String(rule.accountCode || '').trim().slice(0, 32),
+          natureId: String(rule.natureId || '').trim().slice(0, 80),
+          requirement: rule.requirement === 'required' ? 'required' : 'optional',
+          allowPartial: rule.allowPartial === true
+        };
+      }).filter(function (rule) { return rule.accountCode && rule.natureId; }),
+      updatedAt: String(source.updatedAt || '').slice(0, 40)
+    };
+  }
+
+  function defaultAnalyticalAccountRulesConfiguration() {
+    return { rules: [], updatedAt: '' };
+  }
+
   function defaultFixedAssetAccountsRows() {
     return [
       { id: 'fixed-assets-class-21', grossValueAccount: '21*', accumulatedDepreciationAccount: '281*', depreciationExpenseAccount: '6812', disposalNetValueAccount: '811', grantRecoveryAccount: '799' },
@@ -1637,6 +1659,7 @@
       analyticalSectionsConfiguration: defaultAnalyticalSectionsConfiguration(),
       analyticalAllocationKeysConfiguration: defaultAnalyticalAllocationKeysConfiguration(),
       analyticalNaturesConfiguration: defaultAnalyticalNaturesConfiguration(),
+      analyticalAccountRulesConfiguration: defaultAnalyticalAccountRulesConfiguration(),
       generalAccountNaturesConfiguration: defaultGeneralAccountNaturesConfiguration(),
       fixedAssetAccountsConfiguration: defaultFixedAssetAccountsConfiguration(),
       orderAccountsConfiguration: defaultOrderAccountsConfiguration(),
@@ -1710,6 +1733,7 @@
       analyticalSectionsConfiguration: normalizeAnalyticalSectionsConfiguration(record && record.analyticalSectionsConfiguration),
       analyticalAllocationKeysConfiguration: normalizeAnalyticalAllocationKeysConfiguration(record && record.analyticalAllocationKeysConfiguration),
       analyticalNaturesConfiguration: normalizeAnalyticalNaturesConfiguration(record && record.analyticalNaturesConfiguration),
+      analyticalAccountRulesConfiguration: normalizeAnalyticalAccountRulesConfiguration(record && record.analyticalAccountRulesConfiguration),
       fixedAssetAccountsConfiguration: normalizeFixedAssetAccountsConfiguration(record && record.fixedAssetAccountsConfiguration),
       orderAccountsConfiguration: normalizeOrderAccountsConfiguration(record && record.orderAccountsConfiguration),
       orderNaturesConfiguration: normalizeOrderNaturesConfiguration(record && record.orderNaturesConfiguration),
@@ -2293,6 +2317,7 @@
       analyticalSectionsConfiguration: sourceDossier.analyticalSectionsConfiguration,
       analyticalAllocationKeysConfiguration: sourceDossier.analyticalAllocationKeysConfiguration,
       analyticalNaturesConfiguration: sourceDossier.analyticalNaturesConfiguration,
+      analyticalAccountRulesConfiguration: sourceDossier.analyticalAccountRulesConfiguration,
       generalAccountNaturesConfiguration: sourceDossier.generalAccountNaturesConfiguration,
       fixedAssetAccountsConfiguration: sourceDossier.fixedAssetAccountsConfiguration,
       orderAccountsConfiguration: sourceDossier.orderAccountsConfiguration,
@@ -2557,6 +2582,62 @@
 
   function initializeGeneralAccountNaturesConfiguration() {
     return saveGeneralAccountNaturesConfiguration({ rows: defaultGeneralAccountNaturesRows() });
+  }
+
+  function analyticalAccountRulesConfiguration() {
+    ensureFolderCatalog();
+    var dossier = folderById(activeFolderId);
+    return clone(dossier && dossier.analyticalAccountRulesConfiguration || defaultAnalyticalAccountRulesConfiguration());
+  }
+
+  function analyticalAccountRulesForAccount(accountCode) {
+    var normalizedCode = String(accountCode || '').trim();
+    return clone(analyticalAccountRulesConfiguration().rules.filter(function (rule) { return rule.accountCode === normalizedCode; }));
+  }
+
+  function saveAnalyticalAccountRulesConfiguration(input) {
+    ensureFolderCatalog();
+    var dossier = folderById(activeFolderId);
+    if (!dossier) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    var source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    var sourceRules = Array.isArray(source.rules) ? source.rules : [];
+    if (sourceRules.length > 1000) return { ok: false, errors: ['Le paramétrage ne peut pas dépasser 1 000 règles.'] };
+    var natureRows = (analyticalNaturesConfiguration().rows || []).filter(function (row) { return row && !row.group; });
+    var natureById = Object.create(null);
+    natureRows.forEach(function (row) { natureById[row.id] = row; });
+    var seen = Object.create(null);
+    var errors = [];
+    var rules = sourceRules.map(function (rule, index) {
+      rule = rule && typeof rule === 'object' && !Array.isArray(rule) ? rule : {};
+      var accountCode = String(rule.accountCode || '').trim();
+      var natureId = String(rule.natureId || '').trim();
+      var requirement = rule.requirement;
+      var label = 'Règle ' + (index + 1) + ' : ';
+      var accountRecord = accountCode ? account(accountCode) : null;
+      if (!accountRecord || accountRecord.active === false || accountRecord.postable === false) errors.push(label + 'choisissez un compte imputable actif du plan comptable.');
+      if (!natureById[natureId]) errors.push(label + 'choisissez une nature analytique existante.');
+      if (requirement !== 'required' && requirement !== 'optional') errors.push(label + 'précisez si l’imputation est obligatoire ou facultative.');
+      var key = accountCode + '|' + natureId;
+      if (seen[key]) errors.push(label + 'ce compte et cette nature sont déjà paramétrés.');
+      seen[key] = true;
+      return {
+        id: String(accountRecord ? accountRecord.code : accountCode).slice(0, 32) + '::' + natureId.slice(0, 80),
+        accountCode: String(accountRecord ? accountRecord.code : accountCode).slice(0, 32),
+        natureId: natureId.slice(0, 80),
+        requirement: requirement === 'required' ? 'required' : 'optional',
+        allowPartial: rule.allowPartial === true
+      };
+    });
+    if (errors.length) return { ok: false, errors: errors };
+    var previousCatalog = clone(folderCatalog);
+    var dossierIndex = folderCatalog.findIndex(function (record) { return record.id === dossier.id; });
+    var configuration = { rules: rules, updatedAt: new Date().toISOString() };
+    folderCatalog[dossierIndex] = Object.assign({}, dossier, { analyticalAccountRulesConfiguration: configuration });
+    if (!saveFolderCatalog()) {
+      folderCatalog = previousCatalog;
+      return { ok: false, errors: ['Impossible d’enregistrer les règles analytiques dans ce navigateur. Les valeurs précédentes sont conservées.'] };
+    }
+    return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
   }
 
   function saveAnalyticalSectionsConfiguration(input) {
@@ -6449,6 +6530,208 @@
     return { debit: debit, credit: credit, balanced: debitUnits === creditUnits && debitUnits > 0 };
   }
 
+  function normalizeAnalyticalSplits(value) {
+    return (Array.isArray(value) ? value : []).slice(0, 12).map(function (source) {
+      source = source && typeof source === 'object' && !Array.isArray(source) ? source : {};
+      return {
+        natureId: String(source.natureId || '').trim().slice(0, 80),
+        mode: source.mode === 'percentage' ? 'percentage' : (source.mode === 'amount' ? 'amount' : ''),
+        completeness: source.completeness === 'partial' ? 'partial' : (source.completeness === 'complete' ? 'complete' : ''),
+        roundingCenterId: String(source.roundingCenterId || '').trim().slice(0, 80),
+        allocations: (Array.isArray(source.allocations) ? source.allocations : []).slice(0, 50).map(function (allocation) {
+          allocation = allocation && typeof allocation === 'object' && !Array.isArray(allocation) ? allocation : {};
+          return {
+            centerId: String(allocation.centerId || '').trim().slice(0, 80),
+            centerCode: String(allocation.centerCode || '').trim().slice(0, 32),
+            centerName: String(allocation.centerName || '').trim().replace(/\s+/g, ' ').slice(0, 150),
+            valueLabel: String(allocation.valueLabel || '').trim().replace(/\s+/g, ' ').slice(0, 120),
+            value: allocation.value == null ? '' : String(allocation.value).trim().slice(0, 40),
+            amount: Number.isFinite(Number(allocation.amount)) ? Number(allocation.amount) : 0
+          };
+        })
+      };
+    });
+  }
+
+  function evaluateAnalyticalSplit(split, sourceAmount, decimalPlaces) {
+    var precision = Math.pow(10, Number.isInteger(decimalPlaces) && decimalPlaces >= 0 && decimalPlaces <= 4 ? decimalPlaces : 0);
+    var sourceUnits = Math.round(Math.abs(Number(sourceAmount) || 0) * precision);
+    var mode = split && split.mode;
+    var allocations = split && Array.isArray(split.allocations) ? split.allocations : [];
+    var errors = [];
+    var values = [];
+    var sumUnits = 0;
+    var sumPercent = 0;
+    allocations.forEach(function (allocation, index) {
+      var raw = String(allocation && allocation.value != null ? allocation.value : '').trim();
+      if (!raw) {
+        values.push({ index: index, units: 0, value: '' });
+        return;
+      }
+      var value = Number(raw);
+      if (!Number.isFinite(value) || value < 0) {
+        errors.push('La valeur de la ventilation ' + (index + 1) + ' doit être un nombre positif.');
+        values.push({ index: index, units: 0, value: raw });
+        return;
+      }
+      if (mode === 'percentage') {
+        if (value > 100) errors.push('Un pourcentage de ventilation ne peut pas dépasser 100 %.');
+        sumPercent += value;
+        var calculatedUnits = Math.round(sourceUnits * value / 100);
+        values.push({ index: index, units: calculatedUnits, value: value });
+        sumUnits += calculatedUnits;
+      } else if (mode === 'amount') {
+        var units = Math.round(value * precision);
+        if (Math.abs(value - units / precision) > 1e-8) errors.push('Un montant de ventilation dépasse la précision autorisée pour le dossier.');
+        values.push({ index: index, units: units, value: value });
+        sumUnits += units;
+      } else {
+        errors.push('Choisissez un mode de ventilation (montant ou pourcentage).');
+        values.push({ index: index, units: 0, value: value });
+      }
+    });
+    if (mode === 'percentage' && sumPercent > 100 + 1e-8) errors.push('Le total des pourcentages dépasse 100 %.');
+    var exactHundredPercent = mode === 'percentage' && Math.abs(sumPercent - 100) <= 1e-8;
+    return {
+      precision: precision,
+      sourceUnits: sourceUnits,
+      values: values,
+      sumUnits: sumUnits,
+      sumPercent: sumPercent,
+      exactHundredPercent: exactHundredPercent,
+      unallocatedUnits: Math.max(0, sourceUnits - sumUnits),
+      overallocatedUnits: Math.max(0, sumUnits - sourceUnits),
+      errors: errors
+    };
+  }
+
+  function validateAnalyticalSplits(sourceSplits, sourceAmount, decimalPlaces, posting) {
+    var splits = normalizeAnalyticalSplits(sourceSplits);
+    var errors = [];
+    var natureConfiguration = analyticalNaturesConfiguration();
+    var natureRows = (natureConfiguration.rows || []).filter(function (row) { return row && !row.group; });
+    var natureById = Object.create(null);
+    natureRows.forEach(function (row) { natureById[row.id] = row; });
+    var usedNatures = Object.create(null);
+
+    splits.forEach(function (split, splitIndex) {
+      var splitLabel = 'Ventilation analytique ' + (splitIndex + 1) + ' : ';
+      if (!split.natureId && !split.allocations.length) return;
+      var nature = natureById[split.natureId];
+      if (!nature) {
+        if (posting || split.natureId) errors.push(splitLabel + 'la nature analytique est inconnue ou non sélectionnée.');
+        return;
+      }
+      if (usedNatures[split.natureId]) errors.push(splitLabel + 'une seule ventilation par nature est autorisée sur une même ligne.');
+      usedNatures[split.natureId] = true;
+      if (!split.allocations.length) {
+        if (posting) errors.push(splitLabel + 'ajoutez au moins une affectation.');
+        return;
+      }
+      if (split.mode !== 'amount' && split.mode !== 'percentage') {
+        if (posting) errors.push(splitLabel + 'choisissez le mode montant ou pourcentage.');
+        return;
+      }
+      if (posting && split.completeness !== 'complete' && split.completeness !== 'partial') {
+        errors.push(splitLabel + 'choisissez si la ventilation est complète ou si un reliquat peut rester « À ventiler ».');
+      }
+      var seenDestinations = Object.create(null);
+      split.allocations.forEach(function (allocation, allocationIndex) {
+        var destinationKey;
+        if (split.natureId === 'responsibility-centers') {
+          var center = allocation.centerId ? analyticalCenter(allocation.centerId) : null;
+          if (!center) {
+            if (posting || allocation.centerId || allocation.valueLabel || allocation.value) errors.push(splitLabel + 'choisissez un centre analytique existant pour l’affectation ' + (allocationIndex + 1) + '.');
+            return;
+          }
+          if ((allocation.centerCode && allocation.centerCode !== center.code) || (allocation.centerName && allocation.centerName !== center.name)) {
+            errors.push(splitLabel + 'le centre source « ' + [allocation.centerCode, allocation.centerName].filter(Boolean).join(' · ') + ' » ne correspond pas au centre du dossier. Aucune correspondance automatique n’est faite.');
+          }
+          allocation.centerId = center.id;
+          allocation.centerCode = center.code;
+          allocation.centerName = center.name;
+          allocation.valueLabel = '';
+          destinationKey = 'center:' + center.id;
+        } else {
+          allocation.centerId = '';
+          allocation.valueLabel = String(allocation.valueLabel || '').trim().replace(/\s+/g, ' ').slice(0, 120);
+          if (!allocation.valueLabel && (posting || allocation.value)) errors.push(splitLabel + 'la valeur analytique saisie est obligatoire pour l’affectation ' + (allocationIndex + 1) + '.');
+          destinationKey = 'label:' + allocation.valueLabel.toLocaleLowerCase();
+        }
+        if (destinationKey && destinationKey !== 'label:' && seenDestinations[destinationKey]) errors.push(splitLabel + 'une même destination ne peut apparaître qu’une fois.');
+        if (destinationKey) seenDestinations[destinationKey] = true;
+      });
+
+      var evaluation = evaluateAnalyticalSplit(split, sourceAmount, decimalPlaces);
+      evaluation.errors.forEach(function (message) { errors.push(splitLabel + message); });
+      if (evaluation.overallocatedUnits > 0) errors.push(splitLabel + 'le total ventilé dépasse le montant de la ligne comptable.');
+      if (posting && split.completeness === 'complete') {
+        if (split.mode === 'amount' && evaluation.sumUnits !== evaluation.sourceUnits) {
+          errors.push(splitLabel + 'la ventilation complète en montant doit être égale au montant de la ligne.');
+        }
+        if (split.mode === 'percentage' && !evaluation.exactHundredPercent) {
+          errors.push(splitLabel + 'la ventilation complète en pourcentage doit totaliser 100 %.');
+        }
+      }
+      if (split.mode === 'percentage' && evaluation.exactHundredPercent && evaluation.sumUnits !== evaluation.sourceUnits) {
+        var roundingAllocation = split.allocations.find(function (allocation) {
+          var targetKey = allocation.centerId || (allocation.valueLabel ? 'label:' + String(allocation.valueLabel).trim().toLocaleLowerCase() : '');
+          return targetKey && targetKey === split.roundingCenterId;
+        });
+        if (roundingAllocation) {
+          var targetIndex = split.allocations.indexOf(roundingAllocation);
+          var roundingDelta = evaluation.sourceUnits - evaluation.sumUnits;
+          if (evaluation.values[targetIndex].units + roundingDelta >= 0) {
+            evaluation.values[targetIndex].units += roundingDelta;
+            evaluation.sumUnits += roundingDelta;
+            evaluation.unallocatedUnits = Math.max(0, evaluation.sourceUnits - evaluation.sumUnits);
+            evaluation.overallocatedUnits = Math.max(0, evaluation.sumUnits - evaluation.sourceUnits);
+          } else if (posting) {
+            errors.push(splitLabel + 'le centre choisi pour l’arrondi ne peut pas absorber l’écart sans obtenir un montant négatif.');
+          }
+        } else if (posting) {
+          errors.push(splitLabel + 'un écart d’arrondi subsiste en pourcentage ; choisissez explicitement le centre qui recevra ce reliquat.');
+        }
+      }
+      if (evaluation.overallocatedUnits > 0) errors.push(splitLabel + 'l’arrondi des pourcentages dépasse le montant de la ligne. Corrigez les valeurs.');
+      split.allocations.forEach(function (allocation, allocationIndex) {
+        var amountUnits = evaluation.values[allocationIndex] ? evaluation.values[allocationIndex].units : 0;
+        allocation.amount = amountUnits / evaluation.precision;
+      });
+      split.unallocatedAmount = evaluation.unallocatedUnits / evaluation.precision;
+    });
+
+    return { splits: splits, errors: errors };
+  }
+
+  function analyticalAccountRuleErrors(accountCode, sourceSplits, posting) {
+    if (!posting) return [];
+    var accountRules = analyticalAccountRulesForAccount(accountCode);
+    if (!accountRules.length) return [];
+    var splits = normalizeAnalyticalSplits(sourceSplits);
+    var errors = [];
+    var allowedNatures = Object.create(null);
+    var splitsByNature = Object.create(null);
+    accountRules.forEach(function (rule) { allowedNatures[rule.natureId] = rule; });
+    splits.forEach(function (split) {
+      if (split.natureId) splitsByNature[split.natureId] = split;
+      if (split.natureId && !allowedNatures[split.natureId]) {
+        errors.push('La nature « ' + split.natureId + ' » n’est pas prévue dans les règles de ventilation du compte ' + accountCode + '.');
+      }
+    });
+    accountRules.forEach(function (rule) {
+      var split = splitsByNature[rule.natureId];
+      if (rule.requirement === 'required' && !split) {
+        var nature = analyticalNaturesConfiguration().rows.find(function (row) { return row && row.id === rule.natureId; });
+        errors.push('L’imputation « ' + String(nature && (nature.individualName || nature.genericName) || rule.natureId) + ' » est obligatoire pour le compte ' + accountCode + '.');
+      }
+      if (split && split.completeness === 'partial' && !rule.allowPartial) {
+        errors.push('La règle du compte ' + accountCode + ' n’autorise pas une ventilation partielle pour cette nature.');
+      }
+    });
+    return errors;
+  }
+
   /**
    * Valide une pièce. Renvoie { ok, errors: [], entry }.
    * Règles : numéro de pièce unique, journal et comptes existants, débit XOR crédit,
@@ -6538,7 +6821,12 @@
         errors.push(label + 'un débit et un crédit ne peuvent pas coexister.');
         return;
       }
-      cleanLines.push({ account: acc, debit: debit, credit: credit });
+      var analyticValidation = validateAnalyticalSplits(line.analyticSplits, debit || credit, configuration.decimalPlaces, opts.status === 'posted');
+      analyticValidation.errors.forEach(function (message) { errors.push(label + message); });
+      analyticalAccountRuleErrors(acc, analyticValidation.splits, opts.status === 'posted').forEach(function (message) { errors.push(label + message); });
+      var cleanLine = { account: acc, debit: debit, credit: credit };
+      if (analyticValidation.splits.length) cleanLine.analyticSplits = analyticValidation.splits;
+      cleanLines.push(cleanLine);
     });
 
     if (cleanLines.length < 2) {
@@ -6668,7 +6956,7 @@
       date: record && record.date || '',
       description: record && record.description || '',
       lines: (record && Array.isArray(record.lines) ? record.lines : []).map(function (line) {
-        return [line.account || '', Number(line.debit) || 0, Number(line.credit) || 0];
+        return [line.account || '', Number(line.debit) || 0, Number(line.credit) || 0, JSON.stringify(line.analyticSplits || [])];
       })
     });
   }
@@ -6836,12 +7124,23 @@
     if (!t.balanced) {
       return { ok: false, errors: ['La pièce n’est pas équilibrée : validation impossible.'] };
     }
+    var analyticalPostErrors = [];
+    var normalizedLines = (existing.lines || []).map(function (line, index) {
+      var lineCopy = Object.assign({}, line);
+      var analyticValidation = validateAnalyticalSplits(line.analyticSplits, Number(line.debit) || Number(line.credit) || 0, accountingConfiguration().decimalPlaces, true);
+      analyticValidation.errors.forEach(function (message) { analyticalPostErrors.push('Ligne ' + (index + 1) + ' : ' + message); });
+      analyticalAccountRuleErrors(line.account, analyticValidation.splits, true).forEach(function (message) { analyticalPostErrors.push('Ligne ' + (index + 1) + ' : ' + message); });
+      if (analyticValidation.splits.length) lineCopy.analyticSplits = analyticValidation.splits;
+      return lineCopy;
+    });
+    if (analyticalPostErrors.length) return { ok: false, errors: analyticalPostErrors };
     if (!existing.sourceSystem) {
       var missingFixedAssetLines = missingFixedAssetEntryLines(existing);
       var invalidFixedAssetLinks = fixedAssetEntryLinkErrors(existing);
       if (missingFixedAssetLines.length || invalidFixedAssetLinks.length) return { ok: false, errors: fixedAssetValidationError(existing, missingFixedAssetLines).concat(invalidFixedAssetLinks) };
     }
     var previousState = clone(st);
+    existing.lines = normalizedLines;
     existing.status = 'posted';
     existing.postedAt = new Date().toISOString();
     if (!save()) {
@@ -8339,6 +8638,9 @@
     accountingConfiguration: accountingConfiguration,
     updateAccountingConfiguration: updateAccountingConfiguration,
     analyticalSectionsConfiguration: analyticalSectionsConfiguration,
+    analyticalAccountRulesConfiguration: analyticalAccountRulesConfiguration,
+    analyticalAccountRulesForAccount: analyticalAccountRulesForAccount,
+    saveAnalyticalAccountRulesConfiguration: saveAnalyticalAccountRulesConfiguration,
     saveAnalyticalSectionsConfiguration: saveAnalyticalSectionsConfiguration,
     analyticalAllocationKeysConfiguration: analyticalAllocationKeysConfiguration,
     analyticalNaturesConfiguration: analyticalNaturesConfiguration,
@@ -8497,6 +8799,8 @@
     nextReference: nextReference,
     totals: totals,
     validateEntry: visibleValidateEntry,
+    normalizeAnalyticalSplits: normalizeAnalyticalSplits,
+    evaluateAnalyticalSplit: evaluateAnalyticalSplit,
     createEntry: visibleCreateEntry,
     updateDraft: visibleUpdateDraft,
     postedEntryEditPreflight: visiblePostedEntryEditPreflight,

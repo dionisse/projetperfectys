@@ -3071,6 +3071,7 @@ body.dossiers-list-mode #sidebar[hidden] { display: none !important; }
 .third-party-movement-table .btn { padding: 5px 8px; font-size: .61rem; }
 .analytic-disabled-note { color: #707d75; background: #f5f7f5; border-color: #e3e8e3; }
 .analytical-center-workspace .alert { padding: 12px 14px; }
+.analytical-center-shortcuts { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
 .analytical-center-card { padding: 16px; }
 .analytical-center-card .supplier-directory-head { margin-bottom: 8px; }
 .analytical-center-filter-controls { grid-template-columns: minmax(240px, 1fr) minmax(190px, .38fr); }
@@ -3452,6 +3453,40 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .entry-account-status { min-height: 1em; color: var(--muted); font-size: .62rem; line-height: 1.25; }
 .entry-account-status.is-recognized { color: #26734b; }
 .entry-account-status.is-unrecognized { color: #9a5a14; }
+.entry-analytic-editor { margin-top: 7px; padding: 6px 8px; border: 1px solid #dce8df; border-radius: 8px; background: #f7faf7; }
+.analytical-account-rules-table { min-width: 1080px; }
+.analytical-account-rules-table select { min-width: 190px; width: 100%; }
+.analytic-account-rule-partial { display: flex; align-items: center; gap: 7px; min-width: 210px; color: #52675a; font-size: .72rem; }
+.analytic-account-rule-partial input { width: 16px; height: 16px; accent-color: #3c8058; }
+.analytical-account-rules-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-top: 12px; }
+.analytical-movement-filters { display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)); gap: 12px; padding: 14px; }
+.analytical-movement-filters .field { min-width: 0; }
+.analytical-movement-search { grid-column: span 2; }
+.analytical-movement-summary { margin: 14px 0; }
+.analytical-movement-summary > div { min-width: 0; }
+.analytical-movement-summary strong { font-size: .9rem; }
+.analytical-movement-table-wrap { max-height: 65vh; overflow: auto; }
+.analytical-movement-table-wrap table { min-width: 1250px; }
+.analytic-movement-status { display: inline-flex; padding: 3px 7px; border-radius: 999px; background: #e7f4eb; color: #28613b; font-size: .72rem; font-weight: 700; white-space: nowrap; }
+.analytic-movement-status.is-unallocated { background: #fff2d6; color: #805b10; }
+.entry-analytic-editor > summary { display: flex; justify-content: space-between; gap: 8px; cursor: pointer; color: #315f48; font-size: .66rem; font-weight: 800; }
+.entry-analytic-editor > summary span { color: #76857b; font-size: .6rem; font-weight: 700; }
+.entry-analytic-editor-content { padding-top: 8px; }
+.entry-analytic-editor-content > .hint { margin: 0 0 8px; line-height: 1.45; }
+.entry-analytic-rule-summary { margin: 0 0 7px; color: #52675a; font-size: .63rem; line-height: 1.45; }
+.entry-analytic-rule-summary.is-error { color: #aa3c36; font-weight: 700; }
+.entry-analytic-split { display: grid; gap: 7px; margin: 7px 0; padding: 9px; border: 1px solid #dbe5dd; border-radius: 7px; background: #fff; }
+.entry-analytic-split-heading, .entry-analytic-split-options { display: grid; grid-template-columns: minmax(130px, 1fr) auto; gap: 7px; align-items: end; }
+.entry-analytic-split-heading label, .entry-analytic-split-options label { display: grid; gap: 4px; color: #5f6f64; font-size: .59rem; font-weight: 700; }
+.entry-analytic-split-heading select, .entry-analytic-split-options select, .entry-analytic-allocation input, .entry-analytic-allocation select { width: 100%; min-width: 0; min-height: 32px; padding: 5px 7px; border: 1px solid #d8e1da; border-radius: 6px; background: #fff; color: #24352b; font-size: .65rem; }
+.entry-analytic-split-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.entry-analytic-allocation-list { display: grid; gap: 5px; }
+.entry-analytic-allocation { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(90px, .55fr) auto; gap: 6px; align-items: center; }
+.entry-analytic-allocation [hidden], .entry-analytic-split-options [hidden] { display: none !important; }
+.entry-analytic-split-summary { margin: 0; color: #50675a; font-size: .62rem; line-height: 1.45; }
+.entry-analytic-split-summary.is-warning { color: #8b6215; }
+.entry-analytic-split-summary.is-error { color: #aa3c36; }
+.entry-analytic-split-summary.is-balanced { color: #2d754e; }
 .entry-assistance { display: grid; gap: 10px; margin-top: 14px; padding: 13px; border: 1px solid #dfe9e1; border-radius: 10px; background: #f8fbf8; }
 .entry-assistance h4 { margin: 0; color: #304b3d; font-size: .8rem; }
 .entry-assistance p { max-width: 900px; margin: 4px 0 0; color: #68776d; font-size: .65rem; line-height: 1.5; }
@@ -3466,8 +3501,15 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
   .entry-counterpart-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 600px) {
+  .analytical-movement-filters { grid-template-columns: minmax(0, 1fr); padding: 10px; }
+  .analytical-movement-search { grid-column: auto; }
+  .analytical-movement-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .entry-counterpart-list { grid-template-columns: minmax(0, 1fr); }
   .entry-assistance { padding: 10px; }
+  .entry-analytic-split-heading, .entry-analytic-split-options { grid-template-columns: minmax(0, 1fr); }
+  .entry-analytic-allocation { grid-template-columns: minmax(0, 1fr) auto; }
+  .entry-analytic-allocation [data-analytic-allocation-field="value"] { grid-column: 1; }
+  .entry-analytic-allocation [data-action="remove-analytic-allocation"] { grid-column: 2; grid-row: 1 / span 2; }
 }
 .entry-description-field { margin-top: 16px; padding: 12px 13px; border: 1px solid #dbe7dd; border-radius: 9px; background: #fbfdfb; }
 .entry-description-field label { color: #304b3d; font-weight: 800; }
@@ -3508,3 +3550,73 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .entry-journal-history tbody tr.entry-journal-piece-separator { border-top: 2px solid #b8cbbd; border-bottom: 1px solid #dbe7dd; background: #f2f7f3; color: #304b3d; }
 .entry-journal-history tbody tr.entry-journal-piece-separator td { padding-top: 6px; padding-bottom: 6px; }
 .entry-journal-history .empty-state { padding: 20px; }
+
+/* Teinte analytique discrète : les états restent visuellement intégrés aux éditions comptables. */
+.analytical-statement-view {
+  --analytical-tint: #f2f6f5;
+  --analytical-line: #dce8e4;
+  --analytical-accent: #547d72;
+}
+.analytical-statement-heading {
+  margin: 1rem 0;
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--analytical-line);
+  border-left: 3px solid var(--analytical-accent);
+  border-radius: 12px;
+  background: var(--analytical-tint);
+}
+.analytical-statement-heading h2 { margin: .25rem 0; }
+.analytical-statement-heading p { margin: .35rem 0 0; color: var(--text-muted, #66736e); }
+.analytical-statement-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: .75rem;
+  padding: 1rem;
+  border: 1px solid var(--analytical-line);
+  border-radius: 12px;
+  background: #f8faf9;
+}
+.analytical-statement-filters .field { min-width: 180px; margin: 0; }
+.analytical-statement-fixed-nature {
+  display: grid;
+  gap: .3rem;
+  min-width: 200px;
+  padding: .55rem .75rem;
+  border: 1px solid var(--analytical-line);
+  border-radius: 8px;
+  background: var(--analytical-tint);
+}
+.analytical-statement-fixed-nature span { color: var(--text-muted, #66736e); font-size: .78rem; }
+.analytical-statement-output { margin-top: 1rem; }
+.analytical-statement-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .55rem;
+  margin: .75rem 0;
+}
+.analytical-statement-summary span {
+  display: inline-flex;
+  gap: .4rem;
+  align-items: center;
+  padding: .45rem .7rem;
+  border: 1px solid var(--analytical-line);
+  border-radius: 999px;
+  background: var(--analytical-tint);
+  font-size: .88rem;
+}
+.analytical-statement-table-wrap { overflow-x: auto; border: 1px solid var(--analytical-line); border-radius: 10px; }
+.analytical-statement-table { width: 100%; }
+.analytical-statement-table .analytical-statement-group th {
+  background: var(--analytical-tint);
+  color: #36564d;
+  text-align: left;
+}
+.analytical-statement-table .analytical-statement-unallocated td {
+  background: #fbf7ee;
+  color: #6a552c;
+}
+@media print {
+  .analytical-statement-filters, .analytical-statement-view > .edition-report-back { display: none !important; }
+  .analytical-statement-heading, .analytical-statement-table .analytical-statement-group th { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
