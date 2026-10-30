@@ -27,6 +27,7 @@
   var OhadaFinancialStatements = window.PerfectoOhadaFinancialStatements;
   var IsDeclaration = window.PerfectoIsDeclaration;
   var IsTaxAdjustments = window.PerfectoIsTaxAdjustments;
+  var FinancialResult = window.PerfectoFinancialResult;
   var IbaDeclaration = window.PerfectoIbaDeclaration;
   var CashOperations = window.PerfectoCashOperations;
   var AccountMovements = window.PerfectoAccountMovements;
@@ -138,7 +139,8 @@
     otherParties: { q: '', type: 'all' },
     personnel: { q: '' },
     fixedAssets: { q: '', status: 'all', assetType: 'all' },
-    financialFramework: { q: '' }
+    financialFramework: { q: '' },
+    financialResult: { asOfDate: '' }
   };
 
   var selectedEntryJournalCode = '';
@@ -26605,72 +26607,68 @@
     });
   }
 
-  function financialResultPreflight() {
+  function financialResultPreflight(asOfDate) {
     var dossier = S.currentDossier();
-    var rowsByAccount = Object.create(null);
-    S.balance().forEach(function (row) {
-      rowsByAccount[String(row.code)] = Object.assign({}, row, { debit: Number(row.debit) || 0, credit: Number(row.credit) || 0 });
-    });
-    var openingBalanceCount = 0;
-    S.openingBalances().forEach(function (opening) {
-      if (!opening || !opening.accountCode || !opening.date || opening.date >= dossier.cycleStart) return;
-      var code = String(opening.accountCode);
-      if (!rowsByAccount[code]) rowsByAccount[code] = { code: code, label: code, cls: Number(code.charAt(0)), nature: '—', debit: 0, credit: 0 };
-      rowsByAccount[code].debit += Number(opening.debit) || 0;
-      rowsByAccount[code].credit += Number(opening.credit) || 0;
-      openingBalanceCount += 1;
-    });
-    var rows = Object.keys(rowsByAccount).map(function (code) { return rowsByAccount[code]; })
-      .filter(function (row) { return row.debit !== 0 || row.credit !== 0; })
-      .sort(function (a, b) { return a.code.localeCompare(b.code); });
+    var calculated = FinancialResult.calculate({ cycleStart: dossier.cycleStart, cycleEnd: dossier.cycleEnd, asOfDate: asOfDate,
+      accounts: S.accounts(), entries: S.postedEntries(), openingBalances: S.openingBalances() });
+    var rows = calculated.balance;
     var mappingConfig = S.financialStatementsMappingsConfiguration();
     var computed = OhadaFinancialStatements.computeStatementData({ balance: rows, mappings: mappingConfig.mappings });
-    var posted = S.postedEntries();
-    return {
-      balance: rows,
-      openingBalanceCount: openingBalanceCount,
-      postedCount: posted.length,
-      summary: computed.summary,
-      gaps: computed.gaps,
-      hasHiddenConfidentialAccounts: typeof S.hasHiddenConfidentialAccounts === 'function' && S.hasHiddenConfidentialAccounts()
-    };
+    var result = FinancialResult.accountingResult({ balance: rows, mappings: mappingConfig.mappings, financialFramework: AccountingFramework.all() });
+    return { balance: rows, asOfDate: calculated.asOfDate || String(asOfDate || ''), dateValid: calculated.ok,
+      openingBalanceCount: calculated.openingBalanceCount, postedCount: calculated.postedEntryCount,
+      accountingResult: result.result, accountingResultComplete: result.complete, accountingResultMissingCodes: result.unmappedOrNonResultAccountCodes,
+      summary: computed.summary, gaps: computed.gaps,
+      hasHiddenConfidentialAccounts: typeof S.hasHiddenConfidentialAccounts === 'function' && S.hasHiddenConfidentialAccounts() };
   }
 
   function viewFinancialResult() {
     var dossier = S.currentDossier();
-    var preflight = financialResultPreflight();
     var generation = S.ohadaResultGeneration();
+    var priorDate = generation.asOfDate || generation.cycleEnd;
+    if (!ui.financialResult.asOfDate || ui.financialResult.asOfDate < dossier.cycleStart || ui.financialResult.asOfDate > dossier.cycleEnd) {
+      ui.financialResult.asOfDate = priorDate >= dossier.cycleStart && priorDate <= dossier.cycleEnd ? priorDate : dossier.cycleEnd;
+    }
+    var selectedDate = ui.financialResult.asOfDate;
+    var preflight = financialResultPreflight(selectedDate);
     var hasBalance = (preflight.postedCount > 0 || preflight.openingBalanceCount > 0) && preflight.balance.length > 0;
     var canGenerate = hasDemoPermission(getActiveDemoMember(), 'accounting', 'data.export', accountingAccessContext(dossier));
     var balanced = preflight.summary.balanced;
     var existingNotice = !generation.generatedAt ? '' : (generation.stale
       ? '<div class="alert warning"><div><strong>La génération active est périmée.</strong> Elle reste disponible en consultation et téléchargement. Le nouveau calcul la remplacera dans l’application.</div></div>'
-      : '<div class="alert info"><div>Une génération existe déjà pour ce dossier. Cette nouvelle génération la remplacera dans l’application ; les fichiers déjà téléchargés sur l’appareil ne peuvent pas être effacés à distance.</div></div>');
+      : '<div class="alert info"><div>Une génération existe déjà pour le ' + esc(generation.asOfDate || generation.cycleEnd) + '. Cette nouvelle génération la remplacera dans l’application ; les fichiers déjà téléchargés sur l’appareil ne peuvent pas être effacés à distance.</div></div>');
     var downloadButtons = generation.generatedAt
       ? '<div class="financial-result-downloads"><button type="button" class="btn btn-ghost" data-ohada-download="workbook"' + (preflight.hasHiddenConfidentialAccounts ? ' disabled' : '') + '>Télécharger le classeur actif</button><button type="button" class="btn btn-ghost" data-ohada-download="report"' + (preflight.hasHiddenConfidentialAccounts ? ' disabled' : '') + '>Télécharger le rapport séparé</button></div>'
       : '';
-    var blockReason = preflight.hasHiddenConfidentialAccounts
-      ? 'Des comptes confidentiels sont masqués. Un utilisateur autorisé doit activer leur consultation avant la génération complète.'
-        : (!hasBalance ? 'Aucune écriture validée ou ligne de report à nouveau non nulle n’est disponible dans le cycle actif.'
-        : (!balanced ? 'Les débits et crédits cumulés, reports à nouveau inclus, ne s’équilibrent pas ; la génération est bloquée.'
-          : (!canGenerate ? 'Le droit « data.export » est requis pour générer les fichiers.' : '')));
+    var accountingResultLabel = preflight.accountingResultComplete ? esc(S.money(preflight.accountingResult)) : (preflight.accountingResultMissingCodes.length ? 'À compléter · rattachements requis' : 'Non déterminé · aucun compte de résultat mappé');
+    var accountingResultNote = preflight.accountingResultComplete ? '' : '<div class="alert info"><div>Le résultat comptable n’est pas affiché comme définitif : rattachez tous les comptes de charges et produits mouvementés vers des postes OHADA de résultat. Les montants inconnus restent non déterminés.</div></div>';
+    var blockReason = !preflight.dateValid
+      ? 'Choisissez une date d’arrêté comprise dans le cycle actif.'
+      : (preflight.hasHiddenConfidentialAccounts
+        ? 'Des comptes confidentiels sont masqués. Un utilisateur autorisé doit activer leur consultation avant la génération complète.'
+        : (!hasBalance ? 'Aucune écriture validée ou ligne de report à nouveau non nulle n’est disponible à cette date.'
+        : (!balanced ? 'Les débits et crédits cumulés à cette date, reports à nouveau inclus, ne s’équilibrent pas ; la génération est bloquée.'
+          : (!canGenerate ? 'Le droit « data.export » est requis pour générer les fichiers.' : ''))));
     return '<div class="financial-result-workspace">' +
-      '<div class="page-header"><div><span class="page-kicker">FIN D’EXERCICE · ÉTATS FINANCIERS</span><h2>Calcul du résultat et génération des états financiers</h2><p>Préparation à partir des écritures validées du cycle actif ; aucune écriture n’est créée et aucune clôture définitive n’est effectuée.</p></div><a class="btn btn-ghost" href="#/menu?g=fin-exercice&amp;t=balance-checks">← Fin d’exercice</a></div>' +
+      '<div class="page-header"><div><span class="page-kicker">RÉSULTAT COMPTABLE · ÉTATS FINANCIERS</span><h2>Calcul du résultat et génération des états financiers</h2><p>Situation calculée à la date d’arrêté choisie, à partir des écritures validées. Les ajustements fiscaux sont facultatifs et ne conditionnent pas la génération.</p></div><a class="btn btn-ghost" href="#/menu?g=fin-exercice&amp;t=balance-checks">← Sous-menu</a></div>' +
       existingNotice + downloadButtons +
-      '<div class="alert info"><div><strong>Le modèle OHADA intégré est conservé en lecture seule.</strong> Les expressions des formules et la mise en page du classeur sont préservées. Les postes sans source ou correspondance restent vides et figurent dans un rapport distinct. Les règles fiscales non confirmées ne sont pas appliquées.</div></div>' +
+      '<div class="alert info"><div><strong>Préparation comptable non clôturante.</strong> Les états à une date intermédiaire sont des situations provisoires, pas des états annuels définitifs. Les ajustements fiscaux peuvent être ignorés; leur absence n’empêche pas le calcul du résultat comptable. Un éventuel résultat fiscal est distinct et n’est pas calculé ici. Le modèle OHADA, ses formules et sa mise en page sont conservés; les postes sans source restent à compléter dans un rapport séparé.</div></div>' +
       '<section class="exchange-card financial-result-card"><h3>Contrôle préalable · ' + esc(dossier.name || dossier.clientName || 'Dossier actif') + '</h3>' +
-        '<dl class="financial-result-metrics"><div><dt>Cycle</dt><dd>' + esc(dossier.cycleStart || '') + ' au ' + esc(dossier.cycleEnd || '') + '</dd></div>' +
-        '<div><dt>Écritures validées du cycle</dt><dd>' + preflight.postedCount + '</dd></div>' +
+        '<div class="financial-result-date-control"><label for="financial-result-as-of-date">Date d’arrêté</label><input id="financial-result-as-of-date" data-financial-result-date type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(selectedDate) + '"><span class="hint">Choisissez n’importe quelle date comprise dans le cycle (' + esc(dossier.cycleStart) + ' – ' + esc(dossier.cycleEnd) + '). À une date intermédiaire, les états sont provisoires.</span></div>' +
+        '<dl class="financial-result-metrics"><div><dt>Situation arrêtée au</dt><dd>' + esc(selectedDate) + '</dd></div>' +
+        '<div><dt>Écritures validées jusqu’à cette date</dt><dd>' + preflight.postedCount + '</dd></div>' +
         '<div><dt>Lignes de reports à nouveau reprises</dt><dd>' + preflight.openingBalanceCount + '</dd></div>' +
         '<div><dt>Comptes mouvementés</dt><dd>' + preflight.summary.accountCount + '</dd></div>' +
         '<div><dt>Total débits cumulés · RAN inclus</dt><dd>' + esc(S.money(preflight.summary.totalDebit)) + '</dd></div>' +
         '<div><dt>Total crédits cumulés · RAN inclus</dt><dd>' + esc(S.money(preflight.summary.totalCredit)) + '</dd></div>' +
+        '<div><dt>Résultat comptable à date</dt><dd>' + accountingResultLabel + '</dd></div>' +
         '<div><dt>Équilibre</dt><dd>' + (balanced ? 'Équilibré' : 'À contrôler') + '</dd></div>' +
         '<div><dt>Comptes rattachés</dt><dd>' + preflight.summary.mappedAccountCount + '</dd></div>' +
         '<div><dt>Comptes sans rattachement</dt><dd>' + preflight.summary.unmappedAccountCount + '</dd></div></dl>' +
+        accountingResultNote +
         (blockReason ? '<div class="alert warning"><div>' + esc(blockReason) + '</div></div>' : '') +
         '<p class="small muted">Les correspondances peuvent être corrigées dans Paramètres → Cadre comptable et postes des tableaux financiers. Les montants du TFT, les comparatifs et les notes sans source exploitable seront signalés, et non déduits.</p>' +
-        '<div class="financial-result-actions"><a class="btn btn-ghost" href="#/menu?g=parametres&amp;t=financial-framework">Vérifier les correspondances</a><button type="button" class="btn btn-primary" data-financial-result-generate' + (blockReason ? ' disabled' : '') + '>Calculer et générer les états financiers</button></div>' +
+        '<div class="financial-result-actions"><a class="btn btn-ghost" href="#/menu?g=parametres&amp;t=financial-framework">Vérifier les correspondances</a><button type="button" class="btn btn-primary" data-financial-result-generate' + (blockReason ? ' disabled' : '') + '>Calculer le résultat et générer les états à cette date</button></div>' +
         '<div class="financial-result-status" role="status" aria-live="polite"></div>' +
       '</section></div>';
   }
@@ -26705,6 +26703,17 @@
   }
 
   function bindFinancialResult() {
+    var dateInput = $('[data-financial-result-date]');
+    if (dateInput) dateInput.addEventListener('change', function () {
+      var dossier = S.currentDossier(), value = String(dateInput.value || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value < dossier.cycleStart || value > dossier.cycleEnd) {
+        toast('La date d’arrêté doit appartenir au cycle actif.', 'warning');
+        dateInput.value = ui.financialResult.asOfDate;
+        return;
+      }
+      ui.financialResult.asOfDate = value;
+      render();
+    });
     $$('[data-ohada-download]').forEach(function (downloadButton) {
       downloadButton.addEventListener('click', function () { downloadActiveOhadaSnapshot(downloadButton.getAttribute('data-ohada-download')); });
     });
@@ -26726,8 +26735,10 @@
         var templateBytes = results[1];
         var activeDossier = S.currentDossier();
         if (!activeDossier || activeDossier.id !== dossier.id) throw new Error('Le dossier actif a changé ; aucune génération n’a été enregistrée.');
-        var preflight = financialResultPreflight();
-        if (!preflight.postedCount || !preflight.balance.length) throw new Error('Aucune écriture validée non nulle n’est disponible dans le cycle actif.');
+        var selectedDate = String(ui.financialResult.asOfDate || activeDossier.cycleEnd);
+        var preflight = financialResultPreflight(selectedDate);
+        if (!preflight.dateValid) throw new Error('La date d’arrêté doit appartenir au cycle actif.');
+        if ((!preflight.postedCount && !preflight.openingBalanceCount) || !preflight.balance.length) throw new Error('Aucune écriture validée ou ligne de report à nouveau non nulle n’est disponible à cette date.');
         if (!preflight.summary.balanced) throw new Error('La balance du cycle n’est plus équilibrée ; contrôlez les données avant de recommencer.');
         var mappingConfig = S.financialStatementsMappingsConfiguration();
         var printedInformationRows = S.printedReportInformationConfiguration().rows;
@@ -26737,20 +26748,25 @@
           dossierName: activeDossier.name || activeDossier.clientName || '',
           cycleStart: activeDossier.cycleStart,
           cycleEnd: activeDossier.cycleEnd,
+          asOfDate: selectedDate,
           printedInformationRows: printedInformationRows,
           balance: preflight.balance,
           mappings: mappingConfig.mappings
         });
         var gapReport = OhadaFinancialStatements.buildGapReport(workbook.gaps, workbook.summary, {
           dossierName: activeDossier.name || activeDossier.clientName || '',
+          cycleStart: activeDossier.cycleStart,
+          cycleEnd: activeDossier.cycleEnd,
+          asOfDate: selectedDate,
           printedInformationRows: printedInformationRows
         });
         var filePart = safeFilePart(activeDossier.reference || activeDossier.name);
-        var filename = 'Tableaux-financiers-OHADA-' + filePart + '-' + String(activeDossier.cycleEnd || '').replace(/-/g, '') + '.xlsx';
-        var gapFilename = 'Rapport-donnees-manquantes-OHADA-' + filePart + '-' + String(activeDossier.cycleEnd || '').replace(/-/g, '') + '.csv';
+        var filename = 'Tableaux-financiers-OHADA-' + filePart + '-' + String(selectedDate || '').replace(/-/g, '') + '.xlsx';
+        var gapFilename = 'Rapport-donnees-manquantes-OHADA-' + filePart + '-' + String(selectedDate || '').replace(/-/g, '') + '.csv';
         var snapshot = {
           resultId: resultId,
           generatedAt: generatedAt,
+          asOfDate: selectedDate,
           cycleStart: activeDossier.cycleStart,
           cycleEnd: activeDossier.cycleEnd,
           workbookBytes: workbook.bytes,
@@ -26764,6 +26780,7 @@
           var saved = S.saveOhadaResultGeneration({
             generatedAt: generatedAt,
             resultId: resultId,
+            asOfDate: selectedDate,
             cycleStart: activeDossier.cycleStart,
             cycleEnd: activeDossier.cycleEnd,
             summary: workbook.summary

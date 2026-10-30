@@ -20,6 +20,9 @@
 .financial-result-workspace > .page-header p { margin: .35rem 0 0; color: var(--muted, #647067); }
 .financial-result-card { display: grid; gap: .9rem; }
 .financial-result-card h3 { margin: 0; }
+.financial-result-date-control { display: grid; gap: .35rem; max-width: 420px; }
+.financial-result-date-control label { font-weight: 700; }
+.financial-result-date-control input { min-height: 2.6rem; padding: .5rem .65rem; border: 1px solid var(--line, #bac2bd); border-radius: .45rem; font: inherit; }
 .financial-result-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .6rem; margin: 0; }
 .financial-result-metrics > div { padding: .75rem; border: 1px solid var(--line, #bac2bd); border-radius: .5rem; background: #fff; }
 .financial-result-metrics dt { color: var(--muted, #647067); font-size: .78rem; }

@@ -65,6 +65,7 @@ const APP_SHELL = [
   './js/ohada-financial-statements.js',
   './js/is-declaration.js',
   './js/is-tax-adjustments.js',
+  './js/financial-result.js',
   './js/iba-declaration.js',
   './js/currency-balance-report.js',
   './js/currency-supplementary-reports.js',

@@ -37,8 +37,11 @@ assert.equal(store.financialStatementsMappingsConfiguration().mappings['101'].cr
 
 assert.equal(store.saveOhadaResultGeneration({
   resultId: 'OHADA-test-initial', generatedAt: '2026-10-01T12:00:00.000Z',
-  cycleStart: '2026-01-01', cycleEnd: '2026-12-31', summary: { balanced: true }
+  cycleStart: '2026-01-01', cycleEnd: '2026-12-31', asOfDate: '2026-09-30', summary: { balanced: true }
 }).ok, true);
+assert.equal(store.ohadaResultGeneration().asOfDate, '2026-09-30', 'la date d’arrêté de la génération intermédiaire est conservée');
+assert.equal(store.saveOhadaResultGeneration({ resultId: 'invalid-date', generatedAt: '2026-10-01T12:00:00.000Z', cycleStart: '2026-01-01', cycleEnd: '2026-12-31', asOfDate: '2025-12-31' }).ok, false, 'la date d’arrêté hors cycle est refusée');
+assert.equal(store.saveOhadaResultGeneration({ resultId: 'invalid-calendar-date', generatedAt: '2026-10-01T12:00:00.000Z', cycleStart: '2026-01-01', cycleEnd: '2026-12-31', asOfDate: '2026-02-30' }).ok, false, 'une date inexistante du calendrier est refusée');
 const result = store.createEntry({
   reference: 'OD-OHADA-STALE-TEST', journal: 'OD', date: '2026-10-02', description: 'Pièce de test du cycle de péremption',
   lines: [

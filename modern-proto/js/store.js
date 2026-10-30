@@ -1877,6 +1877,7 @@
       resultId: String(generation.resultId || ''),
       cycleStart: String(generation.cycleStart || ''),
       cycleEnd: String(generation.cycleEnd || ''),
+      asOfDate: String(generation.asOfDate || generation.cycleEnd || ''),
       summary: generation.summary && typeof generation.summary === 'object' ? clone(generation.summary) : null
     };
   }
@@ -1886,12 +1887,18 @@
     if (!source.generatedAt || !source.resultId || !source.cycleStart || !source.cycleEnd) {
       return { ok: false, errors: ['Les dates du cycle et l’identifiant de génération sont requis.'] };
     }
+    var asOfDate = String(source.asOfDate || source.cycleEnd);
+    var parsedAsOfDate = /^\d{4}-\d{2}-\d{2}$/.test(asOfDate) ? new Date(asOfDate + 'T00:00:00Z') : null;
+    if (!parsedAsOfDate || !Number.isFinite(parsedAsOfDate.getTime()) || parsedAsOfDate.toISOString().slice(0, 10) !== asOfDate || asOfDate < String(source.cycleStart) || asOfDate > String(source.cycleEnd)) {
+      return { ok: false, errors: ['La date d’arrêté doit appartenir au cycle actif.'] };
+    }
     var state = readOhadaLocalState();
     state.generation = {
       generatedAt: String(source.generatedAt).slice(0, 40),
       resultId: String(source.resultId).slice(0, 100),
       cycleStart: String(source.cycleStart).slice(0, 20),
       cycleEnd: String(source.cycleEnd).slice(0, 20),
+      asOfDate: asOfDate.slice(0, 20),
       summary: source.summary && typeof source.summary === 'object' ? clone(source.summary) : null,
       stale: false,
       staleAt: ''

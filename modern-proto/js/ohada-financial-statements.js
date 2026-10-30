@@ -226,16 +226,18 @@
     assign(['_nBq3'], common['bank-3']); assign(['_nCBq3'], common['bank-3-account']);
 
     var start = String(options.cycleStart || '');
-    var end = String(options.cycleEnd || '');
+    var cycleEnd = String(options.cycleEnd || '');
+    var end = String(options.asOfDate || cycleEnd);
     var duration = cycleDurationMonths(start, end);
+    var atCycleEnd = !!(cycleEnd && end === cycleEnd);
     assign(['_dAn'], end ? end.slice(0, 4) : '');
     assign(['_dDeb'], formatDate(start));
     assign(['_dFin'], formatDate(end));
-    assign(['_ExerClos'], end ? 'Exercice clos le ' + formatDate(end) : '');
+    assign(['_ExerClos'], end ? (atCycleEnd ? 'Exercice clos le ' : 'Situation comptable arrêtée au ') + formatDate(end) : '');
     assign(['_ExerFin'], formatDate(end) ? ' ' + formatDate(end) : '');
     assign(['_ExerFin1', '_ExerClot'], options.previousYearEnd ? ' ' + formatDate(options.previousYearEnd) : '');
     assign(['_Duree'], duration ? 'Durée (en mois) ' + duration : '');
-    assign(['_sTabExer'], end ? 'Tableau financiers au ' + formatDate(end) : '');
+    assign(['_sTabExer'], end ? (atCycleEnd ? 'Tableau financiers au ' : 'Situation comptable au ') + formatDate(end) : '');
     values._Mois = duration || '';
     values._nbMois = duration || '';
     values.tauxImpot = '';
@@ -638,7 +640,7 @@
       rows.push(['Informations communes', '', field.label || field.id, 'Configuration des informations communes aux états imprimés', 'Aucune valeur source n’est renseignée pour ce champ.', 'Compléter le champ dans les informations communes du dossier si cette donnée est applicable.']);
     });
     var dossierName = options && options.dossierName || '';
-    rows.splice(1, 0, ['Dossier', '', dossierName, '', 'Rapport généré pour le cycle actif.', 'Les valeurs nulles éventuellement affichées par formule sont signalées dans la ligne « Formules conservées » ci-dessous.']);
+    rows.splice(1, 0, ['Dossier', '', dossierName, '', options && options.asOfDate ? 'Situation arrêtée au ' + formatDate(options.asOfDate) : 'Rapport généré pour le cycle actif.', 'Les valeurs nulles éventuellement affichées par formule sont signalées dans la ligne « Formules conservées » ci-dessous.']);
     return '\uFEFF' + rows.map(function (row) { return row.map(csvEscape).join(';'); }).join('\r\n');
   }
 
