@@ -150,6 +150,7 @@
     analyticalCenters: { q: '', status: 'active' },
     analyticalMovements: { q: '', natureId: '', centerId: '', journal: '', from: '', to: '' },
     analyticalPaymentSchedule: { dossierId: '', q: '', status: 'all', from: '', to: '' },
+    analyticalInvoicePaymentAllocation: { dossierId: '', q: '', status: 'all' },
     openingBalances: { q: '', position: '', sourceDossierId: '', selectedId: '' },
     accountingBridge: { sourceModuleId: 'payroll-hr' },
     periods: { year: S.exercise() },
@@ -25340,6 +25341,226 @@
     $('[data-scheduled-payment-clear-filters]', workspace).addEventListener('click', function () { ui.analyticalPaymentSchedule = { dossierId: S.currentDossier().id, q: '', status: 'all', from: '', to: '' }; render(); });
   }
 
+  function analyticalInvoicePaymentCandidates(configuration) {
+    var customerCodes = configuration.customerAccountCodes || [];
+    var cashCodes = configuration.cashAccountCodes || [];
+    var activeRows = (configuration.rows || []).filter(function (row) { return row.status === 'active'; });
+    function amountOn(entry, codes, side) {
+      return (entry.lines || []).reduce(function (sum, line) {
+        return sum + (codes.indexOf(String(line.account || '')) !== -1 ? Number(line[side]) || 0 : 0);
+      }, 0);
+    }
+    var invoices = [];
+    var receipts = [];
+    (S.entries() || []).filter(function (entry) { return entry && entry.status === 'posted'; }).forEach(function (entry) {
+      var receivable = amountOn(entry, customerCodes, 'debit') - amountOn(entry, customerCodes, 'credit');
+      var receiptAmount = amountOn(entry, customerCodes, 'credit') - amountOn(entry, customerCodes, 'debit');
+      var alreadyInvoice = activeRows.filter(function (row) { return row.invoiceEntryId === entry.id; }).reduce(function (sum, row) { return sum + Number(row.amount || 0); }, 0);
+      var alreadyReceipt = activeRows.filter(function (row) { return row.receiptEntryId === entry.id; }).reduce(function (sum, row) { return sum + Number(row.amount || 0); }, 0);
+      var cashDebit = amountOn(entry, cashCodes, 'debit');
+      if (receivable > alreadyInvoice + 1e-7) invoices.push({ entry: entry, remaining: receivable - alreadyInvoice });
+      if (receiptAmount > alreadyReceipt + 1e-7 && cashDebit > 0) receipts.push({ entry: entry, remaining: receiptAmount - alreadyReceipt });
+    });
+    return { invoices: invoices, receipts: receipts };
+  }
+
+  function viewAnalyticalInvoicePaymentAllocation() {
+    var dossier = S.currentDossier();
+    if (ui.analyticalInvoicePaymentAllocation.dossierId !== dossier.id) ui.analyticalInvoicePaymentAllocation = { dossierId: dossier.id, q: '', status: 'all' };
+    var filters = ui.analyticalInvoicePaymentAllocation;
+    var config = S.analyticalInvoicePaymentAllocationConfiguration();
+    var rows = config.rows || [];
+    var allowed = hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalInvoicePayments.manage', accountingAccessContext(dossier));
+    var editable = allowed && !isPhoneViewport();
+    var decimals = Number(S.accountingConfiguration().decimalPlaces) || 0;
+    var formatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    var activeRows = rows.filter(function (row) { return row.status === 'active'; });
+    var cancelledRows = rows.filter(function (row) { return row.status === 'cancelled'; });
+    var candidates = analyticalInvoicePaymentCandidates(config);
+    var totalAllocated = activeRows.reduce(function (sum, row) { return sum + Number(row.amount || 0); }, 0);
+    var awaitingAnalytical = activeRows.filter(function (row) { return !(row.analyticalAllocations || []).length; }).length;
+    var identityUnconfirmed = activeRows.filter(function (row) { return row.identityConfirmed !== true; }).length;
+    var visible = rows.filter(function (row) {
+      if (filters.status !== 'all' && row.status !== filters.status) return false;
+      if (!filters.q) return true;
+      var search = [row.invoiceReference, row.receiptReference, row.invoiceDate, row.receiptDate, row.reference].join(' ').toLocaleLowerCase();
+      return search.indexOf(String(filters.q).trim().toLocaleLowerCase()) !== -1;
+    }).sort(function (a, b) { return String(a.receiptDate).localeCompare(String(b.receiptDate)) || String(a.invoiceReference).localeCompare(String(b.invoiceReference)); });
+    function analyticsSummary(row) {
+      var assignments = row.analyticalAllocations || [];
+      if (!assignments.length) return '<span class="invoice-payment-unclassified">À ventiler · aucune imputation saisie</span>';
+      var grouped = Object.create(null);
+      assignments.forEach(function (item) {
+        var key = item.natureId;
+        if (!grouped[key]) grouped[key] = { label: item.natureLabel || item.natureId, amount: 0, values: [] };
+        grouped[key].amount += Number(item.amount || 0);
+        grouped[key].values.push(item.valueLabel || 'valeur à vérifier');
+      });
+      return Object.keys(grouped).map(function (key) {
+        var group = grouped[key];
+        return '<span class="invoice-payment-analytic-chip"><strong>' + esc(group.label) + '</strong> · ' + esc(group.values.join(', ')) + ' · ' + esc(formatter.format(group.amount)) + ' XOF affectés ; reliquat de cet axe : ' + esc(formatter.format(Math.max(0, Number(row.amount) - group.amount))) + ' XOF</span>';
+      }).join(' ');
+    }
+    var tableRows = visible.map(function (row) {
+      var invoice = (S.entries() || []).find(function (entry) { return entry && entry.id === row.invoiceEntryId; });
+      var receipt = (S.entries() || []).find(function (entry) { return entry && entry.id === row.receiptEntryId; });
+      var invoiceLabel = invoice ? [invoice.date, invoice.reference, invoice.description].filter(Boolean).join(' · ') : [row.invoiceDate, row.invoiceReference, 'Pièce source absente'].filter(Boolean).join(' · ');
+      var receiptLabel = receipt ? [receipt.date, receipt.reference, receipt.description].filter(Boolean).join(' · ') : [row.receiptDate, row.receiptReference, 'Pièce source absente'].filter(Boolean).join(' · ');
+      var actions = '<button type="button" class="btn btn-ghost btn-sm" data-invoice-payment-analytic="' + esc(row.id) + '"' + (!editable || row.status === 'cancelled' ? ' disabled' : '') + '>Imputer analytiquement</button>' +
+        '<button type="button" class="btn btn-ghost btn-sm' + (row.status === 'active' ? ' btn-danger-quiet' : '') + '" data-invoice-payment-toggle="' + esc(row.id) + '"' + (!editable ? ' disabled' : '') + '>' + (row.status === 'active' ? 'Annuler l’affectation' : 'Réactiver') + '</button>';
+      return '<tr' + (!(row.analyticalAllocations || []).length && row.status === 'active' ? ' class="invoice-payment-unclassified-row"' : '') + '><td>' + esc(invoiceLabel) + '</td><td>' + esc(receiptLabel) + (row.reference ? '<br><small>Réf. lien : ' + esc(row.reference) + '</small>' : '') + (row.identityConfirmed ? '<br><small class="invoice-payment-identity-confirmed">Client vérifié manuellement</small>' : '<br><small class="invoice-payment-unclassified">Client non confirmé</small>') + '</td><td class="number-cell">' + esc(formatter.format(row.amount)) + ' XOF</td><td class="invoice-payment-analytic-cell">' + analyticsSummary(row) + '</td><td><span class="scheduled-payment-status' + (row.status === 'cancelled' ? ' is-cancelled' : '') + '">' + (row.status === 'cancelled' ? 'Annulée' : 'Affectée') + '</span></td><td><div class="supplier-row-actions">' + actions + '</div></td></tr>';
+    }).join('');
+    var mapping = '<form id="invoice-payment-mapping-form" class="invoice-payment-mapping-form"><div class="field"><label for="invoice-payment-customer-codes">Comptes clients exacts du plan</label><input id="invoice-payment-customer-codes" name="customerAccountCodes" value="' + esc(config.customerAccountCodes.join(', ')) + '" placeholder="Saisir les codes exacts, séparés par des virgules"><span class="hint">Uniquement des comptes 41 imputables du plan de ce dossier ; aucun préfixe ni compte n’est présélectionné.</span></div><div class="field"><label for="invoice-payment-cash-codes">Comptes de trésorerie exacts</label><input id="invoice-payment-cash-codes" name="cashAccountCodes" value="' + esc(config.cashAccountCodes.join(', ')) + '" placeholder="Saisir les codes exacts, séparés par des virgules"><span class="hint">Uniquement des comptes 5 imputables du plan ; aucun compte n’est présélectionné.</span></div><button type="submit" class="btn btn-ghost"' + (!editable ? ' disabled' : '') + '>Enregistrer les comptes de rapprochement</button></form>';
+    var filter = '<form id="invoice-payment-filters" class="invoice-payment-filters"><label class="field"><span>Rechercher les références</span><input name="q" type="search" value="' + esc(filters.q) + '" placeholder="Facture ou règlement"></label><label class="field"><span>État</span><select name="status"><option value="all"' + (filters.status === 'all' ? ' selected' : '') + '>Tous</option><option value="active"' + (filters.status === 'active' ? ' selected' : '') + '>Actifs</option><option value="cancelled"' + (filters.status === 'cancelled' ? ' selected' : '') + '>Annulés</option></select></label><button type="submit" class="btn btn-ghost">Filtrer</button><button type="button" class="btn btn-ghost" data-invoice-payment-clear>Effacer</button></form>';
+    var table = tableRows ? '<div class="table-wrap invoice-payment-table-wrap"><table class="data-table invoice-payment-table"><thead><tr><th>Facture comptabilisée</th><th>Règlement comptabilisé</th><th>Montant affecté</th><th>Imputations analytiques explicites · axes séparés</th><th>État</th><th>Actions</th></tr></thead><tbody>' + tableRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucune affectation pour cette sélection.</strong> Seuls des liens enregistrés entre pièces comptables validées apparaîtront ici.</div>';
+    return '<div class="exchange-workspace invoice-payment-allocation-workspace"><div class="alert info"><div><strong>Affectation facture–règlement · dossier ' + esc(dossier.reference) + '</strong><br>Cette vue relie manuellement une pièce de facture et une pièce d’encaissement déjà validées. Elle conserve le lien et des ventilations analytiques saisies expressément ; elle ne crée ni facture, ni règlement, ni écriture. Les règlements prévus ne sont pas des sources de paiement. Ce registre est distinct du calcul de TVA sur encaissements.</div></div>' +
+      (!allowed ? '<div class="alert warning">Consultation seule : le droit « Affecter et imputer les règlements aux factures » est requis dans ce dossier.</div>' : (isPhoneViewport() ? '<div class="alert info">Consultation sur téléphone ; les affectations sont réservées à un ordinateur ou une tablette.</div>' : '')) +
+      '<div class="alert warning"><strong>Identité du client à confirmer manuellement.</strong> Les pièces ne portent pas d’identifiant auxiliaire individuel ; un solde sur le compte collectif 41 ne prouve pas que facture et encaissement concernent le même client. N’affectez qu’après vérification des justificatifs. Aucun rapprochement client n’est automatique.</div>' +
+      '<section class="invoice-payment-mapping-card"><div><h3>Comptes de rapprochement · correspondance exacte</h3><p>Les lignes sources ne sont proposées qu’après validation des comptes 41 clients et 5 trésorerie choisis ci-dessous.</p></div>' + mapping + '</section>' +
+      '<div class="invoice-payment-summary"><div><small>Affectations actives</small><strong>' + activeRows.length + '</strong></div><div><small>Montants affectés · XOF</small><strong>' + esc(formatter.format(totalAllocated)) + '</strong></div><div><small>Sans ventilation analytique</small><strong>' + awaitingAnalytical + '</strong></div><div><small>Client non confirmé</small><strong>' + identityUnconfirmed + '</strong></div><div><small>Pièces disponibles · selon comptes choisis</small><strong>' + candidates.invoices.length + ' facture(s) · ' + candidates.receipts.length + ' règlement(s)</strong></div><div><small>Affectations annulées conservées</small><strong>' + cancelledRows.length + '</strong></div></div>' +
+      (!config.customerAccountCodes.length || !config.cashAccountCodes.length ? '<div class="alert warning">Aucun rapprochement automatique : renseignez et enregistrez les comptes exacts. Les options de facture et de règlement resteront vides jusque-là.</div>' : '') +
+      filter + '<div class="invoice-payment-toolbar"><button type="button" class="btn btn-primary" data-invoice-payment-add' + (!editable || !candidates.invoices.length || !candidates.receipts.length ? ' disabled' : '') + '>＋ Affecter un règlement validé</button><span>Pièces proposées : écritures comptabilisées du dossier uniquement · ' + candidates.invoices.length + ' facture(s) · ' + candidates.receipts.length + ' règlement(s)</span></div>' + table +
+      '<p class="exchange-footnote">Pour chaque nature analytique, les montants sont contrôlés séparément et le reliquat reste visible « À ventiler ». Les axes parallèles ne sont ni fusionnés ni additionnés ; aucune ventilation d’une facture n’est recopiée sur le règlement sans saisie explicite. Les liens et paramètres sont conservés dans le stockage navigateur de ce dossier ; aucune synchronisation Google Drive n’est impliquée.</p></div>';
+  }
+
+  function openAnalyticalInvoicePaymentModal() {
+    var config = S.analyticalInvoicePaymentAllocationConfiguration();
+    var candidates = analyticalInvoicePaymentCandidates(config);
+    var label = function (candidate) {
+      var entry = candidate.entry;
+      return [entry.date, entry.reference, entry.description, 'reste ' + amount(candidate.remaining) + ' XOF'].filter(Boolean).join(' · ');
+    };
+    var invoiceOptions = '<option value="">Choisir une facture comptabilisée…</option>' + candidates.invoices.map(function (candidate) { return '<option value="' + esc(candidate.entry.id) + '">' + esc(label(candidate)) + '</option>'; }).join('');
+    var receiptOptions = '<option value="">Choisir un règlement comptabilisé…</option>' + candidates.receipts.map(function (candidate) { return '<option value="' + esc(candidate.entry.id) + '">' + esc(label(candidate)) + '</option>'; }).join('');
+    var body = '<form id="invoice-payment-add-form" novalidate><div id="invoice-payment-form-errors" aria-live="assertive"></div><div class="form-grid invoice-payment-form-grid"><div class="field"><label for="invoice-payment-invoice">Facture émise · pièce comptabilisée</label><select id="invoice-payment-invoice" required>' + invoiceOptions + '</select></div><div class="field"><label for="invoice-payment-receipt">Règlement reçu · pièce comptabilisée</label><select id="invoice-payment-receipt" required>' + receiptOptions + '</select></div><div class="field"><label for="invoice-payment-amount">Montant reçu affecté (XOF)</label><input id="invoice-payment-amount" type="number" min="' + esc(String(1 / Math.pow(10, Number(S.accountingConfiguration().decimalPlaces) || 0))) + '" step="' + esc(String(1 / Math.pow(10, Number(S.accountingConfiguration().decimalPlaces) || 0))) + '" required></div><div class="field"><label for="invoice-payment-reference">Référence de rapprochement (facultatif)</label><input id="invoice-payment-reference" maxlength="120" placeholder="Référence saisie par l’utilisateur"></div></div><div class="alert warning"><strong>Contrôle auxiliaire requis :</strong> les écritures sources ne portent pas de code individuel du client. Le compte collectif ne suffit pas à confirmer l’identité.</div><label class="invoice-payment-confirmation"><input id="invoice-payment-identity-confirmed" type="checkbox" required> J’ai vérifié sur les justificatifs que la facture et le règlement concernent le même client.</label><p class="invoice-payment-form-note">Le montant doit être justifié par les soldes des pièces validées ; il ne modifie pas les écritures sources et ne peut dépasser le restant dû ni le règlement disponible.</p></form>';
+    openModal('Affecter un règlement à une facture', 'Dossier ' + esc(S.currentDossier().reference) + ' · aucune écriture ne sera créée', body, '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="submit" class="btn btn-primary" form="invoice-payment-add-form">Enregistrer le lien</button>', true);
+    var form = $('#invoice-payment-add-form');
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (isPhoneViewport() || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalInvoicePayments.manage', accountingAccessContext(S.currentDossier()))) return;
+      var latest = S.analyticalInvoicePaymentAllocationConfiguration();
+      var result = S.saveAnalyticalInvoicePaymentAllocationConfiguration({
+        customerAccountCodes: latest.customerAccountCodes, cashAccountCodes: latest.cashAccountCodes,
+        rows: latest.rows.concat([{ invoiceEntryId: $('#invoice-payment-invoice', form).value, receiptEntryId: $('#invoice-payment-receipt', form).value,
+          amount: $('#invoice-payment-amount', form).value, reference: $('#invoice-payment-reference', form).value, identityConfirmed: $('#invoice-payment-identity-confirmed', form).checked, status: 'active', analyticalAllocations: [] }])
+      });
+      if (!result.ok) { $('#invoice-payment-form-errors', form).innerHTML = '<div class="alert warning"><ul>' + result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>'; return; }
+      toast('Lien facture–règlement enregistré à partir de pièces validées. Aucune écriture n’a été modifiée.', 'success'); closeModal(true); render();
+    });
+  }
+
+  function analyticalInvoicePaymentValueOptions(natureId) {
+    var options = [];
+    if (natureId === 'responsibility-centers') {
+      options = S.analyticalCenters().filter(function (center) { return center && center.active !== false; }).map(function (center) {
+        var label = String(center.code || '') + ' · ' + String(center.name || '');
+        return '<option value="' + esc(center.id) + '" data-label="' + esc(label) + '" data-code="' + esc(center.code || '') + '" data-name="' + esc(center.name || '') + '">' + esc(label) + '</option>';
+      });
+    } else if (natureId) {
+      options = (S.analyticalDimensionValuesConfiguration(natureId).rows || []).filter(function (value) { return value && value.active !== false; }).map(function (value) {
+        return '<option value="' + esc(value.label) + '" data-label="' + esc(value.label) + '">' + esc(value.label) + '</option>';
+      });
+    }
+    return '<option value="">Choisir une valeur…</option>' + options.join('');
+  }
+
+  function openAnalyticalInvoicePaymentClassifications(allocationId) {
+    var config = S.analyticalInvoicePaymentAllocationConfiguration();
+    var allocation = config.rows.find(function (row) { return row.id === allocationId; });
+    if (!allocation) return;
+    var entries = S.entries();
+    var invoice = entries.find(function (entry) { return entry.id === allocation.invoiceEntryId; });
+    var receipt = entries.find(function (entry) { return entry.id === allocation.receiptEntryId; });
+    var natures = (S.analyticalNaturesConfiguration().rows || []).filter(function (nature) { return nature && !nature.group; });
+    var natureOptions = '<option value="">Choisir une nature…</option>' + natures.map(function (nature) {
+      var label = nature.individualName && nature.individualName !== nature.genericName ? nature.genericName + ' · ' + nature.individualName : nature.individualName || nature.genericName || nature.id;
+      return '<option value="' + esc(nature.id) + '">' + esc(label) + '</option>';
+    }).join('');
+    function classificationTable() {
+      if (!(allocation.analyticalAllocations || []).length) return '<p class="small muted">Aucune imputation analytique saisie. Le montant reste « À ventiler ».</p>';
+      var groups = Object.create(null);
+      var html = (allocation.analyticalAllocations || []).map(function (row, index) {
+        var key = row.natureId;
+        groups[key] = (groups[key] || 0) + Number(row.amount || 0);
+        return '<tr><td>' + esc(row.natureLabel || row.natureId) + '</td><td>' + esc(row.valueLabel || 'Référence à vérifier') + '</td><td class="num">' + esc(amount(row.amount)) + ' XOF</td><td><button type="button" class="btn btn-ghost btn-sm btn-danger-quiet" data-invoice-analytic-remove="' + index + '">Retirer</button></td></tr>';
+      }).join('');
+      var totals = Object.keys(groups).map(function (natureId) {
+        var nature = natures.find(function (item) { return item.id === natureId; });
+        return '<span><strong>' + esc(nature && (nature.individualName || nature.genericName) || natureId) + '</strong> · ' + esc(amount(groups[natureId])) + ' XOF imputés ; à ventiler ' + esc(amount(Math.max(0, allocation.amount - groups[natureId]))) + ' XOF</span>';
+      }).join('');
+      return '<div class="table-wrap"><table class="data-table"><thead><tr><th>Nature</th><th>Valeur analytique</th><th>Montant affecté</th><th>Action</th></tr></thead><tbody>' + html + '</tbody></table></div><div class="invoice-payment-axis-totals">' + totals + '</div>';
+    }
+    var body = '<div class="invoice-payment-classification-context"><strong>Facture :</strong> ' + esc(invoice ? [invoice.date, invoice.reference, invoice.description].filter(Boolean).join(' · ') : allocation.invoiceReference) + '<br><strong>Règlement :</strong> ' + esc(receipt ? [receipt.date, receipt.reference, receipt.description].filter(Boolean).join(' · ') : allocation.receiptReference) + '<br><strong>Montant affecté :</strong> ' + esc(amount(allocation.amount)) + ' XOF</div><p>Chaque nature constitue un axe indépendant. Les montants d’un même axe ne peuvent dépasser le règlement affecté ; les reliquats sont affichés « À ventiler ». Aucune imputation de la facture n’est copiée automatiquement.</p><div id="invoice-analytic-classification-list">' + classificationTable() + '</div><form id="invoice-analytic-classification-form" class="invoice-analytic-classification-form"><div id="invoice-analytic-errors" aria-live="assertive"></div><div class="field"><label for="invoice-analytic-nature">Nature analytique</label><select id="invoice-analytic-nature" required>' + natureOptions + '</select></div><div class="field"><label for="invoice-analytic-value">Valeur / centre</label><select id="invoice-analytic-value" disabled required>' + analyticalInvoicePaymentValueOptions('') + '</select></div><div class="field"><label for="invoice-analytic-amount">Montant explicite (XOF)</label><input id="invoice-analytic-amount" type="number" min="' + esc(String(1 / Math.pow(10, Number(S.accountingConfiguration().decimalPlaces) || 0))) + '" step="' + esc(String(1 / Math.pow(10, Number(S.accountingConfiguration().decimalPlaces) || 0))) + '" required></div><button type="submit" class="btn btn-primary">Ajouter cette imputation</button></form>';
+    openModal('Imputations analytiques du règlement affecté', 'Ventilation par nature · règlement ' + esc(amount(allocation.amount)) + ' XOF', body, '<button type="button" class="btn btn-ghost" data-action="close-modal">Fermer</button>', true);
+    var form = $('#invoice-analytic-classification-form');
+    var natureSelect = $('#invoice-analytic-nature', form);
+    var valueSelect = $('#invoice-analytic-value', form);
+    natureSelect.addEventListener('change', function () { valueSelect.innerHTML = analyticalInvoicePaymentValueOptions(natureSelect.value); valueSelect.disabled = !natureSelect.value; });
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (isPhoneViewport() || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalInvoicePayments.manage', accountingAccessContext(S.currentDossier()))) return;
+      var nature = natures.find(function (item) { return item.id === natureSelect.value; });
+      var option = valueSelect.options[valueSelect.selectedIndex];
+      var analytic = { natureId: natureSelect.value, natureLabel: nature && (nature.individualName || nature.genericName) || '', valueId: natureSelect.value === 'responsibility-centers' ? valueSelect.value : '',
+        valueLabel: option && option.value ? option.getAttribute('data-label') || option.textContent : '', centerCode: option && option.getAttribute('data-code') || '', centerName: option && option.getAttribute('data-name') || '', amount: $('#invoice-analytic-amount', form).value };
+      var latest = S.analyticalInvoicePaymentAllocationConfiguration();
+      var updatedRows = latest.rows.map(function (row) { return row.id === allocationId ? Object.assign({}, row, { analyticalAllocations: (row.analyticalAllocations || []).concat([analytic]) }) : row; });
+      var result = S.saveAnalyticalInvoicePaymentAllocationConfiguration({ customerAccountCodes: latest.customerAccountCodes, cashAccountCodes: latest.cashAccountCodes, rows: updatedRows });
+      if (!result.ok) { $('#invoice-analytic-errors', form).innerHTML = '<div class="alert warning"><ul>' + result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>'; return; }
+      toast('Imputation analytique explicite enregistrée ; les écritures sources restent inchangées.', 'success'); closeModal(true); render();
+    });
+    $$('#invoice-analytic-classification-list [data-invoice-analytic-remove]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        if (isPhoneViewport() || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalInvoicePayments.manage', accountingAccessContext(S.currentDossier()))) {
+          toast('Modification refusée : le droit d’affectation analytique est requis pour ce dossier.', 'warning');
+          return;
+        }
+        if (!window.confirm('Retirer cette imputation analytique du lien ? Aucune écriture source ne sera modifiée.')) return;
+        var index = Number(button.getAttribute('data-invoice-analytic-remove'));
+        var latest = S.analyticalInvoicePaymentAllocationConfiguration();
+        var updatedRows = latest.rows.map(function (row) { return row.id === allocationId ? Object.assign({}, row, { analyticalAllocations: row.analyticalAllocations.filter(function (_item, itemIndex) { return itemIndex !== index; }) }) : row; });
+        var result = S.saveAnalyticalInvoicePaymentAllocationConfiguration({ customerAccountCodes: latest.customerAccountCodes, cashAccountCodes: latest.cashAccountCodes, rows: updatedRows });
+        if (!result.ok) { toast((result.errors || ['Imputation non modifiée.']).join(' '), 'error'); return; }
+        closeModal(true); render(); openAnalyticalInvoicePaymentClassifications(allocationId);
+      });
+    });
+  }
+
+  function bindAnalyticalInvoicePaymentAllocation() {
+    var workspace = $('.invoice-payment-allocation-workspace');
+    if (!workspace) return;
+    var mappingForm = $('#invoice-payment-mapping-form', workspace);
+    mappingForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (isPhoneViewport() || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalInvoicePayments.manage', accountingAccessContext(S.currentDossier()))) return;
+      var current = S.analyticalInvoicePaymentAllocationConfiguration();
+      function parseCodes(value) { return String(value || '').split(/[,;\s]+/).map(function (code) { return code.trim(); }).filter(Boolean); }
+      var result = S.saveAnalyticalInvoicePaymentAllocationConfiguration({ customerAccountCodes: parseCodes($('#invoice-payment-customer-codes', mappingForm).value), cashAccountCodes: parseCodes($('#invoice-payment-cash-codes', mappingForm).value), rows: current.rows });
+      if (!result.ok) { toast((result.errors || ['Paramétrage refusé.']).join(' '), 'error'); return; }
+      toast('Comptes exacts enregistrés pour ce dossier ; aucune écriture n’a été modifiée.', 'success'); render();
+    });
+    var filterForm = $('#invoice-payment-filters', workspace);
+    filterForm.addEventListener('submit', function (event) { event.preventDefault(); var data = new FormData(filterForm); ui.analyticalInvoicePaymentAllocation = Object.assign({}, ui.analyticalInvoicePaymentAllocation, { q: String(data.get('q') || ''), status: String(data.get('status') || 'all') }); render(); });
+    $('[data-invoice-payment-clear]', workspace).addEventListener('click', function () { ui.analyticalInvoicePaymentAllocation = { dossierId: S.currentDossier().id, q: '', status: 'all' }; render(); });
+    workspace.addEventListener('click', function (event) {
+      var add = event.target.closest && event.target.closest('[data-invoice-payment-add]');
+      if (add) { openAnalyticalInvoicePaymentModal(); return; }
+      var analytic = event.target.closest && event.target.closest('[data-invoice-payment-analytic]');
+      if (analytic) { openAnalyticalInvoicePaymentClassifications(analytic.getAttribute('data-invoice-payment-analytic')); return; }
+      var toggle = event.target.closest && event.target.closest('[data-invoice-payment-toggle]');
+      if (!toggle || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalInvoicePayments.manage', accountingAccessContext(S.currentDossier()))) return;
+      var id = toggle.getAttribute('data-invoice-payment-toggle');
+      var current = S.analyticalInvoicePaymentAllocationConfiguration();
+      var record = current.rows.find(function (row) { return row.id === id; });
+      if (!record) return;
+      var cancelled = record.status === 'active';
+      if (!window.confirm(cancelled ? 'Annuler uniquement ce lien de rapprochement ? Les pièces restent comptabilisées.' : 'Réactiver ce lien ? Vérifiez de nouveau la facture et le règlement.')) return;
+      var result = S.saveAnalyticalInvoicePaymentAllocationConfiguration({ customerAccountCodes: current.customerAccountCodes, cashAccountCodes: current.cashAccountCodes, rows: current.rows.map(function (row) { return row.id === id ? Object.assign({}, row, { status: cancelled ? 'cancelled' : 'active' }) : row; }) });
+      if (!result.ok) { toast((result.errors || ['Modification impossible.']).join(' '), 'error'); return; }
+      toast(cancelled ? 'Lien annulé ; les écritures sources restent inchangées.' : 'Lien réactivé après validation des soldes sources.', 'success'); render();
+    });
+  }
+
   function viewAnalyticalMovements() {
     var dossier = S.currentDossier();
     var filter = ui.analyticalMovements;
@@ -29262,6 +29483,8 @@
       exchangeFeature = viewPointage();
     } else if (group.id === 'saisie' && tab.id === 'scheduled-payments') {
       exchangeFeature = viewAnalyticalPaymentSchedule();
+    } else if (group.id === 'saisie' && tab.id === 'invoice-payment-allocation') {
+      exchangeFeature = viewAnalyticalInvoicePaymentAllocation();
     } else if (isAccountMovementsSubmenu && selectedChild && selectedChild.id === 'general-movements') {
       exchangeFeature = viewGeneralAccountMovements();
     } else if (isAccountMovementsSubmenu && selectedChild && selectedChild.id === 'third-party-movements') {
@@ -30773,6 +30996,7 @@
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'live-cash') bindAccountingCashOperations();
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'reconciliation') bindPointageView();
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'scheduled-payments') bindAnalyticalPaymentSchedule();
+      if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'invoice-payment-allocation') bindAnalyticalInvoicePaymentAllocation();
       return;
     }
 

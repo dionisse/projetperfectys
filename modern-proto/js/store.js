@@ -1294,6 +1294,65 @@
     return { rows: rows, updatedAt: String(source.updatedAt || '').slice(0, 40) };
   }
 
+  function defaultAnalyticalInvoicePaymentAllocationConfiguration() {
+    return { customerAccountCodes: [], cashAccountCodes: [], rows: [], updatedAt: '' };
+  }
+
+  function normalizeAnalyticalInvoicePaymentAllocationConfiguration(value) {
+    var source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    function codes(input) {
+      var values = Array.isArray(input) ? input : [];
+      var seen = Object.create(null);
+      return values.map(function (code) { return String(code || '').trim(); }).filter(function (code) {
+        if (!/^\d{1,30}$/.test(code) || seen[code]) return false;
+        seen[code] = true;
+        return true;
+      }).slice(0, 200);
+    }
+    var seen = Object.create(null);
+    var rows = (Array.isArray(source.rows) ? source.rows : []).slice(0, 5000).map(function (record) {
+      if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
+      var id = String(record.id || '').trim().slice(0, 100);
+      if (!id || seen[id]) return null;
+      seen[id] = true;
+      var amount = Number(record.amount);
+      var analyticalAllocations = (Array.isArray(record.analyticalAllocations) ? record.analyticalAllocations : []).slice(0, 500).map(function (item) {
+        item = item && typeof item === 'object' && !Array.isArray(item) ? item : {};
+        return {
+          natureId: String(item.natureId || '').trim().slice(0, 80),
+          natureLabel: String(item.natureLabel || '').trim().slice(0, 120),
+          valueId: String(item.valueId || '').trim().slice(0, 160),
+          valueLabel: String(item.valueLabel || '').trim().replace(/\s+/g, ' ').slice(0, 160),
+          centerCode: String(item.centerCode || '').trim().slice(0, 32),
+          centerName: String(item.centerName || '').trim().replace(/\s+/g, ' ').slice(0, 150),
+          amount: Number.isFinite(Number(item.amount)) ? Number(item.amount) : 0
+        };
+      });
+      return {
+        id: id,
+        invoiceEntryId: String(record.invoiceEntryId || '').trim().slice(0, 100),
+        receiptEntryId: String(record.receiptEntryId || '').trim().slice(0, 100),
+        invoiceReference: String(record.invoiceReference || '').trim().slice(0, 120),
+        receiptReference: String(record.receiptReference || '').trim().slice(0, 120),
+        reference: String(record.reference || '').trim().replace(/\s+/g, ' ').slice(0, 120),
+        invoiceDate: String(record.invoiceDate || '').trim().slice(0, 10),
+        receiptDate: String(record.receiptDate || '').trim().slice(0, 10),
+        amount: Number.isFinite(amount) ? amount : 0,
+        analyticalAllocations: analyticalAllocations,
+        identityConfirmed: record.identityConfirmed === true,
+        status: record.status === 'cancelled' ? 'cancelled' : (record.status === 'active' || !record.status ? 'active' : 'invalid'),
+        createdAt: String(record.createdAt || '').slice(0, 40),
+        updatedAt: String(record.updatedAt || '').slice(0, 40)
+      };
+    }).filter(Boolean);
+    return {
+      customerAccountCodes: codes(source.customerAccountCodes),
+      cashAccountCodes: codes(source.cashAccountCodes),
+      rows: rows,
+      updatedAt: String(source.updatedAt || '').slice(0, 40)
+    };
+  }
+
   function normalizeAnalyticalDimensionValuesConfiguration(value) {
     value = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
     var seen = Object.create(null);
@@ -1721,6 +1780,7 @@
       analyticalAccountRulesConfiguration: defaultAnalyticalAccountRulesConfiguration(),
       analyticalDimensionValuesConfiguration: defaultAnalyticalDimensionValuesConfiguration(),
       analyticalPaymentScheduleConfiguration: defaultAnalyticalPaymentScheduleConfiguration(),
+      analyticalInvoicePaymentAllocationConfiguration: defaultAnalyticalInvoicePaymentAllocationConfiguration(),
       generalAccountNaturesConfiguration: defaultGeneralAccountNaturesConfiguration(),
       fixedAssetAccountsConfiguration: defaultFixedAssetAccountsConfiguration(),
       orderAccountsConfiguration: defaultOrderAccountsConfiguration(),
@@ -1797,6 +1857,7 @@
       analyticalAccountRulesConfiguration: normalizeAnalyticalAccountRulesConfiguration(record && record.analyticalAccountRulesConfiguration),
       analyticalDimensionValuesConfiguration: normalizeAnalyticalDimensionValuesConfiguration(record && record.analyticalDimensionValuesConfiguration),
       analyticalPaymentScheduleConfiguration: normalizeAnalyticalPaymentScheduleConfiguration(record && record.analyticalPaymentScheduleConfiguration),
+      analyticalInvoicePaymentAllocationConfiguration: normalizeAnalyticalInvoicePaymentAllocationConfiguration(record && record.analyticalInvoicePaymentAllocationConfiguration),
       fixedAssetAccountsConfiguration: normalizeFixedAssetAccountsConfiguration(record && record.fixedAssetAccountsConfiguration),
       orderAccountsConfiguration: normalizeOrderAccountsConfiguration(record && record.orderAccountsConfiguration),
       orderNaturesConfiguration: normalizeOrderNaturesConfiguration(record && record.orderNaturesConfiguration),
@@ -2800,6 +2861,193 @@
     if (!saveFolderCatalog()) {
       folderCatalog = previousCatalog;
       return { ok: false, errors: ['Impossible d’enregistrer la programmation dans ce navigateur. Les valeurs précédentes sont conservées.'] };
+    }
+    return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
+  }
+
+  function analyticalInvoicePaymentAllocationConfiguration() {
+    var dossier = currentDossier();
+    return clone(dossier && dossier.analyticalInvoicePaymentAllocationConfiguration || defaultAnalyticalInvoicePaymentAllocationConfiguration());
+  }
+
+  function saveAnalyticalInvoicePaymentAllocationConfiguration(input) {
+    ensureFolderCatalog();
+    var dossier = folderById(activeFolderId);
+    if (!dossier) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    input = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    var current = normalizeAnalyticalInvoicePaymentAllocationConfiguration(dossier.analyticalInvoicePaymentAllocationConfiguration);
+    var sourceRows = Array.isArray(input.rows) ? input.rows : [];
+    if (sourceRows.length > 5000) return { ok: false, errors: ['Le registre est limité à 5 000 affectations.'] };
+    var pendingIdPrefix = '__pending-invoice-payment-' + Date.now().toString(36) + '-';
+    var normalizedInput = normalizeAnalyticalInvoicePaymentAllocationConfiguration({
+      customerAccountCodes: input.customerAccountCodes,
+      cashAccountCodes: input.cashAccountCodes,
+      rows: sourceRows.map(function (row, index) {
+        row = row && typeof row === 'object' && !Array.isArray(row) ? row : {};
+        return Object.assign({}, row, { id: String(row.id || '').trim() || pendingIdPrefix + index });
+      })
+    });
+    var errors = [];
+    sourceRows.forEach(function (row, index) {
+      row = row && typeof row === 'object' && !Array.isArray(row) ? row : {};
+      if (String(row.reference || '').trim().length > 120) errors.push('Affectation ' + (index + 1) + ' : la référence ne peut pas dépasser 120 caractères.');
+      if (Array.isArray(row.analyticalAllocations) && row.analyticalAllocations.length > 500) errors.push('Affectation ' + (index + 1) + ' : 500 imputations analytiques maximum.');
+    });
+    var availableAccounts = accounts();
+    function validAccountCodes(codes, label) {
+      if (codes.length > 200) errors.push(label + ' : 200 comptes maximum.');
+      codes.forEach(function (code) {
+        var account = availableAccounts.find(function (record) { return record && String(record.code) === code; });
+        if (!account || account.active === false || account.postable === false) errors.push(label + ' : le compte exact « ' + code + ' » est absent, inactif ou non imputable dans le plan du dossier.');
+        else if (label === 'Comptes clients' && code.slice(0, 2) !== '41') errors.push(label + ' : le compte exact « ' + code + ' » ne relève pas des comptes clients 41.');
+        else if (label === 'Comptes de trésorerie' && code.charAt(0) !== '5') errors.push(label + ' : le compte exact « ' + code + ' » ne relève pas des comptes de trésorerie 5.');
+      });
+    }
+    validAccountCodes(normalizedInput.customerAccountCodes, 'Comptes clients');
+    validAccountCodes(normalizedInput.cashAccountCodes, 'Comptes de trésorerie');
+    var customerCodes = normalizedInput.customerAccountCodes;
+    var cashCodes = normalizedInput.cashAccountCodes;
+    var currentById = new Map(current.rows.map(function (row) { return [row.id, row]; }));
+    var seen = new Set();
+    var invoiceUsed = Object.create(null);
+    var receiptUsed = Object.create(null);
+    var precisionPlaces = Number(normalizeAccountingConfiguration(dossier.accountingConfiguration, dossier.cycleStart, dossier.cycleEnd).decimalPlaces);
+    if (!Number.isInteger(precisionPlaces) || precisionPlaces < 0 || precisionPlaces > 4) precisionPlaces = 0;
+    var precision = Math.pow(10, precisionPlaces);
+    var natureRows = normalizeAnalyticalNaturesConfiguration(dossier.analyticalNaturesConfiguration).rows.filter(function (nature) { return nature && !nature.group; });
+    var dimensionValues = normalizeAnalyticalDimensionValuesConfiguration(dossier.analyticalDimensionValuesConfiguration).rows;
+    var centers = analyticalCenters();
+    var allEntries = entries();
+    function entryAmount(entry, codes, side) {
+      if (!entry || !Array.isArray(entry.lines)) return 0;
+      return entry.lines.reduce(function (sum, line) {
+        if (!line || codes.indexOf(String(line.account || '')) === -1) return sum;
+        return sum + (Number(line[side]) || 0);
+      }, 0);
+    }
+    function receivableBalance(entry) { return entryAmount(entry, customerCodes, 'debit') - entryAmount(entry, customerCodes, 'credit'); }
+    function receiptBalance(entry) { return entryAmount(entry, customerCodes, 'credit') - entryAmount(entry, customerCodes, 'debit'); }
+    var now = new Date().toISOString();
+    var rows = normalizedInput.rows.map(function (record, index) {
+      var pendingNewRow = record.id.indexOf(pendingIdPrefix) === 0;
+      var previous = record.id && !pendingNewRow ? currentById.get(record.id) || null : null;
+      var id = pendingNewRow ? '' : record.id;
+      if (!id) {
+        do { id = 'analytical-invoice-payment-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); }
+        while (seen.has(id) || currentById.has(id));
+      }
+      if (seen.has(id)) errors.push('Affectation ' + (index + 1) + ' : identifiant répété.');
+      seen.add(id);
+      var status = record.status === 'cancelled' ? 'cancelled' : (record.status === 'active' || !record.status ? 'active' : 'invalid');
+      if (status === 'invalid') errors.push('Affectation ' + (index + 1) + ' : état invalide.');
+      var invoice = allEntries.find(function (entry) { return entry && String(entry.id) === record.invoiceEntryId; }) || null;
+      var receipt = allEntries.find(function (entry) { return entry && String(entry.id) === record.receiptEntryId; }) || null;
+      var amount = Number(record.amount);
+      var label = 'Affectation ' + (index + 1) + ' : ';
+      if (!record.invoiceEntryId || !record.receiptEntryId || record.invoiceEntryId === record.receiptEntryId) errors.push(label + 'choisissez deux pièces comptables distinctes.');
+      if (!Number.isFinite(amount) || amount <= 0 || amount > 1000000000000000) errors.push(label + 'le montant affecté doit être strictement positif.');
+      else if (Math.abs(amount * precision - Math.round(amount * precision)) > 1e-7) errors.push(label + 'le montant dépasse la précision configurée (' + precisionPlaces + ' décimale(s)).');
+      if (status === 'active') {
+        if (record.identityConfirmed !== true) errors.push(label + 'confirmez avoir vérifié sur justificatif que facture et règlement concernent le même client ; les comptes collectifs ne portent pas cette identité.');
+        if (!customerCodes.length || !cashCodes.length) errors.push(label + 'configurez d’abord les comptes clients exacts et les comptes de trésorerie exacts.');
+        if (!invoice || invoice.status !== 'posted') errors.push(label + 'la pièce facture doit être validée et comptabilisée dans ce dossier.');
+        if (!receipt || receipt.status !== 'posted') errors.push(label + 'la pièce de règlement doit être validée et comptabilisée dans ce dossier.');
+        if (invoice && receipt && invoice.id === receipt.id) errors.push(label + 'la facture et le règlement doivent être deux pièces distinctes.');
+        if (invoice && receivableBalance(invoice) <= 0) errors.push(label + 'la facture ne présente pas de créance débitrice sur les comptes clients configurés.');
+        if (receipt && (receiptBalance(receipt) <= 0 || entryAmount(receipt, cashCodes, 'debit') <= 0)) errors.push(label + 'le règlement ne présente pas à la fois un crédit client et un débit de trésorerie sur les comptes configurés.');
+        if (invoice && Number.isFinite(amount) && amount > 0) {
+          invoiceUsed[invoice.id] = (invoiceUsed[invoice.id] || 0) + amount;
+          if (invoiceUsed[invoice.id] > receivableBalance(invoice) + 1e-7) errors.push(label + 'le cumul des règlements affectés dépasse la créance de la facture.');
+        }
+        if (receipt && Number.isFinite(amount) && amount > 0) {
+          receiptUsed[receipt.id] = (receiptUsed[receipt.id] || 0) + amount;
+          if (receiptUsed[receipt.id] > receiptBalance(receipt) + 1e-7) errors.push(label + 'le cumul affecté dépasse le règlement client comptabilisé.');
+        }
+      }
+      var allocationSeen = Object.create(null);
+      var natureTotals = Object.create(null);
+      var analyticRows = (Array.isArray(record.analyticalAllocations) ? record.analyticalAllocations : []).map(function (analytic, analyticIndex) {
+        var natureId = String(analytic.natureId || '').trim();
+        var nature = natureRows.find(function (item) { return item.id === natureId; }) || null;
+        var valueId = String(analytic.valueId || '').trim();
+        var valueLabel = String(analytic.valueLabel || '').trim().replace(/\s+/g, ' ');
+        var analyticAmount = Number(analytic.amount);
+        var analyticLabel = label + 'imputation analytique ' + (analyticIndex + 1) + ' : ';
+        if (!nature) errors.push(analyticLabel + 'choisissez une nature analytique existante du dossier.');
+        if (!Number.isFinite(analyticAmount) || analyticAmount <= 0) errors.push(analyticLabel + 'le montant doit être positif.');
+        else if (Math.abs(analyticAmount * precision - Math.round(analyticAmount * precision)) > 1e-7) errors.push(analyticLabel + 'le montant dépasse la précision configurée.');
+        var centerCode = '';
+        var centerName = '';
+        if (natureId === 'responsibility-centers') {
+          var center = centers.find(function (item) { return item && item.id === valueId; }) || null;
+          if (center) {
+            if (previous && previous.analyticalAllocations.some(function (item) { return item.natureId === natureId && item.valueId === valueId && item.valueLabel === valueLabel; })) {
+              centerCode = analytic.centerCode || center.code || '';
+              centerName = analytic.centerName || center.name || '';
+            } else {
+              centerCode = String(center.code || '');
+              centerName = String(center.name || '');
+              valueLabel = valueLabel || centerCode + ' · ' + centerName;
+            }
+          } else if (!(previous && previous.analyticalAllocations.some(function (item) { return item.natureId === natureId && item.valueId === valueId && item.valueLabel === valueLabel; }))) {
+            errors.push(analyticLabel + 'le centre est absent du référentiel de ce dossier.');
+          } else {
+            var previousCenter = previous.analyticalAllocations.find(function (item) { return item.natureId === natureId && item.valueId === valueId && item.valueLabel === valueLabel; });
+            centerCode = previousCenter.centerCode || '';
+            centerName = previousCenter.centerName || '';
+          }
+        } else if (nature && valueLabel) {
+          var dimension = dimensionValues.find(function (item) { return item.natureId === natureId && item.label === valueLabel; }) || null;
+          var unchanged = previous && previous.analyticalAllocations.some(function (item) { return item.natureId === natureId && item.valueLabel === valueLabel; });
+          if (!dimension || dimension.active === false && !unchanged) errors.push(analyticLabel + 'la valeur est absente ou inactive dans le référentiel analytique du dossier.');
+          else valueLabel = dimension.label;
+        } else if (natureId) errors.push(analyticLabel + 'choisissez une valeur ou un centre analytique.');
+        var key = natureId + '|' + (natureId === 'responsibility-centers' ? valueId : valueLabel);
+        if (allocationSeen[key]) errors.push(analyticLabel + 'une même valeur ne peut pas être répétée pour cette nature.');
+        allocationSeen[key] = true;
+        if (Number.isFinite(analyticAmount) && analyticAmount > 0) {
+          natureTotals[natureId] = (natureTotals[natureId] || 0) + analyticAmount;
+          if (Number.isFinite(amount) && natureTotals[natureId] > amount + 1e-7) errors.push(label + 'la ventilation de la nature « ' + (nature && (nature.individualName || nature.genericName) || natureId) + ' » dépasse le montant de règlement affecté.');
+        }
+        return {
+          natureId: nature ? nature.id : natureId,
+          natureLabel: nature ? (previous && previous.analyticalAllocations.find(function (item) { return item.natureId === natureId; }) || {}).natureLabel || nature.individualName || nature.genericName : String(analytic.natureLabel || '').slice(0, 120),
+          valueId: valueId.slice(0, 160), valueLabel: valueLabel.slice(0, 160),
+          centerCode: String(centerCode || '').slice(0, 32), centerName: String(centerName || '').slice(0, 150),
+          amount: Number.isFinite(analyticAmount) ? analyticAmount : 0
+        };
+      });
+      return {
+        id: id,
+        invoiceEntryId: record.invoiceEntryId,
+        receiptEntryId: record.receiptEntryId,
+        invoiceReference: invoice ? String(invoice.reference || '') : String(previous && previous.invoiceReference || ''),
+        receiptReference: receipt ? String(receipt.reference || '') : String(previous && previous.receiptReference || ''),
+        reference: String(record.reference || '').trim().replace(/\s+/g, ' ').slice(0, 120),
+        invoiceDate: invoice ? String(invoice.date || '') : String(previous && previous.invoiceDate || ''),
+        receiptDate: receipt ? String(receipt.date || '') : String(previous && previous.receiptDate || ''),
+        amount: Number.isFinite(amount) ? amount : 0,
+        analyticalAllocations: analyticRows,
+        identityConfirmed: record.identityConfirmed === true,
+        status: status === 'cancelled' ? 'cancelled' : 'active',
+        createdAt: previous ? previous.createdAt : now,
+        updatedAt: now
+      };
+    });
+    current.rows.forEach(function (row) {
+      if (!seen.has(row.id)) errors.push('L’affectation « ' + (row.invoiceReference || row.id) + ' » ne peut pas être supprimée ; annulez-la pour conserver l’historique.');
+    });
+    if (errors.length) return { ok: false, errors: errors };
+    var previousCatalog = clone(folderCatalog);
+    var dossierIndex = folderCatalog.findIndex(function (record) { return record.id === dossier.id; });
+    if (dossierIndex < 0) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    var configuration = normalizeAnalyticalInvoicePaymentAllocationConfiguration({
+      customerAccountCodes: customerCodes, cashAccountCodes: cashCodes, rows: rows, updatedAt: now
+    });
+    folderCatalog[dossierIndex] = Object.assign({}, dossier, { analyticalInvoicePaymentAllocationConfiguration: configuration });
+    if (!saveFolderCatalog()) {
+      folderCatalog = previousCatalog;
+      return { ok: false, errors: ['Impossible d’enregistrer les affectations dans le stockage navigateur de ce dossier. Les données précédentes sont conservées.'] };
     }
     return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
   }
@@ -8908,6 +9156,8 @@
     saveAnalyticalDimensionValues: saveAnalyticalDimensionValues,
     analyticalPaymentScheduleConfiguration: analyticalPaymentScheduleConfiguration,
     saveAnalyticalPaymentScheduleConfiguration: saveAnalyticalPaymentScheduleConfiguration,
+    analyticalInvoicePaymentAllocationConfiguration: analyticalInvoicePaymentAllocationConfiguration,
+    saveAnalyticalInvoicePaymentAllocationConfiguration: saveAnalyticalInvoicePaymentAllocationConfiguration,
     saveAnalyticalSectionsConfiguration: saveAnalyticalSectionsConfiguration,
     analyticalAllocationKeysConfiguration: analyticalAllocationKeysConfiguration,
     analyticalNaturesConfiguration: analyticalNaturesConfiguration,

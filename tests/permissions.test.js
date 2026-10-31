@@ -65,6 +65,21 @@ test('les programmations de règlements analytiques exigent un droit explicite p
   assert.ok(Permissions.actionsForModule('accounting').some(action => action.id === 'analyticalPayments.manage'));
 });
 
+test('les affectations analytiques facture–règlement exigent un droit explicite par dossier', () => {
+  const dossier = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  const employee = {
+    role: 'employee', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view'] }] }
+  };
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'analyticalInvoicePayments.manage', dossier), false);
+  employee.grants.accounting[0].actions.push('analyticalInvoicePayments.manage');
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'analyticalInvoicePayments.manage', dossier), true);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'analyticalInvoicePayments.manage', {
+    organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-2'
+  }), false);
+  assert.ok(Permissions.actionsForModule('accounting').some(action => action.id === 'analyticalInvoicePayments.manage'));
+});
+
 test('les règles analytiques par compte exigent un droit explicite dans le dossier concerné', () => {
   const dossier = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
   const employee = {
