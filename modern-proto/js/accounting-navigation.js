@@ -144,7 +144,7 @@
             { id: 'analytic-consistency-control', label: 'Contrôle de cohérence des ventilations', section: 'analyticControls', status: 'active', reason: 'Vérifie séparément chaque nature des écritures validées : règles par compte, références, complétude, reliquats et dépassements. Lecture seule, sans correction automatique.' }
           ]
         },
-        { id: 'supplier-orders', label: 'Commandes aux fournisseurs (analytique)', status: 'inactive', reason: 'Le registre est disponible dans Saisie ; une édition distincte des commandes n’est pas encore construite ici.' },
+        { id: 'supplier-orders', label: 'Commandes aux fournisseurs (analytique)', status: 'active', reason: 'État en lecture seule des commandes enregistrées dans le dossier, avec consultation des montants par devise et des imputations analytiques explicitement saisies. Les commandes ne constituent ni facture ni dépense comptabilisée ; aucun mouvement de compte, conversion ou lien budgétaire n’est généré.' },
         {
           id: 'budget', label: 'Budget', status: 'active', reason: 'Les dix états illustrés disposent de leur sélection, colonnes, mise en page, aperçu et exports. Le registre de saisie se trouve sous Saisie → Budgets prévisionnels ; les éditions héritées qui ciblent les rubriques analytiques 93 à 99 restent consultatives, sans rapprochement simulé et sans montant simulé.',
           children: [

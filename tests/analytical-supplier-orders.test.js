@@ -71,12 +71,25 @@ assert.equal(S.analyticalSupplierOrdersConfiguration().rows[0].status, 'cancelle
 
 const app = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'app.js'), 'utf8');
 const navigation = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'accounting-navigation.js'), 'utf8');
+const Navigation = require('../modern-proto/js/accounting-navigation.js');
 const css = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'css', 'modern.css'), 'utf8');
 assert.match(navigation, /id: 'supplier-orders',[^\n]*status: 'active'/);
 assert.match(app, /function viewAnalyticalSupplierOrders\(\)/);
 assert.match(app, /function openAnalyticalSupplierOrderLine\(/);
 assert.match(app, /exchangeFeature = viewAnalyticalSupplierOrders\(\)/);
 assert.match(app, /bindAnalyticalSupplierOrders\(\)/);
+assert.equal(Navigation.getTab('editions', 'supplier-orders').status, 'active', 'le sous-menu est disponible dans Éditions');
+assert.match(app, /function viewAnalyticalSupplierOrdersEdition\(\)/);
+assert.match(app, /exchangeFeature = viewAnalyticalSupplierOrdersEdition\(\)/);
+assert.match(app, /function openAnalyticalSupplierOrderEditionDetails\(/);
+assert.match(app, /function bindAnalyticalSupplierOrdersEdition\(\)/);
+assert.match(app, /Édition en lecture seule des commandes enregistrées/);
+assert.match(app, /aucun lien budgétaire, conversion ou écriture n’est créé/i);
+assert.match(app, /Imputations analytiques enregistrées · par nature/);
+assert.match(app, /Aperçu plein écran \/ imprimer/);
+const editionView = app.slice(app.indexOf('function viewAnalyticalSupplierOrdersEdition()'), app.indexOf('function openAnalyticalSupplierOrderEditionDetails('));
+assert.doesNotMatch(editionView, /S\.saveAnalyticalSupplierOrdersConfiguration|S\.entries\(\)\.push/);
+assert.match(app, /menuParams\.g === 'editions' && menuParams\.t === 'supplier-orders'\) bindAnalyticalSupplierOrdersEdition\(\)/);
 assert.match(app, /aucun ordre n’est prérempli/i);
 assert.match(css, /\.supplier-order-summary/);
 console.log('Commandes fournisseurs analytiques : brouillons, émission confirmée, annulation conservée et axes analytiques distincts — OK');

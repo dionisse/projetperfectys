@@ -3905,3 +3905,13 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .budget-realization-table th { position: sticky; top: 0; z-index: 1; white-space: nowrap; }
 .budget-realization-table .number-cell { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .budget-realization-special-row { background: #fff8e8; color: #6e4f19; }
+.analytical-supplier-orders-edition { border-top: 5px solid #087f9f; }
+.supplier-order-edition-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .7rem; margin: .8rem 0; }
+.supplier-order-edition-toolbar > span { color: #526a72; font-size: .82rem; }
+.supplier-order-edition-filters { display: grid; grid-template-columns: minmax(180px, 2fr) minmax(150px, 1fr) auto auto; align-items: end; gap: .65rem; margin: 1rem 0; padding: .75rem; border: 1px solid #d5e3e5; border-radius: 10px; background: #f8fbfc; }
+.supplier-order-edition-table-wrap { overflow-x: auto; }
+.supplier-order-edition-table { min-width: 1320px; }
+.supplier-order-edition-table th { white-space: nowrap; }
+.supplier-order-edition-table .number-cell { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.supplier-order-edition-print-context { margin: .5rem 0 1rem; padding: .8rem; border-left: 4px solid #087f9f; background: #f2fafc; }
+@media (max-width: 680px) { .supplier-order-edition-filters { grid-template-columns: minmax(0, 1fr); } .supplier-order-edition-toolbar { align-items: stretch; flex-direction: column; } }
