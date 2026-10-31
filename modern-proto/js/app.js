@@ -38,6 +38,7 @@
   var CurrencyBalanceReport = window.PerfectoCurrencyBalanceReport;
   var CurrencySupplementaryReports = window.PerfectoCurrencySupplementaryReports;
   var BudgetReports = window.PerfectoBudgetReports;
+  var BudgetRealizations = window.PerfectoBudgetRealizations;
   var MatchingEditionReports = window.PerfectoMatchingEditionReports;
   var PointingEditionReports = window.PerfectoPointingEditionReports;
   var AccountSituationReport = window.PerfectoAccountSituationReport;
@@ -25822,6 +25823,7 @@
       var typeLabel = budget.type === 'C' ? 'Charges' : budget.type === 'I' ? 'Investissements' : budget.type === 'P' ? 'Produits' : 'Personnalisé';
       var classification = budget.classification === 'C' ? 'Compte général' : 'Axe ' + budget.classification.slice(1);
       var buttons = '<button class="btn btn-ghost btn-sm" type="button" data-budget-lines="' + esc(budget.id) + '">Lignes (' + budget.lines.length + ')</button>' +
+        '<button class="btn btn-ghost btn-sm" type="button" data-budget-realizations="' + esc(budget.id) + '">Calculer les réalisations</button>' +
         '<button class="btn btn-ghost btn-sm" type="button" data-budget-edit="' + esc(budget.id) + '"' + (!editable ? ' disabled' : '') + '>Modifier</button>' +
         '<button class="btn btn-ghost btn-sm" type="button" data-budget-import="' + esc(budget.id) + '"' + (!editable ? ' disabled' : '') + '>Importer XLSX</button>' +
         '<button class="btn btn-primary btn-sm" type="button" data-budget-next="' + esc(budget.id) + '"' + (!editable ? ' disabled' : '') + '>Budget suivant</button>' +
@@ -25959,6 +25961,59 @@
       if (!result.ok) { $('#budget-lines-errors', form).innerHTML = '<div class="alert warning"><ul>' + result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>'; return; }
       toast('Lignes budgétaires enregistrées sans écriture comptable.', 'success'); closeModal(true); render();
     });
+  }
+
+  function budgetRealizationModeLabel(mode) {
+    return mode === 'debit' ? 'Débit' : mode === 'credit' ? 'Crédit' : mode === 'debit-credit' ? 'Débit − Crédit' : 'Crédit − Débit';
+  }
+
+  function budgetRealizationPeriodLabel(key) {
+    if (key === 'EXERCICE') return 'Exercice';
+    if (/^T\d+$/.test(key)) return 'Trimestre ' + key.slice(1);
+    if (/^\d{4}-\d{2}$/.test(key)) {
+      var label = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(key + '-01T00:00:00Z'));
+      return label.charAt(0).toLocaleUpperCase('fr') + label.slice(1);
+    }
+    return key;
+  }
+
+  function openBudgetRealizationsModal(budgetId) {
+    var budget = S.budgetRegisterConfiguration().rows.find(function (row) { return row.id === budgetId; });
+    if (!budget) return;
+    if (!BudgetRealizations || typeof BudgetRealizations.calculate !== 'function') {
+      toast('Le calcul des réalisations budgétaires n’est pas chargé.', 'error');
+      return;
+    }
+    var report = BudgetRealizations.calculate({ budget: budget, entries: S.entries() });
+    if (!report.ok) {
+      openModal('Calcul des réalisations', esc(budget.code), '<div class="alert warning"><ul>' + report.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>', '<button type="button" class="btn btn-ghost" data-action="close-modal">Fermer</button>', true);
+      return;
+    }
+    var decimals = Number(S.accountingConfiguration().decimalPlaces) || 0;
+    var formatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    var classificationLabel = budget.classification === 'C'
+      ? 'Compte général exact'
+      : 'Axe ' + budget.classification.slice(1) + ' · ' + budgetNatureLabel(budgetAxesForCurrentDossier().find(function (item) { return item.id === report.axisNatureId; }));
+    var rows = [];
+    report.rows.forEach(function (group) {
+      group.periods.forEach(function (period) {
+        var budgetText = period.budgetAmount == null
+          ? (period.budgetSubtotal == null ? '—' : 'Sous-total saisi : ' + formatter.format(period.budgetSubtotal) + ' · incomplet')
+          : formatter.format(period.budgetAmount);
+        var realizationText = period.realizationAmount == null ? '—' : formatter.format(period.realizationAmount);
+        var varianceText = period.variance == null ? '—' : formatter.format(period.variance);
+        var statusLabel = group.status === 'unbudgeted-realization' ? 'Réalisation sans ligne budgétaire' : group.status === 'unclassified-realization' ? 'Réalisation non ventilée' : group.status === 'unclassified-budget' ? 'Budget à ventiler' : '';
+        rows.push('<tr class="' + (statusLabel ? 'budget-realization-special-row' : '') + '"><td><strong>' + esc(group.label) + '</strong>' + (statusLabel ? '<br><small>' + esc(statusLabel) + '</small>' : '') + '</td><td>' + esc(budgetRealizationPeriodLabel(period.key)) + '</td><td class="number-cell">' + esc(budgetText) + '</td><td class="number-cell">' + esc(realizationText) + '</td><td class="number-cell">' + esc(varianceText) + '</td><td>' + period.sourceLineCount + '</td></tr>');
+      });
+    });
+    var sourceNotice = report.noSourceData
+      ? '<div class="alert warning">Aucune ligne d’écriture validée ne correspond aux comptes budgétés dans la période. Les réalisations restent « — » et ne sont pas présentées comme des zéros.</div>'
+      : '<div class="alert info">' + report.sourceEntryCount + ' écriture(s) validée(s) dans la période · ' + report.matchedSourceLineCount + ' ligne(s) comptable(s) sur les comptes du budget. Calcul consultatif, sans modification des écritures.</div>';
+    var body = '<div class="budget-realization-context"><strong>Base de réalisation :</strong> ' + esc(budgetRealizationModeLabel(budget.realizationMode)) + '<br><strong>Classement :</strong> ' + esc(classificationLabel) + '<br><strong>Source :</strong> écritures validées du dossier, dates comprises entre ' + esc(budget.cycleStart) + ' et ' + esc(budget.cycleEnd) + '.</div>' + sourceNotice +
+      '<p>Les comptes sont rapprochés exactement des lignes budgétaires enregistrées. En classement analytique, seule la nature sélectionnée est calculée ; les axes parallèles ne sont jamais additionnés. Les lignes sans imputation analytique, les valeurs sans ligne budgétaire et les budgets incomplets restent signalés séparément.</p>' +
+      (rows.length ? '<div class="table-wrap budget-realization-table-wrap"><table class="data-table budget-realization-table"><thead><tr><th>Compte / valeur classée</th><th>Période</th><th>Budget</th><th>Réalisation</th><th>Écart budget − réalisation</th><th>Lignes sources</th></tr></thead><tbody>' + rows.join('') + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucune ligne à calculer.</strong> Ajoutez d’abord des lignes au budget.</div>') +
+      '<p class="small muted">Le calcul est recalculé à la demande depuis les écritures validées; aucun résultat de réalisation n’est enregistré comme écriture ou valeur budgétaire.</p>';
+    openModal('Calcul des réalisations', esc(budget.code) + ' · ' + esc(budget.label), body, '<button type="button" class="btn btn-ghost" data-action="close-modal">Fermer</button>', true);
   }
 
   function shiftedBudgetDate(date, years) {
@@ -26102,6 +26157,7 @@
     workspace.addEventListener('click', function (event) {
       if (event.target.closest('[data-budget-add]')) { openBudgetSetupModal(''); return; }
       var lines = event.target.closest('[data-budget-lines]'); if (lines) { openBudgetLinesModal(lines.getAttribute('data-budget-lines')); return; }
+      var realizations = event.target.closest('[data-budget-realizations]'); if (realizations) { openBudgetRealizationsModal(realizations.getAttribute('data-budget-realizations')); return; }
       var edit = event.target.closest('[data-budget-edit]'); if (edit) { openBudgetSetupModal(edit.getAttribute('data-budget-edit')); return; }
       var next = event.target.closest('[data-budget-next]'); if (next) { openBudgetFollowingModal(next.getAttribute('data-budget-next')); return; }
       var importer = event.target.closest('[data-budget-import]'); if (importer) { openBudgetImportModal(importer.getAttribute('data-budget-import')); return; }
