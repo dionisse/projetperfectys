@@ -3733,3 +3733,26 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .journal-lines-analytic-unmatched strong { color: #702a24; }
 .analytical-movement-row-unmatched td { background: #fff1ef; color: #702a24; }
 .analytical-movement-unmatched-note { border-left: 5px solid #b64c3f; }
+.other-analyses-workspace-grid { display: grid; gap: 1rem; margin: 1rem 0; }
+.other-analysis-card {
+  padding: 1rem;
+  border: 1px solid #8dc9d8;
+  border-top: 4px solid #087f9f;
+  border-radius: 12px;
+  background: #f5fcfe;
+}
+.other-analysis-card-heading { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: .75rem; }
+.other-analysis-card-heading h3 { margin: .2rem 0; color: #15566a; }
+.other-analysis-card-heading p { margin: .25rem 0; color: #4b6570; }
+.other-analysis-name-status { display: inline-flex; padding: .35rem .65rem; border: 1px solid #8dc9d8; border-radius: 999px; background: #e6f7fb; color: #15566a; font-size: .75rem; font-weight: 750; }
+.other-analysis-name-status.is-pending { border-color: #d3b36a; background: #fff8e6; color: #74551a; }
+.other-analysis-card-summary { display: flex; flex-wrap: wrap; gap: .6rem; margin: .75rem 0; }
+.other-analysis-card-summary span { padding: .4rem .65rem; border: 1px solid #b4d9e2; border-radius: 8px; background: white; color: #355663; }
+.other-analysis-card-actions { margin: .5rem 0; }
+.other-analysis-values-form { display: grid; gap: .5rem; }
+.other-analysis-name-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.other-analyses-integration-note { margin-top: 1rem; }
+@media (max-width: 680px) {
+  .other-analysis-card { padding: .75rem; }
+  .other-analysis-name-grid { grid-template-columns: minmax(0, 1fr); }
+}

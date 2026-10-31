@@ -42,11 +42,11 @@
         { id: 'funding-sources', label: 'Sources de financement (analytique)', status: 'active', reason: 'Référentiel vide par défaut ; les valeurs saisies par l’utilisateur sont proposées en suggestion lors de la ventilation explicite.' },
         { id: 'alternate-accounts', label: 'Comptes alternatifs (analytique)', status: 'active', reason: 'Liste de valeurs descriptives définies par l’utilisateur ; aucune correspondance avec le plan comptable n’est supposée ni appliquée.' },
         {
-          id: 'diverse-analyses', label: 'Analyses diverses', status: 'mixed', reason: 'Référentiels de valeurs par nature, vides par défaut et alimentés par l’utilisateur ; les analyses dont les champs et la finalité restent à confirmer demeurent en revue.',
+          id: 'diverse-analyses', label: 'Analyses diverses', status: 'active', reason: 'Référentiels analytiques par nature, vides par défaut et alimentés par l’utilisateur. Chaque nature conserve ses propres valeurs ; aucune classification ni affectation automatique n’est créée.',
           children: [
             { id: 'vehicle-expenses', label: 'Frais sur véhicules', status: 'active', reason: 'Référentiel de valeurs descriptives défini par l’utilisateur, proposé à la saisie sans calcul de frais ni écriture.' },
             { id: 'mission-beneficiaries', label: 'Bénéficiaires de frais de mission', status: 'active', reason: 'Référentiel de valeurs descriptives défini par l’utilisateur ; aucun remboursement ni calcul de mission n’est créé.' },
-            { id: 'other-analyses', label: 'Autres analyses à définir', status: 'review' },
+            { id: 'other-analyses', label: 'Autres analyses à définir', status: 'active', reason: 'Trois emplacements analytiques génériques (Analyse 3, 4 et 5) peuvent être nommés et alimentés par des valeurs définies par l’utilisateur pour chaque dossier. Ils sont proposés séparément dans les imputations et états analytiques ; aucune classification ni affectation automatique n’est créée.' },
             { id: 'cash-flow-natures', label: 'Natures des flux de trésorerie', status: 'active', reason: 'Référentiel de valeurs descriptives défini par l’utilisateur ; aucune interprétation de flux ni génération d’écriture n’est appliquée.' }
           ]
         },

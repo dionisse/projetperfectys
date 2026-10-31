@@ -171,6 +171,7 @@
     'activity-domains', 'expense-categories', 'funding-sources', 'alternate-accounts',
     'vehicle-expenses', 'mission-beneficiaries', 'analysis-3', 'analysis-4', 'analysis-5', 'cash-flow-natures'
   ];
+  var OTHER_ANALYSIS_NATURE_IDS = ['analysis-3', 'analysis-4', 'analysis-5'];
   var fixedAssetAccountsSelectedId = 'fixed-assets-class-21';
   var fixedAssetAccountsSelectedDossierId = '';
   var fixedAssetAccountsEditDraft = null;
@@ -24946,11 +24947,12 @@
     return [record.code, record.name, record.description].join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase().indexOf(needle) !== -1;
   }
 
-  function analyticalDimensionValueRowHtml(row) {
+  function analyticalDimensionValueRowHtml(row, editable) {
     row = row || {};
-    return '<tr data-analytical-dimension-value><td><input type="text" data-analytical-dimension-label maxlength="120" value="' + esc(row.label || '') + '" placeholder="Valeur définie par l’utilisateur" aria-label="Valeur analytique"></td>' +
-      '<td><label class="analytical-dimension-active"><input type="checkbox" data-analytical-dimension-active' + (row.active === false ? '' : ' checked') + '> Active</label></td>' +
-      '<td><button type="button" class="btn btn-ghost btn-sm" data-analytical-dimension-remove>Retirer</button></td></tr>';
+    var disabled = editable === false ? ' disabled' : '';
+    return '<tr data-analytical-dimension-value><td><input type="text" data-analytical-dimension-label maxlength="120" value="' + esc(row.label || '') + '" placeholder="Valeur définie par l’utilisateur" aria-label="Valeur analytique"' + disabled + '></td>' +
+      '<td><label class="analytical-dimension-active"><input type="checkbox" data-analytical-dimension-active' + (row.active === false ? '' : ' checked') + disabled + '> Active</label></td>' +
+      '<td><button type="button" class="btn btn-ghost btn-sm" data-analytical-dimension-remove' + disabled + '>Retirer</button></td></tr>';
   }
 
   function viewAnalyticalDimensionValues(natureId) {
@@ -24965,7 +24967,7 @@
     var accessNotice = !canConfigure
       ? '<div class="alert warning">Consultation seule : un droit explicite de configuration des valeurs analytiques est nécessaire.</div>'
       : (isPhoneViewport() ? '<div class="alert info">Consultation sur téléphone ; la modification est réservée à un ordinateur ou une tablette.</div>' : '');
-    var body = records.map(analyticalDimensionValueRowHtml).join('') || '<tr class="analytical-dimension-empty"><td colspan="3">Aucune valeur définie pour cette nature. Les référentiels restent vides tant que l’utilisateur n’a pas ajouté ses propres valeurs.</td></tr>';
+    var body = records.map(function (row) { return analyticalDimensionValueRowHtml(row, !readOnly); }).join('') || '<tr class="analytical-dimension-empty"><td colspan="3">Aucune valeur définie pour cette nature. Les référentiels restent vides tant que l’utilisateur n’a pas ajouté ses propres valeurs.</td></tr>';
     var backLink = '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(accountingMenuHash('definitions', 'general-accounts')) + '">← Définitions</a>';
     return '<div class="analytical-dimension-view">' + backLink + accessNotice +
       '<header class="analytical-dimension-heading"><span class="page-kicker">SUIVI ANALYTIQUE · RÉFÉRENTIEL PAR DOSSIER</span><h2>' + esc(nature.genericName || nature.individualName) + '</h2><p>Valeurs définies par l’utilisateur pour les imputations explicites des lignes comptables. Aucun code, compte, montant ou classement prédéfini n’est ajouté.</p></header>' +
@@ -24973,6 +24975,144 @@
         '<div class="table-wrap analytical-dimension-table-wrap"><table class="data-table analytical-dimension-table"><thead><tr><th scope="col">Valeur analytique</th><th scope="col">État</th><th scope="col">Action</th></tr></thead><tbody id="analytical-dimension-values-body">' + body + '</tbody></table></div>' +
         '<div class="analytical-dimension-actions"><button type="button" class="btn btn-ghost" data-analytical-dimension-add' + (readOnly ? ' disabled' : '') + '>＋ Ajouter une valeur</button><button type="submit" class="btn btn-primary"' + (readOnly ? ' disabled' : '') + '>Enregistrer le référentiel</button></div>' +
       '</form><p class="exchange-footnote">Les valeurs actives apparaissent comme suggestions pendant la saisie ; elles ne sont jamais affectées automatiquement. Les libellés déjà employés par une écriture ne peuvent être supprimés ni renommés ; ils peuvent être désactivés pour préserver l’historique.</p></div>';
+  }
+
+  function otherAnalysisNatureNameEditor(natureId) {
+    var configuration = S.analyticalNaturesConfiguration();
+    var nature = (configuration.rows || []).find(function (row) { return row && !row.group && row.id === natureId; });
+    if (!nature || OTHER_ANALYSIS_NATURE_IDS.indexOf(natureId) === -1) return;
+    var dossier = S.currentDossier();
+    var body = '<form id="other-analysis-name-form" novalidate><div id="other-analysis-name-errors" aria-live="assertive"></div>' +
+      '<div class="form-grid other-analysis-name-grid"><div class="field"><label for="other-analysis-generic-name">Nom générique</label><input id="other-analysis-generic-name" maxlength="120" required value="' + esc(nature.genericName) + '"></div>' +
+      '<div class="field"><label for="other-analysis-individual-name">Nom individuel</label><input id="other-analysis-individual-name" maxlength="120" required value="' + esc(nature.individualName) + '"></div></div>' +
+      '<p class="hint">L’emplacement technique « ' + esc(nature.id) + ' » reste stable : renommer l’analyse ne modifie ni les ventilations déjà enregistrées ni les écritures comptables.</p></form>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="submit" class="btn btn-primary" form="other-analysis-name-form">Enregistrer les intitulés</button>';
+    openModal('Définir une analyse diverse', 'Dossier ' + esc(dossier.reference), body, footer, true);
+    var form = $('#other-analysis-name-form');
+    if (!form) return;
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (isPhoneViewport() || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalNatures.configure', accountingAccessContext(S.currentDossier()))) {
+        toast('Modification refusée : le droit de configuration des natures analytiques n’est pas accordé.', 'warning');
+        return;
+      }
+      var genericName = $('#other-analysis-generic-name', form).value.trim();
+      var individualName = $('#other-analysis-individual-name', form).value.trim();
+      var errors = [];
+      if (!genericName) errors.push('Renseignez un nom générique.');
+      if (!individualName) errors.push('Renseignez un nom individuel.');
+      if (errors.length) {
+        $('#other-analysis-name-errors', form).innerHTML = '<div class="alert warning">' + errors.map(esc).join('<br>') + '</div>';
+        return;
+      }
+      var rows = S.analyticalNaturesConfiguration().rows.map(function (row) {
+        return row.id === natureId ? Object.assign({}, row, { genericName: genericName, individualName: individualName }) : row;
+      });
+      var saved = S.saveAnalyticalNaturesConfiguration({ rows: rows });
+      if (!saved.ok) {
+        $('#other-analysis-name-errors', form).innerHTML = '<div class="alert warning">' + (saved.errors || ['Enregistrement impossible.']).map(esc).join('<br>') + '</div>';
+        return;
+      }
+      toast('Intitulés enregistrés pour ce dossier. Aucune imputation ni écriture n’a été créée.', 'success');
+      closeModal(true);
+      render();
+    });
+  }
+
+  function viewOtherAnalyses() {
+    var dossier = S.currentDossier();
+    var natures = S.analyticalNaturesConfiguration().rows || [];
+    var canEditNames = hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalNatures.configure', accountingAccessContext(dossier));
+    var canEditValues = hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalValues.configure', accountingAccessContext(dossier));
+    var readOnly = isPhoneViewport();
+    var cards = OTHER_ANALYSIS_NATURE_IDS.map(function (natureId, index) {
+      var nature = natures.find(function (row) { return row && !row.group && row.id === natureId; });
+      if (!nature) return '';
+      var values = S.analyticalDimensionValuesConfiguration(natureId).rows || [];
+      var activeCount = values.filter(function (row) { return row.active !== false; }).length;
+      var defaultName = 'Analyse ' + (index + 3);
+      var notNamed = nature.genericName === defaultName && nature.individualName === defaultName;
+      var canEditThisValues = canEditValues && !readOnly;
+      var rows = values.map(function (row) { return analyticalDimensionValueRowHtml(row, canEditThisValues); }).join('') || '<tr class="analytical-dimension-empty"><td colspan="3">Aucune valeur définie. La liste reste vide tant que vous n’ajoutez pas vos propres libellés.</td></tr>';
+      return '<section class="other-analysis-card" data-other-analysis-card="' + esc(natureId) + '">' +
+        '<header class="other-analysis-card-heading"><div><span class="page-kicker">EMPLACEMENT ANALYTIQUE ' + (index + 3) + '</span><h3>' + esc(nature.genericName || defaultName) + '</h3><p>Nom individuel : <strong>' + esc(nature.individualName || 'Non défini') + '</strong></p></div>' +
+          '<span class="other-analysis-name-status' + (notNamed ? ' is-pending' : '') + '">' + (notNamed ? 'Intitulés à définir' : 'Intitulés personnalisés') + '</span></header>' +
+        '<div class="other-analysis-card-summary"><span>Valeurs actives <strong>' + activeCount + '</strong></span><span>Valeurs conservées <strong>' + values.length + '</strong></span></div>' +
+        (!canEditNames ? '<div class="alert warning">Consultation seule : le droit de configuration des natures analytiques est requis pour modifier les intitulés.</div>' : (readOnly ? '<div class="alert info">Consultation sur téléphone ; la modification est réservée à un ordinateur ou une tablette.</div>' : '')) +
+        '<div class="other-analysis-card-actions"><button type="button" class="btn btn-ghost btn-sm" data-other-analysis-edit-name="' + esc(natureId) + '"' + (!canEditNames || readOnly ? ' disabled' : '') + '>Définir les intitulés</button></div>' +
+        '<form class="other-analysis-values-form" data-other-analysis-values-form="' + esc(natureId) + '"><div class="table-wrap analytical-dimension-table-wrap"><table class="data-table analytical-dimension-table"><thead><tr><th scope="col">Valeur définie par vous</th><th scope="col">État</th><th scope="col">Action</th></tr></thead><tbody data-other-analysis-values-body>' + rows + '</tbody></table></div>' +
+        '<div class="analytical-dimension-actions"><button type="button" class="btn btn-ghost" data-other-analysis-add' + (!canEditValues || readOnly ? ' disabled' : '') + '>＋ Ajouter une valeur</button><button type="submit" class="btn btn-primary"' + (!canEditValues || readOnly ? ' disabled' : '') + '>Enregistrer les valeurs</button></div>' +
+        '<div data-other-analysis-errors aria-live="assertive"></div></form>' +
+        '<p class="exchange-footnote">Les valeurs actives sont proposées dans la saisie de ligne pour cette nature seulement. Elles ne sont pas affectées automatiquement ; aucune correspondance de compte ou de centre n’est créée. Une valeur utilisée reste conservée et peut être désactivée.</p>' +
+      '</section>';
+    }).join('');
+    var accessNote = !canEditValues
+      ? '<div class="alert warning">Consultation seule pour les référentiels : le droit « Configurer les valeurs des natures analytiques » est requis.</div>'
+      : '';
+    return '<div class="exchange-workspace analytical-dimension-view other-analyses-workspace">' +
+      '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(accountingMenuHash('definitions', 'general-accounts')) + '">← Définitions</a>' + accessNote +
+      '<header class="analytical-dimension-heading"><span class="page-kicker">COMPTABILITÉ GÉNÉRALE · SUIVI ANALYTIQUE</span><h2>Autres analyses à définir</h2><p>Trois emplacements génériques déjà présents dans le dossier peuvent être nommés et alimentés par vos propres valeurs. Choisissez vous-même ce qu’ils représentent ; aucune finalité, valeur ou classification n’est présélectionnée.</p></header>' +
+      '<div class="other-analyses-workspace-grid">' + cards + '</div>' +
+      '<div class="alert info other-analyses-integration-note"><div>Après définition, chaque nature reste séparée des autres axes, se sélectionne explicitement sur les lignes comptables et apparaît dans les mouvements et états analytiques correspondants. La configuration est propre à ce dossier et ne modifie pas le débit/crédit général.</div></div>' +
+    '</div>';
+  }
+
+  function bindOtherAnalyses() {
+    var workspace = $('.other-analyses-workspace');
+    if (!workspace) return;
+    workspace.addEventListener('click', function (event) {
+      var nameButton = event.target.closest ? event.target.closest('[data-other-analysis-edit-name]') : null;
+      if (nameButton) {
+        var natureId = nameButton.getAttribute('data-other-analysis-edit-name');
+        if (isPhoneViewport() || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalNatures.configure', accountingAccessContext(S.currentDossier()))) {
+          toast('Modification refusée : un droit explicite sur ce dossier est requis.', 'warning');
+          return;
+        }
+        otherAnalysisNatureNameEditor(natureId);
+        return;
+      }
+      var addButton = event.target.closest ? event.target.closest('[data-other-analysis-add]') : null;
+      if (addButton) {
+        var addForm = addButton.closest('[data-other-analysis-values-form]');
+        var addBody = addForm && addForm.querySelector('[data-other-analysis-values-body]');
+        if (!addBody) return;
+        addBody.insertAdjacentHTML('beforeend', analyticalDimensionValueRowHtml({ active: true }));
+        var input = addBody.querySelector('tr:last-child [data-analytical-dimension-label]');
+        if (input) input.focus();
+        return;
+      }
+      var removeButton = event.target.closest ? event.target.closest('[data-analytical-dimension-remove]') : null;
+      if (removeButton && workspace.contains(removeButton)) {
+        var row = removeButton.closest('[data-analytical-dimension-value]');
+        if (row) row.remove();
+      }
+    });
+    workspace.querySelectorAll('[data-other-analysis-values-form]').forEach(function (form) {
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var dossier = S.currentDossier();
+        var natureId = form.getAttribute('data-other-analysis-values-form');
+        if (isPhoneViewport() || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalValues.configure', accountingAccessContext(dossier))) {
+          toast('Enregistrement refusé : un droit explicite est requis pour ce dossier et cet appareil.', 'warning');
+          return;
+        }
+        var rows = Array.prototype.map.call(form.querySelectorAll('[data-analytical-dimension-value]'), function (row) {
+          return {
+            label: row.querySelector('[data-analytical-dimension-label]').value,
+            active: row.querySelector('[data-analytical-dimension-active]').checked
+          };
+        }).filter(function (row) { return String(row.label || '').trim(); });
+        var saved = S.saveAnalyticalDimensionValues(natureId, rows);
+        var nature = (S.analyticalNaturesConfiguration().rows || []).find(function (item) { return item && item.id === natureId; });
+        var errors = form.querySelector('[data-other-analysis-errors]');
+        if (!saved.ok) {
+          if (errors) errors.innerHTML = '<div class="alert warning">' + (saved.errors || ['Enregistrement impossible.']).map(esc).join('<br>') + '</div>';
+          return;
+        }
+        toast('Valeurs de « ' + String(nature && nature.genericName || 'l’analyse diverse') + ' » enregistrées pour ce dossier. Aucune valeur n’a été affectée aux écritures.', 'success');
+        render();
+      });
+    });
   }
 
   function bindAnalyticalDimensionValues(natureId) {
@@ -28978,6 +29118,8 @@
       exchangeFeature = viewAnalyticalCenters();
     } else if (group.id === 'definitions' && ANALYTICAL_VALUE_REGISTRY_NATURES.indexOf(tab.id) !== -1) {
       exchangeFeature = viewAnalyticalDimensionValues(tab.id);
+    } else if (group.id === 'definitions' && tab.id === 'diverse-analyses' && selectedChild && selectedChild.id === 'other-analyses') {
+      exchangeFeature = viewOtherAnalyses();
     } else if (group.id === 'definitions' && tab.id === 'diverse-analyses' && selectedChild && ANALYTICAL_VALUE_REGISTRY_NATURES.indexOf(selectedChild.id) !== -1) {
       exchangeFeature = viewAnalyticalDimensionValues(selectedChild.id);
     } else if (group.id === 'definitions' && tab.id === 'journals') {
@@ -30457,6 +30599,7 @@
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'fixed-asset-locations') bindFixedAssetLocationView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'fixed-assets') bindFixedAssetView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && ANALYTICAL_VALUE_REGISTRY_NATURES.indexOf(menuParams.t) !== -1) bindAnalyticalDimensionValues(menuParams.t);
+      if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'diverse-analyses' && menuParams.c === 'other-analyses') bindOtherAnalyses();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'diverse-analyses' && ANALYTICAL_VALUE_REGISTRY_NATURES.indexOf(menuParams.c) !== -1) bindAnalyticalDimensionValues(menuParams.c);
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'opening-balances') bindOpeningBalancesView();
       if (!isPhoneViewport() && menuParams.g === 'fin-exercice' && menuParams.t === 'depreciation') bindYearEndDepreciation();
