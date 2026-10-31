@@ -71,7 +71,7 @@
         { id: 'invoice-payment-allocation', label: 'Affectation des règlements aux factures émises (analytique)', status: 'active', reason: 'Rapprochement manuel de pièces client et encaissements déjà comptabilisés ; répartition analytique facultative saisie par nature, sans copie automatique ni création/modification d’écriture.' },
         { id: 'matching', label: 'Lettrage', status: 'partial', reason: 'Lettrage manuel de lignes validées et équilibrées sur un même compte auxiliaire de classe 4. Le suivi est séparé des écritures et du grand livre ; aucun client ou fournisseur individuel n’est attribué faute d’identifiant auxiliaire dans les pièces.' },
         { id: 'reconciliation', label: 'Pointage', status: 'partial', reason: 'Import et lecture de relevés génériques CSV/Excel, choix des colonnes, aperçu et suggestions de correspondance avec les lignes validées de trésorerie. Chaque rapprochement exige une confirmation ; aucune écriture n’est créée ni modifiée. Le fichier reste dans le stockage local de démonstration du navigateur ; aucune intégration Google Drive organisationnelle n’est connectée dans PERFECTO.' },
-        { id: 'supplier-orders', label: 'Commandes aux fournisseurs (analytique)', status: 'inactive', reason: 'Relève des achats et/ou de la comptabilité analytique, hors du périmètre actuel.' },
+        { id: 'supplier-orders', label: 'Commandes aux fournisseurs (analytique)', status: 'active', reason: 'Registre par dossier de brouillons et commandes émises auprès des fournisseurs existants. Les imputations analytiques sont explicites ; aucune facture, réception, écriture ou paiement n’est généré.' },
         { id: 'forecast-budgets', label: 'Budgets prévisionnels', status: 'review', reason: 'Périmètre à préciser ; reste inactif jusqu’à votre décision.' },
         { id: 'opening-balances', label: 'Reports à nouveau', status: 'partial', reason: 'Registre de reports distinct des écritures : lecture contrôlée d’un dossier précédent, insertion, modification, suppression, impression et audit sans correction automatique. Le transfert est relançable et préserve les lettrages/pointages courants ; les factures et l’analytique restent à contrôler séparément.' }
       ]
@@ -144,7 +144,7 @@
             { id: 'analytic-consistency-control', label: 'Contrôle de cohérence des ventilations', section: 'analyticControls', status: 'active', reason: 'Vérifie séparément chaque nature des écritures validées : règles par compte, références, complétude, reliquats et dépassements. Lecture seule, sans correction automatique.' }
           ]
         },
-        { id: 'supplier-orders', label: 'Commandes aux fournisseurs (analytique)', status: 'inactive', reason: 'Fonction analytique / achats hors du périmètre actuel.' },
+        { id: 'supplier-orders', label: 'Commandes aux fournisseurs (analytique)', status: 'inactive', reason: 'Le registre est disponible dans Saisie ; une édition distincte des commandes n’est pas encore construite ici.' },
         {
           id: 'budget', label: 'Budget', status: 'active', reason: 'Les dix états illustrés disposent chacun de leur sélection, colonnes, mise en page, aperçu et exports. L’exercice et les catégories C/I/P sont déduits du cycle ; les comptes sont limités aux rubriques analytiques 93 à 99. Aucun registre budgétaire, commande ou rapprochement de réalisation n’étant encore stocké, les résultats restent vides sans montant simulé.',
           children: [

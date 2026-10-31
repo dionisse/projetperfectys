@@ -114,6 +114,16 @@ test('les clés de répartition exigent un droit explicite dans le dossier conce
   assert.ok(Permissions.actionsForModule('accounting').some(action => action.id === 'analyticalAllocationKeys.configure'));
 });
 
+test('les commandes fournisseurs analytiques exigent un droit explicite par dossier', () => {
+  const dossier = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  const employee = { role: 'employee', organizationId: 'org-1', grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view'] }] } };
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'analyticalSupplierOrders.manage', dossier), false);
+  employee.grants.accounting[0].actions.push('analyticalSupplierOrders.manage');
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'analyticalSupplierOrders.manage', dossier), true);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'analyticalSupplierOrders.manage', { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-2' }), false);
+  assert.ok(Permissions.actionsForModule('accounting').some(action => action.id === 'analyticalSupplierOrders.manage'));
+});
+
 test('la gestion des journaux est une série de droits distincts, explicitement délégués', () => {
   const employee = {
     role: 'employee', organizationId: 'org-1',

@@ -151,6 +151,7 @@
     analyticalMovements: { q: '', natureId: '', centerId: '', journal: '', from: '', to: '' },
     analyticalPaymentSchedule: { dossierId: '', q: '', status: 'all', from: '', to: '' },
     analyticalInvoicePaymentAllocation: { dossierId: '', q: '', status: 'all' },
+    analyticalSupplierOrders: { dossierId: '', q: '', status: 'all' },
     openingBalances: { q: '', position: '', sourceDossierId: '', selectedId: '' },
     accountingBridge: { sourceModuleId: 'payroll-hr' },
     periods: { year: S.exercise() },
@@ -25561,6 +25562,197 @@
     });
   }
 
+  function analyticalSupplierOrderLineTotal(order) {
+    return (order.lines || []).reduce(function (sum, line) { return sum + Number(line.amount || 0); }, 0);
+  }
+
+  function viewAnalyticalSupplierOrders() {
+    var dossier = S.currentDossier();
+    if (ui.analyticalSupplierOrders.dossierId !== dossier.id) ui.analyticalSupplierOrders = { dossierId: dossier.id, q: '', status: 'all' };
+    var filters = ui.analyticalSupplierOrders;
+    var rows = S.analyticalSupplierOrdersConfiguration().rows || [];
+    var allowed = hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalSupplierOrders.manage', accountingAccessContext(dossier));
+    var editable = allowed && !isPhoneViewport();
+    var decimals = Number(S.accountingConfiguration().decimalPlaces) || 0;
+    var formatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    var suppliers = S.suppliers().filter(function (supplier) { return supplier && supplier.active !== false; });
+    var orderNatures = S.orderNaturesConfiguration();
+    var configuredOrderNatures = (orderNatures.rows || []).concat(orderNatures.additionalRows || []);
+    var currencies = S.currenciesConfiguration().rows || [];
+    var setupMissing = [];
+    if (!suppliers.length) setupMissing.push('aucun fournisseur actif');
+    if (!configuredOrderNatures.length) setupMissing.push('aucune nature de commande configurée');
+    if (!currencies.length) setupMissing.push('aucune devise configurée');
+    var drafts = rows.filter(function (row) { return row.status === 'draft'; });
+    var issued = rows.filter(function (row) { return row.status === 'issued'; });
+    var cancelled = rows.filter(function (row) { return row.status === 'cancelled'; });
+    var commitments = Object.create(null);
+    issued.forEach(function (order) { commitments[order.currencyCode] = (commitments[order.currencyCode] || 0) + analyticalSupplierOrderLineTotal(order); });
+    var commitmentSummary = Object.keys(commitments).sort().map(function (code) { return '<span><strong>' + esc(code) + '</strong> ' + esc(formatter.format(commitments[code])) + '</span>'; }).join(' ') || '<span>Aucune commande émise</span>';
+    var visible = rows.filter(function (order) {
+      if (filters.status !== 'all' && order.status !== filters.status) return false;
+      if (!filters.q) return true;
+      return [order.reference, order.supplierCode, order.supplierName, order.description, order.natureName].join(' ').toLocaleLowerCase().indexOf(String(filters.q).trim().toLocaleLowerCase()) !== -1;
+    }).sort(function (a, b) { return String(b.date).localeCompare(String(a.date)) || String(a.reference).localeCompare(String(b.reference), 'fr'); });
+    var tableRows = visible.map(function (order) {
+      var status = order.status === 'issued' ? 'Émise · engagement déclaré' : order.status === 'cancelled' ? 'Annulée' : 'Brouillon';
+      var actions = '<button type="button" class="btn btn-ghost btn-sm" data-supplier-order-detail="' + esc(order.id) + '">Lignes / analytique</button>';
+      if (order.status === 'draft') actions += '<button type="button" class="btn btn-ghost btn-sm" data-supplier-order-edit="' + esc(order.id) + '"' + (!editable ? ' disabled' : '') + '>Modifier</button><button type="button" class="btn btn-primary btn-sm" data-supplier-order-issue="' + esc(order.id) + '"' + (!editable ? ' disabled' : '') + '>Émettre</button><button type="button" class="btn btn-ghost btn-sm" data-supplier-order-cancel="' + esc(order.id) + '"' + (!editable ? ' disabled' : '') + '>Annuler</button>';
+      else if (order.status === 'issued') actions += '<button type="button" class="btn btn-ghost btn-sm" data-supplier-order-cancel="' + esc(order.id) + '"' + (!editable ? ' disabled' : '') + '>Annuler la commande</button>';
+      return '<tr><td>' + esc(order.date) + '</td><td><strong>' + esc(order.reference) + '</strong></td><td>' + esc(order.supplierCode + ' · ' + order.supplierName) + '</td><td>' + esc(order.natureNumber + ' · ' + order.natureName) + '</td><td>' + esc(order.description) + '</td><td class="number-cell">' + esc(formatter.format(analyticalSupplierOrderLineTotal(order))) + ' ' + esc(order.currencyCode) + '</td><td>' + esc(status) + '</td><td><div class="supplier-row-actions">' + actions + '</div></td></tr>';
+    }).join('');
+    var filtersHtml = '<form class="supplier-order-filters" id="supplier-order-filters"><label class="field"><span>Rechercher</span><input type="search" name="q" value="' + esc(filters.q) + '" placeholder="Référence, fournisseur, objet"></label><label class="field"><span>État</span><select name="status"><option value="all"' + (filters.status === 'all' ? ' selected' : '') + '>Tous</option><option value="draft"' + (filters.status === 'draft' ? ' selected' : '') + '>Brouillons</option><option value="issued"' + (filters.status === 'issued' ? ' selected' : '') + '>Émises</option><option value="cancelled"' + (filters.status === 'cancelled' ? ' selected' : '') + '>Annulées</option></select></label><button type="submit" class="btn btn-ghost">Filtrer</button><button type="button" class="btn btn-ghost" data-supplier-order-clear>Effacer</button></form>';
+    return '<div class="exchange-workspace analytical-supplier-orders-workspace"><div class="alert info"><div><strong>Commandes fournisseurs · dossier ' + esc(dossier.reference) + '</strong><br>Registre manuel : aucun ordre n’est prérempli. Une commande émise est un engagement saisi, pas une facture, réception, dette comptabilisée ou paiement ; aucune écriture, taxe, conversion ou mouvement de trésorerie n’est généré.</div></div>' +
+      (!allowed ? '<div class="alert warning">Consultation seule : le droit de gestion des commandes fournisseurs analytiques est requis dans ce dossier.</div>' : isPhoneViewport() ? '<div class="alert info">Consultation sur téléphone ; saisie réservée à un ordinateur ou une tablette.</div>' : '') +
+      (setupMissing.length ? '<div class="alert warning">Création désactivée : ' + esc(setupMissing.join(' ; ')) + '. Complétez les référentiels du dossier.</div>' : '') +
+      '<div class="supplier-order-summary"><div><small>Brouillons</small><strong>' + drafts.length + '</strong></div><div><small>Commandes émises</small><strong>' + issued.length + '</strong></div><div><small>Annulées conservées</small><strong>' + cancelled.length + '</strong></div><div class="supplier-order-commitment-summary"><small>Montants émis · par devise, sans conversion</small><div>' + commitmentSummary + '</div></div></div>' +
+      '<div class="supplier-order-toolbar"><button type="button" class="btn btn-primary" data-supplier-order-add' + (!editable || setupMissing.length ? ' disabled' : '') + '>＋ Nouveau brouillon</button><span>' + visible.length + ' commande(s) affichée(s) · aucune imputation de compte ou liaison budgétaire automatique.</span></div>' + filtersHtml +
+      (tableRows ? '<div class="table-wrap supplier-order-table-wrap"><table class="data-table supplier-order-table"><thead><tr><th>Date</th><th>Référence</th><th>Fournisseur</th><th>Nature</th><th>Objet</th><th>Montant saisi</th><th>État</th><th>Actions</th></tr></thead><tbody>' + tableRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucune commande dans ce registre.</strong> Les fournisseurs doivent déjà exister dans le référentiel de ce dossier.</div>') +
+      '<p class="exchange-footnote">Les imputations analytiques sont saisies explicitement par ligne et par nature ; les axes sont contrôlés séparément et les reliquats restent visibles. Les montants sont conservés tels que saisis dans leur devise. Stockage navigateur du dossier ; aucune synchronisation Google Drive.</p></div>';
+  }
+
+  function analyticalSupplierOrderOptions(values, selected, emptyLabel, valueKey, labelFn) {
+    return '<option value="">' + esc(emptyLabel) + '</option>' + values.map(function (item) {
+      var value = String(item[valueKey] || '');
+      return '<option value="' + esc(value) + '"' + (value === selected ? ' selected' : '') + '>' + esc(labelFn(item)) + '</option>';
+    }).join('');
+  }
+
+  function openAnalyticalSupplierOrderModal(orderId) {
+    var current = S.analyticalSupplierOrdersConfiguration();
+    var existing = orderId ? current.rows.find(function (row) { return row.id === orderId; }) : null;
+    if (orderId && (!existing || existing.status !== 'draft')) return;
+    var dossier = S.currentDossier();
+    var suppliers = S.suppliers().filter(function (row) { return row && (row.active !== false || existing && existing.supplierId === row.id); });
+    var orderNatureConfig = S.orderNaturesConfiguration();
+    var natures = (orderNatureConfig.rows || []).concat(orderNatureConfig.additionalRows || []);
+    var currencies = S.currenciesConfiguration().rows || [];
+    var lines = existing && existing.lines.length ? existing.lines : [{ id: '', description: '', amount: '', analyticalAllocations: [] }];
+    function lineHtml(line, index) {
+      return '<div class="supplier-order-line" data-supplier-order-line data-line-id="' + esc(line.id || '') + '"><label class="field"><span>Ligne ' + (index + 1) + ' · objet</span><input data-line-description maxlength="240" value="' + esc(line.description || '') + '" required></label><label class="field"><span>Montant saisi</span><input data-line-amount type="number" min="' + esc(String(1 / Math.pow(10, Number(S.accountingConfiguration().decimalPlaces) || 0))) + '" step="' + esc(String(1 / Math.pow(10, Number(S.accountingConfiguration().decimalPlaces) || 0))) + '" value="' + esc(line.amount == null ? '' : line.amount) + '" required></label><span class="supplier-order-line-analytic-status">' + (line.analyticalAllocations && line.analyticalAllocations.length ? line.analyticalAllocations.length + ' imputation(s)' : 'À ventiler') + '</span><button type="button" class="btn btn-ghost btn-sm" data-supplier-order-remove-line>Retirer</button></div>';
+    }
+    var body = '<form id="supplier-order-form" novalidate><div id="supplier-order-form-errors" aria-live="assertive"></div><div class="form-grid supplier-order-form-grid"><label class="field"><span>Référence</span><input id="supplier-order-reference" maxlength="120" value="' + esc(existing && existing.reference || '') + '" required></label><label class="field"><span>Date dans le cycle</span><input id="supplier-order-date" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(existing && existing.date || '') + '" required></label><label class="field"><span>Fournisseur existant</span><select id="supplier-order-supplier" required>' + analyticalSupplierOrderOptions(suppliers, existing && existing.supplierId || '', 'Choisir un fournisseur…', 'id', function (row) { return row.code + ' · ' + row.name; }) + '</select></label><label class="field"><span>Nature de commande</span><select id="supplier-order-nature" required>' + analyticalSupplierOrderOptions(natures, existing && existing.natureId || '', 'Choisir une nature…', 'id', function (row) { return row.number + ' · ' + row.name; }) + '</select></label><label class="field"><span>Devise</span><select id="supplier-order-currency" required>' + analyticalSupplierOrderOptions(currencies, existing && existing.currencyCode || '', 'Choisir une devise…', 'code', function (row) { return row.code + ' · ' + row.label; }) + '</select></label><label class="field"><span>Objet général</span><input id="supplier-order-description" maxlength="240" value="' + esc(existing && existing.description || '') + '" required></label></div><section class="supplier-order-line-editor"><div class="supplier-order-line-editor-heading"><h4>Lignes saisies</h4><button type="button" class="btn btn-ghost btn-sm" data-supplier-order-add-line>＋ Ajouter une ligne</button></div><div id="supplier-order-line-list">' + lines.map(lineHtml).join('') + '</div></section></form>';
+    openModal(existing ? 'Modifier le brouillon' : 'Nouveau brouillon de commande fournisseur', 'Dossier ' + esc(dossier.reference), body, '<button type="button" class="btn btn-ghost" data-action="close-modal">Fermer</button><button type="submit" class="btn btn-primary" form="supplier-order-form">Enregistrer le brouillon</button>', true);
+    var form = $('#supplier-order-form');
+    var lineList = $('#supplier-order-line-list', form);
+    function addLine() { lineList.insertAdjacentHTML('beforeend', lineHtml({ id: '', description: '', amount: '', analyticalAllocations: [] }, lineList.querySelectorAll('[data-supplier-order-line]').length)); }
+    form.addEventListener('click', function (event) {
+      if (event.target.closest('[data-supplier-order-add-line]')) addLine();
+      var remove = event.target.closest('[data-supplier-order-remove-line]');
+      if (remove) remove.closest('[data-supplier-order-line]').remove();
+    });
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalSupplierOrders.manage', accountingAccessContext(S.currentDossier()))) return;
+      var lineRows = $$('#supplier-order-line-list [data-supplier-order-line]', form).map(function (node) {
+        var id = node.getAttribute('data-line-id') || '';
+        var prior = existing && existing.lines.find(function (line) { return line.id === id; });
+        return { id: id, description: $('[data-line-description]', node).value, amount: $('[data-line-amount]', node).value, analyticalAllocations: prior ? prior.analyticalAllocations : [] };
+      });
+      var candidate = { id: existing && existing.id || '', reference: $('#supplier-order-reference', form).value, date: $('#supplier-order-date', form).value, supplierId: $('#supplier-order-supplier', form).value, natureId: $('#supplier-order-nature', form).value, description: $('#supplier-order-description', form).value, currencyCode: $('#supplier-order-currency', form).value, status: 'draft', lines: lineRows };
+      var rows = existing ? current.rows.map(function (row) { return row.id === existing.id ? candidate : row; }) : current.rows.concat([candidate]);
+      var result = S.saveAnalyticalSupplierOrdersConfiguration(rows);
+      if (!result.ok) { $('#supplier-order-form-errors', form).innerHTML = '<div class="alert warning"><ul>' + result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>'; return; }
+      toast('Brouillon enregistré ; aucune facture, réception ou écriture créée.', 'success'); closeModal(true); render();
+    });
+  }
+
+  function openAnalyticalSupplierOrderLine(orderId, lineId) {
+    var order = S.analyticalSupplierOrdersConfiguration().rows.find(function (row) { return row.id === orderId; });
+    var line = order && order.lines.find(function (row) { return row.id === lineId; });
+    if (!order || !line) return;
+    var editable = order.status === 'draft' && hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalSupplierOrders.manage', accountingAccessContext(S.currentDossier())) && !isPhoneViewport();
+    var natures = (S.analyticalNaturesConfiguration().rows || []).filter(function (row) { return row && !row.group; });
+    function allocationView() {
+      var allocations = line.analyticalAllocations || [];
+      var totals = Object.create(null);
+      allocations.forEach(function (item) { totals[item.natureId] = (totals[item.natureId] || 0) + Number(item.amount || 0); });
+      var rows = allocations.map(function (item, index) { return '<tr><td>' + esc(item.natureLabel || item.natureId) + '</td><td>' + esc(item.valueLabel || 'À vérifier') + '</td><td class="number-cell">' + esc(amount(item.amount)) + ' ' + esc(order.currencyCode) + '</td><td>' + (editable ? '<button type="button" data-remove-allocation="' + index + '" class="btn btn-ghost btn-sm">Retirer</button>' : '') + '</td></tr>'; }).join('');
+      var axisIds = natures.map(function (item) { return item.id; });
+      Object.keys(totals).forEach(function (id) { if (axisIds.indexOf(id) < 0) axisIds.push(id); });
+      var axisHtml = axisIds.map(function (id) { var nature = natures.find(function (item) { return item.id === id; }); var allocated = totals[id] || 0; return '<span><strong>' + esc(nature && (nature.individualName || nature.genericName) || id) + '</strong> · imputé ' + esc(amount(allocated)) + ' ' + esc(order.currencyCode) + ' · reliquat : ' + esc(amount(Math.max(0, line.amount - allocated))) + ' ' + esc(order.currencyCode) + '</span>'; }).join('') || '<span>À ventiler · aucune nature analytique configurée</span>';
+      return (rows ? '<div class="table-wrap"><table class="data-table"><thead><tr><th>Nature</th><th>Valeur</th><th>Montant</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<p>Aucune imputation saisie ; le montant reste « À ventiler ».</p>') + '<div class="supplier-order-axis-totals">' + axisHtml + '</div>';
+    }
+    var natureOptions = analyticalSupplierOrderOptions(natures, '', 'Choisir une nature analytique…', 'id', function (item) { return item.individualName || item.genericName || item.id; });
+    var body = '<div class="supplier-order-line-context"><strong>Commande :</strong> ' + esc(order.reference) + ' · ' + esc(order.supplierName) + '<br><strong>Ligne :</strong> ' + esc(line.description) + ' · ' + esc(amount(line.amount)) + ' ' + esc(order.currencyCode) + '</div><div id="supplier-order-allocations">' + allocationView() + '</div>' +
+      (editable ? '<form id="supplier-order-allocation-form" class="supplier-order-analytic-form"><div id="supplier-order-allocation-errors" aria-live="assertive"></div><label class="field"><span>Nature</span><select id="supplier-order-allocation-nature" required>' + natureOptions + '</select></label><label class="field"><span>Valeur analytique / centre</span><select id="supplier-order-allocation-value" required disabled><option value="">Choisir d’abord une nature…</option></select></label><label class="field"><span>Montant affecté</span><input id="supplier-order-allocation-amount" type="number" min="0.01" step="any" required></label><button class="btn btn-primary" type="submit">Ajouter l’imputation</button></form>' : '<div class="alert info">Commande consultable sans modification dans cet état.</div>');
+    openModal('Ventilation analytique de ligne', 'Imputations indépendantes par nature', body, '<button type="button" class="btn btn-ghost" data-action="close-modal">Fermer</button>', true);
+    if (!editable) return;
+    var natureSelect = $('#supplier-order-allocation-nature');
+    var valueSelect = $('#supplier-order-allocation-value');
+    natureSelect.addEventListener('change', function () {
+      var options = [];
+      if (natureSelect.value === 'responsibility-centers') options = S.analyticalCenters().filter(function (item) { return item && item.active !== false; }).map(function (item) { return { value: item.id, label: item.code + ' · ' + item.name, code: item.code, name: item.name }; });
+      else options = (S.analyticalDimensionValuesConfiguration(natureSelect.value).rows || []).filter(function (item) { return item && item.active !== false; }).map(function (item) { return { value: item.label, label: item.label }; });
+      valueSelect.innerHTML = '<option value="">Choisir une valeur…</option>' + options.map(function (item) { return '<option value="' + esc(item.value) + '" data-label="' + esc(item.label) + '" data-code="' + esc(item.code || '') + '" data-name="' + esc(item.name || '') + '">' + esc(item.label) + '</option>'; }).join('');
+      valueSelect.disabled = false;
+    });
+    $('#supplier-order-allocation-form').addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalSupplierOrders.manage', accountingAccessContext(S.currentDossier()))) return;
+      var option = valueSelect.options[valueSelect.selectedIndex];
+      var nature = natures.find(function (item) { return item.id === natureSelect.value; });
+      var allocation = { natureId: natureSelect.value, natureLabel: nature && (nature.individualName || nature.genericName) || '', valueId: natureSelect.value === 'responsibility-centers' ? valueSelect.value : '', valueLabel: option && option.getAttribute('data-label') || '', centerCode: option && option.getAttribute('data-code') || '', centerName: option && option.getAttribute('data-name') || '', amount: $('#supplier-order-allocation-amount').value };
+      var latest = S.analyticalSupplierOrdersConfiguration();
+      var rows = latest.rows.map(function (record) { return record.id !== orderId ? record : Object.assign({}, record, { lines: record.lines.map(function (item) { return item.id === lineId ? Object.assign({}, item, { analyticalAllocations: item.analyticalAllocations.concat([allocation]) }) : item; }) }); });
+      var result = S.saveAnalyticalSupplierOrdersConfiguration(rows);
+      if (!result.ok) { $('#supplier-order-allocation-errors').innerHTML = '<div class="alert warning"><ul>' + result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>'; return; }
+      closeModal(true); render(); openAnalyticalSupplierOrderDetails(orderId);
+    });
+    $$('#supplier-order-allocations [data-remove-allocation]').forEach(function (button) { button.addEventListener('click', function () {
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalSupplierOrders.manage', accountingAccessContext(S.currentDossier()))) return;
+      if (!window.confirm('Retirer cette imputation du brouillon ?')) return;
+      var index = Number(button.getAttribute('data-remove-allocation'));
+      var latest = S.analyticalSupplierOrdersConfiguration();
+      var rows = latest.rows.map(function (record) { return record.id !== orderId ? record : Object.assign({}, record, { lines: record.lines.map(function (item) { return item.id !== lineId ? item : Object.assign({}, item, { analyticalAllocations: item.analyticalAllocations.filter(function (_row, n) { return n !== index; }) }); }) }); });
+      var result = S.saveAnalyticalSupplierOrdersConfiguration(rows);
+      if (!result.ok) { toast(result.errors.join(' '), 'error'); return; }
+      closeModal(true); render(); openAnalyticalSupplierOrderDetails(orderId);
+    }); });
+  }
+
+  function openAnalyticalSupplierOrderDetails(orderId) {
+    var order = S.analyticalSupplierOrdersConfiguration().rows.find(function (item) { return item.id === orderId; });
+    if (!order) return;
+    var decimals = Number(S.accountingConfiguration().decimalPlaces) || 0;
+    var formatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    var rows = order.lines.map(function (line) { return '<tr><td>' + esc(line.description) + '</td><td class="number-cell">' + esc(formatter.format(line.amount)) + ' ' + esc(order.currencyCode) + '</td><td>' + (line.analyticalAllocations.length ? line.analyticalAllocations.map(function (item) { return '<span class="supplier-order-analytic-chip">' + esc(item.natureLabel) + ' · ' + esc(item.valueLabel) + ' · ' + esc(formatter.format(item.amount)) + ' ' + esc(order.currencyCode) + '</span>'; }).join(' ') : '<span class="supplier-order-unclassified">À ventiler</span>') + '</td><td>' + (order.status === 'draft' ? '<button type="button" class="btn btn-ghost btn-sm" data-edit-line-analytic="' + esc(line.id) + '">Imputer</button>' : '') + '</td></tr>'; }).join('');
+    var body = '<div class="supplier-order-detail-context"><strong>Référence :</strong> ' + esc(order.reference) + '<br><strong>Fournisseur :</strong> ' + esc(order.supplierCode + ' · ' + order.supplierName) + '<br><strong>Nature :</strong> ' + esc(order.natureNumber + ' · ' + order.natureName) + '<br><strong>État :</strong> ' + esc(order.status === 'issued' ? 'Émise · engagement déclaré' : order.status === 'cancelled' ? 'Annulée' : 'Brouillon') + '</div><div class="table-wrap"><table class="data-table"><thead><tr><th>Ligne</th><th>Montant saisi</th><th>Imputation analytique</th><th></th></tr></thead><tbody>' + rows + '</tbody><tfoot><tr><th>Total des lignes</th><th class="number-cell">' + esc(formatter.format(analyticalSupplierOrderLineTotal(order))) + ' ' + esc(order.currencyCode) + '</th><td colspan="2">Montants saisis, sans taxe ni conversion.</td></tr></tfoot></table></div><p>Les imputations n’affectent aucune écriture.</p>';
+    openModal('Détail de la commande', order.reference, body, '<button type="button" class="btn btn-ghost" data-action="close-modal">Fermer</button>', true);
+    $$('[data-edit-line-analytic]').forEach(function (button) { button.addEventListener('click', function () { closeModal(true); openAnalyticalSupplierOrderLine(orderId, button.getAttribute('data-edit-line-analytic')); }); });
+  }
+
+  function bindAnalyticalSupplierOrders() {
+    var workspace = $('.analytical-supplier-orders-workspace');
+    if (!workspace) return;
+    var filters = $('#supplier-order-filters', workspace);
+    filters.addEventListener('submit', function (event) { event.preventDefault(); var data = new FormData(filters); ui.analyticalSupplierOrders = Object.assign({}, ui.analyticalSupplierOrders, { q: String(data.get('q') || ''), status: String(data.get('status') || 'all') }); render(); });
+    $('[data-supplier-order-clear]', workspace).addEventListener('click', function () { ui.analyticalSupplierOrders = { dossierId: S.currentDossier().id, q: '', status: 'all' }; render(); });
+    workspace.addEventListener('click', function (event) {
+      var add = event.target.closest('[data-supplier-order-add]'); if (add) { openAnalyticalSupplierOrderModal(''); return; }
+      var detail = event.target.closest('[data-supplier-order-detail]'); if (detail) { openAnalyticalSupplierOrderDetails(detail.getAttribute('data-supplier-order-detail')); return; }
+      var edit = event.target.closest('[data-supplier-order-edit]'); if (edit) { openAnalyticalSupplierOrderModal(edit.getAttribute('data-supplier-order-edit')); return; }
+      var issue = event.target.closest('[data-supplier-order-issue]');
+      if (issue) {
+        if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalSupplierOrders.manage', accountingAccessContext(S.currentDossier()))) return;
+        var id = issue.getAttribute('data-supplier-order-issue');
+        if (!window.confirm('Émettre cette commande ? Cela enregistre un engagement, sans facture, réception, paiement ni écriture.')) return;
+        var current = S.analyticalSupplierOrdersConfiguration();
+        var result = S.saveAnalyticalSupplierOrdersConfiguration(current.rows.map(function (row) { return row.id === id ? Object.assign({}, row, { status: 'issued', issueConfirmed: true }) : row; }));
+        if (!result.ok) toast(result.errors.join(' '), 'error'); else { toast('Commande marquée comme émise ; aucune écriture ou facture créée.', 'success'); render(); }
+        return;
+      }
+      var cancel = event.target.closest('[data-supplier-order-cancel]'); if (!cancel) return;
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalSupplierOrders.manage', accountingAccessContext(S.currentDossier()))) return;
+      var id = cancel.getAttribute('data-supplier-order-cancel');
+      var current = S.analyticalSupplierOrdersConfiguration();
+      var target = current.rows.find(function (row) { return row.id === id; }); if (!target) return;
+      if (!window.confirm('Annuler cette commande ? Elle sera conservée dans l’historique ; aucun mouvement comptable n’est généré.')) return;
+      var result = S.saveAnalyticalSupplierOrdersConfiguration(current.rows.map(function (row) { return row.id === id ? Object.assign({}, row, { status: 'cancelled', cancelConfirmed: true }) : row; }));
+      if (!result.ok) toast(result.errors.join(' '), 'error'); else { toast('Commande annulée et conservée.', 'success'); render(); }
+    });
+  }
+
   function viewAnalyticalMovements() {
     var dossier = S.currentDossier();
     var filter = ui.analyticalMovements;
@@ -29529,6 +29721,8 @@
       exchangeFeature = viewTaxAdjustments();
     } else if (group.id === 'fin-exercice' && tab.id === 'opening-transfer' && selectedChild && selectedChild.id === 'opening-transfer-build') {
       exchangeFeature = viewOpeningTransferBuild();
+    } else if (group.id === 'saisie' && tab.id === 'supplier-orders') {
+      exchangeFeature = viewAnalyticalSupplierOrders();
     } else if (group.id === 'saisie' && tab.id === 'opening-balances') {
       exchangeFeature = viewOpeningBalances();
     } else if (group.id === 'parametres' && tab.id === 'dossier-configuration') {
@@ -30997,6 +31191,7 @@
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'reconciliation') bindPointageView();
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'scheduled-payments') bindAnalyticalPaymentSchedule();
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'invoice-payment-allocation') bindAnalyticalInvoicePaymentAllocation();
+      if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'supplier-orders') bindAnalyticalSupplierOrders();
       return;
     }
 

@@ -1294,6 +1294,55 @@
     return { rows: rows, updatedAt: String(source.updatedAt || '').slice(0, 40) };
   }
 
+  function defaultAnalyticalSupplierOrdersConfiguration() {
+    return { rows: [], updatedAt: '' };
+  }
+
+  function normalizeAnalyticalSupplierOrdersConfiguration(value) {
+    var source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    var seen = Object.create(null);
+    var rows = (Array.isArray(source.rows) ? source.rows : []).slice(0, 5000).map(function (record) {
+      if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
+      var id = String(record.id || '').trim().slice(0, 100);
+      if (!id || seen[id]) return null;
+      seen[id] = true;
+      var lineIds = Object.create(null);
+      var lines = (Array.isArray(record.lines) ? record.lines : []).slice(0, 500).map(function (line) {
+        if (!line || typeof line !== 'object' || Array.isArray(line)) return null;
+        var lineId = String(line.id || '').trim().slice(0, 100);
+        if (!lineId || lineIds[lineId]) return null;
+        lineIds[lineId] = true;
+        var amount = Number(line.amount);
+        var analyticalAllocations = (Array.isArray(line.analyticalAllocations) ? line.analyticalAllocations : []).slice(0, 500).map(function (item) {
+          item = item && typeof item === 'object' && !Array.isArray(item) ? item : {};
+          return {
+            natureId: String(item.natureId || '').trim().slice(0, 80),
+            natureLabel: String(item.natureLabel || '').trim().slice(0, 120),
+            valueId: String(item.valueId || '').trim().slice(0, 160),
+            valueLabel: String(item.valueLabel || '').trim().replace(/\s+/g, ' ').slice(0, 160),
+            centerCode: String(item.centerCode || '').trim().slice(0, 32),
+            centerName: String(item.centerName || '').trim().replace(/\s+/g, ' ').slice(0, 150),
+            amount: Number.isFinite(Number(item.amount)) ? Number(item.amount) : 0
+          };
+        });
+        return { id: lineId, description: String(line.description || '').trim().replace(/\s+/g, ' ').slice(0, 240), amount: Number.isFinite(amount) ? amount : 0, analyticalAllocations: analyticalAllocations };
+      }).filter(Boolean);
+      var status = ['draft', 'issued', 'cancelled'].indexOf(record.status) !== -1 ? record.status : 'draft';
+      return {
+        id: id, reference: String(record.reference || '').trim().replace(/\s+/g, ' ').slice(0, 120),
+        date: String(record.date || '').trim().slice(0, 10),
+        supplierId: String(record.supplierId || '').trim().slice(0, 100),
+        supplierCode: String(record.supplierCode || '').trim().slice(0, 40), supplierName: String(record.supplierName || '').trim().slice(0, 160),
+        natureId: String(record.natureId || '').trim().slice(0, 100), natureNumber: String(record.natureNumber || '').trim().slice(0, 12), natureName: String(record.natureName || '').trim().slice(0, 120),
+        description: String(record.description || '').trim().replace(/\s+/g, ' ').slice(0, 240),
+        currencyCode: String(record.currencyCode || '').trim().toLocaleUpperCase().slice(0, 3), lines: lines, status: status,
+        createdAt: String(record.createdAt || '').slice(0, 40), updatedAt: String(record.updatedAt || '').slice(0, 40),
+        issuedAt: String(record.issuedAt || '').slice(0, 40), cancelledAt: String(record.cancelledAt || '').slice(0, 40)
+      };
+    }).filter(Boolean);
+    return { rows: rows, updatedAt: String(source.updatedAt || '').slice(0, 40) };
+  }
+
   function defaultAnalyticalInvoicePaymentAllocationConfiguration() {
     return { customerAccountCodes: [], cashAccountCodes: [], rows: [], updatedAt: '' };
   }
@@ -1781,6 +1830,7 @@
       analyticalDimensionValuesConfiguration: defaultAnalyticalDimensionValuesConfiguration(),
       analyticalPaymentScheduleConfiguration: defaultAnalyticalPaymentScheduleConfiguration(),
       analyticalInvoicePaymentAllocationConfiguration: defaultAnalyticalInvoicePaymentAllocationConfiguration(),
+      analyticalSupplierOrdersConfiguration: defaultAnalyticalSupplierOrdersConfiguration(),
       generalAccountNaturesConfiguration: defaultGeneralAccountNaturesConfiguration(),
       fixedAssetAccountsConfiguration: defaultFixedAssetAccountsConfiguration(),
       orderAccountsConfiguration: defaultOrderAccountsConfiguration(),
@@ -1858,6 +1908,7 @@
       analyticalDimensionValuesConfiguration: normalizeAnalyticalDimensionValuesConfiguration(record && record.analyticalDimensionValuesConfiguration),
       analyticalPaymentScheduleConfiguration: normalizeAnalyticalPaymentScheduleConfiguration(record && record.analyticalPaymentScheduleConfiguration),
       analyticalInvoicePaymentAllocationConfiguration: normalizeAnalyticalInvoicePaymentAllocationConfiguration(record && record.analyticalInvoicePaymentAllocationConfiguration),
+      analyticalSupplierOrdersConfiguration: normalizeAnalyticalSupplierOrdersConfiguration(record && record.analyticalSupplierOrdersConfiguration),
       fixedAssetAccountsConfiguration: normalizeFixedAssetAccountsConfiguration(record && record.fixedAssetAccountsConfiguration),
       orderAccountsConfiguration: normalizeOrderAccountsConfiguration(record && record.orderAccountsConfiguration),
       orderNaturesConfiguration: normalizeOrderNaturesConfiguration(record && record.orderNaturesConfiguration),
@@ -2868,6 +2919,157 @@
   function analyticalInvoicePaymentAllocationConfiguration() {
     var dossier = currentDossier();
     return clone(dossier && dossier.analyticalInvoicePaymentAllocationConfiguration || defaultAnalyticalInvoicePaymentAllocationConfiguration());
+  }
+
+  function analyticalSupplierOrdersConfiguration() {
+    var dossier = currentDossier();
+    return clone(dossier && dossier.analyticalSupplierOrdersConfiguration || defaultAnalyticalSupplierOrdersConfiguration());
+  }
+
+  function saveAnalyticalSupplierOrdersConfiguration(inputRows) {
+    ensureFolderCatalog();
+    var dossier = folderById(activeFolderId);
+    if (!dossier) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    var current = normalizeAnalyticalSupplierOrdersConfiguration(dossier.analyticalSupplierOrdersConfiguration);
+    var sourceRows = Array.isArray(inputRows) ? inputRows : [];
+    if (sourceRows.length > 5000) return { ok: false, errors: ['Le registre est limité à 5 000 commandes.'] };
+    var errors = [];
+    var seenIds = new Set();
+    var references = Object.create(null);
+    var precisionPlaces = Number(normalizeAccountingConfiguration(dossier.accountingConfiguration, dossier.cycleStart, dossier.cycleEnd).decimalPlaces);
+    if (!Number.isInteger(precisionPlaces) || precisionPlaces < 0 || precisionPlaces > 4) precisionPlaces = 0;
+    var precision = Math.pow(10, precisionPlaces);
+    var suppliersById = new Map((suppliers() || []).map(function (item) { return [item.id, item]; }));
+    var orderNatures = normalizeOrderNaturesConfiguration(dossier.orderNaturesConfiguration);
+    var allOrderNatures = orderNatures.rows.concat(orderNatures.additionalRows || []);
+    var currencies = normalizeCurrenciesConfiguration(dossier.currenciesConfiguration).rows;
+    var analyticNatures = normalizeAnalyticalNaturesConfiguration(dossier.analyticalNaturesConfiguration).rows.filter(function (nature) { return nature && !nature.group; });
+    var dimensionValues = normalizeAnalyticalDimensionValuesConfiguration(dossier.analyticalDimensionValuesConfiguration).rows;
+    var centers = analyticalCenters();
+    var now = new Date().toISOString();
+    function signature(row) {
+      return JSON.stringify({ reference: row.reference, date: row.date, supplierId: row.supplierId, natureId: row.natureId, description: row.description,
+        currencyCode: row.currencyCode, lines: row.lines.map(function (line) { return { id: line.id, description: line.description, amount: line.amount, analyticalAllocations: line.analyticalAllocations }; }) });
+    }
+    var rows = sourceRows.map(function (input, orderIndex) {
+      input = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+      var label = 'Commande ' + (orderIndex + 1) + ' : ';
+      var id = String(input.id || '').trim();
+      var previous = id ? current.rows.find(function (row) { return row.id === id; }) || null : null;
+      if (!id) { do { id = 'analytical-supplier-order-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); } while (seenIds.has(id)); }
+      if (seenIds.has(id)) errors.push(label + 'identifiant répété.');
+      seenIds.add(id);
+      var reference = String(input.reference || '').trim().replace(/\s+/g, ' ');
+      var referenceKey = reference.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+      if (!reference) errors.push(label + 'la référence est obligatoire.');
+      if (reference.length > 120) errors.push(label + 'la référence ne peut pas dépasser 120 caractères.');
+      if (referenceKey && references[referenceKey]) errors.push(label + 'la référence est répétée dans ce dossier.');
+      if (referenceKey) references[referenceKey] = true;
+      var date = String(input.date || '').trim();
+      if (!parseIsoDate(date) || date < dossier.cycleStart || date > dossier.cycleEnd) errors.push(label + 'la date doit être valide et comprise dans le cycle du dossier (' + dossier.cycleStart + ' au ' + dossier.cycleEnd + ').');
+      var supplierId = String(input.supplierId || '').trim();
+      var supplierRecord = suppliersById.get(supplierId) || null;
+      if ((!supplierRecord || supplierRecord.active === false) && !(previous && previous.supplierId === supplierId)) errors.push(label + 'choisissez un fournisseur actif déjà enregistré dans ce dossier.');
+      var natureId = String(input.natureId || '').trim();
+      var orderNature = allOrderNatures.find(function (nature) { return nature.id === natureId; }) || null;
+      if (!orderNature) errors.push(label + 'choisissez une nature de commande configurée.');
+      var description = String(input.description || '').trim().replace(/\s+/g, ' ');
+      if (!description) errors.push(label + 'l’objet général est obligatoire.');
+      if (description.length > 240) errors.push(label + 'l’objet général ne peut pas dépasser 240 caractères.');
+      var currencyCode = String(input.currencyCode || '').trim().toLocaleUpperCase();
+      if (!currencies.some(function (currency) { return currency.code === currencyCode; }) && !(previous && previous.currencyCode === currencyCode)) errors.push(label + 'choisissez une devise présente dans le référentiel du dossier.');
+      var status = ['draft', 'issued', 'cancelled'].indexOf(input.status) !== -1 ? input.status : 'draft';
+      if (!previous && status !== 'draft') errors.push(label + 'une commande doit d’abord être enregistrée comme brouillon.');
+      var priorLines = new Map((previous && previous.lines || []).map(function (line) { return [line.id, line]; }));
+      var lineIds = new Set();
+      var inputLines = Array.isArray(input.lines) ? input.lines : [];
+      if (!inputLines.length) errors.push(label + 'saisissez au moins une ligne.');
+      if (inputLines.length > 500) errors.push(label + 'le maximum est de 500 lignes.');
+      var lines = inputLines.slice(0, 500).map(function (line, lineIndex) {
+        line = line && typeof line === 'object' && !Array.isArray(line) ? line : {};
+        var lineId = String(line.id || '').trim();
+        var priorLine = lineId ? priorLines.get(lineId) || null : null;
+        if (!lineId) { do { lineId = 'supplier-order-line-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); } while (lineIds.has(lineId)); }
+        if (lineIds.has(lineId)) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : identifiant répété.');
+        lineIds.add(lineId);
+        var lineDescription = String(line.description || '').trim().replace(/\s+/g, ' ');
+        var amount = line.amount === '' || line.amount == null ? NaN : Number(line.amount);
+        if (!lineDescription) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : le libellé est obligatoire.');
+        if (lineDescription.length > 240) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : le libellé dépasse 240 caractères.');
+        if (!Number.isFinite(amount) || amount <= 0 || amount > 1e15) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : le montant saisi doit être positif.');
+        else if (Math.abs(amount * precision - Math.round(amount * precision)) > 1e-7) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : le montant dépasse la précision configurée.');
+        var totals = Object.create(null);
+        var assignedKeys = Object.create(null);
+        var allocations = (Array.isArray(line.analyticalAllocations) ? line.analyticalAllocations : []).slice(0, 500).map(function (raw, allocationIndex) {
+          raw = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+          var analyticNatureId = String(raw.natureId || '').trim();
+          var nature = analyticNatures.find(function (item) { return item.id === analyticNatureId; }) || null;
+          var valueId = String(raw.valueId || '').trim();
+          var valueLabel = String(raw.valueLabel || '').trim().replace(/\s+/g, ' ');
+          var assignedAmount = raw.amount === '' || raw.amount == null ? NaN : Number(raw.amount);
+          var old = priorLine && priorLine.analyticalAllocations.find(function (item) { return item.natureId === analyticNatureId && item.valueId === valueId && item.valueLabel === valueLabel; });
+          if (!nature) errors.push(label + 'ligne ' + (lineIndex + 1) + ', imputation ' + (allocationIndex + 1) + ' : nature analytique inconnue.');
+          if (!Number.isFinite(assignedAmount) || assignedAmount <= 0) errors.push(label + 'ligne ' + (lineIndex + 1) + ', imputation ' + (allocationIndex + 1) + ' : le montant imputé doit être positif.');
+          else if (Math.abs(assignedAmount * precision - Math.round(assignedAmount * precision)) > 1e-7) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : précision de montant analytique dépassée.');
+          var centerCode = '', centerName = '';
+          if (analyticNatureId === 'responsibility-centers') {
+            var center = centers.find(function (item) { return item && item.id === valueId; });
+            if (center) { centerCode = String(center.code || ''); centerName = String(center.name || ''); valueLabel = valueLabel || centerCode + ' · ' + centerName; }
+            else if (old) { centerCode = old.centerCode; centerName = old.centerName; valueLabel = old.valueLabel; }
+            else errors.push(label + 'ligne ' + (lineIndex + 1) + ' : centre analytique absent du référentiel.');
+          } else {
+            var valueExists = dimensionValues.some(function (item) { return item.natureId === analyticNatureId && item.label === valueLabel && (item.active !== false || old); });
+            if (!valueLabel || (!valueExists && !old)) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : valeur analytique active absente du référentiel.');
+          }
+          var allocationKey = analyticNatureId + '|' + (analyticNatureId === 'responsibility-centers' ? valueId : valueLabel);
+          if (assignedKeys[allocationKey]) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : valeur analytique répétée pour une même nature.');
+          assignedKeys[allocationKey] = true;
+          totals[analyticNatureId] = (totals[analyticNatureId] || 0) + (Number.isFinite(assignedAmount) ? assignedAmount : 0);
+          if (Number.isFinite(amount) && totals[analyticNatureId] > amount + 1e-7) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : la ventilation d’une nature dépasse le montant de la ligne.');
+          var priorNature = priorLine && priorLine.analyticalAllocations.find(function (item) { return item.natureId === analyticNatureId; });
+          return { natureId: nature ? nature.id : analyticNatureId, natureLabel: priorNature && priorNature.natureLabel || nature && (nature.individualName || nature.genericName) || '', valueId: valueId.slice(0, 160), valueLabel: valueLabel.slice(0, 160), centerCode: centerCode.slice(0, 32), centerName: centerName.slice(0, 150), amount: Number.isFinite(assignedAmount) ? assignedAmount : 0 };
+        });
+        return { id: lineId, description: lineDescription.slice(0, 240), amount: Number.isFinite(amount) ? amount : 0, analyticalAllocations: allocations };
+      });
+      var candidate = {
+        id: id, reference: reference.slice(0, 120), date: date, supplierId: supplierId,
+        supplierCode: previous && previous.supplierId === supplierId ? previous.supplierCode : supplierRecord && supplierRecord.code || '',
+        supplierName: previous && previous.supplierId === supplierId ? previous.supplierName : supplierRecord && supplierRecord.name || '',
+        natureId: natureId, natureNumber: previous && previous.natureId === natureId ? previous.natureNumber : orderNature && orderNature.number || '',
+        natureName: previous && previous.natureId === natureId ? previous.natureName : orderNature && orderNature.name || '',
+        description: description.slice(0, 240), currencyCode: currencyCode, lines: lines, status: status,
+        createdAt: previous ? previous.createdAt : now, updatedAt: now, issuedAt: previous && previous.issuedAt || '', cancelledAt: previous && previous.cancelledAt || ''
+      };
+      if (previous && previous.status !== 'draft') {
+        if (signature(candidate) !== signature(previous)) errors.push(label + 'les données d’une commande émise ou annulée sont verrouillées.');
+        if (previous.status === 'cancelled' && status !== 'cancelled') errors.push(label + 'une commande annulée ne peut pas être réactivée.');
+        if (previous.status === 'issued' && status === 'cancelled') {
+          if (input.cancelConfirmed !== true) errors.push(label + 'confirmez explicitement l’annulation.');
+          candidate.cancelledAt = now;
+        } else if (previous.status === 'issued' && status !== 'issued') errors.push(label + 'transition d’état invalide.');
+        else if (previous.status === 'issued') candidate.issuedAt = previous.issuedAt;
+        else if (previous.status === 'cancelled') candidate.cancelledAt = previous.cancelledAt;
+      } else if (previous && previous.status === 'draft' && status === 'issued') {
+        if (signature(candidate) !== signature(previous)) errors.push(label + 'enregistrez les modifications avant de confirmer l’émission.');
+        if (input.issueConfirmed !== true) errors.push(label + 'confirmez explicitement l’émission.');
+        candidate.issuedAt = now;
+      } else if (previous && previous.status === 'draft' && status === 'cancelled') {
+        if (signature(candidate) !== signature(previous)) errors.push(label + 'enregistrez les modifications avant de confirmer l’annulation.');
+        if (input.cancelConfirmed !== true) errors.push(label + 'confirmez explicitement l’annulation du brouillon.');
+        candidate.cancelledAt = now;
+      }
+      if (status === 'issued' && !candidate.issuedAt) candidate.issuedAt = now;
+      return candidate;
+    });
+    current.rows.forEach(function (row) { if (!seenIds.has(row.id)) errors.push('La commande « ' + row.reference + ' » ne peut pas être supprimée ; annulez-la pour conserver l’historique.'); });
+    if (errors.length) return { ok: false, errors: errors };
+    var previousCatalog = clone(folderCatalog);
+    var dossierIndex = folderCatalog.findIndex(function (record) { return record.id === dossier.id; });
+    if (dossierIndex < 0) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    var configuration = normalizeAnalyticalSupplierOrdersConfiguration({ rows: rows, updatedAt: now });
+    folderCatalog[dossierIndex] = Object.assign({}, dossier, { analyticalSupplierOrdersConfiguration: configuration });
+    if (!saveFolderCatalog()) { folderCatalog = previousCatalog; return { ok: false, errors: ['Impossible d’enregistrer le registre dans le stockage navigateur du dossier.'] }; }
+    return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
   }
 
   function saveAnalyticalInvoicePaymentAllocationConfiguration(input) {
@@ -9157,6 +9359,8 @@
     analyticalPaymentScheduleConfiguration: analyticalPaymentScheduleConfiguration,
     saveAnalyticalPaymentScheduleConfiguration: saveAnalyticalPaymentScheduleConfiguration,
     analyticalInvoicePaymentAllocationConfiguration: analyticalInvoicePaymentAllocationConfiguration,
+    analyticalSupplierOrdersConfiguration: analyticalSupplierOrdersConfiguration,
+    saveAnalyticalSupplierOrdersConfiguration: saveAnalyticalSupplierOrdersConfiguration,
     saveAnalyticalInvoicePaymentAllocationConfiguration: saveAnalyticalInvoicePaymentAllocationConfiguration,
     saveAnalyticalSectionsConfiguration: saveAnalyticalSectionsConfiguration,
     analyticalAllocationKeysConfiguration: analyticalAllocationKeysConfiguration,

@@ -3833,3 +3833,34 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .invoice-payment-confirmation { display: flex; align-items: flex-start; gap: .6rem; margin: .8rem 0; padding: .8rem; border: 1px solid #d6b45e; border-left: 4px solid #c48116; border-radius: 8px; background: #fff8e8; color: #684d1b; font-weight: 650; }
 .invoice-payment-confirmation input { margin-top: .2rem; }
 @media (max-width: 1040px) { .invoice-payment-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* Supplier orders are commitments/working documents, not accounting entries. */
+.analytical-supplier-orders-workspace { border-top: 5px solid #087f9f; }
+.supplier-order-summary { display: grid; grid-template-columns: repeat(3, minmax(120px, .8fr)) minmax(260px, 2fr); gap: .7rem; margin: 1rem 0; }
+.supplier-order-summary > div { display: flex; flex-direction: column; gap: .35rem; padding: .8rem; border: 1px solid #a7cfd8; border-left: 4px solid #087f9f; border-radius: 10px; background: #f2fafc; color: #15566a; }
+.supplier-order-summary small { color: #526a72; font-weight: 650; }
+.supplier-order-summary strong { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.supplier-order-commitment-summary > div { display: flex; flex-wrap: wrap; gap: .4rem; }
+.supplier-order-commitment-summary > div > span { padding: .32rem .55rem; border: 1px solid #b7d9e0; border-radius: 8px; background: #fff; }
+.supplier-order-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .7rem; margin: .8rem 0; }
+.supplier-order-toolbar > span { color: #526a72; font-size: .82rem; }
+.supplier-order-filters { display: grid; grid-template-columns: minmax(180px, 2fr) minmax(150px, 1fr) auto auto; align-items: end; gap: .65rem; margin: 1rem 0; padding: .75rem; border: 1px solid #d5e3e5; border-radius: 10px; background: #f8fbfc; }
+.supplier-order-table-wrap { overflow-x: auto; }
+.supplier-order-table { min-width: 1220px; }
+.supplier-order-table th { white-space: nowrap; }
+.supplier-order-table .number-cell { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.supplier-order-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.supplier-order-form-grid .field, .supplier-order-line .field, .supplier-order-analytic-form .field { padding: .65rem; border-left: 4px solid #087f9f; border-radius: 8px; background: #f0fbfd; }
+.supplier-order-line-editor { margin-top: 1rem; padding: .9rem; border: 1px solid #acd3db; border-radius: 12px; background: #f8fcfd; }
+.supplier-order-line-editor-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .7rem; margin-bottom: .7rem; }
+.supplier-order-line-editor-heading h4 { color: #15566a; }
+.supplier-order-line { display: grid; grid-template-columns: minmax(240px, 2fr) minmax(140px, 1fr) auto auto; align-items: end; gap: .6rem; padding: .65rem 0; border-top: 1px solid #d7e7e9; }
+.supplier-order-line-analytic-status { padding: .45rem .55rem; border-radius: 7px; background: #fff8e8; color: #74551a; font-size: .8rem; font-weight: 700; }
+.supplier-order-unclassified { display: inline-flex; padding: .28rem .48rem; border: 1px solid #d6b45e; border-radius: 7px; background: #fff8e8; color: #74551a; font-weight: 700; }
+.supplier-order-analytic-chip { display: inline-block; margin: .12rem; padding: .35rem .5rem; border: 1px solid #9bcfd9; border-left: 3px solid #087f9f; border-radius: 7px; background: #f0fbfd; color: #15566a; font-size: .78rem; }
+.supplier-order-analytic-form { display: grid; grid-template-columns: 1.2fr 1.4fr minmax(150px, .8fr) auto; align-items: end; gap: .65rem; margin-top: 1rem; }
+.supplier-order-axis-totals { display: flex; flex-wrap: wrap; gap: .5rem; margin: .7rem 0; }
+.supplier-order-axis-totals span { padding: .4rem .6rem; border: 1px solid #abcfd5; border-radius: 8px; background: #f2fafb; color: #15566a; font-size: .82rem; }
+.supplier-order-line-context, .supplier-order-detail-context { margin: .75rem 0; padding: .75rem .9rem; border-left: 4px solid #c48116; background: #fff8e8; color: #684d1b; }
+@media (max-width: 1040px) { .supplier-order-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .supplier-order-line { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 680px) { .supplier-order-summary, .supplier-order-filters, .supplier-order-form-grid, .supplier-order-line, .supplier-order-analytic-form { grid-template-columns: minmax(0, 1fr); } .supplier-order-toolbar { align-items: stretch; flex-direction: column; } }

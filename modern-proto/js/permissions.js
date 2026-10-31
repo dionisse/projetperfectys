@@ -18,6 +18,7 @@
     { id: 'analyticalValues.configure', label: 'Configurer les valeurs des natures analytiques' },
     { id: 'analyticalPayments.manage', label: 'Programmer et modifier les échéances analytiques' },
     { id: 'analyticalInvoicePayments.manage', label: 'Affecter et imputer les règlements aux factures' },
+    { id: 'analyticalSupplierOrders.manage', label: 'Gérer les commandes fournisseurs analytiques' },
     { id: 'generalAccountNatures.configure', label: 'Configurer les natures des comptes généraux' },
     { id: 'draft.create', label: 'Créer une écriture / un brouillon' },
     { id: 'draft.edit', label: 'Modifier un brouillon' },
