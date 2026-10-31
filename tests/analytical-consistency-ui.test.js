@@ -20,7 +20,9 @@ assert.match(app, /natures sans règle obligatoire ne sont pas présumées oblig
 assert.match(navigation, /id: 'analytic-consistency-control'.*status: 'active'/);
 assert.match(report, /function buildAnalyticalConsistencyReport\(options\)/);
 assert.match(report, /reliquat partiel n’est pas autorisé explicitement/);
+assert.match(app, /analyticalDimensionValues:.*analyticalDimensionValuesConfiguration/);
+assert.match(report, /absente du référentiel renseigné ; la valeur reste non classée/);
 assert.match(css, /\.analytical-consistency-table/);
-assert.match(worker, /perfecto-static-v166/);
+assert.match(worker, /perfecto-static-v167/);
 
 console.log('Contrôle des ventilations analytiques : navigation, calcul consultatif, export et style vérifiés — OK');

@@ -141,6 +141,42 @@ const accountAnalyticBalance = Report.buildAnalyticalStatement({
 assert.equal(accountAnalyticBalance.groups[0].rows[0].cells.account, '601100');
 assert.equal(accountAnalyticBalance.totalDebit, 100);
 
+const entriesWithUnregisteredValue = structuredClone(entries);
+entriesWithUnregisteredValue[0].lines[0].analyticSplits[1].allocations.push({ valueLabel: 'Service inédit', value: '20', amount: 20 });
+const registry = [{ natureId: 'activity-domains', label: 'Production', active: true }];
+const unknownMovement = Report.buildAnalyticalMovements({
+  entries: entriesWithUnregisteredValue, analyticalCenters, analyticalNatures, accounts,
+  analyticalDimensionValues: registry, decimalPlaces: 0,
+  filters: { analyticalNature: 'activity-domains', from: '2026-02-01', to: '2026-02-28' }
+});
+assert.equal(unknownMovement.totalDebit, 100, 'seule la valeur connue contribue aux totaux reconnus.');
+assert.equal(unknownMovement.unmatchedValueCount, 1);
+assert.equal(unknownMovement.unmatchedValueDebit, 20);
+assert.equal(unknownMovement.allocationCount, 1);
+assert.equal(unknownMovement.groups[0].rows.find(row => row.cells.status === 'Valeur non rapprochée').cells.destination, 'Valeur non rapprochée · Service inédit');
+const unknownStatement = Report.buildAnalyticalStatement({
+  reportType: 'analytic-other-nature-balance', entries: entriesWithUnregisteredValue, analyticalCenters, analyticalNatures, accounts,
+  analyticalDimensionValues: registry, decimalPlaces: 0, cycleStart: '2026-01-01', cycleEnd: '2026-12-31',
+  filters: { analyticalNature: 'activity-domains', from: '2026-01-01', to: '2026-12-31' }
+});
+assert.equal(unknownStatement.totalDebit, 100);
+assert.equal(unknownStatement.rowCount, 1, 'la valeur absente ne devient pas une ligne analytique reconnue.');
+assert.equal(unknownStatement.groups[1].code, 'analytical-unmatched-values');
+assert.equal(unknownStatement.groups[1].rows[0].cells.destination, 'Valeurs non rapprochées');
+assert.equal(unknownStatement.groups[1].rows[0].cells.debit, 20);
+const unknownLedger = Report.buildAnalyticalStatement({
+  reportType: 'analytic-other-nature-ledger', entries: entriesWithUnregisteredValue, analyticalCenters, analyticalNatures, accounts,
+  analyticalDimensionValues: registry, decimalPlaces: 0, cycleStart: '2026-01-01', cycleEnd: '2026-12-31',
+  filters: { analyticalNature: 'activity-domains', from: '2026-01-01', to: '2026-12-31' }
+});
+assert.equal(unknownLedger.groups[1].rows[0].cells.status, 'Valeur non rapprochée');
+const withoutConfiguredRegistry = Report.buildAnalyticalMovements({
+  entries: entriesWithUnregisteredValue, analyticalCenters, analyticalNatures, accounts, decimalPlaces: 0,
+  filters: { analyticalNature: 'activity-domains', from: '2026-02-01', to: '2026-02-28' }
+});
+assert.equal(withoutConfiguredRegistry.totalDebit, 120, 'sans référentiel renseigné, aucun mapping ou rejet implicite n’est inventé.');
+assert.equal(withoutConfiguredRegistry.unmatchedValueCount, 0);
+
 const invalidPeriod = Report.buildAnalyticalMovements({
   entries, analyticalCenters, analyticalNatures, accounts,
   filters: { analyticalNature: 'responsibility-centers', from: '2026-03-01', to: '2026-02-01' }

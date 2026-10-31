@@ -29,6 +29,9 @@ assert.match(app, /Choisissez explicitement une nature analytique/);
 assert.match(app, /aucun report d’ouverture n’est supposé/);
 assert.match(app, /Imputations non classées/);
 assert.match(app, /unclassifiedAllocationCount/);
+assert.match(app, /Valeur non rapprochée/);
+assert.match(app, /analytical-unmatched-values/);
+assert.match(css, /is-unmatched/);
 assert.match(app, /ANALYTICAL_STATEMENT_IDS\.indexOf\(child\.id\)/);
 assert.match(navigation, /id: 'analytic-center-balance'.*status: 'active'/);
 assert.match(navigation, /id: 'analytic-other-nature-balance'.*status: 'active'/);
@@ -39,6 +42,6 @@ assert.match(navigation, /id: 'analytic-other-nature-situation'.*status: 'active
 assert.match(navigation, /id: 'analytic-general-account-balance'.*status: 'active'/);
 assert.match(css, /\.analytical-statement-view/);
 assert.match(css, /--analytical-tint: #f2f6f5/);
-assert.match(worker, /perfecto-static-v166/);
+assert.match(worker, /perfecto-static-v167/);
 
 console.log('Vue des mouvements analytiques : accès, filtres et résumés entièrement en français — OK');

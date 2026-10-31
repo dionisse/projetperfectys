@@ -24739,6 +24739,7 @@
     var nature = natureRows.find(function (row) { return row.id === filter.natureId; }) || null;
     var report = JournalLinesReport.buildAnalyticalMovements({
       entries: S.entries(), analyticalCenters: centers, analyticalNatures: natureRows, accounts: S.accounts(),
+      analyticalDimensionValues: S.analyticalDimensionValuesConfiguration(filter.natureId).rows || [],
       cycleStart: cycleStart, cycleEnd: cycleEnd,
       decimalPlaces: S.accountingConfiguration().decimalPlaces,
       filters: { analyticalNature: filter.natureId, centerId: filter.centerId, journal: filter.journal, from: from, to: to, search: filter.q }
@@ -24756,12 +24757,13 @@
       return '<tr>' + report.columns.map(function (column) {
         var value = row.cells[column.key];
         if (column.key === 'debit' || column.key === 'credit') return '<td class="number-cell">' + (Number(value) ? amount(value) : '') + '</td>';
-        if (column.key === 'status') return '<td><span class="analytic-movement-status' + (value === 'À ventiler' ? ' is-unallocated' : '') + '">' + esc(value) + '</span></td>';
+        if (column.key === 'status') return '<td><span class="analytic-movement-status' + (value === 'À ventiler' ? ' is-unallocated' : (value === 'Valeur non rapprochée' ? ' is-unmatched' : '')) + '">' + esc(value) + '</span></td>';
         return '<td>' + esc(value == null ? '' : value) + '</td>';
       }).join('') + '</tr>';
     }).join('');
     var errors = report.errors.length ? '<div class="alert warning"><strong>Consultation impossible.</strong> ' + report.errors.map(esc).join(' ') + '</div>' : '';
-    var unmatchedNote = report.unmatchedCenterCount ? '<div class="alert warning">' + report.unmatchedCenterCount + ' référence(s) de centre n’ont pas été rapprochées sans ambiguïté ; elles restent exclues de cette vue.</div>' : '';
+    var unmatchedNote = (report.unmatchedCenterCount ? '<div class="alert warning">' + report.unmatchedCenterCount + ' référence(s) de centre n’ont pas été rapprochées sans ambiguïté ; elles restent exclues de cette vue.</div>' : '') +
+      (report.unmatchedValueCount ? '<div class="alert warning">' + report.unmatchedValueCount + ' valeur(s) saisie(s) sont absentes du référentiel renseigné. Elles restent non classées et sont exclues des totaux ventilés.</div>' : '');
     var empty = !report.errors.length && !rows
       ? '<div class="empty-state"><span class="empty-state-icon">⌕</span><h3>Aucun mouvement analytique trouvé</h3><p>Les filtres ne correspondent à aucune ventilation explicite d’une pièce validée. Les brouillons et lignes sans imputation ne sont pas repris.</p></div>'
       : '';
@@ -24775,7 +24777,7 @@
         '<label class="field"><span>Au</span><input type="date" data-filter="analyticalMovements:to" value="' + esc(to) + '" min="' + esc(cycleStart) + '" max="' + esc(cycleEnd) + '"></label>' +
         '<label class="field analytical-movement-search"><span>Rechercher</span><input type="search" data-filter="analyticalMovements:q" value="' + esc(filter.q) + '" placeholder="Pièce, compte ou affectation"></label>' +
       '</div></section>' + errors + unmatchedNote +
-      '<div class="exchange-summary-grid supplier-summary-grid analytical-movement-summary"><div><small>Affectations ventilées</small><strong>' + report.allocationCount + '</strong></div><div><small>Total débit analytique</small><strong>' + moneyHtml(report.totalDebit) + '</strong></div><div><small>Total crédit analytique</small><strong>' + moneyHtml(report.totalCredit) + '</strong></div><div><small>À ventiler · débit / crédit</small><strong>' + amount(report.unallocatedDebit) + ' / ' + amount(report.unallocatedCredit) + ' XOF</strong></div></div>' +
+      '<div class="exchange-summary-grid supplier-summary-grid analytical-movement-summary"><div><small>Affectations ventilées</small><strong>' + report.allocationCount + '</strong></div><div><small>Total débit analytique</small><strong>' + moneyHtml(report.totalDebit) + '</strong></div><div><small>Total crédit analytique</small><strong>' + moneyHtml(report.totalCredit) + '</strong></div><div><small>À ventiler · débit / crédit</small><strong>' + amount(report.unallocatedDebit) + ' / ' + amount(report.unallocatedCredit) + ' XOF</strong></div>' + (report.unmatchedValueCount ? '<div class="analytical-summary-unmatched"><small>Valeurs non rapprochées · ' + report.unmatchedValueCount + '</small><strong>' + amount(report.unmatchedValueDebit + report.unmatchedValueCredit) + ' XOF exclu</strong></div>' : '') + '</div>' +
       (rows ? '<div class="table-wrap exchange-table-wrap analytical-movement-table-wrap"><table class="exchange-mapping-table"><thead><tr>' + report.columns.map(function (column) { return '<th>' + esc(column.label) + '</th>'; }).join('') + '</tr></thead><tbody>' + rows + '</tbody></table></div>' : empty) +
       '<p class="exchange-footnote">Les totaux ventilés excluent les reliquats affichés séparément. Aucun montant n’est calculé depuis une clé de répartition ; les références historiques explicites sont marquées comme telles.</p>' +
     '</div>';
@@ -26313,6 +26315,7 @@
       entries: S.postedEntries(),
       analyticalCenters: S.analyticalCenters(),
       analyticalNatures: S.analyticalNaturesConfiguration().rows || [],
+      analyticalDimensionValues: (S.analyticalNaturesConfiguration().rows || []).filter(function (nature) { return nature && !nature.group; }).reduce(function (values, nature) { return values.concat(S.analyticalDimensionValuesConfiguration(nature.id).rows || []); }, []),
       accountRules: S.analyticalAccountRulesConfiguration().rules || [],
       accounts: S.accounts(),
       cycleStart: dossier && dossier.cycleStart || '',
@@ -26399,6 +26402,7 @@
     if (!report) return '';
     var warnings = [];
     if (report.unmatchedCenterCount) warnings.push(report.unmatchedCenterCount + ' ventilation(s) mentionnent un centre absent ou ambigu dans le référentiel ; elles restent non classées et ne sont pas incluses aux totaux.');
+    if (report.unmatchedValueCount) warnings.push(report.unmatchedValueCount + ' valeur(s) saisie(s) sont absentes du référentiel renseigné ; elles restent non classées et leurs montants sont exclus des totaux reconnus.');
     if (report.unclassifiedAllocationCount) warnings.push(report.unclassifiedAllocationCount + ' ventilation(s) d’une autre nature sont incomplètes ou sans valeur identifiable ; elles restent non classées et ne sont pas incluses aux totaux.');
     return warnings.length ? '<div class="alert warning analytical-statement-warning"><div><strong>Imputations non classées</strong><ul>' + warnings.map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('') + '</ul></div></div>' : '';
   }
@@ -26416,7 +26420,8 @@
     }).join('') + '</tr></thead><tbody>' + report.groups.map(function (group) {
       return '<tr class="analytical-statement-group"><th colspan="' + report.columns.length + '" scope="colgroup">' + esc(group.title) + '</th></tr>' +
         (group.rows || []).map(function (row) {
-          return '<tr' + (group.code === 'analytical-unallocated' ? ' class="analytical-statement-unallocated"' : '') + '>' + report.columns.map(function (column) {
+          var rowClass = group.code === 'analytical-unallocated' ? 'analytical-statement-unallocated' : (group.code === 'analytical-unmatched-values' ? 'analytical-statement-unmatched' : '');
+          return '<tr' + (rowClass ? ' class="' + rowClass + '"' : '') + '>' + report.columns.map(function (column) {
             return '<td>' + esc(fmt(row.cells[column.key])) + '</td>';
           }).join('') + '</tr>';
         }).join('');
@@ -26435,6 +26440,7 @@
       entries: S.postedEntries(),
       analyticalCenters: S.analyticalCenters(),
       analyticalNatures: S.analyticalNaturesConfiguration().rows || [],
+      analyticalDimensionValues: S.analyticalDimensionValuesConfiguration(natureId).rows || [],
       accounts: S.accounts(),
       cycleStart: cycleStart,
       cycleEnd: cycleEnd,
@@ -26472,7 +26478,7 @@
     var reportContent = report
       ? ((report.errors || []).length
         ? '<div class="alert warning"><div>' + report.errors.map(function (message) { return '<p>' + esc(message) + '</p>'; }).join('') + '</div></div>'
-        : '<div class="analytical-statement-summary"><span>Mouvements analytiques débit <strong>' + esc(money(report.totalDebit)) + '</strong></span><span>Mouvements analytiques crédit <strong>' + esc(money(report.totalCredit)) + '</strong></span><span>Lignes regroupées <strong>' + esc(String(report.rowCount)) + '</strong></span>' + (report.unallocatedLineCount ? '<span>À ventiler <strong>' + esc(money(report.unallocatedDebit + report.unallocatedCredit)) + '</strong></span>' : '') + '</div>' + analyticalStatementWarnings(report) + analyticalStatementTable(report, S.accountingConfiguration().decimalPlaces))
+        : '<div class="analytical-statement-summary"><span>Mouvements analytiques débit <strong>' + esc(money(report.totalDebit)) + '</strong></span><span>Mouvements analytiques crédit <strong>' + esc(money(report.totalCredit)) + '</strong></span><span>Lignes regroupées <strong>' + esc(String(report.rowCount)) + '</strong></span>' + (report.unallocatedLineCount ? '<span>À ventiler <strong>' + esc(money(report.unallocatedDebit + report.unallocatedCredit)) + '</strong></span>' : '') + (report.unmatchedValueCount ? '<span class="analytical-summary-unmatched">Valeurs non rapprochées · ' + esc(String(report.unmatchedValueCount)) + ' <strong>' + esc(money(report.unmatchedValueDebit + report.unmatchedValueCredit)) + ' exclu</strong></span>' : '') + '</div>' + analyticalStatementWarnings(report) + analyticalStatementTable(report, S.accountingConfiguration().decimalPlaces))
       : '<div class="alert info"><div>Choisissez explicitement une nature analytique pour afficher les imputations enregistrées. Aucun axe ni montant n’est déduit automatiquement.</div></div>';
     return '<div class="edition-report-detail-view analytical-statement-view">' + backLink +
       '<header class="analytical-statement-heading"><span class="page-kicker">SUIVI ANALYTIQUE · ÉTAT EN LECTURE SEULE</span><h2>' + esc(analyticalStatementTitle(reportType)) + '</h2><p>' + (isSituation ? 'Mouvements cumulés depuis le début du cycle jusqu’à la date d’arrêté ; aucun report d’ouverture n’est supposé.' : 'Seules les ventilations explicites des écritures validées sont reprises. Les montants comptables débit/crédit ne sont pas modifiés.') + '</p></header>' +

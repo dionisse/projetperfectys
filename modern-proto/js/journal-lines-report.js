@@ -680,7 +680,11 @@
   }
 
   function normalizeAnalyticalMovementSearch(value) {
-    return String(value == null ? '' : value).trim().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLocaleUpperCase();
+    return String(value == null ? '' : value).trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleUpperCase();
+  }
+
+  function normalizeAnalyticalDimensionValueLabel(value) {
+    return String(value == null ? '' : value).trim().replace(/\s+/g, ' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
   }
 
   var ANALYTICAL_MOVEMENT_COLUMNS = [
@@ -715,14 +719,19 @@
     var centers = Array.isArray(options.analyticalCenters) ? options.analyticalCenters : [];
     var accounts = Array.isArray(options.accounts) ? options.accounts : [];
     var natures = Array.isArray(options.analyticalNatures) ? options.analyticalNatures : [];
+    var dimensionValues = Array.isArray(options.analyticalDimensionValues) ? options.analyticalDimensionValues : [];
     var centerByReference = new Map();
     var centerById = new Map();
     var accountByCode = new Map(accounts.map(function (account) { return [String(account.code || ''), account]; }));
     var nature = natures.find(function (record) { return record && record.id === natureId && !record.group; }) || null;
+    var configuredValues = dimensionValues.filter(function (record) { return record && String(record.natureId || '') === natureId && String(record.label || '').trim(); });
+    var registeredValueKeys = new Set(configuredValues.map(function (record) { return normalizeAnalyticalDimensionValueLabel(record.label); }));
+    var valueRegistryConfigured = registeredValueKeys.size > 0;
     var errors = [];
     var rows = [];
     var sourceLineKeys = new Set();
     var unallocated = { lineCount: 0, debitUnits: 0, creditUnits: 0 };
+    var unmatchedValues = { lineCount: 0, sourceLines: new Set(), debitUnits: 0, creditUnits: 0 };
     var totalDebitUnits = 0;
     var totalCreditUnits = 0;
     var unmatchedCenterCount = 0;
@@ -856,18 +865,24 @@
               var searchText = normalizeAnalyticalMovementSearch([date, entry.journal, entry.reference, accountCode, account && account.label, destination, nature.genericName, nature.individualName].join(' '));
               if (search && searchText.indexOf(search) === -1) return;
               var units = Math.round(analyticAmount * precision);
+              var isUnmatchedValue = valueRegistryConfigured && !registeredValueKeys.has(normalizeAnalyticalDimensionValueLabel(destination));
               var cells = {
                 date: date, journal: String(entry.journal || ''), piece: String(entry.reference || ''), account: accountCode,
-                accountTitle: String(account && account.label || ''), destination: destination,
+                accountTitle: String(account && account.label || ''), destination: isUnmatchedValue ? 'Valeur non rapprochée · ' + destination : destination,
                 mode: split.mode === 'percentage' ? 'Pourcentage' : 'Montant',
                 enteredValue: allocation.value == null ? '' : String(allocation.value),
                 debit: debit > 0 ? units / precision : 0,
                 credit: credit > 0 ? units / precision : 0,
-                status: 'Ventilé'
+                status: isUnmatchedValue ? 'Valeur non rapprochée' : 'Ventilé'
               };
               rows.push({ kind: 'line', entry: entry, line: line, cells: cells });
               sourceLineKeys.add(String(entry.id || entryIndex) + ':' + lineIndex);
-              if (debit > 0) totalDebitUnits += units;
+              if (isUnmatchedValue) {
+                unmatchedValues.lineCount += 1;
+                unmatchedValues.sourceLines.add(String(entry.id || entryIndex) + ':' + lineIndex);
+                if (debit > 0) unmatchedValues.debitUnits += units;
+                else unmatchedValues.creditUnits += units;
+              } else if (debit > 0) totalDebitUnits += units;
               else totalCreditUnits += units;
             });
             var remaining = Number(split.unallocatedAmount);
@@ -915,6 +930,10 @@
       unallocatedLineCount: unallocated.lineCount,
       unallocatedDebit: unallocatedDebit,
       unallocatedCredit: unallocatedCredit,
+      unmatchedValueCount: unmatchedValues.lineCount,
+      unmatchedValueLineCount: unmatchedValues.sourceLines.size,
+      unmatchedValueDebit: unmatchedValues.debitUnits / precision,
+      unmatchedValueCredit: unmatchedValues.creditUnits / precision,
       unmatchedCenterCount: unmatchedCenterCount,
       unclassifiedAllocationCount: unclassifiedAllocationCount,
       analyticalNature: natureId,
@@ -931,19 +950,20 @@
     var sourceRows = movements.groups.reduce(function (result, group) { return result.concat(group.rows || []); }, []);
     var assignedRows = sourceRows.filter(function (row) { return row.cells.status !== 'À ventiler'; });
     var unallocatedRows = sourceRows.filter(function (row) { return row.cells.status === 'À ventiler'; });
+    var unmatchedValueRows = sourceRows.filter(function (row) { return row.cells.status === 'Valeur non rapprochée'; });
     var detailTypes = ['analytic-ledger', 'analytic-other-nature-ledger'];
     var columns;
     var grouped = [];
 
     if (detailTypes.indexOf(reportType) !== -1) {
       columns = movements.columns.map(function (column) { return Object.assign({}, column); });
-      grouped = assignedRows.map(function (row) { return row.cells; });
+      grouped = assignedRows.filter(function (row) { return row.cells.status !== 'Valeur non rapprochée'; }).map(function (row) { return row.cells; });
     } else {
       var groupKind = reportType === 'analytic-center-balance' || reportType === 'analytic-center-situation'
         ? 'center'
         : (reportType === 'analytic-general-account-balance' ? 'account' : 'nature-account');
       var groupsByKey = new Map();
-      assignedRows.forEach(function (record) {
+      assignedRows.filter(function (row) { return row.cells.status !== 'Valeur non rapprochée'; }).forEach(function (record) {
         var cells = record.cells;
         var key = groupKind === 'center'
           ? String(record.center && record.center.id || cells.destination)
@@ -1025,6 +1045,18 @@
       rowCount: grouped.length,
       rows: grouped.map(function (cells) { return { kind: 'line', cells: cells }; })
     }] : [];
+    if (unmatchedValueRows.length) {
+      var unknownDebit = movements.unmatchedValueDebit;
+      var unknownCredit = movements.unmatchedValueCredit;
+      var unknownValues = { analyticCode: '', analyticTitle: 'Valeurs non rapprochées', destination: 'Valeurs non rapprochées', account: '', accountTitle: '', lineCount: movements.unmatchedValueLineCount, debit: unknownDebit, credit: unknownCredit, net: unknownDebit - unknownCredit };
+      if (detailTypes.indexOf(reportType) !== -1) {
+        groups.push({ code: 'analytical-unmatched-values', title: 'Valeurs saisies absentes du référentiel · non classées', rowCount: unmatchedValueRows.length, rows: unmatchedValueRows.map(function (row) { return { kind: 'line', cells: row.cells }; }) });
+      } else {
+        var unknownCells = {};
+        columns.forEach(function (column) { unknownCells[column.key] = unknownValues[column.key] == null ? '' : unknownValues[column.key]; });
+        groups.push({ code: 'analytical-unmatched-values', title: 'Valeurs saisies absentes du référentiel · non classées', rowCount: unmatchedValueRows.length, rows: [{ kind: 'line', cells: unknownCells }] });
+      }
+    }
     if (unallocatedRows.length) {
       var remainderCells;
       if (detailTypes.indexOf(reportType) !== -1) {
@@ -1059,6 +1091,10 @@
       unallocatedLineCount: movements.unallocatedLineCount,
       unallocatedDebit: movements.unallocatedDebit,
       unallocatedCredit: movements.unallocatedCredit,
+      unmatchedValueCount: movements.unmatchedValueCount,
+      unmatchedValueLineCount: movements.unmatchedValueLineCount,
+      unmatchedValueDebit: movements.unmatchedValueDebit,
+      unmatchedValueCredit: movements.unmatchedValueCredit,
       unmatchedCenterCount: movements.unmatchedCenterCount,
       unclassifiedAllocationCount: movements.unclassifiedAllocationCount,
       analyticalNature: movements.analyticalNature,
@@ -1074,6 +1110,14 @@
     var centers = Array.isArray(options.analyticalCenters) ? options.analyticalCenters : [];
     var accounts = Array.isArray(options.accounts) ? options.accounts : [];
     var rules = Array.isArray(options.accountRules) ? options.accountRules : [];
+    var dimensionValues = Array.isArray(options.analyticalDimensionValues) ? options.analyticalDimensionValues : [];
+    var registeredValuesByNature = new Map();
+    dimensionValues.forEach(function (record) {
+      if (!record || !String(record.natureId || '').trim() || !String(record.label || '').trim()) return;
+      var natureId = String(record.natureId);
+      if (!registeredValuesByNature.has(natureId)) registeredValuesByNature.set(natureId, new Set());
+      registeredValuesByNature.get(natureId).add(normalizeAnalyticalDimensionValueLabel(record.label));
+    });
     var from = String(filters.from || '');
     var to = String(filters.to || '');
     var cycleStart = String(options.cycleStart || '');
@@ -1174,6 +1218,10 @@
             } else {
               destination = String(allocation.valueLabel || '').trim();
               if (!destination) addIssue(entry, line, nature, '', natureId, 'Anomalie', label + ' : la valeur analytique de l’affectation ' + (allocationIndex + 1) + ' est vide.');
+              var registeredValues = registeredValuesByNature.get(natureId);
+              if (destination && registeredValues && registeredValues.size && !registeredValues.has(normalizeAnalyticalDimensionValueLabel(destination))) {
+                addIssue(entry, line, nature, destination, natureId, 'Anomalie', label + ' : « ' + destination + ' » est absente du référentiel renseigné ; la valeur reste non classée.');
+              }
               destinationKey = 'value:' + destination.toLocaleLowerCase();
             }
             if (destinationKey && seenDestinations.has(destinationKey)) addIssue(entry, line, nature, destination, natureId, 'Anomalie', label + ' : une même destination apparaît plusieurs fois.');

@@ -47,6 +47,16 @@ assert.equal(clean.checkedLineCount, 1);
 assert.equal(clean.rowCount, 0, 'deux natures complètes sont contrôlées indépendamment sans se cumuler.');
 assert.equal(JSON.stringify(validEntry), sourceSnapshot, 'le contrôle ne modifie jamais les écritures.');
 
+const unregisteredValueEntry = structuredClone(validEntry);
+unregisteredValueEntry.reference = 'OD-UNKNOWN-VALUE';
+unregisteredValueEntry.id = 'OD-UNKNOWN-VALUE';
+unregisteredValueEntry.lines[0].analyticSplits[1].allocations[0].valueLabel = 'Service inédit';
+const unregisteredValue = build([unregisteredValueEntry], {
+  analyticalDimensionValues: [{ natureId: 'activity-domains', label: 'Production', active: true }]
+});
+assert.ok(unregisteredValue.groups[0].rows.some(row => /Service inédit.*absente du référentiel renseigné.*reste non classée/.test(row.cells.control)));
+assert.ok(unregisteredValue.groups[0].rows.some(row => row.cells.severity === 'Anomalie'));
+
 const missingRequired = build([entry([line([])])], {
   accountRules: [{ accountCode: '601100', natureId: 'responsibility-centers', requirement: 'required', allowPartial: false }]
 });
