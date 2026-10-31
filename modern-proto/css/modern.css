@@ -3900,7 +3900,7 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 @media (max-width: 900px) { .budget-register-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .budget-line-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .budget-register-summary, .budget-register-filters, .budget-setup-grid, .budget-line-fields, .budget-import-toolbar { grid-template-columns: minmax(0, 1fr); } .budget-prefix-field, .budget-axis-fieldset { grid-column: auto; } .budget-register-toolbar { align-items: stretch; flex-direction: column; } }
 .budget-realization-context { margin: .5rem 0 1rem; padding: .8rem; border-left: 4px solid #22766c; background: #f2f8f6; }
-.budget-realization-table-wrap { max-height: 55vh; overflow: auto; }
+.budget-realization-table-wrap { overflow-x: auto; }
 .budget-realization-table { min-width: 900px; }
 .budget-realization-table th { position: sticky; top: 0; z-index: 1; white-space: nowrap; }
 .budget-realization-table .number-cell { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }

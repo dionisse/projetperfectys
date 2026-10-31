@@ -25823,7 +25823,7 @@
       var typeLabel = budget.type === 'C' ? 'Charges' : budget.type === 'I' ? 'Investissements' : budget.type === 'P' ? 'Produits' : 'Personnalisé';
       var classification = budget.classification === 'C' ? 'Compte général' : 'Axe ' + budget.classification.slice(1);
       var buttons = '<button class="btn btn-ghost btn-sm" type="button" data-budget-lines="' + esc(budget.id) + '">Lignes (' + budget.lines.length + ')</button>' +
-        '<button class="btn btn-ghost btn-sm" type="button" data-budget-realizations="' + esc(budget.id) + '">Calculer les réalisations</button>' +
+        '<button class="btn btn-ghost btn-sm" type="button" data-budget-realizations="' + esc(budget.id) + '">Aperçu des réalisations</button>' +
         '<button class="btn btn-ghost btn-sm" type="button" data-budget-edit="' + esc(budget.id) + '"' + (!editable ? ' disabled' : '') + '>Modifier</button>' +
         '<button class="btn btn-ghost btn-sm" type="button" data-budget-import="' + esc(budget.id) + '"' + (!editable ? ' disabled' : '') + '>Importer XLSX</button>' +
         '<button class="btn btn-primary btn-sm" type="button" data-budget-next="' + esc(budget.id) + '"' + (!editable ? ' disabled' : '') + '>Budget suivant</button>' +
@@ -26013,7 +26013,7 @@
       '<p>Les comptes sont rapprochés exactement des lignes budgétaires enregistrées. En classement analytique, seule la nature sélectionnée est calculée ; les axes parallèles ne sont jamais additionnés. Les lignes sans imputation analytique, les valeurs sans ligne budgétaire et les budgets incomplets restent signalés séparément.</p>' +
       (rows.length ? '<div class="table-wrap budget-realization-table-wrap"><table class="data-table budget-realization-table"><thead><tr><th>Compte / valeur classée</th><th>Période</th><th>Budget</th><th>Réalisation</th><th>Écart budget − réalisation</th><th>Lignes sources</th></tr></thead><tbody>' + rows.join('') + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucune ligne à calculer.</strong> Ajoutez d’abord des lignes au budget.</div>') +
       '<p class="small muted">Le calcul est recalculé à la demande depuis les écritures validées; aucun résultat de réalisation n’est enregistré comme écriture ou valeur budgétaire.</p>';
-    openModal('Calcul des réalisations', esc(budget.code) + ' · ' + esc(budget.label), body, '<button type="button" class="btn btn-ghost" data-action="close-modal">Fermer</button>', true);
+    openReportPreview('Aperçu des réalisations · ' + budget.code, body);
   }
 
   function shiftedBudgetDate(date, years) {

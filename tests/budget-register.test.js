@@ -74,6 +74,8 @@ assert.match(app, /function openBudgetImportModal\(/);
 assert.match(app, /function openBudgetFollowingModal\(/);
 assert.match(app, /function openBudgetRealizationsModal\(/);
 assert.match(app, /data-budget-realizations=/);
+assert.match(app, /Aperçu des réalisations/);
+assert.match(app, /openReportPreview\('Aperçu des réalisations · ' \+ budget\.code, body\)/);
 assert.match(app, /BudgetRealizations\.calculate\(\{ budget: budget, entries: S\.entries\(\) \}\)/);
 assert.match(app, /Aucune ligne d’écriture validée ne correspond aux comptes budgétés dans la période/);
 assert.match(app, /Télécharger le modèle XLSX/);
