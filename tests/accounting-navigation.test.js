@@ -223,7 +223,7 @@ assert.ok(findTab('saisie', 'reconciliation').reason.includes('relevés généri
 assert.ok(findTab('saisie', 'reconciliation').reason.includes('confirmation'));
 assert.ok(findTab('saisie', 'reconciliation').reason.includes('aucune intégration Google Drive organisationnelle n’est connectée dans PERFECTO'));
 const analyticalCenters = findTab('definitions', 'responsibility-centers');
-assert.equal(analyticalCenters.status, 'partial');
+assert.equal(analyticalCenters.status, 'active');
 assert.equal(analyticalCenters.label, 'Centres analytiques');
 assert.ok(analyticalCenters.reason.includes('partagé avec le Suivi Analytique'));
 assert.match(appSource, /Suivi Analytique · dossier [\s\S]*imputations des lignes sont intégrés au dossier de Comptabilité générale actif/);
@@ -595,7 +595,8 @@ assert.ok(visibleBudgetReportIds.every(id => budgetTab.children.find(child => ch
 assert.ok(budgetTab.children.every(child => child.status === 'active'));
 assert.equal(['general-accounts', 'third-parties', 'foreign-currency', 'analytic-statements', 'budget']
   .reduce((total, tabId) => total + findTab('editions', tabId).children.length, 0), 41);
-assert.equal(findTab('definitions', 'responsibility-centers').status, 'partial');
+assert.equal(findTab('definitions', 'responsibility-centers').status, 'active');
+assert.match(findTab('definitions', 'responsibility-centers').reason, /imputations explicites.*états analytiques/);
 assert.equal(findTab('outils', 'calculator').status, 'inactive');
 assert.equal(findTab('outils', 'screenshot').status, 'inactive');
 assert.equal(findTab('saisie', 'opening-balances').status, 'partial');
@@ -794,7 +795,7 @@ assert.match(appSource, /function generalLedgerReportLayoutView\([\s\S]*general-
 assert.match(appSource, /function generalLedgerReportPrintableHtml\([\s\S]*GRAND LIVRE DES COMPTES[\s\S]*reports à nouveau[\s\S]*page-break/);
 assert.match(generalLedgerSource, /priorEntriesIncludedInRunningBalance: true[\s\S]*sourceReferenceOnly: true[\s\S]*noAccountingMutation: true/);
 assert.match(configurationCss, /\.general-ledger-column-grid[\s\S]*\.general-ledger-account-section/);
-assert.match(serviceWorkerSource, /perfecto-static-v167/);
+assert.match(serviceWorkerSource, /perfecto-static-v168/);
 assert.equal(nav.getTab('declarations', 'vat-difference').status, 'active');
 assert.match(appSource, /group\.id === 'declarations' && tab\.id === 'vat-difference'[\s\S]*viewVatDifferenceReport/);
 assert.match(appSource, /function vatDifferenceConfigurationKey\([\s\S]*function openVatDifferenceAccountPicker/);
@@ -833,7 +834,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v167/);
+assert.match(serviceWorkerSource, /perfecto-static-v168/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);
