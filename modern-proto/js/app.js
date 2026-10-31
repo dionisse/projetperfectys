@@ -25206,13 +25206,14 @@
       analysis: { title: 'Analyses et contreparties', description: 'Détails de contrepartie et ventilations explicites du Suivi Analytique intégré.' },
       controls: { title: 'Relevés et contrôles de tiers', description: 'Restitutions à définir sans attribuer au tiers des mouvements non identifiés.' },
       exchange: { title: 'Devises et écarts de change', description: 'Éditions à construire après définition des montants et règles de conversion.' },
-      situations: { title: 'Situations analytiques', description: 'États du Suivi Analytique intégré, à alimenter après la saisie des ventilations explicites.' },
+      situations: { title: 'Situations analytiques', description: 'Mouvements cumulés du cycle à date, sans report d’ouverture analytique supposé.' },
+      analyticControls: { title: 'Contrôles analytiques', description: 'Anomalies, règles de complétude et reliquats explicitement autorisés ; aucun ajustement automatique.' },
       budgets: { title: 'Budgets', description: 'Budgets de référence et paramètres de saisie.' },
       commitments: { title: 'Commandes et engagements', description: 'Suivi des commandes par ligne budgétaire et hors budget.' },
       realisations: { title: 'Réalisations', description: 'Rapprochement des réalisations avec les lignes budgétaires.' },
       availability: { title: 'Disponibilités budgétaires', description: 'Restes disponibles à calculer après validation des engagements et réalisations.' }
     };
-    var sectionOrder = ['pieces', 'matching', 'pointing', 'bankReconciliation', 'assetSummary', 'assetMovements', 'assetInventory', 'assetAccounts', 'assetDiscrepancies', 'assetDimensions', 'definitionsFramework', 'definitionsAccounts', 'definitionsThirdParties', 'definitionsJournals', 'definitionsAnalytics', 'cumuls', 'imputation', 'balances', 'ledgers', 'analysis', 'controls', 'exchange', 'situations', 'budgets', 'commitments', 'realisations', 'availability'];
+    var sectionOrder = ['pieces', 'matching', 'pointing', 'bankReconciliation', 'assetSummary', 'assetMovements', 'assetInventory', 'assetAccounts', 'assetDiscrepancies', 'assetDimensions', 'definitionsFramework', 'definitionsAccounts', 'definitionsThirdParties', 'definitionsJournals', 'definitionsAnalytics', 'cumuls', 'imputation', 'balances', 'ledgers', 'analysis', 'controls', 'exchange', 'situations', 'analyticControls', 'budgets', 'commitments', 'realisations', 'availability'];
     var sections = sectionOrder.map(function (id) { return Object.assign({ id: id }, sectionMap[id]); });
     var cards = sections.map(function (section) {
       var sectionChildren = (children || []).filter(function (child) { return child.section === section.id; });
@@ -26207,7 +26208,7 @@
   var ANALYTICAL_STATEMENT_IDS = [
     'analytic-center-balance', 'analytic-other-nature-balance', 'analytic-ledger',
     'analytic-other-nature-ledger', 'analytic-center-situation',
-    'analytic-other-nature-situation', 'analytic-general-account-balance'
+    'analytic-other-nature-situation', 'analytic-general-account-balance', 'analytic-consistency-control'
   ];
 
   function analyticalStatementNatureOptions(reportType) {
@@ -26220,6 +26221,81 @@
     }).map(function (nature) {
       return { id: String(nature.id || ''), label: String(nature.individualName || nature.genericName || nature.id || '') };
     }).filter(function (nature) { return nature.id && nature.label; });
+  }
+
+  function buildAnalyticalConsistencyViewReport(filters) {
+    var dossier = S.currentDossier();
+    return JournalLinesReport.buildAnalyticalConsistencyReport({
+      entries: S.postedEntries(),
+      analyticalCenters: S.analyticalCenters(),
+      analyticalNatures: S.analyticalNaturesConfiguration().rows || [],
+      accountRules: S.analyticalAccountRulesConfiguration().rules || [],
+      accounts: S.accounts(),
+      cycleStart: dossier && dossier.cycleStart || '',
+      cycleEnd: dossier && dossier.cycleEnd || '',
+      decimalPlaces: S.accountingConfiguration().decimalPlaces,
+      filters: filters || {}
+    });
+  }
+
+  function analyticalConsistencyTable(report) {
+    if (!report.groups || !report.groups.length) {
+      return '<div class="alert success"><div><strong>Aucune anomalie ni ventilation partielle autorisée à ventiler n’a été détectée.</strong><br>' + esc(String(report.checkedEntryCount)) + ' écriture(s) validée(s) et ' + esc(String(report.checkedLineCount)) + ' ligne(s) examinées. Les natures sans règle obligatoire ne sont pas présumées obligatoires.</div></div>';
+    }
+    return '<div class="analytical-statement-table-wrap"><table class="data-table analytical-statement-table analytical-consistency-table"><thead><tr>' + report.columns.map(function (column) {
+      return '<th scope="col">' + esc(column.label) + '</th>';
+    }).join('') + '</tr></thead><tbody>' + report.groups.map(function (group) {
+      return '<tr class="analytical-statement-group"><th colspan="' + report.columns.length + '" scope="colgroup">' + esc(group.title) + '</th></tr>' +
+        (group.rows || []).map(function (row) {
+          var severity = String(row.cells.severity || '');
+          var severityClass = severity === 'Anomalie' ? 'is-anomaly' : (severity === 'À ventiler' ? 'is-unallocated' : '');
+          return '<tr class="' + severityClass + '">' + report.columns.map(function (column) {
+            return '<td>' + esc(row.cells[column.key] == null ? '' : String(row.cells[column.key])) + '</td>';
+          }).join('') + '</tr>';
+        }).join('');
+    }).join('') + '</tbody></table></div>';
+  }
+
+  function viewAnalyticalConsistencyControl(backLink) {
+    var dossier = S.currentDossier();
+    var from = dossier && dossier.cycleStart || '';
+    var to = dossier && dossier.cycleEnd || '';
+    var report = buildAnalyticalConsistencyViewReport({ from: from, to: to });
+    var content = report.errors && report.errors.length
+      ? '<div class="alert warning">' + report.errors.map(esc).join('<br>') + '</div>'
+      : '<div class="analytical-statement-summary"><span>Écritures examinées <strong>' + esc(String(report.checkedEntryCount)) + '</strong></span><span>Lignes examinées <strong>' + esc(String(report.checkedLineCount)) + '</strong></span><span>Anomalies <strong>' + esc(String(report.anomalyCount)) + '</strong></span><span>À ventiler (autorisé) <strong>' + esc(String(report.unallocatedCount)) + '</strong></span></div>' + analyticalConsistencyTable(report);
+    return '<div class="edition-report-detail-view analytical-statement-view analytical-consistency-view">' + backLink +
+      '<header class="analytical-statement-heading"><span class="page-kicker">SUIVI ANALYTIQUE · CONTRÔLE EN LECTURE SEULE</span><h2>Contrôle de cohérence des ventilations</h2><p>Examine les ventilations par nature, indépendamment les unes des autres, selon les règles explicites du compte. Ne crée, ne corrige et ne modifie aucune écriture.</p></header>' +
+      '<form class="analytical-statement-filters" id="analytical-consistency-form">' +
+        '<label class="field"><span>Du</span><input id="analytical-consistency-from" type="date" min="' + esc(from) + '" max="' + esc(to) + '" value="' + esc(from) + '"></label>' +
+        '<label class="field"><span>Au</span><input id="analytical-consistency-to" type="date" min="' + esc(from) + '" max="' + esc(to) + '" value="' + esc(to) + '"></label>' +
+        '<button type="submit" class="btn btn-primary">Lancer le contrôle</button><button type="button" class="btn btn-ghost" data-analytical-consistency-export>Exporter TSV</button><button type="button" class="btn btn-ghost" data-analytical-consistency-print>Imprimer</button>' +
+      '</form><div class="analytical-statement-output" aria-live="polite">' + content + '</div></div>';
+  }
+
+  function bindAnalyticalConsistencyControl() {
+    var form = $('#analytical-consistency-form');
+    if (!form) return;
+    var output = $('.analytical-statement-output');
+    function currentFilters() {
+      return { from: $('#analytical-consistency-from', form).value, to: $('#analytical-consistency-to', form).value };
+    }
+    function run() {
+      var report = buildAnalyticalConsistencyViewReport(currentFilters());
+      if (report.errors && report.errors.length) {
+        output.innerHTML = '<div class="alert warning">' + report.errors.map(esc).join('<br>') + '</div>';
+      } else {
+        output.innerHTML = '<div class="analytical-statement-summary"><span>Écritures examinées <strong>' + esc(String(report.checkedEntryCount)) + '</strong></span><span>Lignes examinées <strong>' + esc(String(report.checkedLineCount)) + '</strong></span><span>Anomalies <strong>' + esc(String(report.anomalyCount)) + '</strong></span><span>À ventiler (autorisé) <strong>' + esc(String(report.unallocatedCount)) + '</strong></span></div>' + analyticalConsistencyTable(report);
+      }
+      return report;
+    }
+    form.addEventListener('submit', function (event) { event.preventDefault(); run(); });
+    $('[data-analytical-consistency-export]').addEventListener('click', function () {
+      var report = run();
+      if (report.errors && report.errors.length) return;
+      downloadFile('PERFECTO-controle-coherence-analytique-' + currentFilters().from.replace(/-/g, '') + '-' + currentFilters().to.replace(/-/g, '') + '.tsv', JournalLinesReport.toTsv(report), 'text/tab-separated-values;charset=utf-8');
+    });
+    $('[data-analytical-consistency-print]').addEventListener('click', function () { window.print(); });
   }
 
   function analyticalStatementTitle(reportType) {
@@ -26288,6 +26364,7 @@
 
   function viewAnalyticalStatement(child, backLink) {
     var reportType = child.id;
+    if (reportType === 'analytic-consistency-control') return viewAnalyticalConsistencyControl(backLink);
     var dossier = S.currentDossier();
     var options = analyticalStatementNatureOptions(reportType);
     var lockedNature = reportType === 'analytic-center-balance' || reportType === 'analytic-ledger' || reportType === 'analytic-center-situation';
@@ -29850,7 +29927,10 @@
       if (menuParams.g === 'declarations' && menuParams.t === 'ohada-statements') bindOhadaFinancialStatements();
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && (menuParams.c === 'journal-lines' || menuParams.c === 'journal-modified-pieces' || menuParams.c === 'journal-unbalanced-pieces' || menuParams.c === 'journal-entry-totals' || menuParams.c === 'journal-individual-account-totals' || menuParams.c === 'journal-summary-account-totals' || menuParams.c === 'journal-third-party-totals' || menuParams.c === 'journal-analytic-center-totals' || menuParams.c === 'journal-currency-totals')) bindJournalLinesReport();
       if (menuParams.g === 'editions' && menuParams.t === 'journals' && menuParams.c === 'journal-allocation-sheet') bindJournalAllocationSheet();
-      if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && ANALYTICAL_STATEMENT_IDS.indexOf(menuParams.c) !== -1) bindAnalyticalStatement();
+      if (menuParams.g === 'editions' && menuParams.t === 'analytic-statements' && ANALYTICAL_STATEMENT_IDS.indexOf(menuParams.c) !== -1) {
+        if (menuParams.c === 'analytic-consistency-control') bindAnalyticalConsistencyControl();
+        else bindAnalyticalStatement();
+      }
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-balance') bindGeneralBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'foreign-currency' && menuParams.c === 'currency-balance') bindCurrencyBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'foreign-currency' && ['currency-opening-balance', 'currency-situation', 'currency-ledger', 'currency-exchange-differences'].indexOf(menuParams.c) !== -1) bindCurrencySupplementaryReport();

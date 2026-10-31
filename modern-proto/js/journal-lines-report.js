@@ -1066,6 +1066,208 @@
     };
   }
 
+  function buildAnalyticalConsistencyReport(options) {
+    options = options || {};
+    var filters = options.filters || {};
+    var entries = Array.isArray(options.entries) ? options.entries : [];
+    var natures = (Array.isArray(options.analyticalNatures) ? options.analyticalNatures : []).filter(function (nature) { return nature && !nature.group; });
+    var centers = Array.isArray(options.analyticalCenters) ? options.analyticalCenters : [];
+    var accounts = Array.isArray(options.accounts) ? options.accounts : [];
+    var rules = Array.isArray(options.accountRules) ? options.accountRules : [];
+    var from = String(filters.from || '');
+    var to = String(filters.to || '');
+    var cycleStart = String(options.cycleStart || '');
+    var cycleEnd = String(options.cycleEnd || '');
+    var decimalPlaces = Number(options.decimalPlaces);
+    if (!Number.isInteger(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 4) decimalPlaces = 0;
+    var precision = Math.pow(10, decimalPlaces);
+    var natureById = new Map(natures.map(function (nature) { return [String(nature.id || ''), nature]; }));
+    var centerById = new Map(centers.map(function (center) { return [String(center && center.id || ''), center]; }));
+    var accountByCode = new Map(accounts.map(function (account) { return [String(account.code || ''), account]; }));
+    var rulesByAccount = new Map();
+    rules.forEach(function (rule) {
+      var code = String(rule && rule.accountCode || '').trim();
+      if (!code) return;
+      if (!rulesByAccount.has(code)) rulesByAccount.set(code, []);
+      rulesByAccount.get(code).push(rule);
+    });
+    var errors = [];
+    var rows = [];
+    var checkedEntryIds = new Set();
+    var checkedLineCount = 0;
+    var anomalyCount = 0;
+    var unallocatedCount = 0;
+
+    if (from && to && from > to) errors.push('La période est inversée : la date de début doit précéder la date de fin.');
+    if (cycleStart && from && from < cycleStart || cycleEnd && to && to > cycleEnd) errors.push('La période sélectionnée doit rester comprise dans le cycle du dossier (' + cycleStart + ' au ' + cycleEnd + ').');
+    if (errors.length) return { columns: [], groups: [], errors: errors, rowCount: 0, checkedEntryCount: 0, checkedLineCount: 0, anomalyCount: 0, unallocatedCount: 0 };
+
+    function addIssue(entry, line, nature, destination, code, severity, message) {
+      if (severity === 'Anomalie') anomalyCount += 1;
+      if (severity === 'À ventiler') unallocatedCount += 1;
+      rows.push({ kind: 'line', cells: {
+        date: String(entry.date || ''), journal: String(entry.journal || ''), piece: String(entry.reference || ''),
+        account: String(line.account || ''), accountTitle: String(accountByCode.get(String(line.account || '')) && accountByCode.get(String(line.account || '')).label || ''),
+        nature: String(nature && (nature.individualName || nature.genericName) || code || 'Nature inconnue'),
+        destination: String(destination || ''), severity: severity, control: String(message || '')
+      }});
+    }
+
+    entries.forEach(function (entry, entryIndex) {
+      if (!entry || entry.status !== 'posted') return;
+      var date = String(entry.date || '');
+      if (from && date < from || to && date > to) return;
+      checkedEntryIds.add(String(entry.id || entry.reference || entryIndex));
+      (Array.isArray(entry.lines) ? entry.lines : []).forEach(function (line, lineIndex) {
+        if (!line || typeof line !== 'object') return;
+        var accountCode = String(line.account || '').trim();
+        var sourceAmount = Math.abs(Number(line.debit) || Number(line.credit) || 0);
+        if (!accountCode || !Number.isFinite(sourceAmount) || sourceAmount <= 0) return;
+        checkedLineCount += 1;
+        var accountRules = rulesByAccount.get(accountCode) || [];
+        var rulesByNature = new Map(accountRules.map(function (rule) { return [String(rule.natureId || ''), rule]; }));
+        var splits = Array.isArray(line.analyticSplits) ? line.analyticSplits : [];
+        var splitsByNature = new Map();
+        splits.forEach(function (split, splitIndex) {
+          if (!split || typeof split !== 'object') return;
+          var natureId = String(split.natureId || '');
+          var nature = natureById.get(natureId) || null;
+          var label = 'Ligne ' + (lineIndex + 1) + ' · ventilation ' + (splitIndex + 1);
+          if (!nature) {
+            addIssue(entry, line, null, '', natureId, 'Anomalie', label + ' : nature analytique inconnue ou non sélectionnée.');
+            return;
+          }
+          if (splitsByNature.has(natureId)) {
+            addIssue(entry, line, nature, '', natureId, 'Anomalie', label + ' : plusieurs ventilations utilisent la même nature sur cette ligne.');
+          } else splitsByNature.set(natureId, split);
+          if (accountRules.length && !rulesByNature.has(natureId)) {
+            addIssue(entry, line, nature, '', natureId, 'Anomalie', label + ' : cette nature n’est pas autorisée par la règle exacte du compte ' + accountCode + '.');
+          }
+          if (!Array.isArray(split.allocations) || !split.allocations.length) {
+            addIssue(entry, line, nature, '', natureId, 'Anomalie', label + ' : aucune affectation explicite n’est enregistrée.');
+            return;
+          }
+          if (split.mode !== 'amount' && split.mode !== 'percentage') {
+            addIssue(entry, line, nature, '', natureId, 'Anomalie', label + ' : le mode montant/pourcentage est absent ou invalide.');
+            return;
+          }
+          var sumUnits = 0;
+          var sumPercent = 0;
+          var expectedUnits = [];
+          var seenDestinations = new Set();
+          split.allocations.forEach(function (allocation, allocationIndex) {
+            allocation = allocation || {};
+            var destination = '';
+            var destinationKey = '';
+            if (natureId === 'responsibility-centers') {
+              var centerId = String(allocation.centerId || '');
+              var center = centerById.get(centerId);
+              if (!center) {
+                addIssue(entry, line, nature, centerId || 'Centre absent', natureId, 'Anomalie', label + ' : le centre de l’affectation ' + (allocationIndex + 1) + ' est absent ou inconnu dans le dossier.');
+              } else {
+                destination = String(center.code || '') + ' · ' + String(center.name || '');
+                if (allocation.centerCode && String(allocation.centerCode) !== String(center.code || '') || allocation.centerName && String(allocation.centerName) !== String(center.name || '')) {
+                  addIssue(entry, line, nature, destination, natureId, 'Anomalie', label + ' : la référence de centre ne correspond plus au référentiel du dossier.');
+                }
+              }
+              destinationKey = 'center:' + centerId;
+            } else {
+              destination = String(allocation.valueLabel || '').trim();
+              if (!destination) addIssue(entry, line, nature, '', natureId, 'Anomalie', label + ' : la valeur analytique de l’affectation ' + (allocationIndex + 1) + ' est vide.');
+              destinationKey = 'value:' + destination.toLocaleLowerCase();
+            }
+            if (destinationKey && seenDestinations.has(destinationKey)) addIssue(entry, line, nature, destination, natureId, 'Anomalie', label + ' : une même destination apparaît plusieurs fois.');
+            if (destinationKey) seenDestinations.add(destinationKey);
+
+            var raw = String(allocation.value == null ? '' : allocation.value).trim();
+            var value = raw === '' ? NaN : Number(raw);
+            if (!Number.isFinite(value) || value < 0) {
+              addIssue(entry, line, nature, destination, natureId, 'Anomalie', label + ' : la valeur saisie pour l’affectation ' + (allocationIndex + 1) + ' est absente ou invalide.');
+              expectedUnits.push(0);
+              return;
+            }
+            if (split.mode === 'percentage') {
+              if (value > 100) addIssue(entry, line, nature, destination, natureId, 'Anomalie', label + ' : un pourcentage dépasse 100 %.');
+              sumPercent += value;
+              var percentUnits = Math.round(sourceAmount * precision * value / 100);
+              sumUnits += percentUnits;
+              expectedUnits.push(percentUnits);
+            } else {
+              var amountUnits = Math.round(value * precision);
+              if (Math.abs(value * precision - amountUnits) > 1e-7) addIssue(entry, line, nature, destination, natureId, 'Anomalie', label + ' : le montant dépasse la précision autorisée du dossier.');
+              sumUnits += amountUnits;
+              expectedUnits.push(amountUnits);
+            }
+          });
+          if (split.mode === 'percentage' && sumPercent > 100 + 1e-8) addIssue(entry, line, nature, '', natureId, 'Anomalie', label + ' : le total des pourcentages dépasse 100 %.');
+          var sourceUnits = Math.round(sourceAmount * precision);
+          if (sumUnits > sourceUnits) addIssue(entry, line, nature, '', natureId, 'Anomalie', label + ' : le total ventilé dépasse le montant comptable de la ligne.');
+          if (split.mode === 'percentage' && Math.abs(sumPercent - 100) <= 1e-8 && sumUnits !== sourceUnits) {
+            var roundingIndex = split.allocations.findIndex(function (allocation) {
+              var target = allocation && (allocation.centerId || (allocation.valueLabel ? 'value:' + String(allocation.valueLabel).trim().toLocaleLowerCase() : ''));
+              var configured = String(split.roundingCenterId || '');
+              return target && (target === configured || target === 'label:' + String(allocation.valueLabel || '').trim().toLocaleLowerCase());
+            });
+            if (roundingIndex === -1) addIssue(entry, line, nature, '', natureId, 'Anomalie', label + ' : écart d’arrondi en pourcentage sans destinataire explicitement choisi.');
+            else if (expectedUnits[roundingIndex] + sourceUnits - sumUnits < 0) addIssue(entry, line, nature, '', natureId, 'Anomalie', label + ' : le destinataire choisi pour l’arrondi ne peut pas absorber l’écart.');
+            else {
+              expectedUnits[roundingIndex] += sourceUnits - sumUnits;
+              sumUnits = sourceUnits;
+            }
+          }
+          var completeness = String(split.completeness || '');
+          if (completeness !== 'complete' && completeness !== 'partial') {
+            addIssue(entry, line, nature, '', natureId, 'Anomalie', label + ' : le caractère complet/partiel n’est pas défini.');
+          } else if (completeness === 'complete') {
+            var complete = split.mode === 'percentage' ? Math.abs(sumPercent - 100) <= 1e-8 : sumUnits === sourceUnits;
+            if (!complete) addIssue(entry, line, nature, '', natureId, 'Anomalie', label + ' : la ventilation est déclarée complète mais ne couvre pas le montant de la ligne.');
+          } else {
+            var rule = rulesByNature.get(natureId);
+            if (!rule || rule.allowPartial !== true) {
+              addIssue(entry, line, nature, '', natureId, 'Anomalie', label + ' : le reliquat partiel n’est pas autorisé explicitement pour ce compte et cette nature.');
+            } else if (sumUnits < sourceUnits || split.mode === 'percentage' && sumPercent < 100 - 1e-8) {
+              addIssue(entry, line, nature, 'À ventiler', natureId, 'À ventiler', label + ' : reliquat partiel autorisé mais restant à ventiler.');
+            }
+          }
+          split.allocations.forEach(function (allocation, allocationIndex) {
+            var stored = Number(allocation && allocation.amount);
+            var expected = expectedUnits[allocationIndex] / precision;
+            if (Number.isFinite(stored) && Math.abs(Math.round(stored * precision) - expectedUnits[allocationIndex]) > 0) {
+              addIssue(entry, line, nature, String(allocation && (allocation.valueLabel || allocation.centerCode) || ''), natureId, 'Anomalie', label + ' : le montant enregistré de l’affectation ' + (allocationIndex + 1) + ' ne correspond pas à sa valeur saisie.');
+            }
+          });
+        });
+        accountRules.forEach(function (rule) {
+          var natureId = String(rule.natureId || '');
+          if (rule.requirement === 'required' && !splitsByNature.has(natureId)) {
+            var requiredNature = natureById.get(natureId);
+            addIssue(entry, line, requiredNature, '', natureId, 'Anomalie', 'L’imputation obligatoire « ' + String(requiredNature && (requiredNature.individualName || requiredNature.genericName) || natureId) + ' » manque pour le compte ' + accountCode + '.');
+          }
+        });
+      });
+    });
+
+    var columns = [
+      { key: 'date', label: 'Date' }, { key: 'journal', label: 'Journal' }, { key: 'piece', label: 'N° pièce' },
+      { key: 'account', label: 'Compte' }, { key: 'accountTitle', label: 'Intitulé du compte' },
+      { key: 'nature', label: 'Nature analytique' }, { key: 'destination', label: 'Valeur / centre' },
+      { key: 'severity', label: 'Résultat' }, { key: 'control', label: 'Contrôle' }
+    ];
+    rows.sort(function (left, right) {
+      return compare(left.cells.date, right.cells.date) || compare(left.cells.journal, right.cells.journal) ||
+        compare(left.cells.piece, right.cells.piece) || compare(left.cells.account, right.cells.account) ||
+        compare(left.cells.nature, right.cells.nature) || compare(left.cells.control, right.cells.control);
+    });
+    var groups = rows.length ? [{ code: 'analytical-consistency', title: 'Contrôles des ventilations analytiques explicites', rows: rows.map(function (row) {
+      return { kind: 'line', cells: row.cells };
+    }) }] : [];
+    return {
+      columns: columns, groups: groups, errors: [], rowCount: rows.length,
+      checkedEntryCount: checkedEntryIds.size, checkedLineCount: checkedLineCount,
+      anomalyCount: anomalyCount, unallocatedCount: unallocatedCount
+    };
+  }
+
   function normalizeCurrencyCode(value) {
     return String(value == null ? '' : value).trim().toLocaleUpperCase();
   }
@@ -1632,6 +1834,7 @@
     analyticalMovementColumns: ANALYTICAL_MOVEMENT_COLUMNS.map(function (column) { return Object.assign({}, column); }),
     buildAnalyticalMovements: buildAnalyticalMovements,
     buildAnalyticalStatement: buildAnalyticalStatement,
+    buildAnalyticalConsistencyReport: buildAnalyticalConsistencyReport,
     build: build,
     toMatrix: toMatrix,
     toTsv: toTsv

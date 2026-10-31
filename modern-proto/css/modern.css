@@ -3620,3 +3620,6 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
   .analytical-statement-filters, .analytical-statement-view > .edition-report-back { display: none !important; }
   .analytical-statement-heading, .analytical-statement-table .analytical-statement-group th { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
+.analytical-consistency-table tr.is-anomaly td { background: #fbefed; color: #7b3933; }
+.analytical-consistency-table tr.is-unallocated td { background: #fbf7ee; color: #6a552c; }
+.analytical-consistency-table td:last-child { min-width: 300px; white-space: normal; }

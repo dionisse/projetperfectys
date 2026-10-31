@@ -580,7 +580,7 @@ assert.equal(findTab('editions', 'foreign-currency').status, 'active');
 assert.equal(findTab('editions', 'foreign-currency').children.find(child => child.id === 'currency-balance').status, 'active');
 assert.ok(findTab('editions', 'foreign-currency').children.filter(child => child.id.startsWith('currency-')).every(child => child.status === 'active'));
 assert.equal(findTab('editions', 'analytic-statements').status, 'active');
-assert.equal(findTab('editions', 'analytic-statements').children.length, 7);
+assert.equal(findTab('editions', 'analytic-statements').children.length, 8);
 assert.ok(findTab('editions', 'analytic-statements').children.every(child => child.status === 'active'));
 assert.equal(findTab('editions', 'supplier-orders').status, 'inactive');
 assert.equal(findTab('editions', 'budget').children.length, 10);
@@ -594,7 +594,7 @@ const visibleBudgetReportIds = [
 assert.ok(visibleBudgetReportIds.every(id => budgetTab.children.find(child => child.id === id).status === 'active'));
 assert.ok(budgetTab.children.every(child => child.status === 'active'));
 assert.equal(['general-accounts', 'third-parties', 'foreign-currency', 'analytic-statements', 'budget']
-  .reduce((total, tabId) => total + findTab('editions', tabId).children.length, 0), 40);
+  .reduce((total, tabId) => total + findTab('editions', tabId).children.length, 0), 41);
 assert.equal(findTab('definitions', 'responsibility-centers').status, 'partial');
 assert.equal(findTab('outils', 'calculator').status, 'inactive');
 assert.equal(findTab('outils', 'screenshot').status, 'inactive');
@@ -794,7 +794,7 @@ assert.match(appSource, /function generalLedgerReportLayoutView\([\s\S]*general-
 assert.match(appSource, /function generalLedgerReportPrintableHtml\([\s\S]*GRAND LIVRE DES COMPTES[\s\S]*reports à nouveau[\s\S]*page-break/);
 assert.match(generalLedgerSource, /priorEntriesIncludedInRunningBalance: true[\s\S]*sourceReferenceOnly: true[\s\S]*noAccountingMutation: true/);
 assert.match(configurationCss, /\.general-ledger-column-grid[\s\S]*\.general-ledger-account-section/);
-assert.match(serviceWorkerSource, /perfecto-static-v164/);
+assert.match(serviceWorkerSource, /perfecto-static-v165/);
 assert.equal(nav.getTab('declarations', 'vat-difference').status, 'active');
 assert.match(appSource, /group\.id === 'declarations' && tab\.id === 'vat-difference'[\s\S]*viewVatDifferenceReport/);
 assert.match(appSource, /function vatDifferenceConfigurationKey\([\s\S]*function openVatDifferenceAccountPicker/);
@@ -833,7 +833,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v164/);
+assert.match(serviceWorkerSource, /perfecto-static-v165/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

@@ -94,7 +94,7 @@
           ]
         },
         {
-          id: 'general-accounts', label: 'Comptes généraux', status: 'mixed', reason: 'La balance générale propose la sélection, les cumuls début/fin débit-crédit, le regroupement par plan comptable, les sous-totaux par rubrique et les totaux intermédiaires bilan/gestion (classe 8 incluse par défaut, au choix), la mise en page, les destinations, l’aperçu et l’impression après aperçu. Les autres éditions restent à préciser ; les états analytiques sont désactivés dans ce parcours.',
+          id: 'general-accounts', label: 'Comptes généraux', status: 'mixed', reason: 'La balance générale propose la sélection, les cumuls début/fin débit-crédit, le regroupement par plan comptable, les sous-totaux par rubrique et les totaux intermédiaires bilan/gestion (classe 8 incluse par défaut, au choix), la mise en page, les destinations, l’aperçu et l’impression après aperçu. La balance détaillée analytiquement de ce groupe reste à préciser ; les huit états et contrôles du Suivi Analytique sont accessibles dans l’onglet distinct « États analytiques ».',
           children: [
             { id: 'general-balance', label: 'Balance générale des comptes', section: 'balances', status: 'active', reason: 'Sélection des comptes et du cycle, cumuls débit/crédit du début à la fin de période, regroupement par niveaux présents dans le plan, sous-totaux après les comptes, totaux intermédiaires bilan/gestion avec choix d’inclure la classe 8, filtres par nature de journal, mise en page, export Excel/TXT, aperçu et impression après aperçu. Les reports à nouveau restent un registre distinct.' },
             { id: 'general-summary-balance', label: 'Balance de synthèse', section: 'balances', status: 'active', reason: 'Sélection des comptes et de la période, niveaux de synthèse de 01 à 05 (classe, comptes principaux, sous-comptes, divisionnaires et auxiliaires), affichage facultatif des niveaux inférieurs, colonnes de soldes début/fin et mouvements débit/crédit, filtres avant inventaire/résultat, mise en page, export Excel/TXT, aperçu et impression après aperçu.' },
@@ -132,7 +132,7 @@
           ]
         },
         {
-          id: 'analytic-statements', label: 'États analytiques', status: 'active', reason: 'Sept états en lecture seule, calculés à partir des seules ventilations explicites des écritures validées. Les autres natures sont choisies par l’utilisateur ; aucun report d’ouverture analytique n’est supposé.',
+          id: 'analytic-statements', label: 'États analytiques', status: 'active', reason: 'Huit états et contrôles en lecture seule, fondés sur les ventilations explicites des écritures validées. Les autres natures sont choisies par l’utilisateur ; aucun report d’ouverture analytique n’est supposé.',
           children: [
             { id: 'analytic-center-balance', label: 'Balance des centres', section: 'balances', status: 'active', reason: 'Balance par centres de responsabilité à partir des ventilations explicites validées ; les reliquats restent « À ventiler ».' },
             { id: 'analytic-other-nature-balance', label: 'Balance détaillée par une autre nature', section: 'balances', status: 'active', reason: 'Choix explicite d’une autre nature, avec détail par valeur analytique et compte général ; aucune attribution n’est déduite.' },
@@ -140,7 +140,8 @@
             { id: 'analytic-other-nature-ledger', label: 'Grand livre détaillé par une autre nature', section: 'ledgers', status: 'active', reason: 'Détail chronologique après choix explicite d’une nature différente des centres de responsabilité.' },
             { id: 'analytic-center-situation', label: 'Situation des centres', section: 'situations', status: 'active', reason: 'Mouvements cumulés depuis le début du cycle jusqu’à la date choisie ; aucun report d’ouverture n’est inventé.' },
             { id: 'analytic-other-nature-situation', label: 'Situation détaillée par une autre nature', section: 'situations', status: 'active', reason: 'Mouvements cumulés par autre nature depuis le début du cycle ; nature choisie explicitement, sans report d’ouverture.' },
-            { id: 'analytic-general-account-balance', label: 'Balance détaillée par comptes généraux', section: 'balances', status: 'active', reason: 'Balance analytique regroupée par compte général et nature choisie explicitement ; les mouvements comptables ne sont pas modifiés.' }
+            { id: 'analytic-general-account-balance', label: 'Balance détaillée par comptes généraux', section: 'balances', status: 'active', reason: 'Balance analytique regroupée par compte général et nature choisie explicitement ; les mouvements comptables ne sont pas modifiés.' },
+            { id: 'analytic-consistency-control', label: 'Contrôle de cohérence des ventilations', section: 'analyticControls', status: 'active', reason: 'Vérifie séparément chaque nature des écritures validées : règles par compte, références, complétude, reliquats et dépassements. Lecture seule, sans correction automatique.' }
           ]
         },
         { id: 'supplier-orders', label: 'Commandes aux fournisseurs (analytique)', status: 'inactive', reason: 'Fonction analytique / achats hors du périmètre actuel.' },
