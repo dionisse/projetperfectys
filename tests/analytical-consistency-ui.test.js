@@ -21,6 +21,6 @@ assert.match(navigation, /id: 'analytic-consistency-control'.*status: 'active'/)
 assert.match(report, /function buildAnalyticalConsistencyReport\(options\)/);
 assert.match(report, /reliquat partiel n’est pas autorisé explicitement/);
 assert.match(css, /\.analytical-consistency-table/);
-assert.match(worker, /perfecto-static-v165/);
+assert.match(worker, /perfecto-static-v166/);
 
 console.log('Contrôle des ventilations analytiques : navigation, calcul consultatif, export et style vérifiés — OK');

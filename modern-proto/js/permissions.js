@@ -15,6 +15,7 @@
     { id: 'analyticalAllocationKeys.configure', label: 'Configurer les clés de répartition analytiques' },
     { id: 'analyticalNatures.configure', label: 'Configurer les natures analytiques' },
     { id: 'analyticalAccountRules.configure', label: 'Configurer les règles analytiques par compte' },
+    { id: 'analyticalValues.configure', label: 'Configurer les valeurs des natures analytiques' },
     { id: 'generalAccountNatures.configure', label: 'Configurer les natures des comptes généraux' },
     { id: 'draft.create', label: 'Créer une écriture / un brouillon' },
     { id: 'draft.edit', label: 'Modifier un brouillon' },

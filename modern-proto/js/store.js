@@ -1250,6 +1250,30 @@
     return { rules: [], updatedAt: '' };
   }
 
+  var ANALYTICAL_DIMENSION_VALUE_NATURE_IDS = [
+    'activity-domains', 'expense-categories', 'funding-sources', 'alternate-accounts',
+    'vehicle-expenses', 'mission-beneficiaries', 'analysis-3', 'analysis-4', 'analysis-5', 'cash-flow-natures'
+  ];
+
+  function defaultAnalyticalDimensionValuesConfiguration() {
+    return { rows: [], updatedAt: '' };
+  }
+
+  function normalizeAnalyticalDimensionValuesConfiguration(value) {
+    value = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    var seen = Object.create(null);
+    var rows = (Array.isArray(value.rows) ? value.rows : []).map(function (row) {
+      row = row && typeof row === 'object' && !Array.isArray(row) ? row : {};
+      var natureId = String(row.natureId || '').trim();
+      var label = String(row.label || '').trim().replace(/\s+/g, ' ').slice(0, 120);
+      var key = natureId + '|' + label.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+      if (ANALYTICAL_DIMENSION_VALUE_NATURE_IDS.indexOf(natureId) === -1 || !label || seen[key]) return null;
+      seen[key] = true;
+      return { natureId: natureId, label: label, active: row.active !== false };
+    }).filter(Boolean).slice(0, 2000);
+    return { rows: rows, updatedAt: String(value.updatedAt || '').slice(0, 40) };
+  }
+
   function defaultFixedAssetAccountsRows() {
     return [
       { id: 'fixed-assets-class-21', grossValueAccount: '21*', accumulatedDepreciationAccount: '281*', depreciationExpenseAccount: '6812', disposalNetValueAccount: '811', grantRecoveryAccount: '799' },
@@ -1660,6 +1684,7 @@
       analyticalAllocationKeysConfiguration: defaultAnalyticalAllocationKeysConfiguration(),
       analyticalNaturesConfiguration: defaultAnalyticalNaturesConfiguration(),
       analyticalAccountRulesConfiguration: defaultAnalyticalAccountRulesConfiguration(),
+      analyticalDimensionValuesConfiguration: defaultAnalyticalDimensionValuesConfiguration(),
       generalAccountNaturesConfiguration: defaultGeneralAccountNaturesConfiguration(),
       fixedAssetAccountsConfiguration: defaultFixedAssetAccountsConfiguration(),
       orderAccountsConfiguration: defaultOrderAccountsConfiguration(),
@@ -1734,6 +1759,7 @@
       analyticalAllocationKeysConfiguration: normalizeAnalyticalAllocationKeysConfiguration(record && record.analyticalAllocationKeysConfiguration),
       analyticalNaturesConfiguration: normalizeAnalyticalNaturesConfiguration(record && record.analyticalNaturesConfiguration),
       analyticalAccountRulesConfiguration: normalizeAnalyticalAccountRulesConfiguration(record && record.analyticalAccountRulesConfiguration),
+      analyticalDimensionValuesConfiguration: normalizeAnalyticalDimensionValuesConfiguration(record && record.analyticalDimensionValuesConfiguration),
       fixedAssetAccountsConfiguration: normalizeFixedAssetAccountsConfiguration(record && record.fixedAssetAccountsConfiguration),
       orderAccountsConfiguration: normalizeOrderAccountsConfiguration(record && record.orderAccountsConfiguration),
       orderNaturesConfiguration: normalizeOrderNaturesConfiguration(record && record.orderNaturesConfiguration),
@@ -2137,6 +2163,8 @@
       analyticalSectionsConfiguration: normalizeAnalyticalSectionsConfiguration(input.analyticalSectionsConfiguration),
       analyticalAllocationKeysConfiguration: normalizeAnalyticalAllocationKeysConfiguration(input.analyticalAllocationKeysConfiguration),
       analyticalNaturesConfiguration: normalizeAnalyticalNaturesConfiguration(input.analyticalNaturesConfiguration),
+      analyticalDimensionValuesConfiguration: normalizeAnalyticalDimensionValuesConfiguration(input.analyticalDimensionValuesConfiguration),
+      analyticalAccountRulesConfiguration: normalizeAnalyticalAccountRulesConfiguration(input.analyticalAccountRulesConfiguration),
       generalAccountNaturesConfiguration: normalizeGeneralAccountNaturesConfiguration(input.generalAccountNaturesConfiguration),
       fixedAssetAccountsConfiguration: normalizeFixedAssetAccountsConfiguration(input.fixedAssetAccountsConfiguration),
       orderAccountsConfiguration: normalizeOrderAccountsConfiguration(input.orderAccountsConfiguration),
@@ -2318,6 +2346,7 @@
       analyticalAllocationKeysConfiguration: sourceDossier.analyticalAllocationKeysConfiguration,
       analyticalNaturesConfiguration: sourceDossier.analyticalNaturesConfiguration,
       analyticalAccountRulesConfiguration: sourceDossier.analyticalAccountRulesConfiguration,
+      analyticalDimensionValuesConfiguration: sourceDossier.analyticalDimensionValuesConfiguration,
       generalAccountNaturesConfiguration: sourceDossier.generalAccountNaturesConfiguration,
       fixedAssetAccountsConfiguration: sourceDossier.fixedAssetAccountsConfiguration,
       orderAccountsConfiguration: sourceDossier.orderAccountsConfiguration,
@@ -2593,6 +2622,71 @@
   function analyticalAccountRulesForAccount(accountCode) {
     var normalizedCode = String(accountCode || '').trim();
     return clone(analyticalAccountRulesConfiguration().rules.filter(function (rule) { return rule.accountCode === normalizedCode; }));
+  }
+
+  function analyticalDimensionValuesConfiguration(natureId) {
+    ensureFolderCatalog();
+    var dossier = folderById(activeFolderId);
+    var configuration = normalizeAnalyticalDimensionValuesConfiguration(dossier && dossier.analyticalDimensionValuesConfiguration);
+    var selectedNature = String(natureId || '').trim();
+    return {
+      rows: configuration.rows.filter(function (row) { return !selectedNature || row.natureId === selectedNature; }),
+      updatedAt: configuration.updatedAt
+    };
+  }
+
+  function saveAnalyticalDimensionValues(natureId, inputRows) {
+    ensureFolderCatalog();
+    natureId = String(natureId || '').trim();
+    var dossier = folderById(activeFolderId);
+    if (!dossier) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    if (ANALYTICAL_DIMENSION_VALUE_NATURE_IDS.indexOf(natureId) === -1) return { ok: false, errors: ['Cette nature n’a pas de référentiel analytique de valeurs configuré.'] };
+    var natureExists = (analyticalNaturesConfiguration().rows || []).some(function (row) { return row && !row.group && row.id === natureId; });
+    if (!natureExists) return { ok: false, errors: ['La nature analytique n’existe pas dans le dossier.'] };
+    var sourceRows = Array.isArray(inputRows) ? inputRows : [];
+    if (sourceRows.length > 1000) return { ok: false, errors: ['Un référentiel ne peut pas dépasser 1 000 valeurs.'] };
+    var current = normalizeAnalyticalDimensionValuesConfiguration(dossier.analyticalDimensionValuesConfiguration);
+    var existingForNature = current.rows.filter(function (row) { return row.natureId === natureId; });
+    var otherRows = current.rows.filter(function (row) { return row.natureId !== natureId; });
+    var seen = Object.create(null);
+    var errors = [];
+    var rows = sourceRows.map(function (row, index) {
+      row = row && typeof row === 'object' && !Array.isArray(row) ? row : {};
+      var label = String(row.label || '').trim().replace(/\s+/g, ' ');
+      var key = label.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+      if (!label) errors.push('Valeur ' + (index + 1) + ' : saisissez un libellé.');
+      if (label.length > 120) errors.push('Valeur ' + (index + 1) + ' : le libellé ne peut pas dépasser 120 caractères.');
+      if (key && seen[key]) errors.push('La valeur « ' + label + ' » est répétée dans ce référentiel.');
+      if (key) seen[key] = true;
+      return { natureId: natureId, label: label.slice(0, 120), active: row.active !== false };
+    });
+    var usedLabels = new Set();
+    (load().entries || []).forEach(function (entry) {
+      (Array.isArray(entry && entry.lines) ? entry.lines : []).forEach(function (line) {
+        (Array.isArray(line && line.analyticSplits) ? line.analyticSplits : []).forEach(function (split) {
+          if (!split || split.natureId !== natureId) return;
+          (Array.isArray(split.allocations) ? split.allocations : []).forEach(function (allocation) {
+            var label = String(allocation && allocation.valueLabel || '').trim().replace(/\s+/g, ' ');
+            if (label) usedLabels.add(label);
+          });
+        });
+      });
+    });
+    existingForNature.forEach(function (existing) {
+      if (usedLabels.has(existing.label) && !rows.some(function (row) { return row.label === existing.label; })) {
+        errors.push('La valeur « ' + existing.label + ' » est utilisée par une écriture. Conservez-la ou désactivez-la ; elle ne peut pas être supprimée/renommée.');
+      }
+    });
+    if (errors.length) return { ok: false, errors: errors };
+    var previousCatalog = clone(folderCatalog);
+    var dossierIndex = folderCatalog.findIndex(function (record) { return record.id === dossier.id; });
+    var configuration = normalizeAnalyticalDimensionValuesConfiguration({ rows: otherRows.concat(rows), updatedAt: new Date().toISOString() });
+    folderCatalog[dossierIndex] = Object.assign({}, dossier, { analyticalDimensionValuesConfiguration: configuration });
+    if (!saveFolderCatalog()) {
+      folderCatalog = previousCatalog;
+      return { ok: false, errors: ['Impossible d’enregistrer les valeurs analytiques dans ce navigateur. Les valeurs précédentes sont conservées.'] };
+    }
+    return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
   }
 
   function saveAnalyticalAccountRulesConfiguration(input) {
@@ -8641,6 +8735,8 @@
     analyticalAccountRulesConfiguration: analyticalAccountRulesConfiguration,
     analyticalAccountRulesForAccount: analyticalAccountRulesForAccount,
     saveAnalyticalAccountRulesConfiguration: saveAnalyticalAccountRulesConfiguration,
+    analyticalDimensionValuesConfiguration: analyticalDimensionValuesConfiguration,
+    saveAnalyticalDimensionValues: saveAnalyticalDimensionValues,
     saveAnalyticalSectionsConfiguration: saveAnalyticalSectionsConfiguration,
     analyticalAllocationKeysConfiguration: analyticalAllocationKeysConfiguration,
     analyticalNaturesConfiguration: analyticalNaturesConfiguration,

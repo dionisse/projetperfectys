@@ -167,6 +167,10 @@
   var entryAttachmentObjectUrls = [];
   var definitiveCloseBackup = { scope: '', entriesDownloaded: false, backupDownloaded: false, backupJson: '', entriesFileName: '', backupFileName: '', fingerprint: '' };
   var analyticalNatureSelectedId = 'activity-domains';
+  var ANALYTICAL_VALUE_REGISTRY_NATURES = [
+    'activity-domains', 'expense-categories', 'funding-sources', 'alternate-accounts',
+    'vehicle-expenses', 'mission-beneficiaries', 'analysis-3', 'analysis-4', 'analysis-5', 'cash-flow-natures'
+  ];
   var fixedAssetAccountsSelectedId = 'fixed-assets-class-21';
   var fixedAssetAccountsSelectedDossierId = '';
   var fixedAssetAccountsEditDraft = null;
@@ -2845,7 +2849,7 @@
     var decimalPlaces = S.accountingConfiguration().decimalPlaces;
     var amountStep = decimalPlaces ? String(1 / Math.pow(10, decimalPlaces)) : '1';
     var centerField = '<select data-analytic-allocation-field="centerId" aria-label="Centre analytique"' + (centerNature ? '' : ' hidden') + '><option value="">Choisir un centre…</option>' + analyticalCenterOptions(centerId) + '</select>';
-    var labelField = '<input type="text" data-analytic-allocation-field="valueLabel" maxlength="120" value="' + esc(allocation.valueLabel || '') + '" placeholder="Valeur définie par l’utilisateur" aria-label="Valeur analytique"' + (centerNature ? ' hidden' : '') + '>';
+    var labelField = '<input type="text" data-analytic-allocation-field="valueLabel" list="entry-analytical-values-' + esc(natureId) + '" maxlength="120" value="' + esc(allocation.valueLabel || '') + '" placeholder="Choisir ou saisir une valeur" aria-label="Valeur analytique"' + (centerNature ? ' hidden' : '') + '>';
     return '<div class="entry-analytic-allocation">' +
       centerField + labelField +
       '<input type="number" data-analytic-allocation-field="value" min="0" step="' + amountStep + '" value="' + esc(allocation.value == null ? '' : allocation.value) + '" placeholder="Valeur" aria-label="Montant ou pourcentage ventilé">' +
@@ -2879,10 +2883,19 @@
     '</section>';
   }
 
+  function analyticalDimensionDatalistsHtml() {
+    return ANALYTICAL_VALUE_REGISTRY_NATURES.map(function (natureId) {
+      var values = S.analyticalDimensionValuesConfiguration(natureId).rows || [];
+      return '<datalist id="entry-analytical-values-' + esc(natureId) + '">' + values.filter(function (row) { return row.active !== false; }).map(function (row) {
+        return '<option value="' + esc(row.label) + '"></option>';
+      }).join('') + '</datalist>';
+    }).join('');
+  }
+
   function lineAnalyticalEditorHtml(line) {
     var splits = Array.isArray(line.analyticSplits) ? line.analyticSplits : [];
     return '<details class="entry-analytic-editor"><summary>Imputation analytique <span data-analytic-split-count>' + (splits.length ? splits.length + ' axe(s)' : 'facultative') + '</span></summary>' +
-      '<div class="entry-analytic-editor-content"><p class="entry-analytic-rule-summary" data-analytic-account-rule-summary aria-live="polite"></p><p class="hint">Ventilation explicite par axe. Le débit/crédit général reste inchangé. Pour les natures sans référentiel de valeurs, saisissez un libellé choisi par l’utilisateur.</p>' +
+      '<div class="entry-analytic-editor-content"><p class="entry-analytic-rule-summary" data-analytic-account-rule-summary aria-live="polite"></p><p class="hint">Ventilation explicite par axe. Les référentiels proposent des suggestions, mais vous choisissez ou saisissez la valeur ; aucune classification automatique. Le débit/crédit général reste inchangé.</p>' +
       '<div data-entry-analytic-splits>' + splits.map(analyticalSplitHtml).join('') + '</div>' +
       '<button type="button" class="btn btn-ghost btn-sm" data-action="add-analytic-split">＋ Ajouter une nature / un axe</button></div></details>';
   }
@@ -2948,7 +2961,7 @@
         '<button type="button" class="btn btn-ghost btn-sm" data-action="add-line">＋ Ajouter une ligne</button></div>' +
 
       '<div class="lines-head" aria-hidden="true"><span>Compte</span><span>Débit (XOF)</span><span>Crédit (XOF)</span><span></span></div>' +
-      '<datalist id="entry-account-suggestions">' + entryAccountDatalist(model.journal) + '</datalist>' +
+      '<datalist id="entry-account-suggestions">' + entryAccountDatalist(model.journal) + '</datalist>' + analyticalDimensionDatalistsHtml() +
       '<div class="lines-editor" id="lines-body">' + model.lines.map(function (line) { return lineRowHtml(line, model.journal); }).join('') + '</div>' +
       '<section class="entry-assistance" aria-labelledby="entry-assistance-title"><div><h4 id="entry-assistance-title">Contreparties possibles</h4><p>Suggestions fondées uniquement sur des pièces validées de ce dossier contenant les comptes saisis. Elles n’imposent ni compte, ni sens, ni montant.</p></div><div id="entry-counterpart-suggestions" aria-live="polite"></div></section>' +
       '<div class="field entry-source-reference-field"><label for="e-source-reference">Référence</label>' +
@@ -3000,7 +3013,10 @@
       var split = readAnalyticalSplitFromDom(group);
       var centerNature = split.natureId === 'responsibility-centers';
       group.querySelectorAll('[data-analytic-allocation-field="centerId"]').forEach(function (select) { select.hidden = !centerNature; });
-      group.querySelectorAll('[data-analytic-allocation-field="valueLabel"]').forEach(function (input) { input.hidden = centerNature; });
+      group.querySelectorAll('[data-analytic-allocation-field="valueLabel"]').forEach(function (input) {
+        input.hidden = centerNature;
+        input.setAttribute('list', 'entry-analytical-values-' + split.natureId);
+      });
       group.querySelectorAll('[data-analytic-allocation-field="value"]').forEach(function (input) {
         input.step = split.mode === 'percentage' ? '0.01' : (decimalPlaces ? String(1 / Math.pow(10, decimalPlaces)) : '1');
         if (split.mode === 'percentage') input.max = '100';
@@ -24608,6 +24624,74 @@
     return [record.code, record.name, record.description].join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase().indexOf(needle) !== -1;
   }
 
+  function analyticalDimensionValueRowHtml(row) {
+    row = row || {};
+    return '<tr data-analytical-dimension-value><td><input type="text" data-analytical-dimension-label maxlength="120" value="' + esc(row.label || '') + '" placeholder="Valeur définie par l’utilisateur" aria-label="Valeur analytique"></td>' +
+      '<td><label class="analytical-dimension-active"><input type="checkbox" data-analytical-dimension-active' + (row.active === false ? '' : ' checked') + '> Active</label></td>' +
+      '<td><button type="button" class="btn btn-ghost btn-sm" data-analytical-dimension-remove>Retirer</button></td></tr>';
+  }
+
+  function viewAnalyticalDimensionValues(natureId) {
+    var dossier = S.currentDossier();
+    var nature = (S.analyticalNaturesConfiguration().rows || []).find(function (row) { return row && !row.group && row.id === natureId; });
+    if (!nature || ANALYTICAL_VALUE_REGISTRY_NATURES.indexOf(natureId) === -1) {
+      return '<div class="alert warning">Ce référentiel de valeurs analytiques n’est pas disponible.</div>';
+    }
+    var records = S.analyticalDimensionValuesConfiguration(natureId).rows || [];
+    var canConfigure = hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalValues.configure', accountingAccessContext(dossier));
+    var readOnly = !canConfigure || isPhoneViewport();
+    var accessNotice = !canConfigure
+      ? '<div class="alert warning">Consultation seule : un droit explicite de configuration des valeurs analytiques est nécessaire.</div>'
+      : (isPhoneViewport() ? '<div class="alert info">Consultation sur téléphone ; la modification est réservée à un ordinateur ou une tablette.</div>' : '');
+    var body = records.map(analyticalDimensionValueRowHtml).join('') || '<tr class="analytical-dimension-empty"><td colspan="3">Aucune valeur définie pour cette nature. Les référentiels restent vides tant que l’utilisateur n’a pas ajouté ses propres valeurs.</td></tr>';
+    var backLink = '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(accountingMenuHash('definitions', 'general-accounts')) + '">← Définitions</a>';
+    return '<div class="analytical-dimension-view">' + backLink + accessNotice +
+      '<header class="analytical-dimension-heading"><span class="page-kicker">SUIVI ANALYTIQUE · RÉFÉRENTIEL PAR DOSSIER</span><h2>' + esc(nature.genericName || nature.individualName) + '</h2><p>Valeurs définies par l’utilisateur pour les imputations explicites des lignes comptables. Aucun code, compte, montant ou classement prédéfini n’est ajouté.</p></header>' +
+      '<form id="analytical-dimension-values-form" data-nature-id="' + esc(natureId) + '"><div id="analytical-dimension-values-errors" aria-live="assertive"></div>' +
+        '<div class="table-wrap analytical-dimension-table-wrap"><table class="data-table analytical-dimension-table"><thead><tr><th scope="col">Valeur analytique</th><th scope="col">État</th><th scope="col">Action</th></tr></thead><tbody id="analytical-dimension-values-body">' + body + '</tbody></table></div>' +
+        '<div class="analytical-dimension-actions"><button type="button" class="btn btn-ghost" data-analytical-dimension-add' + (readOnly ? ' disabled' : '') + '>＋ Ajouter une valeur</button><button type="submit" class="btn btn-primary"' + (readOnly ? ' disabled' : '') + '>Enregistrer le référentiel</button></div>' +
+      '</form><p class="exchange-footnote">Les valeurs actives apparaissent comme suggestions pendant la saisie ; elles ne sont jamais affectées automatiquement. Les libellés déjà employés par une écriture ne peuvent être supprimés ni renommés ; ils peuvent être désactivés pour préserver l’historique.</p></div>';
+  }
+
+  function bindAnalyticalDimensionValues(natureId) {
+    var form = $('#analytical-dimension-values-form');
+    if (!form) return;
+    var body = $('#analytical-dimension-values-body', form);
+    var errors = $('#analytical-dimension-values-errors', form);
+    form.addEventListener('click', function (event) {
+      var addButton = event.target.closest ? event.target.closest('[data-analytical-dimension-add]') : null;
+      if (addButton) {
+        body.insertAdjacentHTML('beforeend', analyticalDimensionValueRowHtml({ active: true }));
+        var newInput = body.querySelector('tr:last-child [data-analytical-dimension-label]');
+        if (newInput) newInput.focus();
+        return;
+      }
+      var removeButton = event.target.closest ? event.target.closest('[data-analytical-dimension-remove]') : null;
+      if (removeButton) removeButton.closest('[data-analytical-dimension-value]').remove();
+    });
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var dossier = S.currentDossier();
+      if (isPhoneViewport() || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalValues.configure', accountingAccessContext(dossier))) {
+        toast('Enregistrement refusé : un droit explicite est requis pour ce dossier et cet appareil.', 'warning');
+        return;
+      }
+      var rows = Array.prototype.map.call(body.querySelectorAll('[data-analytical-dimension-value]'), function (row) {
+        return {
+          label: row.querySelector('[data-analytical-dimension-label]').value,
+          active: row.querySelector('[data-analytical-dimension-active]').checked
+        };
+      }).filter(function (row) { return String(row.label || '').trim(); });
+      var result = S.saveAnalyticalDimensionValues(natureId, rows);
+      if (!result.ok) {
+        errors.innerHTML = '<div class="alert warning">' + (result.errors || ['Enregistrement impossible.']).map(esc).join('<br>') + '</div>';
+        return;
+      }
+      toast('Référentiel analytique enregistré pour ce dossier.', 'success');
+      render();
+    });
+  }
+
   function viewAnalyticalCenters() {
     var records = S.analyticalCenters().slice().sort(function (a, b) { return String(a.code).localeCompare(String(b.code), 'fr'); });
     var filter = ui.analyticalCenters;
@@ -28553,6 +28637,10 @@
       exchangeFeature = viewAnalyticalMovements();
     } else if (group.id === 'definitions' && tab.id === 'responsibility-centers') {
       exchangeFeature = viewAnalyticalCenters();
+    } else if (group.id === 'definitions' && ANALYTICAL_VALUE_REGISTRY_NATURES.indexOf(tab.id) !== -1) {
+      exchangeFeature = viewAnalyticalDimensionValues(tab.id);
+    } else if (group.id === 'definitions' && tab.id === 'diverse-analyses' && selectedChild && ANALYTICAL_VALUE_REGISTRY_NATURES.indexOf(selectedChild.id) !== -1) {
+      exchangeFeature = viewAnalyticalDimensionValues(selectedChild.id);
     } else if (group.id === 'definitions' && tab.id === 'journals') {
       exchangeFeature = viewJournals();
     } else if (group.id === 'definitions' && tab.id === 'suppliers') {
@@ -29983,6 +30071,8 @@
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'personnel') bindPersonnelView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'fixed-asset-locations') bindFixedAssetLocationView();
       if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'fixed-assets') bindFixedAssetView();
+      if (!isPhoneViewport() && menuParams.g === 'definitions' && ANALYTICAL_VALUE_REGISTRY_NATURES.indexOf(menuParams.t) !== -1) bindAnalyticalDimensionValues(menuParams.t);
+      if (!isPhoneViewport() && menuParams.g === 'definitions' && menuParams.t === 'diverse-analyses' && ANALYTICAL_VALUE_REGISTRY_NATURES.indexOf(menuParams.c) !== -1) bindAnalyticalDimensionValues(menuParams.c);
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'opening-balances') bindOpeningBalancesView();
       if (!isPhoneViewport() && menuParams.g === 'fin-exercice' && menuParams.t === 'depreciation') bindYearEndDepreciation();
       if (!isPhoneViewport() && menuParams.g === 'fin-exercice' && menuParams.t === 'definitive-close') bindDefinitiveClose();

@@ -63,6 +63,10 @@ test('les règles analytiques par compte exigent un droit explicite dans le doss
     organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-2'
   }), false);
   assert.ok(Permissions.actionsForModule('accounting').some(action => action.id === 'analyticalAccountRules.configure'));
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'analyticalValues.configure', dossier), false);
+  employee.grants.accounting[0].actions.push('analyticalValues.configure');
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'analyticalValues.configure', dossier), true);
+  assert.ok(Permissions.actionsForModule('accounting').some(action => action.id === 'analyticalValues.configure'));
 });
 
 test('les clés de répartition exigent un droit explicite dans le dossier concerné', () => {

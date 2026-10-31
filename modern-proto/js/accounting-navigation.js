@@ -36,18 +36,18 @@
         { id: 'personnel', label: 'Personnel', status: 'partial', reason: 'Répertoire local du dossier : code PER automatique/modifiable, fiches du personnel modifiables et suppression protégée si une pièce comptable référence la personne. Les salaires, contrats et calculs restent dans le module Paie & RH ; aucun calcul ni écriture n’est généré ici.' },
         { id: 'other-debtors-creditors', label: 'Débiteurs et créditeurs divers', status: 'partial', reason: 'Répertoire local par dossier des tiers débiteurs et créditeurs de la famille 47 : codes DEB/CRE automatiques et modifiables, fiches éditables et suppression protégée si une pièce comptable les référence. Les mouvements et règlements restent à construire ; les centralisations sont réservées aux modules PERFECTO internes.' },
         { id: 'responsibility-centers', label: 'Centres analytiques', status: 'partial', reason: 'Référentiel de centres par dossier, partagé avec le Suivi Analytique de la Comptabilité générale. Les ventilations rattachées aux lignes d’écriture restent à activer.' },
-        { id: 'activity-domains', label: 'Domaines d’activité (analytique)', status: 'inactive', reason: 'Référentiel analytique non activé dans le dossier tant que ses champs et usages ne sont pas reliés aux écritures générales.' },
+        { id: 'activity-domains', label: 'Domaines d’activité (analytique)', status: 'active', reason: 'Référentiel vide par défaut, alimenté par les libellés définis explicitement par l’utilisateur et proposé en suggestion lors de l’imputation. Aucun compte ou classement n’est prérempli.' },
         { id: 'services', label: 'Prestations', status: 'partial', reason: 'Référentiel local des prestations par dossier (code, désignation, description et état). Aucune facture, TVA, tarification ou écriture n’est générée ; le lien au module Ventes, stock & facturation reste à construire.' },
-        { id: 'expense-categories', label: 'Catégories de dépenses (analytique)', status: 'inactive', reason: 'Référentiel analytique non activé dans le dossier tant que ses champs et usages ne sont pas reliés aux écritures générales.' },
-        { id: 'funding-sources', label: 'Sources de financement (analytique)', status: 'inactive', reason: 'Référentiel analytique non activé dans le dossier tant que ses champs et usages ne sont pas reliés aux écritures générales.' },
-        { id: 'alternate-accounts', label: 'Comptes alternatifs (analytique)', status: 'inactive', reason: 'Référentiel analytique non activé dans le dossier tant que ses champs et usages ne sont pas reliés aux écritures générales.' },
+        { id: 'expense-categories', label: 'Catégories de dépenses (analytique)', status: 'active', reason: 'Référentiel vide par défaut ; les libellés saisis par l’utilisateur sont proposés comme suggestions, sans imputation automatique ni correspondance de compte.' },
+        { id: 'funding-sources', label: 'Sources de financement (analytique)', status: 'active', reason: 'Référentiel vide par défaut ; les valeurs saisies par l’utilisateur sont proposées en suggestion lors de la ventilation explicite.' },
+        { id: 'alternate-accounts', label: 'Comptes alternatifs (analytique)', status: 'active', reason: 'Liste de valeurs descriptives définies par l’utilisateur ; aucune correspondance avec le plan comptable n’est supposée ni appliquée.' },
         {
-          id: 'diverse-analyses', label: 'Analyses diverses', status: 'inactive', reason: 'Sous-menu analytique ; ses éléments restent inactifs.',
+          id: 'diverse-analyses', label: 'Analyses diverses', status: 'mixed', reason: 'Référentiels de valeurs par nature, vides par défaut et alimentés par l’utilisateur ; les analyses dont les champs et la finalité restent à confirmer demeurent en revue.',
           children: [
-            { id: 'vehicle-expenses', label: 'Frais sur véhicules', status: 'inactive' },
-            { id: 'mission-beneficiaries', label: 'Bénéficiaires de frais de mission', status: 'inactive' },
+            { id: 'vehicle-expenses', label: 'Frais sur véhicules', status: 'active', reason: 'Référentiel de valeurs descriptives défini par l’utilisateur, proposé à la saisie sans calcul de frais ni écriture.' },
+            { id: 'mission-beneficiaries', label: 'Bénéficiaires de frais de mission', status: 'active', reason: 'Référentiel de valeurs descriptives défini par l’utilisateur ; aucun remboursement ni calcul de mission n’est créé.' },
             { id: 'other-analyses', label: 'Autres analyses à définir', status: 'review' },
-            { id: 'cash-flow-natures', label: 'Natures des flux de trésorerie', status: 'inactive' }
+            { id: 'cash-flow-natures', label: 'Natures des flux de trésorerie', status: 'active', reason: 'Référentiel de valeurs descriptives défini par l’utilisateur ; aucune interprétation de flux ni génération d’écriture n’est appliquée.' }
           ]
         },
         { id: 'fixed-asset-locations', label: 'Localisation des immobilisations corporelles', status: 'partial', reason: 'Référentiel hiérarchique par dossier : codes, niveaux et désignations modifiables, rattachement parent/enfant, adresse et responsable. Les lieux peuvent être affectés aux fiches du registre Éléments immobilisés ; mouvements et écritures restent à construire.' },

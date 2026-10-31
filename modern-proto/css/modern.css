@@ -3623,3 +3623,20 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .analytical-consistency-table tr.is-anomaly td { background: #fbefed; color: #7b3933; }
 .analytical-consistency-table tr.is-unallocated td { background: #fbf7ee; color: #6a552c; }
 .analytical-consistency-table td:last-child { min-width: 300px; white-space: normal; }
+
+.analytical-dimension-view { --dimension-tint: #f2f6f5; --dimension-line: #dce8e4; }
+.analytical-dimension-heading {
+  margin: 1rem 0;
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--dimension-line);
+  border-left: 3px solid #547d72;
+  border-radius: 12px;
+  background: var(--dimension-tint);
+}
+.analytical-dimension-heading h2 { margin: .25rem 0; }
+.analytical-dimension-heading p { color: var(--text-muted, #66736e); }
+.analytical-dimension-table-wrap { overflow-x: auto; border: 1px solid var(--dimension-line); border-radius: 10px; }
+.analytical-dimension-table input[type="text"] { width: min(100%, 520px); }
+.analytical-dimension-active { display: inline-flex; align-items: center; gap: .45rem; white-space: nowrap; }
+.analytical-dimension-empty td { padding: 1.2rem; color: var(--text-muted, #66736e); }
+.analytical-dimension-actions { display: flex; flex-wrap: wrap; gap: .65rem; margin: 1rem 0; }
