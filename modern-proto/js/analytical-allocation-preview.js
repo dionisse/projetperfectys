@@ -68,6 +68,7 @@
     var roundingDifference = sourceUnits - allocatedUnits;
     var hasCompletePercentage = mode === 'percentage' && Math.abs(keyTotal - 100) <= 1e-8;
     var requiresRoundingChoice = mode === 'weights' && roundingDifference !== 0 || hasCompletePercentage && roundingDifference !== 0;
+    var roundingAmount = requiresRoundingChoice ? roundingDifference / precision : 0;
     if (allocatedUnits > sourceUnits && !requiresRoundingChoice) {
       return { ok: false, errors: ['Le total calculé dépasse le montant de base. Aucune répartition n’est proposée.'] };
     }
@@ -80,6 +81,7 @@
           ok: false,
           requiresRoundingChoice: true,
           roundingDifference: roundingDifference / precision,
+          roundingAmount: roundingAmount,
           errors: ['Choisissez explicitement la ligne qui recevra l’écart d’arrondi de ' + (roundingDifference / precision).toFixed(precisionDigits) + ' XOF.']
         };
       }
@@ -107,8 +109,10 @@
       }),
       allocatedAmount: allocatedUnits / precision,
       unallocatedAmount: (sourceUnits - allocatedUnits) / precision,
-      complete: allocatedUnits === sourceUnits,
+      complete: allocatedUnits === sourceUnits && (mode !== 'percentage' || hasCompletePercentage),
+      unallocatedPercent: mode === 'percentage' ? Math.max(0, 100 - keyTotal) : 0,
       roundingApplied: requiresRoundingChoice,
+      roundingAmount: roundingAmount,
       roundingRowIndex: requiresRoundingChoice ? roundingRowIndex : -1
     };
   }

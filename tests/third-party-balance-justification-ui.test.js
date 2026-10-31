@@ -59,7 +59,7 @@ assert.doesNotMatch(reportSource, /record\.thirdParty\b/);
 assert.ok(htmlSource.indexOf('js/third-party-ledger-report.js') < htmlSource.indexOf('js/third-party-balance-justification-report.js'));
 assert.ok(htmlSource.indexOf('js/third-party-balance-justification-report.js') < htmlSource.indexOf('js/app.js'));
 assert.match(serviceWorkerSource, /\.\/js\/third-party-balance-justification-report\.js/);
-assert.match(serviceWorkerSource, /perfecto-static-v169/);
+assert.match(serviceWorkerSource, /perfecto-static-v170/);
 assert.match(cssSource, /\.third-party-balance-justification-filter-grid[\s\S]*\.third-party-balance-justification-column-grid[\s\S]*\.third-party-balance-justification-comments-grid/);
 assert.match(cssSource, /\.third-party-balance-justification-print\.is-mono-style[\s\S]*\.third-party-balance-justification-print\.is-color-style/);
 assert.match(cssSource, /\.report-preview-overlay\s*,[\s\S]*position:\s*fixed[\s\S]*inset:\s*0/);

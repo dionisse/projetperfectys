@@ -20,6 +20,14 @@ sourceHas(app, /Ventilation complète[\s\S]*Partielle · reliquat visible/, 'app
 sourceHas(app, /function collectAnalyticalSplits\([\s\S]*analyticSplits: collectAnalyticalSplits\(row\)/, 'app source contract');
 sourceHas(app, /S\.evaluateAnalyticalSplit\(split, baseAmount, decimalPlaces\)/, 'app source contract');
 sourceHas(app, /data-action="add-analytic-split"/, 'app source contract');
+sourceHas(app, /data-action="apply-analytical-key"/, 'explicit key application action');
+sourceHas(app, /function openAnalyticalKeyApplicationModal\(trigger\)/, 'key application stays on selected draft line');
+sourceHas(app, /Les destinations sont à sélectionner\/saisir[\s\S]*jamais transformé en valeur analytique/, 'explicit target selection');
+sourceHas(app, /Poids relatifs · proportionnels[\s\S]*Pourcentages explicites[\s\S]*Montants fixes/, 'three explicit interpretations');
+sourceHas(app, /règle exacte du compte[\s\S]*n’autorise pas le reliquat partiel/, 'partial distribution gated by account rules');
+sourceHas(app, /Cette nature est déjà présente[\s\S]*rien ne sera remplacé automatiquement/, 'existing splits are preserved');
+sourceHas(app, /entryForm.getAttribute\('data-entry-status'\) !== 'draft'/, 'key application restricted to drafts');
+sourceHas(app, /absentes du référentiel renseigné[\s\S]*non classées et exclues des états analytiques reconnus/, 'unregistered values require explicit acknowledgement');
 sourceHas(app, /data-action="add-analytic-allocation"/, 'app source contract');
 sourceHas(app, /S\.normalizeAnalyticalSplits\(l\.analyticSplits\)/, 'app source contract');
 sourceHas(store, /JSON\.stringify\(line\.analyticSplits \|\| \[\]\)/, 'line analytics persisted in signature');
@@ -35,6 +43,6 @@ sourceHas(exchange, /analyticSplits: analyticSplits/, 'exchange source contract'
 sourceHas(navigation, /reprend d’abord les ventilations explicites enregistrées sur les lignes validées/, 'navigation source contract');
 sourceHas(css, /\.entry-analytic-editor/, 'css source contract');
 sourceHas(css, /\.entry-analytic-allocation/, 'css source contract');
-sourceHas(worker, /perfecto-static-v169/, 'worker source contract');
+sourceHas(worker, /perfecto-static-v170/, 'worker source contract');
 
 console.log('Saisie analytique : champs multi-axes, modes, contrôle d’écart, persistance, cumul et export intégrés — OK');

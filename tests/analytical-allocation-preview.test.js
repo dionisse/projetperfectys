@@ -28,6 +28,7 @@ const rounded = Preview.simulate({ rows: roundedRows, sourceAmount: '1', mode: '
 assert.equal(rounded.ok, true);
 assert.deepEqual(rounded.allocations.map(row => row.amount), [0, 1, 0]);
 assert.equal(rounded.roundingRowIndex, 1);
+assert.equal(rounded.roundingAmount, 1);
 
 const roundedWeightsDown = Preview.simulate({
   rows: [{ key: '1' }, { key: '1' }], sourceAmount: '1', mode: 'weights', decimalPlaces: 0
@@ -44,6 +45,7 @@ const percentRounding = Preview.simulate({
 });
 assert.equal(percentRounding.ok, false);
 assert.equal(percentRounding.requiresRoundingChoice, true);
+assert.equal(percentRounding.roundingAmount, 1);
 
 const percentages = Preview.simulate({ rows: [
   { mainSection: 'A', counterpart: 'a', key: '40' },
@@ -53,6 +55,13 @@ assert.equal(percentages.ok, true);
 assert.deepEqual(percentages.allocations.map(row => row.amount), [40, 35]);
 assert.equal(percentages.unallocatedAmount, 25, 'un pourcentage incomplet conserve explicitement son reliquat.');
 assert.equal(percentages.complete, false);
+assert.equal(percentages.unallocatedPercent, 25);
+const subCurrencyRemainder = Preview.simulate({ rows: [{ key: '99' }], sourceAmount: '0,01', mode: 'percentage', decimalPlaces: 2 });
+assert.equal(subCurrencyRemainder.ok, true);
+assert.equal(subCurrencyRemainder.complete, false, 'un pourcentage incomplet reste partiel même si l’écart est inférieur à un centime.');
+assert.equal(subCurrencyRemainder.unallocatedPercent, 1);
+assert.equal(subCurrencyRemainder.unallocatedAmount, 0);
+
 const excessivePercentages = Preview.simulate({ rows: [
   { key: '60' }, { key: '41' }
 ], sourceAmount: '100', mode: 'percentage', decimalPlaces: 0 });

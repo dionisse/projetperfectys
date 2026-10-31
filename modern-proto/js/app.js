@@ -2892,11 +2892,332 @@
     }).join('');
   }
 
+  function openAnalyticalKeyApplicationModal(trigger) {
+    var entryForm = $('#entry-form');
+    var line = trigger && trigger.closest('.line-row');
+    var editor = trigger && trigger.closest('.entry-analytic-editor');
+    if (!entryForm || !line || !editor) return;
+    if (entryForm.getAttribute('data-entry-status') !== 'draft') {
+      toast('L’application d’une clé est réservée aux nouvelles pièces et aux brouillons. Aucune correction de pièce validée n’est faite ici.', 'warning');
+      return;
+    }
+    var debitInput = line.querySelector('[data-field="debit"]');
+    var creditInput = line.querySelector('[data-field="credit"]');
+    var debit = Number(debitInput && debitInput.value) || 0;
+    var credit = Number(creditInput && creditInput.value) || 0;
+    if (debit > 0 && credit > 0 || debit <= 0 && credit <= 0) {
+      toast('Saisissez un seul montant débit ou crédit positif sur cette ligne avant de simuler une clé.', 'warning');
+      return;
+    }
+    var sourceAmount = debit || credit;
+    var accountInput = line.querySelector('[data-field="account"]');
+    var account = resolveEntryAccount(accountInput && accountInput.value || '', ($('#e-journal') || {}).value || '');
+    if (!account) {
+      toast('Choisissez d’abord un compte général valide sur la ligne.', 'warning');
+      return;
+    }
+    var configurations = S.analyticalAllocationKeysConfiguration();
+    var availableKeys = ['auxiliaryToMain', 'servicesBySection'].filter(function (kind) {
+      var configuration = configurations[kind];
+      return configuration && configuration.configured === true && Array.isArray(configuration.rows) && configuration.rows.some(function (row) { return row && String(row.key || '').trim(); });
+    });
+    if (!availableKeys.length) {
+      toast('Aucune grille de clés validée avec des lignes renseignées n’est disponible dans ce dossier.', 'warning');
+      return;
+    }
+    var keyLabels = {
+      auxiliaryToMain: 'Sections auxiliaires sur les principales',
+      servicesBySection: 'Prestations par section'
+    };
+    var kindOptions = '<option value="">Choisir une grille validée…</option>' + availableKeys.map(function (kind) {
+      return '<option value="' + kind + '">' + esc(keyLabels[kind]) + '</option>';
+    }).join('');
+    var natureOptions = '<option value="">Choisir une nature analytique…</option>' + analyticalNatureOptions('');
+    var body = '<form id="analytical-key-application-form"><div id="analytical-key-application-errors" aria-live="assertive"></div>' +
+      '<div class="alert info"><div>La simulation porte sur la ligne ' + esc(account.code) + ' · ' + esc(amount(sourceAmount)) + ' XOF du brouillon. Choisissez une grille, une nature, une méthode et chaque destination. Rien n’est repris automatiquement des libellés de sections.</div></div>' +
+      '<div class="form-grid"><label class="field"><span>Grille de clés</span><select id="analytical-key-application-kind" required>' + kindOptions + '</select></label>' +
+      '<label class="field"><span>Nature analytique</span><select id="analytical-key-application-nature" required>' + natureOptions + '</select></label>' +
+      '<label class="field"><span>Interprétation</span><select id="analytical-key-application-mode" required><option value="">Choisissez une méthode…</option><option value="weights">Poids relatifs · proportionnels</option><option value="percentage">Pourcentages explicites</option><option value="amount">Montants fixes</option></select></label></div>' +
+      '<div class="alert warning">Les destinations sont à sélectionner/saisir pour cette application ; le nom d’une section ou prestation ne sera jamais transformé en valeur analytique sans votre choix.</div>' +
+      '<div id="analytical-key-application-mappings"><p class="muted">Choisissez une grille et une nature pour renseigner les destinations de chaque ligne de clé.</p></div>' +
+      '<div id="analytical-key-application-preview" aria-live="polite"></div></form>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="button" class="btn btn-ghost" id="analytical-key-application-calculate">Calculer l’aperçu</button><button type="button" class="btn btn-primary" id="analytical-key-application-apply" disabled>Ajouter au brouillon</button>';
+    openModal('Appliquer une clé à cette ligne', 'Choix explicites · aucune écriture validée n’est modifiée', body, footer, true);
+    var form = $('#analytical-key-application-form');
+    var kindSelect = $('#analytical-key-application-kind', form);
+    var natureSelect = $('#analytical-key-application-nature', form);
+    var modeSelect = $('#analytical-key-application-mode', form);
+    var mappingsNode = $('#analytical-key-application-mappings', form);
+    var previewNode = $('#analytical-key-application-preview', form);
+    var errorsNode = $('#analytical-key-application-errors', form);
+    var calculateButton = $('#analytical-key-application-calculate');
+    var applyButton = $('#analytical-key-application-apply');
+    var lastPreview = null;
+
+    function invalidatePreview() {
+      lastPreview = null;
+      applyButton.disabled = true;
+      previewNode.innerHTML = '';
+    }
+
+    function selectedRows() {
+      var config = configurations[kindSelect.value];
+      return config && Array.isArray(config.rows) ? config.rows.filter(function (row) { return row && String(row.key || '').trim(); }) : [];
+    }
+
+    function renderMappings() {
+      invalidatePreview();
+      var rows = selectedRows();
+      var natureId = natureSelect.value;
+      if (!rows.length || !natureId) {
+        mappingsNode.innerHTML = '<p class="muted">Choisissez une grille validée et une nature analytique.</p>';
+        return;
+      }
+      var centerNature = natureId === 'responsibility-centers';
+      var destinationFields = rows.map(function (row, index) {
+        var gridDestination = [row.mainSection, row.counterpart || row.auxiliarySection || row.serviceFamily].filter(Boolean).join(' · ');
+        var field = centerNature
+          ? '<select data-key-application-center required><option value="">Choisir un centre…</option>' + analyticalCenterOptions('') + '</select>'
+          : '<input type="text" data-key-application-value list="entry-analytical-values-' + esc(natureId) + '" maxlength="120" placeholder="Choisir ou saisir une valeur" required>';
+        return '<div class="form-grid analytical-key-application-row" data-key-application-row="' + index + '"><div><strong>' + esc(gridDestination || 'Ligne de clé ' + (index + 1)) + '</strong><br><small>Clé saisie : ' + esc(row.key) + '</small></div><label class="field"><span>Destination analytique</span>' + field + '</label></div>';
+      }).join('');
+      var rounding = '<label class="field"><span>Destination qui recevra l’écart d’arrondi (si requis)</span><select data-key-application-rounding><option value="">À choisir si un écart apparaît…</option>' + rows.map(function (row, index) {
+        var label = [row.mainSection, row.counterpart || row.auxiliarySection || row.serviceFamily].filter(Boolean).join(' · ') || 'Ligne ' + (index + 1);
+        return '<option value="' + index + '">' + esc(label) + '</option>';
+      }).join('') + '</select></label>';
+      mappingsNode.innerHTML = '<div class="analytical-key-application-mappings-list">' + destinationFields + '</div>' + rounding + '<p class="small muted">Les destinations de chaque ligne sont indépendantes des sections et sont choisies par vous. Une valeur absente du référentiel renseigné sera signalée et restera non classée.</p>';
+    }
+
+    function readMappings() {
+      var rows = selectedRows();
+      var natureId = natureSelect.value;
+      var centerNature = natureId === 'responsibility-centers';
+      var mapped = [];
+      var errors = [];
+      rows.forEach(function (row, index) {
+        var wrapper = mappingsNode.querySelector('[data-key-application-row="' + index + '"]');
+        if (centerNature) {
+          var centerId = wrapper && wrapper.querySelector('[data-key-application-center]') && wrapper.querySelector('[data-key-application-center]').value || '';
+          var center = centerId ? S.analyticalCenter(centerId) : null;
+          if (!center) errors.push('Choisissez un centre existant pour la ligne de clé ' + (index + 1) + '.');
+          mapped.push({ centerId: centerId, center: center, valueLabel: '' });
+        } else {
+          var valueLabel = String(wrapper && wrapper.querySelector('[data-key-application-value]') && wrapper.querySelector('[data-key-application-value]').value || '').trim().replace(/\s+/g, ' ');
+          if (!valueLabel) errors.push('Saisissez ou choisissez une destination analytique pour la ligne de clé ' + (index + 1) + '.');
+          mapped.push({ centerId: '', center: null, valueLabel: valueLabel });
+        }
+      });
+      var keys = new Set();
+      mapped.forEach(function (target, index) {
+        var key = centerNature ? 'center:' + target.centerId : 'value:' + target.valueLabel.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+        if (target.centerId || target.valueLabel) {
+          if (keys.has(key)) errors.push('Deux lignes de clé utilisent la même destination analytique ; choisissez une destination distincte ou saisissez les ventilations séparément.');
+          keys.add(key);
+        }
+      });
+      return { mapped: mapped, errors: errors };
+    }
+
+    function keyRegistryWarning(natureId, mapped) {
+      if (natureId === 'responsibility-centers') return [];
+      var registry = S.analyticalDimensionValuesConfiguration(natureId).rows || [];
+      if (!registry.length) return [];
+      var keys = new Set(registry.map(function (record) { return String(record.label || '').trim().replace(/\s+/g, ' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase(); }));
+      return mapped.filter(function (target) {
+        var key = target.valueLabel.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+        return !keys.has(key);
+      }).map(function (target) { return target.valueLabel; });
+    }
+
+    function accountRuleIssue(natureId, partial) {
+      var rules = S.analyticalAccountRulesForAccount(account.code);
+      if (!rules.length) return partial ? 'Une ventilation partielle requiert une règle explicite pour ce compte et cette nature.' : '';
+      var rule = rules.find(function (item) { return item.natureId === natureId; });
+      if (!rule) return 'La nature choisie n’est pas autorisée par la règle exacte du compte ' + account.code + '.';
+      if (partial && rule.allowPartial !== true) return 'La règle exacte du compte ' + account.code + ' n’autorise pas le reliquat partiel pour cette nature.';
+      return '';
+    }
+
+    function buildSplit(result, mode, completeness, natureId, mapped, roundingIndex) {
+      var percentageMode = mode === 'percentage';
+      return {
+        natureId: natureId,
+        mode: percentageMode ? 'percentage' : 'amount',
+        completeness: completeness,
+        roundingCenterId: percentageMode && result.roundingApplied && roundingIndex >= 0
+          ? (mapped[roundingIndex].centerId || 'label:' + mapped[roundingIndex].valueLabel.trim().toLocaleLowerCase())
+          : '',
+        allocations: result.allocations.map(function (allocation, index) {
+          var target = mapped[index];
+          return {
+            centerId: target.centerId,
+            centerCode: target.center ? String(target.center.code || '') : '',
+            centerName: target.center ? String(target.center.name || '') : '',
+            valueLabel: target.valueLabel,
+            value: percentageMode ? String(Number(String(allocation.key).trim().replace(/\s+/g, '').replace(',', '.'))) : String(allocation.amount),
+            amount: allocation.amount
+          };
+        })
+      };
+    }
+
+    function activateApplyControl() {
+      if (!lastPreview) { applyButton.disabled = true; return; }
+      var completeness = $('#analytical-key-application-completeness', form);
+      var ack = $('#analytical-key-application-unknown-ack', form);
+      var ready = !!(completeness && completeness.value);
+      if (lastPreview.unknownValues.length && !(ack && ack.checked)) ready = false;
+      if (lastPreview.ruleIssue) ready = false;
+      applyButton.disabled = !ready;
+    }
+
+    mappingsNode.addEventListener('input', invalidatePreview);
+    mappingsNode.addEventListener('change', invalidatePreview);
+    kindSelect.addEventListener('change', renderMappings);
+    natureSelect.addEventListener('change', renderMappings);
+    modeSelect.addEventListener('change', invalidatePreview);
+    calculateButton.addEventListener('click', function () {
+      errorsNode.innerHTML = '';
+      invalidatePreview();
+      var kind = kindSelect.value;
+      var natureId = natureSelect.value;
+      var mode = modeSelect.value;
+      var rows = selectedRows();
+      if (!kind || !rows.length || !natureId || !mode) {
+        errorsNode.innerHTML = '<div class="alert warning">Choisissez une grille, une nature et une interprétation avant le calcul.</div>';
+        return;
+      }
+      if (rows.length > 50) {
+        errorsNode.innerHTML = '<div class="alert warning">La grille dépasse les 50 affectations autorisées sur une ligne comptable.</div>';
+        return;
+      }
+      var currentSplits = collectAnalyticalSplits(line);
+      if (currentSplits.length >= 12) {
+        errorsNode.innerHTML = '<div class="alert warning">La ligne a atteint le nombre maximal de natures analytiques.</div>';
+        return;
+      }
+      if (currentSplits.some(function (split) { return !split.natureId; })) {
+        errorsNode.innerHTML = '<div class=\"alert warning\">Un axe analytique sans nature est déjà présent sur cette ligne. Choisissez sa nature ou supprimez cet axe avant d’appliquer une clé.</div>';
+        return;
+      }
+      if (currentSplits.some(function (split) { return split.natureId === natureId; })) {
+        errorsNode.innerHTML = '<div class="alert warning">Cette nature est déjà présente sur la ligne. Retirez ou modifiez explicitement sa ventilation avant d’en ajouter une autre ; rien ne sera remplacé automatiquement.</div>';
+        return;
+      }
+      var targets = readMappings();
+      if (targets.errors.length) {
+        errorsNode.innerHTML = '<div class="alert warning"><ul>' + targets.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
+        return;
+      }
+      var liveDebit = Number(debitInput && debitInput.value) || 0;
+      var liveCredit = Number(creditInput && creditInput.value) || 0;
+      if (liveDebit > 0 && liveCredit > 0 || liveDebit <= 0 && liveCredit <= 0) {
+        errorsNode.innerHTML = '<div class="alert warning">La ligne doit conserver un seul montant débit ou crédit positif.</div>';
+        return;
+      }
+      var roundingField = mappingsNode.querySelector('[data-key-application-rounding]');
+      var result = window.AnalyticalAllocationPreview.simulate({
+        rows: rows,
+        sourceAmount: liveDebit || liveCredit,
+        mode: mode,
+        decimalPlaces: S.accountingConfiguration().decimalPlaces,
+        roundingRowIndex: roundingField ? roundingField.value : ''
+      });
+      if (!result.ok) {
+        errorsNode.innerHTML = '<div class="alert warning"><ul>' + result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
+        return;
+      }
+      var unknownValues = keyRegistryWarning(natureId, targets.mapped);
+      var partial = !result.complete;
+      var ruleIssue = accountRuleIssue(natureId, partial);
+      if (mode === 'percentage' && result.unallocatedPercent > 0 && result.unallocatedAmount === 0) {
+        ruleIssue = ruleIssue || 'Le reliquat de pourcentage est inférieur à la précision monétaire du dossier et ne peut pas être représenté en XOF. Choisissez un autre mode ou ajustez explicitement les pourcentages.';
+      }
+      var completenessOptions = result.complete
+        ? '<option value="">Choisissez la complétude…</option><option value="complete">Ventilation complète</option>'
+        : '<option value="">Choisissez la complétude…</option><option value="partial"' + (ruleIssue ? ' disabled' : '') + '>Partielle · reliquat « À ventiler »</option>';
+      var completenessControl = '<label class="field"><span>Complétude de cette nature</span><select id="analytical-key-application-completeness" required>' + completenessOptions + '</select><small>Une ventilation partielle n’est possible que si elle est autorisée par la règle exacte du compte.</small></label>';
+      var ruleWarning = ruleIssue ? '<div class="alert warning">' + esc(ruleIssue) + '</div>' : '';
+      var unknownWarning = unknownValues.length ? '<div class="alert warning"><label><input id="analytical-key-application-unknown-ack" type="checkbox"> ' + esc(unknownValues.length + ' destination(s) — ' + unknownValues.join(' · ') + ' — sont absentes du référentiel renseigné. Je confirme qu’elles resteront non classées et exclues des états analytiques reconnus.') + '</label></div>' : '';
+      var fmt = function (value) { return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: S.accountingConfiguration().decimalPlaces, maximumFractionDigits: S.accountingConfiguration().decimalPlaces }).format(value); };
+      var resultRows = result.allocations.map(function (allocation, index) {
+        var target = targets.mapped[index];
+        var destination = target.center ? target.center.code + ' · ' + target.center.name : target.valueLabel;
+        return '<tr><td>' + esc(destination) + '</td><td>' + esc(allocation.key) + '</td><td class="number-cell">' + esc(fmt(allocation.amount)) + ' XOF</td></tr>';
+      });
+      if (result.unallocatedAmount > 0 || result.unallocatedPercent > 0) resultRows.push('<tr class="analytical-statement-unallocated"><td colspan="2">À ventiler · sans attribution' + (result.unallocatedPercent > 0 ? ' · ' + esc(fmt(result.unallocatedPercent)) + ' % non ventilé' : '') + '</td><td class="number-cell">' + esc(fmt(result.unallocatedAmount)) + ' XOF</td></tr>');
+      var roundingNote = result.roundingApplied ? '<p class="small muted">Écart d’arrondi appliqué à la destination choisie : ' + esc(fmt(result.roundingAmount)) + ' XOF.</p>' : '';
+      previewNode.innerHTML = '<div class="alert info"><strong>Aperçu ' + (result.complete ? 'complet' : 'partiel') + '</strong> · base ' + esc(fmt(result.sourceAmount)) + ' XOF · réparti ' + esc(fmt(result.allocatedAmount)) + ' XOF · aucun changement enregistré.</div>' +
+        '<div class="table-wrap"><table class="data-table allocation-preview-table"><thead><tr><th>Destination choisie</th><th>Clé</th><th>Montant simulé</th></tr></thead><tbody>' + resultRows.join('') + '</tbody></table></div>' + roundingNote + ruleWarning + unknownWarning + completenessControl;
+      lastPreview = {
+        result: result, mode: mode, natureId: natureId, mapped: targets.mapped,
+        roundingIndex: roundingField && roundingField.value !== '' ? Number(roundingField.value) : -1,
+        sourceAmount: liveDebit || liveCredit, unknownValues: unknownValues, ruleIssue: ruleIssue
+      };
+      var completenessSelect = $('#analytical-key-application-completeness', form);
+      if (completenessSelect) completenessSelect.addEventListener('change', activateApplyControl);
+      var unknownAck = $('#analytical-key-application-unknown-ack', form);
+      if (unknownAck) unknownAck.addEventListener('change', activateApplyControl);
+      activateApplyControl();
+    });
+
+    applyButton.addEventListener('click', function () {
+      errorsNode.innerHTML = '';
+      if (!lastPreview) return;
+      var currentDebit = Number(debitInput && debitInput.value) || 0;
+      var currentCredit = Number(creditInput && creditInput.value) || 0;
+      if (currentDebit > 0 && currentCredit > 0 || currentDebit <= 0 && currentCredit <= 0 || (currentDebit || currentCredit) !== lastPreview.sourceAmount) {
+        errorsNode.innerHTML = '<div class="alert warning">Le montant de la ligne a changé depuis l’aperçu. Recalculez avant de l’ajouter.</div>';
+        invalidatePreview();
+        return;
+      }
+      var liveAccountInput = line.querySelector('[data-field="account"]');
+      var liveAccount = resolveEntryAccount(liveAccountInput && liveAccountInput.value || '', ($('#e-journal') || {}).value || '');
+      if (!liveAccount || liveAccount.code !== account.code) {
+        errorsNode.innerHTML = '<div class="alert warning">Le compte de la ligne a changé depuis l’aperçu. Recommencez avec la règle du compte actuel.</div>';
+        invalidatePreview();
+        return;
+      }
+      if (collectAnalyticalSplits(line).some(function (split) { return split.natureId === lastPreview.natureId; })) {
+        errorsNode.innerHTML = '<div class="alert warning">La nature existe maintenant sur cette ligne ; aucune ventilation n’a été remplacée.</div>';
+        invalidatePreview();
+        return;
+      }
+      var completeness = $('#analytical-key-application-completeness', form).value;
+      if (!completeness || lastPreview.result.complete && completeness !== 'complete' || !lastPreview.result.complete && completeness !== 'partial') {
+        errorsNode.innerHTML = '<div class="alert warning">Confirmez explicitement le caractère complet ou partiel avant l’ajout.</div>';
+        return;
+      }
+      if (lastPreview.ruleIssue) {
+        errorsNode.innerHTML = '<div class="alert warning">' + esc(lastPreview.ruleIssue) + '</div>';
+        return;
+      }
+      if (lastPreview.unknownValues.length && !$('#analytical-key-application-unknown-ack', form).checked) {
+        errorsNode.innerHTML = '<div class="alert warning">Confirmez que la valeur hors référentiel restera non classée.</div>';
+        return;
+      }
+      var split = buildSplit(lastPreview.result, lastPreview.mode, completeness, lastPreview.natureId, lastPreview.mapped, lastPreview.roundingIndex);
+      var evaluation = S.evaluateAnalyticalSplit(split, lastPreview.sourceAmount, S.accountingConfiguration().decimalPlaces);
+      if (evaluation.errors.length || evaluation.overallocatedUnits > 0 || (completeness === 'complete' && evaluation.unallocatedUnits > 0) || (completeness === 'partial' && evaluation.unallocatedUnits <= 0)) {
+        errorsNode.innerHTML = '<div class="alert warning"><ul>' + evaluation.errors.concat(['La ventilation simulée ne respecte pas le montant et la complétude de la ligne.']).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
+        return;
+      }
+      var splitList = editor.querySelector('[data-entry-analytic-splits]');
+      if (!splitList) return;
+      splitList.insertAdjacentHTML('beforeend', analyticalSplitHtml(split));
+      editor.open = true;
+      refreshEntryAnalyticalEditor(editor);
+      closeModal();
+      toast('Ventilation ajoutée au brouillon. Vérifiez la ligne puis enregistrez la pièce explicitement.', 'success');
+    });
+  }
+
   function lineAnalyticalEditorHtml(line) {
     var splits = Array.isArray(line.analyticSplits) ? line.analyticSplits : [];
     return '<details class="entry-analytic-editor"><summary>Imputation analytique <span data-analytic-split-count>' + (splits.length ? splits.length + ' axe(s)' : 'facultative') + '</span></summary>' +
       '<div class="entry-analytic-editor-content"><p class="entry-analytic-rule-summary" data-analytic-account-rule-summary aria-live="polite"></p><p class="hint">Ventilation explicite par axe. Les référentiels proposent des suggestions, mais vous choisissez ou saisissez la valeur ; aucune classification automatique. Le débit/crédit général reste inchangé.</p>' +
       '<div data-entry-analytic-splits>' + splits.map(analyticalSplitHtml).join('') + '</div>' +
+      '<button type="button" class="btn btn-ghost btn-sm" data-action="apply-analytical-key">Utiliser une clé validée…</button> ' +
       '<button type="button" class="btn btn-ghost btn-sm" data-action="add-analytic-split">＋ Ajouter une nature / un axe</button></div></details>';
   }
 
@@ -28924,7 +29245,7 @@
         var resultRows = result.allocations.map(function (allocation) {
           return '<tr><td>' + esc(targetLabel(allocation)) + '</td><td>' + esc(allocation.key) + '</td><td class="number-cell">' + esc(fmt(allocation.amount)) + ' XOF</td></tr>';
         });
-        if (result.unallocatedAmount > 0) resultRows.push('<tr class="analytical-statement-unallocated"><td colspan="2">À ventiler · sans attribution</td><td class="number-cell">' + esc(fmt(result.unallocatedAmount)) + ' XOF</td></tr>');
+        if (result.unallocatedAmount > 0 || result.unallocatedPercent > 0) resultRows.push('<tr class="analytical-statement-unallocated"><td colspan="2">À ventiler · sans attribution' + (result.unallocatedPercent > 0 ? ' · ' + esc(fmt(result.unallocatedPercent)) + ' % non ventilé' : '') + '</td><td class="number-cell">' + esc(fmt(result.unallocatedAmount)) + ' XOF</td></tr>');
         output.innerHTML = '<div class="alert info"><strong>' + (result.complete ? 'Simulation complète.' : 'Simulation partielle.') + '</strong> Base ' + esc(fmt(result.sourceAmount)) + ' XOF · réparti ' + esc(fmt(result.allocatedAmount)) + ' XOF · aucun changement enregistré.</div>' +
           '<div class="table-wrap"><table class="data-table allocation-preview-table"><thead><tr><th>Destination de la grille</th><th>Clé saisie</th><th>Montant simulé</th></tr></thead><tbody>' + resultRows.join('') + '</tbody></table></div>';
       });
@@ -31128,6 +31449,10 @@
       case 'remove-analytical-account-rule': {
         var ruleRow = trigger.closest('[data-analytical-account-rule]');
         if (ruleRow) ruleRow.remove();
+        break;
+      }
+      case 'apply-analytical-key': {
+        openAnalyticalKeyApplicationModal(trigger);
         break;
       }
       case 'add-analytic-split': {
