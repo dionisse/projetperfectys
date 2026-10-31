@@ -20,7 +20,7 @@ assert.match(app, /aucun changement enregistré/);
 assert.match(app, /AnalyticalAllocationPreview\.simulate\(/);
 assert.match(html, /<script src="js\/analytical-allocation-preview\.js"><\/script>/);
 assert.match(worker, /'\.\/js\/analytical-allocation-preview\.js'/);
-assert.match(worker, /perfecto-static-v171/);
+assert.match(worker, /perfecto-static-v172/);
 assert.match(helper, /Choisissez explicitement une interprétation des clés/);
 assert.match(helper, /écart d’arrondi/);
 

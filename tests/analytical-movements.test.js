@@ -68,6 +68,52 @@ assert.equal(oneCenter.groups[0].rows.filter(row => row.cells.status === 'Ventil
 assert.equal(oneCenter.groups[0].rows.find(row => row.cells.status === 'Ventilé').cells.destination, 'ANA-01 · Atelier nord');
 assert.equal(oneCenter.unallocatedDebit, 10, 'le reliquat reste visible séparément et ne devient pas un centre.');
 
+const centersWithAmbiguousCode = analyticalCenters.concat([
+  { id: 'center-3', code: 'DUP', name: 'Centre doublon A', active: true },
+  { id: 'center-4', code: 'DUP', name: 'Centre doublon B', active: true }
+]);
+const unmatchedCenterEntries = [{
+  id: 'entry-unmatched-centers', reference: 'OD-UNMATCHED', journal: 'OD', date: '2026-02-12', status: 'posted',
+  lines: [
+    { account: '601100', debit: 10, credit: 0, analyticSplits: [{ natureId: 'responsibility-centers', mode: 'amount', allocations: [{ centerId: 'center-missing', centerCode: 'ANA-X', centerName: 'Centre retiré', value: '10', amount: 10 }] }] },
+    { account: '601100', debit: 20, credit: 0, analyticSplits: [{ natureId: 'responsibility-centers', mode: 'amount', allocations: [{ centerId: 'center-1', centerCode: 'ANA-02', centerName: 'Ancien libellé', value: '20', amount: 20 }] }] },
+    { account: '601100', debit: 0, credit: 7, analyticalCenterCode: 'ANA-UNKNOWN' },
+    { account: '601100', debit: 8, credit: 0, analyticalCenterCode: 'DUP' },
+    { account: '601100', debit: 12, credit: 0, analyticSplits: [{ natureId: 'responsibility-centers', mode: 'amount', allocations: [{ centerId: 'center-1', centerCode: 'ANA-01', centerName: 'Atelier nord', value: '12', amount: 12 }] }] }
+  ]
+}];
+const unmatchedCenterMovement = Report.buildAnalyticalMovements({
+  entries: unmatchedCenterEntries, analyticalCenters: centersWithAmbiguousCode, analyticalNatures, accounts, decimalPlaces: 0,
+  filters: { analyticalNature: 'responsibility-centers', from: '2026-02-01', to: '2026-02-28' }
+});
+assert.equal(unmatchedCenterMovement.unmatchedCenterCount, 4, 'les références inconnues, contradictoires et ambiguës sont toutes dénombrées');
+assert.equal(unmatchedCenterMovement.unmatchedCenterLineCount, 4);
+assert.equal(unmatchedCenterMovement.unmatchedCenterDebit, 38);
+assert.equal(unmatchedCenterMovement.unmatchedCenterCredit, 7);
+assert.equal(unmatchedCenterMovement.totalDebit, 12, 'les imputations non rapprochées ne rejoignent pas les totaux reconnus');
+assert.equal(unmatchedCenterMovement.rowCount, 5, 'les références non rapprochées sont consultables avec les lignes sources');
+const unmatchedCenterRows = unmatchedCenterMovement.groups[0].rows.filter(row => row.cells.status === 'Centre non rapproché');
+assert.equal(unmatchedCenterRows.length, 4);
+assert.ok(unmatchedCenterRows.some(row => row.cells.piece === 'OD-UNMATCHED' && row.cells.destination.includes('ANA-X') && row.cells.debit === 10));
+assert.ok(unmatchedCenterRows.some(row => row.cells.destination.includes('métadonnées du centre contradictoires') && row.cells.debit === 20));
+assert.ok(unmatchedCenterRows.some(row => row.cells.destination.includes('ANA-UNKNOWN') && row.cells.credit === 7));
+assert.ok(unmatchedCenterRows.some(row => row.cells.destination.includes('référence historique ambiguë') && row.cells.debit === 8));
+const searchedUnmatchedCenter = Report.buildAnalyticalMovements({
+  entries: unmatchedCenterEntries, analyticalCenters: centersWithAmbiguousCode, analyticalNatures, accounts, decimalPlaces: 0,
+  filters: { analyticalNature: 'responsibility-centers', from: '2026-02-01', to: '2026-02-28', search: 'ANA-UNKNOWN' }
+});
+assert.equal(searchedUnmatchedCenter.unmatchedCenterCount, 1, 'la recherche retrouve une référence historique inconnue');
+assert.equal(searchedUnmatchedCenter.groups[0].rows[0].cells.credit, 7);
+const unmatchedCenterStatement = Report.buildAnalyticalStatement({
+  reportType: 'analytic-center-balance', entries: unmatchedCenterEntries, analyticalCenters: centersWithAmbiguousCode,
+  analyticalNatures, accounts, decimalPlaces: 0, cycleStart: '2026-01-01', cycleEnd: '2026-12-31',
+  filters: { analyticalNature: 'responsibility-centers', from: '2026-02-01', to: '2026-02-28' }
+});
+assert.equal(unmatchedCenterStatement.totalDebit, 12);
+assert.equal(unmatchedCenterStatement.rowCount, 1);
+assert.equal(unmatchedCenterStatement.groups[1].code, 'analytical-unmatched-centers');
+assert.equal(unmatchedCenterStatement.groups[1].rows[0].cells.debit, 38);
+
 const otherNature = Report.buildAnalyticalMovements({
   entries, analyticalCenters, analyticalNatures, accounts, decimalPlaces: 0,
   filters: { analyticalNature: 'activity-domains', from: '2026-02-01', to: '2026-02-28' }

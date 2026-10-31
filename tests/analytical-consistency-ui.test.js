@@ -23,6 +23,6 @@ assert.match(report, /reliquat partiel n’est pas autorisé explicitement/);
 assert.match(app, /analyticalDimensionValues:.*analyticalDimensionValuesConfiguration/);
 assert.match(report, /absente du référentiel renseigné ; la valeur reste non classée/);
 assert.match(css, /\.analytical-consistency-table/);
-assert.match(worker, /perfecto-static-v171/);
+assert.match(worker, /perfecto-static-v172/);
 
 console.log('Contrôle des ventilations analytiques : navigation, calcul consultatif, export et style vérifiés — OK');

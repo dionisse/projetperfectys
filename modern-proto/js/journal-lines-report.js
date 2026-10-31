@@ -789,9 +789,9 @@
     var sourceLineKeys = new Set();
     var unallocated = { lineCount: 0, debitUnits: 0, creditUnits: 0 };
     var unmatchedValues = { lineCount: 0, sourceLines: new Set(), debitUnits: 0, creditUnits: 0 };
+    var unmatchedCenters = { allocationCount: 0, sourceLines: new Set(), debitUnits: 0, creditUnits: 0 };
     var totalDebitUnits = 0;
     var totalCreditUnits = 0;
-    var unmatchedCenterCount = 0;
     var unclassifiedAllocationCount = 0;
 
     function registerCenter(reference, center) {
@@ -828,6 +828,53 @@
           var account = accountByCode.get(accountCode) || null;
           var lineKey = String(entry.id || entryIndex) + ':' + lineIndex;
           var matchingSplits = (Array.isArray(line.analyticSplits) ? line.analyticSplits : []).filter(function (split) { return split && split.natureId === natureId; });
+
+          function addUnmatchedCenterRow(destination, enteredValue, mode, analyticAmount) {
+            var searchText = normalizeAnalyticalMovementSearch([
+              date, entry.journal, entry.reference, accountCode, account && account.label,
+              destination, nature.genericName, nature.individualName
+            ].join(' '));
+            if (search && searchText.indexOf(search) === -1) return;
+            var amountValue = Number(analyticAmount);
+            var hasAmount = Number.isFinite(amountValue) && amountValue > 0;
+            var units = hasAmount ? Math.round(amountValue * precision) : 0;
+            var debitUnits = debit > 0 ? units : 0;
+            var creditUnits = credit > 0 ? units : 0;
+            rows.push({ kind: 'line', entry: entry, line: line, center: null, cells: {
+              date: date,
+              journal: String(entry.journal || ''),
+              piece: String(entry.reference || ''),
+              account: accountCode,
+              accountTitle: String(account && account.label || ''),
+              destination: destination + (hasAmount ? '' : ' · montant analytique absent ou illisible'),
+              mode: mode,
+              enteredValue: enteredValue == null ? '' : String(enteredValue),
+              debit: debitUnits / precision,
+              credit: creditUnits / precision,
+              status: 'Centre non rapproché'
+            }});
+            sourceLineKeys.add(lineKey);
+            unmatchedCenters.allocationCount += 1;
+            unmatchedCenters.sourceLines.add(lineKey);
+            unmatchedCenters.debitUnits += debitUnits;
+            unmatchedCenters.creditUnits += creditUnits;
+          }
+
+          function allocationCenterIssue(allocation) {
+            var rawId = allocation && allocation.centerId;
+            var reference = normalizeAnalyticalCenterReference(rawId || '');
+            var center = reference && centerByReference.has(reference) ? centerByReference.get(reference) : null;
+            var reason = !reference ? 'identifiant de centre absent' : (!centerByReference.has(reference)
+              ? 'référence inconnue' : (!center ? 'référence ambiguë' : 'métadonnées du centre contradictoires'));
+            var rawParts = [];
+            if (allocation && allocation.centerCode != null && String(allocation.centerCode).trim()) rawParts.push('code « ' + String(allocation.centerCode).trim() + ' »');
+            if (rawId != null && String(rawId).trim()) rawParts.push('identifiant « ' + String(rawId).trim() + ' »');
+            if (allocation && allocation.centerName != null && String(allocation.centerName).trim()) rawParts.push('libellé « ' + String(allocation.centerName).trim() + ' »');
+            return {
+              center: center,
+              destination: 'Centre non rapproché · ' + (rawParts.length ? rawParts.join(' ; ') : 'référence absente') + ' · ' + reason
+            };
+          }
 
           function addRow(center, destination, enteredValue, mode, analyticAmount, status, isUnallocated) {
             analyticAmount = Number(analyticAmount);
@@ -871,13 +918,13 @@
             matchingSplits.forEach(function (split) {
               (Array.isArray(split.allocations) ? split.allocations : []).forEach(function (allocation) {
                 if (!allocation) return;
-                var ref = normalizeAnalyticalCenterReference(allocation.centerId || '');
-                var center = ref && centerByReference.has(ref) ? centerByReference.get(ref) : null;
-                if (!center || (allocation.centerCode && allocation.centerCode !== center.code) || (allocation.centerName && allocation.centerName !== center.name)) {
-                  unmatchedCenterCount += 1;
+                var issue = allocationCenterIssue(allocation);
+                if (!issue.center || (allocation.centerCode && String(allocation.centerCode) !== String(issue.center.code || '')) ||
+                    (allocation.centerName && String(allocation.centerName) !== String(issue.center.name || ''))) {
+                  addUnmatchedCenterRow(issue.destination, allocation.value, split.mode === 'percentage' ? 'Pourcentage' : 'Montant', allocation.amount);
                   return;
                 }
-                addRow(center, String(center.code || '') + ' · ' + String(center.name || ''), allocation.value, split.mode === 'percentage' ? 'Pourcentage' : 'Montant', allocation.amount, 'Ventilé', false);
+                addRow(issue.center, String(issue.center.code || '') + ' · ' + String(issue.center.name || ''), allocation.value, split.mode === 'percentage' ? 'Pourcentage' : 'Montant', allocation.amount, 'Ventilé', false);
               });
               var remaining = Number(split.unallocatedAmount);
               if (Number.isFinite(remaining) && remaining > 0) addRow(null, 'À ventiler (sans centre)', '', split.mode === 'percentage' ? 'Pourcentage' : 'Montant', remaining, 'À ventiler', true);
@@ -887,16 +934,31 @@
 
           // Les références historiques explicites restent visibles ; aucune correspondance partielle n’est retenue.
           var legacy = analyticalCenterReferences(line, sourceLines[lineIndex] || {});
-          if (legacy.invalid || !legacy.values.length) return;
+          if (!legacy.invalid && !legacy.values.length) return;
           var legacyCenter = null;
-          for (var refIndex = 0; refIndex < legacy.values.length; refIndex += 1) {
+          var legacyIssue = legacy.invalid ? 'référence historique illisible' : '';
+          for (var refIndex = 0; !legacyIssue && refIndex < legacy.values.length; refIndex += 1) {
             var legacyReference = legacy.values[refIndex];
-            if (!centerByReference.has(legacyReference)) return;
+            if (!centerByReference.has(legacyReference)) {
+              legacyIssue = 'référence historique inconnue « ' + legacyReference + ' »';
+              break;
+            }
             var candidate = centerByReference.get(legacyReference);
-            if (!candidate || legacyCenter && legacyCenter !== candidate) return;
+            if (!candidate) {
+              legacyIssue = 'référence historique ambiguë « ' + legacyReference + ' »';
+              break;
+            }
+            if (legacyCenter && legacyCenter !== candidate) {
+              legacyIssue = 'références historiques contradictoires';
+              break;
+            }
             legacyCenter = candidate;
           }
-          if (legacyCenter) addRow(legacyCenter, legacyCenter.code + ' · ' + legacyCenter.name, '', 'Historique', debit || credit, 'Référence historique', false);
+          if (legacyIssue || !legacyCenter) {
+            addUnmatchedCenterRow('Centre non rapproché · ' + (legacy.values.length ? legacy.values.join(' ; ') : 'référence historique absente') + ' · ' + (legacyIssue || 'référence historique invalide'), '', 'Historique', debit || credit);
+            return;
+          }
+          addRow(legacyCenter, legacyCenter.code + ' · ' + legacyCenter.name, '', 'Historique', debit || credit, 'Référence historique', false);
         });
       });
     } else if (!errors.length) {
@@ -991,7 +1053,10 @@
       unmatchedValueLineCount: unmatchedValues.sourceLines.size,
       unmatchedValueDebit: unmatchedValues.debitUnits / precision,
       unmatchedValueCredit: unmatchedValues.creditUnits / precision,
-      unmatchedCenterCount: unmatchedCenterCount,
+      unmatchedCenterCount: unmatchedCenters.allocationCount,
+      unmatchedCenterLineCount: unmatchedCenters.sourceLines.size,
+      unmatchedCenterDebit: unmatchedCenters.debitUnits / precision,
+      unmatchedCenterCredit: unmatchedCenters.creditUnits / precision,
       unclassifiedAllocationCount: unclassifiedAllocationCount,
       analyticalNature: natureId,
       analyticalNatureLabel: nature ? String(nature.individualName || nature.genericName || '') : ''
@@ -1005,8 +1070,9 @@
     var natureLabel = movements.analyticalNatureLabel || '';
     if (movements.errors.length) return Object.assign({}, movements, { reportType: reportType });
     var sourceRows = movements.groups.reduce(function (result, group) { return result.concat(group.rows || []); }, []);
-    var assignedRows = sourceRows.filter(function (row) { return row.cells.status !== 'À ventiler'; });
+    var assignedRows = sourceRows.filter(function (row) { return row.cells.status !== 'À ventiler' && row.cells.status !== 'Centre non rapproché'; });
     var unallocatedRows = sourceRows.filter(function (row) { return row.cells.status === 'À ventiler'; });
+    var unmatchedCenterRows = sourceRows.filter(function (row) { return row.cells.status === 'Centre non rapproché'; });
     var unmatchedValueRows = sourceRows.filter(function (row) { return row.cells.status === 'Valeur non rapprochée'; });
     var detailTypes = ['analytic-ledger', 'analytic-other-nature-ledger'];
     var columns;
@@ -1114,6 +1180,22 @@
         groups.push({ code: 'analytical-unmatched-values', title: 'Valeurs saisies absentes du référentiel · non classées', rowCount: unmatchedValueRows.length, rows: [{ kind: 'line', cells: unknownCells }] });
       }
     }
+    if (unmatchedCenterRows.length) {
+      if (detailTypes.indexOf(reportType) !== -1) {
+        groups.push({ code: 'analytical-unmatched-centers', title: 'Centres non rapprochés · non classés', rowCount: unmatchedCenterRows.length, rows: unmatchedCenterRows.map(function (row) { return { kind: 'line', cells: row.cells }; }) });
+      } else {
+        var unmatchedCenterDebit = movements.unmatchedCenterDebit;
+        var unmatchedCenterCredit = movements.unmatchedCenterCredit;
+        var unmatchedCenterValues = {
+          analyticCode: '', analyticTitle: 'Centres non rapprochés', destination: 'Centres non rapprochés', account: '', accountTitle: '',
+          lineCount: movements.unmatchedCenterLineCount, debit: unmatchedCenterDebit, credit: unmatchedCenterCredit,
+          net: unmatchedCenterDebit - unmatchedCenterCredit
+        };
+        var unmatchedCenterCells = {};
+        columns.forEach(function (column) { unmatchedCenterCells[column.key] = unmatchedCenterValues[column.key] == null ? '' : unmatchedCenterValues[column.key]; });
+        groups.push({ code: 'analytical-unmatched-centers', title: 'Références de centres inconnues, ambiguës ou contradictoires · non classées', rowCount: unmatchedCenterRows.length, rows: [{ kind: 'line', cells: unmatchedCenterCells }] });
+      }
+    }
     if (unallocatedRows.length) {
       var remainderCells;
       if (detailTypes.indexOf(reportType) !== -1) {
@@ -1153,6 +1235,9 @@
       unmatchedValueDebit: movements.unmatchedValueDebit,
       unmatchedValueCredit: movements.unmatchedValueCredit,
       unmatchedCenterCount: movements.unmatchedCenterCount,
+      unmatchedCenterLineCount: movements.unmatchedCenterLineCount,
+      unmatchedCenterDebit: movements.unmatchedCenterDebit,
+      unmatchedCenterCredit: movements.unmatchedCenterCredit,
       unclassifiedAllocationCount: movements.unclassifiedAllocationCount,
       analyticalNature: movements.analyticalNature,
       analyticalNatureLabel: natureLabel

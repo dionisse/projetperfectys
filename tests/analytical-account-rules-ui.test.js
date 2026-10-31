@@ -26,6 +26,6 @@ assert.match(store, /n’autorise pas une ventilation partielle/);
 assert.match(permissions, /analyticalAccountRules\.configure/);
 assert.match(navigation, /analytic-account-rules/);
 assert.match(css, /\.analytical-account-rules-table/);
-assert.match(worker, /perfecto-static-v171/);
+assert.match(worker, /perfecto-static-v172/);
 
 console.log('Règles par compte : écrans, droits, contrôles à la validation et résumés en français — OK');

@@ -64,7 +64,7 @@
           children: [
             { id: 'general-movements', label: 'Comptes généraux et auxiliaires', status: 'partial', reason: 'Arborescence du plan et synthèse mensuelle des écritures validées du dossier. Les mouvements individuels auxiliaires ne sont pas encore enregistrés dans les pièces.' },
             { id: 'third-party-movements', label: 'Comptes tiers', status: 'partial', reason: 'Consultation des fournisseurs, clients, personnels et débiteurs/créditeurs divers. Les montants affichés sont ceux du compte collectif agrégé, jamais un solde individuel de tiers.' },
-            { id: 'analytic-movements', label: 'Comptes analytiques', status: 'active', reason: 'Consultation des ventilations explicites par nature, centre ou valeur, journal et période. Les pièces validées seules sont reprises ; le reliquat apparaît « À ventiler » sans attribution à un centre.' }
+            { id: 'analytic-movements', label: 'Comptes analytiques', status: 'active', reason: 'Consultation des ventilations explicites par nature, centre ou valeur, journal et période. Les pièces validées seules sont reprises ; le reliquat apparaît « À ventiler » sans attribution à un centre. Les références de centre inconnues, ambiguës ou contradictoires sont détaillées avec leur pièce source et restent exclues des totaux reconnus.' }
           ]
         },
         { id: 'scheduled-payments', label: 'Programmation des règlements à effectuer (analytique)', status: 'inactive', reason: 'Fonction explicitement analytique.' },
