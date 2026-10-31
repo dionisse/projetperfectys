@@ -149,6 +149,7 @@
     thirdPartyMovements: { q: '', kind: 'all', recordId: '', month: '' },
     analyticalCenters: { q: '', status: 'active' },
     analyticalMovements: { q: '', natureId: '', centerId: '', journal: '', from: '', to: '' },
+    analyticalPaymentSchedule: { dossierId: '', q: '', status: 'all', from: '', to: '' },
     openingBalances: { q: '', position: '', sourceDossierId: '', selectedId: '' },
     accountingBridge: { sourceModuleId: 'payroll-hr' },
     periods: { year: S.exercise() },
@@ -25188,6 +25189,157 @@
     '</div>';
   }
 
+  function analyticalScheduleNatureOptions(selectedId) {
+    var rows = (S.analyticalNaturesConfiguration().rows || []).filter(function (nature) { return nature && !nature.group; });
+    return '<option value="">Aucune · à classer</option>' + rows.map(function (nature) {
+      var label = nature.individualName && nature.individualName !== nature.genericName ? String(nature.genericName || '') + ' · ' + String(nature.individualName) : String(nature.genericName || nature.individualName || nature.id);
+      return '<option value="' + esc(nature.id) + '"' + (nature.id === selectedId ? ' selected' : '') + '>' + esc(label) + '</option>';
+    }).join('');
+  }
+
+  function analyticalScheduleValueOptions(natureId, current) {
+    var options = [];
+    if (natureId === 'responsibility-centers') {
+      var centers = S.analyticalCenters().filter(function (center) { return center && (center.active !== false || current && center.id === current.valueId); });
+      centers.forEach(function (center) {
+        var label = String(center.code || '') + ' · ' + String(center.name || '');
+        var savedLabel = current && current.valueId === center.id ? (current.valueLabel || label) : label;
+        var savedCode = current && current.valueId === center.id ? (current.centerCode || center.code || '') : (center.code || '');
+        var savedName = current && current.valueId === center.id ? (current.centerName || center.name || '') : (center.name || '');
+        options.push('<option value="' + esc(center.id) + '" data-label="' + esc(savedLabel) + '" data-center-code="' + esc(savedCode) + '" data-center-name="' + esc(savedName) + '"' + (current && current.valueId === center.id ? ' selected' : '') + '>' + esc(savedLabel + (savedLabel !== label ? ' · libellé enregistré' : '') + (center.active === false ? ' · Archivé' : '')) + '</option>');
+      });
+      if (current && current.valueId && !centers.some(function (center) { return center.id === current.valueId; })) options.push('<option value="' + esc(current.valueId) + '" data-label="' + esc(current.valueLabel || '') + '" data-center-code="' + esc(current.centerCode || '') + '" data-center-name="' + esc(current.centerName || '') + '" selected>Référence conservée · ' + esc(current.valueLabel || current.valueId) + '</option>');
+    } else if (natureId) {
+      var values = S.analyticalDimensionValuesConfiguration(natureId).rows || [];
+      values.filter(function (value) { return value && (value.active !== false || current && value.label === current.valueLabel); }).forEach(function (value) {
+        options.push('<option value="' + esc(value.label) + '" data-label="' + esc(value.label) + '"' + (current && current.valueLabel === value.label ? ' selected' : '') + '>' + esc(value.label + (value.active === false ? ' · Inactive' : '')) + '</option>');
+      });
+      if (current && current.valueLabel && !values.some(function (value) { return value.label === current.valueLabel; })) options.push('<option value="' + esc(current.valueLabel) + '" data-label="' + esc(current.valueLabel) + '" selected>Référence conservée · ' + esc(current.valueLabel) + '</option>');
+    }
+    return '<option value="">À classer · aucune valeur choisie</option>' + options.join('');
+  }
+
+  function analyticalScheduleClassification(record) {
+    if (!record.natureId || !record.valueLabel) return 'À classer';
+    if (record.natureId === 'responsibility-centers') {
+      return S.analyticalCenters().some(function (center) { return center && center.id === record.valueId; })
+        ? String(record.natureLabel || 'Centre') + ' · ' + String(record.valueLabel)
+        : 'Référence à vérifier · ' + String(record.valueLabel);
+    }
+    return (S.analyticalDimensionValuesConfiguration(record.natureId).rows || []).some(function (value) { return value && value.label === record.valueLabel; })
+      ? String(record.natureLabel || record.natureId) + ' · ' + String(record.valueLabel)
+      : 'Référence à vérifier · ' + String(record.valueLabel);
+  }
+
+  function viewAnalyticalPaymentSchedule() {
+    var dossier = S.currentDossier();
+    if (ui.analyticalPaymentSchedule.dossierId !== dossier.id) ui.analyticalPaymentSchedule = { dossierId: dossier.id, q: '', status: 'all', from: '', to: '' };
+    var filters = ui.analyticalPaymentSchedule;
+    var records = S.analyticalPaymentScheduleConfiguration().rows || [];
+    var permission = hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalPayments.manage', accountingAccessContext(dossier));
+    var canEdit = permission && !isPhoneViewport();
+    var decimals = Number(S.accountingConfiguration().decimalPlaces) || 0;
+    var formatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    var visible = records.filter(function (record) {
+      if (filters.status !== 'all' && record.status !== filters.status) return false;
+      if (filters.from && record.date < filters.from || filters.to && record.date > filters.to) return false;
+      if (!filters.q) return true;
+      var needle = String(filters.q).trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+      return [record.reference, record.beneficiary, record.description, record.valueLabel, record.natureLabel, record.currencyCode].join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase().includes(needle);
+    }).sort(function (a, b) { return String(a.date).localeCompare(String(b.date)) || String(a.beneficiary).localeCompare(String(b.beneficiary), 'fr'); });
+    var planned = records.filter(function (record) { return record.status === 'planned'; });
+    var cancelled = records.filter(function (record) { return record.status === 'cancelled'; }).length;
+    var unclassified = planned.filter(function (record) { var label = analyticalScheduleClassification(record); return label === 'À classer' || label.indexOf('Référence à vérifier') === 0; }).length;
+    var totals = Object.create(null);
+    planned.forEach(function (record) { if (record.currencyCode) totals[record.currencyCode] = (totals[record.currencyCode] || 0) + Number(record.amount || 0); });
+    var totalHtml = Object.keys(totals).sort().map(function (code) { return '<span><strong>' + esc(code) + '</strong> ' + esc(formatter.format(totals[code])) + '</span>'; }).join('') || '<span>Aucune échéance prévue</span>';
+    var rows = visible.map(function (record) {
+      var classification = analyticalScheduleClassification(record);
+      var flagged = classification === 'À classer' || classification.indexOf('Référence à vérifier') === 0;
+      var actions = '<button type="button" class="btn btn-ghost btn-sm" data-scheduled-payment-edit="' + esc(record.id) + '"' + (!canEdit ? ' disabled' : '') + '>Modifier</button>' +
+        '<button type="button" class="btn btn-ghost btn-sm' + (record.status === 'planned' ? ' btn-danger-quiet' : '') + '" data-scheduled-payment-toggle="' + esc(record.id) + '"' + (!canEdit ? ' disabled' : '') + '>' + (record.status === 'planned' ? 'Annuler la prévision' : 'Réactiver') + '</button>';
+      return '<tr' + (flagged ? ' class="scheduled-payment-unclassified"' : '') + '><td>' + esc(dateLabel(record.date)) + '</td><td>' + esc(record.reference || '') + '</td><td>' + esc(record.beneficiary) + '</td><td>' + esc(record.description) + '</td><td>' + esc(classification) + '</td><td class="number-cell">' + esc(formatter.format(record.amount)) + ' ' + esc(record.currencyCode) + '</td><td><span class="scheduled-payment-status' + (record.status === 'cancelled' ? ' is-cancelled' : '') + '">' + (record.status === 'cancelled' ? 'Annulée' : 'Prévue') + '</span></td><td><div class="supplier-row-actions">' + actions + '</div></td></tr>';
+    }).join('');
+    var filterForm = '<form class="scheduled-payment-filters" id="scheduled-payment-filters"><label class="field"><span>Rechercher</span><input type="search" name="q" value="' + esc(filters.q) + '" placeholder="Référence, bénéficiaire, objet, analytique"></label><label class="field"><span>État</span><select name="status"><option value="all"' + (filters.status === 'all' ? ' selected' : '') + '>Toutes</option><option value="planned"' + (filters.status === 'planned' ? ' selected' : '') + '>Prévues</option><option value="cancelled"' + (filters.status === 'cancelled' ? ' selected' : '') + '>Annulées</option></select></label><label class="field"><span>Du</span><input type="date" name="from" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(filters.from) + '"></label><label class="field"><span>Au</span><input type="date" name="to" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(filters.to) + '"></label><div class="scheduled-payment-filter-actions"><button type="submit" class="btn btn-ghost">Filtrer</button><button type="button" class="btn btn-ghost" data-scheduled-payment-clear-filters>Effacer les filtres</button></div></form>';
+    var empty = records.length ? '<div class="empty-state"><strong>Aucune échéance pour ces filtres.</strong> Modifiez la recherche ou la période ; aucune prévision n’a été recalculée.</div>' : '<div class="empty-state"><strong>Aucune échéance programmée.</strong> Ajoutez uniquement les dates et montants que vous avez explicitement décidés.</div>';
+    return '<div class="exchange-workspace analytical-payment-schedule-workspace"><div class="alert info"><div><strong>Programmation analytique · dossier ' + esc(dossier.reference) + '</strong><br>Registre de prévisions saisies manuellement. Le bénéficiaire et la référence sont libres, sans rapprochement automatique avec une facture ou un tiers. Une échéance n’est pas un paiement exécuté : aucune écriture, sortie de trésorerie, relance automatique ni conversion de devise n’est créée.</div></div>' +
+      (!permission ? '<div class="alert warning">Consultation seule : le droit « Programmer et modifier les échéances analytiques » est requis pour saisir, modifier ou annuler une prévision.</div>' : (isPhoneViewport() ? '<div class="alert info">Consultation sur téléphone ; la programmation est réservée à un ordinateur ou une tablette.</div>' : '')) +
+      '<div class="scheduled-payment-summary"><div><small>Prévisions actives</small><strong>' + planned.length + '</strong></div><div><small>Prévisions annulées</small><strong>' + cancelled + '</strong></div><div><small>À classer analytiquement</small><strong>' + unclassified + '</strong></div><div class="scheduled-payment-currency-summary"><small>Montants prévus · par devise (sans conversion)</small><div>' + totalHtml + '</div></div></div>' + filterForm + '<div class="scheduled-payment-toolbar"><button type="button" class="btn btn-primary" data-scheduled-payment-add' + (!canEdit ? ' disabled' : '') + '>＋ Programmer une échéance</button><span>' + visible.length + ' échéance(s) affichée(s)</span></div>' +
+      (rows ? '<div class="table-wrap scheduled-payment-table-wrap"><table class="data-table scheduled-payment-table"><thead><tr><th>Date prévue</th><th>Référence</th><th>Bénéficiaire</th><th>Objet</th><th>Imputation analytique explicite</th><th class="num">Montant prévu</th><th>État</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : empty) +
+      '<p class="exchange-footnote">Les totaux incluent uniquement les prévisions non annulées et restent séparés par devise. Le classement analytique est facultatif et choisi par l’utilisateur ; les axes parallèles ne sont pas additionnés.</p></div>';
+  }
+
+  function openAnalyticalPaymentScheduleModal(recordId) {
+    var config = S.analyticalPaymentScheduleConfiguration();
+    var existing = recordId ? config.rows.find(function (record) { return record.id === recordId; }) : null;
+    if (recordId && !existing) { toast('Échéance introuvable dans le dossier actif.', 'warning'); return; }
+    var dossier = S.currentDossier();
+    var currencies = S.currenciesConfiguration().rows || [];
+    var currencyOptions = '<option value="">Choisir une devise…</option>' + currencies.map(function (currency) { return '<option value="' + esc(currency.code) + '"' + (existing && existing.currencyCode === currency.code ? ' selected' : '') + '>' + esc(currency.code + ' · ' + currency.label) + '</option>'; }).join('');
+    if (existing && existing.currencyCode && !currencies.some(function (currency) { return currency.code === existing.currencyCode; })) currencyOptions += '<option value="' + esc(existing.currencyCode) + '" selected>' + esc(existing.currencyCode + ' · devise enregistrée, absente du référentiel actuel') + '</option>';
+    var natureId = existing && existing.natureId || '';
+    var decimalPlaces = Number(S.accountingConfiguration().decimalPlaces) || 0;
+    var body = '<form id="scheduled-payment-form" novalidate><div id="scheduled-payment-errors" aria-live="assertive"></div><div class="form-grid scheduled-payment-form-grid">' +
+      '<div class="field"><label for="scheduled-payment-date">Date prévue <b>*</b></label><input id="scheduled-payment-date" name="date" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(existing && existing.date || '') + '" required></div>' +
+      '<div class="field"><label for="scheduled-payment-reference">Référence / pièce source (saisie libre)</label><input id="scheduled-payment-reference" name="reference" maxlength="120" value="' + esc(existing && existing.reference || '') + '"></div>' +
+      '<div class="field"><label for="scheduled-payment-beneficiary">Bénéficiaire (saisie libre) <b>*</b></label><input id="scheduled-payment-beneficiary" name="beneficiary" maxlength="160" value="' + esc(existing && existing.beneficiary || '') + '" required></div>' +
+      '<div class="field"><label for="scheduled-payment-description">Objet du règlement <b>*</b></label><input id="scheduled-payment-description" name="description" maxlength="240" value="' + esc(existing && existing.description || '') + '" required></div>' +
+      '<div class="field"><label for="scheduled-payment-amount">Montant prévu <b>*</b></label><input id="scheduled-payment-amount" name="amount" type="number" min="' + esc(String(1 / Math.pow(10, decimalPlaces))) + '" step="' + esc(String(1 / Math.pow(10, decimalPlaces))) + '" value="' + esc(existing ? String(existing.amount) : '') + '" required></div>' +
+      '<div class="field"><label for="scheduled-payment-currency">Devise <b>*</b></label><select id="scheduled-payment-currency" name="currencyCode" required>' + currencyOptions + '</select><span class="hint">Les devises ne sont ni converties ni additionnées.</span></div>' +
+      '<div class="field"><label for="scheduled-payment-nature">Nature analytique (facultatif)</label><select id="scheduled-payment-nature" name="natureId">' + analyticalScheduleNatureOptions(natureId) + '</select></div>' +
+      '<div class="field"><label for="scheduled-payment-value">Valeur / centre (facultatif)</label><select id="scheduled-payment-value" name="valueId"' + (!natureId ? ' disabled' : '') + '>' + analyticalScheduleValueOptions(natureId, existing || null) + '</select><span class="hint">Choix explicite ; aucun centre ou axe n’est déduit de l’objet.</span></div></div><p class="scheduled-payment-form-note">Cet enregistrement est une prévision uniquement. Il ne crée, ne règle et ne modifie aucune facture, écriture ou opération de banque.</p></form>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="submit" class="btn btn-primary" form="scheduled-payment-form">Enregistrer la prévision</button>';
+    openModal(existing ? 'Modifier une échéance prévue' : 'Programmer une échéance analytique', 'Dossier ' + esc(dossier.reference) + ' · ' + esc(dossier.cycleStart) + ' au ' + esc(dossier.cycleEnd), body, footer, true);
+    var form = $('#scheduled-payment-form');
+    if (!form) return;
+    var natureSelect = $('#scheduled-payment-nature', form);
+    var valueSelect = $('#scheduled-payment-value', form);
+    natureSelect.addEventListener('change', function () { valueSelect.innerHTML = analyticalScheduleValueOptions(natureSelect.value, null); valueSelect.disabled = !natureSelect.value; });
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (isPhoneViewport() || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalPayments.manage', accountingAccessContext(S.currentDossier()))) { toast('Enregistrement refusé : droit de programmation analytique requis pour ce dossier.', 'warning'); return; }
+      var selected = valueSelect.options[valueSelect.selectedIndex] || null;
+      var next = { id: existing && existing.id || '', date: $('#scheduled-payment-date', form).value, reference: $('#scheduled-payment-reference', form).value,
+        beneficiary: $('#scheduled-payment-beneficiary', form).value, description: $('#scheduled-payment-description', form).value, amount: $('#scheduled-payment-amount', form).value,
+        currencyCode: $('#scheduled-payment-currency', form).value, natureId: natureSelect.value,
+        valueId: natureSelect.value === 'responsibility-centers' && selected && selected.value ? selected.value : '',
+        valueLabel: selected && selected.value ? (selected.getAttribute('data-label') || selected.textContent.replace(/\s+· (?:Archivé|Inactive)$/, '').replace(/^Référence conservée · /, '')) : '',
+        centerCode: selected && selected.getAttribute('data-center-code') || '', centerName: selected && selected.getAttribute('data-center-name') || '', status: existing && existing.status || 'planned' };
+      var rows = config.rows.slice();
+      if (existing) rows = rows.map(function (record) { return record.id === existing.id ? next : record; }); else rows.push(next);
+      var result = S.saveAnalyticalPaymentScheduleConfiguration(rows);
+      if (!result.ok) { $('#scheduled-payment-errors', form).innerHTML = '<div class="alert warning"><ul>' + (result.errors || ['Enregistrement impossible.']).map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>'; return; }
+      toast(existing ? 'Prévision mise à jour ; aucune écriture ni paiement créé.' : 'Prévision enregistrée ; aucun paiement ni écriture créé.', 'success'); closeModal(true); render();
+    });
+  }
+
+  function bindAnalyticalPaymentSchedule() {
+    var workspace = $('.analytical-payment-schedule-workspace');
+    if (!workspace) return;
+    var filterForm = $('#scheduled-payment-filters', workspace);
+    filterForm.addEventListener('submit', function (event) {
+      event.preventDefault(); var data = new FormData(filterForm);
+      ui.analyticalPaymentSchedule = Object.assign({}, ui.analyticalPaymentSchedule, { q: String(data.get('q') || ''), status: String(data.get('status') || 'all'), from: String(data.get('from') || ''), to: String(data.get('to') || '') }); render();
+    });
+    workspace.addEventListener('click', function (event) {
+      var add = event.target.closest && event.target.closest('[data-scheduled-payment-add]');
+      if (add) { if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalPayments.manage', accountingAccessContext(S.currentDossier()))) { toast('Saisie refusée : droit de programmation analytique requis.', 'warning'); return; } openAnalyticalPaymentScheduleModal(''); return; }
+      var edit = event.target.closest && event.target.closest('[data-scheduled-payment-edit]');
+      if (edit) { if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalPayments.manage', accountingAccessContext(S.currentDossier()))) { toast('Modification refusée : droit de programmation analytique requis.', 'warning'); return; } openAnalyticalPaymentScheduleModal(edit.getAttribute('data-scheduled-payment-edit')); return; }
+      var toggle = event.target.closest && event.target.closest('[data-scheduled-payment-toggle]');
+      if (!toggle) return;
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalPayments.manage', accountingAccessContext(S.currentDossier()))) { toast('Modification refusée : droit de programmation analytique requis.', 'warning'); return; }
+      var id = toggle.getAttribute('data-scheduled-payment-toggle'); var config = S.analyticalPaymentScheduleConfiguration();
+      var target = config.rows.find(function (record) { return record.id === id; }); if (!target) return;
+      var cancel = target.status === 'planned';
+      if (!window.confirm(cancel ? 'Annuler uniquement cette prévision ? Aucun règlement ou écriture ne sera effectué.' : 'Réactiver cette prévision ? Aucun règlement ou écriture ne sera effectué.')) return;
+      var result = S.saveAnalyticalPaymentScheduleConfiguration(config.rows.map(function (record) { return record.id === id ? Object.assign({}, record, { status: cancel ? 'cancelled' : 'planned' }) : record; }));
+      if (!result.ok) { toast((result.errors || ['Modification impossible.']).join(' '), 'error'); return; }
+      toast(cancel ? 'Prévision annulée ; aucun paiement exécuté.' : 'Prévision réactivée ; aucun paiement exécuté.', 'success'); render();
+    });
+    $('[data-scheduled-payment-clear-filters]', workspace).addEventListener('click', function () { ui.analyticalPaymentSchedule = { dossierId: S.currentDossier().id, q: '', status: 'all', from: '', to: '' }; render(); });
+  }
+
   function viewAnalyticalMovements() {
     var dossier = S.currentDossier();
     var filter = ui.analyticalMovements;
@@ -29108,6 +29260,8 @@
       exchangeFeature = viewMatching();
     } else if (group.id === 'saisie' && tab.id === 'reconciliation') {
       exchangeFeature = viewPointage();
+    } else if (group.id === 'saisie' && tab.id === 'scheduled-payments') {
+      exchangeFeature = viewAnalyticalPaymentSchedule();
     } else if (isAccountMovementsSubmenu && selectedChild && selectedChild.id === 'general-movements') {
       exchangeFeature = viewGeneralAccountMovements();
     } else if (isAccountMovementsSubmenu && selectedChild && selectedChild.id === 'third-party-movements') {
@@ -30618,6 +30772,7 @@
       if (!isPhoneViewport() && menuParams.g === 'saisie' && (!menuParams.t || menuParams.t === 'journal-entry')) bindEntryJournalSelector();
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'live-cash') bindAccountingCashOperations();
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'reconciliation') bindPointageView();
+      if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'scheduled-payments') bindAnalyticalPaymentSchedule();
       return;
     }
 

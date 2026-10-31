@@ -1259,6 +1259,41 @@
     return { rows: [], updatedAt: '' };
   }
 
+  function defaultAnalyticalPaymentScheduleConfiguration() {
+    return { rows: [], updatedAt: '' };
+  }
+
+  function normalizeAnalyticalPaymentScheduleConfiguration(value) {
+    var source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    var seen = Object.create(null);
+    var rows = (Array.isArray(source.rows) ? source.rows : []).slice(0, 5000).map(function (record) {
+      if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
+      var id = String(record.id || '').trim().slice(0, 100);
+      if (!id || seen[id]) return null;
+      seen[id] = true;
+      var amount = Number(record.amount);
+      return {
+        id: id,
+        date: String(record.date || '').trim().slice(0, 10),
+        reference: String(record.reference || '').trim().slice(0, 120),
+        beneficiary: String(record.beneficiary || '').trim().slice(0, 160),
+        description: String(record.description || '').trim().slice(0, 240),
+        amount: Number.isFinite(amount) ? amount : 0,
+        currencyCode: String(record.currencyCode || '').trim().toLocaleUpperCase().slice(0, 3),
+        natureId: String(record.natureId || '').trim().slice(0, 80),
+        natureLabel: String(record.natureLabel || '').trim().slice(0, 120),
+        valueId: String(record.valueId || '').trim().slice(0, 160),
+        valueLabel: String(record.valueLabel || '').trim().replace(/\s+/g, ' ').slice(0, 160),
+        centerCode: String(record.centerCode || '').trim().slice(0, 32),
+        centerName: String(record.centerName || '').trim().replace(/\s+/g, ' ').slice(0, 150),
+        status: record.status === 'cancelled' ? 'cancelled' : 'planned',
+        createdAt: String(record.createdAt || '').slice(0, 40),
+        updatedAt: String(record.updatedAt || '').slice(0, 40)
+      };
+    }).filter(Boolean);
+    return { rows: rows, updatedAt: String(source.updatedAt || '').slice(0, 40) };
+  }
+
   function normalizeAnalyticalDimensionValuesConfiguration(value) {
     value = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
     var seen = Object.create(null);
@@ -1685,6 +1720,7 @@
       analyticalNaturesConfiguration: defaultAnalyticalNaturesConfiguration(),
       analyticalAccountRulesConfiguration: defaultAnalyticalAccountRulesConfiguration(),
       analyticalDimensionValuesConfiguration: defaultAnalyticalDimensionValuesConfiguration(),
+      analyticalPaymentScheduleConfiguration: defaultAnalyticalPaymentScheduleConfiguration(),
       generalAccountNaturesConfiguration: defaultGeneralAccountNaturesConfiguration(),
       fixedAssetAccountsConfiguration: defaultFixedAssetAccountsConfiguration(),
       orderAccountsConfiguration: defaultOrderAccountsConfiguration(),
@@ -1760,6 +1796,7 @@
       analyticalNaturesConfiguration: normalizeAnalyticalNaturesConfiguration(record && record.analyticalNaturesConfiguration),
       analyticalAccountRulesConfiguration: normalizeAnalyticalAccountRulesConfiguration(record && record.analyticalAccountRulesConfiguration),
       analyticalDimensionValuesConfiguration: normalizeAnalyticalDimensionValuesConfiguration(record && record.analyticalDimensionValuesConfiguration),
+      analyticalPaymentScheduleConfiguration: normalizeAnalyticalPaymentScheduleConfiguration(record && record.analyticalPaymentScheduleConfiguration),
       fixedAssetAccountsConfiguration: normalizeFixedAssetAccountsConfiguration(record && record.fixedAssetAccountsConfiguration),
       orderAccountsConfiguration: normalizeOrderAccountsConfiguration(record && record.orderAccountsConfiguration),
       orderNaturesConfiguration: normalizeOrderNaturesConfiguration(record && record.orderNaturesConfiguration),
@@ -2633,6 +2670,138 @@
       rows: configuration.rows.filter(function (row) { return !selectedNature || row.natureId === selectedNature; }),
       updatedAt: configuration.updatedAt
     };
+  }
+
+  function analyticalPaymentScheduleConfiguration() {
+    var dossier = currentDossier();
+    return clone(dossier && dossier.analyticalPaymentScheduleConfiguration || defaultAnalyticalPaymentScheduleConfiguration());
+  }
+
+  function saveAnalyticalPaymentScheduleConfiguration(inputRows) {
+    ensureFolderCatalog();
+    var dossier = folderById(activeFolderId);
+    if (!dossier) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    var sourceRows = Array.isArray(inputRows) ? inputRows : [];
+    if (sourceRows.length > 5000) return { ok: false, errors: ['La programmation ne peut pas dépasser 5 000 échéances.'] };
+    var current = normalizeAnalyticalPaymentScheduleConfiguration(dossier.analyticalPaymentScheduleConfiguration);
+    var existingById = new Map(current.rows.map(function (record) { return [record.id, record]; }));
+    var seen = new Set();
+    var errors = [];
+    var precisionPlaces = Number(normalizeAccountingConfiguration(dossier.accountingConfiguration, dossier.cycleStart, dossier.cycleEnd).decimalPlaces);
+    if (!Number.isInteger(precisionPlaces) || precisionPlaces < 0 || precisionPlaces > 4) precisionPlaces = 0;
+    var precision = Math.pow(10, precisionPlaces);
+    var currencies = normalizeCurrenciesConfiguration(dossier.currenciesConfiguration).rows;
+    var natureRows = normalizeAnalyticalNaturesConfiguration(dossier.analyticalNaturesConfiguration).rows.filter(function (nature) { return nature && !nature.group; });
+    var dimensionValues = normalizeAnalyticalDimensionValuesConfiguration(dossier.analyticalDimensionValuesConfiguration).rows;
+    var centers = analyticalCenters();
+    var now = new Date().toISOString();
+    var rows = sourceRows.map(function (input, index) {
+      input = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+      var id = String(input.id || '').trim();
+      var previous = id ? existingById.get(id) || null : null;
+      if (!id) {
+        do { id = 'analytical-payment-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); }
+        while (seen.has(id) || existingById.has(id));
+      }
+      if (seen.has(id)) errors.push('Échéance ' + (index + 1) + ' : identifiant répété.');
+      seen.add(id);
+      var date = String(input.date || '').trim();
+      var reference = String(input.reference || '').trim().replace(/\s+/g, ' ');
+      var beneficiary = String(input.beneficiary || '').trim().replace(/\s+/g, ' ');
+      var description = String(input.description || '').trim().replace(/\s+/g, ' ');
+      var amount = input.amount === '' || input.amount == null ? NaN : Number(input.amount);
+      var currencyCode = String(input.currencyCode || '').trim().toLocaleUpperCase();
+      var natureId = String(input.natureId || '').trim();
+      var valueId = String(input.valueId || '').trim();
+      var valueLabel = String(input.valueLabel || '').trim().replace(/\s+/g, ' ');
+      var status = input.status === 'cancelled' ? 'cancelled' : (input.status === 'planned' || !input.status ? 'planned' : 'invalid');
+      var label = 'Échéance ' + (index + 1) + ' : ';
+      var parsedDate = parseIsoDate(date);
+      if (!parsedDate) errors.push(label + 'la date prévue est invalide.');
+      else if (date < dossier.cycleStart || date > dossier.cycleEnd) errors.push(label + 'la date doit rester dans le cycle du dossier (' + dossier.cycleStart + ' au ' + dossier.cycleEnd + ').');
+      if (reference.length > 120) errors.push(label + 'la référence ne peut pas dépasser 120 caractères.');
+      if (!beneficiary) errors.push(label + 'le bénéficiaire est obligatoire.');
+      if (beneficiary.length > 160) errors.push(label + 'le bénéficiaire ne peut pas dépasser 160 caractères.');
+      if (!description) errors.push(label + 'l’objet du règlement est obligatoire.');
+      if (description.length > 240) errors.push(label + 'l’objet ne peut pas dépasser 240 caractères.');
+      if (!Number.isFinite(amount) || amount <= 0 || amount > 1000000000000000) errors.push(label + 'le montant doit être un nombre positif et lisible.');
+      else if (Math.abs(amount * precision - Math.round(amount * precision)) > 1e-7) errors.push(label + 'le montant dépasse la précision configurée (' + precisionPlaces + ' décimale(s)).');
+      if (!currencies.some(function (currency) { return currency.code === currencyCode; }) && !(previous && previous.currencyCode === currencyCode)) errors.push(label + 'choisissez une devise présente dans le référentiel du dossier.');
+      if (status === 'invalid') errors.push(label + 'l’état de programmation est invalide.');
+      var nature = natureId ? natureRows.find(function (row) { return row.id === natureId; }) || null : null;
+      if (natureId && !nature) errors.push(label + 'la nature analytique choisie n’existe plus dans ce dossier.');
+      var natureLabel = nature
+        ? (previous && previous.natureId === natureId && previous.natureLabel ? previous.natureLabel : String(nature.individualName || nature.genericName || ''))
+        : '';
+      var centerCode = '';
+      var centerName = '';
+      if (!natureId) {
+        valueId = '';
+        valueLabel = '';
+      } else if (natureId === 'responsibility-centers') {
+        if (valueId) {
+          var center = centers.find(function (record) { return record && record.id === valueId; }) || null;
+          if (center) {
+            if (previous && previous.valueId === valueId && previous.valueLabel === valueLabel) {
+              centerCode = previous.centerCode || String(center.code || '');
+              centerName = previous.centerName || String(center.name || '');
+              valueLabel = previous.valueLabel;
+            } else {
+              centerCode = String(input.centerCode || center.code || '');
+              centerName = String(input.centerName || center.name || '');
+              valueLabel = valueLabel || centerCode + ' · ' + centerName;
+            }
+          } else if (previous && previous.valueId === valueId) {
+            centerCode = previous.centerCode || '';
+            centerName = previous.centerName || '';
+            valueLabel = previous.valueLabel || '';
+          } else errors.push(label + 'le centre choisi est absent du référentiel de ce dossier.');
+        } else valueLabel = '';
+      } else {
+        valueId = '';
+        if (valueLabel) {
+          var dimension = dimensionValues.find(function (record) { return record.natureId === natureId && record.label === valueLabel; }) || null;
+          if (dimension && (dimension.active !== false || previous && previous.natureId === natureId && previous.valueLabel === valueLabel)) {
+            valueLabel = dimension.label;
+          } else if (previous && previous.natureId === natureId && previous.valueLabel === valueLabel) {
+            valueLabel = previous.valueLabel;
+          } else errors.push(label + 'la valeur analytique choisie est absente ou inactive dans ce dossier.');
+        }
+      }
+      if (natureId && !valueLabel) valueId = '';
+      return {
+        id: id,
+        date: date,
+        reference: reference.slice(0, 120),
+        beneficiary: beneficiary.slice(0, 160),
+        description: description.slice(0, 240),
+        amount: Number.isFinite(amount) ? amount : 0,
+        currencyCode: currencyCode,
+        natureId: nature ? nature.id : '',
+        natureLabel: natureLabel || (previous && previous.natureId === natureId ? previous.natureLabel : ''),
+        valueId: valueId.slice(0, 160),
+        valueLabel: valueLabel.slice(0, 160),
+        centerCode: centerCode || (previous && previous.valueId === valueId ? previous.centerCode : ''),
+        centerName: centerName || (previous && previous.valueId === valueId ? previous.centerName : ''),
+        status: status === 'cancelled' ? 'cancelled' : 'planned',
+        createdAt: previous ? previous.createdAt : now,
+        updatedAt: now
+      };
+    });
+    current.rows.forEach(function (record) {
+      if (!seen.has(record.id)) errors.push('L’échéance « ' + (record.reference || record.beneficiary || record.id) + ' » ne peut pas être supprimée ; annulez-la pour la conserver dans l’historique.');
+    });
+    if (errors.length) return { ok: false, errors: errors };
+    var previousCatalog = clone(folderCatalog);
+    var dossierIndex = folderCatalog.findIndex(function (record) { return record.id === dossier.id; });
+    if (dossierIndex < 0) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    var configuration = normalizeAnalyticalPaymentScheduleConfiguration({ rows: rows, updatedAt: now });
+    folderCatalog[dossierIndex] = Object.assign({}, dossier, { analyticalPaymentScheduleConfiguration: configuration });
+    if (!saveFolderCatalog()) {
+      folderCatalog = previousCatalog;
+      return { ok: false, errors: ['Impossible d’enregistrer la programmation dans ce navigateur. Les valeurs précédentes sont conservées.'] };
+    }
+    return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
   }
 
   function saveAnalyticalDimensionValues(natureId, inputRows) {
@@ -8737,6 +8906,8 @@
     saveAnalyticalAccountRulesConfiguration: saveAnalyticalAccountRulesConfiguration,
     analyticalDimensionValuesConfiguration: analyticalDimensionValuesConfiguration,
     saveAnalyticalDimensionValues: saveAnalyticalDimensionValues,
+    analyticalPaymentScheduleConfiguration: analyticalPaymentScheduleConfiguration,
+    saveAnalyticalPaymentScheduleConfiguration: saveAnalyticalPaymentScheduleConfiguration,
     saveAnalyticalSectionsConfiguration: saveAnalyticalSectionsConfiguration,
     analyticalAllocationKeysConfiguration: analyticalAllocationKeysConfiguration,
     analyticalNaturesConfiguration: analyticalNaturesConfiguration,

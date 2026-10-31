@@ -3756,3 +3756,36 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
   .other-analysis-card { padding: .75rem; }
   .other-analysis-name-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Analytical payment schedule: a forecast register, never an execution queue. */
+.analytical-payment-schedule-workspace { border-top: 5px solid #087f9f; }
+.scheduled-payment-summary { display: grid; grid-template-columns: repeat(3, minmax(125px, .7fr)) minmax(250px, 2fr); gap: .75rem; margin: 1rem 0; }
+.scheduled-payment-summary > div { display: flex; flex-direction: column; gap: .35rem; padding: .8rem 1rem; border: 1px solid #9bcfd9; border-left: 4px solid #087f9f; border-radius: 10px; background: #f0fbfd; color: #15566a; }
+.scheduled-payment-summary small { color: #496873; font-weight: 650; }
+.scheduled-payment-summary > div > strong { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.scheduled-payment-currency-summary > div { display: flex; flex-wrap: wrap; gap: .45rem; }
+.scheduled-payment-currency-summary > div > span { padding: .3rem .55rem; border: 1px solid #b7d9e0; border-radius: 8px; background: #fff; font-variant-numeric: tabular-nums; }
+.scheduled-payment-filters { display: grid; grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(130px, 1fr)) auto; align-items: end; gap: .65rem; margin: 1rem 0; padding: .8rem; border: 1px solid #a8ced6; border-radius: 10px; background: #f6fbfc; }
+.scheduled-payment-filter-actions { display: flex; flex-wrap: wrap; gap: .4rem; }
+.scheduled-payment-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .65rem; margin: .75rem 0; }
+.scheduled-payment-toolbar > span { color: #526a72; font-size: .875rem; }
+.scheduled-payment-table-wrap { overflow-x: auto; }
+.scheduled-payment-table { min-width: 1120px; }
+.scheduled-payment-table th { white-space: nowrap; }
+.scheduled-payment-table .number-cell { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.scheduled-payment-status { display: inline-flex; padding: .3rem .55rem; border: 1px solid #75bba9; border-radius: 999px; background: #eaf8f3; color: #155c49; font-size: .78rem; font-weight: 750; white-space: nowrap; }
+.scheduled-payment-status.is-cancelled { border-color: #d7c3bf; background: #f7f1ef; color: #735b56; }
+.scheduled-payment-unclassified td { background: #fff8e8; color: #684d1b; }
+.scheduled-payment-unclassified td:first-child { border-left: 4px solid #c48116; }
+.scheduled-payment-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.scheduled-payment-form-grid .field { padding: .65rem; border-left: 4px solid #087f9f; border-radius: 8px; background: #f0fbfd; }
+.scheduled-payment-form-grid .field > label { color: #15566a; }
+.scheduled-payment-form-note { padding: .7rem .85rem; border-left: 4px solid #c48116; background: #fff8e8; color: #684d1b; }
+@media (max-width: 980px) {
+  .scheduled-payment-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .scheduled-payment-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .scheduled-payment-summary, .scheduled-payment-filters, .scheduled-payment-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .scheduled-payment-toolbar { align-items: stretch; flex-direction: column; }
+}

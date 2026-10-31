@@ -50,6 +50,21 @@ test('les natures analytiques exigent un droit explicite dans le dossier concern
   assert.ok(Permissions.actionsForModule('accounting').some(action => action.id === 'analyticalNatures.configure'));
 });
 
+test('les programmations de règlements analytiques exigent un droit explicite par dossier', () => {
+  const dossier = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  const employee = {
+    role: 'employee', organizationId: 'org-1',
+    grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view'] }] }
+  };
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'analyticalPayments.manage', dossier), false);
+  employee.grants.accounting[0].actions.push('analyticalPayments.manage');
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'analyticalPayments.manage', dossier), true);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'analyticalPayments.manage', {
+    organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-2'
+  }), false);
+  assert.ok(Permissions.actionsForModule('accounting').some(action => action.id === 'analyticalPayments.manage'));
+});
+
 test('les règles analytiques par compte exigent un droit explicite dans le dossier concerné', () => {
   const dossier = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
   const employee = {
