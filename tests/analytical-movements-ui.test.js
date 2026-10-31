@@ -24,6 +24,7 @@ assert.match(report, /function buildAnalyticalMovements\(/);
 assert.match(report, /Référence historique/);
 assert.match(css, /\.analytical-movement-summary/);
 assert.match(app, /function viewAnalyticalStatement\(child, backLink\)/);
+assert.match(app, /Valeurs non rapprochées · '[+\s\S]*unmatchedValueDebit \+ report\.unmatchedValueCredit/);
 assert.match(app, /JournalLinesReport\.buildAnalyticalStatement\(/);
 assert.match(app, /Choisissez explicitement une nature analytique/);
 assert.match(app, /aucun report d’ouverture n’est supposé/);
