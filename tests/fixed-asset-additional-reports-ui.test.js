@@ -67,7 +67,7 @@ assert.ok(htmlSource.indexOf('js/fixed-asset-additional-reports.js') < htmlSourc
 assert.match(htmlSource, /css\/fixed-asset-additional-reports\.css/);
 assert.match(serviceWorkerSource, /\.\/js\/fixed-asset-additional-reports\.js/);
 assert.match(serviceWorkerSource, /\.\/css\/fixed-asset-additional-reports\.css/);
-assert.match(serviceWorkerSource, /perfecto-static-v168/);
+assert.match(serviceWorkerSource, /perfecto-static-v169/);
 assert.match(workflowSource, /modern-proto\/js\/fixed-asset-additional-reports\.js/);
 assert.match(workflowSource, /modern-proto\/css\/fixed-asset-additional-reports\.css/);
 assert.match(cssSource, /\.fixed-asset-additional-filter-grid/);

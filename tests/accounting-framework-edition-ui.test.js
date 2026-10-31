@@ -40,7 +40,7 @@ assert.ok(html.indexOf('js/accounting-framework-edition-report.js') < html.index
 assert.match(html, /css\/financial-framework-edition\.css/);
 assert.match(sw, /\.\/js\/accounting-framework-edition-report\.js/);
 assert.match(sw, /\.\/css\/financial-framework-edition\.css/);
-assert.match(sw, /perfecto-static-v168/);
+assert.match(sw, /perfecto-static-v169/);
 assert.match(css, /\.financial-framework-edition-table-wrap[\s\S]*overflow-x: auto/);
 assert.match(css, /body\.report-preview-printing[\s\S]*\.financial-framework-edition-table/);
 assert.match(workflow, /modern-proto\/js\/accounting-framework-edition-report\.js/);

@@ -15344,6 +15344,7 @@
               '<button type="button" class="btn btn-ghost btn-sm" data-allocation-action="destination" aria-controls="allocation-destination-' + kind + '"' + disabled + '>Destination</button>' +
               '<input type="text" id="allocation-destination-' + kind + '" data-allocation-destination maxlength="240" value="' + esc(configuration.destination || '') + '" aria-label="Destination"' + disabled + '>' +
               '<button type="button" class="btn btn-ghost btn-sm" data-allocation-action="preview">Aperçu</button>' +
+              '<button type="button" class="btn btn-ghost btn-sm" data-allocation-action="simulate">Simuler une application</button>' +
             '</div>' +
           '</fieldset>' +
           '<p class="allocation-key-hint">Saisir une ligne par association. La clé et la destination sont conservées telles que saisies ; aucune règle de répartition n’est calculée.</p>' +
@@ -15361,7 +15362,7 @@
       permissionNotice +
       tableGroup('auxiliaryToMain', 'LES CLÉS DE RÉPARTITION DES SECTIONS AUXILIAIRES SUR LES PRINCIPALES', 12) +
       tableGroup('servicesBySection', 'LES CLÉS DE RÉPARTITION DES PRESTATIONS PAR SECTION', 5) +
-      '<div class="alert info allocation-key-inactive-note"><div><strong>Clés conservées sans calcul automatique.</strong> La mise en application d’une clé devra être choisie et confirmée par l’utilisateur. Ce paramétrage seul ne crée aucune ventilation, imputation ni écriture.</div></div>' +
+      '<div class="alert info allocation-key-inactive-note"><div><strong>Clés conservées sans calcul automatique.</strong> La simulation est facultative : l’utilisateur choisit le sens numérique des clés et fournit le montant de base. L’aperçu ne modifie aucune ligne, ventilation ni écriture.</div></div>' +
     '</div>';
   }
 
@@ -28886,6 +28887,49 @@
       });
     }
 
+    function openAllocationSimulation(kind, rows) {
+      var kindLabel = kind === 'auxiliaryToMain' ? 'sections auxiliaires vers sections principales' : 'prestations par section';
+      var roundingOptions = rows.map(function (row, index) {
+        var target = [row.mainSection, row.counterpart].filter(Boolean).join(' · ') || 'Ligne ' + (index + 1);
+        return '<option value="' + index + '">' + esc(target) + '</option>';
+      }).join('');
+      var body = '<form id="analytical-key-simulation-form"><div id="analytical-key-simulation-errors" aria-live="assertive"></div>' +
+        '<p>Simulation de ' + esc(kindLabel) + '. Aucune écriture ni ventilation existante n’est lue ou modifiée. Saisissez vous-même le montant de base et choisissez une interprétation ; aucune option n’est présélectionnée.</p>' +
+        '<div class="form-grid"><label class="field"><span>Montant de base · XOF</span><input id="analytical-key-simulation-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="Saisir un montant" required></label>' +
+        '<label class="field"><span>Interprétation des clés</span><select id="analytical-key-simulation-mode" required><option value="">Choisissez une méthode…</option><option value="weights">Poids relatifs · répartition proportionnelle</option><option value="percentage">Pourcentages explicites</option><option value="amount">Montants fixes</option></select></label>' +
+        '<label class="field"><span>Ligne destinataire d’un écart d’arrondi</span><select id="analytical-key-simulation-rounding"><option value="">À choisir si un écart apparaît…</option>' + roundingOptions + '</select><small>Obligatoire si une ventilation complète laisse un écart lié aux arrondis.</small></label></div>' +
+        '<div id="analytical-key-simulation-result" aria-live="polite"></div></form>';
+      var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Fermer</button><button type="submit" class="btn btn-primary" form="analytical-key-simulation-form">Calculer l’aperçu</button>';
+      openModal('Simuler une clé de répartition', 'Simulation sans écriture · ' + esc(S.currentDossier().reference), body, footer, true);
+      var simulationForm = $('#analytical-key-simulation-form');
+      if (!simulationForm) return;
+      simulationForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var result = window.AnalyticalAllocationPreview.simulate({
+          rows: rows,
+          sourceAmount: $('#analytical-key-simulation-amount', simulationForm).value,
+          mode: $('#analytical-key-simulation-mode', simulationForm).value,
+          roundingRowIndex: $('#analytical-key-simulation-rounding', simulationForm).value,
+          decimalPlaces: S.accountingConfiguration().decimalPlaces
+        });
+        var errorNode = $('#analytical-key-simulation-errors', simulationForm);
+        var output = $('#analytical-key-simulation-result', simulationForm);
+        if (!result.ok) {
+          errorNode.innerHTML = '<div class="alert warning"><ul>' + result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>';
+          output.innerHTML = '';
+          return;
+        }
+        var fmt = function (value) { return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: S.accountingConfiguration().decimalPlaces, maximumFractionDigits: S.accountingConfiguration().decimalPlaces }).format(value); };
+        var targetLabel = function (row) { return [row.mainSection, row.counterpart].filter(Boolean).join(' · ') || 'Destination non libellée'; };
+        var resultRows = result.allocations.map(function (allocation) {
+          return '<tr><td>' + esc(targetLabel(allocation)) + '</td><td>' + esc(allocation.key) + '</td><td class="number-cell">' + esc(fmt(allocation.amount)) + ' XOF</td></tr>';
+        });
+        if (result.unallocatedAmount > 0) resultRows.push('<tr class="analytical-statement-unallocated"><td colspan="2">À ventiler · sans attribution</td><td class="number-cell">' + esc(fmt(result.unallocatedAmount)) + ' XOF</td></tr>');
+        output.innerHTML = '<div class="alert info"><strong>' + (result.complete ? 'Simulation complète.' : 'Simulation partielle.') + '</strong> Base ' + esc(fmt(result.sourceAmount)) + ' XOF · réparti ' + esc(fmt(result.allocatedAmount)) + ' XOF · aucun changement enregistré.</div>' +
+          '<div class="table-wrap"><table class="data-table allocation-preview-table"><thead><tr><th>Destination de la grille</th><th>Clé saisie</th><th>Montant simulé</th></tr></thead><tbody>' + resultRows.join('') + '</tbody></table></div>';
+      });
+    }
+
     $$('.allocation-key-form').forEach(function (form) {
       var kind = form.getAttribute('data-allocation-kind');
       var tbody = $('[data-allocation-body]', form);
@@ -28909,6 +28953,9 @@
         } else if (action === 'preview') {
           var destination = $('[data-allocation-destination]', form);
           previewAllocationTable(kind, { rows: formRows(form), destination: destination ? destination.value : '' }, 'Aperçu des valeurs saisies · lecture seule');
+        } else if (action === 'simulate') {
+          var simulationRows = formRows(form).filter(function (row) { return String(row.key || '').trim(); });
+          openAllocationSimulation(kind, simulationRows);
         }
       });
 
