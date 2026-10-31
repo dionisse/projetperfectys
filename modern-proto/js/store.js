@@ -1343,6 +1343,58 @@
     return { rows: rows, updatedAt: String(source.updatedAt || '').slice(0, 40) };
   }
 
+  function defaultBudgetRegisterConfiguration() { return { rows: [], updatedAt: '' }; }
+
+  function normalizeBudgetRegisterConfiguration(value) {
+    var source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    var seen = Object.create(null);
+    var rows = (Array.isArray(source.rows) ? source.rows : []).slice(0, 1000).map(function (budget) {
+      if (!budget || typeof budget !== 'object' || Array.isArray(budget)) return null;
+      var id = String(budget.id || '').trim().slice(0, 100);
+      if (!id || seen[id]) return null;
+      seen[id] = true;
+      var linesSeen = Object.create(null);
+      var lines = (Array.isArray(budget.lines) ? budget.lines : []).slice(0, 10000).map(function (line) {
+        if (!line || typeof line !== 'object' || Array.isArray(line)) return null;
+        var lineId = String(line.id || '').trim().slice(0, 100);
+        if (!lineId || linesSeen[lineId]) return null;
+        linesSeen[lineId] = true;
+        var periodAmounts = {};
+        Object.keys(line.periodAmounts || {}).slice(0, 12).forEach(function (key) {
+          var rawAmount = line.periodAmounts[key];
+          var amount = Number(rawAmount);
+          if (/^(\d{4}-\d{2}|T[1-4])$/.test(key) && (rawAmount === '' || rawAmount == null)) periodAmounts[key] = '';
+          else if (/^(\d{4}-\d{2}|T[1-4])$/.test(key) && Number.isFinite(amount) && amount >= 0) periodAmounts[key] = amount;
+        });
+        var analyticValues = {};
+        Object.keys(line.analyticValues || {}).slice(0, 4).forEach(function (natureId) {
+          var value = line.analyticValues[natureId] || {};
+          analyticValues[String(natureId).slice(0, 80)] = { valueId: String(value.valueId || '').slice(0, 160), valueLabel: String(value.valueLabel || '').trim().replace(/\s+/g, ' ').slice(0, 160) };
+        });
+        var annualAmount = line.annualAmount === '' || line.annualAmount == null ? NaN : Number(line.annualAmount);
+        var amountComplete = line.amountComplete !== false && Number.isFinite(annualAmount) && annualAmount >= 0 && !Object.keys(periodAmounts).some(function (key) { return periodAmounts[key] === ''; });
+        return { id: lineId, accountCode: String(line.accountCode || '').trim().slice(0, 32), label: String(line.label || '').trim().replace(/\s+/g, ' ').slice(0, 240), annualAmount: amountComplete ? annualAmount : 0, amountComplete: amountComplete, periodAmounts: periodAmounts, analyticValues: analyticValues };
+      }).filter(Boolean);
+      var type = ['C', 'I', 'P', 'X'].indexOf(budget.type) !== -1 ? budget.type : 'X';
+      var year = String(budget.year || '').trim().slice(0, 4);
+      var axes = Array.isArray(budget.analyticNatureIds) ? budget.analyticNatureIds.map(function (id) { return String(id || '').trim().slice(0, 80); }).filter(Boolean).slice(0, 4) : [];
+      var prefixes = Array.isArray(budget.accountPrefixes) ? budget.accountPrefixes.map(function (item) { return String(item || '').trim().replace(/\s+/g, ''); }).filter(Boolean).slice(0, 40) : [];
+      return {
+        id: id, code: String(budget.code || '').trim().toLocaleUpperCase().slice(0, 20), year: year, type: type,
+        label: String(budget.label || '').trim().replace(/\s+/g, ' ').slice(0, 120),
+        cycleStart: String(budget.cycleStart || '').slice(0, 10), cycleEnd: String(budget.cycleEnd || '').slice(0, 10),
+        decomposition: ['none', 'month', 'quarter'].indexOf(budget.decomposition) !== -1 ? budget.decomposition : 'none',
+        realizationMode: ['debit', 'credit', 'debit-credit', 'credit-debit'].indexOf(budget.realizationMode) !== -1 ? budget.realizationMode : 'debit',
+        analyticNatureIds: axes, classification: String(budget.classification || 'C').slice(0, 3),
+        accountPrefixes: prefixes, lines: lines, followingFromId: String(budget.followingFromId || '').slice(0, 100),
+        followingMethod: ['blank', 'copy', 'coefficient'].indexOf(budget.followingMethod) !== -1 ? budget.followingMethod : '',
+        followingCoefficient: Number.isFinite(Number(budget.followingCoefficient)) && Number(budget.followingCoefficient) >= 0 ? Number(budget.followingCoefficient) : null,
+        createdAt: String(budget.createdAt || '').slice(0, 40), updatedAt: String(budget.updatedAt || '').slice(0, 40)
+      };
+    }).filter(Boolean);
+    return { rows: rows, updatedAt: String(source.updatedAt || '').slice(0, 40) };
+  }
+
   function defaultAnalyticalInvoicePaymentAllocationConfiguration() {
     return { customerAccountCodes: [], cashAccountCodes: [], rows: [], updatedAt: '' };
   }
@@ -1831,6 +1883,7 @@
       analyticalPaymentScheduleConfiguration: defaultAnalyticalPaymentScheduleConfiguration(),
       analyticalInvoicePaymentAllocationConfiguration: defaultAnalyticalInvoicePaymentAllocationConfiguration(),
       analyticalSupplierOrdersConfiguration: defaultAnalyticalSupplierOrdersConfiguration(),
+      budgetRegisterConfiguration: defaultBudgetRegisterConfiguration(),
       generalAccountNaturesConfiguration: defaultGeneralAccountNaturesConfiguration(),
       fixedAssetAccountsConfiguration: defaultFixedAssetAccountsConfiguration(),
       orderAccountsConfiguration: defaultOrderAccountsConfiguration(),
@@ -1909,6 +1962,7 @@
       analyticalPaymentScheduleConfiguration: normalizeAnalyticalPaymentScheduleConfiguration(record && record.analyticalPaymentScheduleConfiguration),
       analyticalInvoicePaymentAllocationConfiguration: normalizeAnalyticalInvoicePaymentAllocationConfiguration(record && record.analyticalInvoicePaymentAllocationConfiguration),
       analyticalSupplierOrdersConfiguration: normalizeAnalyticalSupplierOrdersConfiguration(record && record.analyticalSupplierOrdersConfiguration),
+      budgetRegisterConfiguration: normalizeBudgetRegisterConfiguration(record && record.budgetRegisterConfiguration),
       fixedAssetAccountsConfiguration: normalizeFixedAssetAccountsConfiguration(record && record.fixedAssetAccountsConfiguration),
       orderAccountsConfiguration: normalizeOrderAccountsConfiguration(record && record.orderAccountsConfiguration),
       orderNaturesConfiguration: normalizeOrderNaturesConfiguration(record && record.orderNaturesConfiguration),
@@ -5365,6 +5419,169 @@
       return { ok: false, errors: ['Impossible d’annuler ce pointage dans le dossier actif.'] };
     }
     return { ok: true, errors: [], pointageMark: clone(mark) };
+  }
+
+  function budgetRegisterConfiguration() {
+    var dossier = currentDossier();
+    return clone(dossier && dossier.budgetRegisterConfiguration || defaultBudgetRegisterConfiguration());
+  }
+
+  function saveBudgetRegisterConfiguration(inputRows) {
+    ensureFolderCatalog();
+    var dossier = folderById(activeFolderId);
+    if (!dossier) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    var current = normalizeBudgetRegisterConfiguration(dossier.budgetRegisterConfiguration);
+    var source = Array.isArray(inputRows) ? inputRows : [];
+    if (source.length > 1000) return { ok: false, errors: ['Le registre est limité à 1 000 budgets.'] };
+    var errors = [];
+    var seenIds = new Set();
+    var seenCodes = Object.create(null);
+    var natureRows = normalizeAnalyticalNaturesConfiguration(dossier.analyticalNaturesConfiguration).rows.filter(function (row) { return row && !row.group; });
+    var dimensionValues = normalizeAnalyticalDimensionValuesConfiguration(dossier.analyticalDimensionValuesConfiguration).rows;
+    var currencyPrecision = Number(normalizeAccountingConfiguration(dossier.accountingConfiguration, dossier.cycleStart, dossier.cycleEnd).decimalPlaces);
+    if (!Number.isInteger(currencyPrecision) || currencyPrecision < 0 || currencyPrecision > 4) currencyPrecision = 0;
+    var precision = Math.pow(10, currencyPrecision);
+    var now = new Date().toISOString();
+    function lineAmount(line, decomposition) {
+      if (decomposition === 'none') return Number(line.annualAmount || 0);
+      return Object.keys(line.periodAmounts || {}).reduce(function (sum, key) { return sum + Number(line.periodAmounts[key] || 0); }, 0);
+    }
+    function accountMatches(code, prefixes) {
+      var positive = prefixes.filter(function (prefix) { return prefix.charAt(0) !== '-'; });
+      var excluded = prefixes.filter(function (prefix) { return prefix.charAt(0) === '-'; }).map(function (prefix) { return prefix.slice(1); });
+      return positive.some(function (prefix) { return prefix && code.indexOf(prefix) === 0; }) && !excluded.some(function (prefix) { return prefix && code.indexOf(prefix) === 0; });
+    }
+    function expectedPeriods(year, decomposition, cycleStart, cycleEnd) {
+      var keys = [];
+      var start = String(cycleStart || (year + '-01-01'));
+      var end = String(cycleEnd || (year + '-12-31'));
+      if (decomposition === 'month') {
+        var cursor = new Date(Date.UTC(Number(start.slice(0, 4)), Number(start.slice(5, 7)) - 1, 1));
+        var endDate = new Date(Date.UTC(Number(end.slice(0, 4)), Number(end.slice(5, 7)) - 1, 1));
+        while (cursor <= endDate && keys.length < 48) {
+          keys.push(cursor.getUTCFullYear() + '-' + String(cursor.getUTCMonth() + 1).padStart(2, '0'));
+          cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+        }
+      } else if (decomposition === 'quarter') {
+        var quarterStart = new Date(Date.UTC(Number(start.slice(0, 4)), Number(start.slice(5, 7)) - 1, Number(start.slice(8, 10))));
+        var finalDate = new Date(Date.UTC(Number(end.slice(0, 4)), Number(end.slice(5, 7)) - 1, Number(end.slice(8, 10))));
+        var index = 1;
+        while (quarterStart <= finalDate && index <= 16) { keys.push('T' + index); quarterStart.setUTCMonth(quarterStart.getUTCMonth() + 3); index += 1; }
+      }
+      return keys;
+    }
+
+    var rows = source.map(function (raw, index) {
+      raw = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+      var previous = raw.id ? current.rows.find(function (item) { return item.id === raw.id; }) || null : null;
+      var id = String(raw.id || '').trim();
+      if (!id) { do { id = 'budget-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); } while (seenIds.has(id)); }
+      var label = 'Budget ' + (index + 1) + ' : ';
+      if (seenIds.has(id)) errors.push(label + 'identifiant répété.');
+      seenIds.add(id);
+      var year = String(raw.year || '').trim();
+      var yearNumber = Number(year);
+      if (!/^\d{4}$/.test(year) || yearNumber < 1900 || yearNumber > 2200) errors.push(label + 'indiquez un exercice valide.');
+      var typeValid = ['C', 'I', 'P', 'X'].indexOf(raw.type) !== -1;
+      var type = typeValid ? raw.type : 'X';
+      if (!typeValid) errors.push(label + 'choisissez C (Charges), I (Investissements), P (Produits) ou une catégorie personnalisée.');
+      var code = String(raw.code || '').trim().toLocaleUpperCase();
+      if (!code && type !== 'X' && /^\d{4}$/.test(year)) code = year + type;
+      var name = String(raw.label || '').trim().replace(/\s+/g, ' ');
+      if (!code || code.length > 20) errors.push(label + 'le code est obligatoire (20 caractères maximum).');
+      if (!name || name.length > 120) errors.push(label + 'l’intitulé est obligatoire (120 caractères maximum).');
+      var codeKey = code.toLocaleLowerCase();
+      if (codeKey && seenCodes[codeKey]) errors.push(label + 'le code est déjà utilisé dans ce dossier.');
+      if (codeKey) seenCodes[codeKey] = true;
+      var cycleStart = String(raw.cycleStart || dossier.cycleStart).slice(0, 10);
+      var cycleEnd = String(raw.cycleEnd || dossier.cycleEnd).slice(0, 10);
+      if (!parseIsoDate(cycleStart) || !parseIsoDate(cycleEnd) || cycleEnd < cycleStart || cycleStart.slice(0, 4) !== year) errors.push(label + 'la période de l’exercice est invalide ou ne correspond pas à l’année du budget.');
+      var decompositionValid = ['none', 'month', 'quarter'].indexOf(raw.decomposition) !== -1;
+      var decomposition = decompositionValid ? raw.decomposition : 'none';
+      if (!decompositionValid) errors.push(label + 'choisissez Aucune, Mensuelle ou Trimestrielle pour la décomposition.');
+      var realizationModeValid = ['debit', 'credit', 'debit-credit', 'credit-debit'].indexOf(raw.realizationMode) !== -1;
+      var realizationMode = realizationModeValid ? raw.realizationMode : 'debit';
+      if (!realizationModeValid) errors.push(label + 'choisissez explicitement une base de réalisation.');
+      var prefixes = Array.isArray(raw.accountPrefixes) ? raw.accountPrefixes.map(function (item) { return String(item || '').trim().replace(/\s+/g, ''); }).filter(Boolean).slice(0, 40) : [];
+      if (!prefixes.some(function (prefix) { return prefix.charAt(0) !== '-'; })) errors.push(label + 'renseignez au moins un préfixe de compte inclus.');
+      if (prefixes.some(function (prefix) { return !/^-?\d{1,12}$/.test(prefix); })) errors.push(label + 'un préfixe de compte est invalide. Utilisez un nombre, précédé de « - » pour l’exclure.');
+      var axes = Array.isArray(raw.analyticNatureIds) ? raw.analyticNatureIds.map(String).filter(Boolean).slice(0, 4) : [];
+      var uniqueAxes = new Set();
+      axes.forEach(function (natureId) {
+        if (uniqueAxes.has(natureId)) errors.push(label + 'une nature analytique est sélectionnée plusieurs fois.');
+        uniqueAxes.add(natureId);
+        if (!natureRows.some(function (nature) { return nature.id === natureId; })) errors.push(label + 'une nature analytique sélectionnée est absente du dossier.');
+      });
+      var classification = String(raw.classification || '');
+      if (!classification) errors.push(label + 'choisissez le classement des lignes (compte ou axe analytique).');
+      if (classification && classification !== 'C' && !/^A[1-4]$/.test(classification)) errors.push(label + 'le classement doit cibler le compte ou un axe analytique configuré.');
+      if (classification !== 'C' && Number(classification.slice(1)) > axes.length) errors.push(label + 'le classement analytique choisi n’est pas configuré pour ce budget.');
+      var periodKeys = expectedPeriods(year, decomposition, cycleStart, cycleEnd);
+      var lineIds = new Set();
+      var lines = (Array.isArray(raw.lines) ? raw.lines : []).slice(0, 10000).map(function (line, lineIndex) {
+        line = line && typeof line === 'object' && !Array.isArray(line) ? line : {};
+        var lineId = String(line.id || '').trim();
+        if (!lineId) { do { lineId = 'budget-line-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); } while (lineIds.has(lineId)); }
+        if (lineIds.has(lineId)) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : identifiant répété.');
+        lineIds.add(lineId);
+        var accountCode = String(line.accountCode || '').trim();
+        var accountRecord = account(accountCode);
+        if (!accountRecord || accountRecord.active === false || accountRecord.postable === false) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : choisissez un compte imputable actif.');
+        if (accountCode && prefixes.length && !accountMatches(accountCode, prefixes)) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : le compte ' + accountCode + ' ne correspond pas aux préfixes du budget.');
+        var lineLabel = String(line.label || '').trim().replace(/\s+/g, ' ');
+        if (!lineLabel || lineLabel.length > 240) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : saisissez un libellé de 1 à 240 caractères.');
+        var periodAmounts = {};
+        var periodsComplete = true;
+        var periodTotal = 0;
+        periodKeys.forEach(function (key) {
+          var rawAmount = line.periodAmounts && line.periodAmounts[key];
+          if (rawAmount === '' || rawAmount == null) { periodAmounts[key] = ''; periodsComplete = false; return; }
+          var amount = Number(rawAmount);
+          if (!Number.isFinite(amount) || amount < 0) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : le montant ' + key + ' est invalide.');
+          else if (Math.abs(amount * precision - Math.round(amount * precision)) > 1e-7) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : le montant ' + key + ' dépasse la précision du dossier.');
+          periodAmounts[key] = Number.isFinite(amount) && amount >= 0 ? amount : 0;
+          periodTotal += Number.isFinite(amount) && amount >= 0 ? amount : 0;
+        });
+        var rawAnnual = line.annualAmount;
+        var annualAmount = decomposition === 'none' ? (rawAnnual === '' || rawAnnual == null ? NaN : Number(rawAnnual)) : periodTotal;
+        var amountComplete = decomposition === 'none' ? Number.isFinite(annualAmount) && annualAmount >= 0 : periodsComplete;
+        if (decomposition === 'none' && rawAnnual !== '' && rawAnnual != null && (!Number.isFinite(annualAmount) || annualAmount < 0)) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : le budget annuel ne peut pas être négatif ou invalide.');
+        else if (decomposition === 'none' && Number.isFinite(annualAmount) && Math.abs(annualAmount * precision - Math.round(annualAmount * precision)) > 1e-7) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : le montant annuel dépasse la précision du dossier.');
+        if (decomposition !== 'none' && amountComplete && Math.abs(periodTotal * precision - Math.round(periodTotal * precision)) > 1e-7) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : le total annuel dépasse la précision du dossier.');
+        var analyticValues = {};
+        axes.forEach(function (natureId) {
+          var value = line.analyticValues && line.analyticValues[natureId] || {};
+          var valueId = String(value.valueId || '').trim();
+          var valueLabel = String(value.valueLabel || '').trim().replace(/\s+/g, ' ');
+          if (valueLabel) {
+            if (natureId === 'responsibility-centers') {
+              var center = analyticalCenters().find(function (item) { return item && item.id === valueId; });
+              if (!center) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : centre analytique absent du dossier.');
+              else valueLabel = String(center.code || '') + ' · ' + String(center.name || '');
+            } else {
+              var found = dimensionValues.find(function (item) { return item.natureId === natureId && item.label === valueLabel && item.active !== false; });
+              var old = previous && previous.lines.find(function (item) { return item.id === lineId; });
+              var oldValue = old && old.analyticValues[natureId];
+              if (!found && !(oldValue && oldValue.valueLabel === valueLabel)) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : valeur analytique absente ou inactive du dossier.');
+            }
+          } else valueId = '';
+          analyticValues[natureId] = { valueId: valueId, valueLabel: valueLabel };
+        });
+        return { id: lineId, accountCode: accountCode, label: lineLabel.slice(0, 240), annualAmount: amountComplete && Number.isFinite(annualAmount) ? annualAmount : 0, amountComplete: amountComplete, periodAmounts: periodAmounts, analyticValues: analyticValues };
+      });
+      return { id: id, code: code.slice(0, 20), year: year, type: type, label: name.slice(0, 120), cycleStart: cycleStart, cycleEnd: cycleEnd, decomposition: decomposition, realizationMode: realizationMode, analyticNatureIds: axes, classification: classification, accountPrefixes: prefixes, lines: lines, followingFromId: String(raw.followingFromId || ''), followingMethod: ['blank', 'copy', 'coefficient'].indexOf(raw.followingMethod) !== -1 ? raw.followingMethod : '', followingCoefficient: raw.followingMethod === 'coefficient' && Number.isFinite(Number(raw.followingCoefficient)) ? Number(raw.followingCoefficient) : null, createdAt: previous ? previous.createdAt : now, updatedAt: now };
+    });
+    current.rows.forEach(function (existingBudget) {
+      if (!seenIds.has(existingBudget.id) && rows.some(function (budget) { return budget.followingFromId === existingBudget.id; })) errors.push('Le budget « ' + existingBudget.code + ' » est la source d’une prévision suivante ; supprimez d’abord cette prévision.');
+    });
+    if (errors.length) return { ok: false, errors: errors };
+    var before = clone(folderCatalog);
+    var dossierIndex = folderCatalog.findIndex(function (record) { return record.id === dossier.id; });
+    if (dossierIndex < 0) return { ok: false, errors: ['Dossier actif introuvable.'] };
+    var configuration = normalizeBudgetRegisterConfiguration({ rows: rows, updatedAt: now });
+    folderCatalog[dossierIndex] = Object.assign({}, dossier, { budgetRegisterConfiguration: configuration });
+    if (!saveFolderCatalog()) { folderCatalog = before; return { ok: false, errors: ['Impossible d’enregistrer le budget dans le stockage navigateur du dossier.'] }; }
+    return { ok: true, errors: [], configuration: clone(configuration), dossier: clone(folderCatalog[dossierIndex]) };
   }
 
   function suppliers() {
@@ -9361,6 +9578,8 @@
     analyticalInvoicePaymentAllocationConfiguration: analyticalInvoicePaymentAllocationConfiguration,
     analyticalSupplierOrdersConfiguration: analyticalSupplierOrdersConfiguration,
     saveAnalyticalSupplierOrdersConfiguration: saveAnalyticalSupplierOrdersConfiguration,
+    budgetRegisterConfiguration: budgetRegisterConfiguration,
+    saveBudgetRegisterConfiguration: saveBudgetRegisterConfiguration,
     saveAnalyticalInvoicePaymentAllocationConfiguration: saveAnalyticalInvoicePaymentAllocationConfiguration,
     saveAnalyticalSectionsConfiguration: saveAnalyticalSectionsConfiguration,
     analyticalAllocationKeysConfiguration: analyticalAllocationKeysConfiguration,

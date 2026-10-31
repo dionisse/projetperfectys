@@ -3864,3 +3864,38 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .supplier-order-line-context, .supplier-order-detail-context { margin: .75rem 0; padding: .75rem .9rem; border-left: 4px solid #c48116; background: #fff8e8; color: #684d1b; }
 @media (max-width: 1040px) { .supplier-order-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .supplier-order-line { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 680px) { .supplier-order-summary, .supplier-order-filters, .supplier-order-form-grid, .supplier-order-line, .supplier-order-analytic-form { grid-template-columns: minmax(0, 1fr); } .supplier-order-toolbar { align-items: stretch; flex-direction: column; } }
+
+/* Budget register: professional workspace, with analytical inputs distinguished from accounting fields. */
+.budget-register-workspace { border-top: 5px solid #22766c; }
+.budget-register-summary { display: grid; grid-template-columns: repeat(4, minmax(140px, 1fr)); gap: .75rem; margin: 1rem 0; }
+.budget-register-summary > div { display: flex; flex-direction: column; gap: .35rem; padding: .9rem; border: 1px solid #c6ddd8; border-left: 4px solid #22766c; border-radius: 10px; background: #f4faf8; color: #205c54; }
+.budget-register-summary small { color: #586d68; font-weight: 650; }
+.budget-register-summary strong { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.budget-register-toolbar, .budget-line-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .7rem; margin: 1rem 0; }
+.budget-register-toolbar > span, .budget-register-workspace .exchange-footnote { color: #5f6e69; font-size: .84rem; }
+.budget-register-filters { display: grid; grid-template-columns: minmax(220px, 2fr) minmax(180px, 1fr) auto auto; gap: .65rem; align-items: end; margin: 1rem 0; padding: .8rem; border: 1px solid #d7e4e0; border-radius: 10px; background: #f8fbfa; }
+.budget-register-table-wrap { overflow-x: auto; }
+.budget-register-table { min-width: 1100px; }
+.budget-register-table th { white-space: nowrap; }
+.budget-register-table .number-cell { text-align: right; font-variant-numeric: tabular-nums; }
+.budget-register-table .supplier-row-actions { min-width: 380px; }
+.budget-setup-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.budget-prefix-field, .budget-axis-fieldset { grid-column: 1 / -1; }
+.budget-prefix-field { border-left: 4px solid #64748b; background: #f7f8fa; }
+.budget-axis-fieldset { min-width: 0; margin: 0; padding: .85rem; border: 1px solid #83c6ba; border-left: 5px solid #168b7b; border-radius: 10px; background: #edfaf7; color: #125f53; }
+.budget-axis-fieldset legend { padding: 0 .35rem; font-weight: 750; color: #125f53; }
+.budget-axis-fieldset > small { display: block; margin-top: .5rem; }
+.budget-axis-option { display: inline-flex; align-items: center; gap: .45rem; margin: .3rem .65rem .3rem 0; padding: .45rem .6rem; border: 1px solid #a2d6cd; border-radius: 8px; background: white; color: #155c52; font-weight: 650; }
+.budget-lines-context { margin: .5rem 0 1rem; padding: .8rem; border-left: 4px solid #22766c; background: #f2f8f6; }
+.budget-line-editor-row { margin: .8rem 0; padding: .85rem; border: 1px solid #d7e3df; border-radius: 11px; background: #fbfdfc; }
+.budget-line-fields { display: grid; grid-template-columns: minmax(220px, 1.4fr) minmax(220px, 1.4fr) repeat(2, minmax(140px, 1fr)); gap: .6rem; align-items: end; }
+.budget-line-fields .field { min-width: 0; }
+.budget-line-fields .budget-analytic-field { grid-column: span 1; border-left: 4px solid #138b7c; border-radius: 8px; background: #eefaf7; padding: .55rem; color: #155c52; }
+.budget-line-total { margin-top: .55rem; padding: .5rem .65rem; border-radius: 7px; background: #f4f6f5; color: #44534f; font-size: .84rem; }
+.budget-line-total strong { color: #174e47; font-variant-numeric: tabular-nums; }
+.budget-lines-empty { padding: 1.25rem; }
+.budget-import-toolbar { display: grid; grid-template-columns: auto minmax(200px, 1fr) auto; gap: .7rem; align-items: end; margin: 1rem 0; }
+#budget-import-form input[type="radio"] { margin: .55rem .4rem .55rem .2rem; accent-color: #137b6d; }
+#budget-import-preview { max-height: 340px; overflow: auto; }
+@media (max-width: 900px) { .budget-register-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .budget-line-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .budget-register-summary, .budget-register-filters, .budget-setup-grid, .budget-line-fields, .budget-import-toolbar { grid-template-columns: minmax(0, 1fr); } .budget-prefix-field, .budget-axis-fieldset { grid-column: auto; } .budget-register-toolbar { align-items: stretch; flex-direction: column; } }

@@ -152,6 +152,7 @@
     analyticalPaymentSchedule: { dossierId: '', q: '', status: 'all', from: '', to: '' },
     analyticalInvoicePaymentAllocation: { dossierId: '', q: '', status: 'all' },
     analyticalSupplierOrders: { dossierId: '', q: '', status: 'all' },
+    budgetRegisterDossierId: '', budgetRegisterQuery: '', budgetRegisterType: 'all',
     openingBalances: { q: '', position: '', sourceDossierId: '', selectedId: '' },
     accountingBridge: { sourceModuleId: 'payroll-hr' },
     periods: { year: S.exercise() },
@@ -25753,6 +25754,368 @@
     });
   }
 
+  function budgetStandardPrefixes(type) {
+    return type === 'C' ? ['6', '81', '83', '85', '87', '89'] : type === 'I' ? ['2', '-28', '-29', '475'] : type === 'P' ? ['7', '82', '84', '86', '88'] : [];
+  }
+
+  function budgetAccountAllowed(code, prefixes) {
+    code = String(code || '');
+    var positive = prefixes.filter(function (prefix) { return prefix.charAt(0) !== '-'; });
+    var excluded = prefixes.filter(function (prefix) { return prefix.charAt(0) === '-'; }).map(function (prefix) { return prefix.slice(1); });
+    return positive.some(function (prefix) { return code.indexOf(prefix) === 0; }) && !excluded.some(function (prefix) { return code.indexOf(prefix) === 0; });
+  }
+
+  function budgetPeriodKeys(budget) {
+    var start = String(budget.cycleStart || (budget.year + '-01-01'));
+    var end = String(budget.cycleEnd || (budget.year + '-12-31'));
+    var keys = [];
+    if (budget.decomposition === 'month') {
+      var cursor = new Date(Date.UTC(Number(start.slice(0, 4)), Number(start.slice(5, 7)) - 1, 1));
+      var endDate = new Date(Date.UTC(Number(end.slice(0, 4)), Number(end.slice(5, 7)) - 1, 1));
+      while (cursor <= endDate && keys.length < 48) {
+        keys.push(cursor.getUTCFullYear() + '-' + String(cursor.getUTCMonth() + 1).padStart(2, '0'));
+        cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+      }
+    } else if (budget.decomposition === 'quarter') {
+      var quarterStart = new Date(Date.UTC(Number(start.slice(0, 4)), Number(start.slice(5, 7)) - 1, Number(start.slice(8, 10))));
+      var finalDate = new Date(Date.UTC(Number(end.slice(0, 4)), Number(end.slice(5, 7)) - 1, Number(end.slice(8, 10))));
+      var index = 1;
+      while (quarterStart <= finalDate && index <= 16) { keys.push('T' + index); quarterStart.setUTCMonth(quarterStart.getUTCMonth() + 3); index += 1; }
+    }
+    return keys;
+  }
+
+  function budgetLineAnnualAmount(line, budget) {
+    if (line.amountComplete === false) return null;
+    if (budget.decomposition === 'none') return Number(line.annualAmount || 0);
+    return budgetPeriodKeys(budget).reduce(function (sum, key) { return sum + Number(line.periodAmounts && line.periodAmounts[key] || 0); }, 0);
+  }
+
+  function budgetNatureLabel(nature) {
+    return nature && (nature.individualName || nature.genericName) || nature && nature.id || '';
+  }
+
+  function budgetAxesForCurrentDossier() {
+    return (S.analyticalNaturesConfiguration().rows || []).filter(function (nature) { return nature && !nature.group; });
+  }
+
+  function viewBudgetRegister() {
+    var dossier = S.currentDossier();
+    if (ui.budgetRegisterDossierId !== dossier.id) {
+      ui.budgetRegisterDossierId = dossier.id;
+      ui.budgetRegisterQuery = '';
+      ui.budgetRegisterType = 'all';
+    }
+    var configuration = S.budgetRegisterConfiguration();
+    var rows = configuration.rows || [];
+    var editable = hasDemoPermission(getActiveDemoMember(), 'accounting', 'budgets.manage', accountingAccessContext(dossier)) && !isPhoneViewport();
+    var decimals = Number(S.accountingConfiguration().decimalPlaces) || 0;
+    var formatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    var query = String(ui.budgetRegisterQuery || '').trim().toLocaleLowerCase();
+    var visible = rows.filter(function (budget) {
+      return (ui.budgetRegisterType === 'all' || budget.type === ui.budgetRegisterType) && (!query || [budget.code, budget.label, budget.year, budget.type].join(' ').toLocaleLowerCase().indexOf(query) !== -1);
+    }).sort(function (a, b) { return String(b.year).localeCompare(String(a.year)) || String(a.code).localeCompare(String(b.code), 'fr'); });
+    var tableRows = visible.map(function (budget) {
+      var incompleteLines = budget.lines.filter(function (line) { return budgetLineAnnualAmount(line, budget) == null; }).length;
+      var total = budget.lines.reduce(function (sum, line) { var lineAmount = budgetLineAnnualAmount(line, budget); return sum + (lineAmount == null ? 0 : lineAmount); }, 0);
+      var amountLabel = !budget.lines.length ? '—' : incompleteLines ? esc(formatter.format(total)) + '<br><small>sous-total des lignes complètes · ' + incompleteLines + ' à compléter</small>' : esc(formatter.format(total));
+      var typeLabel = budget.type === 'C' ? 'Charges' : budget.type === 'I' ? 'Investissements' : budget.type === 'P' ? 'Produits' : 'Personnalisé';
+      var classification = budget.classification === 'C' ? 'Compte général' : 'Axe ' + budget.classification.slice(1);
+      var buttons = '<button class="btn btn-ghost btn-sm" type="button" data-budget-lines="' + esc(budget.id) + '">Lignes (' + budget.lines.length + ')</button>' +
+        '<button class="btn btn-ghost btn-sm" type="button" data-budget-edit="' + esc(budget.id) + '"' + (!editable ? ' disabled' : '') + '>Modifier</button>' +
+        '<button class="btn btn-ghost btn-sm" type="button" data-budget-import="' + esc(budget.id) + '"' + (!editable ? ' disabled' : '') + '>Importer XLSX</button>' +
+        '<button class="btn btn-primary btn-sm" type="button" data-budget-next="' + esc(budget.id) + '"' + (!editable ? ' disabled' : '') + '>Budget suivant</button>' +
+        '<button class="btn btn-ghost btn-sm btn-danger-quiet" type="button" data-budget-delete="' + esc(budget.id) + '"' + (!editable ? ' disabled' : '') + '>Supprimer</button>';
+      return '<tr><td><strong>' + esc(budget.code) + '</strong><br><small>' + esc(budget.year) + ' · ' + esc(typeLabel) + '</small></td><td>' + esc(budget.label) + '</td><td>' + budget.lines.length + '</td><td class="number-cell">' + amountLabel + '</td><td>' + esc(classification) + '</td><td><div class="supplier-row-actions">' + buttons + '</div></td></tr>';
+    }).join('');
+    return '<div class="exchange-workspace budget-register-workspace"><div class="alert info"><div><strong>Budgets prévisionnels · dossier ' + esc(dossier.reference) + '</strong><br>Registre manuel : les montants sont saisis sans écriture comptable. Les réalisations ne sont pas calculées par cette saisie ; aucune ventilation ou conversion n’est déduite.</div></div>' +
+      (!editable ? '<div class="alert warning">Consultation seule : le droit de gestion des budgets prévisionnels est requis dans ce dossier.</div>' : '') +
+      '<div class="budget-register-summary"><div><small>Budgets affichés</small><strong>' + visible.length + '</strong></div><div><small>Exercice du dossier</small><strong>' + esc(String(dossier.cycleStart || '').slice(0, 4)) + '</strong></div><div><small>Axes analytiques configurés</small><strong>' + budgetAxesForCurrentDossier().length + '</strong></div><div><small>Montants</small><strong>Saisis · non convertis</strong></div></div>' +
+      '<div class="budget-register-toolbar"><div><button type="button" class="btn btn-primary" data-budget-add' + (!editable ? ' disabled' : '') + '>＋ Nouveau budget</button></div><span>Catégories de base : C · Charges, I · Investissements, P · Produits. Les budgets sont vierges tant qu’ils ne sont pas saisis.</span></div>' +
+      '<form id="budget-register-filters" class="budget-register-filters"><label class="field"><span>Rechercher</span><input name="q" type="search" value="' + esc(ui.budgetRegisterQuery || '') + '" placeholder="Code, exercice, intitulé"></label><label class="field"><span>Catégorie</span><select name="type"><option value="all"' + (ui.budgetRegisterType === 'all' ? ' selected' : '') + '>Toutes</option><option value="C"' + (ui.budgetRegisterType === 'C' ? ' selected' : '') + '>Charges</option><option value="I"' + (ui.budgetRegisterType === 'I' ? ' selected' : '') + '>Investissements</option><option value="P"' + (ui.budgetRegisterType === 'P' ? ' selected' : '') + '>Produits</option><option value="X"' + (ui.budgetRegisterType === 'X' ? ' selected' : '') + '>Personnalisés</option></select></label><button type="submit" class="btn btn-ghost">Filtrer</button><button type="button" class="btn btn-ghost" data-budget-filter-clear>Effacer</button></form>' +
+      (tableRows ? '<div class="table-wrap budget-register-table-wrap"><table class="data-table budget-register-table"><thead><tr><th>Code / Exercice</th><th>Intitulé</th><th>Lignes</th><th>Montant</th><th>Classement</th><th>Actions</th></tr></thead><tbody>' + tableRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucun budget enregistré.</strong> Créez une fiche C, I, P ou une catégorie personnalisée. Aucun montant de démonstration n’est prérempli.</div>') +
+      '<p class="exchange-footnote">Préfixes comptables indiqués par l’utilisateur : les inclusions sont appliquées comme racines de comptes et un préfixe précédé de « − » exclut les sous-comptes correspondants. Les axes analytiques ne sont proposés que s’ils sont configurés dans ce dossier.</p></div>';
+  }
+
+  function openBudgetSetupModal(budgetId) {
+    var config = S.budgetRegisterConfiguration();
+    var existing = budgetId ? config.rows.find(function (row) { return row.id === budgetId; }) : null;
+    if (budgetId && !existing) return;
+    var dossier = S.currentDossier();
+    var axes = budgetAxesForCurrentDossier();
+    var year = existing ? existing.year : String(dossier.cycleStart || '').slice(0, 4);
+    var type = existing ? existing.type : '';
+    var prefixes = existing ? existing.accountPrefixes.join(' ') : budgetStandardPrefixes(type).join(' ');
+    var axesHtml = axes.map(function (nature) {
+      var checked = existing && existing.analyticNatureIds.indexOf(nature.id) !== -1;
+      return '<label class="budget-axis-option"><input type="checkbox" name="budget-axis" value="' + esc(nature.id) + '"' + (checked ? ' checked' : '') + '><span>' + esc(budgetNatureLabel(nature)) + '</span></label>';
+    }).join('');
+    var body = '<form id="budget-setup-form" novalidate><div id="budget-setup-errors" aria-live="assertive"></div><div class="form-grid budget-setup-grid"><label class="field"><span>Exercice</span><input id="budget-year" inputmode="numeric" maxlength="4" value="' + esc(year) + '" readonly required></label><label class="field"><span>Catégorie</span><select id="budget-type" required><option value=""' + (!type ? ' selected' : '') + '>Choisir une catégorie…</option><option value="C"' + (type === 'C' ? ' selected' : '') + '>C · Charges</option><option value="I"' + (type === 'I' ? ' selected' : '') + '>I · Investissements</option><option value="P"' + (type === 'P' ? ' selected' : '') + '>P · Produits</option><option value="X"' + (type === 'X' ? ' selected' : '') + '>Personnalisée</option></select></label><label class="field" id="budget-code-field"' + (type !== 'X' ? ' hidden' : '') + '><span>Code personnalisé</span><input id="budget-code" maxlength="20" value="' + esc(existing && existing.type === 'X' ? existing.code : '') + '" placeholder="Ex. 2025S"></label><label class="field"><span>Intitulé du budget</span><input id="budget-label" maxlength="120" value="' + esc(existing && existing.label || '') + '" required></label><label class="field"><span>Décomposition</span><select id="budget-decomposition" required><option value=""' + (!existing ? ' selected' : '') + '>Choisir une décomposition…</option><option value="none"' + (existing && existing.decomposition === 'none' ? ' selected' : '') + '>Aucune · annuel</option><option value="month"' + (existing && existing.decomposition === 'month' ? ' selected' : '') + '>Mensuelle</option><option value="quarter"' + (existing && existing.decomposition === 'quarter' ? ' selected' : '') + '>Trimestrielle</option></select></label><label class="field"><span>Base de réalisation</span><select id="budget-realization" required><option value=""' + (!existing ? ' selected' : '') + '>Choisir une base…</option><option value="debit"' + (existing && existing.realizationMode === 'debit' ? ' selected' : '') + '>Débit</option><option value="credit"' + (existing && existing.realizationMode === 'credit' ? ' selected' : '') + '>Crédit</option><option value="debit-credit"' + (existing && existing.realizationMode === 'debit-credit' ? ' selected' : '') + '>Débit − Crédit</option><option value="credit-debit"' + (existing && existing.realizationMode === 'credit-debit' ? ' selected' : '') + '>Crédit − Débit</option></select><small>Cette méthode s’applique avec les mêmes préfixes C/I/P, quelle que soit la décomposition annuelle, mensuelle ou trimestrielle.</small></label><label class="field budget-prefix-field"><span>Préfixes de comptes inclus / exclus</span><input id="budget-prefixes" value="' + esc(prefixes) + '" placeholder="6 81 83 85 87 89"><small>Espaces entre préfixes ; « - » devant un préfixe pour l’exclure.</small></label><fieldset class="budget-axis-fieldset"><legend>Suivi analytique · axes configurés dans le dossier</legend>' + (axesHtml || '<p class="muted">Aucune nature analytique n’est configurée dans ce dossier.</p>') + '<small>Choisissez jusqu’à quatre axes. Les valeurs seront renseignées ligne par ligne, sans affectation automatique.</small></fieldset><label class="field"><span>Classement des lignes</span><select id="budget-classification" required><option value=""' + (!existing ? ' selected' : '') + '>Choisir un classement…</option><option value="C"' + (existing && existing.classification === 'C' ? ' selected' : '') + '>C · Compte général</option>' + (existing ? existing.analyticNatureIds : []).map(function (id, index) { var nature = axes.find(function (item) { return item.id === id; }); var code = 'A' + (index + 1); return '<option value="' + code + '"' + (existing.classification === code ? ' selected' : '') + '>' + index + ' · Analytique ' + esc(budgetNatureLabel(nature)) + '</option>'; }).join('') + '</select><small>Le classement pilote la lecture; il ne modifie pas les montants.</small></label></div></form>';
+    openModal(existing ? 'Modifier le budget' : 'Créer un budget', 'Dossier ' + esc(dossier.reference) + ' · préfixes de comptes et axes configurables', body, '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="submit" class="btn btn-primary" form="budget-setup-form">Enregistrer</button>', true);
+    var form = $('#budget-setup-form');
+    var prefixInput = $('#budget-prefixes', form);
+    prefixInput.dataset.customized = existing ? 'true' : 'false';
+    prefixInput.addEventListener('input', function () { prefixInput.dataset.customized = 'true'; });
+    $('#budget-type', form).addEventListener('change', function (event) {
+      var nextType = event.target.value;
+      $('#budget-code-field', form).hidden = nextType !== 'X';
+      if (nextType !== 'X' && prefixInput.dataset.customized !== 'true') prefixInput.value = budgetStandardPrefixes(nextType).join(' ');
+      if (!existing) $('#budget-label', form).value = nextType === 'C' ? 'Charges' : nextType === 'I' ? 'Investissements' : nextType === 'P' ? 'Produits' : '';
+    });
+    form.addEventListener('change', function (event) {
+      if (!event.target.matches('[name="budget-axis"]')) return;
+      var selected = $$('[name="budget-axis"]:checked', form);
+      if (selected.length > 4) { event.target.checked = false; toast('Sélectionnez au maximum quatre axes analytiques.', 'warning'); }
+      var select = $('#budget-classification', form);
+      var previous = select.value;
+      var chosen = $$('[name="budget-axis"]:checked', form).map(function (checkbox, index) { return { code: 'A' + (index + 1), label: 'Axe ' + (index + 1) + ' · ' + budgetNatureLabel(axes.find(function (nature) { return nature.id === checkbox.value; })) }; });
+      select.innerHTML = '<option value="">Choisir un classement…</option><option value="C">C · Compte général</option>' + chosen.map(function (item) { return '<option value="' + item.code + '">' + esc(item.label) + '</option>'; }).join('');
+      if (Array.from(select.options).some(function (option) { return option.value === previous; })) select.value = previous;
+    });
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'budgets.manage', accountingAccessContext(S.currentDossier()))) return;
+      var selectedAxes = $$('[name="budget-axis"]:checked', form).map(function (checkbox) { return checkbox.value; });
+      var selectedType = $('#budget-type', form).value;
+      var candidate = { id: existing && existing.id || '', year: $('#budget-year', form).value, type: selectedType, code: selectedType === 'X' ? $('#budget-code', form).value : '', label: $('#budget-label', form).value, decomposition: $('#budget-decomposition', form).value, realizationMode: $('#budget-realization', form).value, accountPrefixes: $('#budget-prefixes', form).value.split(/\s+/).filter(Boolean), analyticNatureIds: selectedAxes, classification: $('#budget-classification', form).value, cycleStart: existing && existing.cycleStart || dossier.cycleStart, cycleEnd: existing && existing.cycleEnd || dossier.cycleEnd, lines: existing && existing.lines || [], followingFromId: existing && existing.followingFromId || '', followingMethod: existing && existing.followingMethod || '', followingCoefficient: existing && existing.followingCoefficient };
+      var rows = existing ? config.rows.map(function (row) { return row.id === existing.id ? candidate : row; }) : config.rows.concat([candidate]);
+      var result = S.saveBudgetRegisterConfiguration(rows);
+      if (!result.ok) { $('#budget-setup-errors', form).innerHTML = '<div class="alert warning"><ul>' + result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>'; return; }
+      toast('Budget enregistré sans création d’écriture comptable.', 'success'); closeModal(true); render();
+    });
+  }
+
+  function budgetLineAccountOptions(budget, selectedCode) {
+    var options = S.accounts().filter(function (account) { return account && account.active !== false && account.postable !== false && budgetAccountAllowed(String(account.code || ''), budget.accountPrefixes); });
+    var html = '<option value="">Choisir un compte autorisé…</option>' + options.map(function (account) { return '<option value="' + esc(account.code) + '"' + (String(account.code) === String(selectedCode) ? ' selected' : '') + '>' + esc(account.code + ' · ' + (account.label || account.name || '')) + '</option>'; }).join('');
+    if (selectedCode && !options.some(function (account) { return String(account.code) === String(selectedCode); })) html += '<option value="' + esc(selectedCode) + '" selected>' + esc(selectedCode + ' · compte historique à vérifier') + '</option>';
+    return html;
+  }
+
+  function budgetLineAxisOptions(natureId, selected) {
+    if (natureId === 'responsibility-centers') {
+      var centers = S.analyticalCenters().filter(function (center) { return center && (center.active !== false || center.id === selected); });
+      return '<option value="">À renseigner…</option>' + centers.map(function (center) { return '<option value="' + esc(center.id) + '" data-label="' + esc(center.code + ' · ' + center.name) + '"' + (center.id === selected ? ' selected' : '') + '>' + esc(center.code + ' · ' + center.name) + (center.active === false ? ' · archivé' : '') + '</option>'; }).join('');
+    }
+    var values = (S.analyticalDimensionValuesConfiguration(natureId).rows || []).filter(function (row) { return row && (row.active !== false || row.label === selected); });
+    return '<option value="">À renseigner…</option>' + values.map(function (row) { return '<option value="' + esc(row.label) + '" data-label="' + esc(row.label) + '"' + (row.label === selected ? ' selected' : '') + '>' + esc(row.label) + (row.active === false ? ' · archivé' : '') + '</option>'; }).join('');
+  }
+
+  function budgetLineMarkup(budget, line) {
+    line = line || { id: '', accountCode: '', label: '', annualAmount: '', periodAmounts: {}, analyticValues: {} };
+    var periods = budgetPeriodKeys(budget);
+    var amountFields = budget.decomposition === 'none'
+      ? '<label class="field"><span>Montant annuel</span><input type="number" min="0" step="any" data-budget-annual value="' + esc(line.amountComplete === false || line.annualAmount == null ? '' : line.annualAmount) + '"></label>'
+      : periods.map(function (period) { var label = period.charAt(0) === 'T' ? 'Trimestre ' + period.slice(1) : new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(period + '-01T00:00:00Z')); label = label.charAt(0).toLocaleUpperCase('fr') + label.slice(1); return '<label class="field"><span>' + esc(label) + '</span><input type="number" min="0" step="any" data-budget-period="' + esc(period) + '" value="' + esc(line.periodAmounts && line.periodAmounts[period] == null ? '' : line.periodAmounts && line.periodAmounts[period]) + '"></label>'; }).join('');
+    var initialLineTotal = budgetLineAnnualAmount(line, budget);
+    var initialLineTotalLabel = initialLineTotal == null ? 'À compléter' : amount(initialLineTotal);
+    var axisFields = budget.analyticNatureIds.map(function (natureId, index) {
+      var nature = budgetAxesForCurrentDossier().find(function (item) { return item.id === natureId; });
+      var stored = line.analyticValues && line.analyticValues[natureId] || {};
+      return '<label class="field budget-analytic-field"><span>Axe ' + (index + 1) + ' · ' + esc(budgetNatureLabel(nature)) + '</span><select data-budget-analytic="' + esc(natureId) + '" data-nature-index="' + index + '">' + budgetLineAxisOptions(natureId, natureId === 'responsibility-centers' ? stored.valueId : stored.valueLabel) + '</select></label>';
+    }).join('');
+    return '<section class="budget-line-editor-row" data-budget-line data-line-id="' + esc(line.id || '') + '"><div class="budget-line-heading"><strong>Ligne budgétaire</strong><button type="button" class="btn btn-ghost btn-sm" data-budget-remove-line>Retirer</button></div><div class="budget-line-fields"><label class="field"><span>Compte général</span><select data-budget-account required>' + budgetLineAccountOptions(budget, line.accountCode) + '</select></label><label class="field"><span>Intitulé de la ligne</span><input data-budget-line-label maxlength="240" value="' + esc(line.label || '') + '" required></label>' + amountFields + axisFields + '</div><div class="budget-line-total">Montant annuel : <strong data-budget-line-total>' + esc(initialLineTotalLabel) + '</strong> · les axes sont des dimensions parallèles, pas des montants à additionner.</div></section>';
+  }
+
+  function openBudgetLinesModal(budgetId) {
+    var configuration = S.budgetRegisterConfiguration();
+    var budget = configuration.rows.find(function (row) { return row.id === budgetId; });
+    if (!budget) return;
+    var editable = hasDemoPermission(getActiveDemoMember(), 'accounting', 'budgets.manage', accountingAccessContext(S.currentDossier())) && !isPhoneViewport();
+    var linesMarkup = budget.lines.map(function (line) { return budgetLineMarkup(budget, line); }).join('');
+    if (!linesMarkup) linesMarkup = '<p class="empty-state budget-lines-empty">Aucune ligne : ajoutez les comptes et montants explicitement.</p>';
+    var body = '<div class="budget-lines-context"><strong>' + esc(budget.code + ' · ' + budget.label) + '</strong><br>' + esc(budget.year + ' · ' + (budget.decomposition === 'month' ? 'décomposition mensuelle' : budget.decomposition === 'quarter' ? 'décomposition trimestrielle' : 'budget annuel')) + (budget.followingFromId ? '<br>Prévision suivante issue du budget ' + esc((configuration.rows.find(function (row) { return row.id === budget.followingFromId; }) || {}).code || 'source introuvable') + ' · méthode : ' + esc(budget.followingMethod === 'blank' ? 'montants vierges' : budget.followingMethod === 'copy' ? 'copie des montants' : 'coefficient ' + budget.followingCoefficient) : '') + '<br>Préfixes applicables : ' + esc(budget.accountPrefixes.join(' ')) + '</div><form id="budget-lines-form"><div id="budget-lines-errors" aria-live="assertive"></div><div id="budget-lines-list">' + linesMarkup + '</div>' + (editable ? '<button class="btn btn-ghost" type="button" data-budget-add-line>＋ Ajouter une ligne</button>' : '<div class="alert info">Consultation seule.</div>') + '</form>';
+    var footer = '<button type="button" class="btn btn-ghost" data-action="close-modal">Fermer</button>' + (editable ? '<button type="submit" class="btn btn-primary" form="budget-lines-form">Enregistrer les lignes</button>' : '');
+    openModal('Lignes budgétaires', budget.code + ' · ' + budget.label, body, footer, true);
+    var form = $('#budget-lines-form');
+    function refreshTotals() {
+      $$('[data-budget-line]', form).forEach(function (node) {
+        var amountInputs = budget.decomposition === 'none' ? [$('[data-budget-annual]', node)] : $$('[data-budget-period]', node);
+        var complete = amountInputs.every(function (input) { return input && String(input.value).trim() !== '' && Number.isFinite(Number(input.value)) && Number(input.value) >= 0; });
+        var total = amountInputs.reduce(function (sum, input) { return sum + Number(input && input.value || 0); }, 0);
+        $('[data-budget-line-total]', node).textContent = complete ? amount(total) : 'À compléter · sous-total saisi ' + amount(total);
+      });
+    }
+    form.addEventListener('input', refreshTotals);
+    form.addEventListener('click', function (event) {
+      if (event.target.closest('[data-budget-add-line]')) { var empty = $('.budget-lines-empty', form); if (empty) empty.remove(); $('#budget-lines-list', form).insertAdjacentHTML('beforeend', budgetLineMarkup(budget)); }
+      var remove = event.target.closest('[data-budget-remove-line]'); if (remove) remove.closest('[data-budget-line]').remove();
+    });
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!editable || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'budgets.manage', accountingAccessContext(S.currentDossier()))) return;
+      var lines = $$('[data-budget-line]', form).map(function (node) {
+        var periodAmounts = {};
+        $$('[data-budget-period]', node).forEach(function (input) { periodAmounts[input.getAttribute('data-budget-period')] = input.value; });
+        var analyticValues = {};
+        $$('[data-budget-analytic]', node).forEach(function (select) {
+          var option = select.options[select.selectedIndex];
+          analyticValues[select.getAttribute('data-budget-analytic')] = { valueId: select.value && select.getAttribute('data-budget-analytic') === 'responsibility-centers' ? select.value : '', valueLabel: option && select.value ? option.getAttribute('data-label') || option.textContent.replace(/ · archivé$/, '') : '' };
+        });
+        return { id: node.getAttribute('data-line-id') || '', accountCode: $('[data-budget-account]', node).value, label: $('[data-budget-line-label]', node).value, annualAmount: $('[data-budget-annual]', node) ? $('[data-budget-annual]', node).value : '', periodAmounts: periodAmounts, analyticValues: analyticValues };
+      });
+      var rows = configuration.rows.map(function (row) { return row.id === budgetId ? Object.assign({}, budget, { lines: lines }) : row; });
+      var result = S.saveBudgetRegisterConfiguration(rows);
+      if (!result.ok) { $('#budget-lines-errors', form).innerHTML = '<div class="alert warning"><ul>' + result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>'; return; }
+      toast('Lignes budgétaires enregistrées sans écriture comptable.', 'success'); closeModal(true); render();
+    });
+  }
+
+  function shiftedBudgetDate(date, years) {
+    var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date || ''));
+    if (!match) return '';
+    var year = Number(match[1]) + years, month = Number(match[2]), day = Number(match[3]);
+    while (day > 28 && new Date(Date.UTC(year, month - 1, day)).getUTCMonth() !== month - 1) day -= 1;
+    return String(year).padStart(4, '0') + '-' + String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+  }
+
+  function openBudgetFollowingModal(budgetId) {
+    var configuration = S.budgetRegisterConfiguration();
+    var source = configuration.rows.find(function (row) { return row.id === budgetId; });
+    if (!source) return;
+    var newYear = String(Number(source.year) + 1);
+    var body = '<form id="budget-following-form"><div id="budget-following-errors" aria-live="assertive"></div><div class="alert info">Création du budget ' + esc(newYear + (source.type === 'X' ? '' : source.type)) + ' à partir de <strong>' + esc(source.code) + '</strong>. Les comptes, axes et structure des lignes peuvent être repris; aucun montant ne sera copié ou calculé sans votre choix.</div><label class="field"><span>Méthode de préparation</span><select id="budget-following-method" required><option value="">Choisissez explicitement…</option><option value="blank">Lignes vierges · montants à saisir</option><option value="copy">Copier les montants du budget source</option><option value="coefficient">Appliquer un coefficient saisi</option></select></label><label class="field" id="budget-following-coefficient-field" hidden><span>Coefficient (saisi par vous)</span><input id="budget-following-coefficient" type="number" min="0" step="any"></label></form>';
+    openModal('Préparer le budget suivant', source.code + ' → ' + newYear, body, '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="submit" class="btn btn-primary" form="budget-following-form">Créer le brouillon</button>', true);
+    var form = $('#budget-following-form');
+    $('#budget-following-method', form).addEventListener('change', function (event) { $('#budget-following-coefficient-field', form).hidden = event.target.value !== 'coefficient'; });
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'budgets.manage', accountingAccessContext(S.currentDossier()))) return;
+      var method = $('#budget-following-method', form).value;
+      var coefficient = method === 'coefficient' ? Number($('#budget-following-coefficient', form).value) : 1;
+      if (!method || (method === 'coefficient' && (!Number.isFinite(coefficient) || coefficient < 0))) { $('#budget-following-errors', form).innerHTML = '<div class="alert warning">Choisissez une méthode et, le cas échéant, un coefficient valide.</div>'; return; }
+      var lines = source.lines.map(function (line) {
+        var periods = {};
+        budgetPeriodKeys(source).forEach(function (key) {
+          var nextKey = key.charAt(0) === 'T' ? key : newYear + key.slice(4);
+          var sourcePeriodAmount = line.periodAmounts && line.periodAmounts[key];
+          periods[nextKey] = method === 'blank' || sourcePeriodAmount === '' || sourcePeriodAmount == null ? '' : Number(sourcePeriodAmount) * coefficient;
+        });
+        return Object.assign({}, line, { id: '', annualAmount: method === 'blank' || line.amountComplete === false ? '' : Number(line.annualAmount || 0) * coefficient, amountComplete: method !== 'blank' && line.amountComplete !== false, periodAmounts: periods });
+      });
+      var candidate = Object.assign({}, source, { id: '', year: newYear, code: source.type === 'X' ? source.code + '-' + newYear : newYear + source.type, label: source.label + ' · ' + newYear, cycleStart: shiftedBudgetDate(source.cycleStart, 1), cycleEnd: shiftedBudgetDate(source.cycleEnd, 1), lines: lines, followingFromId: source.id, followingMethod: method, followingCoefficient: method === 'coefficient' ? coefficient : null });
+      var result = S.saveBudgetRegisterConfiguration(configuration.rows.concat([candidate]));
+      if (!result.ok) { $('#budget-following-errors', form).innerHTML = '<div class="alert warning"><ul>' + result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>'; return; }
+      var createdBudget = result.configuration.rows.find(function (row) { return row.followingFromId === source.id && row.year === newYear; });
+      toast('Budget suivant créé selon la méthode choisie ; aucune écriture ni réalisation n’a été générée.', 'success'); closeModal(true); render(); if (createdBudget) openBudgetLinesModal(createdBudget.id);
+    });
+  }
+
+  function budgetImportHeaders(budget) {
+    var headers = ['CG', 'Intitulé'];
+    if (budget.decomposition === 'none') headers.push('M');
+    else budgetPeriodKeys(budget).forEach(function (key) { headers.push(key); });
+    budget.analyticNatureIds.forEach(function (id, index) { var nature = budgetAxesForCurrentDossier().find(function (item) { return item.id === id; }); headers.push('A' + (index + 1) + ' · ' + budgetNatureLabel(nature)); });
+    return headers;
+  }
+
+  function openBudgetImportModal(budgetId) {
+    var configuration = S.budgetRegisterConfiguration();
+    var budget = configuration.rows.find(function (row) { return row.id === budgetId; });
+    if (!budget) return;
+    var body = '<form id="budget-import-form"><div id="budget-import-errors" aria-live="assertive"></div><p>Classeur XLSX pour <strong>' + esc(budget.code + ' · ' + budget.label) + '</strong>. En-têtes requis : <code>CG</code> et <code>M</code> pour un budget annuel. Pour une décomposition mensuelle ou trimestrielle, utilisez un en-tête par période (' + esc(budgetImportHeaders(budget).slice(2).join(', ') || 'aucune') + '). Les axes utilisent les en-têtes A1 à A4 affichés dans le modèle.</p><div class="budget-import-toolbar"><button type="button" class="btn btn-ghost" data-budget-template>Télécharger le modèle XLSX</button><label class="field"><span>Classeur Excel</span><input id="budget-import-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required></label><button class="btn btn-ghost" type="button" data-budget-read>Lire le fichier</button></div><div class="field"><span>Mode d’importation · choix explicite</span><label><input type="radio" name="budget-import-mode" value="replace"> Remplacer les lignes du budget</label><label><input type="radio" name="budget-import-mode" value="append"> Conserver et ajouter les lignes importées</label></div><div id="budget-import-preview" aria-live="polite"></div></form>';
+    openModal('Import du budget depuis XLSX', budget.code + ' · aperçu avant import', body, '<button type="button" class="btn btn-ghost" data-action="close-modal">Fermer</button><button type="submit" class="btn btn-primary" form="budget-import-form">Importer les lignes</button>', true);
+    var form = $('#budget-import-form');
+    var importedLines = null;
+    var headers = budgetImportHeaders(budget);
+    $('[data-budget-template]', form).addEventListener('click', function () {
+      var workbook = AccountingExchange.exportTabularWorkbook('Budget', headers, []);
+      downloadFile('Modele-budget-' + safeFilePart(budget.code) + '.xlsx', workbook, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    });
+    $('[data-budget-read]', form).addEventListener('click', async function () {
+      var file = $('#budget-import-file', form).files[0];
+      if (!file) { $('#budget-import-errors', form).innerHTML = '<div class="alert warning">Choisissez un fichier XLSX.</div>'; return; }
+      var parsed;
+      try { parsed = AccountingExchange.parseTableWorkbook(await file.arrayBuffer(), 'Budget'); }
+      catch (error) { $('#budget-import-errors', form).innerHTML = '<div class="alert warning">' + esc(error && error.message || 'Lecture du classeur impossible.') + '</div>'; return; }
+      if (!parsed.ok || !Array.isArray(parsed.rows) || !parsed.rows.length) { $('#budget-import-errors', form).innerHTML = '<div class="alert warning">' + esc((parsed.errors || ['Aucune ligne lisible.']).join(' ')) + '</div>'; return; }
+      var headerRow = parsed.rows.find(function (row) { return Array.isArray(row) && row.some(function (cell) { return String(cell || '').trim(); }); }) || [];
+      var normalized = headerRow.map(function (cell) { return String(cell || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleUpperCase(); });
+      var indexFor = function (names) { return normalized.findIndex(function (value) { return names.indexOf(value) !== -1; }); };
+      var accountIndex = indexFor(['CG', 'COMPTE', 'COMPTE GENERAL']);
+      var labelIndex = indexFor(['INTITULE', 'LIBELLE']);
+      var amountIndex = indexFor(['M', 'MONTANT']);
+      if (accountIndex < 0 || (budget.decomposition === 'none' && amountIndex < 0)) { $('#budget-import-errors', form).innerHTML = '<div class="alert warning">Les colonnes CG et M sont obligatoires pour un budget annuel. Vérifiez l’en-tête de la première ligne.</div>'; return; }
+      var periodIndexes = {};
+      if (budget.decomposition !== 'none') {
+        budgetPeriodKeys(budget).forEach(function (key) { var header = key.charAt(0) === 'T' ? key : 'M' + key.slice(5); periodIndexes[key] = indexFor([key, header]); });
+        if (Object.keys(periodIndexes).some(function (key) { return periodIndexes[key] < 0; })) { $('#budget-import-errors', form).innerHTML = '<div class="alert warning">Le classeur doit contenir une colonne pour chaque période de décomposition : ' + esc(Object.keys(periodIndexes).join(', ')) + '.</div>'; return; }
+      }
+      var axisIndexes = {};
+      budget.analyticNatureIds.forEach(function (id, index) { var expectedHeader = headers[index + (budget.decomposition === 'none' ? 3 : 2 + budgetPeriodKeys(budget).length)]; var expected = normalized.indexOf(String(expectedHeader || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleUpperCase()); if (expected >= 0) axisIndexes[id] = expected; });
+      var dataRows = parsed.rows.slice(parsed.rows.indexOf(headerRow) + 1).filter(function (row) { return Array.isArray(row) && row.some(function (cell) { return String(cell || '').trim(); }); });
+      var errors = [];
+      if (!dataRows.length) errors.push('Le fichier contient l’en-tête mais aucune ligne budgétaire à importer.');
+      importedLines = dataRows.map(function (row, rowIndex) {
+        var accountCode = String(row[accountIndex] || '').trim();
+        var lineLabel = String(labelIndex >= 0 ? row[labelIndex] || '' : accountCode).trim();
+        var periodAmounts = {};
+        if (budget.decomposition === 'none') periodAmounts = {};
+        else Object.keys(periodIndexes).forEach(function (key) { var value = row[periodIndexes[key]]; periodAmounts[key] = value === '' || value == null ? '' : Number(value); });
+        var periodsComplete = budget.decomposition === 'none' || Object.keys(periodAmounts).every(function (key) { return periodAmounts[key] !== ''; });
+        var annualAmount = budget.decomposition === 'none' ? (row[amountIndex] === '' || row[amountIndex] == null ? '' : Number(row[amountIndex])) : periodsComplete ? Object.keys(periodAmounts).reduce(function (sum, key) { return sum + Number(periodAmounts[key]); }, 0) : '';
+        var analyticValues = {};
+        budget.analyticNatureIds.forEach(function (id) {
+          var index = axisIndexes[id];
+          var label = index == null ? '' : String(row[index] || '').trim();
+          var nature = budgetAxesForCurrentDossier().find(function (item) { return item.id === id; });
+          var valueId = '';
+          if (label && id === 'responsibility-centers') {
+            var center = S.analyticalCenters().find(function (item) { return item.code === label || item.id === label; });
+            if (!center) errors.push('Ligne ' + (rowIndex + 2) + ' : centre « ' + label + ' » introuvable.'); else valueId = center.id;
+          } else if (label) {
+            var known = (S.analyticalDimensionValuesConfiguration(id).rows || []).some(function (item) { return item.label === label; });
+            if (!known) errors.push('Ligne ' + (rowIndex + 2) + ' : valeur « ' + label + ' » absente de la nature ' + budgetNatureLabel(nature) + '.');
+          }
+          analyticValues[id] = { valueId: valueId, valueLabel: label };
+        });
+        if (!accountCode) errors.push('Ligne ' + (rowIndex + 2) + ' : code CG vide.');
+        if (annualAmount !== '' && (!Number.isFinite(annualAmount) || annualAmount < 0)) errors.push('Ligne ' + (rowIndex + 2) + ' : montant invalide.');
+        return { accountCode: accountCode, label: lineLabel, annualAmount: annualAmount, periodAmounts: periodAmounts, analyticValues: analyticValues };
+      });
+      var previewRows = importedLines.slice(0, 12).map(function (line) { return '<tr><td>' + esc(line.accountCode) + '</td><td>' + esc(line.label) + '</td><td class="number-cell">' + esc(line.annualAmount === '' ? 'À compléter' : amount(line.annualAmount)) + '</td></tr>'; }).join('');
+      $('#budget-import-errors', form).innerHTML = errors.length ? '<div class="alert warning"><ul>' + errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>' : '<div class="alert success">' + importedLines.length + ' ligne(s) lues. Vérifiez l’aperçu et choisissez le mode avant import.</div>';
+      $('#budget-import-preview', form).innerHTML = '<div class="table-wrap"><table class="data-table"><thead><tr><th>Compte</th><th>Intitulé</th><th>Montant annuel</th></tr></thead><tbody>' + previewRows + '</tbody></table></div>' + (importedLines.length > 12 ? '<p>… et ' + (importedLines.length - 12) + ' autre(s) ligne(s).</p>' : '');
+      if (errors.length) importedLines = null;
+    });
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'budgets.manage', accountingAccessContext(S.currentDossier()))) return;
+      var mode = $('input[name="budget-import-mode"]:checked', form);
+      if (!importedLines || !mode) { $('#budget-import-errors', form).innerHTML = '<div class="alert warning">Lisez un fichier valide puis choisissez Remplacer ou Ajouter explicitement.</div>'; return; }
+      if (mode.value === 'replace' && !window.confirm('Remplacer toutes les lignes actuelles de ce budget par les lignes importées ?')) return;
+      var lines = importedLines.map(function (line) { return Object.assign({ id: '' }, line); });
+      if (mode.value === 'append') lines = budget.lines.concat(lines);
+      var rows = configuration.rows.map(function (row) { return row.id === budgetId ? Object.assign({}, budget, { lines: lines }) : row; });
+      var result = S.saveBudgetRegisterConfiguration(rows);
+      if (!result.ok) { $('#budget-import-errors', form).innerHTML = '<div class="alert warning"><ul>' + result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>'; return; }
+      toast('Import contrôlé enregistré dans le budget ; aucune écriture créée.', 'success'); closeModal(true); render();
+    });
+  }
+
+  function bindBudgetRegister() {
+    var workspace = $('.budget-register-workspace');
+    if (!workspace) return;
+    var filters = $('#budget-register-filters', workspace);
+    filters.addEventListener('submit', function (event) { event.preventDefault(); var data = new FormData(filters); ui.budgetRegisterQuery = String(data.get('q') || ''); ui.budgetRegisterType = String(data.get('type') || 'all'); render(); });
+    $('[data-budget-filter-clear]', workspace).addEventListener('click', function () { ui.budgetRegisterQuery = ''; ui.budgetRegisterType = 'all'; render(); });
+    workspace.addEventListener('click', function (event) {
+      if (event.target.closest('[data-budget-add]')) { openBudgetSetupModal(''); return; }
+      var lines = event.target.closest('[data-budget-lines]'); if (lines) { openBudgetLinesModal(lines.getAttribute('data-budget-lines')); return; }
+      var edit = event.target.closest('[data-budget-edit]'); if (edit) { openBudgetSetupModal(edit.getAttribute('data-budget-edit')); return; }
+      var next = event.target.closest('[data-budget-next]'); if (next) { openBudgetFollowingModal(next.getAttribute('data-budget-next')); return; }
+      var importer = event.target.closest('[data-budget-import]'); if (importer) { openBudgetImportModal(importer.getAttribute('data-budget-import')); return; }
+      var remove = event.target.closest('[data-budget-delete]'); if (remove) {
+        if (!hasDemoPermission(getActiveDemoMember(), 'accounting', 'budgets.manage', accountingAccessContext(S.currentDossier()))) return;
+        var id = remove.getAttribute('data-budget-delete');
+        if (!window.confirm('Supprimer ce budget et ses lignes ? Cette suppression ne crée ni ne modifie aucune écriture.')) return;
+        var config = S.budgetRegisterConfiguration();
+        var result = S.saveBudgetRegisterConfiguration(config.rows.filter(function (row) { return row.id !== id; }));
+        if (!result.ok) toast(result.errors.join(' '), 'error'); else { toast('Budget supprimé.', 'success'); render(); }
+      }
+    });
+  }
+
   function viewAnalyticalMovements() {
     var dossier = S.currentDossier();
     var filter = ui.analyticalMovements;
@@ -29723,6 +30086,8 @@
       exchangeFeature = viewOpeningTransferBuild();
     } else if (group.id === 'saisie' && tab.id === 'supplier-orders') {
       exchangeFeature = viewAnalyticalSupplierOrders();
+    } else if (group.id === 'saisie' && tab.id === 'forecast-budgets') {
+      exchangeFeature = viewBudgetRegister();
     } else if (group.id === 'saisie' && tab.id === 'opening-balances') {
       exchangeFeature = viewOpeningBalances();
     } else if (group.id === 'parametres' && tab.id === 'dossier-configuration') {
@@ -31192,6 +31557,7 @@
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'scheduled-payments') bindAnalyticalPaymentSchedule();
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'invoice-payment-allocation') bindAnalyticalInvoicePaymentAllocation();
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'supplier-orders') bindAnalyticalSupplierOrders();
+      if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'forecast-budgets') bindBudgetRegister();
       return;
     }
 

@@ -124,6 +124,16 @@ test('les commandes fournisseurs analytiques exigent un droit explicite par doss
   assert.ok(Permissions.actionsForModule('accounting').some(action => action.id === 'analyticalSupplierOrders.manage'));
 });
 
+test('la gestion des budgets prévisionnels exige un droit explicite par dossier', () => {
+  const dossier = { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-1' };
+  const employee = { role: 'employee', organizationId: 'org-1', grants: { accounting: [{ scope: { type: 'dossier', dossiers: ['dossier-1'] }, actions: ['module.view'] }] } };
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'budgets.manage', dossier), false);
+  employee.grants.accounting[0].actions.push('budgets.manage');
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'budgets.manage', dossier), true);
+  assert.strictEqual(Permissions.hasPermission(employee, 'accounting', 'budgets.manage', { organizationId: 'org-1', scopeType: 'dossier', dossierId: 'dossier-2' }), false);
+  assert.ok(Permissions.actionsForModule('accounting').some(action => action.id === 'budgets.manage'));
+});
+
 test('la gestion des journaux est une série de droits distincts, explicitement délégués', () => {
   const employee = {
     role: 'employee', organizationId: 'org-1',
