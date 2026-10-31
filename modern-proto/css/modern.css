@@ -3643,3 +3643,91 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .analytical-dimension-active { display: inline-flex; align-items: center; gap: .45rem; white-space: nowrap; }
 .analytical-dimension-empty td { padding: 1.2rem; color: var(--text-muted, #66736e); }
 .analytical-dimension-actions { display: flex; flex-wrap: wrap; gap: .65rem; margin: 1rem 0; }
+
+/* Les contrôles analytiques utilisent un repère bleu-cyan franc, distinct des champs comptables. */
+.entry-analytic-editor {
+  border: 2px solid #1385a8;
+  border-left-width: 6px;
+  border-radius: 10px;
+  background: #eaf8fc;
+  box-shadow: 0 2px 8px rgba(19, 133, 168, .12);
+}
+.entry-analytic-editor > summary { color: #075d78; }
+.entry-analytic-editor > summary span { color: #376b7a; }
+.entry-analytic-editor-content { color: #163c49; }
+.entry-analytic-rule-summary { color: #245969; }
+.entry-analytic-split {
+  border: 1px solid #78bdd0;
+  background: #f5fcfe;
+}
+.entry-analytic-split-heading label,
+.entry-analytic-split-options label { color: #18596b; }
+.entry-analytic-split-heading select,
+.entry-analytic-split-options select,
+.entry-analytic-allocation input,
+.entry-analytic-allocation select {
+  border-color: #58a9c0;
+  background-color: #fff;
+}
+.entry-analytic-split-heading select:focus,
+.entry-analytic-split-options select:focus,
+.entry-analytic-allocation input:focus,
+.entry-analytic-allocation select:focus {
+  border-color: #087da2;
+  box-shadow: 0 0 0 3px rgba(8, 125, 162, .18);
+  outline: 0;
+}
+.entry-analytic-split-summary { color: #245969; }
+.analytical-center-workspace,
+.analytical-dimension-view,
+.analytical-account-rules-workspace,
+.allocation-key-workspace,
+.analytical-statement-view,
+.analytical-movement-view {
+  --analytical-accent: #087f9f;
+  --analytical-line: #8dc9d8;
+  --analytical-tint: #eaf8fc;
+}
+.analytical-center-workspace .analytical-center-card,
+.analytical-account-rules-workspace,
+.allocation-key-workspace {
+  border-top: 3px solid #1385a8;
+}
+.analytical-center-workspace .field input,
+.analytical-center-workspace .field select,
+.analytical-center-workspace .field textarea,
+.analytical-account-rules-workspace select,
+.allocation-key-workspace input,
+.allocation-key-workspace select,
+.analytical-statement-filters select,
+.analytical-movement-filters input,
+.analytical-movement-filters select {
+  border-color: #72b6c9;
+  background-color: #fbfeff;
+}
+.analytical-center-workspace .field input:focus,
+.analytical-center-workspace .field select:focus,
+.analytical-center-workspace .field textarea:focus,
+.analytical-account-rules-workspace select:focus,
+.allocation-key-workspace input:focus,
+.allocation-key-workspace select:focus,
+.analytical-statement-filters select:focus,
+.analytical-movement-filters input:focus,
+.analytical-movement-filters select:focus {
+  border-color: #087f9f;
+  box-shadow: 0 0 0 3px rgba(8, 127, 159, .16);
+  outline: 0;
+}
+.analytical-center-workspace .field > label,
+.analytical-account-rules-workspace th,
+.allocation-key-workspace th { color: #15566a; }
+.analytical-center-workspace .analytical-center-shortcuts .btn { border-color: #69afc1; }
+.analytical-dimension-view .analytical-dimension-heading,
+.analytical-statement-view .analytical-statement-heading { border-left-width: 5px; }
+.journal-lines-analytic-unmatched {
+  border: 2px solid #b64c3f;
+  border-left-width: 6px;
+  background: #fff0ed;
+  color: #702a24;
+}
+.journal-lines-analytic-unmatched strong { color: #702a24; }

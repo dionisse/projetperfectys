@@ -43,6 +43,6 @@ assert.match(navigation, /id: 'analytic-other-nature-situation'.*status: 'active
 assert.match(navigation, /id: 'analytic-general-account-balance'.*status: 'active'/);
 assert.match(css, /\.analytical-statement-view/);
 assert.match(css, /--analytical-tint: #f2f6f5/);
-assert.match(worker, /perfecto-static-v170/);
+assert.match(worker, /perfecto-static-v171/);
 
 console.log('Vue des mouvements analytiques : accès, filtres et résumés entièrement en français — OK');

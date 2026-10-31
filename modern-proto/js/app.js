@@ -26034,6 +26034,15 @@
     return '<label class="journal-lines-radio-option"><input type="radio" name="' + esc(name) + '" value="' + esc(value) + '"' + (checked ? ' checked' : '') + '><span>' + label + '</span></label>';
   }
 
+  function journalLinesAnalyticalCenterWarning(report) {
+    if (!report || !report.unmatchedCenterCount) return '';
+    return '<div class="alert warning journal-lines-analytic-unmatched"><div><strong>' +
+      esc(report.unmatchedCenterCount) + ' imputation(s) de centre non rapprochée(s)</strong> sur ' +
+      esc(report.unmatchedCenterLineCount) + ' ligne(s) : débits ' + esc(amount(report.unmatchedCenterDebit)) +
+      ' XOF, crédits ' + esc(amount(report.unmatchedCenterCredit)) +
+      ' XOF. Elles restent listées séparément et sont exclues des cumuls reconnus ; aucun centre n’est supposé.</div></div>';
+  }
+
   function journalLinesReportLayoutView(session) {
     var report = session.report || buildJournalLinesReport(session);
     var summary = session.mode === 'modified'
@@ -26057,6 +26066,7 @@
       pageHeader('Mise en Page', 'Choisissez le format, la présentation et la destination du rapport.', '') +
       '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(summary) + '. Les pièces sont consultées en lecture seule.</div></div>' +
       (session.mode === 'currency-totals' && report.omittedLineCount ? '<div class="alert warning"><div>' + report.omittedLineCount + ' ligne(s) ignorée(s) : devise absente ou ambiguë dans le référentiel, code devise invalide ou contradictoire, montant comptabilisé invalide ou montant d’origine absent/illisible. Aucun cours ni conversion n’a été appliqué.</div></div>' : '') +
+      (session.mode === 'analytic-center-totals' ? journalLinesAnalyticalCenterWarning(report) : '') +
       '<form id="journal-lines-layout-form">' +
         '<div class="journal-lines-settings-grid">' +
           '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div>' +
@@ -26176,7 +26186,7 @@
           : (session.mode === 'third-party-totals'
             ? journalLinesThirdPartyCountLabel(report.thirdPartyNature, group.thirdPartyCount)
             : (session.mode === 'analytic-center-totals'
-              ? group.centerCount + (group.centerCount === 1 ? ' centre analytique' : ' centres analytiques')
+              ? (group.code === 'analytical-unmatched-centers' ? group.lineCount + ' ligne(s) à éclaircir' : group.centerCount + (group.centerCount === 1 ? ' centre analytique' : ' centres analytiques'))
               : (session.mode === 'currency-totals'
                 ? group.currencyCount + (group.currencyCount === 1 ? ' devise' : ' devises')
                 : (session.mode === 'summary-account-totals'
@@ -26271,6 +26281,7 @@
         '</div></div>' +
         printerHint +
         currencyWarning +
+        (session.mode === 'analytic-center-totals' ? journalLinesAnalyticalCenterWarning(report) : '') +
         '<div class="journal-lines-print-meta">' +
           '<div class="journal-lines-print-identity">' +
             '<div class="journal-lines-print-owner"><strong>' + esc(identity.licenseOwner) + '</strong><span>Organisation · propriétaire de la licence</span></div>' +

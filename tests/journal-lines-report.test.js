@@ -526,6 +526,14 @@ assert.deepEqual(analyticTotals.groups[0].rows[0].cells, {
   analyticCode: 'ANA-0001', analyticTitle: 'Atelier Nord', lineCount: 2, debit: 100, credit: 30
 }, 'le cumul analytique applique période, journaux et code ; il accepte une référence unique présente sur la ligne ou sa métadonnée source');
 assert.equal(analyticTotals.groups[0].title, 'Cumul des saisies · Centres de responsabilité');
+assert.equal(analyticTotals.unmatchedCenterCount, 2, 'les deux imputations inconnue et contradictoire sont signalées');
+assert.equal(analyticTotals.unmatchedCenterLineCount, 2);
+assert.equal(analyticTotals.unmatchedCenterDebit, 1700);
+assert.equal(analyticTotals.unmatchedCenterCredit, 0);
+assert.equal(analyticTotals.groups[1].code, 'analytical-unmatched-centers');
+assert.deepEqual(analyticTotals.groups[1].rows[0].cells, {
+  analyticCode: '', analyticTitle: 'Centres non rapprochés', lineCount: 2, debit: 1700, credit: 0
+}, 'les références non rapprochées sont listées à part, hors des cumuls reconnus');
 assert.deepEqual(analyticalCenterRecords, analyticalCentersBefore, 'le cumul ne modifie pas le référentiel des centres');
 assert.deepEqual(analyticalEntries, analyticalEntriesBefore, 'le cumul ne modifie aucune pièce comptable');
 const allocatedAnalyticalEntries = [{
@@ -553,10 +561,35 @@ assert.deepEqual(multiCenterTotals.groups[1].rows[0].cells, {
   analyticCode: '', analyticTitle: 'À ventiler (sans centre)', lineCount: 1, debit: 10, credit: 0
 }, 'le reliquat apparaît dans un groupe distinct, sans centre fictif ni inclusion dans les totaux par centre.');
 assert.ok(Report.toMatrix(multiCenterTotals).some(row => row[1] === 'À ventiler (sans centre)' && row[3] === 10), 'le reliquat reste visible dans l’export du rapport.');
+const unmatchedAllocationTotals = Report.build({
+  reportType: 'analytic-center-totals', analyticalCenters: analyticalCenterRecords,
+  entries: [{
+    id: 'analytic-unmatched-allocations', date: '2026-02-23', journal: 'OD', status: 'posted',
+    lines: [{ account: '601100', debit: 20, credit: 0, analyticSplits: [{
+      natureId: 'responsibility-centers', mode: 'amount', unallocatedAmount: 3,
+      allocations: [
+        { centerId: 'center-1', amount: 10 },
+        { centerId: 'center-missing', centerCode: 'ANA-X', amount: 4 },
+        { centerId: 'center-1', centerCode: 'ANA-0002', amount: 3 }
+      ]
+    }] }]
+  }],
+  filters: { analyticalNature: 'responsibility-centers', from: '2026-02-01', to: '2026-02-28' }
+});
+assert.equal(unmatchedAllocationTotals.totalDebit, 10, 'les imputations inconnues/contradictoires ne gonflent pas le total reconnu');
+assert.equal(unmatchedAllocationTotals.unmatchedCenterCount, 2);
+assert.equal(unmatchedAllocationTotals.unmatchedCenterDebit, 7);
+assert.equal(unmatchedAllocationTotals.unmatchedCenterLineCount, 1);
+assert.equal(unmatchedAllocationTotals.groups[1].code, 'analytical-unmatched-centers');
+assert.equal(unmatchedAllocationTotals.groups[2].code, 'analytical-unallocated');
+const unmatchedAllocationMatrix = Report.toMatrix(unmatchedAllocationTotals);
+assert.ok(unmatchedAllocationMatrix.some(row => row[1] === 'Centres non rapprochés' && row[3] === 7), 'l’export conserve séparément la valeur des allocations non rapprochées');
 const analyticMatrix = Report.toMatrix(analyticTotals);
 assert.deepEqual(analyticMatrix[0], ['Code analytique', 'Intitulé', 'Nombre de lignes', 'Total des débits', 'Total des crédits']);
 assert.ok(analyticMatrix.some(row => row[0] === 'ANA-0001' && row[1] === 'Atelier Nord' && row[2] === 2 && row[3] === 100 && row[4] === 30),
   'l’export tabulaire contient le cumul analytique sans ventilation inventée');
+assert.ok(analyticMatrix.some(row => row[1] === 'Centres non rapprochés' && row[3] === 1700),
+  'l’export distingue le total des références inconnues ou contradictoires des centres reconnus');
 const allAnalyticCenters = Report.build({
   reportType: 'analytic-center-totals', analyticalCenters: analyticalCenterRecords, entries: analyticalEntries,
   filters: { analyticalNature: 'responsibility-centers', from: '2026-01-01', to: '2026-02-28' }

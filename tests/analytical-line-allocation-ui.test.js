@@ -29,6 +29,9 @@ sourceHas(app, /Cette nature est déjà présente[\s\S]*rien ne sera remplacé a
 sourceHas(app, /entryForm.getAttribute\('data-entry-status'\) !== 'draft'/, 'key application restricted to drafts');
 sourceHas(app, /absentes du référentiel renseigné[\s\S]*non classées et exclues des états analytiques reconnus/, 'unregistered values require explicit acknowledgement');
 sourceHas(app, /data-action="add-analytic-allocation"/, 'app source contract');
+sourceHas(app, /function journalLinesAnalyticalCenterWarning\(report\)[\s\S]*imputation\(s\) de centre non rapprochée\(s\)[\s\S]*aucun centre n’est supposé/, 'unmatched center amounts are warned in the actual report UI');
+sourceHas(report, /analytical-unmatched-centers[\s\S]*Références de centre non rapprochées/, 'unmatched centers remain a separate report group');
+sourceHas(css, /\.entry-analytic-editor\s*\{[\s\S]*border: 2px solid #1385a8[\s\S]*background: #eaf8fc/, 'analytical fields have a visible color distinct from accounting inputs');
 sourceHas(app, /S\.normalizeAnalyticalSplits\(l\.analyticSplits\)/, 'app source contract');
 sourceHas(store, /JSON\.stringify\(line\.analyticSplits \|\| \[\]\)/, 'line analytics persisted in signature');
 sourceHas(store, /le total ventilé dépasse le montant de la ligne comptable/, 'store source contract');
@@ -43,6 +46,6 @@ sourceHas(exchange, /analyticSplits: analyticSplits/, 'exchange source contract'
 sourceHas(navigation, /reprend d’abord les ventilations explicites enregistrées sur les lignes validées/, 'navigation source contract');
 sourceHas(css, /\.entry-analytic-editor/, 'css source contract');
 sourceHas(css, /\.entry-analytic-allocation/, 'css source contract');
-sourceHas(worker, /perfecto-static-v170/, 'worker source contract');
+sourceHas(worker, /perfecto-static-v171/, 'worker source contract');
 
 console.log('Saisie analytique : champs multi-axes, modes, contrôle d’écart, persistance, cumul et export intégrés — OK');

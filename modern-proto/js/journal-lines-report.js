@@ -527,6 +527,17 @@
     });
     var totalsByCenter = new Map();
     var unallocatedTotals = { lineCount: 0, debitUnits: 0, creditUnits: 0 };
+    var unmatchedCenterTotals = { allocationCount: 0, sourceLines: new Set(), debitUnits: 0, creditUnits: 0 };
+
+    function addUnmatchedCenterAmount(amount, debit, sourceLineKey) {
+      unmatchedCenterTotals.allocationCount += 1;
+      if (sourceLineKey) unmatchedCenterTotals.sourceLines.add(sourceLineKey);
+      amount = Number(amount);
+      if (!Number.isFinite(amount) || amount <= 0) return;
+      var units = Math.round(amount * precision);
+      if (debit > 0) unmatchedCenterTotals.debitUnits += units;
+      else unmatchedCenterTotals.creditUnits += units;
+    }
 
     function registerReference(reference, center) {
       var normalized = normalizeAnalyticalCenterReference(reference);
@@ -559,6 +570,7 @@
           var credit = Number(line.credit);
           if (!Number.isFinite(debit) || !Number.isFinite(credit) || debit < 0 || credit < 0 ||
               (debit > 0 && credit > 0) || (debit === 0 && credit === 0)) return;
+          var sourceLineKey = String(entry.id || entry.reference || '') + ':' + lineIndex;
 
           function addCenterAmount(center, amount) {
             if (!center || !center.code || !Number.isFinite(amount) || amount <= 0) return;
@@ -584,6 +596,11 @@
                 if (!allocation) return;
                 var reference = normalizeAnalyticalCenterReference(allocation.centerId || '');
                 var center = reference && centerByReference.has(reference) ? centerByReference.get(reference) : null;
+                if (!center || (allocation.centerCode && String(allocation.centerCode) !== String(center.code || '')) ||
+                    (allocation.centerName && String(allocation.centerName) !== String(center.name || ''))) {
+                  addUnmatchedCenterAmount(allocation.amount, debit, sourceLineKey);
+                  return;
+                }
                 addCenterAmount(center, Number(allocation.amount));
               });
               var unallocatedAmount = Number(split.unallocatedAmount);
@@ -598,16 +615,31 @@
 
           // Compatibilité historique : les références explicites antérieures restent consultables.
           var references = analyticalCenterReferences(line, sourceLines[lineIndex] || {});
-          if (references.invalid || !references.values.length) return;
+          if (!references.invalid && !references.values.length) return;
+          if (references.invalid || !references.values.length) {
+            addUnmatchedCenterAmount(debit || credit, debit, sourceLineKey);
+            return;
+          }
           var legacyCenter = null;
+          var legacyReferencesMatch = true;
           for (var refIndex = 0; refIndex < references.values.length; refIndex += 1) {
             var legacyReference = references.values[refIndex];
-            if (!centerByReference.has(legacyReference)) return;
-            var matched = centerByReference.get(legacyReference);
-            if (!matched || (legacyCenter && legacyCenter !== matched)) return;
-            legacyCenter = matched;
+            if (!centerByReference.has(legacyReference)) {
+              legacyReferencesMatch = false;
+              break;
+            }
+            var matchedCenter = centerByReference.get(legacyReference);
+            if (!matchedCenter || (legacyCenter && legacyCenter !== matchedCenter)) {
+              legacyReferencesMatch = false;
+              break;
+            }
+            legacyCenter = matchedCenter;
           }
-          if (legacyCenter) addCenterAmount(legacyCenter, debit || credit);
+          if (!legacyReferencesMatch || !legacyCenter) {
+            addUnmatchedCenterAmount(debit || credit, debit, sourceLineKey);
+            return;
+          }
+          addCenterAmount(legacyCenter, debit || credit);
         });
       });
     }
@@ -645,6 +677,27 @@
     }] : [];
     var unallocatedDebit = unallocatedTotals.debitUnits / precision;
     var unallocatedCredit = unallocatedTotals.creditUnits / precision;
+    var unmatchedCenterDebit = unmatchedCenterTotals.debitUnits / precision;
+    var unmatchedCenterCredit = unmatchedCenterTotals.creditUnits / precision;
+    if (unmatchedCenterTotals.allocationCount) {
+      var unmatchedCells = {};
+      columns.forEach(function (column) {
+        switch (column.key) {
+          case 'analyticCode': unmatchedCells[column.key] = ''; break;
+          case 'analyticTitle': unmatchedCells[column.key] = 'Centres non rapprochés'; break;
+          case 'lineCount': unmatchedCells[column.key] = unmatchedCenterTotals.sourceLines.size; break;
+          case 'debit': unmatchedCells[column.key] = unmatchedCenterDebit; break;
+          case 'credit': unmatchedCells[column.key] = unmatchedCenterCredit; break;
+        }
+      });
+      groups.push({
+        code: 'analytical-unmatched-centers',
+        title: 'Références de centre non rapprochées · exclues des cumuls reconnus',
+        centerCount: 0,
+        lineCount: unmatchedCenterTotals.sourceLines.size,
+        rows: [{ kind: 'line', cells: unmatchedCells }]
+      });
+    }
     if (unallocatedTotals.lineCount) {
       var unallocatedCells = {};
       columns.forEach(function (column) {
@@ -675,7 +728,11 @@
       totalCredit: totalCreditUnits / precision,
       unallocatedLineCount: unallocatedTotals.lineCount,
       unallocatedDebit: unallocatedDebit,
-      unallocatedCredit: unallocatedCredit
+      unallocatedCredit: unallocatedCredit,
+      unmatchedCenterCount: unmatchedCenterTotals.allocationCount,
+      unmatchedCenterLineCount: unmatchedCenterTotals.sourceLines.size,
+      unmatchedCenterDebit: unmatchedCenterDebit,
+      unmatchedCenterCredit: unmatchedCenterCredit
     };
   }
 
