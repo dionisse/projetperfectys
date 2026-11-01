@@ -393,6 +393,76 @@
     };
   }
 
+  function budgetAvailabilityRows(budget, orders, entries, accounts, asOfDate, configuredBaseCurrencyCode) {
+    var accountCodes = Array.from(new Set((Array.isArray(budget.lines) ? budget.lines : []).map(function (line) { return String(line && line.accountCode || '').trim(); }).filter(Boolean)));
+    var actuals = realizationRows(budget, entries, accountCodes, budget.cycleStart, asOfDate);
+    if (!actuals.ok) return { ok: false, errors: actuals.errors || ['Les réalisations du budget ne peuvent pas être calculées.'] };
+    var commitments = budgetOrderRows(budget, orders, accountCodes, budget.cycleStart, asOfDate, accounts, false, configuredBaseCurrencyCode);
+    var classification = String(budget.classification || 'C');
+    var axisIndex = classification.charAt(0) === 'A' ? Number(classification.slice(1)) - 1 : -1;
+    var axisNatureId = axisIndex >= 0 && Array.isArray(budget.analyticNatureIds) ? String(budget.analyticNatureIds[axisIndex] || '') : '';
+    function groupKeyForLine(line) {
+      var code = String(line && line.accountCode || '').trim();
+      if (classification === 'C') return 'account:' + code;
+      var value = line && line.analyticValues && line.analyticValues[axisNatureId] || {};
+      var valueKey = axisNatureId === 'responsibility-centers'
+        ? (value.valueId ? 'center:' + String(value.valueId) : '')
+        : (value.valueLabel ? 'label:' + String(value.valueLabel).trim().replace(/\s+/g, ' ') : '');
+      return valueKey ? 'axis:' + valueKey : '__budget-unclassified__';
+    }
+    var realizationGroups = Object.create(null);
+    (actuals.rows || []).forEach(function (row) {
+      if (row.status === 'budgeted' || row.status === 'unclassified-budget') realizationGroups[String(row.key || '')] = row;
+    });
+    var commitmentByLine = Object.create(null);
+    (commitments.rows || []).forEach(function (row) { commitmentByLine[String(row.sourceBudgetLineId || '')] = row; });
+    var groupedCommitments = Object.create(null);
+    (Array.isArray(budget.lines) ? budget.lines : []).forEach(function (line) {
+      if (!line || !line.id) return;
+      var key = groupKeyForLine(line);
+      if (!groupedCommitments[key]) groupedCommitments[key] = { amount: 0, incomplete: false, lineCount: 0 };
+      var target = groupedCommitments[key];
+      var commitment = commitmentByLine[String(line.id)];
+      target.lineCount += 1;
+      if (!commitment || commitment.totalCommitments == null || commitments.unlinkedOrderLineCount > 0 || commitments.staleLinkCount > 0 || commitments.invalidAmountCount > 0) target.incomplete = true;
+      else target.amount += Number(commitment.totalCommitments) || 0;
+    });
+    var accountLabels = Object.create(null);
+    (Array.isArray(accounts) ? accounts : []).forEach(function (account) {
+      var code = String(account && account.code || '');
+      if (code) accountLabels[code] = String(account.label || account.name || '');
+    });
+    var rows = Object.keys(realizationGroups).map(function (key) {
+      var actual = realizationGroups[key];
+      var commitment = groupedCommitments[key] || { amount: 0, incomplete: true, lineCount: 0 };
+      var budgetAmount = actual.budgetAmount == null || !Number.isFinite(Number(actual.budgetAmount)) ? null : Number(actual.budgetAmount);
+      var realizedAmount = actual.realizationAtPeriodEnd == null || !Number.isFinite(Number(actual.realizationAtPeriodEnd)) ? null : Number(actual.realizationAtPeriodEnd);
+      var code = String(actual.accountCode || '');
+      var accountLabel = classification === 'C' && code.indexOf(',') === -1
+        ? accountLabels[code] || String(actual.accountLabel || code)
+        : String(actual.accountLabel || '');
+      return {
+        accountCode: code,
+        accountLabel: accountLabel,
+        budgetAmount: budgetAmount,
+        commitments: commitment.incomplete ? null : commitment.amount,
+        realizations: realizedAmount,
+        sourceGroupKey: key,
+        sourceBudgetLineCount: commitment.lineCount,
+        status: budgetAmount == null || commitment.incomplete ? 'incomplete-availability' : 'budgeted'
+      };
+    }).sort(function (left, right) { return left.accountCode.localeCompare(right.accountCode) || String(left.sourceGroupKey).localeCompare(String(right.sourceGroupKey)); });
+    var unbudgetedRealizationGroupCount = (actuals.rows || []).filter(function (row) { return row.status === 'unbudgeted-realization'; }).length;
+    var unallocatedRealizationGroupCount = (actuals.rows || []).filter(function (row) { return row.status === 'unclassified-realization'; }).length;
+    return {
+      ok: true, rows: rows, actuals: actuals, commitments: commitments,
+      sourceEntryCount: actuals.sourceEntryCount, matchedSourceLineCount: actuals.matchedSourceLineCount,
+      unbudgetedRealizationGroupCount: unbudgetedRealizationGroupCount,
+      unallocatedRealizationGroupCount: unallocatedRealizationGroupCount,
+      baseCurrencyCode: commitments.baseCurrencyCode
+    };
+  }
+
   function explicitOutsideOrderRows(budget, orders, from, to, accounts, configuredBaseCurrencyCode) {
     var baseCurrencyCode = String(configuredBaseCurrencyCode || 'XOF').toUpperCase();
     var accountLabels = Object.create(null);
@@ -722,7 +792,7 @@
         budgetRegisterAvailable: false,
         commitmentRegisterAvailable: false,
         realizationRegisterAvailable: false,
-        accountsLimitedToAnalyticClasses93to99: !(['budget-entered', 'budget-orders-followup', 'budget-orders-by-line', 'budget-orders-outside', 'budget-realizations-followup', 'budget-realizations-by-line', 'budget-outside-realizations-total', 'budget-outside-realizations-detail'].indexOf(reportId) !== -1 && !!budget && Array.isArray(options && options.budgetRegister)),
+        accountsLimitedToAnalyticClasses93to99: !(['budget-entered', 'budget-orders-followup', 'budget-orders-by-line', 'budget-orders-outside', 'budget-realizations-followup', 'budget-realizations-by-line', 'budget-outside-realizations-total', 'budget-outside-realizations-detail', 'budget-available-not-committed'].indexOf(reportId) !== -1 && !!budget && Array.isArray(options && options.budgetRegister)),
         noBudgetAmountsSimulated: true,
         noCommitmentsSimulated: true,
         noRealizationsSimulated: true,
@@ -891,6 +961,55 @@
       outsideActualReport.basis.noAvailabilityOrExecutionRateSimulated = true;
       outsideActualReport.basis.noAccountingMutation = true;
       return outsideActualReport;
+    }
+    if (definition.kind === 'availability-summary' && Array.isArray(options.budgetRegister)) {
+      if (!Array.isArray(options.supplierOrders)) return emptyResult(reportId, definition, options, ['Le registre des commandes fournisseurs n’est pas chargé.'], warnings, selectedBudget);
+      if (!BudgetRealizations || typeof BudgetRealizations.calculate !== 'function') return emptyResult(reportId, definition, options, ['Le calcul des réalisations budgétaires n’est pas chargé.'], warnings, selectedBudget);
+      var availability = budgetAvailabilityRows(selectedBudget, options.supplierOrders, options.entries, options.accounts, asOfDate, options.baseCurrencyCode);
+      if (!availability.ok) return emptyResult(reportId, definition, options, availability.errors || ['Le suivi des engagements et réalisations ne peut pas être calculé.'], warnings, selectedBudget);
+      if (!availability.rows.length) warnings.push('Le budget sélectionné ne contient aucune ligne permettant de présenter ce suivi.');
+      if (availability.rows.length && options.generalAccounts === false) warnings.push('Aucune ligne de compte général n’a été sélectionnée pour l’impression ; les sources et calculs restent inchangés.');
+      if (availability.rows.some(function (row) { return row.budgetAmount == null; })) warnings.push('Une ou plusieurs lignes budgétaires sont incomplètes ; leur budget reste « — ».');
+      if (availability.commitments.unlinkedOrderLineCount) warnings.push(availability.commitments.unlinkedOrderLineCount + ' ligne(s) de commande émise(s) sans liaison explicite empêchent de certifier les engagements ; aucun rattachement n’est déduit.');
+      if (availability.commitments.staleLinkCount) warnings.push(availability.commitments.staleLinkCount + ' liaison(s) explicite(s) de commande pointent vers une ligne budgétaire absente ; elles ne sont pas réattribuées.');
+      if (availability.commitments.nonBaseCurrencyLineCount) warnings.push(availability.commitments.nonBaseCurrencyLineCount + ' ligne(s) de commande liée(s) en devise autre que ' + availability.commitments.baseCurrencyCode + ' ne sont pas converties ; les engagements des groupes concernés restent vides.');
+      if (availability.commitments.invalidAmountCount) warnings.push(availability.commitments.invalidAmountCount + ' montant(s) de commande invalide(s) empêchent de certifier les engagements.');
+      if (availability.unbudgetedRealizationGroupCount) warnings.push(availability.unbudgetedRealizationGroupCount + ' groupe(s) de valeur analytique explicite sans ligne budgétaire sont exclus des lignes budgétées ; aucune réalisation n’est reclassée.');
+      if (availability.unallocatedRealizationGroupCount) warnings.push(availability.unallocatedRealizationGroupCount + ' groupe(s) de réalisations « À ventiler » sont exclus ; les allocations ne sont pas inventées.');
+      if (availability.actuals.noSourceData) warnings.push('Aucune écriture validée ne correspond au budget et à la période arrêtée ; les réalisations restent « — », sans zéro supposé.');
+      warnings.push('Lecture au ' + asOfDate + ' : Budget issu du registre, engagements issus des commandes émises et explicitement liées, réalisations issues des écritures validées selon le classement du budget. Aucun budget consommé, pourcentage ou reste disponible n’est calculé dans cet état.');
+      var availabilityReport = emptyResult(reportId, definition, options, [], warnings, selectedBudget);
+      availabilityReport.cycleStart = cycleStart;
+      availabilityReport.cycleEnd = cycleEnd;
+      availabilityReport.asOfDate = asOfDate;
+      availabilityReport.budgetOptions = availableBudgets.map(function (item) { return Object.assign({}, item); });
+      availabilityReport.rows = options.generalAccounts === false ? [] : availability.rows;
+      availabilityReport.generatedLineCount = availabilityReport.rows.length;
+      availabilityReport.dataAvailable = availabilityReport.rows.length > 0;
+      availabilityReport.lineSelection = { generalAccounts: options.generalAccounts !== false, groupingCodes: false, placeholderLines: Array.isArray(options.placeholderLines) ? options.placeholderLines.map(Boolean).slice(0, 2) : [false, false] };
+      availabilityReport.sourceEntryCount = availability.sourceEntryCount;
+      availabilityReport.matchedSourceLineCount = availability.matchedSourceLineCount;
+      availabilityReport.sourceOrderLineCount = availability.commitments.sourceOrderLineCount;
+      availabilityReport.matchedOrderLineCount = availability.commitments.matchedOrderLineCount;
+      availabilityReport.unlinkedOrderLineCount = availability.commitments.unlinkedOrderLineCount;
+      availabilityReport.staleLinkCount = availability.commitments.staleLinkCount;
+      availabilityReport.nonBaseCurrencyLineCount = availability.commitments.nonBaseCurrencyLineCount;
+      availabilityReport.baseCurrencyCode = availability.baseCurrencyCode;
+      availabilityReport.realizationMode = availability.actuals.realizationMode;
+      availabilityReport.axisNatureId = availability.actuals.axisNatureId;
+      availabilityReport.realizationBasis = String(availability.actuals.basis || 'Classement budgétaire et écritures validées.');
+      availabilityReport.budgetRegisterAvailable = true;
+      availabilityReport.commitmentRegisterAvailable = true;
+      availabilityReport.realizationRegisterAvailable = false;
+      availabilityReport.basis.budgetRegisterAvailable = true;
+      availabilityReport.basis.commitmentRegisterAvailable = true;
+      availabilityReport.basis.realizationRegisterAvailable = false;
+      availabilityReport.basis.noBudgetAmountsSimulated = false;
+      availabilityReport.basis.noCommitmentsSimulated = false;
+      availabilityReport.basis.noRealizationsSimulated = false;
+      availabilityReport.basis.noAvailabilityOrExecutionRateSimulated = true;
+      availabilityReport.basis.noAccountingMutation = true;
+      return availabilityReport;
     }
     if (definition.kind === 'forecast' && Array.isArray(options.budgetRegister)) {
       var forecast = forecastRows(selectedBudget, accountFilter.codes, options.accounts, options.analyticNatures, {

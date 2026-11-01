@@ -249,6 +249,72 @@ test('les commandes hors budget exigent un classement explicite, un compte exact
   assert.match(report.warnings.join(' '), /ne sont ni converties/);
 });
 
+test('le suivi Budget, engagements et réalisations aligne les sources explicites à la date d’arrêté', () => {
+  const budget = {
+    id: 'budget-summary-2025', code: '2025C', year: '2025', type: 'C', label: 'Charges',
+    cycleStart: '2025-01-01', cycleEnd: '2025-12-31', decomposition: 'none', realizationMode: 'debit',
+    classification: 'C', analyticNatureIds: [],
+    lines: [{ id: 'line-summary-601', accountCode: '601', label: 'Achats', annualAmount: 1000, amountComplete: true }]
+  };
+  const supplierOrders = [
+    { id: 'order-linked-summary', status: 'issued', date: '2025-03-01', reference: 'CMD-SUM', currencyCode: 'XOF', lines: [{ id: 'line-linked-summary', amount: 50, budgetId: budget.id, budgetLineId: 'line-summary-601' }] },
+    { id: 'order-after-date', status: 'issued', date: '2025-09-01', currencyCode: 'XOF', lines: [{ id: 'line-after-date', amount: 90, budgetId: budget.id, budgetLineId: 'line-summary-601' }] },
+    { id: 'draft-summary', status: 'draft', date: '2025-04-01', currencyCode: 'XOF', lines: [{ id: 'line-draft-summary', amount: 500, budgetId: budget.id, budgetLineId: 'line-summary-601' }] }
+  ];
+  const entries = [
+    { id: 'posted-summary', status: 'posted', date: '2025-04-10', lines: [{ account: '601', debit: 200, credit: 0 }] },
+    { id: 'posted-after-date', status: 'posted', date: '2025-09-10', lines: [{ account: '601', debit: 300, credit: 0 }] },
+    { id: 'draft-entry', status: 'draft', date: '2025-04-11', lines: [{ account: '601', debit: 400, credit: 0 }] }
+  ];
+  const report = BudgetReports.buildReport('budget-available-not-committed', options({
+    budgetRegister: [budget], budgetCode: '2025C', supplierOrders, entries,
+    accounts: [{ code: '601', label: 'Achats de marchandises' }], asOfDate: '2025-06-30'
+  }));
+  assert.equal(report.ok, true, report.errors.join(' '));
+  assert.deepEqual(report.rows.map(row => [row.accountCode, row.accountLabel, row.budgetAmount, row.commitments, row.realizations]), [['601', 'Achats de marchandises', 1000, 50, 200]]);
+  assert.equal(report.asOfDate, '2025-06-30');
+  assert.equal(report.sourceEntryCount, 1, 'seules les écritures validées avant l’arrêté alimentent les réalisations');
+  assert.equal(report.matchedOrderLineCount, 1, 'brouillons et commandes postérieures à la date sont exclus');
+  assert.equal(report.basis.noAvailabilityOrExecutionRateSimulated, true, 'aucun montant consommé ni taux n’est déduit');
+  assert.equal(report.basis.accountsLimitedToAnalyticClasses93to99, false, 'le compte vient des lignes budgétaires réellement enregistrées');
+  assert.equal(report.basis.noAccountingMutation, true);
+  assert.match(report.warnings.join(' '), /aucun budget consommé, pourcentage ou reste disponible n’est calculé/i);
+  const outsideBudgetCycle = BudgetReports.buildReport('budget-available-not-committed', options({
+    budgetRegister: [budget], budgetCode: '2025C', supplierOrders, entries,
+    accounts: [{ code: '601', label: 'Achats de marchandises' }], asOfDate: '2026-01-01'
+  }));
+  assert.equal(outsideBudgetCycle.ok, false, 'la date d’arrêté ne dépasse pas le cycle du budget sélectionné');
+  assert.match(outsideBudgetCycle.errors.join(' '), /cycle du dossier/);
+  const incompleteSummary = BudgetReports.buildReport('budget-available-not-committed', options({
+    budgetRegister: [budget], budgetCode: '2025C',
+    supplierOrders: supplierOrders.concat([
+      { id: 'unlinked-summary', status: 'issued', date: '2025-05-01', currencyCode: 'XOF', lines: [{ id: 'line-unlinked-summary', amount: 30 }] },
+      { id: 'foreign-summary', status: 'issued', date: '2025-05-02', currencyCode: 'USD', lines: [{ id: 'line-foreign-summary', amount: 40, budgetId: budget.id, budgetLineId: 'line-summary-601' }] }
+    ]), entries, accounts: [{ code: '601', label: 'Achats de marchandises' }], asOfDate: '2025-06-30'
+  }));
+  assert.equal(incompleteSummary.rows[0].commitments, null, 'liens absents et devises non converties empêchent de certifier les engagements');
+  assert.match(incompleteSummary.warnings.join(' '), /liaison explicite empêchent de certifier/);
+  assert.match(incompleteSummary.warnings.join(' '), /ne sont pas converties/);
+  const withoutPrintedLines = BudgetReports.buildReport('budget-available-not-committed', options({
+    budgetRegister: [budget], budgetCode: '2025C', supplierOrders, entries, generalAccounts: false, asOfDate: '2025-06-30'
+  }));
+  assert.equal(withoutPrintedLines.rows.length, 0, 'les lignes de compte suivent la sélection d’impression');
+  assert.equal(withoutPrintedLines.lineSelection.generalAccounts, false);
+
+  const analyticBudget = {
+    ...budget, classification: 'A1', analyticNatureIds: ['activity-domains'],
+    lines: [{ id: 'line-summary-analytic', accountCode: '601', label: 'Services', annualAmount: 800, amountComplete: true, analyticValues: { 'activity-domains': { valueLabel: 'Services' } } }]
+  };
+  const analyticReport = BudgetReports.buildReport('budget-available-not-committed', options({
+    budgetRegister: [analyticBudget], budgetCode: '2025C',
+    supplierOrders: [{ id: 'order-analytic-summary', status: 'issued', date: '2025-03-01', currencyCode: 'XOF', lines: [{ id: 'line-analytic-order', amount: 25, budgetId: analyticBudget.id, budgetLineId: 'line-summary-analytic' }] }],
+    entries: [{ id: 'posted-analytic-summary', status: 'posted', date: '2025-04-10', lines: [{ account: '601', debit: 100, credit: 0, analyticSplits: [{ natureId: 'activity-domains', allocations: [{ valueLabel: 'Services', amount: 60 }, { valueLabel: 'Non budgétée', amount: 40 }], unallocatedAmount: 0 }] }] }],
+    accounts: [{ code: '601', label: 'Achats de marchandises' }], asOfDate: '2025-06-30'
+  }));
+  assert.deepEqual(analyticReport.rows.map(row => [row.accountCode, row.accountLabel, row.budgetAmount, row.commitments, row.realizations]), [['601', 'Services', 800, 25, 60]]);
+  assert.match(analyticReport.warnings.join(' '), /groupe\(s\) de valeur analytique explicite sans ligne budgétaire sont exclus/i);
+});
+
 test('le cumul hors budget ne retient que les valeurs analytiques explicites absentes du même compte budgété', () => {
   const budget = {
     id: 'budget-analytic-2025', code: '2025C', year: '2025', type: 'C', label: 'Charges analytiques',
