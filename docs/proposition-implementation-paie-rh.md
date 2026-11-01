@@ -193,8 +193,8 @@ Mettre en place l’architecture versionnée multi-pays et compléter en premier
 
 ### Étape 12 — Moteur de calcul et lots de paie
 
-Calculer les éléments du lot à partir des contrats, variables, congés approuvés et pack de règles. Expliquer chaque ligne et conserver la version des sources de calcul.
-**Jalon :** calcul reproductible, équilibré selon les règles définies et bloqué lorsqu’une donnée ou règle indispensable manque.
+Calculer les éléments du lot à partir des contrats, variables, congés approuvés et pack de règles. Expliquer chaque ligne et conserver la version des sources de calcul. La préparation des lots, les snapshots, les blocages et l’explicabilité sont détaillés dans [la fiche de cadrage de l’étape 12](cadrage-paie-rh-etape-12-moteur-lots-paie.md).
+**Jalon :** calcul reproductible, cohérent selon les règles définies et bloqué lorsqu’une donnée ou règle indispensable manque.
 
 ### Étape 13 — Contrôles, approbation et clôture
 
