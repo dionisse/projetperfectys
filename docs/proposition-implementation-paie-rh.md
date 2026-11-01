@@ -158,7 +158,7 @@ Permettre à l’utilisateur de créer et organiser directions, départements, s
 
 ### Étape 5 — Profil complet et documents employés
 
-Créer les fiches reliées au dossier RH : identité, contacts, banque, informations familiales utiles, photo facultative, CV, formations, compétences, évaluations et pièces. Encadrer spécialement les champs bancaires, médicaux, familiaux et disciplinaires.
+Créer les fiches reliées au dossier RH : identité, contacts, banque, informations familiales utiles, photo facultative, CV, formations, compétences, évaluations et pièces. Le modèle de données, les sections, les liens et les critères de protection sont détaillés dans [la fiche de cadrage de l’étape 5](cadrage-paie-rh-etape-5-profil-employe.md).
 **Jalon :** droits d’accès contrôlés ; les dix fiches génériques de `PRH-TEST-2026` restent liées à ce seul dossier.
 
 ### Étape 6 — Recrutement, embauche, contrats et intérim
