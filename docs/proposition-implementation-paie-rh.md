@@ -148,7 +148,7 @@ Construire la route, la barre latérale et les menus propres à Paie & RH, sans 
 
 ### Étape 3 — Dossiers RH et isolation
 
-Créer, sélectionner et configurer les dossiers clients Paie & RH, leur référence PRH, pays, cycle et utilisateurs autorisés. Chaque donnée RH sera liée à un identifiant de dossier RH.
+Créer, sélectionner et configurer les dossiers clients Paie & RH, leur référence PRH, pays, cycle et utilisateurs autorisés. Les identifiants, associations comptables facultatives, règles d’isolation, cycle de vie et critères d’acceptation sont détaillés dans [la fiche de cadrage de l’étape 3](cadrage-paie-rh-etape-3-dossiers.md). Chaque donnée RH sera liée à un identifiant de dossier RH.
 **Jalon :** les employés, congés, lots et documents d’un dossier ne sont pas visibles dans un autre ; aucun rattachement comptable automatique.
 
 ### Étape 4 — Organisation de l’entreprise
