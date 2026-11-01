@@ -1,4 +1,4 @@
-/* Contrats des dix rapports Budget visibles sur les deux captures, sans source budgétaire simulée. */
+/* Contrats des dix rapports Budget et contrôle du raccordement des réalisations à leurs sources. */
 'use strict';
 
 const assert = require('node:assert/strict');
@@ -26,7 +26,7 @@ function test(name, fn) {
   }
 }
 
-console.log('Rapports Budget · sélections, filtres et absence de sources');
+console.log('Rapports Budget · sélections, filtres et réalisations sources');
 
 test('propose les trois budgets C/I/P pour l’exercice du cycle, sans année codée en dur', () => {
   assert.deepEqual(BudgetReports.budgetOptions('2025-01-01').map(item => [item.code, item.label]), [
@@ -114,6 +114,63 @@ test('les filtres Compte acceptent uniquement les comptes analytiques 93 à 99',
     assert.equal(BudgetReports.definitionFor(id).filters.includes('accounts'), false, id + ' ne présente pas de filtre Compte');
   }
   assert.equal(BudgetReports.definitionFor('budget-available-balance').filters.includes('accounts'), true);
+});
+
+test('le suivi des réalisations relie le budget enregistré aux seules écritures validées', () => {
+  const registeredBudget = {
+    id: 'budget-2025c', code: '2025C', year: '2025', type: 'C', label: 'Charges enregistrées',
+    cycleStart: '2025-01-01', cycleEnd: '2025-12-31', decomposition: 'none', realizationMode: 'debit-credit',
+    classification: 'C', analyticNatureIds: [], lines: [{ id: 'line-601', accountCode: '601', label: 'Services', annualAmount: 1000, amountComplete: true, periodAmounts: {}, analyticValues: {} }]
+  };
+  const entries = [
+    { id: 'before', status: 'posted', date: '2025-01-08', lines: [{ account: '601', debit: 40, credit: 5 }] },
+    { id: 'period-debit', status: 'posted', date: '2025-01-15', lines: [{ account: '601', debit: 100, credit: 0 }] },
+    { id: 'period-credit', status: 'posted', date: '2025-01-20', lines: [{ account: '601', debit: 0, credit: 30 }] },
+    { id: 'draft', status: 'draft', date: '2025-01-21', lines: [{ account: '601', debit: 900, credit: 0 }] },
+    { id: 'other-account', status: 'posted', date: '2025-01-22', lines: [{ account: '602', debit: 700, credit: 0 }] }
+  ];
+  const report = BudgetReports.buildReport('budget-realizations-followup', options({
+    budgetRegister: [registeredBudget], budgetCode: '2025C', accountFilter: '60*',
+    from: '2025-01-10', to: '2025-01-31', entries
+  }));
+  assert.equal(report.ok, true, report.errors.join(' '));
+  assert.equal(report.budget.id, registeredBudget.id);
+  assert.deepEqual(report.budgetOptions.map(item => item.code), ['2025C']);
+  assert.equal(report.generatedLineCount, 1);
+  assert.equal(report.rows[0].accountCode, '601');
+  assert.equal(report.rows[0].budgetAmount, 1000);
+  assert.equal(report.rows[0].realizationBeforePeriod, 35);
+  assert.equal(report.rows[0].periodRealization, 70);
+  assert.equal(report.rows[0].realizationAtPeriodEnd, 105);
+  assert.equal(report.rows[0].remainingAtPeriodEnd, 895);
+  assert.equal(report.rows[0].previousBudget, null, 'N-1 reste explicitement indisponible');
+  assert.equal(report.sourceEntryCount, 4, 'le cumul indique les écritures validées du dossier jusqu’à la fin de période, hors brouillons');
+  assert.equal(report.matchedSourceLineCount, 3, 'seules les lignes de comptes budgétés contribuent au réalisé');
+  assert.equal(report.basis.noAccountingMutation, true);
+  assert.equal(report.basis.accountsLimitedToAnalyticClasses93to99, false, 'le filtre suit les comptes réellement budgétés, pas une classe présumée');
+  assert.match(report.warnings.join(' '), /N-1 restent indisponibles/);
+
+  const analyticBudget = {
+    ...registeredBudget, id: 'budget-2025-analytic', classification: 'A1', analyticNatureIds: ['activity-domains'],
+    lines: [{ id: 'line-analytic', accountCode: '601', label: 'Services', annualAmount: 100, amountComplete: true, periodAmounts: {}, analyticValues: { 'activity-domains': { valueLabel: 'Services' } } }]
+  };
+  const analyticReport = BudgetReports.buildReport('budget-realizations-followup', options({
+    budgetRegister: [analyticBudget], budgetCode: analyticBudget.code, accountFilter: '*',
+    from: '2025-01-01', to: '2025-06-30', entries: [
+      { id: 'analytic-entry', status: 'posted', date: '2025-04-10', lines: [{ account: '601', debit: 100, credit: 0, analyticSplits: [{ natureId: 'activity-domains', allocations: [{ valueLabel: 'Services', amount: 60 }], unallocatedAmount: 40 }] }] },
+      { id: 'future-unbudgeted', status: 'posted', date: '2025-11-10', lines: [{ account: '601', debit: 50, credit: 0, analyticSplits: [{ natureId: 'activity-domains', allocations: [{ valueLabel: 'Valeur future non budgétée', amount: 50 }], unallocatedAmount: 0 }] }] }
+    ]
+  }));
+  const analyticServices = analyticReport.rows.find(row => row.accountLabel === 'Services');
+  const analyticRemainder = analyticReport.rows.find(row => row.status === 'unclassified-realization');
+  assert.equal(analyticServices.realizationAtPeriodEnd, 60, 'seule l’imputation explicite de la nature classée est reprise');
+  assert.equal(analyticServices.remainingAtPeriodEnd, 40);
+  assert.equal(analyticRemainder.realizationAtPeriodEnd, 40, 'le reliquat reste séparé et non ventilé');
+  assert.equal(analyticReport.rows.some(row => row.accountLabel.indexOf('Valeur future') !== -1), false, 'aucune réalisation postérieure à la fin de période n’apparaît');
+  assert.equal(analyticReport.axisNatureId, 'activity-domains');
+
+  const empty = BudgetReports.buildReport('budget-realizations-followup', options({ budgetRegister: [], budgetCode: '' }));
+  assert.equal(empty.ok, false, 'aucun budget fictif ne doit être proposé dans le parcours applicatif');
 });
 
 test('les périodes sont inclusives et restent dans le cycle pour les sept états datés', () => {

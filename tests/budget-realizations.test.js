@@ -32,6 +32,7 @@ const services = result.rows.find(row => row.key === 'axis:label:Services');
 const goods = result.rows.find(row => row.key === 'axis:label:Biens');
 const unallocated = result.rows.find(row => row.status === 'unclassified-realization');
 assert.equal(services.periods[0].budgetAmount, 70);
+assert.deepEqual(services.accountCodes, ['601']);
 assert.equal(services.periods[0].realizationAmount, 50, 'débit-crédit s’applique aux montants explicitement ventilés');
 assert.equal(services.periods[0].variance, 20);
 assert.equal(goods.periods[0].realizationAmount, 10);

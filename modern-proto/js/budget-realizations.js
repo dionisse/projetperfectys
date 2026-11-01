@@ -137,8 +137,9 @@
     });
     var sourceLineCount = 0;
     var unbudgetedAnalyticGroups = Object.create(null);
-    function addUnbudgeted(key, label, period, amount) {
+    function addUnbudgeted(key, label, period, amount, accountCode) {
       var group = getGroup('unbudgeted:' + key, label, 'unbudgeted-realization');
+      if (accountCode) group.accountCodes[accountCode] = true;
       addPeriod(group.realizationByPeriod, period, amount, true);
       unbudgetedAnalyticGroups[key] = true;
     }
@@ -166,6 +167,7 @@
           var fullUnallocated = modeContribution('debit', debit, mode) + modeContribution('credit', credit, mode);
           if (Number.isFinite(lineAmount) && lineAmount > 0) {
             var unallocatedGroup = getGroup('__realization-unallocated__', 'Réalisation analytique · À ventiler', 'unclassified-realization');
+            unallocatedGroup.accountCodes[accountCode] = true;
             addPeriod(unallocatedGroup.realizationByPeriod, period, fullUnallocated, true);
           }
           return;
@@ -187,14 +189,15 @@
           if (pairBudgeted) {
             var axisGroup = groupsByKey['axis:' + key];
             if (axisGroup && axisGroup.accountCodes[accountCode]) addPeriod(axisGroup.realizationByPeriod, period, contribution, true);
-            else addUnbudgeted(key, 'Réalisation sans ligne budgétaire · ' + key.slice(key.indexOf(':') + 1), period, contribution);
-          } else addUnbudgeted(key, 'Réalisation sans ligne budgétaire · ' + key.slice(key.indexOf(':') + 1), period, contribution);
+            else addUnbudgeted(key, 'Réalisation sans ligne budgétaire · ' + key.slice(key.indexOf(':') + 1), period, contribution, accountCode);
+          } else addUnbudgeted(key, 'Réalisation sans ligne budgétaire · ' + key.slice(key.indexOf(':') + 1), period, contribution, accountCode);
         });
         var unallocated = Number(split.unallocatedAmount);
         if (!Number.isFinite(unallocated) || unallocated < 0) unallocated = Math.max(0, lineAmount - assignedAmount);
         if (unallocated > 0) {
           var sign = modeContribution(debit > 0 ? 'debit' : 'credit', unallocated, mode);
           var remainingGroup = getGroup('__realization-unallocated__', 'Réalisation analytique · À ventiler', 'unclassified-realization');
+          remainingGroup.accountCodes[accountCode] = true;
           addPeriod(remainingGroup.realizationByPeriod, period, sign, true);
         }
       });
@@ -218,7 +221,7 @@
           variance: budgetAmount == null || realizationAmount == null ? null : budgetAmount - realizationAmount
         };
       });
-      return { key: group.key, label: group.label, status: group.status, periods: rowPeriods };
+      return { key: group.key, label: group.label, status: group.status, accountCodes: Object.keys(group.accountCodes).sort(), periods: rowPeriods };
     });
     return {
       ok: true,
