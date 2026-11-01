@@ -11,6 +11,7 @@ function options(overrides = {}) {
     budgetCode: '2025C',
     accountFilter: '*',
     accounts: [{ code: '930100', label: 'Compte analytique' }],
+    supplierOrders: [],
     entries: []
   }, overrides);
 }
@@ -313,6 +314,79 @@ test('le suivi Budget, engagements et réalisations aligne les sources explicite
   }));
   assert.deepEqual(analyticReport.rows.map(row => [row.accountCode, row.accountLabel, row.budgetAmount, row.commitments, row.realizations]), [['601', 'Services', 800, 25, 60]]);
   assert.match(analyticReport.warnings.join(' '), /groupe\(s\) de valeur analytique explicite sans ligne budgétaire sont exclus/i);
+});
+
+test('le reste disponible applique la méthode choisie sans additionner engagements et réalisations', () => {
+  const budget = {
+    id: 'budget-balance-2025', code: '2025C', year: '2025', type: 'C', label: 'Charges',
+    cycleStart: '2025-01-01', cycleEnd: '2025-12-31', decomposition: 'none', realizationMode: 'debit',
+    classification: 'C', analyticNatureIds: [],
+    lines: [{ id: 'line-balance-601', accountCode: '601', label: 'Achats', annualAmount: 1000, amountComplete: true }]
+  };
+  const base = {
+    budgetRegister: [budget], budgetCode: '2025C', accounts: [{ code: '601', label: 'Achats' }],
+    supplierOrders: [{ id: 'order-balance', status: 'issued', date: '2025-03-01', currencyCode: 'XOF', lines: [{ id: 'line-order-balance', amount: 200, budgetId: budget.id, budgetLineId: 'line-balance-601' }] }],
+    entries: [
+      { id: 'posted-balance', status: 'posted', date: '2025-04-01', lines: [{ account: '601', debit: 150, credit: 0 }] },
+      { id: 'future-balance', status: 'posted', date: '2025-09-01', lines: [{ account: '601', debit: 300, credit: 0 }] }
+    ],
+    asOfDate: '2025-06-30'
+  };
+  const commitments = BudgetReports.buildReport('budget-available-balance', options(base));
+  assert.equal(commitments.ok, true, commitments.errors.join(' '));
+  assert.equal(commitments.consumptionBasis, 'commitments');
+  assert.deepEqual([
+    commitments.rows[0].budgetAmount, commitments.rows[0].commitments, commitments.rows[0].uncommittedExpenses,
+    commitments.rows[0].consumedBudget, commitments.rows[0].consumedPercent, commitments.rows[0].remainingAvailable
+  ], [1000, 200, null, 200, 20, 800]);
+  assert.match(commitments.warnings.join(' '), /les deux sources ne sont pas additionnées/i);
+  assert.match(commitments.warnings.join(' '), /aucune liaison explicite entre écriture comptable et commande/i);
+
+  const realizations = BudgetReports.buildReport('budget-available-balance', options({ ...base, consumptionBasis: 'realizations' }));
+  assert.equal(realizations.ok, true, realizations.errors.join(' '));
+  assert.equal(realizations.consumptionBasis, 'realizations');
+  assert.deepEqual([
+    realizations.rows[0].budgetAmount, realizations.rows[0].commitments, realizations.rows[0].uncommittedExpenses,
+    realizations.rows[0].consumedBudget, realizations.rows[0].consumedPercent, realizations.rows[0].remainingAvailable
+  ], [1000, 200, null, 150, 15, 850]);
+  assert.equal(realizations.rows[0].realizations, 150);
+  assert.equal(realizations.basis.noAvailabilityOrExecutionRateSimulated, false);
+  assert.equal(realizations.basis.accountsLimitedToAnalyticClasses93to99, false, 'le filtre est limité aux comptes du budget, pas aux classes 93 à 99');
+  assert.equal(realizations.basis.noAccountingMutation, true);
+
+  const missingRealizations = BudgetReports.buildReport('budget-available-balance', options({ ...base, entries: [], consumptionBasis: 'realizations' }));
+  assert.equal(missingRealizations.rows[0].consumedBudget, null, 'une source vide ne produit pas un zéro supposé');
+  assert.equal(missingRealizations.rows[0].consumedPercent, null);
+  assert.equal(missingRealizations.rows[0].remainingAvailable, null);
+  assert.match(missingRealizations.warnings.join(' '), /aucune écriture validée ne correspond/i);
+
+  const analyticBudget = {
+    ...budget, classification: 'A1', analyticNatureIds: ['activity-domains'],
+    lines: [{ id: 'line-balance-analytic', accountCode: '601', label: 'Services', annualAmount: 800, amountComplete: true, analyticValues: { 'activity-domains': { valueLabel: 'Services' } } }]
+  };
+  const partiallyAllocated = BudgetReports.buildReport('budget-available-balance', options({
+    budgetRegister: [analyticBudget], supplierOrders: [], accounts: [{ code: '601', label: 'Achats' }],
+    entries: [{ id: 'posted-partially-allocated', status: 'posted', date: '2025-04-01', lines: [{ account: '601', debit: 100, credit: 0, analyticSplits: [{ natureId: 'activity-domains', allocations: [{ valueLabel: 'Services', amount: 60 }], unallocatedAmount: 40 }] }] }],
+    asOfDate: '2025-06-30', consumptionBasis: 'realizations'
+  }));
+  assert.equal(partiallyAllocated.rows[0].realizations, 60, 'le montant analytique explicitement classé reste consultable');
+  assert.equal(partiallyAllocated.rows[0].consumedBudget, null, 'un reliquat à ventiler empêche de certifier le consommé');
+  assert.equal(partiallyAllocated.rows[0].remainingAvailable, null);
+  assert.match(partiallyAllocated.warnings.join(' '), /À ventiler/);
+
+  const invalidBasis = BudgetReports.buildReport('budget-available-balance', options({ ...base, consumptionBasis: 'commitments-plus-realizations' }));
+  assert.equal(invalidBasis.ok, false);
+  assert.match(invalidBasis.errors.join(' '), /Choisissez une base de calcul/);
+
+  const zeroBudget = { ...budget, lines: [{ id: 'line-zero-balance', accountCode: '602', label: 'Zéro', annualAmount: 0, amountComplete: true }] };
+  const zero = BudgetReports.buildReport('budget-available-balance', options({
+    budgetRegister: [zeroBudget], accountFilter: '602', supplierOrders: [], entries: [], asOfDate: '2025-06-30'
+  }));
+  assert.equal(zero.ok, true, zero.errors.join(' '));
+  assert.equal(zero.rows[0].consumedBudget, 0);
+  assert.equal(zero.rows[0].consumedPercent, null, 'aucune division par un budget nul');
+  assert.equal(zero.rows[0].remainingAvailable, 0);
+  assert.match(zero.warnings.join(' '), /montant budgétaire vaut zéro/);
 });
 
 test('le cumul hors budget ne retient que les valeurs analytiques explicites absentes du même compte budgété', () => {

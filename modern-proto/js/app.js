@@ -6059,7 +6059,8 @@
       phase: 'selection',
       filters: {
         budgetCode: availableBudgets.length ? availableBudgets[0].code : '',
-        accounts: '*', from: dossier.cycleStart, to: dossier.cycleEnd, asOfDate: dossier.cycleEnd
+        accounts: '*', from: dossier.cycleStart, to: dossier.cycleEnd, asOfDate: dossier.cycleEnd,
+        consumptionBasis: 'commitments'
       },
       lineSelection: { generalAccounts: true, groupingCodes: false, placeholderLines: [false, false] },
       columns: columns,
@@ -6096,6 +6097,7 @@
       from: session.filters.from,
       to: session.filters.to,
       asOfDate: session.filters.asOfDate,
+      consumptionBasis: session.filters.consumptionBasis,
       generalAccounts: session.lineSelection.generalAccounts,
       groupingCodes: session.lineSelection.groupingCodes,
       placeholderLines: session.lineSelection.placeholderLines
@@ -6118,14 +6120,17 @@
     }
     if (key === 'accounts') {
       var label = definition.accountLabel || 'Compte';
-      if (['forecast', 'orders-followup', 'orders-by-line', 'realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1) {
+      if (['forecast', 'orders-followup', 'orders-by-line', 'realizations-followup', 'realizations-by-line', 'available-balance'].indexOf(definition.kind) !== -1) {
         var filterLabel = label === 'Comptes généraux' ? label + ' budgétés' : label + 's budgétés';
         return '<div class="field"><label for="budget-report-accounts">' + esc(filterLabel) + '</label><input id="budget-report-accounts" data-budget-report-filter="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou code exact / préfixe*" autocomplete="off" required><span class="hint">Filtre limité aux comptes présents dans les lignes du budget sélectionné. Le code est rapproché des lignes enregistrées ; « * » sélectionne toutes les lignes compatibles.</span></div>';
       }
       return '<div class="field"><label for="budget-report-accounts">' + esc(label) + '</label><div class="journal-lines-picker-control"><input id="budget-report-accounts" data-budget-report-filter="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou 93, 9301*" autocomplete="off" required><button type="button" class="btn btn-ghost" data-budget-report-picker="accounts" aria-label="Choisir les comptes analytiques">…</button></div><span class="hint">« * » sélectionne les comptes des rubriques analytiques 93 à 99 ; un code de rubrique inclut ses sous-comptes.</span></div>';
     }
     if (key === 'asOfDate') {
-      return '<div class="field"><label for="budget-report-date">Date</label><input id="budget-report-date" data-budget-report-filter="asOfDate" type="date" value="' + esc(session.filters.asOfDate) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required></div>';
+      return '<div class="field"><label for="budget-report-date">Date d’arrêté</label><input id="budget-report-date" data-budget-report-filter="asOfDate" type="date" value="' + esc(session.filters.asOfDate) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required></div>';
+    }
+    if (key === 'consumptionBasis') {
+      return '<div class="field"><label for="budget-report-consumption-basis">Base de calcul du budget consommé</label><select id="budget-report-consumption-basis" data-budget-report-filter="consumptionBasis" required><option value="commitments"' + (session.filters.consumptionBasis === 'commitments' ? ' selected' : '') + '>Engagements émis liés</option><option value="realizations"' + (session.filters.consumptionBasis === 'realizations' ? ' selected' : '') + '>Réalisations comptabilisées</option></select><span class="hint">Le calcul utilise une seule base à la fois. Les engagements et réalisations ne sont pas additionnés, faute de liaison explicite permettant d’éviter les doubles comptes.</span></div>';
     }
     var dateKey = key === 'from' ? 'from' : 'to';
     return '<div class="field"><label for="budget-report-' + dateKey + '">' + (dateKey === 'from' ? 'Début' : 'Fin') + '</label><input id="budget-report-' + dateKey + '" data-budget-report-filter="' + dateKey + '" type="date" value="' + esc(session.filters[dateKey]) + '" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" required></div>';
@@ -6196,6 +6201,8 @@
           ? '<div class="alert info budget-report-source-note"><div><strong>Sources de cet état.</strong> Seules les commandes émises et explicitement liées à une ligne du budget sont prises en compte ; brouillons, commandes annulées et lignes non liées sont exclus ou signalés. Les montants d’une devise autre que XOF ne sont ni convertis ni additionnés. Une commande ne crée ni facture ni écriture comptable.</div></div>'
         : definition.kind === 'availability-summary'
           ? '<div class="alert info budget-report-source-note"><div><strong>Sources de cet état.</strong> Budget enregistré, commandes émises explicitement liées aux lignes et écritures validées selon le classement du budget, à la date d’arrêté. Les montants incomplets restent vides ; les liens absents ne sont pas déduits. Aucun budget consommé, pourcentage ni reste disponible n’est calculé ici.</div></div>'
+        : definition.kind === 'available-balance'
+          ? '<div class="alert info budget-report-source-note"><div><strong>Convention de gestion sélectionnable, non référentiel légal.</strong> Le budget consommé utilise soit les engagements explicites, soit les réalisations comptabilisées ; ces sources ne sont jamais additionnées sans rapprochement commande-écriture. Le pourcentage et le reste suivent la formule affichée dans les avertissements. Les dépenses hors engagement restent vides faute de liaison explicite.</div></div>'
         : ['outside-realizations-total', 'outside-realizations-detail'].indexOf(definition.kind) !== -1
           ? '<div class="alert info budget-report-source-note"><div><strong>Source de cet état.</strong> Le cumul et le détail ne retiennent que les allocations analytiques explicites qui ne correspondent à aucune valeur du même compte budgété. Un compte absent du budget, une ligne « À ventiler » ou un budget classé « C » ne suffisent pas à prouver une réalisation hors budget et ne sont pas reclassés ; le marché reste vide s’il n’est pas porté par la source.</div></div>'
         : ['realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1
@@ -6205,6 +6212,7 @@
     if (definition.filters.indexOf('accounts') !== -1) criteria.push('les comptes');
     if (definition.filters.indexOf('from') !== -1) criteria.push('la période');
     if (definition.filters.indexOf('asOfDate') !== -1) criteria.push('la date d’arrêté');
+    if (definition.filters.indexOf('consumptionBasis') !== -1) criteria.push('la méthode de calcul du consommé');
     var selectionDescription = 'Sélectionnez ' + criteria.join(', ').replace(/, ([^,]*)$/, ' et $1') + ' de l’état.';
     return generalBalanceReportSteps('selection', 'Étapes de préparation de ' + definition.title) +
       pageHeader(definition.title, selectionDescription, '') + sourceNote +
@@ -6260,10 +6268,13 @@
     var styleClass = session.layout.style === 'color10' ? 'budget-report-style-color' : 'budget-report-style-plain';
     var decimals = Number(S.accountingConfiguration().decimalPlaces) || 0;
     var formatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-    var reportRows = ['forecast', 'orders-followup', 'orders-by-line', 'orders-outside', 'realizations-followup', 'realizations-by-line', 'outside-realizations-total', 'outside-realizations-detail', 'availability-summary'].indexOf(definition.kind) !== -1 ? (report.rows || []).map(function (row) {
+    var reportRows = ['forecast', 'orders-followup', 'orders-by-line', 'orders-outside', 'realizations-followup', 'realizations-by-line', 'outside-realizations-total', 'outside-realizations-detail', 'availability-summary', 'available-balance'].indexOf(definition.kind) !== -1 ? (report.rows || []).map(function (row) {
       return '<tr class="' + (row.status && row.status !== 'budgeted' ? 'budget-realization-special-row' : '') + '"><td>' + esc(report.budget && report.budget.code || '') + '</td>' + columns.map(function (column) {
         var value = row[column.key];
-        var text = value == null || !Number.isFinite(Number(value)) && !column.text ? '—' : (column.text ? String(value == null ? '' : value) : formatter.format(Number(value)));
+        var text = value == null || !Number.isFinite(Number(value)) && !column.text
+          ? '—'
+          : column.text ? String(value == null ? '' : value)
+            : formatter.format(Number(value)) + (column.key === 'consumedPercent' ? ' %' : '');
         return '<td' + (column.text ? '' : ' class="num"') + '>' + esc(text || '—') + '</td>';
       }).join('') + '</tr>';
     }).join('') : '';
@@ -6275,17 +6286,21 @@
     if (definition.kind === 'outside-realizations-total' && !reportRows) tableBody = '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune réalisation hors budget identifiable</strong>Aucune allocation explicite non budgétée ne peut être cumulée avec le classement et les sources choisis.</div></td></tr></tbody>';
     if (definition.kind === 'outside-realizations-detail' && !reportRows) tableBody = '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune ligne de réalisation hors budget identifiable</strong>Aucune allocation analytique explicite absente du budget ne correspond aux écritures de la période.</div></td></tr></tbody>';
     if (definition.kind === 'availability-summary' && !reportRows) tableBody = '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune ligne de suivi disponible</strong>Aucune ligne budgétaire ne correspond aux sources et au périmètre sélectionnés.</div></td></tr></tbody>';
+    if (definition.kind === 'available-balance' && !reportRows) tableBody = '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune ligne de budget disponible</strong>Vérifiez le budget, le compte et les sources nécessaires au calcul.</div></td></tr></tbody>';
     if (definition.kind === 'forecast' && !reportRows) tableBody = '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune ligne budgétaire correspondante</strong>Le budget enregistré ne contient aucune ligne compatible avec les comptes sélectionnés.</div></td></tr></tbody>';
     if (definition.kind === 'realizations-followup' && !reportRows) tableBody = '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune ligne générée</strong>Le budget sélectionné ne comporte pas de ligne compatible avec le filtre.</div></td></tr></tbody>';
     if (definition.kind === 'realizations-by-line' && !reportRows) tableBody = '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune ligne comptabilisée correspondante</strong>Aucun mouvement validé ne correspond aux comptes et à la période sélectionnés.</div></td></tr></tbody>';
     var isForecastReport = definition.kind === 'forecast';
     var isAvailabilitySummary = definition.kind === 'availability-summary';
+    var isAvailabilityBalance = definition.kind === 'available-balance';
     var isOrderReport = ['orders-followup', 'orders-by-line', 'orders-outside'].indexOf(definition.kind) !== -1;
     var isRealizationReport = ['realizations-followup', 'realizations-by-line', 'outside-realizations-total', 'outside-realizations-detail'].indexOf(definition.kind) !== -1;
     var sourceLabel = isForecastReport
       ? 'Lignes et montants issus du registre de budget enregistré'
       : isAvailabilitySummary
         ? 'Budget enregistré · commandes émises liées explicitement · écritures validées à date'
+      : isAvailabilityBalance
+        ? 'Budget et calcul à date selon la méthode de consommation choisie'
       : isOrderReport
         ? (definition.kind === 'orders-outside' ? 'Commandes émises classées hors budget sur choix explicite' : 'Engagements issus des seules commandes émises et explicitement liées')
         : isRealizationReport
@@ -6297,6 +6312,8 @@
       ? '<p class="budget-report-source-note">Lignes sources du registre · montant annuel affiché uniquement si la ligne est complète · pourcentage du total non calculé, formule non définie</p>'
       : isAvailabilitySummary && report.budgetRegisterAvailable
         ? '<p class="budget-report-source-note">Budget saisi · engagements de commandes explicitement liées en ' + esc(report.baseCurrencyCode || 'XOF') + ' · réalisations en lecture seule selon ' + esc(budgetRealizationModeLabel(report.realizationMode)) + ' · arrêté au ' + esc(dateLabel(report.asOfDate)) + ' · aucun total consommé ou disponible calculé</p>'
+      : isAvailabilityBalance && report.budgetRegisterAvailable
+        ? '<p class="budget-report-source-note">Méthode « ' + esc(report.consumptionBasisLabel || '') + ' » · budget consommé : source choisie · pourcentage : consommé ÷ budget × 100 · reste disponible : budget − consommé · arrêté au ' + esc(dateLabel(report.asOfDate)) + ' · aucune addition engagements/réalisations</p>'
       : isOrderReport && report.commitmentRegisterAvailable
         ? (definition.kind === 'orders-outside'
           ? '<p class="budget-report-source-note">' + esc(String(report.generatedLineCount || 0)) + ' ligne(s) explicitement classée(s) hors budget · montants en ' + esc(report.baseCurrencyCode || 'XOF') + ' sans conversion</p>'
@@ -6312,7 +6329,7 @@
   function budgetReportExportMatrix(session, report, definition) {
     var columns = budgetReportSelectedColumns(session, definition);
     var headers = ['Budget'].concat(columns.map(function (column) { return column.label; }));
-    var rows = ['forecast', 'orders-followup', 'orders-by-line', 'orders-outside', 'realizations-followup', 'realizations-by-line', 'outside-realizations-total', 'outside-realizations-detail', 'availability-summary'].indexOf(definition.kind) !== -1 ? (report.rows || []).map(function (row) {
+    var rows = ['forecast', 'orders-followup', 'orders-by-line', 'orders-outside', 'realizations-followup', 'realizations-by-line', 'outside-realizations-total', 'outside-realizations-detail', 'availability-summary', 'available-balance'].indexOf(definition.kind) !== -1 ? (report.rows || []).map(function (row) {
       return [report.budget && report.budget.code || ''].concat(columns.map(function (column) {
         var value = row[column.key];
         return value == null || !Number.isFinite(Number(value)) && !column.text ? '—' : (column.text ? String(value == null ? '' : value) : Number(value));

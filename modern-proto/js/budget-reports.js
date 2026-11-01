@@ -141,7 +141,7 @@
     },
     'budget-available-balance': {
       id: 'budget-available-balance', kind: 'available-balance', title: 'Budget, reste disponible',
-      filters: ['budget', 'accounts', 'asOfDate'], showLines: true, showGroupingCodes: false, columnStacks: 3,
+      filters: ['budget', 'accounts', 'asOfDate', 'consumptionBasis'], showLines: true, showGroupingCodes: false, columnStacks: 3,
       accountLabel: 'Compte',
       columns: [
         { key: 'accountCode', label: 'Code', text: true },
@@ -393,8 +393,10 @@
     };
   }
 
-  function budgetAvailabilityRows(budget, orders, entries, accounts, asOfDate, configuredBaseCurrencyCode) {
-    var accountCodes = Array.from(new Set((Array.isArray(budget.lines) ? budget.lines : []).map(function (line) { return String(line && line.accountCode || '').trim(); }).filter(Boolean)));
+  function budgetAvailabilityRows(budget, orders, entries, accounts, asOfDate, configuredBaseCurrencyCode, selectedAccountCodes) {
+    var accountCodes = Array.isArray(selectedAccountCodes)
+      ? selectedAccountCodes.map(function (code) { return String(code || '').trim(); }).filter(Boolean)
+      : Array.from(new Set((Array.isArray(budget.lines) ? budget.lines : []).map(function (line) { return String(line && line.accountCode || '').trim(); }).filter(Boolean)));
     var actuals = realizationRows(budget, entries, accountCodes, budget.cycleStart, asOfDate);
     if (!actuals.ok) return { ok: false, errors: actuals.errors || ['Les réalisations du budget ne peuvent pas être calculées.'] };
     var commitments = budgetOrderRows(budget, orders, accountCodes, budget.cycleStart, asOfDate, accounts, false, configuredBaseCurrencyCode);
@@ -461,6 +463,40 @@
       unallocatedRealizationGroupCount: unallocatedRealizationGroupCount,
       baseCurrencyCode: commitments.baseCurrencyCode
     };
+  }
+
+  function availableBalanceRows(availability, consumptionBasis) {
+    var useCommitments = consumptionBasis === 'commitments';
+    function realizationsIncompleteForRow(row) {
+      if (availability.actuals.noSourceData || row.sourceGroupKey === '__budget-unclassified__') return true;
+      if (availability.actuals.classification === 'C') return false;
+      var rowCodes = String(row.accountCode || '').split(/,\s*/).filter(Boolean);
+      return (availability.actuals.rows || []).some(function (sourceRow) {
+        if (sourceRow.status !== 'unclassified-realization') return false;
+        var sourceCodes = String(sourceRow.accountCode || '').split(/,\s*/).filter(Boolean);
+        return sourceCodes.some(function (code) { return rowCodes.indexOf(code) !== -1; });
+      });
+    }
+    return (availability.rows || []).map(function (row) {
+      var commitments = row.commitments;
+      var realizations = realizationsIncompleteForRow(row) ? null : row.realizations;
+      var consumed = useCommitments ? commitments : realizations;
+      var budgetAmount = row.budgetAmount;
+      var percent = budgetAmount != null && Number.isFinite(Number(budgetAmount)) && Number(budgetAmount) > 0 && consumed != null && Number.isFinite(Number(consumed))
+        ? Number(consumed) / Number(budgetAmount) * 100
+        : null;
+      var remaining = budgetAmount != null && Number.isFinite(Number(budgetAmount)) && consumed != null && Number.isFinite(Number(consumed))
+        ? Number(budgetAmount) - Number(consumed)
+        : null;
+      return Object.assign({}, row, {
+        uncommittedExpenses: null,
+        consumedBudget: consumed == null || !Number.isFinite(Number(consumed)) ? null : Number(consumed),
+        consumedPercent: percent,
+        remainingAvailable: remaining,
+        consumptionBasis: consumptionBasis,
+        status: budgetAmount == null || consumed == null ? 'incomplete-availability' : 'budgeted'
+      });
+    });
   }
 
   function explicitOutsideOrderRows(budget, orders, from, to, accounts, configuredBaseCurrencyCode) {
@@ -792,7 +828,7 @@
         budgetRegisterAvailable: false,
         commitmentRegisterAvailable: false,
         realizationRegisterAvailable: false,
-        accountsLimitedToAnalyticClasses93to99: !(['budget-entered', 'budget-orders-followup', 'budget-orders-by-line', 'budget-orders-outside', 'budget-realizations-followup', 'budget-realizations-by-line', 'budget-outside-realizations-total', 'budget-outside-realizations-detail', 'budget-available-not-committed'].indexOf(reportId) !== -1 && !!budget && Array.isArray(options && options.budgetRegister)),
+        accountsLimitedToAnalyticClasses93to99: !(['budget-entered', 'budget-orders-followup', 'budget-orders-by-line', 'budget-orders-outside', 'budget-realizations-followup', 'budget-realizations-by-line', 'budget-outside-realizations-total', 'budget-outside-realizations-detail', 'budget-available-not-committed', 'budget-available-balance'].indexOf(reportId) !== -1 && !!budget && Array.isArray(options && options.budgetRegister)),
         noBudgetAmountsSimulated: true,
         noCommitmentsSimulated: true,
         noRealizationsSimulated: true,
@@ -825,7 +861,7 @@
       Array.isArray(options.entries) ? options.entries : []
     );
     var accountFilter = definition.filters.indexOf('accounts') !== -1
-      ? (['forecast', 'orders-followup', 'orders-by-line', 'realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1 && selectedBudget && Array.isArray(options.budgetRegister)
+      ? (['forecast', 'orders-followup', 'orders-by-line', 'realizations-followup', 'realizations-by-line', 'available-balance'].indexOf(definition.kind) !== -1 && selectedBudget && Array.isArray(options.budgetRegister)
         ? budgetAccountFilter(options.accountFilter == null ? '*' : options.accountFilter, selectedBudget.lines)
         : CurrencyBalanceReport.parseAccountFilter(options.accountFilter == null ? '*' : options.accountFilter, accountOptions))
       : CurrencyBalanceReport.parseAccountFilter('*', accountOptions);
@@ -846,6 +882,8 @@
       if (!isIsoDate(asOfDate)) errors.push('Indiquez une date d’arrêté valide.');
       else if (asOfDate < cycleStart || asOfDate > cycleEnd) errors.push('La date d’arrêté doit rester dans le cycle du dossier (' + cycleStart + ' — ' + cycleEnd + ').');
     }
+    var consumptionBasis = String(options.consumptionBasis || 'commitments');
+    if (definition.kind === 'available-balance' && ['commitments', 'realizations'].indexOf(consumptionBasis) === -1) errors.push('Choisissez une base de calcul : engagements ou réalisations comptabilisées.');
     if (Array.isArray(options.sourceErrors) && options.sourceErrors.length) errors.push.apply(errors, options.sourceErrors.map(String));
 
     if (errors.length) return emptyResult(reportId, definition, options, errors, warnings, selectedBudget);
@@ -1010,6 +1048,63 @@
       availabilityReport.basis.noAvailabilityOrExecutionRateSimulated = true;
       availabilityReport.basis.noAccountingMutation = true;
       return availabilityReport;
+    }
+    if (definition.kind === 'available-balance' && Array.isArray(options.budgetRegister)) {
+      if (!Array.isArray(options.supplierOrders)) return emptyResult(reportId, definition, options, ['Le registre des commandes fournisseurs n’est pas chargé.'], warnings, selectedBudget);
+      if (!Array.isArray(options.entries)) return emptyResult(reportId, definition, options, ['Les écritures comptabilisées ne sont pas chargées.'], warnings, selectedBudget);
+      if (!BudgetRealizations || typeof BudgetRealizations.calculate !== 'function') return emptyResult(reportId, definition, options, ['Le calcul des réalisations budgétaires n’est pas chargé.'], warnings, selectedBudget);
+      var balanceAvailability = budgetAvailabilityRows(selectedBudget, options.supplierOrders, options.entries, options.accounts, asOfDate, options.baseCurrencyCode, accountFilter.codes);
+      if (!balanceAvailability.ok) return emptyResult(reportId, definition, options, balanceAvailability.errors || ['Le reste disponible ne peut pas être calculé.'], warnings, selectedBudget);
+      var balanceRows = availableBalanceRows(balanceAvailability, consumptionBasis);
+      if (!balanceAvailability.rows.length) warnings.push('Aucune ligne budgétaire ne correspond au compte sélectionné.');
+      if (balanceRows.some(function (row) { return row.budgetAmount == null; })) warnings.push('Une ou plusieurs lignes budgétaires sont incomplètes ; le budget, son pourcentage et le reste correspondant restent indisponibles.');
+      if (balanceRows.some(function (row) { return row.budgetAmount === 0; })) warnings.push('Le pourcentage du budget n’est pas défini pour une ligne dont le montant budgétaire vaut zéro.');
+      if (options.generalAccounts === false) balanceRows = [];
+      if (balanceAvailability.commitments.unlinkedOrderLineCount) warnings.push(balanceAvailability.commitments.unlinkedOrderLineCount + ' ligne(s) de commande émise(s) sans liaison explicite empêchent de certifier les engagements ; aucun rattachement n’est déduit.');
+      if (balanceAvailability.commitments.staleLinkCount) warnings.push(balanceAvailability.commitments.staleLinkCount + ' liaison(s) explicite(s) de commande pointent vers une ligne budgétaire absente ; elles ne sont pas réattribuées.');
+      if (balanceAvailability.commitments.nonBaseCurrencyLineCount) warnings.push(balanceAvailability.commitments.nonBaseCurrencyLineCount + ' ligne(s) de commande liée(s) en devise autre que ' + balanceAvailability.commitments.baseCurrencyCode + ' ne sont pas converties ; les engagements concernés restent vides.');
+      if (balanceAvailability.commitments.invalidAmountCount) warnings.push(balanceAvailability.commitments.invalidAmountCount + ' montant(s) de commande invalide(s) empêchent de certifier les engagements.');
+      if (balanceAvailability.unallocatedRealizationGroupCount) warnings.push(balanceAvailability.unallocatedRealizationGroupCount + ' groupe(s) de réalisation « À ventiler » empêchent de certifier les montants consommés selon les réalisations ; aucune ventilation n’est inventée.');
+      if (balanceAvailability.unbudgetedRealizationGroupCount) warnings.push(balanceAvailability.unbudgetedRealizationGroupCount + ' groupe(s) analytique(s) sans ligne budgétaire explicite sont signalés, sans réaffectation au budget.');
+      if (balanceAvailability.actuals.noSourceData) warnings.push('Aucune écriture validée ne correspond aux comptes et au périmètre budgétaires ; les réalisations restent vides, sans zéro supposé.');
+      warnings.push('Convention de gestion sélectionnée : « ' + (consumptionBasis === 'commitments' ? 'Engagements émis liés' : 'Réalisations comptabilisées') + ' ». Budget consommé = source choisie ; % consommé = budget consommé ÷ budget enregistré × 100 ; reste disponible = budget enregistré − budget consommé. Le reste n’est pas plafonné et peut être négatif. Les deux sources ne sont pas additionnées ; ce choix ne prétend pas définir une règle comptable ou fiscale officielle.');
+      warnings.push('« Dépenses hors engag. » reste vide : aucune liaison explicite entre écriture comptable et commande ne permet de distinguer les dépenses couvertes. Aucun rapprochement n’est inféré.');
+      if (balanceAvailability.rows.length && options.generalAccounts === false) warnings.push('Aucune ligne de compte général n’a été sélectionnée pour l’impression ; les sources et calculs restent inchangés.');
+      var balanceReport = emptyResult(reportId, definition, options, [], warnings, selectedBudget);
+      balanceReport.cycleStart = cycleStart;
+      balanceReport.cycleEnd = cycleEnd;
+      balanceReport.asOfDate = asOfDate;
+      balanceReport.consumptionBasis = consumptionBasis;
+      balanceReport.consumptionBasisLabel = consumptionBasis === 'commitments' ? 'Engagements émis explicitement liés' : 'Réalisations issues des écritures validées';
+      balanceReport.budgetOptions = availableBudgets.map(function (item) { return Object.assign({}, item); });
+      balanceReport.accountFilter = accountFilter;
+      balanceReport.rows = balanceRows;
+      balanceReport.generatedLineCount = balanceRows.length;
+      balanceReport.dataAvailable = balanceRows.length > 0;
+      balanceReport.lineSelection = { generalAccounts: options.generalAccounts !== false, groupingCodes: false, placeholderLines: Array.isArray(options.placeholderLines) ? options.placeholderLines.map(Boolean).slice(0, 2) : [false, false] };
+      balanceReport.sourceEntryCount = balanceAvailability.sourceEntryCount;
+      balanceReport.matchedSourceLineCount = balanceAvailability.matchedSourceLineCount;
+      balanceReport.sourceOrderLineCount = balanceAvailability.commitments.sourceOrderLineCount;
+      balanceReport.matchedOrderLineCount = balanceAvailability.commitments.matchedOrderLineCount;
+      balanceReport.unlinkedOrderLineCount = balanceAvailability.commitments.unlinkedOrderLineCount;
+      balanceReport.staleLinkCount = balanceAvailability.commitments.staleLinkCount;
+      balanceReport.nonBaseCurrencyLineCount = balanceAvailability.commitments.nonBaseCurrencyLineCount;
+      balanceReport.baseCurrencyCode = balanceAvailability.baseCurrencyCode;
+      balanceReport.realizationMode = balanceAvailability.actuals.realizationMode;
+      balanceReport.axisNatureId = balanceAvailability.actuals.axisNatureId;
+      balanceReport.realizationBasis = String(balanceAvailability.actuals.basis || 'Classement budgétaire et écritures validées.');
+      balanceReport.budgetRegisterAvailable = true;
+      balanceReport.commitmentRegisterAvailable = true;
+      balanceReport.realizationRegisterAvailable = false;
+      balanceReport.basis.budgetRegisterAvailable = true;
+      balanceReport.basis.commitmentRegisterAvailable = true;
+      balanceReport.basis.realizationRegisterAvailable = false;
+      balanceReport.basis.noBudgetAmountsSimulated = false;
+      balanceReport.basis.noCommitmentsSimulated = false;
+      balanceReport.basis.noRealizationsSimulated = false;
+      balanceReport.basis.noAvailabilityOrExecutionRateSimulated = false;
+      balanceReport.basis.noAccountingMutation = true;
+      return balanceReport;
     }
     if (definition.kind === 'forecast' && Array.isArray(options.budgetRegister)) {
       var forecast = forecastRows(selectedBudget, accountFilter.codes, options.accounts, options.analyticNatures, {
