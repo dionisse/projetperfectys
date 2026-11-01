@@ -208,22 +208,22 @@ Générer les bulletins après approbation et suivre le statut de paiement avec 
 
 ### Étape 15 — Registres RH et de paie
 
-Créer les registres consultables et filtrables des employés, contrats, affectations, missions, congés, variables, lots, bulletins, paiements et transferts.
+Créer les registres consultables et filtrables des employés, contrats, affectations, missions, congés, variables, lots, bulletins, paiements et transferts. Les registres en lecture seule, leurs sources, filtres et permissions sont détaillés dans [la fiche de cadrage de l’étape 15](cadrage-paie-rh-etape-15-registres.md).
 **Jalon :** chaque ligne est traçable à son dossier et à sa source ; registres en lecture seule sauf parcours métier dédié.
 
 ### Étape 16 — États et tableaux de suivi
 
-Produire les états RH et de paie confirmés : effectifs, congés, rémunérations, impôts, cotisations et parts employeur, selon les règles validées.
+Produire les états RH et de paie confirmés : effectifs, congés, rémunérations, impôts, cotisations et parts employeur, selon les règles validées. Les définitions, périodes, sources et contrôles des états sont détaillés dans [la fiche de cadrage de l’étape 16](cadrage-paie-rh-etape-16-etats-tableaux-suivi.md).
 **Jalon :** chaque total explique sa période, son périmètre, ses filtres et ses données source ; aucun état ne fabrique de solde.
 
 ### Étape 17 — Éditions, impressions et exports
 
-Concevoir les éditions imprimables ou exportables : bulletins, registres et états ; les formats d’export seront définis avant réalisation.
+Concevoir les éditions imprimables ou exportables : bulletins, registres et états ; les formats d’export seront définis avant réalisation. Le catalogue, la fidélité aux filtres, la sécurité et les décisions de format sont détaillés dans [la fiche de cadrage de l’étape 17](cadrage-paie-rh-etape-17-editions-exports.md).
 **Jalon :** éditions cohérentes avec le filtre et l’état sélectionnés, protégées selon la sensibilité des données.
 
 ### Étape 18 — Centralisation comptable et recette intégrée
 
-Finaliser le menu dédié à la centralisation : association explicite entre dossiers RH et comptable, correspondances validées, aperçu, confirmation, historique et prévention des doublons. Tester le parcours complet avec profils autorisés, jeux fictifs, règles validées et scénarios d’erreur.
+Finaliser le menu dédié à la centralisation : association explicite entre dossiers RH et comptable, correspondances validées, aperçu, confirmation, historique et prévention des doublons. Tester le parcours complet avec profils autorisés, jeux fictifs, règles validées et scénarios d’erreur. Le transfert, les mappings, la traçabilité et la recette sont détaillés dans [la fiche de cadrage de l’étape 18](cadrage-paie-rh-etape-18-centralisation-comptable-recette.md).
 **Jalon :** aucune écriture n’est créée sans lien choisi, correspondances, droits et confirmation ; les corrections comptables restent dans la Comptabilité générale.
 
 ## 7. Points de cadrage restant à valider avant les calculs réels
