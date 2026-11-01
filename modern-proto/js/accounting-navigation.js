@@ -162,7 +162,7 @@
           ]
         },
         { id: 'accounts-payable', label: 'Comptes à payer (analytique)', status: 'active', reason: 'État en lecture seule des mouvements validés sur les comptes explicitement configurés comme « comptes à payer », ventilés par une seule nature analytique choisie dans le dossier. Débits et crédits restent séparés ; sans identifiant auxiliaire source, aucun solde individuel fournisseur n’est attribué. Les commandes ne valent pas dettes comptabilisées.' },
-        { id: 'accounts-receivable', label: 'Comptes à recevoir (analytique)', status: 'inactive', reason: 'Élément fourni comme analytique dans votre nomenclature.' },
+        { id: 'accounts-receivable', label: 'Comptes à recevoir (analytique)', status: 'active', reason: 'État en lecture seule des mouvements validés sur les comptes explicitement configurés comme « comptes à recevoir », ventilés par une seule nature analytique choisie dans le dossier. Débits et crédits restent séparés ; sans identifiant auxiliaire source, aucun solde individuel client n’est attribué. Les documents commerciaux ne sont pas reconstitués comme créances comptabilisées.' },
         {
           id: 'matching', label: 'Lettrage', status: 'active', reason: 'Les trois états disposent chacun de leur sélection, colonnes, mise en page, aperçu plein écran et exports. Les états de lignes lisent les écritures validées du cycle et le registre explicite des lettrages ; les comptes acceptent tout le plan actuel et futur. Le contrôle des anomalies se limite aux règles déjà imposées par le lettrage manuel et reste en lecture seule.',
           children: [

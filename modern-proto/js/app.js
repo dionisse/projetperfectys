@@ -155,6 +155,7 @@
     analyticalSupplierOrders: { dossierId: '', q: '', status: 'all' },
     analyticalSupplierOrdersEdition: { dossierId: '', q: '', status: 'all' },
     analyticalPayablesEdition: { dossierId: '', natureId: '', accountCode: '', journal: '', from: '', to: '', q: '' },
+    analyticalReceivablesEdition: { dossierId: '', natureId: '', accountCode: '', journal: '', from: '', to: '', q: '' },
     budgetRegisterDossierId: '', budgetRegisterQuery: '', budgetRegisterType: 'all',
     openingBalances: { q: '', position: '', sourceDossierId: '', selectedId: '' },
     accountingBridge: { sourceModuleId: 'payroll-hr' },
@@ -25722,6 +25723,113 @@
     });
   }
 
+  function viewAnalyticalReceivablesEdition() {
+    var dossier = S.currentDossier();
+    if (ui.analyticalReceivablesEdition.dossierId !== dossier.id) {
+      ui.analyticalReceivablesEdition = { dossierId: dossier.id, natureId: '', accountCode: '', journal: '', from: dossier.cycleStart || '', to: dossier.cycleEnd || '', q: '' };
+    }
+    var filter = ui.analyticalReceivablesEdition;
+    var cycleStart = String(dossier.cycleStart || '');
+    var cycleEnd = String(dossier.cycleEnd || '');
+    var from = filter.from || cycleStart;
+    var to = filter.to || cycleEnd;
+    var configuredCodes = Array.from(new Set(String(S.accountControlsConfiguration().receivableAccounts || '').split(/[\s,;]+/).map(function (code) { return code.trim(); }).filter(Boolean)));
+    var configuredLookup = Object.create(null);
+    configuredCodes.forEach(function (code) { configuredLookup[code] = true; });
+    var accountRows = S.accounts();
+    var accountsByCode = Object.create(null);
+    accountRows.forEach(function (account) { accountsByCode[String(account.code || '')] = account; });
+    var missingAccounts = configuredCodes.filter(function (code) { return !accountsByCode[code]; });
+    var natures = (S.analyticalNaturesConfiguration().rows || []).filter(function (nature) { return nature && !nature.group; });
+    var nature = natures.find(function (item) { return item.id === filter.natureId; }) || null;
+    var journals = S.journals().filter(function (journal) { return journal && !journal.retired; });
+    var selectedCodes = filter.accountCode && configuredLookup[filter.accountCode] ? [filter.accountCode] : configuredCodes;
+    var report = null;
+    if (nature && selectedCodes.length) {
+      var sourceEntries = S.entries().map(function (entry) {
+        return Object.assign({}, entry, { lines: (Array.isArray(entry.lines) ? entry.lines : []).map(function (line) {
+          var code = String(line && (line.account == null ? line.accountCode || '' : line.account) || '').trim();
+          if (configuredLookup[code] && selectedCodes.indexOf(code) !== -1) return line;
+          return Object.assign({}, line, { debit: 0, credit: 0, analyticSplits: [] });
+        }) });
+      });
+      report = JournalLinesReport.buildAnalyticalMovements({
+        entries: sourceEntries, analyticalCenters: S.analyticalCenters(), analyticalNatures: natures,
+        accounts: accountRows, analyticalDimensionValues: S.analyticalDimensionValuesConfiguration(filter.natureId).rows || [],
+        cycleStart: cycleStart, cycleEnd: cycleEnd, decimalPlaces: S.accountingConfiguration().decimalPlaces,
+        filters: { analyticalNature: filter.natureId, journal: filter.journal, from: from, to: to, search: filter.q }
+      });
+    }
+    var natureOptions = '<option value="">Choisir une nature analytique…</option>' + natures.map(function (item) {
+      return '<option value="' + esc(item.id) + '"' + (item.id === filter.natureId ? ' selected' : '') + '>' + esc(item.individualName || item.genericName || item.id) + '</option>';
+    }).join('');
+    var accountOptions = '<option value="">Tous les comptes à recevoir configurés</option>' + configuredCodes.map(function (code) {
+      var account = accountsByCode[code];
+      return '<option value="' + esc(code) + '"' + (code === filter.accountCode ? ' selected' : '') + '>' + esc(code + (account && account.label ? ' · ' + account.label : ' · absent du plan actuel')) + '</option>';
+    }).join('');
+    var journalOptions = '<option value="">Tous les journaux</option>' + journals.map(function (journal) {
+      return '<option value="' + esc(journal.code) + '"' + (journal.code === filter.journal ? ' selected' : '') + '>' + esc(journal.code + ' · ' + journal.label) + '</option>';
+    }).join('');
+    var filterHtml = '<form class="analytical-receivables-filters" data-analytical-receivables-filters>' +
+      '<label class="field"><span>Nature analytique</span><select name="natureId">' + natureOptions + '</select></label>' +
+      '<label class="field"><span>Compte à recevoir</span><select name="accountCode">' + accountOptions + '</select></label>' +
+      '<label class="field"><span>Journal</span><select name="journal">' + journalOptions + '</select></label>' +
+      '<label class="field"><span>Du</span><input type="date" name="from" value="' + esc(from) + '" min="' + esc(cycleStart) + '" max="' + esc(cycleEnd) + '"></label>' +
+      '<label class="field"><span>Au</span><input type="date" name="to" value="' + esc(to) + '" min="' + esc(cycleStart) + '" max="' + esc(cycleEnd) + '"></label>' +
+      '<label class="field"><span>Rechercher</span><input type="search" name="q" value="' + esc(filter.q) + '" placeholder="Pièce, compte ou valeur analytique"></label>' +
+      '<button type="submit" class="btn btn-ghost">Filtrer</button><button type="button" class="btn btn-ghost" data-analytical-receivables-clear>Réinitialiser</button></form>';
+    var rows = report && !report.errors.length ? report.groups.reduce(function (list, group) { return list.concat(group.rows || []); }, []) : [];
+    var renderedRows = rows.map(function (row) {
+      return '<tr>' + report.columns.map(function (column) {
+        var value = row.cells[column.key];
+        if (column.key === 'debit' || column.key === 'credit') return '<td class="number-cell">' + (Number(value) ? esc(amount(value)) : '') + '</td>';
+        if (column.key === 'status') return '<td><span class="analytic-movement-status' + (value === 'À ventiler' ? ' is-unallocated' : (value === 'Valeur non rapprochée' || value === 'Centre non rapproché' ? ' is-unmatched' : '')) + '">' + esc(value) + '</span></td>';
+        return '<td>' + esc(value == null ? '' : value) + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    var issueNotes = report ? (report.unmatchedCenterCount ? '<div class="alert warning"><strong>' + report.unmatchedCenterCount + ' affectation(s) de centre non rapprochée(s).</strong> Les valeurs restent détaillées et séparées des totaux ventilés.</div>' : '') +
+      (report.unmatchedValueCount ? '<div class="alert warning">' + report.unmatchedValueCount + ' valeur(s) analytiques hors référentiel restent signalées sans correspondance automatique.</div>' : '') : '';
+    var message = '';
+    if (!configuredCodes.length) message = '<div class="alert warning">Aucun compte n’est configuré dans « Comptes à recevoir ». Configurez la liste avant de lancer cet état ; aucun préfixe ni compte n’est présumé. <a href="' + esc(accountingMenuHash('parametres', 'account-controls')) + '">Ouvrir les contrôles de comptes</a>.</div>';
+    else if (!natures.length) message = '<div class="alert warning">Aucune nature analytique n’est configurée dans ce dossier. Cet état n’invente pas d’axe.</div>';
+    else if (!nature) message = '<div class="alert info">Choisissez une nature analytique. Une seule nature est affichée à la fois ; les axes parallèles ne sont pas additionnés.</div>';
+    else if (report && report.errors.length) message = '<div class="alert warning"><strong>Consultation impossible.</strong> ' + report.errors.map(esc).join(' ') + '</div>';
+    else if (report && !report.sourceLineCount) message = '<div class="alert warning">Aucune ventilation analytique validée ne correspond aux filtres et aux comptes configurés. Aucun total nul n’est présenté comme un mouvement.</div>';
+    var missingNote = missingAccounts.length ? '<div class="alert warning">Compte(s) configuré(s) absent(s) du plan actuel : ' + missingAccounts.map(esc).join(', ') + '. Les mouvements éventuels restent filtrés par code exact.</div>' : '';
+    var summary = report && report.sourceLineCount ? '<div class="analytical-receivables-summary"><div><small>Lignes sources avec analytique</small><strong>' + report.sourceLineCount + '</strong></div><div><small>Débits ventilés · XOF</small><strong>' + esc(amount(report.totalDebit)) + '</strong></div><div><small>Crédits ventilés · XOF</small><strong>' + esc(amount(report.totalCredit)) + '</strong></div><div><small>À ventiler · débit / crédit · XOF</small><strong>' + esc(amount(report.unallocatedDebit)) + ' / ' + esc(amount(report.unallocatedCredit)) + '</strong></div></div>' : '';
+    var table = rows.length ? '<div class="table-wrap analytical-receivables-table-wrap"><table class="data-table analytical-receivables-table"><thead><tr>' + report.columns.map(function (column) { return '<th>' + esc(column.label) + '</th>'; }).join('') + '</tr></thead><tbody>' + renderedRows + '</tbody></table></div>' : '';
+    var printContent = '<div class="analytical-receivables-print-context"><strong>Dossier :</strong> ' + esc(dossier.reference) + '<br><strong>Comptes configurés :</strong> ' + esc(selectedCodes.join(', ')) + '<br><strong>Nature analytique choisie :</strong> ' + esc(nature && (nature.individualName || nature.genericName) || '') + '<br><strong>Période :</strong> ' + esc(from) + ' au ' + esc(to) + '</div>' + summary + issueNotes + table;
+    return '<div class="exchange-workspace analytical-receivables-workspace"><div class="alert info"><div><strong>Comptes à recevoir (analytique) · dossier ' + esc(dossier.reference) + '</strong><br>État en lecture seule des seules écritures validées, sur les comptes inscrits dans Paramètres → Comptes à recevoir. Les débits et crédits sont présentés séparément ; la nature analytique doit être choisie. Les documents commerciaux ne remplacent pas les écritures validées comme source de cet état. Sans référence auxiliaire explicite dans les écritures, aucun solde n’est attribué à un client.</div></div>' +
+      (missingAccounts.length ? missingNote : '') + filterHtml + message + issueNotes + summary + table +
+      (rows.length ? '<div class="analytical-receivables-toolbar"><button type="button" class="btn btn-primary" data-analytical-receivables-preview>Aperçu plein écran / imprimer</button></div><div data-analytical-receivables-print hidden>' + printContent + '</div>' : '') +
+      '<p class="exchange-footnote">Cette édition montre des mouvements débit/crédit et les ventilations saisies ; elle ne calcule pas de solde exigible ni de créance par tiers. Les axes restent séparés, les montants « À ventiler » ne sont pas attribués ; l’édition ne modifie ni écritures ni documents commerciaux.</p></div>';
+  }
+
+  function bindAnalyticalReceivablesEdition() {
+    var workspace = $('.analytical-receivables-workspace');
+    if (!workspace) return;
+    var form = $('[data-analytical-receivables-filters]', workspace);
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var data = new FormData(form);
+      ui.analyticalReceivablesEdition = {
+        dossierId: S.currentDossier().id, natureId: String(data.get('natureId') || ''), accountCode: String(data.get('accountCode') || ''),
+        journal: String(data.get('journal') || ''), from: String(data.get('from') || ''), to: String(data.get('to') || ''), q: String(data.get('q') || '')
+      };
+      render();
+    });
+    $('[data-analytical-receivables-clear]', workspace).addEventListener('click', function () {
+      var dossier = S.currentDossier();
+      ui.analyticalReceivablesEdition = { dossierId: dossier.id, natureId: '', accountCode: '', journal: '', from: dossier.cycleStart || '', to: dossier.cycleEnd || '', q: '' };
+      render();
+    });
+    workspace.addEventListener('click', function (event) {
+      if (!event.target.closest('[data-analytical-receivables-preview]')) return;
+      var printRegion = $('[data-analytical-receivables-print]', workspace);
+      if (printRegion) openReportPreview('Comptes à recevoir (analytique)', printRegion.innerHTML);
+    });
+  }
+
   function analyticalSupplierOrderStatusLabel(status) {
     return status === 'issued' ? 'Émise · engagement déclaré' : status === 'cancelled' ? 'Annulée' : 'Brouillon';
   }
@@ -30296,6 +30404,8 @@
       exchangeFeature = viewAnalyticalSupplierOrdersEdition();
     } else if (group.id === 'editions' && tab.id === 'accounts-payable') {
       exchangeFeature = viewAnalyticalPayablesEdition();
+    } else if (group.id === 'editions' && tab.id === 'accounts-receivable') {
+      exchangeFeature = viewAnalyticalReceivablesEdition();
     } else if (group.id === 'declarations' && tab.id === 'vat-difference') {
       exchangeFeature = viewVatDifferenceReport('');
     } else if (group.id === 'declarations' && tab.id === 'vat-payment') {
@@ -31841,6 +31951,7 @@
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'supplier-orders') bindAnalyticalSupplierOrders();
       if (menuParams.g === 'editions' && menuParams.t === 'supplier-orders') bindAnalyticalSupplierOrdersEdition();
       if (menuParams.g === 'editions' && menuParams.t === 'accounts-payable') bindAnalyticalPayablesEdition();
+      if (menuParams.g === 'editions' && menuParams.t === 'accounts-receivable') bindAnalyticalReceivablesEdition();
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'forecast-budgets') bindBudgetRegister();
       return;
     }

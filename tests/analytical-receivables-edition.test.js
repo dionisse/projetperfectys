@@ -1,0 +1,32 @@
+/* Édition Comptes à recevoir (analytique) : navigation active, source comptable explicite et lecture seule. */
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const Navigation = require('../modern-proto/js/accounting-navigation.js');
+const app = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'app.js'), 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'index.html'), 'utf8');
+const worker = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'service-worker.js'), 'utf8');
+const css = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'css', 'modern.css'), 'utf8');
+
+assert.equal(Navigation.getTab('editions', 'accounts-receivable').status, 'active');
+const viewStart = app.indexOf('function viewAnalyticalReceivablesEdition()');
+const viewEnd = app.indexOf('function bindAnalyticalReceivablesEdition()', viewStart);
+assert.ok(viewStart >= 0 && viewEnd > viewStart, 'l’écran et sa liaison doivent être définis');
+const view = app.slice(viewStart, viewEnd);
+assert.match(view, /S\.accountControlsConfiguration\(\)\.receivableAccounts/);
+assert.match(view, /configuredLookup\[code\] = true/);
+assert.match(view, /JournalLinesReport\.buildAnalyticalMovements/);
+assert.match(view, /Choisir une nature analytique/);
+assert.match(view, /une seule nature est affichée à la fois/i);
+assert.match(view, /débits et crédits sont présentés séparément/i);
+assert.match(view, /aucun solde n’est attribué à un client/i);
+assert.match(view, /documents commerciaux ne remplacent pas les écritures validées comme source/i);
+assert.doesNotMatch(view, /S\.save[A-Z]|window\.confirm\(/, 'l’édition ne modifie ni les comptes ni les écritures');
+assert.match(app, /exchangeFeature = viewAnalyticalReceivablesEdition\(\)/);
+assert.match(app, /bindAnalyticalReceivablesEdition\(\)/);
+assert.match(app, /function openReportPreview\(/);
+assert.match(html, /js\/app\.js/);
+assert.match(worker, /perfecto-static-v182/);
+assert.match(css, /\.analytical-receivables-workspace/);
+console.log('Comptes à recevoir analytiques : comptes configurés, une nature choisie, mouvements validés et lecture seule — OK');

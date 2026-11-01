@@ -3929,3 +3929,17 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .analytical-payables-print-context { margin: .5rem 0 1rem; padding: .8rem; border-left: 4px solid #157a68; background: #f2faf7; }
 @media (max-width: 900px) { .analytical-payables-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .analytical-payables-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .analytical-payables-summary, .analytical-payables-filters { grid-template-columns: minmax(0, 1fr); } .analytical-payables-toolbar { justify-content: stretch; } .analytical-payables-toolbar .btn { width: 100%; } }
+.analytical-receivables-workspace { border-top: 5px solid #157a68; }
+.analytical-receivables-filters { display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)); gap: .65rem; align-items: end; margin: 1rem 0; padding: .8rem; border: 1px solid #c8dfd7; border-radius: 10px; background: #f5faf8; }
+.analytical-receivables-summary { display: grid; grid-template-columns: repeat(4, minmax(130px, 1fr)); gap: .7rem; margin: 1rem 0; }
+.analytical-receivables-summary > div { display: flex; flex-direction: column; gap: .35rem; padding: .8rem; border: 1px solid #b8d8ce; border-left: 4px solid #157a68; border-radius: 9px; background: #f2faf7; }
+.analytical-receivables-summary small { color: #526a62; font-weight: 650; }
+.analytical-receivables-summary strong { font-variant-numeric: tabular-nums; }
+.analytical-receivables-table-wrap { overflow-x: auto; }
+.analytical-receivables-table { min-width: 1120px; }
+.analytical-receivables-table th { white-space: nowrap; }
+.analytical-receivables-table .number-cell { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.analytical-receivables-toolbar { display: flex; justify-content: flex-end; margin: .8rem 0; }
+.analytical-receivables-print-context { margin: .5rem 0 1rem; padding: .8rem; border-left: 4px solid #157a68; background: #f2faf7; }
+@media (max-width: 900px) { .analytical-receivables-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .analytical-receivables-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .analytical-receivables-summary, .analytical-receivables-filters { grid-template-columns: minmax(0, 1fr); } .analytical-receivables-toolbar { justify-content: stretch; } .analytical-receivables-toolbar .btn { width: 100%; } }
