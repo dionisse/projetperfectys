@@ -116,6 +116,50 @@ test('les filtres Compte acceptent uniquement les comptes analytiques 93 à 99',
   assert.equal(BudgetReports.definitionFor('budget-available-balance').filters.includes('accounts'), true);
 });
 
+test('le budget prévisionnel restitue les lignes enregistrées sans inventer le pourcentage', () => {
+  const registeredBudget = {
+    id: 'budget-forecast-2025', code: '2025C', year: '2025', type: 'C', label: 'Charges',
+    cycleStart: '2025-01-01', cycleEnd: '2025-12-31', decomposition: 'none', realizationMode: 'debit',
+    classification: 'A1', analyticNatureIds: ['activity-domains'], accountPrefixes: ['6'],
+    lines: [
+      { id: 'line-service-1', accountCode: '601', label: 'Prestations', annualAmount: 1000, amountComplete: true, analyticValues: { 'activity-domains': { valueLabel: 'Services' } } },
+      { id: 'line-service-2', accountCode: '601', label: 'Maintenance', annualAmount: 500, amountComplete: true, analyticValues: { 'activity-domains': { valueLabel: 'Services' } } },
+      { id: 'line-incomplete', accountCode: '602', label: 'Achats à compléter', annualAmount: 0, amountComplete: false, analyticValues: { 'activity-domains': { valueLabel: 'Fournitures' } } }
+    ]
+  };
+  const accounts = [
+    { code: '6', label: 'Charges', postable: false },
+    { code: '60', label: 'Achats', postable: false },
+    { code: '601', label: 'Services', postable: true },
+    { code: '602', label: 'Autres achats', postable: true }
+  ];
+  const report = BudgetReports.buildReport('budget-entered', options({
+    budgetRegister: [registeredBudget], budgetCode: '2025C', accountFilter: '601', accounts,
+    analyticNatures: [{ id: 'activity-domains', individualName: 'Domaine d’activité' }], groupingCodes: true
+  }));
+  assert.equal(report.ok, true, report.errors.join(' '));
+  assert.equal(report.budget.id, registeredBudget.id);
+  assert.equal(report.dataAvailable, true);
+  assert.equal(report.generatedLineCount, 4, 'deux lignes saisies et leurs deux codes de regroupement');
+  assert.deepEqual(report.rows.map(row => [row.accountCode, row.budgetAmount]), [['6', 1500], ['60', 1500], ['601', 1000], ['601', 500]]);
+  assert.match(report.rows[2].accountLabel, /Prestations · Domaine d’activité : Services/);
+  assert.equal(report.rows.every(row => row.shareOfTotal == null), true);
+  assert.equal(report.basis.budgetRegisterAvailable, true);
+  assert.equal(report.basis.noBudgetAmountsSimulated, false);
+  assert.equal(report.basis.accountsLimitedToAnalyticClasses93to99, false);
+  assert.equal(report.basis.noAccountingMutation, true);
+  assert.match(report.warnings.join(' '), /Pourcentage du total.+formule n’est pas définie/);
+
+  const incomplete = BudgetReports.buildReport('budget-entered', options({
+    budgetRegister: [registeredBudget], budgetCode: '2025C', accountFilter: '60*', accounts,
+    groupingCodes: true
+  }));
+  assert.equal(incomplete.generatedLineCount, 5);
+  assert.equal(incomplete.incompleteLineCount, 1);
+  assert.equal(incomplete.rows.find(row => row.accountCode === '602').budgetAmount, null);
+  assert.equal(incomplete.rows.filter(row => row.status === 'incomplete-grouping').length, 2);
+});
+
 test('le suivi des réalisations relie le budget enregistré aux seules écritures validées', () => {
   const registeredBudget = {
     id: 'budget-2025c', code: '2025C', year: '2025', type: 'C', label: 'Charges enregistrées',

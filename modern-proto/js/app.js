@@ -6089,6 +6089,7 @@
       budgetRegister: S.budgetRegisterConfiguration().rows,
       accountFilter: session.filters.accounts,
       accounts: S.accounts(),
+      analyticNatures: S.analyticalNaturesConfiguration().rows,
       entries: S.postedEntries(),
       from: session.filters.from,
       to: session.filters.to,
@@ -6115,7 +6116,10 @@
     }
     if (key === 'accounts') {
       var label = definition.accountLabel || 'Compte';
-      if (definition.kind === 'realizations-followup' || definition.kind === 'realizations-by-line') return '<div class="field"><label for="budget-report-accounts">' + esc(label) + 's budgétés</label><input id="budget-report-accounts" data-budget-report-filter="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou code exact / préfixe*" autocomplete="off" required><span class="hint">Filtre limité aux comptes présents dans les lignes du budget sélectionné. Les comptes sont rapprochés selon le code exact budgété ; « * » sélectionne toutes ses lignes.</span></div>';
+      if (['forecast', 'realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1) {
+        var filterLabel = label === 'Comptes généraux' ? label + ' budgétés' : label + 's budgétés';
+        return '<div class="field"><label for="budget-report-accounts">' + esc(filterLabel) + '</label><input id="budget-report-accounts" data-budget-report-filter="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou code exact / préfixe*" autocomplete="off" required><span class="hint">Filtre limité aux comptes présents dans les lignes du budget sélectionné. Le code est rapproché des lignes enregistrées ; « * » sélectionne toutes les lignes compatibles.</span></div>';
+      }
       return '<div class="field"><label for="budget-report-accounts">' + esc(label) + '</label><div class="journal-lines-picker-control"><input id="budget-report-accounts" data-budget-report-filter="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou 93, 9301*" autocomplete="off" required><button type="button" class="btn btn-ghost" data-budget-report-picker="accounts" aria-label="Choisir les comptes analytiques">…</button></div><span class="hint">« * » sélectionne les comptes des rubriques analytiques 93 à 99 ; un code de rubrique inclut ses sous-comptes.</span></div>';
     }
     if (key === 'asOfDate') {
@@ -6182,9 +6186,11 @@
     var countMarkup = definition.showGeneratedCount
       ? '<div class="budget-report-generated-count" role="status" aria-live="polite">Lignes générées : <strong data-budget-report-line-count>' + esc(report.generatedLineCount || 0) + '</strong></div>'
       : '';
-    var sourceNote = ['realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1
-      ? '<div class="alert info budget-report-source-note"><div><strong>Sources de cet état.</strong> Le budget et son classement proviennent du registre du dossier ; les réalisations sont calculées à partir des seules écritures validées et comptabilisées. Aucun engagement de commande fournisseur n’est transformé en réalisation.' + (definition.kind === 'realizations-followup' ? ' Les colonnes N-1 restent indisponibles dans cette étape.' : ' Les allocations analytiques n’apparaissent que lorsqu’elles sont explicitement enregistrées sur la ligne source.') + '</div></div>'
-      : '<div class="alert info budget-report-source-note"><div><strong>Lecture seule.</strong> Les autres états attendent le raccordement de leurs registres de budgets, commandes ou réalisations ; aucun montant n’est simulé. Leurs filtres de compte restent limités aux rubriques analytiques 93 à 99.</div></div>';
+    var sourceNote = definition.kind === 'forecast'
+      ? '<div class="alert info budget-report-source-note"><div><strong>Source de cet état.</strong> Les lignes et montants annuels viennent du budget enregistré dans le registre du dossier. Les lignes incomplètes restent sans montant ; le pourcentage du total n’est pas calculé, car sa formule n’est pas définie.</div></div>'
+      : ['realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1
+        ? '<div class="alert info budget-report-source-note"><div><strong>Sources de cet état.</strong> Le budget et son classement proviennent du registre du dossier ; les réalisations sont calculées à partir des seules écritures validées et comptabilisées. Aucun engagement de commande fournisseur n’est transformé en réalisation.' + (definition.kind === 'realizations-followup' ? ' Les colonnes N-1 restent indisponibles dans cette étape.' : ' Les allocations analytiques n’apparaissent que lorsqu’elles sont explicitement enregistrées sur la ligne source.') + '</div></div>'
+        : '<div class="alert info budget-report-source-note"><div><strong>Lecture seule.</strong> Les autres états attendent le raccordement de leurs registres de commandes ou de réalisations ; aucun montant n’est simulé. Leurs filtres de compte restent limités aux rubriques analytiques 93 à 99.</div></div>';
     var criteria = ['le budget'];
     if (definition.filters.indexOf('accounts') !== -1) criteria.push('les comptes');
     if (definition.filters.indexOf('from') !== -1) criteria.push('la période');
@@ -6244,7 +6250,7 @@
     var styleClass = session.layout.style === 'color10' ? 'budget-report-style-color' : 'budget-report-style-plain';
     var decimals = Number(S.accountingConfiguration().decimalPlaces) || 0;
     var formatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-    var reportRows = ['realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1 ? (report.rows || []).map(function (row) {
+    var reportRows = ['forecast', 'realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1 ? (report.rows || []).map(function (row) {
       return '<tr class="' + (row.status && row.status !== 'budgeted' ? 'budget-realization-special-row' : '') + '"><td>' + esc(report.budget && report.budget.code || '') + '</td>' + columns.map(function (column) {
         var value = row[column.key];
         var text = value == null || !Number.isFinite(Number(value)) && !column.text ? '—' : (column.text ? String(value == null ? '' : value) : formatter.format(Number(value)));
@@ -6254,17 +6260,23 @@
     var tableBody = reportRows
       ? '<tbody>' + reportRows + '</tbody>'
       : '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune ligne générée</strong>Le dossier ne fournit aucune source enregistrée pour cet état.</div></td></tr></tbody>';
+    if (definition.kind === 'forecast' && !reportRows) tableBody = '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune ligne budgétaire correspondante</strong>Le budget enregistré ne contient aucune ligne compatible avec les comptes sélectionnés.</div></td></tr></tbody>';
     if (definition.kind === 'realizations-followup' && !reportRows) tableBody = '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune ligne générée</strong>Le budget sélectionné ne comporte pas de ligne compatible avec le filtre.</div></td></tr></tbody>';
     if (definition.kind === 'realizations-by-line' && !reportRows) tableBody = '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune ligne comptabilisée correspondante</strong>Aucun mouvement validé ne correspond aux comptes et à la période sélectionnés.</div></td></tr></tbody>';
+    var isForecastReport = definition.kind === 'forecast';
     var isRealizationReport = ['realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1;
-    var sourceLabel = isRealizationReport
-      ? 'Comptes et classement issus du budget enregistré · source : écritures comptabilisées'
-      : 'Comptes analytiques 93 à 99';
+    var sourceLabel = isForecastReport
+      ? 'Lignes et montants issus du registre de budget enregistré'
+      : isRealizationReport
+        ? 'Comptes et classement issus du budget enregistré · source : écritures comptabilisées'
+        : 'Comptes analytiques 93 à 99';
     var realizationNature = report.axisNatureId && (S.analyticalNaturesConfiguration().rows || []).find(function (nature) { return nature && nature.id === report.axisNatureId; });
     var realizationBasisLabel = String(report.realizationBasis || '') + (realizationNature ? ' Nature : ' + (realizationNature.individualName || realizationNature.genericName || realizationNature.id) + '.' : '');
-    var basis = isRealizationReport && report.realizationBasis
-      ? '<p class="budget-report-source-note">' + (definition.kind === 'realizations-followup' ? 'Base de réalisation : ' + esc(budgetRealizationModeLabel(report.realizationMode)) + ' · ' : 'Détail des mouvements bruts · base de réalisation du budget : ' + esc(budgetRealizationModeLabel(report.realizationMode)) + ' · ') + esc(realizationBasisLabel) + (report.sourceEntryCount != null ? ' · ' + esc(String(report.sourceEntryCount)) + ' écriture(s) · ' + esc(String(report.matchedSourceLineCount)) + ' ligne(s) comptable(s) correspondante(s)' : '') + '</p>'
-      : '';
+    var basis = isForecastReport && report.budgetRegisterAvailable
+      ? '<p class="budget-report-source-note">Lignes sources du registre · montant annuel affiché uniquement si la ligne est complète · pourcentage du total non calculé, formule non définie</p>'
+      : isRealizationReport && report.realizationBasis
+        ? '<p class="budget-report-source-note">' + (definition.kind === 'realizations-followup' ? 'Base de réalisation : ' + esc(budgetRealizationModeLabel(report.realizationMode)) + ' · ' : 'Détail des mouvements bruts · base de réalisation du budget : ' + esc(budgetRealizationModeLabel(report.realizationMode)) + ' · ') + esc(realizationBasisLabel) + (report.sourceEntryCount != null ? ' · ' + esc(String(report.sourceEntryCount)) + ' écriture(s) · ' + esc(String(report.matchedSourceLineCount)) + ' ligne(s) comptable(s) correspondante(s)' : '') + '</p>'
+        : '';
     return '<article class="budget-report-print ' + styleClass + '"><header class="budget-report-print-heading"><p class="page-kicker">ÉDITIONS · BUDGET</p><h2>' + esc(definition.title) + '</h2><p>' + esc(report.budget && (report.budget.label || report.budget.code) || '') + ' · ' + period + ' · ' + sourceLabel + '</p>' + basis + '</header>' +
       budgetReportWarningsHtml(report) + '<div class="budget-report-table-wrap"><table class="budget-report-table"><thead>' + tableHeader + '</thead>' + tableBody + '</table></div>' +
       '<p class="budget-report-print-note">État en lecture seule. Aucune commande fournisseur ne constitue une réalisation comptable ; les écritures sources restent inchangées.</p></article>';
@@ -6273,7 +6285,7 @@
   function budgetReportExportMatrix(session, report, definition) {
     var columns = budgetReportSelectedColumns(session, definition);
     var headers = ['Budget'].concat(columns.map(function (column) { return column.label; }));
-    var rows = ['realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1 ? (report.rows || []).map(function (row) {
+    var rows = ['forecast', 'realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1 ? (report.rows || []).map(function (row) {
       return [report.budget && report.budget.code || ''].concat(columns.map(function (column) {
         var value = row[column.key];
         return value == null || !Number.isFinite(Number(value)) && !column.text ? '—' : (column.text ? String(value == null ? '' : value) : Number(value));
