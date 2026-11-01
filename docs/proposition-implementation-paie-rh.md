@@ -173,7 +173,7 @@ Gérer le licenciement et toute autre raison de sortie : motif, date d’effet, 
 
 ### Étape 8 — Affectations et missions
 
-Gérer les affectations datées à une unité, fonction, lieu et responsable, ainsi que les missions opérationnelles et, si retenu, déplacements professionnels.
+Gérer les affectations datées à une unité, fonction, lieu et responsable, ainsi que les missions opérationnelles et, si retenu, déplacements professionnels. Les historiques, liens aux dossiers RH, contrôles et règles de distinction sont détaillés dans [la fiche de cadrage de l’étape 8](cadrage-paie-rh-etape-8-affectations-missions.md).
 **Jalon :** historique consultable ; les remboursements et indemnités de mission restent inactifs tant que leurs règles ne sont pas validées.
 
 ### Étape 9 — Congés et absences
