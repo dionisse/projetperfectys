@@ -482,8 +482,8 @@
       case 'open-account-movement-month-detail':
       case 'open-account-movement-cycle-detail':
       case 'select-third-party-movement-record':
-      case 'open-third-party-collective-month-detail':
-      case 'open-third-party-collective-cycle-detail':
+      case 'open-third-party-individual-month-detail':
+      case 'open-third-party-individual-cycle-detail':
         return { moduleId: 'accounting', actionId: 'module.view' };
       case 'open-entry':
         return { moduleId: 'accounting', actionId: 'module.view' };
@@ -24003,6 +24003,8 @@
         records.push({
           id: String(type) + ':' + String(record.id || code),
           type: type,
+          thirdPartyType: type === 'Tiers divers' ? String(record.type || '') : ({ Fournisseur: 'supplier', Client: 'client', Personnel: 'personnel' }[type] || ''),
+          thirdPartyId: String(record.id || ''),
           code: code,
           auxiliaryAccountCode: record.auxiliaryAccountCode || '',
           accountCode: String(record.accountCode),
@@ -24286,23 +24288,26 @@
       periods.find(function (period) { return period.key === todayKey; }) ||
       periods.find(function (period) { return period.posted > 0; }) || periods[0] || null;
     ui.thirdPartyMovements.month = selectedMonth ? selectedMonth.key : '';
-    var collectiveNode = selected && selected.generalAccountCode ? {
-      id: 'account:' + selected.generalAccountCode,
-      kind: 'account',
-      code: selected.generalAccountCode,
-      label: (S.account(selected.generalAccountCode) || {}).label || 'Compte collectif',
-      accountCodes: [selected.generalAccountCode]
+    var auxiliaryNode = selected && selected.generalAccountCode ? {
+      id: 'auxiliary:' + selected.kind + ':' + selected.recordId,
+      kind: 'auxiliary',
+      code: selected.auxiliaryCode,
+      label: selected.name,
+      accountCode: selected.generalAccountCode,
+      thirdPartyType: selected.kind,
+      thirdPartyId: selected.recordId,
+      accountCodes: []
     } : null;
     var cycleEntries = S.entries();
     var postedEntries = S.postedEntries();
-    var summary = AccountMovements.monthlySummary(collectiveNode, cycleEntries, periods, dossier.cycleStart, dossier.cycleEnd);
+    var summary = AccountMovements.monthlySummary(auxiliaryNode, cycleEntries, periods, dossier.cycleStart, dossier.cycleEnd);
     return {
       dossier: dossier,
       visibleRecords: visibleRecords,
       selected: selected,
       periods: periods,
       selectedMonth: selectedMonth,
-      collectiveNode: collectiveNode,
+      auxiliaryNode: auxiliaryNode,
       summary: summary,
       accounts: S.accounts(),
       postedEntries: postedEntries
@@ -24345,17 +24350,19 @@
       '</strong>Créez ou gérez les fiches depuis les boutons ci-dessus.</div></td></tr>';
     var monthRows = context.periods.map(function (period) { return renderThirdPartyMovementMonthRow(period, summary, context.selectedMonth); }).join('');
     var totalRow = !selected
-      ? '<tr class="account-movement-total-row"><th colspan="4">Sélectionnez une fiche pour afficher le compte collectif.</th></tr>'
+      ? '<tr class="account-movement-total-row"><th colspan="4">Sélectionnez une fiche pour afficher ses mouvements explicites.</th></tr>'
       : (summary.available
-        ? '<tr class="account-movement-total-row"><th colspan="2">Compte collectif · ' + esc(amount(summary.totalLines)) + ' ligne(s)</th><td class="num">' + esc(amount(summary.debit)) + '</td><td class="num">' + esc(amount(summary.credit)) + '</td></tr>'
-        : '<tr class="account-movement-total-row"><th colspan="4">Synthèse du compte collectif indisponible</th></tr>');
+        ? '<tr class="account-movement-total-row"><th colspan="2">Fiche auxiliaire · ' + esc(amount(summary.totalLines)) + ' ligne(s)</th><td class="num">' + esc(amount(summary.debit)) + '</td><td class="num">' + esc(amount(summary.credit)) + '</td></tr>'
+        : '<tr class="account-movement-total-row"><th colspan="4">Mouvements individuels indisponibles</th></tr>');
     var title = selected ? selected.typeLabel + ' · ' + selected.name : 'Aucune fiche sélectionnée';
-    var collectiveLabel = selected ? 'Compte collectif ' + selected.generalAccountCode : 'Compte collectif non sélectionné';
+    var auxiliaryLabel = selected ? 'Fiche auxiliaire ' + selected.code + ' · compte collectif ' + selected.generalAccountCode : 'Fiche auxiliaire non sélectionnée';
     var detailDisabled = !selected || !summary.available;
     var directoryTab = selected ? selected.definitionTab : 'suppliers';
-    var individualNote = '<div class="alert warning third-party-individual-note"><strong>Mouvements individuels non disponibles.</strong> Les pièces comptables ne contiennent pas encore l’identifiant de la fiche sélectionnée. Le tableau mensuel ci-contre présente uniquement les mouvements agrégés du compte général collectif ' +
-      (selected ? '<strong>' + esc(selected.generalAccountCode) + '</strong>, toutes fiches confondues' : 'du dossier') +
-      ' ; il ne constitue pas le solde de ce fournisseur, client, membre du personnel ou tiers divers.</div>';
+    var individualNote = selected
+      ? '<div class="alert info third-party-individual-note"><strong>Attribution par référence explicite.</strong> Seules les lignes validées portant l’identifiant de cette fiche et son compte collectif exact sont incluses. Les lignes du collectif sans identifiant restent non attribuées' +
+        (summary.available && summary.unattributedLineCount ? ' (' + esc(amount(summary.unattributedLineCount)) + ' ligne(s) dans le cycle)' : '') +
+        '. Le cumul ci-dessous porte sur les mouvements du cycle uniquement ; aucun report d’ouverture n’est ajouté.</div>'
+      : '<div class="alert info third-party-individual-note"><strong>Choisissez une fiche auxiliaire.</strong> Les mouvements individuels seront établis uniquement à partir de références explicites conservées sur les lignes validées.</div>';
     return '<div class="account-movements-feature third-party-movements-feature">' +
       '<div class="account-movements-title"><p class="page-kicker">SAISIE · TIERS DU DOSSIER</p><h4>Mouvements des comptes tiers</h4></div>' +
       individualNote +
@@ -24368,39 +24375,39 @@
         '<section class="account-movements-pane" aria-labelledby="third-party-tree-title"><div class="account-movements-pane-head"><div><p class="page-kicker">FICHES AUXILIAIRES · ' + esc(context.dossier.reference || '') + '</p><h4 id="third-party-tree-title">Fournisseurs, clients, personnel et autres tiers</h4></div><span class="account-movement-count">' + esc(String(context.visibleRecords.length)) + ' fiche(s)</span></div>' +
           '<div class="table-wrap account-movement-tree-wrap third-party-movement-tree-wrap"><table class="account-movement-table third-party-movement-table"><thead><tr><th>Type / code auxiliaire</th><th>Intitulé</th><th>Compte collectif</th><th>Fiche</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
         '</section>' +
-        '<section class="account-movements-pane" aria-labelledby="third-party-month-title"><div class="account-movements-pane-head"><div><p class="page-kicker">SYNTHÈSE MENSUELLE · EXERCICE ' + esc(String(S.exercise())) + '</p><small class="account-movement-cycle-range">Cycle du dossier · ' + esc(dateLabel(context.dossier.cycleStart)) + ' — ' + esc(dateLabel(context.dossier.cycleEnd)) + '</small><h4 id="third-party-month-title">' + esc(collectiveLabel) + '</h4><small class="account-movement-cycle-range">' + esc(title) + ' · données du collectif uniquement</small></div>' + (context.selectedMonth ? accountMovementPeriodStatus(context.selectedMonth.status) : '') + '</div>' +
+        '<section class="account-movements-pane" aria-labelledby="third-party-month-title"><div class="account-movements-pane-head"><div><p class="page-kicker">MOUVEMENTS INDIVIDUELS · EXERCICE ' + esc(String(S.exercise())) + '</p><small class="account-movement-cycle-range">Cycle du dossier · ' + esc(dateLabel(context.dossier.cycleStart)) + ' — ' + esc(dateLabel(context.dossier.cycleEnd)) + '</small><h4 id="third-party-month-title">' + esc(auxiliaryLabel) + '</h4><small class="account-movement-cycle-range">' + esc(title) + ' · lignes liées par identifiant tiers</small></div>' + (context.selectedMonth ? accountMovementPeriodStatus(context.selectedMonth.status) : '') + '</div>' +
           '<div class="table-wrap account-movement-month-wrap"><table class="account-movement-table account-movement-month-table"><thead><tr><th>Mois</th><th class="num">Lignes</th><th class="num">Débit</th><th class="num">Crédit</th></tr></thead><tbody>' + monthRows + '</tbody><tfoot>' + totalRow + '</tfoot></table></div>' +
-          '<div class="account-movement-closing-summary"><span>Solde net du compte collectif</span><strong>' + esc(selected && summary.available ? accountMovementBalanceText(summary.closingBalance) : '—') + (selected && summary.available ? ' <small>XOF</small>' : '') + '</strong></div>' +
-          '<p class="small muted account-movement-draft-note">' + (summary.available && summary.totalDrafts ? esc(amount(summary.totalDrafts)) + ' pièce(s) en brouillon exclue(s). ' : '') + 'Les lignes restent agrégées au compte général ; aucun solde individuel n’est calculé.</p>' +
+          '<div class="account-movement-closing-summary"><span>Cumul net des mouvements liés (débit − crédit)</span><strong>' + esc(selected && summary.available ? accountMovementBalanceText(summary.closingBalance) : '—') + (selected && summary.available ? ' <small>XOF</small>' : '') + '</strong></div>' +
+          '<p class="small muted account-movement-draft-note">' + (summary.available && summary.totalDrafts ? esc(amount(summary.totalDrafts)) + ' pièce(s) en brouillon exclue(s). ' : '') + 'Ce cumul ne comprend pas de report d’ouverture et ne représente pas un solde d’ouverture ou de clôture du tiers.</p>' +
         '</section>' +
       '</div>' +
-      '<div class="account-movement-actions"><button type="button" class="btn btn-ghost" data-action="open-third-party-collective-month-detail"' + (detailDisabled ? ' disabled' : '') + '>Détail du mois · collectif…</button><button type="button" class="btn btn-ghost" data-action="open-third-party-collective-cycle-detail"' + (detailDisabled ? ' disabled' : '') + '>Détail de l’exercice · collectif…</button><a class="btn btn-ghost" href="' + esc(accountingMenuHash('definitions', directoryTab)) + '">Gérer le répertoire</a><a class="btn btn-primary" href="#/periods" title="La clôture reste rattachée aux périodes comptables">Clôture</a></div>' +
+      '<div class="account-movement-actions"><button type="button" class="btn btn-ghost" data-action="open-third-party-individual-month-detail"' + (detailDisabled ? ' disabled' : '') + '>Détail du mois · tiers</button><button type="button" class="btn btn-ghost" data-action="open-third-party-individual-cycle-detail"' + (detailDisabled ? ' disabled' : '') + '>Détail du cycle · tiers</button><a class="btn btn-ghost" href="' + esc(accountingMenuHash('definitions', directoryTab)) + '">Gérer le répertoire</a><a class="btn btn-primary" href="#/periods" title="La clôture reste rattachée aux périodes comptables">Clôture</a></div>' +
       '<p class="small muted account-movement-period-note">La clôture s’effectue par période comptable. Les fiches tiers n’ont pas de statut de clôture individuel.</p>' +
     '</div>';
   }
 
-  function openThirdPartyCollectiveDetail(scope) {
+  function openThirdPartyIndividualDetail(scope) {
     var context = getThirdPartyMovementsContext();
     var selected = context.selected;
-    if (!selected || !context.collectiveNode) {
-      toast('Sélectionnez une fiche tierce rattachée à un compte collectif.', 'warning');
+    if (!selected || !context.auxiliaryNode) {
+      toast('Sélectionnez une fiche auxiliaire pour afficher ses mouvements.', 'warning');
       return;
     }
     var month = context.selectedMonth;
     var monthKey = scope === 'month' && month ? month.key : '';
-    var detail = AccountMovements.detailRows(context.collectiveNode, context.postedEntries, context.accounts, context.dossier.cycleStart, context.dossier.cycleEnd, monthKey);
-    var title = scope === 'month' ? 'Détail du mois — ' + accountMovementMonthLabel(month) : 'Détail de l’exercice — ' + String(S.exercise());
-    var subtitle = esc('Compte collectif ' + selected.generalAccountCode + ' · ' + selected.typeLabel + ' : ' + selected.name);
-    var warning = '<div class="alert warning"><strong>Détail agrégé du compte collectif.</strong> Ces lignes peuvent concerner plusieurs fiches. Elles ne sont pas attribuées individuellement à « ' + esc(selected.name) + ' ».</div>';
+    var detail = AccountMovements.detailRows(context.auxiliaryNode, context.postedEntries, context.accounts, context.dossier.cycleStart, context.dossier.cycleEnd, monthKey);
+    var title = scope === 'month' ? 'Détail du mois — ' + accountMovementMonthLabel(month) : 'Détail du cycle — ' + String(S.exercise());
+    var subtitle = esc(selected.typeLabel + ' · ' + selected.name + ' · ' + selected.auxiliaryCode);
+    var warning = '<div class="alert info"><strong>Source auxiliaire explicite.</strong> Seules les lignes validées liées à cette fiche et à son compte collectif exact sont affichées. Les autres lignes du collectif ainsi que les reports d’ouverture sont exclus.</div>';
     var body;
     if (!detail.rows.length) {
-      body = warning + '<div class="empty-state"><div class="empty-icon">⌕</div><strong>Aucune ligne validée</strong>Aucun mouvement du compte collectif ne correspond à cette période.</div>';
+      body = warning + '<div class="empty-state"><div class="empty-icon">⌕</div><strong>Aucun mouvement individuel validé</strong>Aucune ligne ne porte actuellement la référence explicite de cette fiche sur la période demandée.</div>';
     } else {
       var detailRowsHtml = detail.rows.map(function (row) {
         return '<tr><td class="nowrap">' + esc(dateLabel(row.date)) + '</td><td><strong>' + esc(row.reference || '—') + '</strong></td><td>' + esc(row.journal || '—') + '</td><td>' + esc(row.account + ' · ' + row.accountLabel) + '</td><td>' + esc(row.description || '—') + '</td><td class="num">' + esc(amount(row.debit)) + '</td><td class="num">' + esc(amount(row.credit)) + '</td></tr>';
       }).join('');
-      body = warning + '<p class="small muted">Pièces validées uniquement · ' + esc(String(detail.rows.length)) + ' ligne(s).</p>' +
-        '<div class="table-wrap account-movement-detail-wrap"><table class="account-movement-table account-movement-detail-table"><thead><tr><th>Date</th><th>Référence</th><th>Journal</th><th>Compte</th><th>Libellé</th><th class="num">Débit</th><th class="num">Crédit</th></tr></thead><tbody>' + detailRowsHtml + '</tbody><tfoot><tr><th colspan="5">Totaux du compte collectif</th><td class="num">' + esc(amount(detail.debit)) + '</td><td class="num">' + esc(amount(detail.credit)) + '</td></tr></tfoot></table></div>';
+      body = warning + '<p class="small muted">Pièces validées uniquement · ' + esc(String(detail.rows.length)) + ' ligne(s) explicitement liées.</p>' +
+        '<div class="table-wrap account-movement-detail-wrap"><table class="account-movement-table account-movement-detail-table"><thead><tr><th>Date</th><th>Référence</th><th>Journal</th><th>Compte collectif</th><th>Libellé</th><th class="num">Débit</th><th class="num">Crédit</th></tr></thead><tbody>' + detailRowsHtml + '</tbody><tfoot><tr><th colspan="5">Totaux des lignes liées</th><td class="num">' + esc(amount(detail.debit)) + '</td><td class="num">' + esc(amount(detail.credit)) + '</td></tr></tfoot></table></div>';
     }
     openModal(title, subtitle, body, '<button type="button" class="btn btn-primary" data-action="close-modal">Fermer</button>', true);
   }
@@ -32663,11 +32670,11 @@
         render();
         break;
       }
-      case 'open-third-party-collective-month-detail':
-        openThirdPartyCollectiveDetail('month');
+      case 'open-third-party-individual-month-detail':
+        openThirdPartyIndividualDetail('month');
         break;
-      case 'open-third-party-collective-cycle-detail':
-        openThirdPartyCollectiveDetail('cycle');
+      case 'open-third-party-individual-cycle-detail':
+        openThirdPartyIndividualDetail('cycle');
         break;
       case 'open-account-movement-month-detail':
         openAccountMovementDetail('month');

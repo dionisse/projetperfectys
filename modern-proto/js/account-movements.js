@@ -1,7 +1,7 @@
 /*
  * PERFECTO · Arbre et relevés mensuels des comptes.
- * Les mouvements auxiliaires restent distincts tant que les pièces ne portent
- * pas encore d'identifiant auxiliaire ; aucun mouvement n'est imputé par supposition.
+ * Les mouvements auxiliaires ne sont rattachés qu’à partir de l’identifiant
+ * explicite de tiers conservé sur chaque ligne validée.
  */
 (function (root) {
   'use strict';
@@ -99,6 +99,8 @@
         depth: 3,
         accountCode: String(record.accountCode),
         auxiliaryType: type,
+        thirdPartyType: String(record.thirdPartyType || ''),
+        thirdPartyId: String(record.thirdPartyId || ''),
         active: record.active !== false,
         accountCodes: [],
         hasAuxiliaries: false,
@@ -193,31 +195,61 @@
     var byMonth = Object.create(null);
     rows.forEach(function (row) { byMonth[row.key] = row; });
     if (!node) return { available: false, reason: 'Aucun compte sélectionné.', months: rows, totalLines: 0, totalDrafts: 0, debit: 0, credit: 0, closingBalance: 0 };
-    if (node.kind === 'auxiliary') return {
+    if (node.kind === 'auxiliary' && (!node.thirdPartyId || !node.thirdPartyType || !node.accountCode)) return {
       available: false,
-      reason: 'Les pièces actuelles enregistrent le compte général, mais ne portent pas encore l’identifiant de l’auxiliaire. Aucun mouvement ni solde ne lui est attribué.',
+      reason: 'La fiche ne possède pas de référence source complète ; aucun mouvement individuel ne lui est attribué.',
       months: rows,
       totalLines: null,
       totalDrafts: null,
       debit: null,
       credit: null,
-      closingBalance: null
+      closingBalance: null,
+      unattributedLineCount: null
     };
 
     var targetCodes = node.accountCodes || [];
     var codeSet = Object.create(null);
     targetCodes.forEach(function (code) { codeSet[String(code)] = true; });
+    var unattributedLineCount = 0;
     (entries || []).forEach(function (entry) {
       var date = String(entry && entry.date || '');
       if (!entry || !date || date < cycleStart || date > cycleEnd) return;
       var month = byMonth[date.slice(0, 7)];
       if (!month) return;
+      var lines = Array.isArray(entry.lines) ? entry.lines : [];
+      if (node.kind === 'auxiliary') {
+        var partyLines = lines.filter(function (line) {
+          return String(line && line.account || '') === String(node.accountCode) &&
+            String(line && line.thirdPartyId || '') === String(node.thirdPartyId) &&
+            String(line && line.thirdPartyType || '') === String(node.thirdPartyType);
+        });
+        if (entry.status === 'draft') {
+          if (partyLines.length) month.drafts += 1;
+          return;
+        }
+        if (entry.status !== 'posted') return;
+        lines.forEach(function (line) {
+          if (String(line && line.account || '') !== String(node.accountCode)) return;
+          var debit = Number(line.debit) || 0;
+          var credit = Number(line.credit) || 0;
+          if (!debit && !credit) return;
+          if (!String(line.thirdPartyId || '').trim()) {
+            unattributedLineCount += 1;
+            return;
+          }
+          if (String(line.thirdPartyId) !== String(node.thirdPartyId) || String(line.thirdPartyType || '') !== String(node.thirdPartyType)) return;
+          month.lines += 1;
+          month.debit += debit;
+          month.credit += credit;
+        });
+        return;
+      }
       if (entry.status === 'draft') {
-        if ((entry.lines || []).some(function (line) { return !!codeSet[String(line.account)]; })) month.drafts += 1;
+        if (lines.some(function (line) { return !!codeSet[String(line.account)]; })) month.drafts += 1;
         return;
       }
       if (entry.status !== 'posted') return;
-      (entry.lines || []).forEach(function (line) {
+      lines.forEach(function (line) {
         if (!codeSet[String(line.account)]) return;
         var debit = Number(line.debit) || 0;
         var credit = Number(line.credit) || 0;
@@ -249,15 +281,16 @@
       totalDrafts: draftTotal,
       debit: debitTotal,
       credit: creditTotal,
-      closingBalance: debitTotal - creditTotal
+      closingBalance: debitTotal - creditTotal,
+      unattributedLineCount: node.kind === 'auxiliary' ? unattributedLineCount : 0
     };
   }
 
   function detailRows(node, entries, accounts, cycleStart, cycleEnd, monthKey) {
     if (!node) return { available: false, reason: 'Aucun compte sélectionné.', rows: [], debit: 0, credit: 0 };
-    if (node.kind === 'auxiliary') return {
+    if (node.kind === 'auxiliary' && (!node.thirdPartyId || !node.thirdPartyType || !node.accountCode)) return {
       available: false,
-      reason: 'Aucun mouvement auxiliaire ne peut être affiché : les écritures actuelles ne portent pas d’identifiant de tiers.',
+      reason: 'La fiche ne possède pas de référence source complète ; aucun mouvement individuel ne lui est attribué.',
       rows: [],
       debit: null,
       credit: null
@@ -272,7 +305,10 @@
       if (!entry || entry.status !== 'posted' || date < cycleStart || date > cycleEnd || (monthKey && date.slice(0, 7) !== monthKey)) return;
       (entry.lines || []).forEach(function (line) {
         var code = String(line.account || '');
-        if (!codeSet[code]) return;
+        if (node.kind === 'auxiliary') {
+          if (code !== String(node.accountCode) || String(line.thirdPartyId || '') !== String(node.thirdPartyId) ||
+              String(line.thirdPartyType || '') !== String(node.thirdPartyType)) return;
+        } else if (!codeSet[code]) return;
         var debit = Number(line.debit) || 0;
         var credit = Number(line.credit) || 0;
         if (!debit && !credit) return;
@@ -283,6 +319,9 @@
           description: String(entry.description || ''),
           account: code,
           accountLabel: labels[code] || code,
+          thirdPartyId: String(line.thirdPartyId || ''),
+          thirdPartyType: String(line.thirdPartyType || ''),
+          thirdPartyCode: String(line.thirdPartyCode || ''),
           debit: debit,
           credit: credit
         });
