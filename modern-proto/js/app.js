@@ -20085,7 +20085,7 @@
         '<h3>' + esc(folder.clientName) + '</h3>' +
         '<p class="payroll-dossier-meta">Code client ' + esc(folder.clientCode) + ' · exercice ' + esc(folder.exerciseYear) + '</p>' +
         '<p class="payroll-dossier-meta">Cycle : ' + esc(dateLabel(folder.cycleStart)) + ' au ' + esc(dateLabel(folder.cycleEnd)) + '</p>' +
-        (Array.isArray(folder.demoEmployees) && folder.demoEmployees.length ? '<p class="payroll-dossier-meta">Jeu de test : ' + folder.demoEmployees.length + ' employés fictifs</p>' : '') +
+        (PayrollHR.employees(folder.id).length ? '<p class="payroll-dossier-meta">' + PayrollHR.employees(folder.id).length + ' employés fictifs liés à ce dossier client</p>' : '') +
         '<p class="payroll-dossier-link-note">' + esc(linkedLabel) + '</p>' +
         '<button type="button" class="btn btn-primary" data-action="open-payroll-dossier" data-id="' + esc(folder.id) + '">Ouvrir ce dossier RH <span aria-hidden="true">→</span></button>' +
       '</article>';
@@ -20203,7 +20203,8 @@
     var runs = PayrollHR.runs(dossier.id);
     var firstPeriod = PayrollHR.periodForDate(dossier.cycleStart);
     var lastPeriod = PayrollHR.periodForDate(dossier.cycleEnd);
-    var hasTestEmployeeRoster = Array.isArray(dossier.demoEmployees) && dossier.demoEmployees.length > 0;
+    var dossierEmployees = PayrollHR.employees(dossier.id);
+    var hasTestEmployeeRoster = dossierEmployees.length > 0;
     var rows = runs.map(function (run) {
       var linkedEntry = payrollEntryForRun(run, dossier.id);
       var status = linkedEntry
@@ -20235,7 +20236,7 @@
       pageHeader('Paie & RH', 'Dossier client : <strong>' + esc(dossier.clientName) + '</strong> · ' + esc(dossier.reference) + ' · exercice ' + esc(dossier.exerciseYear) + '.', '<a class="btn btn-ghost" href="#/payroll-dossiers">Changer de dossier RH</a> <a class="btn btn-ghost" href="#/launcher">← Modules</a>') +
       '<div class="alert warning"><div><strong>Étape de raccordement interne · démonstration</strong><br>Cette version conserve des lots locaux et contrôle leur journal comptable. Elle ne calcule pas les salaires, les cotisations ni les retenues légales. Les montants d’exemple sont fictifs ; aucun export/import tiers n’intervient.</div></div>' +
       accountingLinkPanel +
-      (Array.isArray(dossier.demoEmployees) && dossier.demoEmployees.length ? '<section class="exchange-card payroll-demo-employees-card"><p class="page-kicker">JEU DE DONNÉES FICTIF</p><h3>' + dossier.demoEmployees.length + ' employés de test</h3><p>Fiches génériques de démonstration uniquement : aucun nom réel, salaire, coordonnées ou calcul de paie n’est enregistré. Elles ne sont pas des employés réels.</p><div class="payroll-demo-employees-grid">' + dossier.demoEmployees.map(function (employee) { return '<div class="payroll-demo-employee"><span>' + esc(employee.id) + '</span><strong>' + esc(employee.displayName) + '</strong><small>Test uniquement · aucun montant</small></div>'; }).join('') + '</div></section>' : '') +
+      (dossierEmployees.length ? '<section class="exchange-card payroll-demo-employees-card"><p class="page-kicker">JEU DE DONNÉES FICTIF · DOSSIER CLIENT ' + esc(dossier.reference) + '</p><h3>' + dossierEmployees.length + ' employés liés à ce dossier</h3><p>Chaque fiche est rattachée à l’identifiant de ce dossier Paie & RH. Fiches génériques uniquement : aucun nom réel, salaire, coordonnées ou calcul de paie n’est enregistré. Elles ne sont pas des employés réels.</p><div class="payroll-demo-employees-grid">' + dossierEmployees.map(function (employee) { return '<div class="payroll-demo-employee" data-employee-id="' + esc(employee.id) + '" data-dossier-id="' + esc(employee.dossierId) + '"><span>' + esc(employee.id) + '</span><strong>' + esc(employee.displayName) + '</strong><small>Lié à ' + esc(dossier.reference) + ' · test uniquement</small></div>'; }).join('') + '</div></section>' : '') +
       '<section class="exchange-card"><p class="page-kicker">SOURCE INTERNE DE PAIE</p><h3>Lots de paie du dossier</h3>' +
         '<p>Un lot doit être approuvé dans Paie & RH avant d’être transmis. Après centralisation, son identifiant interne empêche un second transfert.</p>' +
         (hasTestEmployeeRoster

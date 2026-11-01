@@ -28,14 +28,23 @@
       if (!raw) return emptyDossierCatalog();
       var saved = JSON.parse(raw);
       if (!saved || saved.version !== 1 || !Array.isArray(saved.dossiers)) return emptyDossierCatalog();
+      var migratedEmployeeLinks = false;
       var dossiers = saved.dossiers.filter(function (dossier) {
         return dossier && typeof dossier.id === 'string' && typeof dossier.clientName === 'string' &&
           typeof dossier.clientCode === 'string' && typeof dossier.reference === 'string' &&
           dateParts(dossier.cycleStart) && dateParts(dossier.cycleEnd) && dossier.cycleEnd >= dossier.cycleStart;
+      }).map(function (dossier) {
+        var employees = Array.isArray(dossier.demoEmployees) ? dossier.demoEmployees.map(function (employee) {
+          if (!employee || employee.dossierId !== dossier.id) migratedEmployeeLinks = true;
+          return Object.assign({}, employee, { dossierId: dossier.id });
+        }) : [];
+        return Object.assign({}, dossier, { demoEmployees: employees });
       });
       var activeDossierId = dossiers.some(function (dossier) { return dossier.id === saved.activeDossierId; })
         ? String(saved.activeDossierId) : (dossiers[0] && dossiers[0].id || '');
-      return { version: 1, dossiers: dossiers, activeDossierId: activeDossierId };
+      var catalog = { version: 1, dossiers: dossiers, activeDossierId: activeDossierId };
+      if (migratedEmployeeLinks) saveDossierCatalog(catalog);
+      return catalog;
     } catch (err) {
       return emptyDossierCatalog();
     }
@@ -58,6 +67,13 @@
   function currentDossier() {
     var catalog = loadDossierCatalog();
     return clone(catalog.dossiers.find(function (dossier) { return dossier.id === catalog.activeDossierId; }) || null);
+  }
+
+  function employees(dossierId) {
+    dossierId = String(dossierId || '');
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier || !Array.isArray(dossier.demoEmployees)) return [];
+    return clone(dossier.demoEmployees.filter(function (employee) { return employee && employee.dossierId === dossierId; }));
   }
 
   function dossierById(dossierId) {
@@ -107,7 +123,7 @@
     var demoEmployees = input.includeTenTestEmployees === true
       ? Array.from({ length: 10 }, function (_, index) {
         var number = String(index + 1).padStart(3, '0');
-        return { id: 'EMP-TEST-' + number, displayName: 'Employé fictif ' + number, status: 'test-only' };
+        return { id: 'EMP-TEST-' + number, dossierId: id, displayName: 'Employé fictif ' + number, status: 'test-only' };
       })
       : [];
     var dossier = {
@@ -344,6 +360,7 @@
     dossiers: dossiers,
     currentDossier: currentDossier,
     dossier: dossierById,
+    employees: employees,
     createDossier: createDossier,
     createTestDossier: createTestDossier,
     selectDossier: selectDossier,
