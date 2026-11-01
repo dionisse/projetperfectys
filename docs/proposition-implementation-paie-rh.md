@@ -138,8 +138,8 @@ Les étapes sont séquentielles là où elles dépendent les unes des autres. La
 
 ### Étape 1 — Cadrage métier et règles du pays pilote
 
-Le cadrage initial est consigné dans [la fiche de l’étape 1](cadrage-paie-rh-etape-1.md). Il sépare les décisions déjà confirmées des choix d’entreprise et des règles légales encore à documenter pour le Bénin.
-**Jalon :** pays, périmètre, périodicité initiale, sources officielles et responsables de validation identifiés ; aucune règle légale inventée ou activée implicitement.
+Le cadrage initial est consigné dans [la fiche de l’étape 1](cadrage-paie-rh-etape-1.md). Le pilote est mensuel et les conventions seront sélectionnées selon la catégorie de l’employé. Les règles juridiques et les sources hors CGI restent à documenter et valider pour le Bénin.
+**Jalon :** périmètre et choix internes identifiés ; sources officielles et responsables de validation réunis ; aucune règle légale inventée ou activée implicitement.
 
 ### Étape 2 — Navigation indépendante Paie & RH
 

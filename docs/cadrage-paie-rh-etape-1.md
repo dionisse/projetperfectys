@@ -19,7 +19,13 @@ Définir les périmètres métier, les catégories de salariés, les sources de 
 - Les missions, affectations, travailleurs intérimaires, registres, états, éditions et une centralisation comptable explicite sont au périmètre du plan.
 - L’association à un dossier comptable est facultative et ne sera jamais déduite du nom ou du code client.
 
-## 3. Inventaire initial des sources
+## 3. Décisions prises pour le cadrage initial
+
+- **Périodicité du pilote : mensuelle.** Cette décision fixe le cycle initial de travail ; elle ne remplace pas une vérification des obligations légales applicables.
+- **Conventions collectives : applicabilité déterminée selon la catégorie de l’employé.** La catégorie et la convention exacte devront être documentées et juridiquement validées avant tout effet sur la paie.
+- **Sources : l’utilisateur fournira les textes officiels ; le CGI est également nécessaire.** Le CGI béninois 2026 déjà référencé est conservé comme source fiscale à analyser. Les textes du travail, conventions, barèmes CNSS et règles d’assurance restent attendus.
+
+## 4. Inventaire initial des sources
 
 | Domaine | Sources à recueillir et examiner | État du cadrage |
 |---|---|---|
@@ -34,7 +40,7 @@ Définir les périmètres métier, les catégories de salariés, les sources de 
 
 Une recherche initiale dans les fichiers Drive consultés n’a pas fait ressortir de document sur les conventions collectives ou les barèmes CNSS. Cette absence de résultat n’établit pas que ces sources n’existent pas : elles restent à fournir ou à rechercher dans un espace documentaire approprié.
 
-## 4. Registre des paramètres à valider
+## 5. Registre des paramètres à valider
 
 Chaque règle devra être enregistrée avec : pays, régime ou catégorie concernée, intitulé, formule ou valeur, base de calcul, responsable (salarié/employeur/organisme), limites éventuelles, date de début et de fin d’effet, source exacte, date de vérification, validateur, jeux de tests et statut (`à documenter`, `à valider`, `validée`, `retirée`).
 
@@ -52,12 +58,12 @@ Le registre couvrira au minimum :
 
 Aucune ligne du registre ne devient une règle de calcul tant que la source, les dates d’effet et la validation métier/juridique ne sont pas renseignées. Une formule non confirmée reste bloquée et affichée comme telle.
 
-## 5. Points de décision de l’entreprise
+## 6. Points de décision de l’entreprise
 
 Les choix ci-dessous concernent le paramétrage de l’entreprise, et non l’interprétation de la loi :
 
-1. **Périodicité de paie** : mensuelle proposée pour le pilote, à confirmer ; autres périodicités éventuelles à recenser.
-2. **Convention collective** : identifier le secteur et les conventions concernées ; déterminer si un dossier ou une catégorie de personnel peut sélectionner une convention différente, selon les sources et le conseil compétent.
+1. **Périodicité de paie** : mensuelle confirmée pour le pilote ; les autres périodicités resteront configurables si elles sont nécessaires.
+2. **Convention collective** : la règle de sélection par catégorie d’employé est confirmée. Il reste à identifier les catégories, le secteur et la convention exacte à appliquer, avec source et validation compétente.
 3. **Catégories à prendre en charge au démarrage** : contrats et travailleurs intérimaires à prioriser ; les autres catégories pourront être ajoutées par configuration validée.
 4. **Rubriques de rémunération** : lister les rubriques effectivement utilisées par l’entreprise, leurs justificatifs et approbateurs, sans leur attribuer de traitement fiscal ou social avant validation.
 5. **Calendrier de travail** : jours travaillés, repos, jours fériés et règle de décompte des absences par dossier, une fois établis.
@@ -65,7 +71,7 @@ Les choix ci-dessous concernent le paramétrage de l’entreprise, et non l’in
 7. **Départ de l’employé** : définir les étapes internes, les motifs à tracer, les personnes à informer, la restitution des biens et la désactivation des accès.
 8. **Missions et affectations** : confirmer si les missions incluent les déplacements, qui approuve les missions et si des avances ou remboursements seront suivis.
 
-## 6. Critères de sortie de l’étape 1
+## 7. Critères de sortie de l’étape 1
 
 L’étape 1 sera considérée cadrée lorsque :
 
@@ -76,4 +82,4 @@ L’étape 1 sera considérée cadrée lorsque :
 - le registre des règles et jeux de test est prêt, sans valeurs inventées ;
 - les règles encore inconnues sont listées comme blocages, et non remplacées par des hypothèses.
 
-**Prochaine activité :** compléter l’inventaire des sources béninoises et répondre aux choix de la section 5. L’étape 2 (navigation indépendante) peut être préparée en parallèle, mais les calculs de paie ne démarreront qu’après validation des paramètres concernés.
+**Prochaine activité :** compléter l’inventaire des sources béninoises et répondre aux points encore ouverts de la section 6. L’étape 2 (navigation indépendante) peut être préparée en parallèle, mais les calculs de paie ne démarreront qu’après validation des paramètres concernés.
