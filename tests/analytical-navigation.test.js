@@ -23,11 +23,11 @@ assert.doesNotMatch(fs.readFileSync(path.join(root, 'modern-proto/js/analytical-
   'le catalogue analytique est autonome et ne réutilise pas la navigation générale');
 
 const analytics = modules.get('analytics');
-assert.equal(analytics.route, 'analytics?g=home&i=overview');
+assert.equal(analytics.route, 'analytics-dossiers');
 assert.equal(analytics.name, 'Suivi Analytique');
 assert.match(app, /'analytics'[^\]]*'menu'/, 'la route dédiée est reconnue par le routeur');
 assert.match(app, /case 'analytics': html = viewAnalyticalModule\(parsed\.params\)/);
-assert.match(app, /function setModuleSidebar\(route, params\)[\s\S]*analyticalSidebarMarkup\(params\)[\s\S]*accountingSidebarMarkup/,
+assert.match(app, /function setModuleSidebar\(route, params\)[\s\S]*analyticalSidebarMarkup\(params, route\)[\s\S]*accountingSidebarMarkup/,
   'le menu analytique remplace la navigation générale et celle-ci est restaurée en sortie');
 assert.match(app, /var ACCOUNTING_ROUTES = \['analytics'/,
   'les permissions et le dossier restent dans le même périmètre comptable');

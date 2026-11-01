@@ -20,6 +20,25 @@ body.analytics-module-mode .sidebar-nav .analytics-nav-link .nav-icon {
   color: #684ab5;
   background: #f0ebfa;
 }
+body.analytics-module-mode .analytical-dossiers-summary {
+  border-color: #e2dced;
+  background: #faf8fd;
+}
+body.analytics-module-mode .analytical-dossiers-summary .dossiers-summary-icon {
+  color: #684ab5;
+  background: #eee8fb;
+}
+body.analytics-module-mode .analytical-dossiers-section .dossiers-section-heading .page-kicker { color: #6d4bc3; }
+body.analytics-module-mode .analytical-dossiers-section .dossiers-section-heading > span {
+  border-color: #e2dced;
+  background: #f1edf8;
+  color: #5739a1;
+}
+body.analytics-module-mode .analytical-dossiers-page .client-dossier-card { border-color: #e4dff0; }
+body.analytics-module-mode .analytical-dossiers-page .client-dossier-card:hover {
+  border-color: #c6b7e7;
+  box-shadow: 0 10px 24px rgba(61, 42, 101, .09);
+}
 body.analytics-module-mode .analytics-nav-context {
   padding-top: 6px;
   border-top: 1px solid #e8e2f0;

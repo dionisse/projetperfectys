@@ -116,7 +116,7 @@
     balance: '⚖︎', journal: '≡', ledger: '⌕', periods: '◷', settings: '⚙︎'
   };
 
-  var ROUTES = ['login', 'launcher', 'organization', 'payroll', 'sales', 'analytics', 'dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'financial-result', 'settings', 'menu'];
+  var ROUTES = ['login', 'launcher', 'organization', 'payroll', 'sales', 'analytics', 'analytics-dossiers', 'dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'financial-result', 'settings', 'menu'];
 
   var TITLES = {
     login: ['Connexion', 'Accès à votre espace PERFECTO'],
@@ -125,6 +125,7 @@
     payroll: ['Paie & RH', 'Lots de paie internes · prototype de centralisation'],
     sales: ['Ventes, stock & facturation', 'Lots d’opérations internes · prototype de centralisation'],
     analytics: ['Suivi Analytique', 'Menus dédiés aux imputations, référentiels et états du dossier actif'],
+    'analytics-dossiers': ['Dossiers clients · Suivi Analytique', 'Sélection du dossier client pour consulter ses données analytiques'],
     dossiers: ['Dossiers clients', 'Entreprises clientes et cycles comptables'],
     dashboard: ['Tableau de bord', 'Vue d’ensemble de la comptabilité générale'],
     accounts: ['Plan comptable', 'Comptes SYSCOHADA révisé'],
@@ -290,7 +291,7 @@
   ];
   var launcherUi = { filter: 'all', query: '' };
   var DEMO_ORGANIZATION_ID = 'demo-org';
-  var ACCOUNTING_ROUTES = ['analytics', 'dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'financial-result', 'settings', 'menu'];
+  var ACCOUNTING_ROUTES = ['analytics', 'analytics-dossiers', 'dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'financial-result', 'settings', 'menu'];
   var PHONE_REPORT_ROUTES = ['balance', 'journal', 'ledger'];
   var PHONE_BREAKPOINT = 700;
   // Le Suivi Analytique dispose de menus et d’une route propres, mais partage le dossier
@@ -327,12 +328,15 @@
       : accountingMenuHash(accountingGroup, accountingTab, accountingChild);
   }
 
-  function analyticalSidebarMarkup(params) {
+  function analyticalSidebarMarkup(params, route) {
     params = params || {};
     var currentGroup = AnalyticalNavigation.getGroup(params.g);
     var currentItem = AnalyticalNavigation.getItem(currentGroup.id, params.i);
-    return '<div class="nav-section nav-context-links analytics-nav-context"><p class="nav-section-heading">Suivi Analytique · dossier actif</p>' +
-      '<a href="' + esc(analyticalMenuHash('home', 'overview')) + '" class="analytics-nav-link' + (currentGroup.id === 'home' ? ' active' : '') + '"' + (currentGroup.id === 'home' ? ' aria-current="page"' : '') + '><span class="nav-icon" aria-hidden="true">▥</span>Accueil analytique</a>' +
+    var dossierListActive = route === 'analytics-dossiers';
+    var homeActive = route === 'analytics' && currentGroup.id === 'home';
+    return '<div class="nav-section nav-context-links analytics-nav-context"><p class="nav-section-heading">Suivi Analytique</p>' +
+      '<a href="#/analytics-dossiers" class="analytics-nav-link' + (dossierListActive ? ' active' : '') + '"' + (dossierListActive ? ' aria-current="page"' : '') + '><span class="nav-icon" aria-hidden="true">▰</span>Dossiers clients</a>' +
+      '<a href="' + esc(analyticalMenuHash('home', 'overview')) + '" class="analytics-nav-link' + (homeActive ? ' active' : '') + '"' + (homeActive ? ' aria-current="page"' : '') + '><span class="nav-icon" aria-hidden="true">▥</span>Accueil analytique</a>' +
       '</div>' + AnalyticalNavigation.all().filter(function (group) { return group.id !== 'home'; }).map(function (group) {
         return '<div class="nav-section analytics-nav-section"><p class="nav-section-heading">' + esc(group.label) + '</p>' + group.items.map(function (item) {
           var active = currentGroup.id === group.id && currentItem.id === item.id;
@@ -347,8 +351,8 @@
     var nav = $('.sidebar-nav');
     if (!nav) return;
     if (accountingSidebarMarkup == null) accountingSidebarMarkup = nav.innerHTML;
-    var analytical = route === 'analytics';
-    nav.innerHTML = analytical ? analyticalSidebarMarkup(params) : accountingSidebarMarkup;
+    var analytical = route === 'analytics' || route === 'analytics-dossiers';
+    nav.innerHTML = analytical ? analyticalSidebarMarkup(params, route) : accountingSidebarMarkup;
     nav.setAttribute('aria-label', analytical ? 'Navigation du module Suivi Analytique' : 'Navigation de la comptabilité générale');
     var brandCaption = $('.sidebar .brand-text small');
     if (brandCaption) brandCaption.textContent = analytical ? 'Cabinet GOBEX · Suivi Analytique' : 'Cabinet GOBEX · SYSCOHADA';
@@ -1067,7 +1071,7 @@
     }
     var phoneViewport = isPhoneViewport();
     setModuleSidebar(route, parsed.params);
-    var phoneRouteAllowed = route === 'dossiers' || route === 'analytics' ||
+    var phoneRouteAllowed = route === 'dossiers' || route === 'analytics' || route === 'analytics-dossiers' ||
       (route === 'menu' && parsed.params.g === 'editions') ||
       PHONE_REPORT_ROUTES.indexOf(route) !== -1;
     if (phoneViewport && (route === 'payroll' || route === 'sales')) {
@@ -1082,7 +1086,7 @@
     var databaseStorage = ACCOUNTING_ROUTES.indexOf(route) !== -1 && S.databaseStorageStatus
       ? S.databaseStorageStatus()
       : { recoveryRequired: false };
-    if (databaseStorage.recoveryRequired && !isDatabaseRepairRoute && route !== 'dossiers') {
+    if (databaseStorage.recoveryRequired && !isDatabaseRepairRoute && route !== 'dossiers' && route !== 'analytics-dossiers') {
       if (!phoneViewport) {
         navigate(accountingMenuHash('fichier', 'repair-database'));
         return;
@@ -1138,7 +1142,7 @@
       navigate('#/launcher');
       return;
     }
-    if (route === 'dossiers') {
+    if (route === 'dossiers' || route === 'analytics-dossiers') {
       var canOpenDossierList = permittedDemoDossiers(activeMember).length > 0 ||
         hasDemoPermission(activeMember, 'organization', 'organization.manageDossiers', orgContext);
       if (!canOpenDossierList) {
@@ -1168,12 +1172,12 @@
 
     closeModal(true);
     var launcherMode = route === 'login' || route === 'launcher' || route === 'organization';
-    var selectedDossierMode = ACCOUNTING_ROUTES.indexOf(route) !== -1 && route !== 'dossiers';
+    var selectedDossierMode = ACCOUNTING_ROUTES.indexOf(route) !== -1 && route !== 'dossiers' && route !== 'analytics-dossiers';
     var dossiersListMode = route === 'dossiers';
     document.body.classList.toggle('launcher-mode', launcherMode);
     document.body.classList.toggle('dossiers-list-mode', dossiersListMode);
-    document.body.classList.toggle('phone-editions-mode', phoneViewport && ACCOUNTING_ROUTES.indexOf(route) !== -1 && route !== 'analytics');
-    document.body.classList.toggle('analytics-module-mode', route === 'analytics');
+    document.body.classList.toggle('phone-editions-mode', phoneViewport && ACCOUNTING_ROUTES.indexOf(route) !== -1 && route !== 'analytics' && route !== 'analytics-dossiers');
+    document.body.classList.toggle('analytics-module-mode', route === 'analytics' || route === 'analytics-dossiers');
     document.body.classList.toggle('analytical-table-mode', route === 'analytics' || (route === 'menu' && isAnalyticalAccountingMenuRoute(parsed.params)));
 
     var html = '';
@@ -1184,6 +1188,7 @@
       case 'payroll': html = viewPayrollModule(); break;
       case 'sales': html = viewSalesModule(); break;
       case 'analytics': html = viewAnalyticalModule(parsed.params); break;
+      case 'analytics-dossiers': html = viewAnalyticalDossiers(); break;
       case 'dossiers': html = viewDossiers(); break;
       case 'dashboard': html = viewDashboard(); break;
       case 'accounts': html = viewAccounts(); break;
@@ -1206,19 +1211,21 @@
     if (folderIndicator) {
       var inAccounting = ACCOUNTING_ROUTES.indexOf(route) !== -1 || route === 'payroll' || route === 'sales';
       var activeDossier = S.currentDossier();
-      var visibleDossierCount = route === 'dossiers' ? permittedDemoDossiers(activeMember).length : 0;
+      var isAnalyticalDossierDirectory = route === 'analytics-dossiers';
+      var isDossierDirectory = route === 'dossiers' || isAnalyticalDossierDirectory;
+      var visibleDossierCount = isDossierDirectory ? permittedDemoDossiers(activeMember).length : 0;
       folderIndicator.hidden = !inAccounting;
-      folderIndicator.textContent = route === 'dossiers'
+      folderIndicator.textContent = isDossierDirectory
         ? 'DOSSIERS CLIENTS · ' + visibleDossierCount + (visibleDossierCount === 1 ? ' dossier visible' : ' dossiers visibles')
         : (inAccounting && activeDossier ? activeDossier.reference : '');
-      folderIndicator.title = route === 'dossiers'
-        ? 'Liste multi-dossiers accessible à ce profil de démonstration'
+      folderIndicator.title = isDossierDirectory
+        ? (isAnalyticalDossierDirectory ? 'Dossiers comptables accessibles et liés au Suivi Analytique pour ce profil' : 'Liste multi-dossiers accessible à ce profil de démonstration')
         : (inAccounting ? 'Dossier client isolé localement · ' + (activeDossier && activeDossier.name || '') : '');
     }
     var dossiersReturn = $('#dossier-list-return');
     if (dossiersReturn) dossiersReturn.hidden = !selectedDossierMode;
     var topbarEntry = $('a[href="#/entry"].btn.btn-primary');
-    if (topbarEntry && (route === 'dossiers' || route === 'payroll' || route === 'sales' || route === 'analytics')) topbarEntry.hidden = true;
+    if (topbarEntry && (route === 'dossiers' || route === 'payroll' || route === 'sales' || route === 'analytics' || route === 'analytics-dossiers')) topbarEntry.hidden = true;
 
     var title = TITLES[route] || TITLES.login;
     if (route === 'analytics') {
@@ -1238,7 +1245,7 @@
       ? 'CABINET GOBEX · Paie & RH'
       : (route === 'sales'
         ? 'CABINET GOBEX · Ventes, stock & facturation'
-        : (route === 'analytics' ? 'CABINET GOBEX · Suivi Analytique' : 'CABINET GOBEX · Comptabilité générale'));
+        : ((route === 'analytics' || route === 'analytics-dossiers') ? 'CABINET GOBEX · Suivi Analytique' : 'CABINET GOBEX · Comptabilité générale'));
     document.title = 'PERFECTO · ' + title[0];
 
     $$('[data-route]').forEach(function (link) {
@@ -30731,6 +30738,20 @@
       '</section></div>';
   }
 
+  function viewAnalyticalDossiers() {
+    var member = getActiveDemoMember();
+    var accessible = permittedDemoDossiers(member);
+    return '<section class="analytical-module-home analytical-dossiers-page">' +
+      '<header class="analytical-module-welcome"><div><span class="analytical-module-kicker">SUIVI ANALYTIQUE · SÉLECTION DU DOSSIER</span><h2>Dossiers clients concernés</h2><p>Choisissez un dossier auquel ce profil a accès dans la Comptabilité générale. Le Suivi Analytique ouvre les mêmes données et le même dossier, sans créer de copie.</p></div><a class="btn btn-ghost" href="#/launcher"><span aria-hidden="true">←</span> Modules</a></header>' +
+      '<div class="dossiers-summary analytical-dossiers-summary"><div><span class="dossiers-summary-icon" aria-hidden="true">▰</span><span><strong>' + accessible.length + ' dossier' + (accessible.length === 1 ? '' : 's') + ' accessible' + (accessible.length === 1 ? '' : 's') + '</strong><small>Accès hérité de la Comptabilité générale</small></span></div><span class="dossiers-demo-note">Données du dossier partagées</span></div>' +
+      '<section class="dossiers-section analytical-dossiers-section"><div class="dossiers-section-heading"><div><p class="page-kicker">SUIVI ANALYTIQUE</p><h3>Dossiers clients accessibles</h3></div><span>' + accessible.length + ' résultat' + (accessible.length === 1 ? '' : 's') + '</span></div>' +
+      (accessible.length
+        ? '<div class="client-dossier-grid">' + accessible.map(dossierCard).join('') + '</div>'
+        : '<div class="dossiers-empty"><span aria-hidden="true">▰</span><strong>Aucun dossier client accessible</strong><p>Le Suivi Analytique utilise les droits d’accès aux dossiers de la Comptabilité générale. Aucun dossier n’est visible pour ce profil.</p></div>') +
+      '</section><p class="dossiers-storage-footnote">Les dossiers et les données analytiques restent isolés par dossier client dans le même espace local. Le choix d’un dossier ne copie ni les écritures ni les référentiels.</p>' +
+      '</section>';
+  }
+
   function viewAnalyticalModuleHome() {
     var dossier = S.currentDossier();
     var postedCount = S.postedEntries().length;
@@ -32297,6 +32318,7 @@
       bindOrganizationView();
       return;
     }
+    if (route === 'analytics-dossiers') return;
     if (route === 'analytics') {
       var analyticalParams = parseHash().params;
       var analyticalGroup = AnalyticalNavigation.getGroup(analyticalParams.g);
@@ -32813,7 +32835,10 @@
         var switchedDossier = S.switchDossier(dossier.id);
         if (!switchedDossier.ok) { toast(switchedDossier.errors[0] || 'Ouverture du dossier impossible.', 'error'); break; }
         activeDemoDossierId = dossier.id;
-        navigate(isPhoneViewport() ? accountingMenuHash('editions', 'general-accounts') : '#/dashboard');
+        var openedFromAnalytics = parseHash().route === 'analytics-dossiers';
+        navigate(openedFromAnalytics
+          ? analyticalMenuHash('home', 'overview')
+          : (isPhoneViewport() ? accountingMenuHash('editions', 'general-accounts') : '#/dashboard'));
         break;
       }
       case 'launcher-info':

@@ -23,7 +23,7 @@ const analytics = modules.get('analytics');
 assert(analytics, 'le Suivi Analytique conserve son identifiant technique historique');
 assert.strictEqual(analytics.name, 'Suivi Analytique');
 assert.strictEqual(analytics.status, 'partial');
-assert.strictEqual(analytics.route, 'analytics?g=home&i=overview', 'le module ouvre sa route et son accueil dédiés');
+assert.strictEqual(analytics.route, 'analytics-dossiers', 'le module ouvre la liste des dossiers clients accessibles');
 assert.match(appSource, /ACCESS_MODULES[^\n]*filter\(function \(module\) \{ return module\.id !== 'analytics'; \}\)/, 'le Suivi Analytique ne crée pas un périmètre de droits distinct');
 assert.match(appSource, /module\.id === 'accounting' \|\| module\.id === 'analytics'/, 'l’ouverture du Suivi Analytique utilise les droits du dossier comptable');
 assert.match(appSource, /requestedModuleId === 'analytics' \? 'accounting' : requestedModuleId/, 'les droits de lancement restent ceux de la Comptabilité générale');

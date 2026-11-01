@@ -30,7 +30,7 @@
       status: 'partial',
       statusLabel: 'PARTIEL · INTÉGRÉ',
       version: 'Module analytique · menus dédiés',
-      route: 'analytics?g=home&i=overview'
+      route: 'analytics-dossiers'
     },
     {
       id: 'payroll-hr',
