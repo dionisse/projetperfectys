@@ -65,7 +65,19 @@ La fiche comportera des espaces distincts et traçables pour :
 
 Une note globale ne sera pas calculée automatiquement. Les critères, échelles et effets éventuels sur la rémunération ou la carrière devront être définis et validés. Les données disciplinaires et d’évaluation auront des droits plus restrictifs que les informations administratives courantes.
 
-### 2.6 Calcul de paie par pays
+### 2.6 Congés et absences
+
+Le module permettra de définir des types de congé par pays et de les adapter aux règles internes de l’entreprise. Le catalogue pourra comprendre les congés annuels, maternité, paternité, maladie, accident, événements familiaux, congé sans solde et d’autres types créés par l’utilisateur. Ces intitulés ne préjugent pas de leurs conditions légales ; leurs règles devront être confirmées pour chaque pays et leur période d’application.
+
+Pour chaque type, le paramétrage pourra préciser, après validation : les conditions d’éligibilité, le mode de décompte, les droits et leur acquisition, la rémunération ou indemnisation, les justificatifs requis, le circuit d’approbation, les reports ou plafonds éventuels, l’effet sur la paie et les sources applicables. Aucun nombre de jours, taux, droit acquis ou effet financier ne sera supposé par défaut.
+
+Une demande de congé conservera l’employé et son dossier RH, le type, les dates, le statut, le décideur et les pièces privées nécessaires. Les statuts pourront couvrir la préparation, la demande, l’approbation, le refus, l’annulation et la clôture. Le calendrier de travail et les jours à décompter devront être définis pour le dossier concerné ; le système ne déduira pas les jours ouvrés, fériés ou de repos sans calendrier validé.
+
+Les parcours maternité et paternité seront identifiables séparément et pourront suivre leurs périodes et pièces propres une fois les règles validées. Le congé lié à un accident distinguera l’accident du travail d’une maladie ou d’un accident non professionnel si la règle applicable le requiert. Les informations médicales seront réduites au strict nécessaire et leur accès fortement limité ; les détails médicaux ne seront pas affichés dans les vues générales du personnel.
+
+La paie consommera les congés approuvés comme des événements datés et tracés. La rémunération maintenue, les retenues, indemnités, remboursements d’assurance ou parts employeur ne seront calculés qu’à partir de règles vérifiées et versionnées. Une modification rétroactive d’un congé ou d’une règle devra produire un contrôle et une correction explicites, jamais une réécriture silencieuse d’un bulletin approuvé.
+
+### 2.7 Calcul de paie par pays
 
 Un moteur de calcul commun utilisera des **packs de règles par pays**, datés et versionnés. Le Bénin sera le pays pilote et le pays proposé par défaut à la création d’un dossier ; l’utilisateur pourra choisir un autre pays lorsque son pack sera disponible.
 
@@ -83,13 +95,14 @@ Aucun taux, plafond, assiette ou compte comptable ne sera préchargé sans sourc
 ## 3. Cycle de paie mensuel proposé
 
 1. Ouvrir la période dans le dossier RH et vérifier les employés et contrats actifs à la date considérée.
-2. Recueillir les variables et pièces justificatives.
-3. Produire un brouillon explicable, avec détail brut, bases, retenues, impôts, cotisations salariales, cotisations employeur et net à payer — uniquement pour les règles validées.
-4. Afficher les anomalies et empêcher l’approbation si un contrôle bloquant échoue.
-5. Faire contrôler puis approuver par des profils autorisés différents, si la politique du client l’exige.
-6. Générer les bulletins et états après approbation ; enregistrer les paiements sans fabriquer de preuve bancaire.
-7. Verrouiller la période. Toute correction passe par une procédure de réouverture ou de régularisation tracée.
-8. Si l’association comptable existe, prévisualiser la pièce de centralisation et les correspondances, puis demander confirmation. Conserver l’identifiant du lot source pour bloquer les doublons.
+2. Charger les congés et absences approuvés qui chevauchent la période ; vérifier leurs dates, leur statut et les règles de traitement en vigueur.
+3. Recueillir les autres variables et pièces justificatives.
+4. Produire un brouillon explicable, avec détail brut, bases, retenues, impôts, cotisations salariales, cotisations employeur et net à payer — uniquement pour les règles validées.
+5. Afficher les anomalies et empêcher l’approbation si un contrôle bloquant échoue.
+6. Faire contrôler puis approuver par des profils autorisés différents, si la politique du client l’exige.
+7. Générer les bulletins et états après approbation ; enregistrer les paiements sans fabriquer de preuve bancaire.
+8. Verrouiller la période. Toute correction passe par une procédure de réouverture ou de régularisation tracée.
+9. Si l’association comptable existe, prévisualiser la pièce de centralisation et les correspondances, puis demander confirmation. Conserver l’identifiant du lot source pour bloquer les doublons.
 
 ## 4. Sécurité et architecture de données
 
@@ -116,22 +129,27 @@ Créer les directions, départements, sections, services et unités personnalis�
 Créer, modifier et archiver une fiche complète, avec rattachement obligatoire au dossier RH ; gérer CV, compétences, photo facultative, informations bancaires et familiales selon les droits, ainsi que les pièces privées et les évaluations.
 **Critère :** les employés de `PRH-TEST-2026` sont visibles uniquement dans ce dossier ; les accès aux données bancaires, disciplinaires et d’évaluation sont contrôlés et audités.
 
-### Lot 3 — Embauche, contrats, intérim et débauchage
+### Lot 3 — Congés et absences
+
+Créer le catalogue configurable des congés annuels, maternité, paternité, maladie, accident et autres types décidés par l’entreprise. Gérer demandes, justificatifs, approbations, calendrier et historique. Paramétrer les droits, durées et effets sur la paie uniquement après validation.
+**Critère :** aucun droit, décompte de jour ou traitement salarial n’est attribué par défaut ; les demandes sont rattachées à l’employé et au dossier RH.
+
+### Lot 4 — Embauche, contrats, intérim et débauchage
 
 Implémenter les étapes documentaires validées, les contrats datés, les missions intérimaires et le processus de départ pour licenciement ou tout autre motif. Conserver les historiques et gérer la clôture d’accès.
 **Critère :** aucun dossier employé n’est supprimé à son départ ; aucun préavis, indemnité ou solde de départ n’est calculé sans règle du pays et du contrat validée.
 
-### Lot 4 — Variables et moteur pilote Bénin
+### Lot 5 — Variables et moteur pilote Bénin
 
-Saisir les éléments de période et implémenter progressivement l’impôt, les cotisations, assurances et parts employeur à partir des règles validées. Comparer les résultats à des cas de référence approuvés.
+Saisir les éléments de période, intégrer les congés approuvés et implémenter progressivement l’impôt, les cotisations, assurances et parts employeur à partir des règles validées. Comparer les résultats à des cas de référence approuvés.
 **Critère :** résultats reproductibles, détail vérifiable, tests de frontière et refus du calcul si une règle manque.
 
-### Lot 5 — Contrôle, approbation et bulletins
+### Lot 6 — Contrôle, approbation et bulletins
 
 Gérer brouillon, contrôles, approbation, verrouillage, bulletins et historiques de corrections.
 **Critère :** impossible de modifier silencieusement un lot approuvé.
 
-### Lot 6 — Paiement, déclarations et centralisation
+### Lot 7 — Paiement, déclarations et centralisation
 
 Ajouter les suivis de paiement et états réglementaires confirmés, puis la centralisation comptable facultative avec correspondances explicites.
 **Critère :** pas de paiement déclaré sans preuve source ; pas de centralisation sans lien, droits, aperçu et confirmation.
@@ -139,6 +157,8 @@ Ajouter les suivis de paiement et états réglementaires confirmés, puis la cen
 ## 6. Points de cadrage restant à valider avant les calculs réels
 
 - Quelles catégories de contrat et de travailleurs intérimaires faut-il couvrir en premier ?
+- Pour chaque type de congé, quelles conditions d’éligibilité, durées, règles d’acquisition et de décompte, pièces, validations, reports et effets sur la paie faut-il retenir ? Quelles sources béninoises confirmeront ces paramètres ?
+- Pour le congé accident, quelles distinctions et pièces doivent être suivies entre accident du travail et autre accident ?
 - Quelles conventions et sources officielles béninoises utiliser pour le pack pilote, et qui valide leurs versions ?
 - Quels motifs de départ, étapes d’approbation et documents de sortie l’entreprise souhaite-t-elle suivre ?
 - Les missions couvrent-elles les missions opérationnelles, les déplacements professionnels, ou les deux ? Qui les approuve ?
@@ -146,4 +166,4 @@ Ajouter les suivis de paiement et états réglementaires confirmés, puis la cen
 - Quelles informations familiales sont réellement nécessaires au calcul ?
 - Quel processus d’approbation et de paiement souhaite l’entreprise ?
 
-**Prochaine étape recommandée :** valider le cadrage du Lot 0, puis implémenter les lots 1 et 2 avant de calculer le moindre montant de paie.
+**Prochaine étape recommandée :** valider le cadrage du Lot 0, puis implémenter les lots 1 à 4 avant de calculer le moindre montant de paie. Le plan reste évolutif : les idées et besoins complémentaires pourront y être ajoutés et validés avant le démarrage des lots de calcul.
