@@ -25,6 +25,6 @@ for (const id of ['activity-domains', 'expense-categories', 'funding-sources', '
   assert.match(navigation, new RegExp("id: '" + id + "'.*status: 'active'"));
 }
 assert.match(css, /\.analytical-dimension-view/);
-assert.match(worker, /perfecto-static-v182/);
+assert.match(worker, /perfecto-static-v183/);
 
 console.log('Référentiels analytiques : écrans, suggestions explicites, droits et ressources vérifiés — OK');

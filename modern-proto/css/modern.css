@@ -3943,3 +3943,13 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .analytical-receivables-print-context { margin: .5rem 0 1rem; padding: .8rem; border-left: 4px solid #157a68; background: #f2faf7; }
 @media (max-width: 900px) { .analytical-receivables-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .analytical-receivables-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .analytical-receivables-summary, .analytical-receivables-filters { grid-template-columns: minmax(0, 1fr); } .analytical-receivables-toolbar { justify-content: stretch; } .analytical-receivables-toolbar .btn { width: 100%; } }
+
+/* Liaison auxiliaire explicite sur les lignes de saisie générale. */
+.entry-auxiliary-party-editor { display: grid; gap: 3px; min-width: 0; padding: 4px 0 2px; }
+.entry-auxiliary-party-editor[hidden] { display: none; }
+.entry-auxiliary-party-editor label { display: grid; grid-template-columns: minmax(125px, auto) minmax(0, 1fr); align-items: center; gap: 8px; color: var(--muted, #5b6574); font-size: 12px; }
+.entry-auxiliary-party-editor select { width: 100%; min-width: 0; }
+.entry-auxiliary-party-status { color: var(--muted, #5b6574); font-size: 11px; line-height: 1.35; }
+@media (max-width: 640px) {
+  .entry-auxiliary-party-editor label { grid-template-columns: 1fr; gap: 3px; }
+}

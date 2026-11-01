@@ -2110,6 +2110,79 @@
     return entryCounterpartIndexCache;
   }
 
+  function entryAuxiliaryPartyToken(type, id) {
+    return type && id ? String(type) + '|' + String(id) : '';
+  }
+
+  function parseEntryAuxiliaryPartyToken(token) {
+    token = String(token || '');
+    var separator = token.indexOf('|');
+    return separator > 0 ? { type: token.slice(0, separator), id: token.slice(separator + 1) } : null;
+  }
+
+  function entryAuxiliaryPartyRecord(type, id) {
+    if (!type || !id) return null;
+    if (type === 'supplier') return (S.suppliers() || []).find(function (record) { return String(record.id) === String(id); }) || null;
+    if (type === 'client') return (S.clients() || []).find(function (record) { return String(record.id) === String(id); }) || null;
+    if (type === 'debtor' || type === 'creditor') return (S.otherParties(type) || []).find(function (record) { return String(record.id) === String(id); }) || null;
+    if (type === 'personnel') return (S.personnel() || []).find(function (record) { return String(record.id) === String(id); }) || null;
+    return null;
+  }
+
+  function entryAuxiliaryPartyChoices(accountCode) {
+    var groups = [
+      { type: 'supplier', label: 'Fournisseur', records: S.suppliers() || [] },
+      { type: 'client', label: 'Client', records: S.clients() || [] },
+      { type: 'debtor', label: 'Débiteur divers', records: S.otherParties('debtor') || [] },
+      { type: 'creditor', label: 'Créditeur divers', records: S.otherParties('creditor') || [] },
+      { type: 'personnel', label: 'Personnel', records: S.personnel() || [] }
+    ];
+    return groups.reduce(function (choices, group) {
+      group.records.forEach(function (record) {
+        if (record.active === false || String(record.accountCode || '') !== String(accountCode || '')) return;
+        choices.push({ type: group.type, typeLabel: group.label, id: String(record.id || ''), code: String(record.code || ''), name: String(record.name || '') });
+      });
+      return choices;
+    }, []).sort(function (left, right) {
+      return left.typeLabel.localeCompare(right.typeLabel, 'fr') || left.code.localeCompare(right.code, 'fr');
+    });
+  }
+
+  function entryAuxiliaryPartyEditorHtml(accountCode, selectedToken, fallbackLabel) {
+    var account = S.account(accountCode);
+    var selected = parseEntryAuxiliaryPartyToken(selectedToken);
+    var accountIsAuxiliary = !!(account && account.aux === true);
+    var shouldShow = accountIsAuxiliary || !!selected;
+    var choices = accountIsAuxiliary ? entryAuxiliaryPartyChoices(account.code) : [];
+    var selectedChoice = selected && choices.find(function (choice) { return choice.type === selected.type && choice.id === selected.id; });
+    var selectedRecord = selected && entryAuxiliaryPartyRecord(selected.type, selected.id);
+    var stale = !!(selected && !selectedChoice);
+    var options = ['<option value="">— Aucun tiers auxiliaire lié —</option>'];
+    choices.forEach(function (choice) {
+      var token = entryAuxiliaryPartyToken(choice.type, choice.id);
+      options.push('<option value="' + esc(token) + '"' + (token === selectedToken ? ' selected' : '') + '>' + esc(choice.typeLabel + ' · ' + choice.code + ' — ' + choice.name) + '</option>');
+    });
+    if (stale && selected) {
+      var previousLabel = selectedRecord
+        ? ({ supplier: 'Fournisseur', client: 'Client', debtor: 'Débiteur divers', creditor: 'Créditeur divers', personnel: 'Personnel' }[selected.type] || 'Tiers') + ' · ' + String(selectedRecord.code || '') + ' — ' + String(selectedRecord.name || '')
+        : String(fallbackLabel || ('Tiers introuvable · ' + selected.id));
+      options.push('<option value="' + esc(selectedToken) + '" selected>' + esc(previousLabel + ' · lien à vérifier') + '</option>');
+    }
+    return '<div class="entry-auxiliary-party-editor"' + (shouldShow ? '' : ' hidden') + '><label>Auxiliaire explicite <select data-field="third-party" aria-label="Tiers auxiliaire explicitement lié à la ligne">' + options.join('') + '</select></label>' +
+      '<small class="entry-auxiliary-party-status">' + (stale ? 'Le lien tiers est inactif ou son compte collectif ne correspond plus à cette ligne : retirez-le ou rétablissez le compte exact.' : (choices.length ? 'Choisissez une fiche existante ; aucun tiers n’est déduit du compte collectif.' : (accountIsAuxiliary ? 'Aucune fiche active n’est rattachée à ce compte collectif.' : ''))) + '</small></div>';
+  }
+
+  function refreshEntryAuxiliaryPartyEditor(input) {
+    if (!input) return;
+    var row = input.closest && input.closest('.line-row');
+    if (!row) return;
+    var current = row.querySelector('[data-field="third-party"]');
+    var token = current ? current.value : '';
+    var fallback = current && current.selectedOptions && current.selectedOptions[0] ? current.selectedOptions[0].textContent : '';
+    var holder = row.querySelector('.entry-auxiliary-party-editor');
+    if (holder) holder.outerHTML = entryAuxiliaryPartyEditorHtml(input.value, token, fallback);
+  }
+
   function entryAccountInputStatus(input) {
     if (!input) return;
     var status = input.parentNode && input.parentNode.querySelector('.entry-account-status');
@@ -2129,6 +2202,7 @@
     status.textContent = account
       ? 'Compte reconnu : ' + account.code + ' · ' + account.label + (requiredLabels.length ? ' · Imputation obligatoire : ' + requiredLabels.join(', ') : '')
       : (ambiguousLabel ? 'Intitulé ambigu : précisez le code du compte.' : (query ? 'Saisissez un code ou un intitulé exact proposé pour ce journal.' : 'Tapez un début de code ou d’intitulé pour afficher jusqu’à 40 suggestions.'));
+    refreshEntryAuxiliaryPartyEditor(input);
   }
 
   function entryCounterpartSuggestions(journalCode, accountsInPiece) {
@@ -2745,7 +2819,7 @@
           date: existing.date,
           description: existing.description,
           amendmentReason: '',
-          lines: existing.lines.map(function (l) { return { account: l.account, debit: l.debit || '', credit: l.credit || '', analyticSplits: S.normalizeAnalyticalSplits(l.analyticSplits) }; })
+          lines: existing.lines.map(function (l) { return { account: l.account, debit: l.debit || '', credit: l.credit || '', analyticSplits: S.normalizeAnalyticalSplits(l.analyticSplits), thirdPartyType: l.thirdPartyType || '', thirdPartyId: l.thirdPartyId || '' }; })
         };
       }
       if (existing && existing.status === 'posted') {
@@ -2760,7 +2834,7 @@
           description: existing.description,
           amendmentReason: '',
           editPreflight: editPreflight,
-          lines: existing.lines.map(function (l) { return { account: l.account, debit: l.debit || '', credit: l.credit || '', analyticSplits: S.normalizeAnalyticalSplits(l.analyticSplits) }; })
+          lines: existing.lines.map(function (l) { return { account: l.account, debit: l.debit || '', credit: l.credit || '', analyticSplits: S.normalizeAnalyticalSplits(l.analyticSplits), thirdPartyType: l.thirdPartyType || '', thirdPartyId: l.thirdPartyId || '' }; })
         };
       }
     }
@@ -3236,8 +3310,9 @@
     var amountInputMode = decimalPlaces ? 'decimal' : 'numeric';
     var account = resolveEntryAccount(line.account, journalCode);
     var accountValue = account ? account.code : String(line.account || '');
+    var partyToken = entryAuxiliaryPartyToken(line.thirdPartyType, line.thirdPartyId);
     return '<div class="line-row">' +
-      '<div class="line-account-entry"><input type="text" data-field="account" list="entry-account-suggestions" value="' + esc(accountValue) + '" placeholder="Code ou intitulé du compte" autocomplete="off" aria-label="Compte de la ligne, code ou intitulé"><small class="entry-account-status">Tapez un début de code ou d’intitulé pour afficher jusqu’à 40 suggestions.</small>' + lineAnalyticalEditorHtml(line) + '</div>' +
+      '<div class="line-account-entry"><input type="text" data-field="account" list="entry-account-suggestions" value="' + esc(accountValue) + '" placeholder="Code ou intitulé du compte" autocomplete="off" aria-label="Compte de la ligne, code ou intitulé"><small class="entry-account-status">Tapez un début de code ou d’intitulé pour afficher jusqu’à 40 suggestions.</small>' + entryAuxiliaryPartyEditorHtml(accountValue, partyToken, '') + lineAnalyticalEditorHtml(line) + '</div>' +
       '<input type="number" data-field="debit" min="0" step="' + amountStep + '" inputmode="' + amountInputMode + '" value="' + esc(line.debit) + '" placeholder="0" aria-label="Montant au débit">' +
       '<input type="number" data-field="credit" min="0" step="' + amountStep + '" inputmode="' + amountInputMode + '" value="' + esc(line.credit) + '" placeholder="0" aria-label="Montant au crédit">' +
       '<button type="button" class="line-remove" data-action="remove-line" aria-label="Supprimer cette ligne">✕</button>' +
@@ -3451,11 +3526,15 @@
       lines: rows.map(function (row) {
         var accountInput = row.querySelector('[data-field="account"]');
         var account = resolveEntryAccount(accountInput.value, $('#e-journal').value);
+        var partyToken = row.querySelector('[data-field="third-party"]');
+        var party = parseEntryAuxiliaryPartyToken(partyToken && partyToken.value);
         return {
           account: account ? account.code : accountInput.value.trim(),
           debit: row.querySelector('[data-field="debit"]').value,
           credit: row.querySelector('[data-field="credit"]').value,
-          analyticSplits: collectAnalyticalSplits(row)
+          analyticSplits: collectAnalyticalSplits(row),
+          thirdPartyType: party ? party.type : '',
+          thirdPartyId: party ? party.id : ''
         };
       })
     };

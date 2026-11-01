@@ -269,7 +269,7 @@
       if (!movement) return;
       var accountCode = String(movement.account || movement.accountCode || '').trim();
       if (!selectedAccountCodes[accountCode]) return;
-      var auxiliaryReference = normalizeReference(movement.auxiliaryCode || movement.auxiliaryAccountCode || movement.auxiliaryId);
+      var auxiliaryReference = normalizeReference(movement.thirdPartyId || movement.auxiliaryCode || movement.auxiliaryAccountCode || movement.auxiliaryId);
       var matched = aliases.get(auxiliaryReference);
       if (!auxiliaryReference || !aliases.has(auxiliaryReference)) {
         unmatchedMovementCount += 1;

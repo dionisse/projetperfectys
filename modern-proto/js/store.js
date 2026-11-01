@@ -7662,6 +7662,47 @@
     return errors;
   }
 
+  function entryAuxiliaryPartyRecord(st, type, id) {
+    var records = [];
+    if (type === 'supplier') records = Array.isArray(st.suppliers) ? st.suppliers : [];
+    else if (type === 'client') records = Array.isArray(st.clients) ? st.clients : [];
+    else if (type === 'debtor' || type === 'creditor') records = Array.isArray(st.otherParties) ? st.otherParties.filter(function (record) { return record.type === type; }) : [];
+    else if (type === 'personnel') records = Array.isArray(st.personnel) ? st.personnel : [];
+    return records.find(function (record) { return String(record.id || '') === id; }) || null;
+  }
+
+  function validateEntryAuxiliaryParty(line, accountRecord, st, options, lineLabel, errors) {
+    var type = String(line && line.thirdPartyType || '').trim().toLowerCase();
+    var id = String(line && line.thirdPartyId || '').trim();
+    if (!type && !id) return null;
+    if (!type || !id) {
+      errors.push(lineLabel + 'le lien auxiliaire doit contenir à la fois le type et l’identifiant du tiers.');
+      return null;
+    }
+    if (['supplier', 'client', 'debtor', 'creditor', 'personnel'].indexOf(type) === -1) {
+      errors.push(lineLabel + 'le type de tiers auxiliaire est inconnu.');
+      return null;
+    }
+    var party = entryAuxiliaryPartyRecord(st, type, id);
+    if (!party) {
+      errors.push(lineLabel + 'le tiers auxiliaire sélectionné est absent du référentiel de ce dossier.');
+      return null;
+    }
+    if (!accountRecord || accountRecord.aux !== true) {
+      errors.push(lineLabel + 'un tiers ne peut être lié qu’à un compte marqué auxiliaire dans le plan comptable.');
+      return null;
+    }
+    if (String(party.accountCode || '') !== String(accountRecord.code || '')) {
+      errors.push(lineLabel + 'le compte collectif du tiers ne correspond pas exactement au compte de cette ligne. Choisissez le tiers explicitement ou retirez son lien.');
+      return null;
+    }
+    if (party.active === false && options.status !== 'posted') {
+      errors.push(lineLabel + 'le tiers auxiliaire est inactif et ne peut pas être affecté à une nouvelle pièce.');
+      return null;
+    }
+    return party;
+  }
+
   /**
    * Valide une pièce. Renvoie { ok, errors: [], entry }.
    * Règles : numéro de pièce unique, journal et comptes existants, débit XOR crédit,
@@ -7754,8 +7795,16 @@
       var analyticValidation = validateAnalyticalSplits(line.analyticSplits, debit || credit, configuration.decimalPlaces, opts.status === 'posted');
       analyticValidation.errors.forEach(function (message) { errors.push(label + message); });
       analyticalAccountRuleErrors(acc, analyticValidation.splits, opts.status === 'posted').forEach(function (message) { errors.push(label + message); });
+      var auxiliaryParty = validateEntryAuxiliaryParty(line, accountRecord, st, opts, label, errors);
       var cleanLine = { account: acc, debit: debit, credit: credit };
       if (analyticValidation.splits.length) cleanLine.analyticSplits = analyticValidation.splits;
+      if (auxiliaryParty) {
+        cleanLine.thirdPartyType = String(line.thirdPartyType).trim().toLowerCase();
+        cleanLine.thirdPartyId = String(auxiliaryParty.id || '').trim();
+        cleanLine.thirdPartyCode = String(auxiliaryParty.code || '').trim().slice(0, 80);
+        cleanLine.thirdPartyName = String(auxiliaryParty.name || '').trim().slice(0, 180);
+        cleanLine.auxiliaryAccountCode = String(auxiliaryParty.auxiliaryAccountCode || '').trim().slice(0, 120);
+      }
       cleanLines.push(cleanLine);
     });
 

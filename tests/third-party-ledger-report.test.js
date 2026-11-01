@@ -219,6 +219,30 @@ test('exclut une référence de mouvement ambiguë même si toutes les fiches so
   assert.ok(report.warnings.some(message => /plusieurs fiches/i.test(message)));
 });
 
+test('le lien tiers explicite par identifiant tranche une référence auxiliaire textuelle ambiguë', () => {
+  const ambiguousParties = [
+    { id: 'debtor-one', code: 'DUP', name: 'Débiteur 1', type: 'debtor', accountCode: '471100', _thirdPartyNature: 'other-parties' },
+    { id: 'creditor-two', code: 'DUP', name: 'Créditeur 2', type: 'creditor', accountCode: '471100', _thirdPartyNature: 'other-parties' }
+  ];
+  const report = build({
+    nature: 'other-parties',
+    thirdPartyRecords: ambiguousParties,
+    allThirdPartyRecords: ambiguousParties,
+    thirdPartyMovements: [{ date: '2025-02-10', account: '471100', auxiliaryCode: '471100-DUP', thirdPartyType: 'debtor', thirdPartyId: 'debtor-one', debit: 5, credit: 0, sourceEntryId: 'AMB-ID', lineNumber: 1 }],
+    entries: [{ id: 'AMB-ID', date: '2025-02-10', status: 'posted', lines: [
+      { account: '471100', debit: 5, credit: 0, auxiliaryCode: '471100-DUP', thirdPartyType: 'debtor', thirdPartyId: 'debtor-one' },
+      { account: '512000', debit: 0, credit: 5 }
+    ] }],
+    accounts,
+    openingBalances: []
+  });
+  assert.equal(report.ok, true, report.errors.join(' '));
+  assert.equal(report.groups.length, 1);
+  assert.equal(report.groups[0].thirdPartyCode, 'DUP');
+  assert.equal(report.groups[0].closingBalance, 5);
+  assert.equal(report.ambiguousMovementCount, 0);
+});
+
 test('refuse les filtres, périodes et correspondances de lignes sources invalides', () => {
   assert.equal(build({ thirdPartyFilter: 'TIERS-ABSENT' }).ok, false);
   assert.equal(build({ from: '2024-12-31' }).ok, false);

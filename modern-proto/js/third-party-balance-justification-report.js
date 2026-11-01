@@ -376,7 +376,7 @@
       if (!movement || typeof movement !== 'object') return;
       var accountCode = String(movement.account || movement.accountCode || '').trim();
       var date = String(movement.date || '');
-      var auxiliaryReference = normalizeReference(movement.auxiliaryCode || movement.auxiliaryAccountCode || movement.auxiliaryId);
+      var auxiliaryReference = normalizeReference(movement.thirdPartyId || movement.auxiliaryCode || movement.auxiliaryAccountCode || movement.auxiliaryId);
       if (!isIsoDate(date)) {
         var invalidDateResolution = resolveReference(auxiliaryReference, allAliases, accountCode);
         var invalidDateTouchesSelection = !!selectedAccountCodes[accountCode] ||

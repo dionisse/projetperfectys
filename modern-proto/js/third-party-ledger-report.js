@@ -405,7 +405,7 @@
     movements.forEach(function (movement, movementIndex) {
       if (!movement || typeof movement !== 'object') return;
       var accountCode = String(movement.account || movement.accountCode || '').trim();
-      var auxiliaryReference = normalizeReference(movement.auxiliaryCode || movement.auxiliaryAccountCode || movement.auxiliaryId);
+      var auxiliaryReference = normalizeReference(movement.thirdPartyId || movement.auxiliaryCode || movement.auxiliaryAccountCode || movement.auxiliaryId);
       var resolution = resolveReference(auxiliaryReference, allAliases, accountCode);
       if (resolution.status === 'missing') {
         if (selectedAccountCodes[accountCode]) unmatchedMovementCount += 1;
