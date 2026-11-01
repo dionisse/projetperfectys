@@ -106,7 +106,7 @@ Aucun taux, plafond, assiette ou compte comptable ne sera préchargé sans sourc
 
 ## 4. Navigation indépendante et menus Paie & RH
 
-Paie & RH aura son propre parcours de navigation, sa propre sélection de dossier RH, sa barre latérale et ses menus — indépendants de ceux de la Comptabilité générale et du Suivi Analytique. L’application pourra réutiliser les principes d’interface déjà éprouvés dans la Comptabilité (dossier actif clairement visible, menus et sous-menus cohérents, filtres, états, permissions et impressions), mais **ne réutilisera pas la navigation comptable**.
+Paie & RH aura son propre parcours de navigation, sa propre sélection de dossier RH, sa barre latérale et ses menus — indépendants de ceux de la Comptabilité générale et du Suivi Analytique. L’application pourra réutiliser les principes d’interface déjà éprouvés dans la Comptabilité (dossier actif clairement visible, menus et sous-menus cohérents, filtres, états, permissions et impressions), mais **ne réutilisera pas la navigation comptable**. L’arborescence et les critères d’acceptation détaillés sont dans [la fiche de cadrage de l’étape 2](cadrage-paie-rh-etape-2-navigation.md).
 
 ### Menus proposés
 
@@ -143,8 +143,8 @@ Le cadrage initial est consigné dans [la fiche de l’étape 1](cadrage-paie-rh
 
 ### Étape 2 — Navigation indépendante Paie & RH
 
-Construire la route, la barre latérale et les menus propres à Paie & RH, sans reprendre ceux de la Comptabilité générale ou du Suivi Analytique. Prévoir les entrées Dossiers RH, Organisation, Personnel, Affectations & missions, Temps & congés, Paie, Centralisation comptable, Registres, États, Éditions et Paramètres.
-**Jalon :** chaque menu ouvre une vue Paie & RH dans le contexte RH actif ; les permissions et retours de navigation restent dans ce module.
+Construire la route, la barre latérale et les menus propres à Paie & RH, sans reprendre ceux de la Comptabilité générale ou du Suivi Analytique. L’arborescence proposée, les parcours, les permissions de navigation et les critères d’acceptation sont définis dans [la fiche de l’étape 2](cadrage-paie-rh-etape-2-navigation.md).
+**Jalon :** chaque menu ouvre une vue Paie & RH dans le contexte RH actif ; les permissions et retours de navigation restent dans ce module ; Centralisation comptable est un pont explicite, pas une reprise des menus comptables.
 
 ### Étape 3 — Dossiers RH et isolation
 
