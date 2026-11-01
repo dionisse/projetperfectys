@@ -490,6 +490,7 @@
       case 'open-payroll-dossier':
         return { moduleId: 'payroll-hr', actionId: 'module.view' };
       case 'create-payroll-dossier':
+      case 'create-payroll-test-dossier':
       case 'save-payroll-accounting-link':
         return { moduleId: 'organization', actionId: 'organization.manageDossiers' };
       case 'create-demo-payroll-run':
@@ -20068,6 +20069,7 @@
     var member = getActiveDemoMember();
     var folders = permittedPayrollDossiers(member);
     var canManage = hasDemoPermission(member, 'organization', 'organization.manageDossiers', demoAccessContext('organization'));
+    var testDossierExists = PayrollHR.dossiers().some(function (dossier) { return dossier.reference === 'PRH-TEST-2026'; });
     var accountingFolders = permittedDemoDossiers(member);
     var accountOptions = '<option value="">Aucun lien comptable (facultatif)</option>' + accountingFolders.map(function (folder) {
       return '<option value="' + esc(folder.id) + '">' + esc(folder.clientName + ' · ' + folder.reference) + '</option>';
@@ -20083,6 +20085,7 @@
         '<h3>' + esc(folder.clientName) + '</h3>' +
         '<p class="payroll-dossier-meta">Code client ' + esc(folder.clientCode) + ' · exercice ' + esc(folder.exerciseYear) + '</p>' +
         '<p class="payroll-dossier-meta">Cycle : ' + esc(dateLabel(folder.cycleStart)) + ' au ' + esc(dateLabel(folder.cycleEnd)) + '</p>' +
+        (Array.isArray(folder.demoEmployees) && folder.demoEmployees.length ? '<p class="payroll-dossier-meta">Jeu de test : ' + folder.demoEmployees.length + ' employés fictifs</p>' : '') +
         '<p class="payroll-dossier-link-note">' + esc(linkedLabel) + '</p>' +
         '<button type="button" class="btn btn-primary" data-action="open-payroll-dossier" data-id="' + esc(folder.id) + '">Ouvrir ce dossier RH <span aria-hidden="true">→</span></button>' +
       '</article>';
@@ -20090,6 +20093,9 @@
     var empty = folders.length ? '' : '<div class="empty-state"><strong>Aucun dossier Paie & RH accessible</strong><span>Créez un dossier dédié ou demandez au gestionnaire de vous accorder un accès Paie & RH.</span></div>';
     var createPanel = canManage
       ? '<section class="dossier-create-panel payroll-dossier-create-panel"><div class="panel-heading"><div><p class="page-kicker">NOUVEAU DOSSIER RH</p><h2>Créer un dossier client Paie & RH</h2><p>Le dossier est isolé des dossiers de Comptabilité générale. Le lien comptable reste facultatif et n’est jamais déduit du code client ou de l’exercice.</p></div></div>' +
+        (testDossierExists
+          ? '<div class="alert info payroll-test-dossier-exists"><div>Le dossier PRH-TEST-2026 existe déjà. Ouvrez-le dans la liste des dossiers RH.</div></div>'
+          : '<div class="payroll-test-dossier-callout"><div><strong>Besoin d’un jeu de test ?</strong><span>Créez un dossier fictif PRH-TEST-2026 et dix fiches « Employé fictif », sans salaire ni donnée personnelle.</span></div><button type="button" class="btn btn-secondary" data-action="create-payroll-test-dossier">Créer le dossier test · 10 employés</button></div>') +
         '<form id="payroll-dossier-create-form" class="dossier-create-form">' +
           '<div class="payroll-dossier-create-grid">' +
             '<div class="field"><label for="prh-client-name">Entreprise cliente <span class="required-mark">*</span></label><input id="prh-client-name" type="text" maxlength="120" required autocomplete="organization" placeholder="Nom de l’entreprise"></div>' +
@@ -20197,6 +20203,7 @@
     var runs = PayrollHR.runs(dossier.id);
     var firstPeriod = PayrollHR.periodForDate(dossier.cycleStart);
     var lastPeriod = PayrollHR.periodForDate(dossier.cycleEnd);
+    var hasTestEmployeeRoster = Array.isArray(dossier.demoEmployees) && dossier.demoEmployees.length > 0;
     var rows = runs.map(function (run) {
       var linkedEntry = payrollEntryForRun(run, dossier.id);
       var status = linkedEntry
@@ -20228,10 +20235,13 @@
       pageHeader('Paie & RH', 'Dossier client : <strong>' + esc(dossier.clientName) + '</strong> · ' + esc(dossier.reference) + ' · exercice ' + esc(dossier.exerciseYear) + '.', '<a class="btn btn-ghost" href="#/payroll-dossiers">Changer de dossier RH</a> <a class="btn btn-ghost" href="#/launcher">← Modules</a>') +
       '<div class="alert warning"><div><strong>Étape de raccordement interne · démonstration</strong><br>Cette version conserve des lots locaux et contrôle leur journal comptable. Elle ne calcule pas les salaires, les cotisations ni les retenues légales. Les montants d’exemple sont fictifs ; aucun export/import tiers n’intervient.</div></div>' +
       accountingLinkPanel +
+      (Array.isArray(dossier.demoEmployees) && dossier.demoEmployees.length ? '<section class="exchange-card payroll-demo-employees-card"><p class="page-kicker">JEU DE DONNÉES FICTIF</p><h3>' + dossier.demoEmployees.length + ' employés de test</h3><p>Fiches génériques de démonstration uniquement : aucun nom réel, salaire, coordonnées ou calcul de paie n’est enregistré. Elles ne sont pas des employés réels.</p><div class="payroll-demo-employees-grid">' + dossier.demoEmployees.map(function (employee) { return '<div class="payroll-demo-employee"><span>' + esc(employee.id) + '</span><strong>' + esc(employee.displayName) + '</strong><small>Test uniquement · aucun montant</small></div>'; }).join('') + '</div></section>' : '') +
       '<section class="exchange-card"><p class="page-kicker">SOURCE INTERNE DE PAIE</p><h3>Lots de paie du dossier</h3>' +
         '<p>Un lot doit être approuvé dans Paie & RH avant d’être transmis. Après centralisation, son identifiant interne empêche un second transfert.</p>' +
-        '<div class="payroll-demo-create"><div class="field"><label for="payroll-demo-period">Période de l’exemple interne</label><input id="payroll-demo-period" type="month" min="' + esc(firstPeriod) + '" max="' + esc(lastPeriod) + '" value="' + esc(firstPeriod) + '"><span class="hint">La période doit se situer dans le cycle du dossier actif.</span></div>' +
-        '<button type="button" class="btn btn-primary" data-action="create-demo-payroll-run">＋ Créer un lot fictif de démonstration</button></div>' +
+        (hasTestEmployeeRoster
+          ? '<div class="alert info"><div>Aucun lot salarial d’exemple n’est généré pour ces fiches test : aucun montant ou calcul de rémunération n’est inventé.</div></div>'
+          : '<div class="payroll-demo-create"><div class="field"><label for="payroll-demo-period">Période de l’exemple interne</label><input id="payroll-demo-period" type="month" min="' + esc(firstPeriod) + '" max="' + esc(lastPeriod) + '" value="' + esc(firstPeriod) + '"><span class="hint">La période doit se situer dans le cycle du dossier actif.</span></div>' +
+            '<button type="button" class="btn btn-primary" data-action="create-demo-payroll-run">＋ Créer un lot fictif de démonstration</button></div>') +
       '</section>' +
       '<section class="exchange-card"><p class="page-kicker">SUIVI DES LOTS</p><h3>' + runs.length + ' lot(s) enregistré(s)</h3>' + empty +
         (runs.length ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Référence interne</th><th>Période</th><th class="numeric">Effectif</th><th class="numeric">Brut illustratif (XOF)</th><th class="numeric">Net illustratif (XOF)</th><th>État</th><th>Action</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '') +
@@ -33097,6 +33107,20 @@
       case 'save-accounting-bridge-mapping':
         saveAccountingBridgeFromView();
         break;
+      case 'create-payroll-test-dossier': {
+        if (!canPerformDemoAction(action, trigger, true)) break;
+        var testDossierResult = PayrollHR.createTestDossier();
+        if (!testDossierResult.ok) {
+          var existingTestDossier = PayrollHR.dossiers().find(function (dossier) { return dossier.reference === 'PRH-TEST-2026'; });
+          toast(existingTestDossier
+            ? 'Le dossier PRH-TEST-2026 existe déjà. Ouvrez-le depuis la liste des dossiers RH.'
+            : (testDossierResult.errors[0] || 'Création du dossier de test impossible.'), 'warning');
+          break;
+        }
+        toast('Dossier fictif PRH-TEST-2026 créé avec dix fiches génériques de test. Aucun salaire ni calcul n’a été ajouté.', 'success');
+        navigate('#/payroll');
+        break;
+      }
       case 'create-demo-payroll-run':
         createDemoPayrollRun();
         break;

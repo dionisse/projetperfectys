@@ -104,6 +104,12 @@
     do {
       id = 'prh-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
     } while (catalog.dossiers.some(function (dossier) { return dossier.id === id; }));
+    var demoEmployees = input.includeTenTestEmployees === true
+      ? Array.from({ length: 10 }, function (_, index) {
+        var number = String(index + 1).padStart(3, '0');
+        return { id: 'EMP-TEST-' + number, displayName: 'Employé fictif ' + number, status: 'test-only' };
+      })
+      : [];
     var dossier = {
       id: id,
       clientName: clientName,
@@ -119,12 +125,23 @@
       email: String(input.email || '').trim().slice(0, 254),
       phone: String(input.phone || '').trim().slice(0, 40),
       accountingDossierId: accountingDossierId,
+      demoEmployees: demoEmployees,
       createdAt: new Date().toISOString()
     };
     catalog.dossiers.push(dossier);
     catalog.activeDossierId = id;
     if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Création impossible : le stockage local est indisponible ou plein. Aucun dossier Paie & RH n’a été enregistré.'] };
     return { ok: true, errors: [], dossier: clone(dossier) };
+  }
+
+  function createTestDossier() {
+    return createDossier({
+      clientName: 'Entreprise fictive de test',
+      clientCode: 'TEST',
+      cycleStart: '2026-01-01',
+      cycleEnd: '2026-12-31',
+      includeTenTestEmployees: true
+    });
   }
 
   function updateAccountingDossierLink(dossierId, accountingDossierId) {
@@ -328,6 +345,7 @@
     currentDossier: currentDossier,
     dossier: dossierById,
     createDossier: createDossier,
+    createTestDossier: createTestDossier,
     selectDossier: selectDossier,
     updateAccountingDossierLink: updateAccountingDossierLink,
     runs: runs,

@@ -53,4 +53,14 @@ assert.equal(run.ok, true, run.errors.join('\n'));
 assert.equal(PayrollHR.runs(created.dossier.id).length, 1);
 assert.deepEqual(PayrollHR.runs(second.dossier.id), [], 'les lots demeurent isolés par identifiant de dossier RH, jamais par comptabilité');
 assert.notEqual(PayrollHR.sourceId(created.dossier.id, run.run.id), PayrollHR.sourceId(second.dossier.id, run.run.id));
+
+const testDossier = PayrollHR.createTestDossier();
+assert.equal(testDossier.ok, true, testDossier.errors.join('\n'));
+assert.equal(testDossier.dossier.reference, 'PRH-TEST-2026');
+assert.equal(testDossier.dossier.accountingDossierId, '');
+assert.equal(testDossier.dossier.demoEmployees.length, 10);
+assert.equal(testDossier.dossier.demoEmployees[0].displayName, 'Employé fictif 001');
+assert.ok(testDossier.dossier.demoEmployees.every(employee => employee.status === 'test-only' && !('salary' in employee)));
+assert.deepEqual(PayrollHR.runs(testDossier.dossier.id), [], 'le dossier test ne crée aucun lot de paie ou montant');
+assert.equal(PayrollHR.createTestDossier().ok, false, 'le jeu de test ne se duplique pas');
 console.log('Dossiers Paie & RH : identifiants PRH, cycles, association explicite, sélection et isolation des lots — OK');

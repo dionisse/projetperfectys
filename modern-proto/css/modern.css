@@ -3989,3 +3989,15 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
   .payroll-accounting-link-form { align-items: stretch; flex-direction: column; }
   .payroll-accounting-link-form .field { min-width: 0; }
 }
+
+.payroll-test-dossier-callout { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-top: 14px; padding: 13px 15px; border: 1px solid #d9e8df; border-radius: 8px; background: #f4f9f5; }
+.payroll-test-dossier-callout > div { display: grid; gap: 4px; }
+.payroll-test-dossier-callout strong { color: #34584e; font-size: .75rem; }
+.payroll-test-dossier-callout span { color: #66766e; font-size: .66rem; line-height: 1.5; }
+.payroll-demo-employees-card > p:not(.page-kicker) { margin: 6px 0 13px; color: var(--muted); font-size: .68rem; line-height: 1.5; }
+.payroll-demo-employees-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(190px, 100%), 1fr)); gap: 9px; }
+.payroll-demo-employee { display: grid; gap: 4px; padding: 11px; border: 1px solid #e4ebe6; border-radius: 7px; background: #fafcf9; }
+.payroll-demo-employee > span { color: #14766c; font-size: .58rem; font-weight: 800; letter-spacing: .07em; }
+.payroll-demo-employee strong { color: #374a42; font-size: .7rem; }
+.payroll-demo-employee small { color: #89928c; font-size: .58rem; }
+@media (max-width: 700px) { .payroll-test-dossier-callout { align-items: flex-start; flex-direction: column; } }

@@ -17,6 +17,11 @@ assert.match(app, /function viewPayrollDossiers\([\s\S]*Créer un dossier client
 assert.match(app, /PRH-' \+ code \+ '-' \+ year/);
 assert.match(app, /Aucun lien automatique avec un dossier comptable/);
 assert.match(app, /Aucun salarié, calcul, écriture comptable ou dossier comptable n’est créé automatiquement/);
+assert.match(app, /data-action=\"create-payroll-test-dossier\"/);
+assert.match(app, /dix fiches « Employé fictif »/);
+assert.match(app, /Aucun lot salarial d’exemple n’est généré pour ces fiches test/);
+assert.match(payroll, /Array\.from\(\{ length: 10 \}/);
+assert.match(payroll, /Employé fictif /);
 assert.match(app, /function permittedPayrollDossiers\([\s\S]*PayrollHR\.dossiers\(\)/);
 assert.match(app, /module\.id === 'payroll-hr' \? PayrollHR\.dossiers\(\) : S\.dossiers\(\)/);
 assert.match(app, /function payrollRunFromSelection\([\s\S]*payrollDossier\.accountingDossierId !== String\(accountingDossierId/);
@@ -25,5 +30,5 @@ assert.match(payroll, /function createDossier\(input\)[\s\S]*'PRH-' \+ clientCod
 assert.match(payroll, /accountingDossierId: accountingDossierId/);
 assert.match(payroll, /function storageKey\(dossierId\)[\s\S]*STORAGE_PREFIX \+ encodeURIComponent/);
 assert.match(css, /\.payroll-dossier-grid[\s\S]*\.payroll-dossier-card/);
-assert.match(worker, /perfecto-static-v198/);
+assert.match(worker, /perfecto-static-v199/);
 console.log('UI Paie & RH : route dossier dédiée, référence PRH, sélection par dossier et association non automatique — OK');
