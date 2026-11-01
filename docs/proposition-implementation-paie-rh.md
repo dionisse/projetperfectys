@@ -183,7 +183,7 @@ Gérer congés annuels, maternité, paternité, maladie, accident et autres type
 
 ### Étape 10 — Rémunérations et variables
 
-Configurer les composantes de rémunération et recueillir les éléments variables de période avec leur source et justificatif. Distinguer saisie, validation et calcul.
+Configurer les composantes de rémunération et recueillir les éléments variables de période avec leur source et justificatif. Distinguer saisie, validation et calcul. Le catalogue, les données fixes/variables, les workflows et les contrôles sont détaillés dans [la fiche de cadrage de l’étape 10](cadrage-paie-rh-etape-10-remunerations-variables.md).
 **Jalon :** aucune valeur de rémunération fictive dans les dossiers réels ; absence de justificatif ou de règle signalée avant calcul.
 
 ### Étape 11 — Packs de règles par pays
