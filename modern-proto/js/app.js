@@ -154,6 +154,7 @@
     analyticalInvoicePaymentAllocation: { dossierId: '', q: '', status: 'all' },
     analyticalSupplierOrders: { dossierId: '', q: '', status: 'all' },
     analyticalSupplierOrdersEdition: { dossierId: '', q: '', status: 'all' },
+    analyticalPayablesEdition: { dossierId: '', natureId: '', accountCode: '', journal: '', from: '', to: '', q: '' },
     budgetRegisterDossierId: '', budgetRegisterQuery: '', budgetRegisterType: 'all',
     openingBalances: { q: '', position: '', sourceDossierId: '', selectedId: '' },
     accountingBridge: { sourceModuleId: 'payroll-hr' },
@@ -25614,6 +25615,113 @@
       '<p class="exchange-footnote">Les imputations analytiques sont saisies explicitement par ligne et par nature ; les axes sont contrôlés séparément et les reliquats restent visibles. Les montants sont conservés tels que saisis dans leur devise. Stockage navigateur du dossier ; aucune synchronisation Google Drive.</p></div>';
   }
 
+  function viewAnalyticalPayablesEdition() {
+    var dossier = S.currentDossier();
+    if (ui.analyticalPayablesEdition.dossierId !== dossier.id) {
+      ui.analyticalPayablesEdition = { dossierId: dossier.id, natureId: '', accountCode: '', journal: '', from: dossier.cycleStart || '', to: dossier.cycleEnd || '', q: '' };
+    }
+    var filter = ui.analyticalPayablesEdition;
+    var cycleStart = String(dossier.cycleStart || '');
+    var cycleEnd = String(dossier.cycleEnd || '');
+    var from = filter.from || cycleStart;
+    var to = filter.to || cycleEnd;
+    var configuredCodes = Array.from(new Set(String(S.accountControlsConfiguration().payableAccounts || '').split(/[\s,;]+/).map(function (code) { return code.trim(); }).filter(Boolean)));
+    var configuredLookup = Object.create(null);
+    configuredCodes.forEach(function (code) { configuredLookup[code] = true; });
+    var accountRows = S.accounts();
+    var accountsByCode = Object.create(null);
+    accountRows.forEach(function (account) { accountsByCode[String(account.code || '')] = account; });
+    var missingAccounts = configuredCodes.filter(function (code) { return !accountsByCode[code]; });
+    var natures = (S.analyticalNaturesConfiguration().rows || []).filter(function (nature) { return nature && !nature.group; });
+    var nature = natures.find(function (item) { return item.id === filter.natureId; }) || null;
+    var journals = S.journals().filter(function (journal) { return journal && !journal.retired; });
+    var selectedCodes = filter.accountCode && configuredLookup[filter.accountCode] ? [filter.accountCode] : configuredCodes;
+    var report = null;
+    if (nature && selectedCodes.length) {
+      var sourceEntries = S.entries().map(function (entry) {
+        return Object.assign({}, entry, { lines: (Array.isArray(entry.lines) ? entry.lines : []).map(function (line) {
+          var code = String(line && (line.account == null ? line.accountCode || '' : line.account) || '').trim();
+          if (configuredLookup[code] && selectedCodes.indexOf(code) !== -1) return line;
+          return Object.assign({}, line, { debit: 0, credit: 0, analyticSplits: [] });
+        }) });
+      });
+      report = JournalLinesReport.buildAnalyticalMovements({
+        entries: sourceEntries, analyticalCenters: S.analyticalCenters(), analyticalNatures: natures,
+        accounts: accountRows, analyticalDimensionValues: S.analyticalDimensionValuesConfiguration(filter.natureId).rows || [],
+        cycleStart: cycleStart, cycleEnd: cycleEnd, decimalPlaces: S.accountingConfiguration().decimalPlaces,
+        filters: { analyticalNature: filter.natureId, journal: filter.journal, from: from, to: to, search: filter.q }
+      });
+    }
+    var natureOptions = '<option value="">Choisir une nature analytique…</option>' + natures.map(function (item) {
+      return '<option value="' + esc(item.id) + '"' + (item.id === filter.natureId ? ' selected' : '') + '>' + esc(item.individualName || item.genericName || item.id) + '</option>';
+    }).join('');
+    var accountOptions = '<option value="">Tous les comptes à payer configurés</option>' + configuredCodes.map(function (code) {
+      var account = accountsByCode[code];
+      return '<option value="' + esc(code) + '"' + (code === filter.accountCode ? ' selected' : '') + '>' + esc(code + (account && account.label ? ' · ' + account.label : ' · absent du plan actuel')) + '</option>';
+    }).join('');
+    var journalOptions = '<option value="">Tous les journaux</option>' + journals.map(function (journal) {
+      return '<option value="' + esc(journal.code) + '"' + (journal.code === filter.journal ? ' selected' : '') + '>' + esc(journal.code + ' · ' + journal.label) + '</option>';
+    }).join('');
+    var filterHtml = '<form class="analytical-payables-filters" data-analytical-payables-filters>' +
+      '<label class="field"><span>Nature analytique</span><select name="natureId">' + natureOptions + '</select></label>' +
+      '<label class="field"><span>Compte à payer</span><select name="accountCode">' + accountOptions + '</select></label>' +
+      '<label class="field"><span>Journal</span><select name="journal">' + journalOptions + '</select></label>' +
+      '<label class="field"><span>Du</span><input type="date" name="from" value="' + esc(from) + '" min="' + esc(cycleStart) + '" max="' + esc(cycleEnd) + '"></label>' +
+      '<label class="field"><span>Au</span><input type="date" name="to" value="' + esc(to) + '" min="' + esc(cycleStart) + '" max="' + esc(cycleEnd) + '"></label>' +
+      '<label class="field"><span>Rechercher</span><input type="search" name="q" value="' + esc(filter.q) + '" placeholder="Pièce, compte ou valeur analytique"></label>' +
+      '<button type="submit" class="btn btn-ghost">Filtrer</button><button type="button" class="btn btn-ghost" data-analytical-payables-clear>Réinitialiser</button></form>';
+    var rows = report && !report.errors.length ? report.groups.reduce(function (list, group) { return list.concat(group.rows || []); }, []) : [];
+    var renderedRows = rows.map(function (row) {
+      return '<tr>' + report.columns.map(function (column) {
+        var value = row.cells[column.key];
+        if (column.key === 'debit' || column.key === 'credit') return '<td class="number-cell">' + (Number(value) ? esc(amount(value)) : '') + '</td>';
+        if (column.key === 'status') return '<td><span class="analytic-movement-status' + (value === 'À ventiler' ? ' is-unallocated' : (value === 'Valeur non rapprochée' || value === 'Centre non rapproché' ? ' is-unmatched' : '')) + '">' + esc(value) + '</span></td>';
+        return '<td>' + esc(value == null ? '' : value) + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    var issueNotes = report ? (report.unmatchedCenterCount ? '<div class="alert warning"><strong>' + report.unmatchedCenterCount + ' affectation(s) de centre non rapprochée(s).</strong> Les valeurs restent détaillées et séparées des totaux ventilés.</div>' : '') +
+      (report.unmatchedValueCount ? '<div class="alert warning">' + report.unmatchedValueCount + ' valeur(s) analytiques hors référentiel restent signalées sans correspondance automatique.</div>' : '') : '';
+    var message = '';
+    if (!configuredCodes.length) message = '<div class="alert warning">Aucun compte n’est configuré dans « Comptes à payer ». Configurez la liste avant de lancer cet état ; aucun préfixe ni compte n’est présumé. <a href="' + esc(accountingMenuHash('parametres', 'account-controls')) + '">Ouvrir les contrôles de comptes</a>.</div>';
+    else if (!natures.length) message = '<div class="alert warning">Aucune nature analytique n’est configurée dans ce dossier. Cet état n’invente pas d’axe.</div>';
+    else if (!nature) message = '<div class="alert info">Choisissez une nature analytique. Une seule nature est affichée à la fois ; les axes parallèles ne sont pas additionnés.</div>';
+    else if (report && report.errors.length) message = '<div class="alert warning"><strong>Consultation impossible.</strong> ' + report.errors.map(esc).join(' ') + '</div>';
+    else if (report && !report.sourceLineCount) message = '<div class="alert warning">Aucune ventilation analytique validée ne correspond aux filtres et aux comptes configurés. Aucun total nul n’est présenté comme un mouvement.</div>';
+    var missingNote = missingAccounts.length ? '<div class="alert warning">Compte(s) configuré(s) absent(s) du plan actuel : ' + missingAccounts.map(esc).join(', ') + '. Les mouvements éventuels restent filtrés par code exact.</div>' : '';
+    var summary = report && report.sourceLineCount ? '<div class="analytical-payables-summary"><div><small>Lignes sources avec analytique</small><strong>' + report.sourceLineCount + '</strong></div><div><small>Débits ventilés · XOF</small><strong>' + esc(amount(report.totalDebit)) + '</strong></div><div><small>Crédits ventilés · XOF</small><strong>' + esc(amount(report.totalCredit)) + '</strong></div><div><small>À ventiler · débit / crédit · XOF</small><strong>' + esc(amount(report.unallocatedDebit)) + ' / ' + esc(amount(report.unallocatedCredit)) + '</strong></div></div>' : '';
+    var table = rows.length ? '<div class="table-wrap analytical-payables-table-wrap"><table class="data-table analytical-payables-table"><thead><tr>' + report.columns.map(function (column) { return '<th>' + esc(column.label) + '</th>'; }).join('') + '</tr></thead><tbody>' + renderedRows + '</tbody></table></div>' : '';
+    var printContent = '<div class="analytical-payables-print-context"><strong>Dossier :</strong> ' + esc(dossier.reference) + '<br><strong>Comptes configurés :</strong> ' + esc(selectedCodes.join(', ')) + '<br><strong>Nature analytique choisie :</strong> ' + esc(nature && (nature.individualName || nature.genericName) || '') + '<br><strong>Période :</strong> ' + esc(from) + ' au ' + esc(to) + '</div>' + summary + issueNotes + table;
+    return '<div class="exchange-workspace analytical-payables-workspace"><div class="alert info"><div><strong>Comptes à payer (analytique) · dossier ' + esc(dossier.reference) + '</strong><br>État en lecture seule des seules écritures validées, sur les comptes inscrits dans Paramètres → Comptes à payer. Les débits et crédits sont présentés séparément ; la nature analytique doit être choisie. Les commandes fournisseurs ne sont pas des dettes comptabilisées. Sans référence auxiliaire explicite dans les écritures, aucun solde n’est attribué à un fournisseur.</div></div>' +
+      (missingAccounts.length ? missingNote : '') + filterHtml + message + issueNotes + summary + table +
+      (rows.length ? '<div class="analytical-payables-toolbar"><button type="button" class="btn btn-primary" data-analytical-payables-preview>Aperçu plein écran / imprimer</button></div><div data-analytical-payables-print hidden>' + printContent + '</div>' : '') +
+      '<p class="exchange-footnote">Cette édition montre des mouvements débit/crédit et les ventilations saisies ; elle ne calcule pas de solde exigible ni de dette par tiers. Les axes restent séparés, les montants « À ventiler » ne sont pas attribués et aucune écriture ou commande n’est modifiée.</p></div>';
+  }
+
+  function bindAnalyticalPayablesEdition() {
+    var workspace = $('.analytical-payables-workspace');
+    if (!workspace) return;
+    var form = $('[data-analytical-payables-filters]', workspace);
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var data = new FormData(form);
+      ui.analyticalPayablesEdition = {
+        dossierId: S.currentDossier().id, natureId: String(data.get('natureId') || ''), accountCode: String(data.get('accountCode') || ''),
+        journal: String(data.get('journal') || ''), from: String(data.get('from') || ''), to: String(data.get('to') || ''), q: String(data.get('q') || '')
+      };
+      render();
+    });
+    $('[data-analytical-payables-clear]', workspace).addEventListener('click', function () {
+      var dossier = S.currentDossier();
+      ui.analyticalPayablesEdition = { dossierId: dossier.id, natureId: '', accountCode: '', journal: '', from: dossier.cycleStart || '', to: dossier.cycleEnd || '', q: '' };
+      render();
+    });
+    workspace.addEventListener('click', function (event) {
+      if (!event.target.closest('[data-analytical-payables-preview]')) return;
+      var printRegion = $('[data-analytical-payables-print]', workspace);
+      if (printRegion) openReportPreview('Comptes à payer (analytique)', printRegion.innerHTML);
+    });
+  }
+
   function analyticalSupplierOrderStatusLabel(status) {
     return status === 'issued' ? 'Émise · engagement déclaré' : status === 'cancelled' ? 'Annulée' : 'Brouillon';
   }
@@ -30186,6 +30294,8 @@
         : editionReportCatalog(tab.children, group.id, tab.id, tab.label);
     } else if (group.id === 'editions' && tab.id === 'supplier-orders') {
       exchangeFeature = viewAnalyticalSupplierOrdersEdition();
+    } else if (group.id === 'editions' && tab.id === 'accounts-payable') {
+      exchangeFeature = viewAnalyticalPayablesEdition();
     } else if (group.id === 'declarations' && tab.id === 'vat-difference') {
       exchangeFeature = viewVatDifferenceReport('');
     } else if (group.id === 'declarations' && tab.id === 'vat-payment') {
@@ -31730,6 +31840,7 @@
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'invoice-payment-allocation') bindAnalyticalInvoicePaymentAllocation();
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'supplier-orders') bindAnalyticalSupplierOrders();
       if (menuParams.g === 'editions' && menuParams.t === 'supplier-orders') bindAnalyticalSupplierOrdersEdition();
+      if (menuParams.g === 'editions' && menuParams.t === 'accounts-payable') bindAnalyticalPayablesEdition();
       if (!isPhoneViewport() && menuParams.g === 'saisie' && menuParams.t === 'forecast-budgets') bindBudgetRegister();
       return;
     }

@@ -1,0 +1,32 @@
+/* Édition Comptes à payer (analytique) : navigation active, source comptable explicite et lecture seule. */
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const Navigation = require('../modern-proto/js/accounting-navigation.js');
+const app = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'app.js'), 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'index.html'), 'utf8');
+const worker = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'service-worker.js'), 'utf8');
+const css = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'css', 'modern.css'), 'utf8');
+
+assert.equal(Navigation.getTab('editions', 'accounts-payable').status, 'active');
+const viewStart = app.indexOf('function viewAnalyticalPayablesEdition()');
+const viewEnd = app.indexOf('function bindAnalyticalPayablesEdition()', viewStart);
+assert.ok(viewStart >= 0 && viewEnd > viewStart, 'l’écran et sa liaison doivent être définis');
+const view = app.slice(viewStart, viewEnd);
+assert.match(view, /S\.accountControlsConfiguration\(\)\.payableAccounts/);
+assert.match(view, /configuredLookup\[code\] = true/);
+assert.match(view, /JournalLinesReport\.buildAnalyticalMovements/);
+assert.match(view, /Choisir une nature analytique/);
+assert.match(view, /une seule nature est affichée à la fois/i);
+assert.match(view, /débits et crédits sont présentés séparément/i);
+assert.match(view, /aucun solde n’est attribué à un fournisseur/i);
+assert.match(view, /commandes fournisseurs ne sont pas des dettes comptabilisées/i);
+assert.doesNotMatch(view, /S\.save[A-Z]|window\.confirm\(/, 'l’édition ne modifie ni les comptes ni les écritures');
+assert.match(app, /exchangeFeature = viewAnalyticalPayablesEdition\(\)/);
+assert.match(app, /bindAnalyticalPayablesEdition\(\)/);
+assert.match(app, /function openReportPreview\(/);
+assert.match(html, /js\/app\.js/);
+assert.match(worker, /perfecto-static-v181/);
+assert.match(css, /\.analytical-payables-workspace/);
+console.log('Comptes à payer analytiques : comptes configurés, une nature choisie, mouvements validés et lecture seule — OK');
