@@ -15,8 +15,10 @@ assert.ok(analyticsStylesheet > html.indexOf('css/table-design-system.css'),
   'la grille analytique se charge après le système global de tableaux');
 assert.ok(analyticsStylesheet > html.indexOf('css/accounting-configuration.css'),
   'les anciennes règles de configuration ne reprennent pas la priorité dans le module');
-assert.match(css, /body\.analytics-module-mode #view table/,
-  'les règles restent limitées aux tableaux du module analytique');
+assert.match(css, /body:is\(\.analytics-module-mode, \.analytical-table-mode\) #view table/,
+  'la grille couvre le module et ses sous-menus analytiques dans la Comptabilité générale');
+assert.match(app, /function isAnalyticalAccountingMenuRoute\(params\)[\s\S]*responsibility-centers[\s\S]*analytic-movements[\s\S]*analytic-natures[\s\S]*analytic-statements/);
+assert.match(app, /toggle\('analytical-table-mode', route === 'analytics' \|\| \(route === 'menu' && isAnalyticalAccountingMenuRoute\(parsed\.params\)\)\)/);
 assert.match(css, /--table-head-bg:\s*#f1edf8/);
 assert.match(css, /border-radius:\s*12px/);
 assert.match(css, /overflow-x:\s*auto/);

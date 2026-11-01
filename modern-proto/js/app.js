@@ -354,6 +354,21 @@
     if (brandCaption) brandCaption.textContent = analytical ? 'Cabinet GOBEX · Suivi Analytique' : 'Cabinet GOBEX · SYSCOHADA';
   }
 
+  function isAnalyticalAccountingMenuRoute(params) {
+    params = params || {};
+    if (params.g === 'definitions' && (
+      params.t === 'responsibility-centers' ||
+      params.t === 'diverse-analyses' ||
+      ANALYTICAL_VALUE_REGISTRY_NATURES.indexOf(params.t) !== -1
+    )) return true;
+    if (params.g === 'saisie' && params.t === 'account-movements' && params.c === 'analytic-movements') return true;
+    if (params.g === 'parametres' && ['sections-accounts', 'allocation-keys', 'analytic-natures', 'analytic-account-rules'].indexOf(params.t) !== -1) return true;
+    if (params.g === 'editions' && params.t === 'analytic-statements') return true;
+    if (params.g === 'editions' && params.t === 'general-accounts' && params.c === 'general-analytic-balance') return true;
+    if (params.g === 'editions' && params.t === 'journals' && params.c === 'journal-analytic-center-totals') return true;
+    return false;
+  }
+
   function accountingGroupForRoute(route) {
     var routeGroups = {
       accounts: 'definitions', journals: 'definitions',
@@ -1159,6 +1174,7 @@
     document.body.classList.toggle('dossiers-list-mode', dossiersListMode);
     document.body.classList.toggle('phone-editions-mode', phoneViewport && ACCOUNTING_ROUTES.indexOf(route) !== -1 && route !== 'analytics');
     document.body.classList.toggle('analytics-module-mode', route === 'analytics');
+    document.body.classList.toggle('analytical-table-mode', route === 'analytics' || (route === 'menu' && isAnalyticalAccountingMenuRoute(parsed.params)));
 
     var html = '';
     switch (route) {
