@@ -173,6 +173,58 @@ test('le suivi des réalisations relie le budget enregistré aux seules écritur
   assert.equal(empty.ok, false, 'aucun budget fictif ne doit être proposé dans le parcours applicatif');
 });
 
+test('le détail restitue les seules lignes validées du budget et sépare les ventilations analytiques', () => {
+  const registeredBudget = {
+    id: 'budget-detail-2025', code: '2025C', year: '2025', type: 'C', label: 'Charges détaillées',
+    cycleStart: '2025-01-01', cycleEnd: '2025-12-31', decomposition: 'none', realizationMode: 'debit-credit',
+    classification: 'C', analyticNatureIds: [], lines: [{ id: 'line-601', accountCode: '601', label: 'Services', annualAmount: 1000, amountComplete: true, periodAmounts: {}, analyticValues: {} }]
+  };
+  const entries = [
+    { id: 'posted-match', status: 'posted', date: '2025-02-03', journal: 'OD', reference: 'OD-1', description: 'Prestation', lines: [{ account: '601', debit: 100, credit: 0, label: 'Ligne validée' }] },
+    { id: 'draft', status: 'draft', date: '2025-02-04', lines: [{ account: '601', debit: 900, credit: 0 }] },
+    { id: 'other-account', status: 'posted', date: '2025-02-05', lines: [{ account: '602', debit: 800, credit: 0 }] },
+    { id: 'outside-period', status: 'posted', date: '2025-07-01', lines: [{ account: '601', debit: 700, credit: 0 }] }
+  ];
+  const detail = BudgetReports.buildReport('budget-realizations-by-line', options({
+    budgetRegister: [registeredBudget], budgetCode: '2025C', accountFilter: '601',
+    from: '2025-02-01', to: '2025-06-30', entries, accounts: [{ code: '601', label: 'Prestations' }]
+  }));
+  assert.equal(detail.ok, true, detail.errors.join(' '));
+  assert.equal(detail.generatedLineCount, 1);
+  assert.deepEqual(detail.rows[0], {
+    date: '2025-02-03', journal: 'OD', piece: 'OD-1', accountCode: '601', accountLabel: 'Prestations',
+    debit: 100, credit: 0, label: 'Ligne validée', sourceEntryId: 'posted-match', sourceLineIndex: 0, allocationIndex: -1
+  });
+  assert.equal(detail.sourceEntryCount, 1);
+  assert.equal(detail.matchedSourceLineCount, 1);
+  assert.equal(detail.basis.noAccountingMutation, true);
+  const missingIds = BudgetReports.buildReport('budget-realizations-by-line', options({
+    budgetRegister: [registeredBudget], budgetCode: '2025C', accountFilter: '601',
+    from: '2025-02-01', to: '2025-06-30', entries: [
+      { status: 'posted', date: '2025-03-01', lines: [{ account: '601', debit: 10, credit: 0 }] },
+      { status: 'posted', date: '2025-03-01', lines: [{ account: '601', debit: 15, credit: 0 }] }
+    ]
+  }));
+  assert.equal(missingIds.sourceEntryCount, 2, 'les pièces sans identifiant restent comptées individuellement');
+
+  const analyticBudget = {
+    ...registeredBudget, id: 'budget-detail-axis', code: '2025X', type: 'X', classification: 'A1', analyticNatureIds: ['activity-domains'],
+    lines: [{ id: 'axis-line', accountCode: '601', label: 'Services', annualAmount: 1000, amountComplete: true, periodAmounts: {}, analyticValues: { 'activity-domains': { valueLabel: 'Services' } } }]
+  };
+  const analytic = BudgetReports.buildReport('budget-realizations-by-line', options({
+    budgetRegister: [analyticBudget], budgetCode: '2025X', accountFilter: '*',
+    from: '2025-02-01', to: '2025-06-30',
+    entries: [{ id: 'analytic-posted', status: 'posted', date: '2025-03-01', journal: 'OD', reference: 'OD-A', lines: [{ account: '601', debit: 100, credit: 0, label: 'Ventilation source', analyticSplits: [{ natureId: 'activity-domains', allocations: [{ valueLabel: 'Services', amount: 60 }, { valueLabel: 'Autre valeur', amount: 20 }], unallocatedAmount: 20 }] }] }]
+  }));
+  assert.equal(analytic.ok, true, analytic.errors.join(' '));
+  assert.equal(analytic.rows.length, 3, 'les deux affectations explicites et le reliquat restent distincts');
+  assert.deepEqual(analytic.rows.map(row => row.debit), [60, 20, 20]);
+  assert.match(analytic.rows[0].label, /Imputation explicite · valeur budgétée/);
+  assert.match(analytic.rows[1].label, /valeur sans ligne budgétaire/);
+  assert.match(analytic.rows[2].label, /À ventiler · reliquat analytique explicite/);
+  assert.equal(analytic.unmatchedValueCount, 1);
+});
+
 test('les périodes sont inclusives et restent dans le cycle pour les sept états datés', () => {
   const datedReports = BudgetReports.REPORT_IDS.filter(id => BudgetReports.definitionFor(id).filters.includes('from'));
   assert.equal(datedReports.length, 7);

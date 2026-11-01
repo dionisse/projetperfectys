@@ -292,6 +292,102 @@
     };
   }
 
+  function realizationDetailRows(budget, entries, accountCodes, from, to, accounts) {
+    var classification = String(budget.classification || 'C');
+    var axisIndex = classification.charAt(0) === 'A' ? Number(classification.slice(1)) - 1 : -1;
+    var axisNatureId = axisIndex >= 0 && Array.isArray(budget.analyticNatureIds) ? budget.analyticNatureIds[axisIndex] : '';
+    var accountLabels = Object.create(null);
+    (Array.isArray(accounts) ? accounts : []).forEach(function (account) {
+      var code = String(account && account.code || '');
+      if (code) accountLabels[code] = String(account.label || account.name || '');
+    });
+    var rows = [];
+    var entryIds = Object.create(null);
+    var sourceLineCount = 0;
+    var unallocatedCount = 0;
+    var unmatchedValueCount = 0;
+    function addSourceRow(entry, line, accountCode, amount, valueLabel, suffix, lineIndex, allocationIndex) {
+      var debit = Number(line.debit) || 0;
+      var credit = Number(line.credit) || 0;
+      var bothSides = debit > 0 && credit > 0;
+      var side = debit > 0 && !credit ? 'debit' : credit > 0 && !debit ? 'credit' : '';
+      var rowAmount = Number(amount);
+      var rowDebit = side === 'debit' && Number.isFinite(rowAmount) && rowAmount >= 0 ? rowAmount : (bothSides ? debit : 0);
+      var rowCredit = side === 'credit' && Number.isFinite(rowAmount) && rowAmount >= 0 ? rowAmount : (bothSides ? credit : 0);
+      var label = String(line.label || entry.description || '');
+      if (valueLabel) label += (label ? ' · ' : '') + 'Valeur analytique : ' + valueLabel;
+      if (suffix) label += (label ? ' · ' : '') + suffix;
+      rows.push({
+        date: String(entry.date || ''), journal: String(entry.journal || ''), piece: String(entry.reference || ''),
+        accountCode: accountCode, accountLabel: accountLabels[accountCode] || accountCode,
+        debit: rowDebit, credit: rowCredit, label: label,
+        sourceEntryId: String(entry.id || ''), sourceLineIndex: lineIndex, allocationIndex: allocationIndex
+      });
+    }
+    (Array.isArray(entries) ? entries : []).forEach(function (entry, entryIndex) {
+      if (!entry || entry.status !== 'posted' || !isIsoDate(entry.date) || entry.date < from || entry.date > to || entry.date < budget.cycleStart || entry.date > budget.cycleEnd) return;
+      (Array.isArray(entry.lines) ? entry.lines : []).forEach(function (line, lineIndex) {
+        var accountCode = String(line && (line.account == null ? line.accountCode || '' : line.account) || '').trim();
+        if (!line || accountCodes.indexOf(accountCode) === -1) return;
+        var debit = Number(line.debit) || 0;
+        var credit = Number(line.credit) || 0;
+        var lineAmount = debit > 0 && credit > 0 ? NaN : debit > 0 ? debit : credit;
+        sourceLineCount += 1;
+        entryIds[String(entry.id || 'entry-' + entryIndex)] = true;
+        if (classification === 'C') {
+          addSourceRow(entry, line, accountCode, lineAmount, '', '', lineIndex, -1);
+          return;
+        }
+        if (!Number.isFinite(lineAmount)) {
+          addSourceRow(entry, line, accountCode, NaN, '', 'À vérifier · débits et crédits simultanés sur la ligne source', lineIndex, -1);
+          unallocatedCount += 1;
+          return;
+        }
+        var split = (Array.isArray(line.analyticSplits) ? line.analyticSplits : []).find(function (item) { return item && item.natureId === axisNatureId; });
+        if (!split) {
+          addSourceRow(entry, line, accountCode, lineAmount, '', 'À ventiler · aucune imputation explicite pour la nature du budget', lineIndex, -1);
+          unallocatedCount += 1;
+          return;
+        }
+        var assigned = 0;
+        (Array.isArray(split.allocations) ? split.allocations : []).forEach(function (allocation, allocationIndex) {
+          var amount = Number(allocation && allocation.amount);
+          if (!Number.isFinite(amount) || amount <= 0) return;
+          assigned += amount;
+          var valueLabel = String(allocation.valueLabel || allocation.centerName || allocation.centerCode || allocation.centerId || '').trim();
+          var matchesBudget = (budget.lines || []).some(function (budgetLine) {
+            if (String(budgetLine.accountCode || '') !== accountCode) return false;
+            var value = budgetLine.analyticValues && budgetLine.analyticValues[axisNatureId] || {};
+            return axisNatureId === 'responsibility-centers'
+              ? String(value.valueId || '') === String(allocation.centerId || '')
+              : String(value.valueLabel || '').trim().replace(/\s+/g, ' ') === valueLabel.replace(/\s+/g, ' ');
+          });
+          if (!matchesBudget) unmatchedValueCount += 1;
+          addSourceRow(entry, line, accountCode, amount, valueLabel, matchesBudget ? 'Imputation explicite · valeur budgétée' : 'Imputation explicite · valeur sans ligne budgétaire', lineIndex, allocationIndex);
+        });
+        var rawUnallocated = split.unallocatedAmount;
+        var unallocated = rawUnallocated == null || rawUnallocated === '' ? Math.max(0, lineAmount - assigned) : Number(rawUnallocated);
+        if (Number.isFinite(unallocated) && unallocated > 0) {
+          addSourceRow(entry, line, accountCode, unallocated, '', 'À ventiler · reliquat analytique explicite', lineIndex, -1);
+          unallocatedCount += 1;
+        }
+      });
+    });
+    rows.sort(function (left, right) { return left.date.localeCompare(right.date) || left.journal.localeCompare(right.journal) || left.piece.localeCompare(right.piece) || left.accountCode.localeCompare(right.accountCode) || left.sourceLineIndex - right.sourceLineIndex || (left.allocationIndex < 0 ? Number.MAX_SAFE_INTEGER : left.allocationIndex) - (right.allocationIndex < 0 ? Number.MAX_SAFE_INTEGER : right.allocationIndex); });
+    return {
+      rows: rows,
+      sourceEntryCount: Object.keys(entryIds).length,
+      matchedSourceLineCount: sourceLineCount,
+      noSourceData: sourceLineCount === 0,
+      unallocatedCount: unallocatedCount,
+      unmatchedValueCount: unmatchedValueCount,
+      classification: classification,
+      axisNatureId: axisNatureId,
+      realizationMode: String(budget.realizationMode || ''),
+      noAccountingMutation: true
+    };
+  }
+
   function emptyResult(reportId, definition, options, errors, warnings, budget) {
     return {
       ok: !errors.length,
@@ -313,7 +409,7 @@
         budgetRegisterAvailable: false,
         commitmentRegisterAvailable: false,
         realizationRegisterAvailable: false,
-        accountsLimitedToAnalyticClasses93to99: !(reportId === 'budget-realizations-followup' && !!budget && Array.isArray(options && options.budgetRegister)),
+        accountsLimitedToAnalyticClasses93to99: !(['budget-realizations-followup', 'budget-realizations-by-line'].indexOf(reportId) !== -1 && !!budget && Array.isArray(options && options.budgetRegister)),
         noBudgetAmountsSimulated: true,
         noCommitmentsSimulated: true,
         noRealizationsSimulated: true,
@@ -346,7 +442,7 @@
       Array.isArray(options.entries) ? options.entries : []
     );
     var accountFilter = definition.filters.indexOf('accounts') !== -1
-      ? (definition.kind === 'realizations-followup' && selectedBudget && Array.isArray(options.budgetRegister)
+      ? (['realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1 && selectedBudget && Array.isArray(options.budgetRegister)
         ? budgetAccountFilter(options.accountFilter == null ? '*' : options.accountFilter, selectedBudget.lines)
         : CurrencyBalanceReport.parseAccountFilter(options.accountFilter == null ? '*' : options.accountFilter, accountOptions))
       : CurrencyBalanceReport.parseAccountFilter('*', accountOptions);
@@ -359,7 +455,7 @@
       if (!isIsoDate(from) || !isIsoDate(to)) errors.push('Indiquez des dates valides pour la période budgétaire.');
       else if (from > to) errors.push('La date de début doit précéder ou égaler la date de fin.');
       else if (from < cycleStart || to > cycleEnd) errors.push('La période budgétaire doit rester dans le cycle du dossier (' + cycleStart + ' — ' + cycleEnd + ').');
-      else if (definition.kind === 'realizations-followup' && selectedBudget && (from < selectedBudget.cycleStart || to > selectedBudget.cycleEnd)) errors.push('La période choisie doit rester dans le cycle du budget sélectionné (' + selectedBudget.cycleStart + ' — ' + selectedBudget.cycleEnd + ').');
+      else if (['realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1 && selectedBudget && (from < selectedBudget.cycleStart || to > selectedBudget.cycleEnd)) errors.push('La période choisie doit rester dans le cycle du budget sélectionné (' + selectedBudget.cycleStart + ' — ' + selectedBudget.cycleEnd + ').');
     }
     var hasAsOfDate = definition.filters.indexOf('asOfDate') !== -1;
     var asOfDate = String(options.asOfDate || (hasAsOfDate ? cycleEnd : ''));
@@ -370,6 +466,37 @@
     if (Array.isArray(options.sourceErrors) && options.sourceErrors.length) errors.push.apply(errors, options.sourceErrors.map(String));
 
     if (errors.length) return emptyResult(reportId, definition, options, errors, warnings, selectedBudget);
+    if (definition.kind === 'realizations-by-line' && Array.isArray(options.budgetRegister)) {
+      var details = realizationDetailRows(selectedBudget, options.entries, accountFilter.codes, from, to, options.accounts);
+      if (details.noSourceData) warnings.push('Aucune ligne comptabilisée ne correspond aux comptes budgétés sélectionnés dans la période.');
+      if (details.unallocatedCount) warnings.push(details.unallocatedCount + ' ligne(s) ou allocation(s) restent « À ventiler » ou nécessitent une vérification ; elles sont explicitement marquées dans le détail.');
+      if (details.unmatchedValueCount) warnings.push(details.unmatchedValueCount + ' allocation(s) utilisent une valeur analytique explicite sans ligne correspondante dans le budget sélectionné ; elles restent identifiées, sans rattachement inventé.');
+      warnings.push('Détail en lecture seule depuis les écritures comptabilisées ; les commandes fournisseurs ne sont pas une source de réalisation.');
+      var detailReport = emptyResult(reportId, definition, options, [], warnings, selectedBudget);
+      detailReport.cycleStart = cycleStart;
+      detailReport.cycleEnd = cycleEnd;
+      detailReport.from = from;
+      detailReport.to = to;
+      detailReport.accountFilter = accountFilter;
+      detailReport.budgetOptions = availableBudgets.map(function (item) { return Object.assign({}, item); });
+      detailReport.rows = details.rows;
+      detailReport.generatedLineCount = details.rows.length;
+      detailReport.dataAvailable = details.rows.length > 0;
+      detailReport.sourceEntryCount = details.sourceEntryCount;
+      detailReport.matchedSourceLineCount = details.matchedSourceLineCount;
+      detailReport.unallocatedCount = details.unallocatedCount;
+      detailReport.unmatchedValueCount = details.unmatchedValueCount;
+      detailReport.realizationMode = details.realizationMode;
+      detailReport.axisNatureId = details.axisNatureId;
+      detailReport.realizationBasis = details.classification === 'C' ? 'Compte général exact, selon le budget sélectionné.' : 'Une seule nature analytique est détaillée à partir des imputations explicites.';
+      detailReport.basis.budgetRegisterAvailable = true;
+      detailReport.basis.realizationRegisterAvailable = false;
+      detailReport.basis.noBudgetAmountsSimulated = false;
+      detailReport.basis.noRealizationsSimulated = false;
+      detailReport.basis.noAvailabilityOrExecutionRateSimulated = true;
+      detailReport.basis.noAccountingMutation = true;
+      return detailReport;
+    }
     if (definition.kind === 'realizations-followup' && Array.isArray(options.budgetRegister)) {
       if (!BudgetRealizations || typeof BudgetRealizations.calculate !== 'function') return emptyResult(reportId, definition, options, ['Le calcul des réalisations budgétaires n’est pas chargé.'], warnings, selectedBudget);
       var actuals = realizationRows(selectedBudget, options.entries, accountFilter.codes, from, to);
