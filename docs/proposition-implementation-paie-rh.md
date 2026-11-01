@@ -203,7 +203,7 @@ Mettre en place anomalies, contrôles de cohérence, rôles de validation, appro
 
 ### Étape 14 — Bulletins et suivi des paiements
 
-Générer les bulletins après approbation et suivre le statut de paiement avec les références réellement fournies par l’utilisateur.
+Générer les bulletins après approbation et suivre le statut de paiement avec les références réellement fournies par l’utilisateur. Les versions, conditions d’émission, corrections, protections et preuves de paiement sont détaillées dans [la fiche de cadrage de l’étape 14](cadrage-paie-rh-etape-14-bulletins-paiements.md).
 **Jalon :** aucun bulletin final avant validation ; aucun paiement déclaré sans source ou preuve.
 
 ### Étape 15 — Registres RH et de paie
