@@ -1438,6 +1438,10 @@
         reference: String(record.reference || '').trim().replace(/\s+/g, ' ').slice(0, 120),
         invoiceDate: String(record.invoiceDate || '').trim().slice(0, 10),
         receiptDate: String(record.receiptDate || '').trim().slice(0, 10),
+        thirdPartyId: String(record.thirdPartyId || '').trim().slice(0, 100),
+        thirdPartyCode: String(record.thirdPartyCode || '').trim().slice(0, 80),
+        thirdPartyName: String(record.thirdPartyName || '').trim().slice(0, 180),
+        identitySource: ['explicit', 'manual', 'unconfirmed'].indexOf(record.identitySource) !== -1 ? record.identitySource : '',
         amount: Number.isFinite(amount) ? amount : 0,
         analyticalAllocations: analyticalAllocations,
         identityConfirmed: record.identityConfirmed === true,
@@ -3166,7 +3170,8 @@
     var currentById = new Map(current.rows.map(function (row) { return [row.id, row]; }));
     var seen = new Set();
     var invoiceUsed = Object.create(null);
-    var receiptUsed = Object.create(null);
+    var receiptUsedByParty = Object.create(null);
+    var receiptUsedTotal = Object.create(null);
     var precisionPlaces = Number(normalizeAccountingConfiguration(dossier.accountingConfiguration, dossier.cycleStart, dossier.cycleEnd).decimalPlaces);
     if (!Number.isInteger(precisionPlaces) || precisionPlaces < 0 || precisionPlaces > 4) precisionPlaces = 0;
     var precision = Math.pow(10, precisionPlaces);
@@ -3174,15 +3179,25 @@
     var dimensionValues = normalizeAnalyticalDimensionValuesConfiguration(dossier.analyticalDimensionValuesConfiguration).rows;
     var centers = analyticalCenters();
     var allEntries = entries();
-    function entryAmount(entry, codes, side) {
+    var allClients = clients();
+    function lineHasExplicitClient(line) {
+      var id = String(line && line.thirdPartyId || '').trim();
+      if (!id || String(line && line.thirdPartyType || '') !== 'client') return false;
+      var party = allClients.find(function (record) { return String(record.id) === id; }) || null;
+      return !!(party && String(party.accountCode || '') === String(line.account || ''));
+    }
+    function entryAmount(entry, codes, side, thirdPartyId) {
       if (!entry || !Array.isArray(entry.lines)) return 0;
       return entry.lines.reduce(function (sum, line) {
         if (!line || codes.indexOf(String(line.account || '')) === -1) return sum;
+        if (thirdPartyId) {
+          if (!lineHasExplicitClient(line) || String(line.thirdPartyId) !== String(thirdPartyId)) return sum;
+        } else if (String(line.thirdPartyId || '').trim() || String(line.thirdPartyType || '').trim()) return sum;
         return sum + (Number(line[side]) || 0);
       }, 0);
     }
-    function receivableBalance(entry) { return entryAmount(entry, customerCodes, 'debit') - entryAmount(entry, customerCodes, 'credit'); }
-    function receiptBalance(entry) { return entryAmount(entry, customerCodes, 'credit') - entryAmount(entry, customerCodes, 'debit'); }
+    function receivableBalance(entry, thirdPartyId) { return entryAmount(entry, customerCodes, 'debit', thirdPartyId) - entryAmount(entry, customerCodes, 'credit', thirdPartyId); }
+    function receiptBalance(entry, thirdPartyId) { return entryAmount(entry, customerCodes, 'credit', thirdPartyId) - entryAmount(entry, customerCodes, 'debit', thirdPartyId); }
     var now = new Date().toISOString();
     var rows = normalizedInput.rows.map(function (record, index) {
       var pendingNewRow = record.id.indexOf(pendingIdPrefix) === 0;
@@ -3203,21 +3218,30 @@
       if (!record.invoiceEntryId || !record.receiptEntryId || record.invoiceEntryId === record.receiptEntryId) errors.push(label + 'choisissez deux pièces comptables distinctes.');
       if (!Number.isFinite(amount) || amount <= 0 || amount > 1000000000000000) errors.push(label + 'le montant affecté doit être strictement positif.');
       else if (Math.abs(amount * precision - Math.round(amount * precision)) > 1e-7) errors.push(label + 'le montant dépasse la précision configurée (' + precisionPlaces + ' décimale(s)).');
+      var thirdPartyId = String(record.thirdPartyId || '').trim();
+      var linkedClient = thirdPartyId ? allClients.find(function (party) { return String(party.id) === thirdPartyId; }) || null : null;
+      var identityConfirmed = !!thirdPartyId || record.identityConfirmed === true;
+      var identitySource = thirdPartyId ? 'explicit' : (identityConfirmed ? 'manual' : 'unconfirmed');
+      if (thirdPartyId && !linkedClient) errors.push(label + 'le client lié par identifiant est absent du référentiel du dossier.');
       if (status === 'active') {
-        if (record.identityConfirmed !== true) errors.push(label + 'confirmez avoir vérifié sur justificatif que facture et règlement concernent le même client ; les comptes collectifs ne portent pas cette identité.');
+        if (!thirdPartyId && !identityConfirmed) errors.push(label + 'confirmez sur justificatif que les deux pièces non identifiées concernent le même client.');
         if (!customerCodes.length || !cashCodes.length) errors.push(label + 'configurez d’abord les comptes clients exacts et les comptes de trésorerie exacts.');
         if (!invoice || invoice.status !== 'posted') errors.push(label + 'la pièce facture doit être validée et comptabilisée dans ce dossier.');
         if (!receipt || receipt.status !== 'posted') errors.push(label + 'la pièce de règlement doit être validée et comptabilisée dans ce dossier.');
         if (invoice && receipt && invoice.id === receipt.id) errors.push(label + 'la facture et le règlement doivent être deux pièces distinctes.');
-        if (invoice && receivableBalance(invoice) <= 0) errors.push(label + 'la facture ne présente pas de créance débitrice sur les comptes clients configurés.');
-        if (receipt && (receiptBalance(receipt) <= 0 || entryAmount(receipt, cashCodes, 'debit') <= 0)) errors.push(label + 'le règlement ne présente pas à la fois un crédit client et un débit de trésorerie sur les comptes configurés.');
+        if (invoice && receivableBalance(invoice, thirdPartyId) <= 0) errors.push(label + 'la facture ne présente pas de créance débitrice pour le client explicitement sélectionné ou dans ses lignes historiques non identifiées.');
+        if (receipt && (receiptBalance(receipt, thirdPartyId) <= 0 || entryAmount(receipt, cashCodes, 'debit') <= 0)) errors.push(label + 'le règlement ne présente pas à la fois un crédit client correspondant à cette identité et un débit de trésorerie sur les comptes configurés.');
         if (invoice && Number.isFinite(amount) && amount > 0) {
-          invoiceUsed[invoice.id] = (invoiceUsed[invoice.id] || 0) + amount;
-          if (invoiceUsed[invoice.id] > receivableBalance(invoice) + 1e-7) errors.push(label + 'le cumul des règlements affectés dépasse la créance de la facture.');
+          var invoiceKey = invoice.id + '\u0000' + thirdPartyId;
+          invoiceUsed[invoiceKey] = (invoiceUsed[invoiceKey] || 0) + amount;
+          if (invoiceUsed[invoiceKey] > receivableBalance(invoice, thirdPartyId) + 1e-7) errors.push(label + 'le cumul des règlements affectés dépasse la créance source de la facture pour ce client.');
         }
         if (receipt && Number.isFinite(amount) && amount > 0) {
-          receiptUsed[receipt.id] = (receiptUsed[receipt.id] || 0) + amount;
-          if (receiptUsed[receipt.id] > receiptBalance(receipt) + 1e-7) errors.push(label + 'le cumul affecté dépasse le règlement client comptabilisé.');
+          var receiptKey = receipt.id + '\u0000' + thirdPartyId;
+          receiptUsedByParty[receiptKey] = (receiptUsedByParty[receiptKey] || 0) + amount;
+          receiptUsedTotal[receipt.id] = (receiptUsedTotal[receipt.id] || 0) + amount;
+          if (receiptUsedByParty[receiptKey] > receiptBalance(receipt, thirdPartyId) + 1e-7) errors.push(label + 'le cumul affecté dépasse le crédit client source pour cette identité.');
+          if (receiptUsedTotal[receipt.id] > entryAmount(receipt, cashCodes, 'debit') + 1e-7) errors.push(label + 'le cumul affecté dépasse le débit de trésorerie comptabilisé dans ce règlement.');
         }
       }
       var allocationSeen = Object.create(null);
@@ -3282,9 +3306,13 @@
         reference: String(record.reference || '').trim().replace(/\s+/g, ' ').slice(0, 120),
         invoiceDate: invoice ? String(invoice.date || '') : String(previous && previous.invoiceDate || ''),
         receiptDate: receipt ? String(receipt.date || '') : String(previous && previous.receiptDate || ''),
+        thirdPartyId: thirdPartyId,
+        thirdPartyCode: linkedClient ? String(linkedClient.code || '').slice(0, 80) : String(record.thirdPartyCode || previous && previous.thirdPartyCode || '').slice(0, 80),
+        thirdPartyName: linkedClient ? String(linkedClient.name || '').slice(0, 180) : String(record.thirdPartyName || previous && previous.thirdPartyName || '').slice(0, 180),
+        identitySource: identitySource,
         amount: Number.isFinite(amount) ? amount : 0,
         analyticalAllocations: analyticRows,
-        identityConfirmed: record.identityConfirmed === true,
+        identityConfirmed: identityConfirmed,
         status: status === 'cancelled' ? 'cancelled' : 'active',
         createdAt: previous ? previous.createdAt : now,
         updatedAt: now
@@ -7935,7 +7963,7 @@
       date: record && record.date || '',
       description: record && record.description || '',
       lines: (record && Array.isArray(record.lines) ? record.lines : []).map(function (line) {
-        return [line.account || '', Number(line.debit) || 0, Number(line.credit) || 0, JSON.stringify(line.analyticSplits || [])];
+        return [line.account || '', Number(line.debit) || 0, Number(line.credit) || 0, JSON.stringify(line.analyticSplits || []), String(line.thirdPartyType || ''), String(line.thirdPartyId || '')];
       })
     });
   }

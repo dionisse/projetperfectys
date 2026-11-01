@@ -40,7 +40,7 @@ const unconfirmed = S.saveAnalyticalInvoicePaymentAllocationConfiguration({
   ...mapping, rows: [{ invoiceEntryId: invoice.entry.id, receiptEntryId: receipt.entry.id, amount: 6000, analyticalAllocations: [] }]
 });
 assert.equal(unconfirmed.ok, false);
-assert.match(unconfirmed.errors.join(' '), /confirmez avoir vérifié sur justificatif/);
+assert.match(unconfirmed.errors.join(' '), /confirmez sur justificatif/);
 const added = S.saveAnalyticalInvoicePaymentAllocationConfiguration({
   ...mapping, rows: [{ invoiceEntryId: invoice.entry.id, receiptEntryId: receipt.entry.id, amount: 6000, reference: 'RAPPROCHEMENT-001', identityConfirmed: true, analyticalAllocations: [] }]
 });
@@ -62,12 +62,12 @@ const invoiceOver = S.saveAnalyticalInvoicePaymentAllocationConfiguration({
   ...mapping, rows: [stored, { invoiceEntryId: invoice.entry.id, receiptEntryId: receipt.entry.id, amount: 4001, analyticalAllocations: [] }]
 });
 assert.equal(invoiceOver.ok, false);
-assert.match(invoiceOver.errors.join(' '), /dépasse la créance de la facture/);
+assert.match(invoiceOver.errors.join(' '), /dépasse la créance source de la facture/);
 const receiptOver = S.saveAnalyticalInvoicePaymentAllocationConfiguration({
   ...mapping, rows: [stored, { invoiceEntryId: invoice.entry.id, receiptEntryId: receipt.entry.id, amount: 1, analyticalAllocations: [] }]
 });
 assert.equal(receiptOver.ok, false);
-assert.match(receiptOver.errors.join(' '), /dépasse le règlement client comptabilisé/);
+assert.match(receiptOver.errors.join(' '), /dépasse le crédit client source/);
 const futurePayment = S.saveAnalyticalInvoicePaymentAllocationConfiguration({
   ...mapping, rows: [{ invoiceEntryId: invoice.entry.id, receiptEntryId: invoice.entry.id, amount: 100 }]
 });
@@ -113,6 +113,55 @@ assert.deepEqual(JSON.parse(JSON.stringify(S.analyticalInvoicePaymentAllocationC
 assert.equal(S.switchDossier(initialDossierId).ok, true);
 assert.equal(S.analyticalInvoicePaymentAllocationConfiguration().rows[0].status, 'cancelled');
 
+const clientAccount = S.accounts().find(account => account.aux === true && account.active !== false && account.postable !== false && /^411/.test(account.code) && !/^4117/.test(account.code));
+assert.ok(clientAccount, 'le plan fournit un compte auxiliaire client imputable.');
+const explicitClient = S.createClient({ code: 'ALLOC-CLIENT-1', name: 'Client lié explicitement', accountCode: clientAccount.code });
+assert.equal(explicitClient.ok, true, explicitClient.errors.join(' '));
+const secondExplicitClient = S.createClient({ code: 'ALLOC-CLIENT-2', name: 'Autre client explicite', accountCode: clientAccount.code });
+assert.equal(secondExplicitClient.ok, true, secondExplicitClient.errors.join(' '));
+const linkedInvoice = S.createEntry({
+  reference: 'FAC-CLIENT-ID-1', journal: 'VTE', date: '2026-06-01', description: 'Facture client identifiée',
+  lines: [{ account: clientAccount.code, debit: 1000, credit: 0, thirdPartyType: 'client', thirdPartyId: explicitClient.client.id }, { account: '701', debit: 0, credit: 1000 }]
+}, 'posted');
+assert.equal(linkedInvoice.ok, true, linkedInvoice.errors.join(' '));
+const linkedReceipt = S.createEntry({
+  reference: 'BQ-CLIENT-ID-1', journal: 'BQ', date: '2026-06-10', description: 'Encaissement client identifié',
+  lines: [{ account: '512', debit: 700, credit: 0 }, { account: clientAccount.code, debit: 0, credit: 700, thirdPartyType: 'client', thirdPartyId: explicitClient.client.id }]
+}, 'posted');
+assert.equal(linkedReceipt.ok, true, linkedReceipt.errors.join(' '));
+const linkedInvoice2 = S.createEntry({
+  reference: 'FAC-CLIENT-ID-2', journal: 'VTE', date: '2026-06-02', description: 'Facture autre client',
+  lines: [{ account: clientAccount.code, debit: 500, credit: 0, thirdPartyType: 'client', thirdPartyId: secondExplicitClient.client.id }, { account: '701', debit: 0, credit: 500 }]
+}, 'posted');
+assert.equal(linkedInvoice2.ok, true, linkedInvoice2.errors.join(' '));
+const linkedReceipt2 = S.createEntry({
+  reference: 'BQ-CLIENT-ID-2', journal: 'BQ', date: '2026-06-11', description: 'Encaissement autre client',
+  lines: [{ account: '512', debit: 500, credit: 0 }, { account: clientAccount.code, debit: 0, credit: 500, thirdPartyType: 'client', thirdPartyId: secondExplicitClient.client.id }]
+}, 'posted');
+assert.equal(linkedReceipt2.ok, true, linkedReceipt2.errors.join(' '));
+const exactClientMapping = { customerAccountCodes: [clientAccount.code], cashAccountCodes: ['512'] };
+const preservedLegacyRows = S.analyticalInvoicePaymentAllocationConfiguration().rows;
+const directIdentity = S.saveAnalyticalInvoicePaymentAllocationConfiguration({
+  ...exactClientMapping, rows: preservedLegacyRows.concat([{ invoiceEntryId: linkedInvoice.entry.id, receiptEntryId: linkedReceipt.entry.id, thirdPartyId: explicitClient.client.id, amount: 600, identityConfirmed: false }])
+});
+assert.equal(directIdentity.ok, true, directIdentity.errors.join(' '));
+const explicitAllocation = S.analyticalInvoicePaymentAllocationConfiguration().rows.find(row => row.invoiceEntryId === linkedInvoice.entry.id);
+assert.equal(explicitAllocation.thirdPartyId, explicitClient.client.id);
+assert.equal(explicitAllocation.thirdPartyCode, explicitClient.client.code);
+assert.equal(explicitAllocation.identitySource, 'explicit');
+assert.equal(explicitAllocation.identityConfirmed, true, 'l’identité explicite source suffit, sans case manuelle.');
+const preserveAfterDirect = S.analyticalInvoicePaymentAllocationConfiguration().rows;
+const crossClient = S.saveAnalyticalInvoicePaymentAllocationConfiguration({
+  ...exactClientMapping, rows: preserveAfterDirect.concat([{ invoiceEntryId: linkedInvoice.entry.id, receiptEntryId: linkedReceipt2.entry.id, thirdPartyId: explicitClient.client.id, amount: 100 }])
+});
+assert.equal(crossClient.ok, false);
+assert.match(crossClient.errors.join(' '), /crédit client correspondant à cette identité/);
+const strippedIdentity = S.saveAnalyticalInvoicePaymentAllocationConfiguration({
+  ...exactClientMapping, rows: preserveAfterDirect.concat([{ invoiceEntryId: linkedInvoice.entry.id, receiptEntryId: linkedReceipt.entry.id, amount: 100, identityConfirmed: true }])
+});
+assert.equal(strippedIdentity.ok, false, 'une confirmation manuelle ne contourne pas les références déjà présentes et explicites.');
+assert.match(strippedIdentity.errors.join(' '), /facture ne présente pas de créance débitrice/);
+
 const app = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'app.js'), 'utf8');
 const navigation = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'js', 'accounting-navigation.js'), 'utf8');
 const css = fs.readFileSync(path.join(__dirname, '..', 'modern-proto', 'css', 'modern.css'), 'utf8');
@@ -122,5 +171,10 @@ assert.match(app, /function openAnalyticalInvoicePaymentClassifications\(/);
 assert.match(app, /exchangeFeature = viewAnalyticalInvoicePaymentAllocation\(\)/);
 assert.match(app, /bindAnalyticalInvoicePaymentAllocation\(\)/);
 assert.match(app, /aucune imputation de la facture n’est copiée automatiquement/i);
+assert.match(app, /function partyGroups\(entry, positiveSide, negativeSide\)/);
+assert.match(app, /thirdPartyId: explicitlyMatched \? invoiceCandidate\.thirdPartyId : ''/);
+assert.match(app, /Identité vérifiée par la source/);
+assert.match(app, /une source partiellement identifiée ne peut pas être rapprochée manuellement/i);
+assert.doesNotMatch(app, /les écritures sources ne portent pas d’identifiant auxiliaire individuel/);
 assert.match(css, /\.invoice-payment-summary/);
 console.log('Affectation analytique facture–règlement : pièces validées, comptes exacts, limites de soldes et axes explicites — OK');

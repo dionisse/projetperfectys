@@ -25437,21 +25437,45 @@
     var customerCodes = configuration.customerAccountCodes || [];
     var cashCodes = configuration.cashAccountCodes || [];
     var activeRows = (configuration.rows || []).filter(function (row) { return row.status === 'active'; });
+    var clients = S.clients() || [];
     function amountOn(entry, codes, side) {
       return (entry.lines || []).reduce(function (sum, line) {
         return sum + (codes.indexOf(String(line.account || '')) !== -1 ? Number(line[side]) || 0 : 0);
       }, 0);
     }
+    function partyGroups(entry, positiveSide, negativeSide) {
+      var groups = Object.create(null);
+      (entry.lines || []).forEach(function (line) {
+        if (!line || customerCodes.indexOf(String(line.account || '')) === -1) return;
+        var id = String(line.thirdPartyId || '').trim();
+        var type = String(line.thirdPartyType || '').trim();
+        var client = id && type === 'client' ? clients.find(function (record) { return String(record.id) === id; }) : null;
+        if (id && (!client || String(client.accountCode || '') !== String(line.account || ''))) return;
+        if (!id && type) return;
+        var key = id || '';
+        if (!groups[key]) groups[key] = { thirdPartyId: key, thirdPartyType: key ? 'client' : '', thirdPartyCode: client && String(client.code || '') || '', thirdPartyName: client && String(client.name || '') || '', amount: 0 };
+        groups[key].amount += (Number(line[positiveSide]) || 0) - (Number(line[negativeSide]) || 0);
+      });
+      return Object.keys(groups).map(function (key) { return groups[key]; });
+    }
+    function allocatedFor(entryId, thirdPartyId, entryField) {
+      return activeRows.filter(function (row) {
+        return row[entryField] === entryId && String(row.thirdPartyId || '') === String(thirdPartyId || '');
+      }).reduce(function (sum, row) { return sum + Number(row.amount || 0); }, 0);
+    }
     var invoices = [];
     var receipts = [];
     (S.entries() || []).filter(function (entry) { return entry && entry.status === 'posted'; }).forEach(function (entry) {
-      var receivable = amountOn(entry, customerCodes, 'debit') - amountOn(entry, customerCodes, 'credit');
-      var receiptAmount = amountOn(entry, customerCodes, 'credit') - amountOn(entry, customerCodes, 'debit');
-      var alreadyInvoice = activeRows.filter(function (row) { return row.invoiceEntryId === entry.id; }).reduce(function (sum, row) { return sum + Number(row.amount || 0); }, 0);
-      var alreadyReceipt = activeRows.filter(function (row) { return row.receiptEntryId === entry.id; }).reduce(function (sum, row) { return sum + Number(row.amount || 0); }, 0);
-      var cashDebit = amountOn(entry, cashCodes, 'debit');
-      if (receivable > alreadyInvoice + 1e-7) invoices.push({ entry: entry, remaining: receivable - alreadyInvoice });
-      if (receiptAmount > alreadyReceipt + 1e-7 && cashDebit > 0) receipts.push({ entry: entry, remaining: receiptAmount - alreadyReceipt });
+      partyGroups(entry, 'debit', 'credit').forEach(function (group) {
+        var remaining = group.amount - allocatedFor(entry.id, group.thirdPartyId, 'invoiceEntryId');
+        if (remaining > 1e-7) invoices.push({ entry: entry, thirdPartyId: group.thirdPartyId, thirdPartyType: group.thirdPartyType, thirdPartyCode: group.thirdPartyCode, thirdPartyName: group.thirdPartyName, identitySource: group.thirdPartyId ? 'explicit' : 'manual', selectionId: String(entry.id) + '|' + String(group.thirdPartyId || ''), remaining: remaining, sourceKind: 'invoice' });
+      });
+      var cashRemaining = amountOn(entry, cashCodes, 'debit') - activeRows.filter(function (row) { return row.receiptEntryId === entry.id; }).reduce(function (sum, row) { return sum + Number(row.amount || 0); }, 0);
+      if (cashRemaining <= 1e-7) return;
+      partyGroups(entry, 'credit', 'debit').forEach(function (group) {
+        var customerRemaining = group.amount - allocatedFor(entry.id, group.thirdPartyId, 'receiptEntryId');
+        if (customerRemaining > 1e-7) receipts.push({ entry: entry, thirdPartyId: group.thirdPartyId, thirdPartyType: group.thirdPartyType, thirdPartyCode: group.thirdPartyCode, thirdPartyName: group.thirdPartyName, identitySource: group.thirdPartyId ? 'explicit' : 'manual', selectionId: String(entry.id) + '|' + String(group.thirdPartyId || ''), remaining: customerRemaining, cashRemaining: cashRemaining, sourceKind: 'receipt' });
+      });
     });
     return { invoices: invoices, receipts: receipts };
   }
@@ -25471,7 +25495,8 @@
     var candidates = analyticalInvoicePaymentCandidates(config);
     var totalAllocated = activeRows.reduce(function (sum, row) { return sum + Number(row.amount || 0); }, 0);
     var awaitingAnalytical = activeRows.filter(function (row) { return !(row.analyticalAllocations || []).length; }).length;
-    var identityUnconfirmed = activeRows.filter(function (row) { return row.identityConfirmed !== true; }).length;
+    var identityExplicit = activeRows.filter(function (row) { return row.identitySource === 'explicit' && !!row.thirdPartyId; }).length;
+    var identityUnconfirmed = activeRows.filter(function (row) { return row.identitySource !== 'explicit' && row.identityConfirmed !== true; }).length;
     var visible = rows.filter(function (row) {
       if (filters.status !== 'all' && row.status !== filters.status) return false;
       if (!filters.q) return true;
@@ -25498,18 +25523,21 @@
       var receipt = (S.entries() || []).find(function (entry) { return entry && entry.id === row.receiptEntryId; });
       var invoiceLabel = invoice ? [invoice.date, invoice.reference, invoice.description].filter(Boolean).join(' · ') : [row.invoiceDate, row.invoiceReference, 'Pièce source absente'].filter(Boolean).join(' · ');
       var receiptLabel = receipt ? [receipt.date, receipt.reference, receipt.description].filter(Boolean).join(' · ') : [row.receiptDate, row.receiptReference, 'Pièce source absente'].filter(Boolean).join(' · ');
+      var identityLabel = row.thirdPartyId
+        ? '<br><small class="invoice-payment-identity-confirmed">Client lié par identifiant explicite · ' + esc(row.thirdPartyName || row.thirdPartyCode || row.thirdPartyId) + (row.thirdPartyCode ? ' · ' + esc(row.thirdPartyCode) : '') + '</small>'
+        : (row.identityConfirmed ? '<br><small class="invoice-payment-identity-confirmed">Client vérifié manuellement sur justificatifs</small>' : '<br><small class="invoice-payment-unclassified">Client non confirmé</small>');
       var actions = '<button type="button" class="btn btn-ghost btn-sm" data-invoice-payment-analytic="' + esc(row.id) + '"' + (!editable || row.status === 'cancelled' ? ' disabled' : '') + '>Imputer analytiquement</button>' +
         '<button type="button" class="btn btn-ghost btn-sm' + (row.status === 'active' ? ' btn-danger-quiet' : '') + '" data-invoice-payment-toggle="' + esc(row.id) + '"' + (!editable ? ' disabled' : '') + '>' + (row.status === 'active' ? 'Annuler l’affectation' : 'Réactiver') + '</button>';
-      return '<tr' + (!(row.analyticalAllocations || []).length && row.status === 'active' ? ' class="invoice-payment-unclassified-row"' : '') + '><td>' + esc(invoiceLabel) + '</td><td>' + esc(receiptLabel) + (row.reference ? '<br><small>Réf. lien : ' + esc(row.reference) + '</small>' : '') + (row.identityConfirmed ? '<br><small class="invoice-payment-identity-confirmed">Client vérifié manuellement</small>' : '<br><small class="invoice-payment-unclassified">Client non confirmé</small>') + '</td><td class="number-cell">' + esc(formatter.format(row.amount)) + ' XOF</td><td class="invoice-payment-analytic-cell">' + analyticsSummary(row) + '</td><td><span class="scheduled-payment-status' + (row.status === 'cancelled' ? ' is-cancelled' : '') + '">' + (row.status === 'cancelled' ? 'Annulée' : 'Affectée') + '</span></td><td><div class="supplier-row-actions">' + actions + '</div></td></tr>';
+      return '<tr' + (!(row.analyticalAllocations || []).length && row.status === 'active' ? ' class="invoice-payment-unclassified-row"' : '') + '><td>' + esc(invoiceLabel) + '</td><td>' + esc(receiptLabel) + (row.reference ? '<br><small>Réf. lien : ' + esc(row.reference) + '</small>' : '') + identityLabel + '</td><td class="number-cell">' + esc(formatter.format(row.amount)) + ' XOF</td><td class="invoice-payment-analytic-cell">' + analyticsSummary(row) + '</td><td><span class="scheduled-payment-status' + (row.status === 'cancelled' ? ' is-cancelled' : '') + '">' + (row.status === 'cancelled' ? 'Annulée' : 'Affectée') + '</span></td><td><div class="supplier-row-actions">' + actions + '</div></td></tr>';
     }).join('');
     var mapping = '<form id="invoice-payment-mapping-form" class="invoice-payment-mapping-form"><div class="field"><label for="invoice-payment-customer-codes">Comptes clients exacts du plan</label><input id="invoice-payment-customer-codes" name="customerAccountCodes" value="' + esc(config.customerAccountCodes.join(', ')) + '" placeholder="Saisir les codes exacts, séparés par des virgules"><span class="hint">Uniquement des comptes 41 imputables du plan de ce dossier ; aucun préfixe ni compte n’est présélectionné.</span></div><div class="field"><label for="invoice-payment-cash-codes">Comptes de trésorerie exacts</label><input id="invoice-payment-cash-codes" name="cashAccountCodes" value="' + esc(config.cashAccountCodes.join(', ')) + '" placeholder="Saisir les codes exacts, séparés par des virgules"><span class="hint">Uniquement des comptes 5 imputables du plan ; aucun compte n’est présélectionné.</span></div><button type="submit" class="btn btn-ghost"' + (!editable ? ' disabled' : '') + '>Enregistrer les comptes de rapprochement</button></form>';
     var filter = '<form id="invoice-payment-filters" class="invoice-payment-filters"><label class="field"><span>Rechercher les références</span><input name="q" type="search" value="' + esc(filters.q) + '" placeholder="Facture ou règlement"></label><label class="field"><span>État</span><select name="status"><option value="all"' + (filters.status === 'all' ? ' selected' : '') + '>Tous</option><option value="active"' + (filters.status === 'active' ? ' selected' : '') + '>Actifs</option><option value="cancelled"' + (filters.status === 'cancelled' ? ' selected' : '') + '>Annulés</option></select></label><button type="submit" class="btn btn-ghost">Filtrer</button><button type="button" class="btn btn-ghost" data-invoice-payment-clear>Effacer</button></form>';
     var table = tableRows ? '<div class="table-wrap invoice-payment-table-wrap"><table class="data-table invoice-payment-table"><thead><tr><th>Facture comptabilisée</th><th>Règlement comptabilisé</th><th>Montant affecté</th><th>Imputations analytiques explicites · axes séparés</th><th>État</th><th>Actions</th></tr></thead><tbody>' + tableRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucune affectation pour cette sélection.</strong> Seuls des liens enregistrés entre pièces comptables validées apparaîtront ici.</div>';
     return '<div class="exchange-workspace invoice-payment-allocation-workspace"><div class="alert info"><div><strong>Affectation facture–règlement · dossier ' + esc(dossier.reference) + '</strong><br>Cette vue relie manuellement une pièce de facture et une pièce d’encaissement déjà validées. Elle conserve le lien et des ventilations analytiques saisies expressément ; elle ne crée ni facture, ni règlement, ni écriture. Les règlements prévus ne sont pas des sources de paiement. Ce registre est distinct du calcul de TVA sur encaissements.</div></div>' +
       (!allowed ? '<div class="alert warning">Consultation seule : le droit « Affecter et imputer les règlements aux factures » est requis dans ce dossier.</div>' : (isPhoneViewport() ? '<div class="alert info">Consultation sur téléphone ; les affectations sont réservées à un ordinateur ou une tablette.</div>' : '')) +
-      '<div class="alert warning"><strong>Identité du client à confirmer manuellement.</strong> Les pièces ne portent pas d’identifiant auxiliaire individuel ; un solde sur le compte collectif 41 ne prouve pas que facture et encaissement concernent le même client. N’affectez qu’après vérification des justificatifs. Aucun rapprochement client n’est automatique.</div>' +
+      '<div class="alert info"><strong>Rapprochement par identité explicite lorsque disponible.</strong> Deux pièces portant le même identifiant client de ligne sont rapprochées pour ce client uniquement. Les écritures historiques sans identifiant restent en mode manuel avec confirmation sur justificatifs ; une pièce identifiée ne peut pas être associée à une pièce non identifiée ou à un autre client.</div>' +
       '<section class="invoice-payment-mapping-card"><div><h3>Comptes de rapprochement · correspondance exacte</h3><p>Les lignes sources ne sont proposées qu’après validation des comptes 41 clients et 5 trésorerie choisis ci-dessous.</p></div>' + mapping + '</section>' +
-      '<div class="invoice-payment-summary"><div><small>Affectations actives</small><strong>' + activeRows.length + '</strong></div><div><small>Montants affectés · XOF</small><strong>' + esc(formatter.format(totalAllocated)) + '</strong></div><div><small>Sans ventilation analytique</small><strong>' + awaitingAnalytical + '</strong></div><div><small>Client non confirmé</small><strong>' + identityUnconfirmed + '</strong></div><div><small>Pièces disponibles · selon comptes choisis</small><strong>' + candidates.invoices.length + ' facture(s) · ' + candidates.receipts.length + ' règlement(s)</strong></div><div><small>Affectations annulées conservées</small><strong>' + cancelledRows.length + '</strong></div></div>' +
+      '<div class="invoice-payment-summary"><div><small>Affectations actives</small><strong>' + activeRows.length + '</strong></div><div><small>Montants affectés · XOF</small><strong>' + esc(formatter.format(totalAllocated)) + '</strong></div><div><small>Sans ventilation analytique</small><strong>' + awaitingAnalytical + '</strong></div><div><small>Identité client explicite</small><strong>' + identityExplicit + '</strong></div><div><small>Client non confirmé</small><strong>' + identityUnconfirmed + '</strong></div><div><small>Pièces disponibles · selon comptes choisis</small><strong>' + candidates.invoices.length + ' facture(s) · ' + candidates.receipts.length + ' règlement(s)</strong></div><div><small>Affectations annulées conservées</small><strong>' + cancelledRows.length + '</strong></div></div>' +
       (!config.customerAccountCodes.length || !config.cashAccountCodes.length ? '<div class="alert warning">Aucun rapprochement automatique : renseignez et enregistrez les comptes exacts. Les options de facture et de règlement resteront vides jusque-là.</div>' : '') +
       filter + '<div class="invoice-payment-toolbar"><button type="button" class="btn btn-primary" data-invoice-payment-add' + (!editable || !candidates.invoices.length || !candidates.receipts.length ? ' disabled' : '') + '>＋ Affecter un règlement validé</button><span>Pièces proposées : écritures comptabilisées du dossier uniquement · ' + candidates.invoices.length + ' facture(s) · ' + candidates.receipts.length + ' règlement(s)</span></div>' + table +
       '<p class="exchange-footnote">Pour chaque nature analytique, les montants sont contrôlés séparément et le reliquat reste visible « À ventiler ». Les axes parallèles ne sont ni fusionnés ni additionnés ; aucune ventilation d’une facture n’est recopiée sur le règlement sans saisie explicite. Les liens et paramètres sont conservés dans le stockage navigateur de ce dossier ; aucune synchronisation Google Drive n’est impliquée.</p></div>';
@@ -25520,24 +25548,87 @@
     var candidates = analyticalInvoicePaymentCandidates(config);
     var label = function (candidate) {
       var entry = candidate.entry;
-      return [entry.date, entry.reference, entry.description, 'reste ' + amount(candidate.remaining) + ' XOF'].filter(Boolean).join(' · ');
+      var identity = candidate.thirdPartyId
+        ? 'Client identifié · ' + (candidate.thirdPartyName || candidate.thirdPartyCode || candidate.thirdPartyId) + (candidate.thirdPartyCode ? ' · ' + candidate.thirdPartyCode : '')
+        : 'Sans identifiant tiers · confirmation manuelle requise';
+      var capacity = candidate.sourceKind === 'receipt'
+        ? 'crédit client restant ' + amount(candidate.remaining) + ' XOF · trésorerie restante ' + amount(candidate.cashRemaining) + ' XOF'
+        : 'créance restante ' + amount(candidate.remaining) + ' XOF';
+      return [identity, entry.date, entry.reference, entry.description, capacity].filter(Boolean).join(' · ');
     };
-    var invoiceOptions = '<option value="">Choisir une facture comptabilisée…</option>' + candidates.invoices.map(function (candidate) { return '<option value="' + esc(candidate.entry.id) + '">' + esc(label(candidate)) + '</option>'; }).join('');
-    var receiptOptions = '<option value="">Choisir un règlement comptabilisé…</option>' + candidates.receipts.map(function (candidate) { return '<option value="' + esc(candidate.entry.id) + '">' + esc(label(candidate)) + '</option>'; }).join('');
-    var body = '<form id="invoice-payment-add-form" novalidate><div id="invoice-payment-form-errors" aria-live="assertive"></div><div class="form-grid invoice-payment-form-grid"><div class="field"><label for="invoice-payment-invoice">Facture émise · pièce comptabilisée</label><select id="invoice-payment-invoice" required>' + invoiceOptions + '</select></div><div class="field"><label for="invoice-payment-receipt">Règlement reçu · pièce comptabilisée</label><select id="invoice-payment-receipt" required>' + receiptOptions + '</select></div><div class="field"><label for="invoice-payment-amount">Montant reçu affecté (XOF)</label><input id="invoice-payment-amount" type="number" min="' + esc(String(1 / Math.pow(10, Number(S.accountingConfiguration().decimalPlaces) || 0))) + '" step="' + esc(String(1 / Math.pow(10, Number(S.accountingConfiguration().decimalPlaces) || 0))) + '" required></div><div class="field"><label for="invoice-payment-reference">Référence de rapprochement (facultatif)</label><input id="invoice-payment-reference" maxlength="120" placeholder="Référence saisie par l’utilisateur"></div></div><div class="alert warning"><strong>Contrôle auxiliaire requis :</strong> les écritures sources ne portent pas de code individuel du client. Le compte collectif ne suffit pas à confirmer l’identité.</div><label class="invoice-payment-confirmation"><input id="invoice-payment-identity-confirmed" type="checkbox" required> J’ai vérifié sur les justificatifs que la facture et le règlement concernent le même client.</label><p class="invoice-payment-form-note">Le montant doit être justifié par les soldes des pièces validées ; il ne modifie pas les écritures sources et ne peut dépasser le restant dû ni le règlement disponible.</p></form>';
+    var invoiceOptions = '<option value="">Choisir une facture comptabilisée…</option>' + candidates.invoices.map(function (candidate) { return '<option value="' + esc(candidate.selectionId) + '">' + esc(label(candidate)) + '</option>'; }).join('');
+    var receiptOptions = '<option value="">Choisir un règlement comptabilisé…</option>' + candidates.receipts.map(function (candidate) { return '<option value="' + esc(candidate.selectionId) + '">' + esc(label(candidate)) + '</option>'; }).join('');
+    var body = '<form id="invoice-payment-add-form" novalidate><div id="invoice-payment-form-errors" aria-live="assertive"></div><div class="form-grid invoice-payment-form-grid"><div class="field"><label for="invoice-payment-invoice">Facture émise · pièce comptabilisée</label><select id="invoice-payment-invoice" required>' + invoiceOptions + '</select></div><div class="field"><label for="invoice-payment-receipt">Règlement reçu · pièce comptabilisée</label><select id="invoice-payment-receipt" required>' + receiptOptions + '</select></div><div class="field"><label for="invoice-payment-amount">Montant reçu affecté (XOF)</label><input id="invoice-payment-amount" type="number" min="' + esc(String(1 / Math.pow(10, Number(S.accountingConfiguration().decimalPlaces) || 0))) + '" step="' + esc(String(1 / Math.pow(10, Number(S.accountingConfiguration().decimalPlaces) || 0))) + '" required></div><div class="field"><label for="invoice-payment-reference">Référence de rapprochement (facultatif)</label><input id="invoice-payment-reference" maxlength="120" placeholder="Référence saisie par l’utilisateur"></div></div><div id="invoice-payment-identity-status" aria-live="polite"></div><label class="invoice-payment-confirmation"><input id="invoice-payment-identity-confirmed" type="checkbox"> Je confirme sur justificatifs que les deux pièces non identifiées concernent le même client.</label><p class="invoice-payment-form-note">Le montant doit être justifié par les soldes des pièces validées ; il ne modifie pas les écritures sources et ne peut dépasser le restant dû de cette facture, le crédit client de ce règlement ni son débit de trésorerie disponible.</p></form>';
     openModal('Affecter un règlement à une facture', 'Dossier ' + esc(S.currentDossier().reference) + ' · aucune écriture ne sera créée', body, '<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button><button type="submit" class="btn btn-primary" form="invoice-payment-add-form">Enregistrer le lien</button>', true);
     var form = $('#invoice-payment-add-form');
+    var invoiceSelect = $('#invoice-payment-invoice', form);
+    var receiptSelect = $('#invoice-payment-receipt', form);
+    var identityCheckbox = $('#invoice-payment-identity-confirmed', form);
+    var identityStatus = $('#invoice-payment-identity-status', form);
+    function findCandidate(selectionId, list) {
+      return (list || []).find(function (candidate) { return candidate.selectionId === String(selectionId || ''); }) || null;
+    }
+    function updateIdentityStatus() {
+      var invoiceCandidate = findCandidate(invoiceSelect.value, candidates.invoices);
+      var receiptCandidate = findCandidate(receiptSelect.value, candidates.receipts);
+      identityCheckbox.disabled = true;
+      identityCheckbox.required = false;
+      if (!invoiceCandidate || !receiptCandidate) {
+        identityCheckbox.checked = false;
+        identityStatus.innerHTML = '<div class="alert info">Choisissez une facture et un règlement pour contrôler leur identité client.</div>';
+        return;
+      }
+      if (invoiceCandidate.thirdPartyId && receiptCandidate.thirdPartyId) {
+        identityCheckbox.checked = invoiceCandidate.thirdPartyId === receiptCandidate.thirdPartyId;
+        if (invoiceCandidate.thirdPartyId === receiptCandidate.thirdPartyId) {
+          identityStatus.innerHTML = '<div class="alert success"><strong>Identité vérifiée par la source.</strong> Les deux pièces portent le même identifiant client explicite : ' + esc(invoiceCandidate.thirdPartyName || invoiceCandidate.thirdPartyCode || invoiceCandidate.thirdPartyId) + '.</div>';
+        } else {
+          identityStatus.innerHTML = '<div class="alert error"><strong>Rapprochement refusé.</strong> Les pièces portent des identifiants clients différents.</div>';
+        }
+        return;
+      }
+      if (!invoiceCandidate.thirdPartyId && !receiptCandidate.thirdPartyId) {
+        identityCheckbox.disabled = false;
+        identityCheckbox.required = true;
+        identityCheckbox.checked = false;
+        identityStatus.innerHTML = '<div class="alert warning"><strong>Identifiants absents des écritures historiques.</strong> Vérifiez les justificatifs des deux pièces et confirmez manuellement qu’elles concernent le même client.</div>';
+        return;
+      }
+      identityCheckbox.checked = false;
+      identityStatus.innerHTML = '<div class="alert warning"><strong>Rapprochement bloqué.</strong> Une seule pièce porte un identifiant client ; corrigez la source ou utilisez deux pièces historiques non identifiées avec vérification manuelle. Aucune identité n’est déduite du compte collectif.</div>';
+    }
+    invoiceSelect.addEventListener('change', updateIdentityStatus);
+    receiptSelect.addEventListener('change', updateIdentityStatus);
+    updateIdentityStatus();
     form.addEventListener('submit', function (event) {
       event.preventDefault();
       if (isPhoneViewport() || !hasDemoPermission(getActiveDemoMember(), 'accounting', 'analyticalInvoicePayments.manage', accountingAccessContext(S.currentDossier()))) return;
+      var invoiceCandidate = findCandidate(invoiceSelect.value, candidates.invoices);
+      var receiptCandidate = findCandidate(receiptSelect.value, candidates.receipts);
+      if (!invoiceCandidate || !receiptCandidate) {
+        $('#invoice-payment-form-errors', form).innerHTML = '<div class="alert error">Choisissez une facture et un règlement comptabilisés.</div>';
+        return;
+      }
+      var explicitlyMatched = !!(invoiceCandidate.thirdPartyId && receiptCandidate.thirdPartyId && invoiceCandidate.thirdPartyId === receiptCandidate.thirdPartyId);
+      if (invoiceCandidate.thirdPartyId && receiptCandidate.thirdPartyId && invoiceCandidate.thirdPartyId !== receiptCandidate.thirdPartyId ||
+          !!invoiceCandidate.thirdPartyId !== !!receiptCandidate.thirdPartyId) {
+        $('#invoice-payment-form-errors', form).innerHTML = '<div class="alert error">Les identifiants explicites doivent être identiques sur les deux pièces ; une source partiellement identifiée ne peut pas être rapprochée manuellement.</div>';
+        return;
+      }
+      if (!explicitlyMatched && !identityCheckbox.checked) {
+        $('#invoice-payment-form-errors', form).innerHTML = '<div class="alert error">Confirmez la vérification manuelle des deux pièces historiques avant le rapprochement.</div>';
+        return;
+      }
       var latest = S.analyticalInvoicePaymentAllocationConfiguration();
       var result = S.saveAnalyticalInvoicePaymentAllocationConfiguration({
         customerAccountCodes: latest.customerAccountCodes, cashAccountCodes: latest.cashAccountCodes,
-        rows: latest.rows.concat([{ invoiceEntryId: $('#invoice-payment-invoice', form).value, receiptEntryId: $('#invoice-payment-receipt', form).value,
-          amount: $('#invoice-payment-amount', form).value, reference: $('#invoice-payment-reference', form).value, identityConfirmed: $('#invoice-payment-identity-confirmed', form).checked, status: 'active', analyticalAllocations: [] }])
+        rows: latest.rows.concat([{ invoiceEntryId: invoiceCandidate.entry.id, receiptEntryId: receiptCandidate.entry.id,
+          thirdPartyId: explicitlyMatched ? invoiceCandidate.thirdPartyId : '',
+          amount: $('#invoice-payment-amount', form).value, reference: $('#invoice-payment-reference', form).value,
+          identityConfirmed: explicitlyMatched || identityCheckbox.checked, status: 'active', analyticalAllocations: [] }])
       });
       if (!result.ok) { $('#invoice-payment-form-errors', form).innerHTML = '<div class="alert warning"><ul>' + result.errors.map(function (error) { return '<li>' + esc(error) + '</li>'; }).join('') + '</ul></div>'; return; }
-      toast('Lien facture–règlement enregistré à partir de pièces validées. Aucune écriture n’a été modifiée.', 'success'); closeModal(true); render();
+      toast(explicitlyMatched ? 'Lien facture–règlement enregistré avec identité client explicite. Aucune écriture n’a été modifiée.' : 'Lien manuel enregistré après confirmation des justificatifs. Aucune écriture n’a été modifiée.', 'success'); closeModal(true); render();
     });
   }
 
