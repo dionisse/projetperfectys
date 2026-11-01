@@ -26915,7 +26915,7 @@
         '<label class="field analytical-movement-search"><span>Rechercher</span><input type="search" data-filter="analyticalMovements:q" value="' + esc(filter.q) + '" placeholder="Pièce, compte ou affectation"></label>' +
       '</div></section>' + errors + unmatchedNote +
       '<div class="exchange-summary-grid supplier-summary-grid analytical-movement-summary"><div><small>Affectations ventilées</small><strong>' + report.allocationCount + '</strong></div><div><small>Total débit analytique</small><strong>' + moneyHtml(report.totalDebit) + '</strong></div><div><small>Total crédit analytique</small><strong>' + moneyHtml(report.totalCredit) + '</strong></div><div><small>À ventiler · débit / crédit</small><strong>' + amount(report.unallocatedDebit) + ' / ' + amount(report.unallocatedCredit) + ' XOF</strong></div>' + (report.unmatchedCenterCount ? '<div class="analytical-summary-unmatched"><small>Centres non rapprochés · ' + report.unmatchedCenterCount + '</small><strong>' + amount(report.unmatchedCenterDebit) + ' débit · ' + amount(report.unmatchedCenterCredit) + ' crédit XOF exclus</strong></div>' : '') + (report.unmatchedValueCount ? '<div class="analytical-summary-unmatched"><small>Valeurs non rapprochées · ' + report.unmatchedValueCount + '</small><strong>' + amount(report.unmatchedValueDebit + report.unmatchedValueCredit) + ' XOF exclu</strong></div>' : '') + '</div>' +
-      (rows ? '<div class="table-wrap exchange-table-wrap analytical-movement-table-wrap"><table class="exchange-mapping-table"><thead><tr>' + report.columns.map(function (column) { return '<th>' + esc(column.label) + '</th>'; }).join('') + '</tr></thead><tbody>' + rows + '</tbody></table></div>' : empty) +
+      (rows ? '<div class="table-wrap exchange-table-wrap analytical-movement-table-wrap"><table class="exchange-mapping-table analytical-movement-table"><thead><tr>' + report.columns.map(function (column) { return '<th' + (column.key === 'debit' || column.key === 'credit' ? ' class="num"' : '') + '>' + esc(column.label) + '</th>'; }).join('') + '</tr></thead><tbody>' + rows + '</tbody></table></div>' : empty) +
       '<p class="exchange-footnote">Les totaux ventilés excluent les reliquats affichés séparément. Aucun montant n’est calculé depuis une clé de répartition ; les références historiques explicites sont marquées comme telles.</p>' +
     '</div>';
   }
@@ -28555,6 +28555,10 @@
     return warnings.length ? '<div class="alert warning analytical-statement-warning"><div><strong>Imputations non classées</strong><ul>' + warnings.map(function (warning) { return '<li>' + esc(warning) + '</li>'; }).join('') + '</ul></div></div>' : '';
   }
 
+  function analyticalStatementColumnIsNumeric(column) {
+    return !!column && ['lineCount', 'debit', 'credit', 'net'].indexOf(String(column.key || '')) !== -1;
+  }
+
   function analyticalStatementTable(report, decimalPlaces) {
     var fmt = function (value) {
       return typeof value === 'number'
@@ -28564,13 +28568,13 @@
     if (!report || report.errors && report.errors.length) return '';
     if (!report.groups || !report.groups.length) return '<div class="alert info"><div>Aucun mouvement analytique explicite validé ne correspond à ces critères.</div></div>';
     return '<div class="analytical-statement-table-wrap"><table class="data-table analytical-statement-table"><thead><tr>' + report.columns.map(function (column) {
-      return '<th scope="col">' + esc(column.label) + '</th>';
+      return '<th scope="col"' + (analyticalStatementColumnIsNumeric(column) ? ' class="num"' : '') + '>' + esc(column.label) + '</th>';
     }).join('') + '</tr></thead><tbody>' + report.groups.map(function (group) {
       return '<tr class="analytical-statement-group"><th colspan="' + report.columns.length + '" scope="colgroup">' + esc(group.title) + '</th></tr>' +
         (group.rows || []).map(function (row) {
           var rowClass = group.code === 'analytical-unallocated' ? 'analytical-statement-unallocated' : (group.code === 'analytical-unmatched-values' || group.code === 'analytical-unmatched-centers' ? 'analytical-statement-unmatched' : '');
           return '<tr' + (rowClass ? ' class="' + rowClass + '"' : '') + '>' + report.columns.map(function (column) {
-            return '<td>' + esc(fmt(row.cells[column.key])) + '</td>';
+            return '<td' + (analyticalStatementColumnIsNumeric(column) ? ' class="num"' : '') + '>' + esc(fmt(row.cells[column.key])) + '</td>';
           }).join('') + '</tr>';
         }).join('');
     }).join('') + '</tbody></table></div>';

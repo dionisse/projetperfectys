@@ -36,6 +36,7 @@ const APP_SHELL = [
   './css/ohada-financial-statements.css',
   './css/is-declaration.css',
   './css/iba-declaration.css',
+  './css/analytical-tables.css',
   './js/accounting-chart.js',
   './js/account-search.js',
   './js/accounting-framework.js',
