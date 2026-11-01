@@ -13,7 +13,6 @@ global.localStorage = {
 
 const Bridge = require('../modern-proto/js/accounting-bridge.js');
 const PayrollHR = require('../modern-proto/js/payroll-hr.js');
-const PayrollCentralization = require('../modern-proto/js/payroll-centralization.js');
 const SalesOperations = require('../modern-proto/js/sales-stock-invoicing.js');
 const SalesCentralization = require('../modern-proto/js/sales-centralization.js');
 const Navigation = require('../modern-proto/js/accounting-navigation.js');
@@ -36,23 +35,19 @@ const targetAccounts = [
   { code: '497', label: 'Compte non imputable', active: true, postable: false }
 ];
 
-assert.deepEqual(new Set(sourcePayroll.map(account => account.code)), new Set(['641', '421', '431']));
+assert.deepEqual(sourcePayroll, [], 'aucun compte de paie n’est préconfiguré sans règles et rubriques validées');
 assert.deepEqual(new Set(sourceSales.map(account => account.code)), new Set(['411', '701', '601', '401']));
-assert.ok(sourcePayroll.every(account => account.postable && account.active));
 assert.ok(sourceSales.every(account => account.postable && account.active));
 
 const empty = Bridge.get('dossier-a', 'payroll-hr');
 assert.equal(empty.ok, true);
 assert.deepEqual(empty.mappings, []);
 
-const payrollMappings = [
-  { sourceCode: '641', targetCode: '499' },
-  { sourceCode: '421', targetCode: '421' },
-  { sourceCode: '431', targetCode: '431' }
-];
-const savedPayroll = Bridge.save('dossier-a', 'payroll-hr', payrollMappings, sourcePayroll, targetAccounts);
-assert.equal(savedPayroll.ok, true, savedPayroll.errors.join('\n'));
-assert.equal(Bridge.get('dossier-a', 'payroll-hr').mappings[0].targetCode, '499');
+const attemptedUnvalidatedPayrollMapping = Bridge.save('dossier-a', 'payroll-hr', [
+  { sourceCode: '641', targetCode: '499' }
+], sourcePayroll, targetAccounts);
+assert.equal(attemptedUnvalidatedPayrollMapping.ok, false, 'une correspondance de paie ne peut viser une rubrique source inexistante/non validée');
+assert.deepEqual(Bridge.get('dossier-a', 'payroll-hr').mappings, []);
 assert.deepEqual(Bridge.get('dossier-b', 'payroll-hr').mappings, [], 'les dossiers cibles ont des tableaux séparés');
 assert.deepEqual(Bridge.get('dossier-a', 'sales-stock-invoicing').mappings, [], 'les modules sources ont des tableaux séparés');
 
@@ -66,14 +61,7 @@ assert.equal(savedSales.ok, true, savedSales.errors.join('\n'));
 assert.equal(Bridge.get('dossier-a', 'sales-stock-invoicing').mappings.length, 4);
 
 const dossier = { id: 'dossier-a', cycleStart: '2026-01-01', cycleEnd: '2026-12-31' };
-const payrollRunResult = PayrollHR.createDemoRun(dossier, '2026-01');
-assert.equal(payrollRunResult.ok, true, payrollRunResult.errors.join('\n'));
-assert.equal(PayrollHR.approveRun(dossier, payrollRunResult.run.id).ok, true);
-const payrollRun = PayrollHR.getRun(dossier.id, payrollRunResult.run.id);
-const payrollMap = Object.fromEntries(Bridge.get(dossier.id, 'payroll-hr').mappings.map(mapping => [mapping.sourceCode, mapping.targetCode]));
-const payrollAggregate = PayrollCentralization.aggregate(payrollRun, payrollMap, targetAccounts);
-assert.equal(payrollAggregate.ok, true, payrollAggregate.errors.join('\n'));
-assert.ok(payrollAggregate.lines.some(line => line.account === '499'), 'le compte cible configuré remplace le pré-réglage identique dans l’agrégat paie');
+assert.deepEqual(Bridge.get(dossier.id, 'payroll-hr').mappings, [], 'la configuration de paie reste vide jusqu’à validation de ses sources');
 
 const salesRunResult = SalesOperations.createDemoRun(dossier, '2026-01');
 assert.equal(salesRunResult.ok, true, salesRunResult.errors.join('\n'));
@@ -94,8 +82,8 @@ for (const invalid of [
   const rejected = Bridge.save('dossier-a', 'payroll-hr', invalid, sourcePayroll, targetAccounts);
   assert.equal(rejected.ok, false);
 }
-assert.deepEqual(Bridge.get('dossier-a', 'payroll-hr').mappings, payrollMappings,
-  'une configuration invalide ne remplace pas le paramétrage précédent');
+assert.deepEqual(Bridge.get('dossier-a', 'payroll-hr').mappings, [],
+  'aucune configuration paie n’est enregistrée sans rubriques source validées');
 
 const corruptKey = 'perfecto.accounting-bridge.v2.' + encodeURIComponent('dossier-corrupt') + '.' + encodeURIComponent('payroll-hr');
 storage.set(corruptKey, '{broken');
@@ -108,7 +96,10 @@ assert.ok(Navigation.getTab('parametres', 'accounting-bridge').reason.includes('
 assert.match(appSource, /group\.id === 'parametres' && tab\.id === 'accounting-bridge'[\s\S]*viewAccountingBridge\(\)/);
 assert.match(appSource, /menuParams\.t === 'accounting-bridge'\) bindAccountingBridge\(\)/);
 assert.match(appSource, /function accountingBridgeConfiguredAccountMap\([\s\S]*AccountingBridge\.get\(dossier\.id, sourceModuleId\)/);
-assert.match(appSource, /createPayrollCentralizationSession\(run, dossier\)[\s\S]*accountingBridgeConfiguredAccountMap\(dossier, 'payroll-hr'/);
+assert.match(appSource, /createPayrollCentralizationSession\(run, dossier\)[\s\S]*accountingBridgeConfiguredAccountMap\(dossier, 'payroll-hr', run\.accountingLines, false\)/);
+assert.match(appSource, /function createPayrollCentralizationSession\([\s\S]*targetDate: '',[\s\S]*targetJournal: '',[\s\S]*targetReference: ''/);
+assert.match(appSource, /— Choisir un journal —[\s\S]*Aucun journal n’est présélectionné/);
+assert.match(appSource, /Centralisation bloquée : choisissez explicitement la date, le journal et la référence comptable/);
 assert.match(appSource, /createSalesCentralizationSession\(run, dossier\)[\s\S]*accountingBridgeConfiguredAccountMap\(dossier, 'sales-stock-invoicing'/);
 assert.match(appSource, /function saveAccountingBridgeFromView\([\s\S]*AccountingBridge\.validateMappings[\s\S]*window\.confirm[\s\S]*AccountingBridge\.save/);
 assert.match(appSource, /Les opérations Paie & RH et Ventes, stock & facturation chargent ces correspondances comme point de départ/);

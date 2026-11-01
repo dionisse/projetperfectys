@@ -4001,3 +4001,19 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .payroll-demo-employee strong { color: #374a42; font-size: .7rem; }
 .payroll-demo-employee small { color: #89928c; font-size: .58rem; }
 @media (max-width: 700px) { .payroll-test-dossier-callout { align-items: flex-start; flex-direction: column; } }
+
+/* ---------- Registre Paie & RH : prototypes de fiches fictives ---------- */
+.payroll-employee-registry > .alert { margin: 10px 0 14px; line-height: 1.55; }
+.payroll-employee-create-form { margin: 0 0 15px; padding: 13px; border: 1px solid #e3eae5; border-radius: 8px; background: #fbfcfb; }
+.payroll-employee-create-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: 12px; }
+.payroll-employee-create-grid .field { min-width: 0; margin: 0; }
+.payroll-employee-create-grid .field input { width: 100%; }
+.payroll-test-confirm { display: flex; grid-column: 1 / -1; align-items: flex-start; gap: 9px; color: #6d5631; font-size: .67rem; line-height: 1.5; }
+.payroll-test-confirm input { margin: 2px 0 0; accent-color: #a67c35; }
+.payroll-employee-create-grid > .btn { justify-self: start; }
+.payroll-employee-registry .exchange-table-wrap { margin-top: 12px; }
+.payroll-module-workspace .dossiers-storage-footnote { margin: 0; }
+@media (max-width: 700px) {
+  .payroll-employee-create-grid { grid-template-columns: 1fr; }
+  .payroll-test-confirm { grid-column: auto; }
+}

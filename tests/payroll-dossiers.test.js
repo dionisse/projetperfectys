@@ -49,10 +49,10 @@ assert.equal(PayrollHR.updateAccountingDossierLink(created.dossier.id, '').ok, t
 assert.equal(PayrollHR.dossier(created.dossier.id).accountingDossierId, '', 'le lien peut être explicitement retiré');
 
 const run = PayrollHR.createDemoRun(created.dossier, '2026-01');
-assert.equal(run.ok, true, run.errors.join('\n'));
-assert.equal(PayrollHR.runs(created.dossier.id).length, 1);
+assert.equal(run.ok, false, 'aucun lot salarial avec montants ou comptes fictifs n’est prérempli');
+assert.deepEqual(PayrollHR.runs(created.dossier.id), []);
 assert.deepEqual(PayrollHR.runs(second.dossier.id), [], 'les lots demeurent isolés par identifiant de dossier RH, jamais par comptabilité');
-assert.notEqual(PayrollHR.sourceId(created.dossier.id, run.run.id), PayrollHR.sourceId(second.dossier.id, run.run.id));
+assert.notEqual(PayrollHR.sourceId(created.dossier.id, 'run-test'), PayrollHR.sourceId(second.dossier.id, 'run-test'));
 
 const testDossier = PayrollHR.createTestDossier();
 assert.equal(testDossier.ok, true, testDossier.errors.join('\n'));

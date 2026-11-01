@@ -73,7 +73,45 @@
     dossierId = String(dossierId || '');
     var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === dossierId; });
     if (!dossier || !Array.isArray(dossier.demoEmployees)) return [];
-    return clone(dossier.demoEmployees.filter(function (employee) { return employee && employee.dossierId === dossierId; }));
+    return clone(dossier.demoEmployees.filter(function (employee) { return employee && employee.dossierId === dossierId; }).map(function (employee) {
+      return Object.assign({}, employee, { employeeNumber: employee.employeeNumber || employee.id || '' });
+    }));
+  }
+
+  function createEmployee(dossierId, input) {
+    input = input || {};
+    dossierId = String(dossierId || '');
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Cette version locale accepte uniquement des fiches synthétiques de test.'] };
+    var employeeNumber = String(input.employeeNumber || '').trim();
+    var displayName = String(input.displayName || '').trim().replace(/\s+/g, ' ');
+    var errors = [];
+    if (!employeeNumber) errors.push('Le numéro employé interne est obligatoire.');
+    if (employeeNumber.length > 40) errors.push('Le numéro employé ne peut pas dépasser 40 caractères.');
+    if (!displayName) errors.push('Le nom d’affichage est obligatoire pour cette fiche de test.');
+    if (displayName.length > 120) errors.push('Le nom d’affichage ne peut pas dépasser 120 caractères.');
+    var current = Array.isArray(dossier.demoEmployees) ? dossier.demoEmployees : [];
+    if (employeeNumber && current.some(function (employee) {
+      return String(employee && (employee.employeeNumber || employee.id) || '').trim().toLocaleLowerCase() === employeeNumber.toLocaleLowerCase();
+    })) errors.push('Ce numéro employé existe déjà dans ce dossier Paie & RH.');
+    if (errors.length) return { ok: false, errors: errors };
+    var id;
+    do {
+      id = 'emp-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    } while (current.some(function (employee) { return employee && employee.id === id; }));
+    var employee = {
+      id: id,
+      dossierId: dossierId,
+      employeeNumber: employeeNumber,
+      displayName: displayName,
+      status: 'test-only',
+      createdAt: new Date().toISOString()
+    };
+    dossier.demoEmployees = current.concat([employee]);
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la fiche fictive dans le stockage local.'] };
+    return { ok: true, errors: [], employee: clone(employee) };
   }
 
   function dossierById(dossierId) {
@@ -186,7 +224,7 @@
       if (!saved || saved.version !== VERSION || String(saved.dossierId) !== String(dossierId) || !Array.isArray(saved.runs)) return state;
       state.runs = saved.runs.filter(function (run) {
         return run && typeof run.id === 'string' && typeof run.reference === 'string' &&
-          run.dossierId === String(dossierId) && (run.status === 'draft' || run.status === 'approved') &&
+          run.dossierId === String(dossierId) && run.origin !== 'demo' && (run.status === 'draft' || run.status === 'approved') &&
           validPeriod(run.period) && dateParts(run.date) && periodForDate(run.date) === run.period &&
           Array.isArray(run.accountingLines);
       });
@@ -240,56 +278,11 @@
     return period >= firstMonth && period <= lastMonth;
   }
 
-  function accountingDateForPeriod(period, dossier) {
-    var end = monthEnd(period);
-    if (!end || !dossier) return '';
-    if (end > dossier.cycleEnd) end = dossier.cycleEnd;
-    if (end < dossier.cycleStart) end = dossier.cycleStart;
-    return end;
-  }
-
-  function validateAccountingLines(lines, requireBalanced) {
-    var errors = [];
-    if (!Array.isArray(lines) || lines.length < 2) return { ok: false, errors: ['Un lot de paie doit contenir au moins deux lignes comptables.'], debit: 0, credit: 0 };
-    var debit = 0;
-    var credit = 0;
-    lines.forEach(function (line, index) {
-      line = line || {};
-      var code = String(line.accountCode || '').trim();
-      var label = String(line.accountLabel || '').trim();
-      var d = Number(line.debit);
-      var c = Number(line.credit);
-      if (!code || code.length > 30) errors.push('Ligne ' + (index + 1) + ' : code de compte source obligatoire (30 caractères maximum).');
-      if (!label || label.length > 160) errors.push('Ligne ' + (index + 1) + ' : libellé de compte obligatoire (160 caractères maximum).');
-      if (!Number.isSafeInteger(d) || !Number.isSafeInteger(c) || d < 0 || c < 0 || (d > 0 && c > 0) || (d === 0 && c === 0)) {
-        errors.push('Ligne ' + (index + 1) + ' : renseignez un débit ou un crédit positif en XOF entier, jamais les deux.');
-      }
-      debit += Number.isSafeInteger(d) ? d : 0;
-      credit += Number.isSafeInteger(c) ? c : 0;
-      if (!Number.isSafeInteger(debit) || !Number.isSafeInteger(credit)) errors.push('Le total comptable dépasse la capacité numérique sûre.');
-    });
-    if (requireBalanced && debit !== credit) errors.push('Le lot de paie n’est pas équilibré : débit ' + debit + ' XOF, crédit ' + credit + ' XOF.');
-    return { ok: errors.length === 0, errors: errors, debit: debit, credit: credit };
-  }
-
-  function demoAccountingLines() {
-    return [
-      { accountCode: '641', accountLabel: 'Rémunérations du personnel', description: 'Rémunérations brutes · exemple', debit: 750000, credit: 0 },
-      { accountCode: '421', accountLabel: 'Personnel, rémunérations dues', description: 'Net à payer · exemple', debit: 0, credit: 675000 },
-      { accountCode: '431', accountLabel: 'Organismes sociaux', description: 'Retenues sociales · exemple', debit: 0, credit: 75000 }
-    ];
-  }
-
   function accountingAccountCatalog() {
-    var seen = Object.create(null);
-    return demoAccountingLines().filter(function (line) {
-      if (seen[line.accountCode]) return false;
-      seen[line.accountCode] = true;
-      return true;
-    }).map(function (line) {
-      return { code: line.accountCode, label: line.accountLabel, postable: true, active: true };
-    });
+    // Aucune rubrique ni correspondance comptable n’est présumée par défaut.
+    return [];
   }
+
 
   function runs(dossierId) {
     return clone(load(dossierId).runs).sort(function (a, b) {
@@ -301,54 +294,12 @@
     return runs(dossierId).find(function (run) { return run.id === runId; }) || null;
   }
 
-  function createDemoRun(dossier, period) {
-    if (!dossier || !dossier.id) return { ok: false, errors: ['Aucun dossier client actif pour créer le lot de paie.'] };
-    period = String(period || periodForDate(dossier.cycleStart));
-    if (!periodFitsDossier(period, dossier)) return { ok: false, errors: ['La période de paie doit se situer dans le cycle du dossier actif.'] };
-    var state = load(dossier.id);
-    var periodToken = period.replace('-', '');
-    var reference = 'PAIE-DEMO-' + periodToken;
-    if (state.runs.some(function (run) { return run.reference === reference; })) {
-      return { ok: false, errors: ['Un lot de démonstration existe déjà pour la période ' + period + '.'] };
-    }
-    var date = accountingDateForPeriod(period, dossier);
-    var run = {
-      id: 'paie-demo-' + encodeURIComponent(String(dossier.id)) + '-' + periodToken,
-      dossierId: String(dossier.id),
-      reference: reference,
-      period: period,
-      date: date,
-      status: 'draft',
-      employeeCount: 3,
-      totals: { grossPay: 750000, deductions: 75000, netPay: 675000 },
-      accountingLines: demoAccountingLines(),
-      origin: 'demo',
-      calculationNote: 'Montants fictifs de démonstration : aucun calcul de paie, de cotisation ou de retenue légale n’est effectué.',
-      createdAt: new Date().toISOString(),
-      approvedAt: null
-    };
-    var lineCheck = validateAccountingLines(run.accountingLines, true);
-    if (!lineCheck.ok) return { ok: false, errors: lineCheck.errors };
-    state.runs.push(run);
-    if (!save(state)) return { ok: false, errors: ['Impossible d’enregistrer le lot Paie & RH dans le stockage local.'] };
-    return { ok: true, errors: [], run: clone(run) };
+  function createDemoRun() {
+    return { ok: false, errors: ['La création de lots fictifs avec montants ou comptes inventés est désactivée. Un lot réel exige des données source et des règles validées.'] };
   }
 
-  function approveRun(dossier, runId) {
-    if (!dossier || !dossier.id) return { ok: false, errors: ['Aucun dossier client actif.'] };
-    var state = load(dossier.id);
-    var run = state.runs.find(function (item) { return item.id === runId; });
-    if (!run) return { ok: false, errors: ['Lot de paie introuvable dans Paie & RH.'] };
-    if (run.status !== 'draft') return { ok: false, errors: ['Seul un lot de paie en brouillon peut être approuvé.'] };
-    if (!periodFitsDossier(run.period, dossier) || periodForDate(run.date) !== run.period || run.date < dossier.cycleStart || run.date > dossier.cycleEnd) {
-      return { ok: false, errors: ['La date et la période du lot doivent se situer dans le cycle du dossier actif.'] };
-    }
-    var lineCheck = validateAccountingLines(run.accountingLines, true);
-    if (!lineCheck.ok) return { ok: false, errors: lineCheck.errors };
-    run.status = 'approved';
-    run.approvedAt = new Date().toISOString();
-    if (!save(state)) return { ok: false, errors: ['Impossible d’enregistrer l’approbation dans le stockage local.'] };
-    return { ok: true, errors: [], run: clone(run) };
+  function approveRun() {
+    return { ok: false, errors: ['L’approbation est désactivée tant qu’un calcul reproductible et des règles applicables validées ne sont pas disponibles.'] };
   }
 
   function sourceId(dossierId, runId) {
@@ -361,6 +312,7 @@
     currentDossier: currentDossier,
     dossier: dossierById,
     employees: employees,
+    createEmployee: createEmployee,
     createDossier: createDossier,
     createTestDossier: createTestDossier,
     selectDossier: selectDossier,
@@ -371,7 +323,6 @@
     createDemoRun: createDemoRun,
     approveRun: approveRun,
     sourceId: sourceId,
-    validateAccountingLines: validateAccountingLines,
     periodForDate: periodForDate,
     periodFitsDossier: periodFitsDossier
   });

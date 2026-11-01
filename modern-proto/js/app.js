@@ -493,10 +493,8 @@
       case 'create-payroll-test-dossier':
       case 'save-payroll-accounting-link':
         return { moduleId: 'organization', actionId: 'organization.manageDossiers' };
-      case 'create-demo-payroll-run':
+      case 'create-payroll-test-employee':
         return { moduleId: 'payroll-hr', actionId: 'record.create' };
-      case 'approve-internal-payroll-run':
-        return { moduleId: 'payroll-hr', actionId: 'record.validate' };
       case 'open-accounting-payroll-centralization':
         return { moduleId: 'payroll-hr', actionId: 'module.view' };
       case 'commit-accounting-payroll-centralization':
@@ -20182,6 +20180,21 @@
       toast(accountingDossierId ? 'Lien explicite avec le dossier comptable enregistré.' : 'Association comptable retirée ; aucun lien automatique ne sera utilisé.', 'success');
       render();
     });
+    var employeeForm = $('#payroll-employee-create-form');
+    if (employeeForm) employeeForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('create-payroll-test-employee', null, true)) return;
+      var dossier = PayrollHR.currentDossier();
+      var confirmed = !!($('#payroll-test-data-confirmation', employeeForm) || {}).checked;
+      var result = PayrollHR.createEmployee(dossier && dossier.id, {
+        employeeNumber: ($('#payroll-employee-number', employeeForm) || {}).value || '',
+        displayName: ($('#payroll-employee-display-name', employeeForm) || {}).value || '',
+        testOnly: confirmed
+      });
+      if (!result.ok) { toast(result.errors[0] || 'Création de la fiche de test impossible.', 'warning'); return; }
+      toast('Fiche fictive créée dans le dossier RH actif. Aucun champ sensible ou élément de paie n’a été saisi.', 'success');
+      render();
+    });
   }
 
   function payrollEntryForRun(run, dossierId) {
@@ -20195,59 +20208,42 @@
   function viewPayrollModule() {
     var dossier = PayrollHR.currentDossier();
     if (!dossier) return '<div class="empty-state"><strong>Aucun dossier Paie & RH sélectionné</strong><a class="btn btn-primary" href="#/payroll-dossiers">Choisir un dossier RH</a></div>';
-    var accountingFolders = permittedDemoDossiers(getActiveDemoMember());
+    var member = getActiveDemoMember();
+    var accountingFolders = permittedDemoDossiers(member);
     var storedAccountingAssociation = S.dossiers().find(function (accounting) { return accounting.id === dossier.accountingDossierId; }) || null;
     var linkedAccountingDossier = accountingFolders.find(function (accounting) { return accounting.id === dossier.accountingDossierId; }) || null;
-    var canManagePayrollDossiers = hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageDossiers', demoAccessContext('organization'));
-    var hasAccessibleAccountingLink = !!(linkedAccountingDossier && accountingFolders.some(function (accounting) { return accounting.id === linkedAccountingDossier.id; }));
-    var runs = PayrollHR.runs(dossier.id);
-    var firstPeriod = PayrollHR.periodForDate(dossier.cycleStart);
-    var lastPeriod = PayrollHR.periodForDate(dossier.cycleEnd);
+    var canManagePayrollDossiers = hasDemoPermission(member, 'organization', 'organization.manageDossiers', demoAccessContext('organization'));
+    var canCreatePayrollEmployee = hasDemoPermission(member, 'payroll-hr', 'record.create', payrollAccessContext(dossier));
     var dossierEmployees = PayrollHR.employees(dossier.id);
-    var hasTestEmployeeRoster = dossierEmployees.length > 0;
-    var rows = runs.map(function (run) {
-      var linkedEntry = payrollEntryForRun(run, dossier.id);
-      var status = linkedEntry
-        ? '<span class="badge posted">Transféré en comptabilité</span><small>' + esc(linkedEntry.reference) + ' · ' + esc(linkedEntry.status === 'posted' ? 'validée' : 'brouillon') + '</small>'
-        : (run.status === 'approved'
-          ? '<span class="badge posted">Approuvé · prêt</span>'
-          : '<span class="badge draft">Brouillon Paie & RH</span>');
-      var action = linkedEntry
-        ? '<span class="small muted">Lot déjà centralisé</span>'
-        : (run.status === 'approved'
-          ? (hasAccessibleAccountingLink
-            ? '<button type="button" class="btn btn-primary btn-sm" data-action="open-accounting-payroll-centralization" data-accounting-dossier-id="' + esc(linkedAccountingDossier.id) + '">Centraliser dans ' + esc(linkedAccountingDossier.reference) + '</button>'
-            : '<span class="small muted">Association comptable explicite requise</span>')
-          : '<button type="button" class="btn btn-ghost btn-sm" data-action="approve-internal-payroll-run" data-id="' + esc(run.id) + '">Contrôler et approuver</button>');
-      return '<tr><td><strong>' + esc(run.reference) + '</strong><br><span class="small muted">' + esc(run.origin === 'demo' ? 'Jeu d’exemple interne' : 'Lot Paie & RH') + '</span></td>' +
-        '<td>' + esc(run.period) + '<br><span class="small muted">Comptabilisation source au ' + esc(dateLabel(run.date)) + '</span></td>' +
-        '<td class="numeric">' + Number(run.employeeCount || 0) + '</td>' +
-        '<td class="numeric">' + esc(amount(run.totals && run.totals.grossPay || 0)) + '</td>' +
-        '<td class="numeric">' + esc(amount(run.totals && run.totals.netPay || 0)) + '</td>' +
-        '<td>' + status + '</td><td>' + action + '</td></tr>';
+    var employeeRows = dossierEmployees.map(function (employee) {
+      return '<tr data-employee-id="' + esc(employee.id) + '" data-dossier-id="' + esc(employee.dossierId) + '"><td><strong>' + esc(employee.employeeNumber || employee.id) + '</strong></td><td>' + esc(employee.displayName || '—') + '</td><td><span class="badge draft">Test uniquement</span></td><td><small>' + esc(employee.id) + '</small></td></tr>';
     }).join('');
-    var empty = runs.length
-      ? ''
-      : '<div class="empty-state"><strong>Aucun lot Paie & RH dans ce dossier</strong><span>Les lots sont isolés par dossier RH. Aucun lot ni donnée de salarié n’est créé automatiquement.</span></div>';
+    var employeeSection = '<section class="exchange-card payroll-employee-registry"><p class="page-kicker">REGISTRE DES EMPLOYÉS · DONNÉES DE TEST UNIQUEMENT</p><h3>' + dossierEmployees.length + ' fiche(s) dans ce dossier</h3>' +
+      '<div class="alert warning"><div><strong>Prototype local — ne saisissez aucune donnée réelle.</strong><br>Les fiches sont enregistrées dans le stockage du navigateur, sans protection serveur ni synchronisation multi-utilisateur. Aucune donnée bancaire, médicale, familiale, pièce jointe ou rémunération ne peut être saisie ici.</div></div>' +
+      (canCreatePayrollEmployee ? '<form id="payroll-employee-create-form" class="payroll-employee-create-form"><div class="payroll-employee-create-grid">' +
+        '<div class="field"><label for="payroll-employee-number">Numéro employé interne <span class="required-mark">*</span></label><input id="payroll-employee-number" type="text" maxlength="40" required></div>' +
+        '<div class="field"><label for="payroll-employee-display-name">Nom d’affichage fictif <span class="required-mark">*</span></label><input id="payroll-employee-display-name" type="text" maxlength="120" required></div>' +
+        '<label class="payroll-test-confirm"><input id="payroll-test-data-confirmation" type="checkbox" required><span>Je confirme qu’il s’agit d’une donnée fictive de test, et non d’une donnée personnelle réelle.</span></label>' +
+        '<button type="submit" class="btn btn-primary">＋ Créer la fiche fictive</button></div></form>' : '<p class="small muted">Votre profil ne dispose pas du droit de création dans ce dossier.</p>') +
+      (employeeRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Numéro</th><th>Nom d’affichage</th><th>Nature</th><th>Identifiant technique</th></tr></thead><tbody>' + employeeRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucune fiche dans ce dossier RH</strong><span>Aucune fiche n’est créée automatiquement.</span></div>') +
+      '</section>';
+    var runs = PayrollHR.runs(dossier.id);
+    var runRows = runs.map(function (run) {
+      var linkedEntry = payrollEntryForRun(run, dossier.id);
+      return '<tr><td><strong>' + esc(run.reference) + '</strong></td><td>' + esc(run.period) + '</td><td><span class="badge ' + (run.status === 'approved' ? 'posted' : 'draft') + '">' + esc(run.status === 'approved' ? 'Approuvé' : 'Brouillon') + '</span></td><td>' + (linkedEntry ? esc(linkedEntry.reference) : '—') + '</td></tr>';
+    }).join('');
     var accountingLinkPanel = canManagePayrollDossiers
       ? '<section class="exchange-card payroll-accounting-link-card"><p class="page-kicker">ASSOCIATION COMPTABLE FACULTATIVE</p><h3>Destination éventuelle des centralisations</h3><p>Ce choix explicite est indépendant du code client et de l’exercice. Sans association, aucune centralisation vers la Comptabilité n’est proposée.</p><form id="payroll-accounting-link-form" class="payroll-accounting-link-form"><div class="field"><label for="payroll-accounting-dossier-link">Dossier comptable associé</label><select id="payroll-accounting-dossier-link"><option value="">Aucun lien comptable</option>' + accountingFolders.map(function (accounting) { return '<option value="' + esc(accounting.id) + '"' + (accounting.id === dossier.accountingDossierId ? ' selected' : '') + '>' + esc(accounting.clientName + ' · ' + accounting.reference) + '</option>'; }).join('') + '</select></div><button type="submit" class="btn btn-secondary">Enregistrer l’association</button></form></section>'
       : '<div class="alert info"><div>' + (linkedAccountingDossier ? 'Association comptable explicite : ' + esc(linkedAccountingDossier.reference) + '.' : (storedAccountingAssociation ? 'Une association comptable existe, mais votre profil ne peut pas consulter ce dossier.' : 'Aucune association à un dossier comptable. Les lots restent en Paie & RH.')) + '</div></div>';
     return '<div class="payroll-module-workspace">' +
       pageHeader('Paie & RH', 'Dossier client : <strong>' + esc(dossier.clientName) + '</strong> · ' + esc(dossier.reference) + ' · exercice ' + esc(dossier.exerciseYear) + '.', '<a class="btn btn-ghost" href="#/payroll-dossiers">Changer de dossier RH</a> <a class="btn btn-ghost" href="#/launcher">← Modules</a>') +
-      '<div class="alert warning"><div><strong>Étape de raccordement interne · démonstration</strong><br>Cette version conserve des lots locaux et contrôle leur journal comptable. Elle ne calcule pas les salaires, les cotisations ni les retenues légales. Les montants d’exemple sont fictifs ; aucun export/import tiers n’intervient.</div></div>' +
-      accountingLinkPanel +
-      (dossierEmployees.length ? '<section class="exchange-card payroll-demo-employees-card"><p class="page-kicker">JEU DE DONNÉES FICTIF · DOSSIER CLIENT ' + esc(dossier.reference) + '</p><h3>' + dossierEmployees.length + ' employés liés à ce dossier</h3><p>Chaque fiche est rattachée à l’identifiant de ce dossier Paie & RH. Fiches génériques uniquement : aucun nom réel, salaire, coordonnées ou calcul de paie n’est enregistré. Elles ne sont pas des employés réels.</p><div class="payroll-demo-employees-grid">' + dossierEmployees.map(function (employee) { return '<div class="payroll-demo-employee" data-employee-id="' + esc(employee.id) + '" data-dossier-id="' + esc(employee.dossierId) + '"><span>' + esc(employee.id) + '</span><strong>' + esc(employee.displayName) + '</strong><small>Lié à ' + esc(dossier.reference) + ' · test uniquement</small></div>'; }).join('') + '</div></section>' : '') +
-      '<section class="exchange-card"><p class="page-kicker">SOURCE INTERNE DE PAIE</p><h3>Lots de paie du dossier</h3>' +
-        '<p>Un lot doit être approuvé dans Paie & RH avant d’être transmis. Après centralisation, son identifiant interne empêche un second transfert.</p>' +
-        (hasTestEmployeeRoster
-          ? '<div class="alert info"><div>Aucun lot salarial d’exemple n’est généré pour ces fiches test : aucun montant ou calcul de rémunération n’est inventé.</div></div>'
-          : '<div class="payroll-demo-create"><div class="field"><label for="payroll-demo-period">Période de l’exemple interne</label><input id="payroll-demo-period" type="month" min="' + esc(firstPeriod) + '" max="' + esc(lastPeriod) + '" value="' + esc(firstPeriod) + '"><span class="hint">La période doit se situer dans le cycle du dossier actif.</span></div>' +
-            '<button type="button" class="btn btn-primary" data-action="create-demo-payroll-run">＋ Créer un lot fictif de démonstration</button></div>') +
+      '<div class="alert warning"><div><strong>Base fonctionnelle en cours</strong><br>Les données sont encore stockées localement dans ce navigateur. Utilisez uniquement des données synthétiques. Le calcul de paie et les fonctions de production restent bloqués tant que les textes, règles et le stockage sécurisé ne sont pas validés.</div></div>' +
+      accountingLinkPanel + employeeSection +
+      '<section class="exchange-card"><p class="page-kicker">CYCLE DE PAIE</p><h3>Lots du dossier</h3>' +
+        '<div class="alert info"><div>Aucun calcul ou lot fictif n’est créé. Le moteur restera indisponible tant que les règles applicables, les données source et les contrôles d’approbation ne sont pas validés.</div></div>' +
+        (runRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Référence</th><th>Période</th><th>État</th><th>Référence comptable</th></tr></thead><tbody>' + runRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucun lot de paie disponible</strong><span>Les lots ne peuvent pas être créés avec des montants, comptes ou règles inventés.</span></div>') +
       '</section>' +
-      '<section class="exchange-card"><p class="page-kicker">SUIVI DES LOTS</p><h3>' + runs.length + ' lot(s) enregistré(s)</h3>' + empty +
-        (runs.length ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Référence interne</th><th>Période</th><th class="numeric">Effectif</th><th class="numeric">Brut illustratif (XOF)</th><th class="numeric">Net illustratif (XOF)</th><th>État</th><th>Action</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '') +
-      '</section>' +
-      '<div class="alert info"><div>Les données Paie & RH sont isolées par dossier RH dans ce navigateur. Les calculs de paie, les dossiers du personnel, la validation métier complète et la synchronisation multi-utilisateur restent à construire.</div></div>' +
+      '<p class="dossiers-storage-footnote">Le stockage local du navigateur ne constitue ni un stockage serveur protégé, ni une synchronisation Google Drive ou multi-utilisateur.</p>' +
     '</div>';
   }
 
@@ -20302,7 +20298,7 @@
     '</div>';
   }
 
-  function accountingBridgeConfiguredAccountMap(dossier, sourceModuleId, accountingLines) {
+  function accountingBridgeConfiguredAccountMap(dossier, sourceModuleId, accountingLines, allowSameCodeFallback) {
     var saved = AccountingBridge.get(dossier.id, sourceModuleId);
     var savedBySource = Object.create(null);
     if (saved.ok) (saved.mappings || []).forEach(function (mapping) { savedBySource[mapping.sourceCode] = mapping.targetCode; });
@@ -20313,23 +20309,21 @@
       var sameCodeTarget = S.account(code);
       accountMap[code] = saved.ok && Object.prototype.hasOwnProperty.call(savedBySource, code)
         ? savedBySource[code]
-        : (sameCodeTarget && sameCodeTarget.active !== false && sameCodeTarget.postable !== false ? code : '');
+        : (allowSameCodeFallback !== false && sameCodeTarget && sameCodeTarget.active !== false && sameCodeTarget.postable !== false ? code : '');
     });
     return { accountMap: accountMap, error: saved.ok ? '' : (saved.errors || ['Lecture du tableau de passage impossible.']).join(' ') };
   }
 
   function createPayrollCentralizationSession(run, dossier) {
-    var configuredMappings = accountingBridgeConfiguredAccountMap(dossier, 'payroll-hr', run.accountingLines);
+    var configuredMappings = accountingBridgeConfiguredAccountMap(dossier, 'payroll-hr', run.accountingLines, false);
     var accountMap = configuredMappings.accountMap;
-    var defaultJournal = S.journals().find(function (journal) { return journal.code === 'PA'; }) || S.journals().find(function (journal) { return journal.code === 'OD'; }) || S.journals()[0];
-    var parts = run.period.split('-');
     return {
       runId: run.id,
       payrollDossierId: run.dossierId,
       targetDossierId: dossier.id,
-      targetDate: run.date,
-      targetJournal: defaultJournal && defaultJournal.code || '',
-      targetReference: 'PA-' + parts[0] + '-' + parts[1] + '-001',
+      targetDate: '',
+      targetJournal: '',
+      targetReference: '',
       mode: 'draft',
       accountMap: accountMap,
       mappingConfigurationError: configuredMappings.error,
@@ -20401,36 +20395,6 @@
       '</tbody></table></div></section>';
   }
 
-  function createDemoPayrollRun() {
-    var dossier = PayrollHR.currentDossier();
-    if (!hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'record.create', payrollAccessContext(dossier))) {
-      toast('Création refusée : le droit de saisie dans Paie & RH n’est pas accordé.', 'warning');
-      return;
-    }
-    var period = ($('#payroll-demo-period') || {}).value || '';
-    var result = PayrollHR.createDemoRun(dossier, period);
-    if (!result.ok) {
-      toast(result.errors[0] || 'Création du lot de démonstration impossible.', 'error');
-      return;
-    }
-    toast('Lot fictif créé dans le registre interne Paie & RH. Contrôlez-le avant approbation.', 'success');
-    render();
-  }
-
-  function approveInternalPayrollRun(runId) {
-    var dossier = PayrollHR.currentDossier();
-    if (!hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'record.validate', payrollAccessContext(dossier))) {
-      toast('Approbation refusée : le droit de validation dans Paie & RH n’est pas accordé.', 'warning');
-      return;
-    }
-    var result = PayrollHR.approveRun(dossier, runId);
-    if (!result.ok) {
-      toast(result.errors[0] || 'Approbation du lot impossible.', 'error');
-      return;
-    }
-    toast('Lot de paie approuvé dans Paie & RH ; il est prêt pour la centralisation interne.', 'success');
-    render();
-  }
 
   function payrollRunSelectionValue(run) {
     return run ? String(run.dossierId || '') + '::' + String(run.id || '') : '';
@@ -20532,9 +20496,9 @@
     if (!selectedRun) return;
     if (!payrollCentralizationSession || payrollCentralizationSession.targetDossierId !== dossier.id || payrollCentralizationSession.payrollDossierId !== selectedRun.dossierId || payrollCentralizationSession.runId !== selectedRun.id) {
       payrollCentralizationSession = createPayrollCentralizationSession(selectedRun, dossier);
-      payrollCentralizationSession.targetDate = ($('#payroll-centralization-date') || {}).value || selectedRun.date;
-      payrollCentralizationSession.targetJournal = ($('#payroll-centralization-journal') || {}).value || payrollCentralizationSession.targetJournal;
-      payrollCentralizationSession.targetReference = ($('#payroll-centralization-reference') || {}).value || payrollCentralizationSession.targetReference;
+      payrollCentralizationSession.targetDate = ($('#payroll-centralization-date') || {}).value || '';
+      payrollCentralizationSession.targetJournal = ($('#payroll-centralization-journal') || {}).value || '';
+      payrollCentralizationSession.targetReference = ($('#payroll-centralization-reference') || {}).value || '';
       payrollCentralizationSession.mode = ($('#payroll-centralization-mode') || {}).value === 'posted' ? 'posted' : 'draft';
     }
     function syncControls() {
@@ -20580,6 +20544,14 @@
     session.targetJournal = ($('#payroll-centralization-journal') || {}).value || '';
     session.targetReference = ($('#payroll-centralization-reference') || {}).value || '';
     session.mode = mode;
+    if (!session.targetDate || !session.targetJournal || !session.targetReference) {
+      toast('Centralisation bloquée : choisissez explicitement la date, le journal et la référence comptable.', 'warning');
+      return;
+    }
+    if (session.targetDate < dossier.cycleStart || session.targetDate > dossier.cycleEnd) {
+      toast('Centralisation refusée : la date choisie est hors du cycle comptable actif.', 'warning');
+      return;
+    }
     var aggregate = PayrollCentralization.aggregate(run, session.accountMap, S.accounts());
     session.aggregateResult = aggregate;
     if (!aggregate.ok) {
@@ -20644,9 +20616,9 @@
     var selectedRun = existingSession && approvedRuns.find(function (run) { return run.id === existingSession.runId && run.dossierId === existingSession.payrollDossierId; }) ||
       approvedRuns.find(function (run) { return run.dossierId === preferredPayrollDossierId; }) || approvedRuns[0] || null;
     var linkedEntry = selectedRun && payrollEntryForRun(selectedRun, selectedRun.dossierId);
-    var targetDate = existingSession && selectedRun && existingSession.runId === selectedRun.id && existingSession.payrollDossierId === selectedRun.dossierId ? existingSession.targetDate : (selectedRun && selectedRun.date || '');
-    var targetJournal = existingSession && selectedRun && existingSession.runId === selectedRun.id ? existingSession.targetJournal : (S.journals().find(function (journal) { return journal.code === 'PA'; }) || S.journals()[0] || {}).code || '';
-    var targetReference = existingSession && selectedRun && existingSession.runId === selectedRun.id ? existingSession.targetReference : (selectedRun ? 'PA-' + selectedRun.period + '-001' : '');
+    var targetDate = existingSession && selectedRun && existingSession.runId === selectedRun.id && existingSession.payrollDossierId === selectedRun.dossierId ? existingSession.targetDate : '';
+    var targetJournal = existingSession && selectedRun && existingSession.runId === selectedRun.id ? existingSession.targetJournal : '';
+    var targetReference = existingSession && selectedRun && existingSession.runId === selectedRun.id ? existingSession.targetReference : '';
     var targetMode = existingSession && selectedRun && existingSession.runId === selectedRun.id ? existingSession.mode : 'draft';
     var options = approvedRuns.map(function (run) {
       var linked = payrollEntryForRun(run, run.dossierId);
@@ -20663,8 +20635,8 @@
       : '';
     var controls = selectedRun && !linkedEntry
       ? '<div class="exchange-import-controls payroll-centralization-controls">' +
-        '<div class="field"><label for="payroll-centralization-date">Date de la pièce générale</label><input id="payroll-centralization-date" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(targetDate) + '" required><span class="hint">La date proposée vient du lot approuvé ; elle doit rester dans le cycle du dossier comptable de destination.</span></div>' +
-        '<div class="field"><label for="payroll-centralization-journal">Journal général</label><select id="payroll-centralization-journal" required>' + S.journals().filter(function (journal) { return !journal.retired && !journal.systemManaged && journal.code !== 'CEN'; }).map(function (journal) { return '<option value="' + esc(journal.code) + '"' + (journal.code === targetJournal ? ' selected' : '') + '>' + esc(journalDisplayName(journal)) + '</option>'; }).join('') + '</select><span class="hint">Le journal « Paie (PA) » est proposé par défaut ; aucun journal n’est créé.</span></div>' +
+        '<div class="field"><label for="payroll-centralization-date">Date de la pièce générale</label><input id="payroll-centralization-date" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(targetDate) + '" required><span class="hint">Choisissez explicitement la date ; elle doit rester dans le cycle du dossier comptable de destination.</span></div>' +
+        '<div class="field"><label for="payroll-centralization-journal">Journal général</label><select id="payroll-centralization-journal" required><option value="">— Choisir un journal —</option>' + S.journals().filter(function (journal) { return !journal.retired && !journal.systemManaged && journal.code !== 'CEN'; }).map(function (journal) { return '<option value="' + esc(journal.code) + '"' + (journal.code === targetJournal ? ' selected' : '') + '>' + esc(journalDisplayName(journal)) + '</option>'; }).join('') + '</select><span class="hint">Aucun journal n’est présélectionné ni créé.</span></div>' +
         '<div class="field"><label for="payroll-centralization-reference">Référence comptable</label><input id="payroll-centralization-reference" type="text" maxlength="100" value="' + esc(targetReference) + '" required></div>' +
         '<div class="field"><label for="payroll-centralization-mode">Statut de la pièce</label><select id="payroll-centralization-mode"><option value="draft"' + (targetMode === 'draft' ? ' selected' : '') + '>Créer un brouillon (recommandé)</option><option value="posted"' + (targetMode === 'posted' ? ' selected' : '') + '>Importer comme écriture validée</option></select><span class="hint">La validation exige une période ouverte et les droits comptables nécessaires.</span></div>' +
       '</div>'
@@ -33122,12 +33094,6 @@
         navigate('#/payroll');
         break;
       }
-      case 'create-demo-payroll-run':
-        createDemoPayrollRun();
-        break;
-      case 'approve-internal-payroll-run':
-        approveInternalPayrollRun(id);
-        break;
       case 'open-accounting-payroll-centralization': {
         var payrollDossier = PayrollHR.currentDossier();
         var accountingDossierId = trigger.getAttribute('data-accounting-dossier-id') || (payrollDossier && payrollDossier.accountingDossierId);
