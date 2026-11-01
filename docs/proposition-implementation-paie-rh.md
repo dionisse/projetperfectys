@@ -188,7 +188,7 @@ Configurer les composantes de rémunération et recueillir les éléments variab
 
 ### Étape 11 — Packs de règles par pays
 
-Mettre en place l’architecture versionnée multi-pays et compléter en premier le pack béninois : impôt sur salaire, cotisations sociales, assurances, parts employeur, plafonds, assiettes, arrondis et dates d’effet.
+Mettre en place l’architecture versionnée multi-pays et compléter en premier le pack béninois : impôt sur salaire, cotisations sociales, assurances, parts employeur, plafonds, assiettes, arrondis et dates d’effet. La structure des règles, leur versionnement, leur applicabilité et leur validation sont détaillés dans [la fiche de cadrage de l’étape 11](cadrage-paie-rh-etape-11-packs-regles-pays.md).
 **Jalon :** chaque règle active a une source officielle, une période de validité, un approbateur et des cas de référence.
 
 ### Étape 12 — Moteur de calcul et lots de paie
