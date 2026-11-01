@@ -7805,6 +7805,7 @@
     }
 
     var cleanLines = [];
+    var usedLineIds = Object.create(null);
     lines.forEach(function (line, index) {
       var debit = Number(line.debit) || 0;
       var credit = Number(line.credit) || 0;
@@ -7847,7 +7848,10 @@
       analyticValidation.errors.forEach(function (message) { errors.push(label + message); });
       analyticalAccountRuleErrors(acc, analyticValidation.splits, opts.status === 'posted').forEach(function (message) { errors.push(label + message); });
       var auxiliaryParty = validateEntryAuxiliaryParty(line, accountRecord, st, opts, label, errors);
-      var cleanLine = { account: acc, debit: debit, credit: credit };
+      var lineId = String(line.id || '').trim().slice(0, 120) || (payload.id ? 'legacy-' + String(payload.id) + '-' + index : 'line-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10));
+      if (usedLineIds[lineId]) errors.push(label + 'identifiant de ligne répété dans la pièce.');
+      usedLineIds[lineId] = true;
+      var cleanLine = { id: lineId, account: acc, debit: debit, credit: credit };
       if (analyticValidation.splits.length) cleanLine.analyticSplits = analyticValidation.splits;
       if (auxiliaryParty) {
         cleanLine.thirdPartyType = String(line.thirdPartyType).trim().toLowerCase();
@@ -8002,7 +8006,11 @@
     if (existing.sourceSystem === 'PERFECTO-ANNULATION-CENTRALISATION' && existing.sourceMetadata && existing.sourceMetadata.operation === 'centralization-reversal') {
       return { ok: false, errors: ['Une écriture inverse est immuable après sa préparation. Supprimez ce brouillon et recommencez l’annulation si une correction est nécessaire.'] };
     }
-    payload.id = id;
+    payload = Object.assign({}, payload || {}, { id: id });
+    payload.lines = (Array.isArray(payload.lines) ? payload.lines : []).map(function (line, lineIndex) {
+      var priorLine = Array.isArray(existing.lines) ? existing.lines[lineIndex] : null;
+      return Object.assign({}, line || {}, { id: String(line && line.id || priorLine && priorLine.id || '') });
+    });
     var currentJournal = journal(existing.journal);
     var submittedJournal = journal(payload.journal);
     var allowInactiveJournal = !!(currentJournal && submittedJournal && currentJournal.active === false && currentJournal.code === submittedJournal.code);
@@ -8074,6 +8082,10 @@
     if (!reason) return { ok: false, errors: ['Le motif de correction est obligatoire.'], preflight: eligibility };
     if (reason.length > 500) return { ok: false, errors: ['Le motif de correction ne peut pas dépasser 500 caractères.'], preflight: eligibility };
     payload = Object.assign({}, payload || {}, { id: id });
+    payload.lines = (Array.isArray(payload.lines) ? payload.lines : []).map(function (line, lineIndex) {
+      var priorLine = Array.isArray(existing.lines) ? existing.lines[lineIndex] : null;
+      return Object.assign({}, line || {}, { id: String(line && line.id || priorLine && priorLine.id || '') });
+    });
     var existingJournal = journal(existing.journal);
     var submittedJournal = journal(payload.journal);
     var allowInactiveJournal = !!(existingJournal && submittedJournal && existingJournal.active === false && existingJournal.code === submittedJournal.code);

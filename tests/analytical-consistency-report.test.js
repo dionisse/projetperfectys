@@ -62,6 +62,8 @@ const missingRequired = build([entry([line([])])], {
 });
 assert.equal(missingRequired.anomalyCount, 1);
 assert.match(missingRequired.groups[0].rows[0].cells.control, /imputation obligatoire.*manque/i);
+assert.equal(missingRequired.groups[0].rows[0].sourceEntryId, 'OD-001');
+assert.equal(missingRequired.groups[0].rows[0].sourceLineId, 'legacy-OD-001-0');
 
 const permittedPartial = build([entry([line([centerSplit('partial', [centerAllocation('c1', 'ANA-01', 'Atelier nord', 80, 80)])])])], {
   accountRules: [{ accountCode: '601100', natureId: 'responsibility-centers', requirement: 'required', allowPartial: true }]

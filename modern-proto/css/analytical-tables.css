@@ -190,3 +190,24 @@ body:is(.analytics-module-mode, .analytical-table-mode) #view .analytical-moveme
   body:is(.analytics-module-mode, .analytical-table-mode) #view table { min-width: 0 !important; font-size: 9pt !important; }
   body:is(.analytics-module-mode, .analytical-table-mode) #view table thead :is(th, td) { position: static; }
 }
+
+
+/* Traçabilité bidirectionnelle des lignes analytiques vers la pièce source. */
+body:is(.analytics-module-mode, .analytical-table-mode) #view .analytical-source-link {
+  color: #5b3fa7;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+body:is(.analytics-module-mode, .analytical-table-mode) #view .analytical-source-link:hover { color: #39246f; }
+body.analytics-module-mode #view .analytical-source-entry .analytical-source-line-focused td {
+  background: #f1edf8 !important;
+  box-shadow: inset 0 1px #c8b8e5, inset 0 -1px #c8b8e5;
+}
+body.analytics-module-mode #view .analytical-source-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+body.analytics-module-mode #view .analytical-source-entry > p { margin: 14px 0; }

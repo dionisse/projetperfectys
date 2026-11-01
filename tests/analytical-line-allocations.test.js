@@ -95,12 +95,15 @@ const draft = S.createEntry(entry([{
 }], 'OD-ANALYTIC-DRAFT'), 'draft');
 assert.equal(draft.ok, true, draft.errors.join(' '));
 assert.equal(draft.entry.lines[0].analyticSplits[0].allocations[0].amount, 50);
+assert.ok(draft.entry.lines[0].id, 'chaque nouvelle ligne générale reçoit un identifiant stable');
+const stableDraftLineId = draft.entry.lines[0].id;
 const update = S.updateDraft(draft.entry.id, entry([{
   natureId: 'responsibility-centers', mode: 'amount', completeness: 'complete',
   allocations: [centerAllocation(centers[0], 75)]
 }], 'OD-ANALYTIC-DRAFT'));
 assert.equal(update.ok, true, update.errors.join(' '));
 assert.equal(update.entry.lines[0].analyticSplits[0].allocations[0].amount, 75, 'la modification analytique est détectée et sauvegardée');
+assert.equal(update.entry.lines[0].id, stableDraftLineId, 'l’identifiant de ligne est conservé à travers la modification du brouillon');
 const incompletePost = S.postEntry(draft.entry.id);
 assert.equal(incompletePost.ok, false, 'la validation d’un brouillon recontrôle aussi sa ventilation analytique');
 assert.match(incompletePost.errors.join(' '), /doit être égale au montant de la ligne/);

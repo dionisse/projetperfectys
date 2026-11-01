@@ -17,6 +17,7 @@ assert.deepEqual(groups.map(group => group.id), ['home', 'imputations', 'referen
 assert.deepEqual(groups.map(group => group.label), ['Accueil', 'Imputations', 'Référentiels analytiques', 'États analytiques']);
 assert.equal(navigation.getGroup('unknown').id, 'home');
 assert.equal(navigation.getItem('reports', 'unknown').id, 'analytic-center-balance');
+assert.equal(navigation.getItem('imputations', 'source-entry').contextOnly, true, 'la pièce source est un item contextuel, pas un menu permanent supplémentaire');
 assert.ok(groups.flatMap(group => group.items).every(item => item.status === 'active'));
 assert.equal(groups.find(group => group.id === 'imputations').items.find(item => item.id === 'entry').route, 'entry');
 assert.doesNotMatch(fs.readFileSync(path.join(root, 'modern-proto/js/analytical-navigation.js'), 'utf8'), /PerfectoAccountingNavigation/,
@@ -41,7 +42,7 @@ assert.match(app, /phoneRouteAllowed = route === 'dossiers' \|\| route === 'anal
 assert.match(html, /css\/analytical-module\.css/);
 assert.ok(html.indexOf('js/analytical-navigation.js') < html.indexOf('js/app.js'),
   'le catalogue analytique est chargé avant le routeur');
-assert.match(serviceWorker, /perfecto-static-v196/);
+assert.match(serviceWorker, /perfecto-static-v197/);
 assert.match(serviceWorker, /\.\/js\/analytical-navigation\.js/);
 assert.match(serviceWorker, /\.\/css\/analytical-module\.css/);
 assert.match(css, /body\.analytics-module-mode/);

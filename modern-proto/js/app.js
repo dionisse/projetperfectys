@@ -319,6 +319,10 @@
     var item = AnalyticalNavigation.getItem(group.id, itemId || group.defaultItem);
     var hash = '#/analytics?g=' + encodeURIComponent(group.id) + '&i=' + encodeURIComponent(item.id);
     if (extra && extra.natureId) hash += '&n=' + encodeURIComponent(extra.natureId);
+    if (extra && extra.entryId) hash += '&eid=' + encodeURIComponent(extra.entryId);
+    if (extra && extra.lineId) hash += '&lid=' + encodeURIComponent(extra.lineId);
+    if (extra && Number.isInteger(extra.lineIndex)) hash += '&line=' + encodeURIComponent(String(extra.lineIndex));
+    if (extra && extra.back) hash += '&back=' + encodeURIComponent(extra.back);
     return hash;
   }
 
@@ -338,7 +342,8 @@
       '<a href="#/analytics-dossiers" class="analytics-nav-link' + (dossierListActive ? ' active' : '') + '"' + (dossierListActive ? ' aria-current="page"' : '') + '><span class="nav-icon" aria-hidden="true">▰</span>Dossiers clients</a>' +
       '<a href="' + esc(analyticalMenuHash('home', 'overview')) + '" class="analytics-nav-link' + (homeActive ? ' active' : '') + '"' + (homeActive ? ' aria-current="page"' : '') + '><span class="nav-icon" aria-hidden="true">▥</span>Accueil analytique</a>' +
       '</div>' + AnalyticalNavigation.all().filter(function (group) { return group.id !== 'home'; }).map(function (group) {
-        return '<div class="nav-section analytics-nav-section"><p class="nav-section-heading">' + esc(group.label) + '</p>' + group.items.map(function (item) {
+        var visibleItems = group.items.filter(function (item) { return !item.contextOnly || currentGroup.id === group.id && currentItem.id === item.id; });
+        return '<div class="nav-section analytics-nav-section"><p class="nav-section-heading">' + esc(group.label) + '</p>' + visibleItems.map(function (item) {
           var active = currentGroup.id === group.id && currentItem.id === item.id;
           var href = item.route ? '#/' + item.route : analyticalMenuHash(group.id, item.id);
           return '<a href="' + esc(href) + '" class="analytics-nav-link' + (active ? ' active' : '') + '" data-analytics-menu-link' + (active ? ' aria-current="page"' : '') + ' title="' + esc(item.description || item.label) + '"><span class="nav-icon" aria-hidden="true">' + (group.icon || '•') + '</span>' + esc(item.label) + '</a>';
@@ -2896,7 +2901,7 @@
           date: existing.date,
           description: existing.description,
           amendmentReason: '',
-          lines: existing.lines.map(function (l) { return { account: l.account, debit: l.debit || '', credit: l.credit || '', analyticSplits: S.normalizeAnalyticalSplits(l.analyticSplits), thirdPartyType: l.thirdPartyType || '', thirdPartyId: l.thirdPartyId || '' }; })
+          lines: existing.lines.map(function (l, index) { return { id: l.id || 'legacy-' + String(existing.id) + '-' + index, account: l.account, debit: l.debit || '', credit: l.credit || '', analyticSplits: S.normalizeAnalyticalSplits(l.analyticSplits), thirdPartyType: l.thirdPartyType || '', thirdPartyId: l.thirdPartyId || '' }; })
         };
       }
       if (existing && existing.status === 'posted') {
@@ -2911,7 +2916,7 @@
           description: existing.description,
           amendmentReason: '',
           editPreflight: editPreflight,
-          lines: existing.lines.map(function (l) { return { account: l.account, debit: l.debit || '', credit: l.credit || '', analyticSplits: S.normalizeAnalyticalSplits(l.analyticSplits), thirdPartyType: l.thirdPartyType || '', thirdPartyId: l.thirdPartyId || '' }; })
+          lines: existing.lines.map(function (l, index) { return { id: l.id || 'legacy-' + String(existing.id) + '-' + index, account: l.account, debit: l.debit || '', credit: l.credit || '', analyticSplits: S.normalizeAnalyticalSplits(l.analyticSplits), thirdPartyType: l.thirdPartyType || '', thirdPartyId: l.thirdPartyId || '' }; })
         };
       }
     }
@@ -3388,7 +3393,7 @@
     var account = resolveEntryAccount(line.account, journalCode);
     var accountValue = account ? account.code : String(line.account || '');
     var partyToken = entryAuxiliaryPartyToken(line.thirdPartyType, line.thirdPartyId);
-    return '<div class="line-row">' +
+    return '<div class="line-row" data-entry-line-id="' + esc(line.id || '') + '">' +
       '<div class="line-account-entry"><input type="text" data-field="account" list="entry-account-suggestions" value="' + esc(accountValue) + '" placeholder="Code ou intitulé du compte" autocomplete="off" aria-label="Compte de la ligne, code ou intitulé"><small class="entry-account-status">Tapez un début de code ou d’intitulé pour afficher jusqu’à 40 suggestions.</small>' + entryAuxiliaryPartyEditorHtml(accountValue, partyToken, '') + lineAnalyticalEditorHtml(line) + '</div>' +
       '<input type="number" data-field="debit" min="0" step="' + amountStep + '" inputmode="' + amountInputMode + '" value="' + esc(line.debit) + '" placeholder="0" aria-label="Montant au débit">' +
       '<input type="number" data-field="credit" min="0" step="' + amountStep + '" inputmode="' + amountInputMode + '" value="' + esc(line.credit) + '" placeholder="0" aria-label="Montant au crédit">' +
@@ -3606,6 +3611,7 @@
         var partyToken = row.querySelector('[data-field="third-party"]');
         var party = parseEntryAuxiliaryPartyToken(partyToken && partyToken.value);
         return {
+          id: row.getAttribute('data-entry-line-id') || '',
           account: account ? account.code : accountInput.value.trim(),
           debit: row.querySelector('[data-field="debit"]').value,
           credit: row.querySelector('[data-field="credit"]').value,
@@ -3863,6 +3869,7 @@
     var journal = S.journal(e.journal);
     var canManageAttachments = hasDemoPermission(getActiveDemoMember(), 'accounting', 'entryAttachments.manage', accountingAccessContext());
 
+    var hasAnalyticalAllocations = (Array.isArray(e.lines) ? e.lines : []).some(function (line) { return Array.isArray(line && line.analyticSplits) && line.analyticSplits.length > 0; });
     var body = '<div class="form-grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:16px">' +
       '<div class="total-item"><span>Date</span><strong>' + dateLabel(e.date) + '</strong></div>' +
       '<div class="total-item"><span>N° de pièce</span><strong>' + esc(e.reference) + '</strong></div>' +
@@ -3870,6 +3877,7 @@
       '<div class="total-item"><span>Statut</span><div>' + statusBadge(e.status) + '</div></div>' +
       '</div>' +
       '<p class="muted" style="margin-bottom:16px"><strong>Référence :</strong> ' + esc(e.sourceReference || '—') + '<br><strong>Libellé :</strong> ' + esc(e.description || 'Aucun libellé') + '</p>' +
+      (hasAnalyticalAllocations ? '<p><a class="btn btn-ghost btn-sm" href="' + esc(analyticalMenuHash('imputations', 'source-entry', { entryId: e.id, back: analyticalMenuHash('imputations', 'movements', { entryId: e.id }) })) + '">Consulter les imputations analytiques de cette pièce ↗</a></p>' : '') +
       '<p><button type="button" class="btn btn-ghost btn-sm entry-attachments-manage-button" data-action="manage-entry-attachments" data-id="' + esc(e.id) + '"' + (canManageAttachments ? '' : ' disabled title="Droit entryAttachments.manage requis"') + '>📎 Ajouter ou consulter les justificatifs</button></p>' +
       '<div class="table-wrap"><table class="data-table">' +
         '<thead><tr><th scope="col">Compte</th><th scope="col">Intitulé</th><th scope="col" class="num">Débit</th><th scope="col" class="num">Crédit</th></tr></thead><tbody>' +
@@ -26889,6 +26897,9 @@
   function viewAnalyticalMovements() {
     var dossier = S.currentDossier();
     var filter = ui.analyticalMovements;
+    var sourceParams = parseHash().params || {};
+    var sourceEntryId = String(sourceParams.eid || '');
+    var sourceLineId = String(sourceParams.lid || '');
     var natureRows = (S.analyticalNaturesConfiguration().rows || []).filter(function (row) { return row && !row.group; });
     var centers = S.analyticalCenters();
     var journals = S.journals().filter(function (journal) { return journal && !journal.retired; });
@@ -26902,7 +26913,7 @@
       analyticalDimensionValues: S.analyticalDimensionValuesConfiguration(filter.natureId).rows || [],
       cycleStart: cycleStart, cycleEnd: cycleEnd,
       decimalPlaces: S.accountingConfiguration().decimalPlaces,
-      filters: { analyticalNature: filter.natureId, centerId: filter.centerId, journal: filter.journal, from: from, to: to, search: filter.q }
+      filters: { analyticalNature: filter.natureId, centerId: filter.centerId, journal: filter.journal, from: from, to: to, search: filter.q, entryId: sourceEntryId, lineId: sourceLineId }
     });
     var centerOptions = '<option value="">Tous les centres</option>' + centers.filter(function (center) { return center.active !== false || center.id === filter.centerId; }).map(function (center) {
       return '<option value="' + esc(center.id) + '"' + (center.id === filter.centerId ? ' selected' : '') + '>' + esc(center.code + ' · ' + center.name + (center.active === false ? ' · Archivé' : '')) + '</option>';
@@ -26917,6 +26928,10 @@
       return '<tr' + (row.cells.status === 'Centre non rapproché' ? ' class="analytical-movement-row-unmatched"' : '') + '>' + report.columns.map(function (column) {
         var value = row.cells[column.key];
         if (column.key === 'debit' || column.key === 'credit') return '<td class="number-cell">' + (Number(value) ? amount(value) : '') + '</td>';
+        if (column.key === 'piece' && row.entry && row.entry.id) {
+          var sourceHref = analyticalMenuHash('imputations', 'source-entry', { entryId: row.entry.id, lineId: row.sourceLineId, lineIndex: row.lineIndex, back: location.hash });
+          return '<td><a class="analytical-source-link" href="' + esc(sourceHref) + '" aria-label="Consulter la pièce ' + esc(row.cells.piece || row.entry.id) + ' et sa ligne source">' + esc(value == null ? '' : value) + ' ↗</a></td>';
+        }
         if (column.key === 'status') return '<td><span class="analytic-movement-status' + (value === 'À ventiler' ? ' is-unallocated' : (value === 'Valeur non rapprochée' || value === 'Centre non rapproché' ? ' is-unmatched' : '')) + '">' + esc(value) + '</span></td>';
         return '<td>' + esc(value == null ? '' : value) + '</td>';
       }).join('') + '</tr>';
@@ -26928,7 +26943,7 @@
       ? '<div class="empty-state"><span class="empty-state-icon">⌕</span><h3>Aucun mouvement analytique trouvé</h3><p>Les filtres ne correspondent à aucune ventilation explicite d’une pièce validée. Les brouillons et lignes sans imputation ne sont pas repris.</p></div>'
       : '';
     return '<div class="exchange-workspace analytical-movements-workspace">' +
-      '<div class="alert info"><div><strong>Mouvements analytiques · dossier ' + esc(dossier.reference) + '</strong><br>Lecture seule des ventilations enregistrées sur les lignes validées. Les natures sont consultées séparément ; le débit et le crédit généraux ne sont pas modifiés. Les reliquats restent « À ventiler » et ne sont attribués à aucun centre. Le total « À ventiler » suit la nature, la période et le journal, indépendamment du filtre de centre.</div></div>' +
+      '<div class="alert info"><div><strong>Mouvements analytiques · dossier ' + esc(dossier.reference) + '</strong><br>' + (sourceEntryId ? 'Filtre de source exact actif · pièce ' + esc(sourceEntryId) + (sourceLineId ? ' · ligne ' + esc(sourceLineId) : '') + ' · <a href="' + esc(analyticalMenuHash('imputations', 'movements')) + '">retirer le filtre source</a><br>' : '') + 'Lecture seule des ventilations enregistrées sur les lignes validées. Les natures sont consultées séparément ; le débit et le crédit généraux ne sont pas modifiés. Les reliquats restent « À ventiler » et ne sont attribués à aucun centre. Le total « À ventiler » suit la nature, la période et le journal, indépendamment du filtre de centre.</div></div>' +
       '<section class="exchange-card analytical-movement-filter-card"><div class="supplier-filter-controls analytical-movement-filters">' +
         '<label class="field"><span>Nature analytique</span><select data-filter="analyticalMovements:natureId">' + natureOptions + '</select></label>' +
         (nature && nature.id === 'responsibility-centers' ? '<label class="field"><span>Centre</span><select data-filter="analyticalMovements:centerId">' + centerOptions + '</select></label>' : '') +
@@ -28508,7 +28523,13 @@
           var severity = String(row.cells.severity || '');
           var severityClass = severity === 'Anomalie' ? 'is-anomaly' : (severity === 'À ventiler' ? 'is-unallocated' : '');
           return '<tr class="' + severityClass + '">' + report.columns.map(function (column) {
-            return '<td>' + esc(row.cells[column.key] == null ? '' : String(row.cells[column.key])) + '</td>';
+            var value = row.cells[column.key];
+            var contents = esc(value == null ? '' : String(value));
+            if (column.key === 'piece' && row.sourceEntryId) {
+              var sourceHref = analyticalMenuHash('imputations', 'source-entry', { entryId: row.sourceEntryId, lineId: row.sourceLineId, lineIndex: row.sourceLineIndex, back: location.hash });
+              contents = '<a class="analytical-source-link" href="' + esc(sourceHref) + '">' + contents + ' ↗</a>';
+            }
+            return '<td>' + contents + '</td>';
           }).join('') + '</tr>';
         }).join('');
     }).join('') + '</tbody></table></div>';
@@ -28597,7 +28618,13 @@
         (group.rows || []).map(function (row) {
           var rowClass = group.code === 'analytical-unallocated' ? 'analytical-statement-unallocated' : (group.code === 'analytical-unmatched-values' || group.code === 'analytical-unmatched-centers' ? 'analytical-statement-unmatched' : '');
           return '<tr' + (rowClass ? ' class="' + rowClass + '"' : '') + '>' + report.columns.map(function (column) {
-            return '<td' + (analyticalStatementColumnIsNumeric(column) ? ' class="num"' : '') + '>' + esc(fmt(row.cells[column.key])) + '</td>';
+            var cell = row.cells[column.key];
+            var contents = esc(fmt(cell));
+            if (column.key === 'piece' && row.sourceEntryId) {
+              var sourceHref = analyticalMenuHash('imputations', 'source-entry', { entryId: row.sourceEntryId, lineId: row.sourceLineId, lineIndex: row.sourceLineIndex, back: location.hash });
+              contents = '<a class="analytical-source-link" href="' + esc(sourceHref) + '">' + contents + ' ↗</a>';
+            }
+            return '<td' + (analyticalStatementColumnIsNumeric(column) ? ' class="num"' : '') + '>' + contents + '</td>';
           }).join('') + '</tr>';
         }).join('');
     }).join('') + '</tbody></table></div>';
@@ -30780,6 +30807,60 @@
     return '<div class="analytical-values-index"><p>Choisissez explicitement la nature dont vous souhaitez gérer les valeurs. Ce choix ne modifie aucune imputation existante.</p><div class="analytical-module-card-grid">' + available.map(function (nature) {
       return '<a class="analytical-module-card" href="' + esc(analyticalMenuHash('references', 'values', { natureId: nature.id })) + '"><h3>' + esc(nature.genericName || nature.individualName || nature.id) + '</h3><p>' + esc(nature.individualName || 'Valeurs analytiques définies pour le dossier actif.') + '</p><span class="analytical-module-card-action">Gérer les valeurs <span aria-hidden="true">→</span></span></a>';
     }).join('') + '</div></div>';
+  }
+
+  function viewAnalyticalSourceEntry(params) {
+    params = params || {};
+    var entryId = String(params.eid || '');
+    var entry = entryId ? S.entry(entryId) : null;
+    if (!entry) return '<div class="alert warning"><div><strong>Pièce source introuvable dans le dossier actif.</strong> Le lien ne change pas de dossier et aucune recherche par numéro de pièce n’est effectuée.</div></div><a class="btn btn-ghost" href="' + esc(analyticalMenuHash('imputations', 'movements')) + '">← Retour aux mouvements analytiques</a>';
+    var journal = S.journal(entry.journal);
+    var requestedLineId = String(params.lid || '');
+    var requestedLineIndex = params.line === '' || params.line == null ? -1 : Number(params.line);
+    var back = String(params.back || '');
+    if (!/^#\/analytics(?:\?|$)/.test(back)) back = analyticalMenuHash('imputations', 'movements', { entryId: entry.id, lineId: requestedLineId || undefined });
+    var lineRows = [];
+    (Array.isArray(entry.lines) ? entry.lines : []).forEach(function (line, lineIndex) {
+      var lineId = String(line.id || 'legacy-' + String(entry.id) + '-' + lineIndex);
+      var isFocused = requestedLineId ? requestedLineId === lineId : requestedLineIndex === lineIndex;
+      var splits = Array.isArray(line.analyticSplits) ? line.analyticSplits : [];
+      var account = S.account(line.account);
+      var base = '<td>' + (lineIndex + 1) + '</td><td><span class="code-chip">' + esc(line.account || '') + '</span><br>' + esc(account && account.label || '—') + '</td><td class="num">' + (Number(line.debit) ? esc(amount(Number(line.debit))) : '—') + '</td><td class="num">' + (Number(line.credit) ? esc(amount(Number(line.credit))) : '—') + '</td>';
+      var rowClass = isFocused ? ' class="analytical-source-line-focused"' : '';
+      if (!splits.length) {
+        lineRows.push('<tr' + rowClass + '>' + base + '<td colspan="6">Aucune imputation analytique enregistrée sur cette ligne.</td></tr>');
+        return;
+      }
+      splits.forEach(function (split) {
+        var nature = (S.analyticalNaturesConfiguration().rows || []).find(function (item) { return item && item.id === split.natureId && !item.group; });
+        var natureLabel = nature && (nature.individualName || nature.genericName) || split.natureId || 'Nature inconnue';
+        var allocations = Array.isArray(split.allocations) ? split.allocations : [];
+        if (!allocations.length) lineRows.push('<tr' + rowClass + '>' + base + '<td>' + esc(natureLabel) + '</td><td colspan="5">Aucune affectation enregistrée.</td></tr>');
+        allocations.forEach(function (allocation) {
+          allocation = allocation || {};
+          var center = allocation.centerId ? S.analyticalCenter(allocation.centerId) : null;
+          var destination = allocation.valueLabel || (center ? center.code + ' · ' + center.name : allocation.centerCode || allocation.centerId || '');
+          var recorded = allocation.amount == null || allocation.amount === '' ? '—' : (Number.isFinite(Number(allocation.amount)) ? amount(Number(allocation.amount)) : String(allocation.amount));
+          var entered = allocation.value == null || allocation.value === '' ? '—' : String(allocation.value);
+          lineRows.push('<tr' + rowClass + '>' + base + '<td>' + esc(natureLabel) + '</td><td>' + esc(destination) + '</td><td>' + esc(split.mode === 'percentage' ? 'Pourcentage' : (split.mode === 'amount' ? 'Montant' : String(split.mode || '—'))) + '</td><td>' + esc(entered) + '</td><td class="num">' + esc(recorded) + '</td><td>Ventilé</td></tr>');
+        });
+        var unallocated = split.unallocatedAmount;
+        if (unallocated != null && unallocated !== '' && Number.isFinite(Number(unallocated)) && Number(unallocated) > 0) {
+          lineRows.push('<tr' + rowClass + '>' + base + '<td>' + esc(natureLabel) + '</td><td>À ventiler</td><td>' + esc(split.mode === 'percentage' ? 'Pourcentage' : 'Montant') + '</td><td>—</td><td class="num">' + esc(amount(Number(unallocated))) + '</td><td>Reliquat enregistré</td></tr>');
+        }
+      });
+    });
+    var canCorrect = entry.status === 'posted' && S.postedEntryEditPreflight(entry.id).canEdit &&
+      hasDemoPermission(getActiveDemoMember(), 'accounting', 'draft.edit', accountingAccessContext()) &&
+      hasDemoPermission(getActiveDemoMember(), 'accounting', 'entry.validate', accountingAccessContext());
+    var correction = canCorrect ? '<button type="button" class="btn btn-primary" data-action="edit-posted-entry" data-id="' + esc(entry.id) + '">Corriger dans la Comptabilité générale</button>' : '';
+    return '<section class="analytical-source-entry"><a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(back) + '">← Retour à la vue analytique</a>' +
+      '<header class="analytical-statement-heading"><span class="page-kicker">SUIVI ANALYTIQUE · PIÈCE SOURCE · LECTURE SEULE</span><h2>Pièce comptable N° ' + esc(entry.reference || entry.id) + '</h2><p>Consultation de la pièce enregistrée dans le dossier actif. Les montants et ventilations affichés ne sont pas modifiables ici.</p></header>' +
+      '<div class="analytical-statement-summary"><span>Dossier <strong>' + esc((S.currentDossier() || {}).reference || '') + '</strong></span><span>Date <strong>' + esc(dateLabel(entry.date)) + '</strong></span><span>Journal <strong>' + esc(journal ? journalDisplayName(journal) : entry.journal || '') + '</strong></span><span>Statut <strong>' + esc(entry.status === 'posted' ? 'Validée' : 'Brouillon') + '</strong></span><span>Identifiant pièce <strong>' + esc(entry.id) + '</strong></span></div>' +
+      '<p><strong>Référence :</strong> ' + esc(entry.sourceReference || '—') + ' · <strong>Libellé :</strong> ' + esc(entry.description || 'Aucun libellé') + '</p>' +
+      '<div class="table-wrap analytical-statement-table-wrap"><table class="data-table analytical-statement-table"><thead><tr><th>Ligne</th><th>Compte</th><th class="num">Débit général</th><th class="num">Crédit général</th><th>Nature analytique</th><th>Valeur / centre</th><th>Mode</th><th>Valeur saisie</th><th class="num">Montant enregistré</th><th>État</th></tr></thead><tbody>' + (lineRows.join('') || '<tr><td colspan="10">Aucune ligne source dans cette pièce.</td></tr>') + '</tbody></table></div>' +
+      '<div class="alert info"><div>Vue strictement consultative : seules les données explicitement enregistrées sur la pièce sont présentées. Les reliquats affichés proviennent du champ « À ventiler » enregistré ; aucune ventilation n’est recalculée ou déduite.</div></div>' +
+      '<div class="analytical-source-actions"><a class="btn btn-ghost" href="' + esc(analyticalMenuHash('imputations', 'movements', { entryId: entry.id, lineId: requestedLineId || undefined })) + '">Voir les mouvements de cette pièce</a>' + correction + '<a class="btn btn-ghost" href="#/entries">Ouvrir les pièces dans la Comptabilité générale</a></div></section>';
   }
 
   function viewAnalyticalModule(params) {

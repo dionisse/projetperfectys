@@ -12,6 +12,7 @@
     {
       id: 'imputations', label: 'Imputations', icon: '∑', defaultItem: 'movements', items: [
         { id: 'movements', label: 'Mouvements analytiques', view: 'movements', status: 'active', description: 'Consultation des ventilations explicites portées par les écritures validées.' },
+        { id: 'source-entry', label: 'Pièce comptable source', view: 'source-entry', status: 'active', contextOnly: true, description: 'Consultation en lecture seule de la pièce et de ses imputations analytiques enregistrées.' },
         { id: 'consistency', label: 'Contrôle de cohérence', view: 'consistency', reportId: 'analytic-consistency-control', status: 'active', description: 'Contrôle en lecture seule des axes, règles, reliquats et imputations.' },
         { id: 'entry', label: 'Saisie d’une pièce comptable', route: 'entry', status: 'active', description: 'La pièce générale et ses imputations analytiques restent saisies ensemble dans la Comptabilité générale.' }
       ]

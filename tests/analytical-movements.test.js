@@ -54,6 +54,16 @@ assert.equal(report.allocationCount, 2);
 assert.equal(report.totalDebit, 90, 'seuls les montants affectés aux centres entrent dans le total ventilé.');
 assert.equal(report.unallocatedDebit, 10);
 assert.equal(report.unallocatedCredit, 0);
+assert.ok(report.groups[0].rows.every(row => row.sourceLineId === 'legacy-entry-1-0' && row.lineIndex === 0),
+  'chaque mouvement expose la pièce et la ligne source exactes, sans utiliser le numéro de pièce comme identifiant');
+const exactSource = Report.buildAnalyticalMovements({
+  entries: entries.concat([{ id: 'entry-other', reference: 'OD-OTHER', journal: 'OD', date: '2026-02-10', status: 'posted', lines: [{ id: 'other-line', account: '601100', debit: 5, credit: 0, analyticSplits: [{ natureId: 'responsibility-centers', mode: 'amount', allocations: [{ centerId: 'center-1', value: '5', amount: 5 }] }] }] }]),
+  analyticalCenters, analyticalNatures, accounts, decimalPlaces: 0,
+  filters: { analyticalNature: 'responsibility-centers', entryId: 'entry-other', lineId: 'other-line' }
+});
+assert.equal(exactSource.rowCount, 1);
+assert.equal(exactSource.groups[0].rows[0].entry.id, 'entry-other', 'le filtre source compare uniquement l’identifiant stable de pièce');
+assert.equal(exactSource.groups[0].rows[0].line.id, 'other-line', 'le filtre source descend jusqu’à l’identifiant de ligne');
 assert.deepEqual(report.groups[0].rows.map(row => [row.cells.destination, row.cells.debit, row.cells.status]), [
   ['À ventiler (sans centre)', 10, 'À ventiler'],
   ['ANA-01 · Atelier nord', 40, 'Ventilé'],
@@ -238,3 +248,26 @@ assert.match(noNature.errors.join(' '), /Choisissez une nature analytique valide
 assert.equal(JSON.stringify(entries), snapshot, 'la consultation ne modifie aucune pièce.');
 
 console.log('Mouvements analytiques : nature isolée, multi-centres, À ventiler, filtres, lecture seule et résumés en français — OK');
+
+const detailedLedger = Report.buildAnalyticalStatement({
+  reportType: 'analytic-ledger', entries: [{ id: 'entry-detail', reference: 'OD-DETAIL', journal: 'OD', date: '2026-02-10', status: 'posted', lines: [{ id: 'detail-line', account: '601100', debit: 100, credit: 0, analyticSplits: [{ natureId: 'responsibility-centers', mode: 'amount', unallocatedAmount: 0, allocations: [{ centerId: 'center-1', centerCode: 'ANA-01', centerName: 'Atelier nord', value: '100', amount: 100 }] }] }] }],
+  analyticalCenters, analyticalNatures, accounts, decimalPlaces: 0, cycleStart: '2026-01-01', cycleEnd: '2026-12-31',
+  filters: { analyticalNature: 'responsibility-centers', from: '2026-01-01', to: '2026-12-31' }
+});
+assert.equal(detailedLedger.groups[0].rows[0].sourceEntryId, 'entry-detail');
+assert.equal(detailedLedger.groups[0].rows[0].sourceLineId, 'detail-line');
+const aggregatedBalance = Report.buildAnalyticalStatement({
+  reportType: 'analytic-center-balance', entries: [{ id: 'entry-detail', reference: 'OD-DETAIL', journal: 'OD', date: '2026-02-10', status: 'posted', lines: [{ id: 'detail-line', account: '601100', debit: 100, credit: 0, analyticSplits: [{ natureId: 'responsibility-centers', mode: 'amount', unallocatedAmount: 0, allocations: [{ centerId: 'center-1', centerCode: 'ANA-01', centerName: 'Atelier nord', value: '100', amount: 100 }] }] }] }],
+  analyticalCenters, analyticalNatures, accounts, decimalPlaces: 0, cycleStart: '2026-01-01', cycleEnd: '2026-12-31',
+  filters: { analyticalNature: 'responsibility-centers', from: '2026-01-01', to: '2026-12-31' }
+});
+assert.equal(aggregatedBalance.groups[0].rows[0].sourceEntryId, '', 'une ligne agrégée ne revendique jamais une pièce source unique');
+
+const detailedRemainder = Report.buildAnalyticalStatement({
+  reportType: 'analytic-ledger', entries: [{ id: 'entry-partial', reference: 'OD-PARTIAL', journal: 'OD', date: '2026-02-10', status: 'posted', lines: [{ id: 'partial-line', account: '601100', debit: 100, credit: 0, analyticSplits: [{ natureId: 'responsibility-centers', mode: 'amount', unallocatedAmount: 20, allocations: [{ centerId: 'center-1', centerCode: 'ANA-01', centerName: 'Atelier nord', value: '80', amount: 80 }] }] }] }],
+  analyticalCenters, analyticalNatures, accounts, decimalPlaces: 0, cycleStart: '2026-01-01', cycleEnd: '2026-12-31',
+  filters: { analyticalNature: 'responsibility-centers', from: '2026-01-01', to: '2026-12-31' }
+});
+const linkedRemainder = detailedRemainder.groups.find(group => group.code === 'analytical-unallocated').rows[0];
+assert.equal(linkedRemainder.sourceEntryId, 'entry-partial');
+assert.equal(linkedRemainder.sourceLineId, 'partial-line', 'un reliquat détaillé conserve aussi sa ligne source exacte');
