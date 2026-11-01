@@ -8,12 +8,135 @@
 
   var VERSION = 1;
   var STORAGE_PREFIX = 'perfecto.payroll.v1.';
+  var DOSSIER_CATALOG_KEY = 'perfecto.payroll.dossiers.v1';
   var MONTH_LABELS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
   function clone(value) { return JSON.parse(JSON.stringify(value)); }
 
   function storageKey(dossierId) {
     return STORAGE_PREFIX + encodeURIComponent(String(dossierId || ''));
+  }
+
+  function emptyDossierCatalog() {
+    return { version: 1, dossiers: [], activeDossierId: '' };
+  }
+
+  function loadDossierCatalog() {
+    if (!root.localStorage) return emptyDossierCatalog();
+    try {
+      var raw = root.localStorage.getItem(DOSSIER_CATALOG_KEY);
+      if (!raw) return emptyDossierCatalog();
+      var saved = JSON.parse(raw);
+      if (!saved || saved.version !== 1 || !Array.isArray(saved.dossiers)) return emptyDossierCatalog();
+      var dossiers = saved.dossiers.filter(function (dossier) {
+        return dossier && typeof dossier.id === 'string' && typeof dossier.clientName === 'string' &&
+          typeof dossier.clientCode === 'string' && typeof dossier.reference === 'string' &&
+          dateParts(dossier.cycleStart) && dateParts(dossier.cycleEnd) && dossier.cycleEnd >= dossier.cycleStart;
+      });
+      var activeDossierId = dossiers.some(function (dossier) { return dossier.id === saved.activeDossierId; })
+        ? String(saved.activeDossierId) : (dossiers[0] && dossiers[0].id || '');
+      return { version: 1, dossiers: dossiers, activeDossierId: activeDossierId };
+    } catch (err) {
+      return emptyDossierCatalog();
+    }
+  }
+
+  function saveDossierCatalog(catalog) {
+    try {
+      if (!root.localStorage) return false;
+      root.localStorage.setItem(DOSSIER_CATALOG_KEY, JSON.stringify(catalog));
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function dossiers() {
+    return clone(loadDossierCatalog().dossiers);
+  }
+
+  function currentDossier() {
+    var catalog = loadDossierCatalog();
+    return clone(catalog.dossiers.find(function (dossier) { return dossier.id === catalog.activeDossierId; }) || null);
+  }
+
+  function dossierById(dossierId) {
+    return clone(loadDossierCatalog().dossiers.find(function (dossier) { return dossier.id === String(dossierId || ''); }) || null);
+  }
+
+  function selectDossier(dossierId) {
+    var catalog = loadDossierCatalog();
+    dossierId = String(dossierId || '');
+    if (!catalog.dossiers.some(function (dossier) { return dossier.id === dossierId; })) {
+      return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    }
+    catalog.activeDossierId = dossierId;
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible de mémoriser le dossier Paie & RH actif dans le stockage local.'] };
+    return { ok: true, errors: [], dossier: currentDossier() };
+  }
+
+  function createDossier(input) {
+    input = input || {};
+    var clientName = String(input.clientName || input.name || '').trim().replace(/\s+/g, ' ');
+    var clientCode = String(input.clientCode || '').trim().toLocaleUpperCase().replace(/\s+/g, '');
+    var cycleStart = String(input.cycleStart || '');
+    var cycleEnd = String(input.cycleEnd || '');
+    var start = dateParts(cycleStart);
+    var end = dateParts(cycleEnd);
+    var errors = [];
+    if (!clientName) errors.push('Le nom de l’entreprise cliente est obligatoire.');
+    if (clientName.length > 120) errors.push('Le nom de l’entreprise ne peut pas dépasser 120 caractères.');
+    if (!/^[A-Z0-9]{2,8}$/.test(clientCode)) errors.push('Le sigle du dossier doit contenir de 2 à 8 lettres ou chiffres.');
+    if (!start || !end || cycleEnd < cycleStart) errors.push('Le cycle d’exercice doit préciser des dates valides, dans l’ordre chronologique.');
+    if (start && end && (end.year - start.year) * 12 + end.month - start.month + 1 > 18) {
+      errors.push('Le cycle d’exercice ne peut pas dépasser 18 mois dans cette version.');
+    }
+    var exerciseYear = start ? start.year : 0;
+    var reference = clientCode ? 'PRH-' + clientCode + '-' + (exerciseYear || '') : '';
+    var catalog = loadDossierCatalog();
+    if (reference && catalog.dossiers.some(function (dossier) { return dossier.reference.toLocaleLowerCase() === reference.toLocaleLowerCase(); })) {
+      errors.push('La référence « ' + reference + ' » existe déjà. Choisissez un autre sigle ou un autre exercice.');
+    }
+    var accountingDossierId = String(input.accountingDossierId || '').trim();
+    if (accountingDossierId.length > 160) errors.push('L’identifiant du dossier comptable associé est invalide.');
+    if (errors.length) return { ok: false, errors: errors };
+    var id;
+    do {
+      id = 'prh-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    } while (catalog.dossiers.some(function (dossier) { return dossier.id === id; }));
+    var dossier = {
+      id: id,
+      clientName: clientName,
+      name: clientName,
+      clientCode: clientCode,
+      reference: reference,
+      exerciseYear: exerciseYear,
+      cycleStart: cycleStart,
+      cycleEnd: cycleEnd,
+      address: String(input.address || '').trim().slice(0, 240),
+      ifu: String(input.ifu || '').trim().slice(0, 40),
+      rccm: String(input.rccm || '').trim().slice(0, 60),
+      email: String(input.email || '').trim().slice(0, 254),
+      phone: String(input.phone || '').trim().slice(0, 40),
+      accountingDossierId: accountingDossierId,
+      createdAt: new Date().toISOString()
+    };
+    catalog.dossiers.push(dossier);
+    catalog.activeDossierId = id;
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Création impossible : le stockage local est indisponible ou plein. Aucun dossier Paie & RH n’a été enregistré.'] };
+    return { ok: true, errors: [], dossier: clone(dossier) };
+  }
+
+  function updateAccountingDossierLink(dossierId, accountingDossierId) {
+    var catalog = loadDossierCatalog();
+    dossierId = String(dossierId || '');
+    accountingDossierId = String(accountingDossierId || '').trim();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    if (accountingDossierId.length > 160) return { ok: false, errors: ['Identifiant de dossier comptable invalide.'] };
+    dossier.accountingDossierId = accountingDossierId;
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer le lien explicite avec la Comptabilité générale.'] };
+    return { ok: true, errors: [], dossier: clone(dossier) };
   }
 
   function emptyState(dossierId) {
@@ -201,6 +324,12 @@
 
   var api = Object.freeze({
     VERSION: VERSION,
+    dossiers: dossiers,
+    currentDossier: currentDossier,
+    dossier: dossierById,
+    createDossier: createDossier,
+    selectDossier: selectDossier,
+    updateAccountingDossierLink: updateAccountingDossierLink,
     runs: runs,
     getRun: getRun,
     accountingAccountCatalog: accountingAccountCatalog,

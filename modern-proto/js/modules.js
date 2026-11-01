@@ -42,7 +42,7 @@
       status: 'partial',
       statusLabel: 'PARTIEL · DÉMO',
       version: 'Étape intégration paie',
-      route: 'payroll',
+      route: 'payroll-dossiers',
       scopeable: true
     },
     {

@@ -31,7 +31,7 @@ assert.match(appSource, /requestedModuleId === 'analytics' \? 'accounting' : req
 const payroll = modules.get('payroll-hr');
 assert(payroll, 'Paie & RH est dans le catalogue');
 assert.strictEqual(payroll.status, 'partial', 'seul le flux interne de centralisation est disponible en démo');
-assert.strictEqual(payroll.route, 'payroll');
+assert.strictEqual(payroll.route, 'payroll-dossiers', 'le module ouvre d’abord sa liste de dossiers RH autonomes');
 assert.strictEqual(payroll.scopeable, true, 'les droits Paie & RH peuvent être limités au dossier client');
 
 const sales = modules.get('sales-stock-invoicing');
