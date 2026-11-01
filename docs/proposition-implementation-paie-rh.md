@@ -178,7 +178,7 @@ Gérer les affectations datées à une unité, fonction, lieu et responsable, ai
 
 ### Étape 9 — Congés et absences
 
-Gérer congés annuels, maternité, paternité, maladie, accident et autres types configurables : demandes, calendriers, pièces, validation, acquisition et historique.
+Gérer congés annuels, maternité, paternité, maladie, accident et autres types configurables : demandes, calendriers, pièces, validation, acquisition et historique. Les distinctions, données, contrôles, soldes traçables et règles de protection sont détaillés dans [la fiche de cadrage de l’étape 9](cadrage-paie-rh-etape-9-conges-absences.md).
 **Jalon :** aucun droit, durée, décompte ou effet salarial présumé ; congé accident et données médicales traités selon des règles d’accès validées.
 
 ### Étape 10 — Rémunérations et variables
