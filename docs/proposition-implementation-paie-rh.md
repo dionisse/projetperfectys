@@ -168,7 +168,7 @@ Gérer le recrutement et l’entrée, contrats datés, catégories d’emploi, d
 
 ### Étape 7 — Débauchage et départ de l’entreprise
 
-Gérer le licenciement et toute autre raison de sortie : motif, date d’effet, approbations, pièces, clôture des accès et éléments à régulariser. Conserver l’historique plutôt que supprimer la fiche.
+Gérer le licenciement et toute autre raison de sortie : motif, date d’effet, approbations, pièces, clôture des accès et éléments à régulariser. Conserver l’historique plutôt que supprimer la fiche. Le parcours, la distinction entre fin de contrat et départ, la clôture et les contrôles sont détaillés dans [la fiche de cadrage de l’étape 7](cadrage-paie-rh-etape-7-debauchage-depart.md).
 **Jalon :** aucun préavis, indemnité, congé dû ou solde de départ calculé sans règles du pays et du contrat validées.
 
 ### Étape 8 — Affectations et missions
