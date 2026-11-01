@@ -104,7 +104,27 @@ Aucun taux, plafond, assiette ou compte comptable ne sera préchargé sans sourc
 8. Verrouiller la période. Toute correction passe par une procédure de réouverture ou de régularisation tracée.
 9. Si l’association comptable existe, prévisualiser la pièce de centralisation et les correspondances, puis demander confirmation. Conserver l’identifiant du lot source pour bloquer les doublons.
 
-## 4. Sécurité et architecture de données
+## 4. Navigation indépendante et menus Paie & RH
+
+Paie & RH aura son propre parcours de navigation, sa propre sélection de dossier RH, sa barre latérale et ses menus — indépendants de ceux de la Comptabilité générale et du Suivi Analytique. L’application pourra réutiliser les principes d’interface déjà éprouvés dans la Comptabilité (dossier actif clairement visible, menus et sous-menus cohérents, filtres, états, permissions et impressions), mais **ne réutilisera pas la navigation comptable**.
+
+### Menus proposés
+
+1. **Dossiers RH** — créer, sélectionner et consulter les dossiers client Paie & RH.
+2. **Organisation** — directions, départements, sections, services et unités personnalisées.
+3. **Personnel** — fiches employés, recrutement, contrats, intérim, départs/débauchage, CV, pièces, évaluations et discipline.
+4. **Affectations & missions** — affectations datées, missions opérationnelles et déplacements si activés.
+5. **Temps, congés & absences** — calendriers, demandes, approbations, congés et historiques.
+6. **Paie** — éléments variables, préparation des lots, calcul, contrôles, approbation et clôture.
+7. **Centralisation comptable** — association explicite du dossier comptable, correspondances de comptes, aperçu, transfert et historique des centralisations.
+8. **Registres** — registres RH et de paie : employés, contrats, affectations, congés, lots, bulletins, paiements et transferts.
+9. **États** — tableaux de suivi et états calculés à partir des données source et des règles validées.
+10. **Éditions** — bulletins, registres et états imprimables, PDF ou exports dont les formats auront été définis.
+11. **Paramètres** — pays et versions de règles, calendriers, rubriques, circuits de validation, types de congé et permissions.
+
+Les registres conserveront les données opérationnelles Paie & RH ; les états en fourniront une lecture calculée et traçable ; les éditions permettront leur consultation ou impression. Ces vues ne créeront pas à elles seules de données métier. Le menu **Centralisation comptable** restera un parcours distinct : il n’écrira dans la Comptabilité générale qu’après sélection explicite de la destination, configuration des correspondances, aperçu et confirmation. Les corrections d’écritures comptables continueront à suivre le parcours comptable existant.
+
+## 5. Sécurité et architecture de données
 
 Les informations bancaires, familiales, les photos, CV, évaluations et données disciplinaires sont sensibles. En production, le stockage navigateur actuel ne suffit pas. Le module devra s’appuyer sur un stockage serveur protégé avec chiffrement en transit et au repos, contrôle d’accès par organisation, dossier, rôle et action, journal d’audit, sauvegardes testées, gestion des pièces privées et politique de conservation validée.
 
@@ -112,49 +132,101 @@ Les droits seront séparés : administration des dossiers, consultation RH, gest
 
 Les dix fiches « Employé fictif » de `PRH-TEST-2026` resteront des identifiants de test liés à ce dossier. Elles ne contiennent pas de salaire, de coordonnées bancaires ni de données personnelles réelles et ne serviront pas à produire des résultats de paie.
 
-## 5. Feuille de route par lots et critères de validation
+## 6. Plan complet d’implémentation en 18 étapes
 
-### Lot 0 — Cadrage pays, règles et processus RH
+Les étapes sont séquentielles là où elles dépendent les unes des autres. La sécurité, la traçabilité et les tests sont transversaux, puis vérifiés à nouveau lors de l’étape 18. Aucun calcul réel ne commence avant la validation des règles du pays pilote.
 
-Confirmer les catégories d’emploi et d’intérim, conventions applicables, sources officielles, rubriques et responsabilités de validation pour le Bénin. Définir les étapes d’embauche, de mission, d’affectation et de débauchage au sens défini ci-dessus. Le débauchage sera traité comme un départ de l’entreprise, sans cause présumée ni effet financier automatique.
-**Critère de passage :** aucun paramètre légal actif sans source, date d’effet et approbateur identifié ; motifs et circuits de validation configurés avant usage.
+### Étape 1 — Cadrage métier et règles du pays pilote
 
-### Lot 1 — Structure, affectations et missions
+Confirmer les profils, contrats, intérim, motifs de départ, affectations, missions, congés, rubriques, responsabilités et sources officielles du Bénin. Définir qui valide les règles et leurs dates d’effet.
+**Jalon :** vocabulaire, périmètre et responsables validés ; aucune règle légale inventée ou activée implicitement.
 
-Créer les directions, départements, sections, services et unités personnalisées. Gérer les affectations datées, leur historique, les missions opérationnelles et, si demandé, les déplacements professionnels.
-**Critère :** chaque affectation et mission est liée au bon dossier RH ; une nouvelle affectation ne modifie pas les périodes précédentes ; aucun remboursement ni indemnité n’est calculé sans règle approuvée.
+### Étape 2 — Navigation indépendante Paie & RH
 
-### Lot 2 — Dossier employé et documents
+Construire la route, la barre latérale et les menus propres à Paie & RH, sans reprendre ceux de la Comptabilité générale ou du Suivi Analytique. Prévoir les entrées Dossiers RH, Organisation, Personnel, Affectations & missions, Temps & congés, Paie, Centralisation comptable, Registres, États, Éditions et Paramètres.
+**Jalon :** chaque menu ouvre une vue Paie & RH dans le contexte RH actif ; les permissions et retours de navigation restent dans ce module.
 
-Créer, modifier et archiver une fiche complète, avec rattachement obligatoire au dossier RH ; gérer CV, compétences, photo facultative, informations bancaires et familiales selon les droits, ainsi que les pièces privées et les évaluations.
-**Critère :** les employés de `PRH-TEST-2026` sont visibles uniquement dans ce dossier ; les accès aux données bancaires, disciplinaires et d’évaluation sont contrôlés et audités.
+### Étape 3 — Dossiers RH et isolation
 
-### Lot 3 — Congés et absences
+Créer, sélectionner et configurer les dossiers clients Paie & RH, leur référence PRH, pays, cycle et utilisateurs autorisés. Chaque donnée RH sera liée à un identifiant de dossier RH.
+**Jalon :** les employés, congés, lots et documents d’un dossier ne sont pas visibles dans un autre ; aucun rattachement comptable automatique.
 
-Créer le catalogue configurable des congés annuels, maternité, paternité, maladie, accident et autres types décidés par l’entreprise. Gérer demandes, justificatifs, approbations, calendrier et historique. Paramétrer les droits, durées et effets sur la paie uniquement après validation.
-**Critère :** aucun droit, décompte de jour ou traitement salarial n’est attribué par défaut ; les demandes sont rattachées à l’employé et au dossier RH.
+### Étape 4 — Organisation de l’entreprise
 
-### Lot 4 — Embauche, contrats, intérim et débauchage
+Permettre à l’utilisateur de créer et organiser directions, départements, sections, services et unités personnalisées.
+**Jalon :** structure modifiable et historisée, sans hiérarchie imposée ni réécriture des affectations passées.
 
-Implémenter les étapes documentaires validées, les contrats datés, les missions intérimaires et le processus de départ pour licenciement ou tout autre motif. Conserver les historiques et gérer la clôture d’accès.
-**Critère :** aucun dossier employé n’est supprimé à son départ ; aucun préavis, indemnité ou solde de départ n’est calculé sans règle du pays et du contrat validée.
+### Étape 5 — Profil complet et documents employés
 
-### Lot 5 — Variables et moteur pilote Bénin
+Créer les fiches reliées au dossier RH : identité, contacts, banque, informations familiales utiles, photo facultative, CV, formations, compétences, évaluations et pièces. Encadrer spécialement les champs bancaires, médicaux, familiaux et disciplinaires.
+**Jalon :** droits d’accès contrôlés ; les dix fiches génériques de `PRH-TEST-2026` restent liées à ce seul dossier.
 
-Saisir les éléments de période, intégrer les congés approuvés et implémenter progressivement l’impôt, les cotisations, assurances et parts employeur à partir des règles validées. Comparer les résultats à des cas de référence approuvés.
-**Critère :** résultats reproductibles, détail vérifiable, tests de frontière et refus du calcul si une règle manque.
+### Étape 6 — Recrutement, embauche, contrats et intérim
 
-### Lot 6 — Contrôle, approbation et bulletins
+Gérer le recrutement et l’entrée, contrats datés, catégories d’emploi, documents et dossiers de travailleurs intérimaires/agences.
+**Jalon :** un statut ou contrat détermine l’éligibilité uniquement selon des règles configurées et validées.
 
-Gérer brouillon, contrôles, approbation, verrouillage, bulletins et historiques de corrections.
-**Critère :** impossible de modifier silencieusement un lot approuvé.
+### Étape 7 — Débauchage et départ de l’entreprise
 
-### Lot 7 — Paiement, déclarations et centralisation
+Gérer le licenciement et toute autre raison de sortie : motif, date d’effet, approbations, pièces, clôture des accès et éléments à régulariser. Conserver l’historique plutôt que supprimer la fiche.
+**Jalon :** aucun préavis, indemnité, congé dû ou solde de départ calculé sans règles du pays et du contrat validées.
 
-Ajouter les suivis de paiement et états réglementaires confirmés, puis la centralisation comptable facultative avec correspondances explicites.
-**Critère :** pas de paiement déclaré sans preuve source ; pas de centralisation sans lien, droits, aperçu et confirmation.
+### Étape 8 — Affectations et missions
 
-## 6. Points de cadrage restant à valider avant les calculs réels
+Gérer les affectations datées à une unité, fonction, lieu et responsable, ainsi que les missions opérationnelles et, si retenu, déplacements professionnels.
+**Jalon :** historique consultable ; les remboursements et indemnités de mission restent inactifs tant que leurs règles ne sont pas validées.
+
+### Étape 9 — Congés et absences
+
+Gérer congés annuels, maternité, paternité, maladie, accident et autres types configurables : demandes, calendriers, pièces, validation, acquisition et historique.
+**Jalon :** aucun droit, durée, décompte ou effet salarial présumé ; congé accident et données médicales traités selon des règles d’accès validées.
+
+### Étape 10 — Rémunérations et variables
+
+Configurer les composantes de rémunération et recueillir les éléments variables de période avec leur source et justificatif. Distinguer saisie, validation et calcul.
+**Jalon :** aucune valeur de rémunération fictive dans les dossiers réels ; absence de justificatif ou de règle signalée avant calcul.
+
+### Étape 11 — Packs de règles par pays
+
+Mettre en place l’architecture versionnée multi-pays et compléter en premier le pack béninois : impôt sur salaire, cotisations sociales, assurances, parts employeur, plafonds, assiettes, arrondis et dates d’effet.
+**Jalon :** chaque règle active a une source officielle, une période de validité, un approbateur et des cas de référence.
+
+### Étape 12 — Moteur de calcul et lots de paie
+
+Calculer les éléments du lot à partir des contrats, variables, congés approuvés et pack de règles. Expliquer chaque ligne et conserver la version des sources de calcul.
+**Jalon :** calcul reproductible, équilibré selon les règles définies et bloqué lorsqu’une donnée ou règle indispensable manque.
+
+### Étape 13 — Contrôles, approbation et clôture
+
+Mettre en place anomalies, contrôles de cohérence, rôles de validation, approbation, verrouillage, correction et réouverture tracées.
+**Jalon :** aucun lot approuvé ne peut être modifié silencieusement ; toute correction conserve l’historique.
+
+### Étape 14 — Bulletins et suivi des paiements
+
+Générer les bulletins après approbation et suivre le statut de paiement avec les références réellement fournies par l’utilisateur.
+**Jalon :** aucun bulletin final avant validation ; aucun paiement déclaré sans source ou preuve.
+
+### Étape 15 — Registres RH et de paie
+
+Créer les registres consultables et filtrables des employés, contrats, affectations, missions, congés, variables, lots, bulletins, paiements et transferts.
+**Jalon :** chaque ligne est traçable à son dossier et à sa source ; registres en lecture seule sauf parcours métier dédié.
+
+### Étape 16 — États et tableaux de suivi
+
+Produire les états RH et de paie confirmés : effectifs, congés, rémunérations, impôts, cotisations et parts employeur, selon les règles validées.
+**Jalon :** chaque total explique sa période, son périmètre, ses filtres et ses données source ; aucun état ne fabrique de solde.
+
+### Étape 17 — Éditions, impressions et exports
+
+Concevoir les éditions imprimables ou exportables : bulletins, registres et états ; les formats d’export seront définis avant réalisation.
+**Jalon :** éditions cohérentes avec le filtre et l’état sélectionnés, protégées selon la sensibilité des données.
+
+### Étape 18 — Centralisation comptable et recette intégrée
+
+Finaliser le menu dédié à la centralisation : association explicite entre dossiers RH et comptable, correspondances validées, aperçu, confirmation, historique et prévention des doublons. Tester le parcours complet avec profils autorisés, jeux fictifs, règles validées et scénarios d’erreur.
+**Jalon :** aucune écriture n’est créée sans lien choisi, correspondances, droits et confirmation ; les corrections comptables restent dans la Comptabilité générale.
+
+## 7. Points de cadrage restant à valider avant les calculs réels
 
 - Quelles catégories de contrat et de travailleurs intérimaires faut-il couvrir en premier ?
 - Pour chaque type de congé, quelles conditions d’éligibilité, durées, règles d’acquisition et de décompte, pièces, validations, reports et effets sur la paie faut-il retenir ? Quelles sources béninoises confirmeront ces paramètres ?
@@ -166,4 +238,4 @@ Ajouter les suivis de paiement et états réglementaires confirmés, puis la cen
 - Quelles informations familiales sont réellement nécessaires au calcul ?
 - Quel processus d’approbation et de paiement souhaite l’entreprise ?
 
-**Prochaine étape recommandée :** valider le cadrage du Lot 0, puis implémenter les lots 1 à 4 avant de calculer le moindre montant de paie. Le plan reste évolutif : les idées et besoins complémentaires pourront y être ajoutés et validés avant le démarrage des lots de calcul.
+**Prochaine étape recommandée :** valider l’étape 1, puis avancer dans l’ordre prévu. Les menus et dossiers RH indépendants sont cadrés dès les étapes 2 et 3 ; aucun montant réel ne sera calculé avant l’étape 12, après validation des règles du Bénin à l’étape 11. Le plan reste évolutif : les idées et besoins complémentaires pourront y être ajoutés et validés avant le démarrage des lots de calcul.
