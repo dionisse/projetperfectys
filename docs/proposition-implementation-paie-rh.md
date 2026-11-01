@@ -198,7 +198,7 @@ Calculer les éléments du lot à partir des contrats, variables, congés approu
 
 ### Étape 13 — Contrôles, approbation et clôture
 
-Mettre en place anomalies, contrôles de cohérence, rôles de validation, approbation, verrouillage, correction et réouverture tracées.
+Mettre en place anomalies, contrôles de cohérence, rôles de validation, approbation, verrouillage, correction et réouverture tracées. Le cycle, la gestion des anomalies, la séparation des rôles et la piste d’audit sont détaillés dans [la fiche de cadrage de l’étape 13](cadrage-paie-rh-etape-13-controles-approbation-cloture.md).
 **Jalon :** aucun lot approuvé ne peut être modifié silencieusement ; toute correction conserve l’historique.
 
 ### Étape 14 — Bulletins et suivi des paiements
