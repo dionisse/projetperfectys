@@ -28258,7 +28258,7 @@
   var ANALYTICAL_STATEMENT_IDS = [
     'analytic-center-balance', 'analytic-other-nature-balance', 'analytic-ledger',
     'analytic-other-nature-ledger', 'analytic-center-situation',
-    'analytic-other-nature-situation', 'analytic-general-account-balance', 'analytic-consistency-control'
+    'analytic-other-nature-situation', 'analytic-general-account-balance', 'analytic-consistency-control', 'general-analytic-balance'
   ];
 
   function analyticalStatementNatureOptions(reportType) {
@@ -28417,7 +28417,8 @@
   }
 
   function viewAnalyticalStatement(child, backLink) {
-    var reportType = child.id;
+    var reportType = child.id === 'general-analytic-balance' ? 'analytic-general-account-balance' : child.id;
+    var statementTitle = child.id === 'general-analytic-balance' ? child.label : analyticalStatementTitle(reportType);
     if (reportType === 'analytic-consistency-control') return viewAnalyticalConsistencyControl(backLink);
     var dossier = S.currentDossier();
     var options = analyticalStatementNatureOptions(reportType);
@@ -28445,7 +28446,7 @@
         : '<div class="analytical-statement-summary"><span>Mouvements analytiques débit <strong>' + esc(money(report.totalDebit)) + '</strong></span><span>Mouvements analytiques crédit <strong>' + esc(money(report.totalCredit)) + '</strong></span><span>Lignes regroupées <strong>' + esc(String(report.rowCount)) + '</strong></span>' + (report.unallocatedLineCount ? '<span>À ventiler <strong>' + esc(money(report.unallocatedDebit + report.unallocatedCredit)) + '</strong></span>' : '') + (report.unmatchedCenterCount ? '<span class="analytical-summary-unmatched">Centres non rapprochés · ' + esc(String(report.unmatchedCenterCount)) + ' <strong>' + esc(money(report.unmatchedCenterDebit)) + ' débit · ' + esc(money(report.unmatchedCenterCredit)) + ' crédit exclus</strong></span>' : '') + (report.unmatchedValueCount ? '<span class="analytical-summary-unmatched">Valeurs non rapprochées · ' + esc(String(report.unmatchedValueCount)) + ' <strong>' + esc(money(report.unmatchedValueDebit + report.unmatchedValueCredit)) + ' exclu</strong></span>' : '') + '</div>' + analyticalStatementWarnings(report) + analyticalStatementTable(report, S.accountingConfiguration().decimalPlaces))
       : '<div class="alert info"><div>Choisissez explicitement une nature analytique pour afficher les imputations enregistrées. Aucun axe ni montant n’est déduit automatiquement.</div></div>';
     return '<div class="edition-report-detail-view analytical-statement-view">' + backLink +
-      '<header class="analytical-statement-heading"><span class="page-kicker">SUIVI ANALYTIQUE · ÉTAT EN LECTURE SEULE</span><h2>' + esc(analyticalStatementTitle(reportType)) + '</h2><p>' + (isSituation ? 'Mouvements cumulés depuis le début du cycle jusqu’à la date d’arrêté ; aucun report d’ouverture n’est supposé.' : 'Seules les ventilations explicites des écritures validées sont reprises. Les montants comptables débit/crédit ne sont pas modifiés.') + '</p></header>' +
+      '<header class="analytical-statement-heading"><span class="page-kicker">SUIVI ANALYTIQUE · ÉTAT EN LECTURE SEULE</span><h2>' + esc(statementTitle) + '</h2><p>' + (isSituation ? 'Mouvements cumulés depuis le début du cycle jusqu’à la date d’arrêté ; aucun report d’ouverture n’est supposé.' : 'Seules les ventilations explicites des écritures validées sont reprises. Les montants comptables débit/crédit ne sont pas modifiés.') + '</p></header>' +
       '<form class="analytical-statement-filters" id="analytical-statement-form" data-report-type="' + esc(reportType) + '">' + natureField + dates + '<button type="submit" class="btn btn-primary">Actualiser l’état</button><button type="button" class="btn btn-ghost" data-analytical-statement-export' + (!report ? ' disabled' : '') + '>Exporter TSV</button><button type="button" class="btn btn-ghost" data-analytical-statement-print>Imprimer</button></form>' +
       '<div class="analytical-statement-output" aria-live="polite">' + reportContent + '</div></div>';
   }
@@ -32051,6 +32052,7 @@
         if (menuParams.c === 'analytic-consistency-control') bindAnalyticalConsistencyControl();
         else bindAnalyticalStatement();
       }
+      if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-analytic-balance') bindAnalyticalStatement();
       if (menuParams.g === 'editions' && menuParams.t === 'general-accounts' && menuParams.c === 'general-balance') bindGeneralBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'foreign-currency' && menuParams.c === 'currency-balance') bindCurrencyBalanceReport();
       if (menuParams.g === 'editions' && menuParams.t === 'foreign-currency' && ['currency-opening-balance', 'currency-situation', 'currency-ledger', 'currency-exchange-differences'].indexOf(menuParams.c) !== -1) bindCurrencySupplementaryReport();

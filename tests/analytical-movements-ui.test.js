@@ -49,8 +49,11 @@ assert.match(navigation, /id: 'analytic-other-nature-ledger'.*status: 'active'/)
 assert.match(navigation, /id: 'analytic-center-situation'.*status: 'active'/);
 assert.match(navigation, /id: 'analytic-other-nature-situation'.*status: 'active'/);
 assert.match(navigation, /id: 'analytic-general-account-balance'.*status: 'active'/);
+assert.match(navigation, /id: 'general-analytic-balance'.*status: 'active'/);
+assert.match(app, /child\.id === 'general-analytic-balance' \? 'analytic-general-account-balance' : child\.id/);
+assert.match(app, /menuParams\.t === 'general-accounts' && menuParams\.c === 'general-analytic-balance'\) bindAnalyticalStatement\(\)/);
 assert.match(css, /\.analytical-statement-view/);
 assert.match(css, /--analytical-tint: #f2f6f5/);
-assert.match(worker, /perfecto-static-v186/);
+assert.match(worker, /perfecto-static-v187/);
 
 console.log('Vue des mouvements analytiques : accès, filtres et résumés entièrement en français — OK');
