@@ -6194,6 +6194,8 @@
         ? '<div class="alert info budget-report-source-note"><div><strong>Source de cet état.</strong> Seules les lignes de commande émises, classées explicitement « Hors budget » et associées à un compte choisi sont retenues. Une ligne non classée n’est pas considérée hors budget ; les devises autres que XOF ne sont pas converties.</div></div>'
         : ['orders-followup', 'orders-by-line'].indexOf(definition.kind) !== -1
           ? '<div class="alert info budget-report-source-note"><div><strong>Sources de cet état.</strong> Seules les commandes émises et explicitement liées à une ligne du budget sont prises en compte ; brouillons, commandes annulées et lignes non liées sont exclus ou signalés. Les montants d’une devise autre que XOF ne sont ni convertis ni additionnés. Une commande ne crée ni facture ni écriture comptable.</div></div>'
+        : definition.kind === 'outside-realizations-total'
+          ? '<div class="alert info budget-report-source-note"><div><strong>Source de cet état.</strong> Le cumul peut isoler les allocations analytiques explicites qui ne correspondent à aucune valeur du même compte budgété. Un compte absent du budget, une ligne « À ventiler » ou un budget classé « C » ne suffisent pas à prouver une réalisation hors budget et ne sont pas reclassés.</div></div>'
         : ['realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1
           ? '<div class="alert info budget-report-source-note"><div><strong>Sources de cet état.</strong> Le budget et son classement proviennent du registre du dossier ; les réalisations sont calculées à partir des seules écritures validées et comptabilisées. Aucun engagement de commande fournisseur n’est transformé en réalisation.' + (definition.kind === 'realizations-followup' ? ' Les colonnes N-1 restent indisponibles dans cette étape.' : ' Les allocations analytiques n’apparaissent que lorsqu’elles sont explicitement enregistrées sur la ligne source.') + '</div></div>'
           : '<div class="alert info budget-report-source-note"><div><strong>Lecture seule.</strong> Les autres états attendent le raccordement de leurs sources explicites ; aucun montant n’est simulé. Leurs filtres de compte restent limités aux rubriques analytiques 93 à 99.</div></div>';
@@ -6256,7 +6258,7 @@
     var styleClass = session.layout.style === 'color10' ? 'budget-report-style-color' : 'budget-report-style-plain';
     var decimals = Number(S.accountingConfiguration().decimalPlaces) || 0;
     var formatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-    var reportRows = ['forecast', 'orders-followup', 'orders-by-line', 'orders-outside', 'realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1 ? (report.rows || []).map(function (row) {
+    var reportRows = ['forecast', 'orders-followup', 'orders-by-line', 'orders-outside', 'realizations-followup', 'realizations-by-line', 'outside-realizations-total'].indexOf(definition.kind) !== -1 ? (report.rows || []).map(function (row) {
       return '<tr class="' + (row.status && row.status !== 'budgeted' ? 'budget-realization-special-row' : '') + '"><td>' + esc(report.budget && report.budget.code || '') + '</td>' + columns.map(function (column) {
         var value = row[column.key];
         var text = value == null || !Number.isFinite(Number(value)) && !column.text ? '—' : (column.text ? String(value == null ? '' : value) : formatter.format(Number(value)));
@@ -6268,12 +6270,13 @@
       : '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune ligne générée</strong>Le dossier ne fournit aucune source enregistrée pour cet état.</div></td></tr></tbody>';
     if (definition.kind === 'orders-by-line' && !reportRows) tableBody = '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune commande liée explicitement</strong>Aucune ligne de commande émise, en devise du dossier, ne correspond au budget et à la période sélectionnés.</div></td></tr></tbody>';
     if (definition.kind === 'orders-outside' && !reportRows) tableBody = '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune commande classée hors budget</strong>Aucune ligne émise de la période ne porte une classification hors budget explicite et un compte valide.</div></td></tr></tbody>';
+    if (definition.kind === 'outside-realizations-total' && !reportRows) tableBody = '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune réalisation hors budget identifiable</strong>Aucune allocation explicite non budgétée ne peut être cumulée avec le classement et les sources choisis.</div></td></tr></tbody>';
     if (definition.kind === 'forecast' && !reportRows) tableBody = '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune ligne budgétaire correspondante</strong>Le budget enregistré ne contient aucune ligne compatible avec les comptes sélectionnés.</div></td></tr></tbody>';
     if (definition.kind === 'realizations-followup' && !reportRows) tableBody = '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune ligne générée</strong>Le budget sélectionné ne comporte pas de ligne compatible avec le filtre.</div></td></tr></tbody>';
     if (definition.kind === 'realizations-by-line' && !reportRows) tableBody = '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune ligne comptabilisée correspondante</strong>Aucun mouvement validé ne correspond aux comptes et à la période sélectionnés.</div></td></tr></tbody>';
     var isForecastReport = definition.kind === 'forecast';
     var isOrderReport = ['orders-followup', 'orders-by-line', 'orders-outside'].indexOf(definition.kind) !== -1;
-    var isRealizationReport = ['realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1;
+    var isRealizationReport = ['realizations-followup', 'realizations-by-line', 'outside-realizations-total'].indexOf(definition.kind) !== -1;
     var sourceLabel = isForecastReport
       ? 'Lignes et montants issus du registre de budget enregistré'
       : isOrderReport
@@ -6290,7 +6293,7 @@
           ? '<p class="budget-report-source-note">' + esc(String(report.generatedLineCount || 0)) + ' ligne(s) explicitement classée(s) hors budget · montants en ' + esc(report.baseCurrencyCode || 'XOF') + ' sans conversion</p>'
           : '<p class="budget-report-source-note">' + esc(String(report.matchedOrderLineCount || 0)) + ' ligne(s) de commande liée(s) · montants en ' + esc(report.baseCurrencyCode || 'XOF') + ' sans conversion' + (report.unlinkedOrderLineCount ? ' · ' + esc(String(report.unlinkedOrderLineCount)) + ' ligne(s) émise(s) non liée(s)' : '') + '</p>')
         : isRealizationReport && report.realizationBasis
-          ? '<p class="budget-report-source-note">' + (definition.kind === 'realizations-followup' ? 'Base de réalisation : ' + esc(budgetRealizationModeLabel(report.realizationMode)) + ' · ' : 'Détail des mouvements bruts · base de réalisation du budget : ' + esc(budgetRealizationModeLabel(report.realizationMode)) + ' · ') + esc(realizationBasisLabel) + (report.sourceEntryCount != null ? ' · ' + esc(String(report.sourceEntryCount)) + ' écriture(s) · ' + esc(String(report.matchedSourceLineCount)) + ' ligne(s) comptable(s) correspondante(s)' : '') + '</p>'
+          ? '<p class="budget-report-source-note">' + (definition.kind === 'realizations-followup' ? 'Base de réalisation : ' + esc(budgetRealizationModeLabel(report.realizationMode)) + ' · ' : definition.kind === 'outside-realizations-total' ? 'Cumul hors budget · base : ' + esc(budgetRealizationModeLabel(report.realizationMode)) + ' · ' : 'Détail des mouvements bruts · base de réalisation du budget : ' + esc(budgetRealizationModeLabel(report.realizationMode)) + ' · ') + esc(realizationBasisLabel) + (report.sourceEntryCount != null ? ' · ' + esc(String(report.sourceEntryCount)) + ' écriture(s) · ' + esc(String(report.matchedSourceLineCount)) + ' ligne(s) comptable(s) correspondante(s)' : '') + '</p>'
           : '';
     return '<article class="budget-report-print ' + styleClass + '"><header class="budget-report-print-heading"><p class="page-kicker">ÉDITIONS · BUDGET</p><h2>' + esc(definition.title) + '</h2><p>' + esc(report.budget && (report.budget.label || report.budget.code) || '') + ' · ' + period + ' · ' + sourceLabel + '</p>' + basis + '</header>' +
       budgetReportWarningsHtml(report) + '<div class="budget-report-table-wrap"><table class="budget-report-table"><thead>' + tableHeader + '</thead>' + tableBody + '</table></div>' +
@@ -6300,7 +6303,7 @@
   function budgetReportExportMatrix(session, report, definition) {
     var columns = budgetReportSelectedColumns(session, definition);
     var headers = ['Budget'].concat(columns.map(function (column) { return column.label; }));
-    var rows = ['forecast', 'orders-followup', 'orders-by-line', 'orders-outside', 'realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1 ? (report.rows || []).map(function (row) {
+    var rows = ['forecast', 'orders-followup', 'orders-by-line', 'orders-outside', 'realizations-followup', 'realizations-by-line', 'outside-realizations-total'].indexOf(definition.kind) !== -1 ? (report.rows || []).map(function (row) {
       return [report.budget && report.budget.code || ''].concat(columns.map(function (column) {
         var value = row[column.key];
         return value == null || !Number.isFinite(Number(value)) && !column.text ? '—' : (column.text ? String(value == null ? '' : value) : Number(value));

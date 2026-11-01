@@ -249,6 +249,43 @@ test('les commandes hors budget exigent un classement explicite, un compte exact
   assert.match(report.warnings.join(' '), /ne sont ni converties/);
 });
 
+test('le cumul hors budget ne retient que les valeurs analytiques explicites absentes du même compte budgété', () => {
+  const budget = {
+    id: 'budget-analytic-2025', code: '2025C', year: '2025', type: 'C', label: 'Charges analytiques',
+    cycleStart: '2025-01-01', cycleEnd: '2025-12-31', decomposition: 'none', realizationMode: 'debit',
+    classification: 'A1', analyticNatureIds: ['activity-domains'],
+    lines: [{ id: 'line-services', accountCode: '601', label: 'Services', annualAmount: 1000, amountComplete: true, analyticValues: { 'activity-domains': { valueLabel: 'Services' } } }]
+  };
+  const entries = [
+    { id: 'posted-analytic', status: 'posted', date: '2025-04-10', lines: [{ account: '601', debit: 100, credit: 0, analyticSplits: [{ natureId: 'activity-domains', allocations: [{ valueLabel: 'Services', amount: 60 }, { valueLabel: 'Activité absente du budget', amount: 20 }], unallocatedAmount: 20 }] }] },
+    { id: 'posted-unbudgeted-account', status: 'posted', date: '2025-04-11', lines: [{ account: '602', debit: 70, credit: 0, analyticSplits: [{ natureId: 'activity-domains', allocations: [{ valueLabel: 'Autre valeur', amount: 70 }], unallocatedAmount: 0 }] }] },
+    { id: 'posted-unallocated', status: 'posted', date: '2025-04-12', lines: [{ account: '601', debit: 30, credit: 0 }] },
+    { id: 'draft-outside', status: 'draft', date: '2025-04-13', lines: [{ account: '601', debit: 500, credit: 0 }] }
+  ];
+  const report = BudgetReports.buildReport('budget-outside-realizations-total', options({
+    budgetRegister: [budget], budgetCode: '2025C', entries, accounts: [{ code: '601', label: 'Achats de services' }],
+    from: '2025-01-01', to: '2025-12-31'
+  }));
+  assert.equal(report.ok, true, report.errors.join(' '));
+  assert.deepEqual(report.rows.map(row => [row.accountCode, row.accountLabel, row.amount]), [['601', 'Achats de services', 20]]);
+  assert.equal(report.sourceEntryCount, 1);
+  assert.equal(report.matchedSourceLineCount, 1);
+  assert.equal(report.matchedAllocationCount, 1);
+  assert.equal(report.unallocatedCount, 2, 'les reliquats et lignes sans axe sont signalés, non classés hors budget');
+  assert.equal(report.unbudgetedAccountLineCount, 1, 'un compte absent des lignes budgétaires n’est pas rattaché par défaut');
+  assert.equal(report.basis.noAccountingMutation, true);
+  assert.match(report.warnings.join(' '), /aucun axe ni aucune valeur ne sont inventés/i);
+  assert.match(report.warnings.join(' '), /ne sont pas attribuées au hors budget sans lien explicite/i);
+
+  const accountOnlyBudget = { ...budget, classification: 'C', analyticNatureIds: [] };
+  const accountOnly = BudgetReports.buildReport('budget-outside-realizations-total', options({
+    budgetRegister: [accountOnlyBudget], budgetCode: '2025C', entries,
+    from: '2025-01-01', to: '2025-12-31'
+  }));
+  assert.equal(accountOnly.rows.length, 0, 'une classification par compte ne distingue pas les réalisations hors budget');
+  assert.match(accountOnly.warnings.join(' '), /aucune classification explicite ne distingue les écritures hors budget/i);
+});
+
 test('le suivi des réalisations relie le budget enregistré aux seules écritures validées', () => {
   const registeredBudget = {
     id: 'budget-2025c', code: '2025C', year: '2025', type: 'C', label: 'Charges enregistrées',

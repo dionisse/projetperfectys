@@ -440,6 +440,102 @@
     };
   }
 
+  function outsideRealizationTotalRows(budget, entries, accounts, from, to) {
+    var classification = String(budget.classification || 'C');
+    var axisIndex = classification.charAt(0) === 'A' ? Number(classification.slice(1)) - 1 : -1;
+    var axisNatureId = axisIndex >= 0 && Array.isArray(budget.analyticNatureIds) ? String(budget.analyticNatureIds[axisIndex] || '') : '';
+    if (classification === 'C') return { ok: true, accountClassificationOnly: true, rows: [], sourceEntryCount: 0, matchedSourceLineCount: 0, unallocatedCount: 0, unbudgetedAccountLineCount: 0, invalidAllocationCount: 0, noSourceData: true, realizationMode: budget.realizationMode, axisNatureId: '' };
+    if (!/^A[1-4]$/.test(classification) || !axisNatureId) return { ok: false, errors: ['Le classement analytique du budget ne désigne pas un axe configuré.'], rows: [] };
+    var mode = String(budget.realizationMode || '');
+    if (['debit', 'credit', 'debit-credit', 'credit-debit'].indexOf(mode) === -1) return { ok: false, errors: ['La base de réalisation du budget n’est pas définie.'], rows: [] };
+    var budgetLinesByAccount = Object.create(null);
+    (Array.isArray(budget.lines) ? budget.lines : []).forEach(function (line) {
+      var code = String(line && line.accountCode || '').trim();
+      if (!code) return;
+      if (!budgetLinesByAccount[code]) budgetLinesByAccount[code] = [];
+      budgetLinesByAccount[code].push(line);
+    });
+    var accountLabels = Object.create(null);
+    (Array.isArray(accounts) ? accounts : []).forEach(function (account) {
+      var code = String(account && account.code || '');
+      if (code) accountLabels[code] = String(account.label || account.name || '');
+    });
+    var totals = Object.create(null);
+    var sourceEntryIds = Object.create(null);
+    var matchedSourceLineCount = 0;
+    var matchedAllocationCount = 0;
+    var unallocatedCount = 0;
+    var unbudgetedAccountLineCount = 0;
+    var invalidAllocationCount = 0;
+    // A line is outside only when its explicit axis value has no exact match on a budget line for the same account.
+    // Account codes absent from the budget are kept out of this report rather than assigned by inference.
+    function contribution(side, amount) {
+      if (side === 'debit') return mode === 'debit' || mode === 'debit-credit' ? amount : mode === 'credit-debit' ? -amount : 0;
+      return mode === 'credit' || mode === 'credit-debit' ? amount : mode === 'debit-credit' ? -amount : 0;
+    }
+    (Array.isArray(entries) ? entries : []).forEach(function (entry) {
+      if (!entry || entry.status !== 'posted' || !isIsoDate(entry.date) || entry.date < budget.cycleStart || entry.date > budget.cycleEnd || entry.date < from || entry.date > to) return;
+      (Array.isArray(entry.lines) ? entry.lines : []).forEach(function (line) {
+        var accountCode = String(line && (line.account == null ? line.accountCode || '' : line.account) || '').trim();
+        var matchingBudgetLines = budgetLinesByAccount[accountCode];
+        if (!line || !matchingBudgetLines || !matchingBudgetLines.length) { if (accountCode) unbudgetedAccountLineCount += 1; return; }
+        var debit = Number(line.debit) || 0;
+        var credit = Number(line.credit) || 0;
+        if (debit > 0 && credit > 0 || debit <= 0 && credit <= 0) { invalidAllocationCount += 1; return; }
+        var split = (Array.isArray(line.analyticSplits) ? line.analyticSplits : []).find(function (item) { return item && item.natureId === axisNatureId; });
+        if (!split) { unallocatedCount += 1; return; }
+        var allocations = Array.isArray(split.allocations) ? split.allocations : [];
+        var allocatedTotal = 0;
+        var lineHasOutsideAllocation = false;
+        allocations.forEach(function (allocation) {
+          var amount = Number(allocation && allocation.amount);
+          if (!Number.isFinite(amount) || amount <= 0) { if (amount !== 0) invalidAllocationCount += 1; return; }
+          var valueKey = '';
+          var valueLabel = String(allocation.valueLabel || '').trim().replace(/\s+/g, ' ');
+          if (axisNatureId === 'responsibility-centers') {
+            var centerId = String(allocation.centerId || '').trim();
+            if (!centerId) { invalidAllocationCount += 1; return; }
+            valueKey = 'center:' + centerId;
+            valueLabel = valueLabel || String(allocation.centerName || allocation.centerCode || centerId);
+          } else {
+            if (!valueLabel) { invalidAllocationCount += 1; return; }
+            valueKey = 'label:' + valueLabel;
+          }
+          allocatedTotal += amount;
+          var matched = matchingBudgetLines.some(function (budgetLine) {
+            var budgetValue = budgetLine.analyticValues && budgetLine.analyticValues[axisNatureId] || {};
+            return axisNatureId === 'responsibility-centers'
+              ? String(budgetValue.valueId || '') === valueKey.slice('center:'.length)
+              : String(budgetValue.valueLabel || '').trim().replace(/\s+/g, ' ') === valueLabel;
+          });
+          if (matched) return;
+          var side = debit > 0 ? 'debit' : 'credit';
+          var key = accountCode;
+          if (!totals[key]) totals[key] = { accountCode: accountCode, amount: 0, allocationCount: 0 };
+          totals[key].amount += contribution(side, amount);
+          totals[key].allocationCount += 1;
+          sourceEntryIds[String(entry.id || '')] = true;
+          matchedAllocationCount += 1;
+          lineHasOutsideAllocation = true;
+        });
+        var unallocated = split.unallocatedAmount == null || split.unallocatedAmount === '' ? Math.max(0, (debit || credit) - allocatedTotal) : Number(split.unallocatedAmount);
+        if (Number.isFinite(unallocated) && unallocated > 0) unallocatedCount += 1;
+        else if (!Number.isFinite(unallocated) || unallocated < 0) invalidAllocationCount += 1;
+        if (lineHasOutsideAllocation) matchedSourceLineCount += 1;
+      });
+    });
+    var rows = Object.keys(totals).map(function (code) {
+      return { accountCode: code, accountLabel: accountLabels[code] || code, amount: totals[code].amount, sourceAllocationCount: totals[code].allocationCount };
+    }).sort(function (left, right) { return left.accountCode.localeCompare(right.accountCode); });
+    return {
+      ok: true, accountClassificationOnly: false, rows: rows,
+      sourceEntryCount: Object.keys(sourceEntryIds).length, matchedSourceLineCount: matchedSourceLineCount, matchedAllocationCount: matchedAllocationCount,
+      unallocatedCount: unallocatedCount, unbudgetedAccountLineCount: unbudgetedAccountLineCount,
+      invalidAllocationCount: invalidAllocationCount, noSourceData: matchedSourceLineCount === 0,
+      realizationMode: mode, axisNatureId: axisNatureId
+    };
+  }
+
   function forecastRows(budget, accountCodes, accounts, analyticNatures, lineSelection) {
     var accountRows = Array.isArray(accounts) ? accounts : [];
     var natureRows = Array.isArray(analyticNatures) ? analyticNatures : [];
@@ -614,7 +710,7 @@
         budgetRegisterAvailable: false,
         commitmentRegisterAvailable: false,
         realizationRegisterAvailable: false,
-        accountsLimitedToAnalyticClasses93to99: !(['budget-entered', 'budget-orders-followup', 'budget-orders-by-line', 'budget-orders-outside', 'budget-realizations-followup', 'budget-realizations-by-line'].indexOf(reportId) !== -1 && !!budget && Array.isArray(options && options.budgetRegister)),
+        accountsLimitedToAnalyticClasses93to99: !(['budget-entered', 'budget-orders-followup', 'budget-orders-by-line', 'budget-orders-outside', 'budget-realizations-followup', 'budget-realizations-by-line', 'budget-outside-realizations-total'].indexOf(reportId) !== -1 && !!budget && Array.isArray(options && options.budgetRegister)),
         noBudgetAmountsSimulated: true,
         noCommitmentsSimulated: true,
         noRealizationsSimulated: true,
@@ -660,7 +756,7 @@
       if (!isIsoDate(from) || !isIsoDate(to)) errors.push('Indiquez des dates valides pour la période budgétaire.');
       else if (from > to) errors.push('La date de début doit précéder ou égaler la date de fin.');
       else if (from < cycleStart || to > cycleEnd) errors.push('La période budgétaire doit rester dans le cycle du dossier (' + cycleStart + ' — ' + cycleEnd + ').');
-      else if (['realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1 && selectedBudget && (from < selectedBudget.cycleStart || to > selectedBudget.cycleEnd)) errors.push('La période choisie doit rester dans le cycle du budget sélectionné (' + selectedBudget.cycleStart + ' — ' + selectedBudget.cycleEnd + ').');
+      else if (['realizations-followup', 'realizations-by-line', 'outside-realizations-total', 'outside-realizations-detail'].indexOf(definition.kind) !== -1 && selectedBudget && (from < selectedBudget.cycleStart || to > selectedBudget.cycleEnd)) errors.push('La période choisie doit rester dans le cycle du budget sélectionné (' + selectedBudget.cycleStart + ' — ' + selectedBudget.cycleEnd + ').');
     }
     var hasAsOfDate = definition.filters.indexOf('asOfDate') !== -1;
     var asOfDate = String(options.asOfDate || (hasAsOfDate ? cycleEnd : ''));
@@ -744,6 +840,43 @@
       outsideReport.basis.noAvailabilityOrExecutionRateSimulated = true;
       outsideReport.basis.noAccountingMutation = true;
       return outsideReport;
+    }
+    if (definition.kind === 'outside-realizations-total' && Array.isArray(options.budgetRegister)) {
+      var outsideActuals = outsideRealizationTotalRows(selectedBudget, options.entries, options.accounts, from, to);
+      if (!outsideActuals.ok) return emptyResult(reportId, definition, options, outsideActuals.errors || ['Le cumul des réalisations hors budget ne peut pas être calculé.'], warnings, selectedBudget);
+      if (outsideActuals.accountClassificationOnly) warnings.push('Le budget est classé par compte général (C) ; aucune classification explicite ne distingue les écritures hors budget. Aucun montant hors budget n’est déduit.');
+      else if (outsideActuals.noSourceData) warnings.push('Aucune allocation analytique explicite, sur un compte budgété, ne correspond à une valeur absente des lignes du budget sélectionné.');
+      if (outsideActuals.unallocatedCount) warnings.push(outsideActuals.unallocatedCount + ' ligne(s) ou reliquat(s) « À ventiler » sont exclus ; aucun axe ni aucune valeur ne sont inventés.');
+      if (outsideActuals.unbudgetedAccountLineCount) warnings.push(outsideActuals.unbudgetedAccountLineCount + ' ligne(s) validée(s) portent un compte absent des lignes budgétaires ; elles ne sont pas attribuées au hors budget sans lien explicite.');
+      if (outsideActuals.invalidAllocationCount) warnings.push(outsideActuals.invalidAllocationCount + ' ligne(s) ou allocation(s) analytiques invalides sont exclues.');
+      warnings.push('Périmètre calculé uniquement pour les comptes budgétés ayant un axe analytique explicite : allocations validées dont la valeur exacte ne figure pas sur une ligne du même compte. Le classement « C » par compte seul ne permet pas d’isoler le hors budget. Source en lecture seule : écritures validées.');
+      var outsideActualReport = emptyResult(reportId, definition, options, [], warnings, selectedBudget);
+      outsideActualReport.cycleStart = cycleStart;
+      outsideActualReport.cycleEnd = cycleEnd;
+      outsideActualReport.from = from;
+      outsideActualReport.to = to;
+      outsideActualReport.budgetOptions = availableBudgets.map(function (item) { return Object.assign({}, item); });
+      outsideActualReport.rows = outsideActuals.rows;
+      outsideActualReport.generatedLineCount = outsideActuals.rows.length;
+      outsideActualReport.dataAvailable = outsideActuals.rows.length > 0;
+      outsideActualReport.sourceEntryCount = outsideActuals.sourceEntryCount;
+      outsideActualReport.matchedSourceLineCount = outsideActuals.matchedSourceLineCount;
+      outsideActualReport.matchedAllocationCount = outsideActuals.matchedAllocationCount;
+      outsideActualReport.unallocatedCount = outsideActuals.unallocatedCount;
+      outsideActualReport.unbudgetedAccountLineCount = outsideActuals.unbudgetedAccountLineCount;
+      outsideActualReport.invalidAllocationCount = outsideActuals.invalidAllocationCount;
+      outsideActualReport.realizationMode = outsideActuals.realizationMode;
+      outsideActualReport.axisNatureId = outsideActuals.axisNatureId;
+      outsideActualReport.realizationBasis = outsideActuals.accountClassificationOnly ? 'Aucun classement hors budget distinct n’est défini pour une classification par compte.' : 'Compte exact du budget et valeur de la nature analytique explicitement imputée, absente de ce compte budgété.';
+      outsideActualReport.budgetRegisterAvailable = true;
+      outsideActualReport.realizationRegisterAvailable = false;
+      outsideActualReport.basis.budgetRegisterAvailable = true;
+      outsideActualReport.basis.realizationRegisterAvailable = false;
+      outsideActualReport.basis.noBudgetAmountsSimulated = true;
+      outsideActualReport.basis.noRealizationsSimulated = false;
+      outsideActualReport.basis.noAvailabilityOrExecutionRateSimulated = true;
+      outsideActualReport.basis.noAccountingMutation = true;
+      return outsideActualReport;
     }
     if (definition.kind === 'forecast' && Array.isArray(options.budgetRegister)) {
       var forecast = forecastRows(selectedBudget, accountFilter.codes, options.accounts, options.analyticNatures, {
