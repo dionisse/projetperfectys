@@ -1,7 +1,7 @@
 # Étape 3 — Dossiers RH clients et isolation des données
 
-**Statut :** proposition de cadrage à valider avant implémentation.  
-**Dépendances :** étape 1 cadrée initialement ; la validation de l’étape 2 (menus) est reportée par l’utilisateur. Cette fiche définit uniquement le périmètre fonctionnel des dossiers et leur isolation.  
+**Statut :** cadrage fonctionnel en cours ; décisions du cycle, de référence et d’archivage consignées, à implémenter plus tard.
+**Dépendances :** étape 1 cadrée initialement ; la validation de l’étape 2 (menus) est reportée par l’utilisateur. Cette fiche définit uniquement le périmètre fonctionnel des dossiers et leur isolation.
 **Plan complet :** [Plan d’implémentation Paie & RH en 18 étapes](proposition-implementation-paie-rh.md).
 
 ## 1. But
@@ -20,9 +20,9 @@ Chaque dossier devra avoir un identifiant technique stable, non réutilisable et
 - statut du dossier (actif, fermé/archivé) et dates de création/clôture ;
 - coordonnées et informations administratives facultatives, selon les besoins validés.
 
-La référence est unique dans l’organisation. L’année affichée provient de l’année de début de l’exercice, selon la convention déjà retenue dans le prototype. Le changement ultérieur du nom du client ne change pas l’identifiant technique ni les liens historiques. Un changement de code ou de cycle devra être contrôlé pour éviter une référence ambiguë ; la politique exacte de correction de référence reste à valider.
+La référence est unique dans l’organisation et **immuable après création**. L’année affichée provient de l’année de début de l’exercice, selon la convention déjà retenue dans le prototype. Le changement ultérieur du nom du client ne change pas la référence, l’identifiant technique ni les liens historiques. Une correction du code ou de l’année ne modifiera pas directement la référence ; la procédure de remplacement ou de correction exceptionnelle devra préserver une trace et reste à définir.
 
-Le cycle RH et la période de paie sont deux notions distinctes : le cycle décrit le dossier ; les périodes mensuelles de paie sont créées à l’intérieur du périmètre autorisé. La durée maximale d’un cycle et le traitement d’une période qui chevauche sa borne devront être confirmés avant d’en faire une règle bloquante.
+Le cycle RH et la période de paie sont deux notions distinctes : le cycle décrit le dossier ; les périodes mensuelles de paie sont créées dans le contexte du dossier. Il n’y aura **pas de durée maximale prédéfinie** pour un cycle RH ; les dates doivent toutefois être valides et dans l’ordre. Si une période de paie chevauche une borne du cycle, l’application affichera un avertissement et exigera une permission dédiée ainsi qu’une confirmation tracée avant de poursuivre. Cette confirmation ne remplace pas les contrôles des règles de paie.
 
 ## 3. Association facultative à la Comptabilité
 
@@ -57,7 +57,7 @@ Les identifiants techniques des objets ne seront pas réutilisés dans d’autre
 - À l’ouverture du module, l’utilisateur choisit un dossier RH auquel il a accès ; le contexte actif reste affiché dans toutes les vues.
 - Le changement de dossier est explicite et ne change pas le dossier actif de Comptabilité générale.
 - Les actions de créer, consulter, modifier, approuver, fermer et associer à la Comptabilité sont des droits distincts.
-- La fermeture/archivage interdit de nouvelles opérations selon une politique à valider, tout en conservant la consultation historique autorisée.
+- À la fermeture, le dossier passe en lecture seule et interdit les nouvelles opérations ; une réouverture reste possible pour un profil autorisé et sera historisée.
 - La suppression physique d’un dossier contenant des employés, contrats, congés, lots ou bulletins n’est pas prévue dans le parcours normal ; toute politique de suppression et de conservation doit être validée avant production.
 - Les dossiers sont isolés par organisation et par permissions dans l’architecture serveur future. Le stockage navigateur du prototype ne constitue pas une sécurité ou une synchronisation multi-utilisateur.
 
@@ -67,22 +67,22 @@ Le dossier de test `PRH-TEST-2026` contient dix identifiants d’employés ficti
 
 ## 7. Critères d’acceptation de l’étape 3
 
-1. Une création valide produit une référence PRH unique et un identifiant technique stable.
+1. Une création valide produit une référence PRH unique et un identifiant technique stable ; la référence ne peut pas être modifiée ensuite.
 2. Le pays Bénin est proposé par défaut, mais reste visible et modifiable selon les pays supportés.
-3. Dossier RH actif, cycle et statut sont visibles dans chaque vue Paie & RH.
-4. Le changement de dossier RH ne modifie pas le dossier comptable actif.
-5. Une association comptable n’existe qu’après sélection explicite ; aucune correspondance par nom/code/année n’est acceptée.
-6. Un employé, congé, mission, lot ou bulletin d’un dossier est invisible dans un autre dossier pour un profil sans accès.
-7. Chaque relation est contrôlée côté serveur en production, en plus des contrôles d’interface ; le stockage local reste identifié comme démonstration.
-8. La fermeture conserve les historiques et empêche les opérations nouvelles selon une politique validée.
-9. Les dix employés de test sont rattachés par identifiant à `PRH-TEST-2026`, sans créer de montants ou de bulletins.
+3. Le cycle n’a pas de durée maximale par défaut ; ses dates sont valides et ordonnées.
+4. Dossier RH actif, cycle et statut sont visibles dans chaque vue Paie & RH.
+5. Le changement de dossier RH ne modifie pas le dossier comptable actif.
+6. Une période de paie qui chevauche une borne déclenche un avertissement et nécessite permission et confirmation tracée.
+7. Une association comptable n’existe qu’après sélection explicite ; aucune correspondance par nom/code/année n’est acceptée.
+8. Un employé, congé, mission, lot ou bulletin d’un dossier est invisible dans un autre dossier pour un profil sans accès.
+9. Chaque relation est contrôlée côté serveur en production, en plus des contrôles d’interface ; le stockage local reste identifié comme démonstration.
+10. La fermeture met le dossier en lecture seule ; une réouverture exige un droit spécifique et est historisée.
+11. Les dix employés de test sont rattachés par identifiant à `PRH-TEST-2026`, sans créer de montants ou de bulletins.
 
 ## 8. Décisions encore ouvertes
 
-- Quelle politique de changement du code et de la référence après création ?
-- Quel cycle d’exercice RH est autorisé, et quelle durée maximale appliquer ?
-- Une période de paie peut-elle chevaucher les dates du cycle, ou le chevauchement doit-il bloquer le calcul ?
-- Quels rôles peuvent créer, fermer ou réassocier un dossier RH ?
+- Quels rôles peuvent créer, fermer, rouvrir ou réassocier un dossier RH ?
 - Quelles règles de conservation et de suppression doivent s’appliquer aux dossiers réels ?
+- Si le code client ou l’année de référence est erroné après création, quelle procédure exceptionnelle permet de corriger sans rendre la référence modifiable ni casser les liens historiques ?
 
 **Étape suivante du plan :** l’étape 4 porte sur la structure organisationnelle configurable à l’intérieur du dossier RH. Cette fiche ne met pas encore en œuvre les écrans ni les règles de stockage de production.
