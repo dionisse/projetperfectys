@@ -153,7 +153,7 @@ Créer, sélectionner et configurer les dossiers clients Paie & RH, leur référ
 
 ### Étape 4 — Organisation de l’entreprise
 
-Permettre à l’utilisateur de créer et organiser directions, départements, sections, services et unités personnalisées.
+Permettre à l’utilisateur de créer et organiser directions, départements, sections, services et unités personnalisées. Le modèle, les opérations, l’isolation et les critères de validation sont détaillés dans [la fiche de cadrage de l’étape 4](cadrage-paie-rh-etape-4-structure.md).
 **Jalon :** structure modifiable et historisée, sans hiérarchie imposée ni réécriture des affectations passées.
 
 ### Étape 5 — Profil complet et documents employés
