@@ -277,6 +277,16 @@ test('le cumul hors budget ne retient que les valeurs analytiques explicites abs
   assert.match(report.warnings.join(' '), /aucun axe ni aucune valeur ne sont inventés/i);
   assert.match(report.warnings.join(' '), /ne sont pas attribuées au hors budget sans lien explicite/i);
 
+  const detail = BudgetReports.buildReport('budget-outside-realizations-detail', options({
+    budgetRegister: [budget], budgetCode: '2025C', entries, accounts: [{ code: '601', label: 'Achats de services' }],
+    from: '2025-01-01', to: '2025-12-31'
+  }));
+  assert.equal(detail.ok, true, detail.errors.join(' '));
+  assert.equal(detail.rows.length, 1);
+  assert.deepEqual([detail.rows[0].accountCode, detail.rows[0].market, detail.rows[0].reserved1, detail.rows[0].reserved2, detail.rows[0].debit, detail.rows[0].credit], ['601', '', '-', '-', 20, 0]);
+  assert.match(detail.rows[0].label, /Valeur analytique hors budget/);
+  assert.match(detail.warnings.join(' '), /aucun marché n’est reconstitué/i);
+
   const accountOnlyBudget = { ...budget, classification: 'C', analyticNatureIds: [] };
   const accountOnly = BudgetReports.buildReport('budget-outside-realizations-total', options({
     budgetRegister: [accountOnlyBudget], budgetCode: '2025C', entries,
@@ -284,6 +294,11 @@ test('le cumul hors budget ne retient que les valeurs analytiques explicites abs
   }));
   assert.equal(accountOnly.rows.length, 0, 'une classification par compte ne distingue pas les réalisations hors budget');
   assert.match(accountOnly.warnings.join(' '), /aucune classification explicite ne distingue les écritures hors budget/i);
+  const accountOnlyDetail = BudgetReports.buildReport('budget-outside-realizations-detail', options({
+    budgetRegister: [accountOnlyBudget], budgetCode: '2025C', entries,
+    from: '2025-01-01', to: '2025-12-31'
+  }));
+  assert.equal(accountOnlyDetail.rows.length, 0, 'le détail respecte aussi l’absence de classification explicite hors budget');
 });
 
 test('le suivi des réalisations relie le budget enregistré aux seules écritures validées', () => {
