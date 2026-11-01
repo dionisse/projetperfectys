@@ -163,7 +163,7 @@ Créer les fiches reliées au dossier RH : identité, contacts, banque, informat
 
 ### Étape 6 — Recrutement, embauche, contrats et intérim
 
-Gérer le recrutement et l’entrée, contrats datés, catégories d’emploi, documents et dossiers de travailleurs intérimaires/agences.
+Gérer le recrutement et l’entrée, contrats datés, catégories d’emploi, documents et dossiers de travailleurs intérimaires/agences. Les parcours, données, contrôles, relations et critères de protection sont détaillés dans [la fiche de cadrage de l’étape 6](cadrage-paie-rh-etape-6-recrutement-contrats-interim.md).
 **Jalon :** un statut ou contrat détermine l’éligibilité uniquement selon des règles configurées et validées.
 
 ### Étape 7 — Débauchage et départ de l’entreprise
