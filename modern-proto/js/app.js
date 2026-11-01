@@ -9,6 +9,7 @@
   var ModuleRegistry = window.PerfectoModules;
   var Permissions = window.PerfectoPermissions;
   var AccountingNavigation = window.PerfectoAccountingNavigation;
+  var AnalyticalNavigation = window.PerfectoAnalyticalNavigation;
   var AccountingBridge = window.PerfectoAccountingBridge;
   var AccountingFramework = window.PerfectoAccountingFramework;
   var AccountSearch = window.PerfectoAccountSearch;
@@ -115,7 +116,7 @@
     balance: '⚖︎', journal: '≡', ledger: '⌕', periods: '◷', settings: '⚙︎'
   };
 
-  var ROUTES = ['login', 'launcher', 'organization', 'payroll', 'sales', 'dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'financial-result', 'settings', 'menu'];
+  var ROUTES = ['login', 'launcher', 'organization', 'payroll', 'sales', 'analytics', 'dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'financial-result', 'settings', 'menu'];
 
   var TITLES = {
     login: ['Connexion', 'Accès à votre espace PERFECTO'],
@@ -123,6 +124,7 @@
     organization: ['Organisation & accès', 'Organisation, membres et droits d’accès'],
     payroll: ['Paie & RH', 'Lots de paie internes · prototype de centralisation'],
     sales: ['Ventes, stock & facturation', 'Lots d’opérations internes · prototype de centralisation'],
+    analytics: ['Suivi Analytique', 'Menus dédiés aux imputations, référentiels et états du dossier actif'],
     dossiers: ['Dossiers clients', 'Entreprises clientes et cycles comptables'],
     dashboard: ['Tableau de bord', 'Vue d’ensemble de la comptabilité générale'],
     accounts: ['Plan comptable', 'Comptes SYSCOHADA révisé'],
@@ -288,15 +290,16 @@
   ];
   var launcherUi = { filter: 'all', query: '' };
   var DEMO_ORGANIZATION_ID = 'demo-org';
-  var ACCOUNTING_ROUTES = ['dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'financial-result', 'settings', 'menu'];
+  var ACCOUNTING_ROUTES = ['analytics', 'dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'financial-result', 'settings', 'menu'];
   var PHONE_REPORT_ROUTES = ['balance', 'journal', 'ledger'];
   var PHONE_BREAKPOINT = 700;
-  // Le Suivi Analytique partage le dossier et les droits de la Comptabilité générale ;
-  // il ne reçoit pas de périmètre d’accès autonome.
+  // Le Suivi Analytique dispose de menus et d’une route propres, mais partage le dossier
+  // et les droits de la Comptabilité générale ; aucune donnée comptable n’est dupliquée.
   var ACCESS_MODULES = [{ id: 'organization', name: 'Organisation & accès', status: 'available', route: 'organization', scopeable: false }].concat(ModuleRegistry.all().filter(function (module) { return module.id !== 'analytics'; }));
   var demoMembers = [{ id: 'demo-supervisor', name: 'Compte superviseur (démo)', role: 'supervisor', organizationId: DEMO_ORGANIZATION_ID, grants: {} }];
   var activeDemoMemberId = 'demo-supervisor';
   var activeDemoDossierId = S.currentDossier().id;
+  var accountingSidebarMarkup = null;
   var demoMemberSequence = 0;
 
   function isPhoneViewport() {
@@ -308,6 +311,47 @@
     var tab = AccountingNavigation.getTab(group.id, tabId || group.defaultTab);
     var hash = '#/menu?g=' + encodeURIComponent(group.id) + '&t=' + encodeURIComponent(tab.id);
     return childId ? hash + '&c=' + encodeURIComponent(childId) : hash;
+  }
+
+  function analyticalMenuHash(groupId, itemId, extra) {
+    var group = AnalyticalNavigation.getGroup(groupId);
+    var item = AnalyticalNavigation.getItem(group.id, itemId || group.defaultItem);
+    var hash = '#/analytics?g=' + encodeURIComponent(group.id) + '&i=' + encodeURIComponent(item.id);
+    if (extra && extra.natureId) hash += '&n=' + encodeURIComponent(extra.natureId);
+    return hash;
+  }
+
+  function analyticalWorkspaceHash(analyticGroup, analyticItem, accountingGroup, accountingTab, accountingChild) {
+    return parseHash().route === 'analytics'
+      ? analyticalMenuHash(analyticGroup, analyticItem)
+      : accountingMenuHash(accountingGroup, accountingTab, accountingChild);
+  }
+
+  function analyticalSidebarMarkup(params) {
+    params = params || {};
+    var currentGroup = AnalyticalNavigation.getGroup(params.g);
+    var currentItem = AnalyticalNavigation.getItem(currentGroup.id, params.i);
+    return '<div class="nav-section nav-context-links analytics-nav-context"><p class="nav-section-heading">Suivi Analytique · dossier actif</p>' +
+      '<a href="' + esc(analyticalMenuHash('home', 'overview')) + '" class="analytics-nav-link' + (currentGroup.id === 'home' ? ' active' : '') + '"' + (currentGroup.id === 'home' ? ' aria-current="page"' : '') + '><span class="nav-icon" aria-hidden="true">▥</span>Accueil analytique</a>' +
+      '</div>' + AnalyticalNavigation.all().filter(function (group) { return group.id !== 'home'; }).map(function (group) {
+        return '<div class="nav-section analytics-nav-section"><p class="nav-section-heading">' + esc(group.label) + '</p>' + group.items.map(function (item) {
+          var active = currentGroup.id === group.id && currentItem.id === item.id;
+          var href = item.route ? '#/' + item.route : analyticalMenuHash(group.id, item.id);
+          return '<a href="' + esc(href) + '" class="analytics-nav-link' + (active ? ' active' : '') + '" data-analytics-menu-link' + (active ? ' aria-current="page"' : '') + ' title="' + esc(item.description || item.label) + '"><span class="nav-icon" aria-hidden="true">' + (group.icon || '•') + '</span>' + esc(item.label) + '</a>';
+        }).join('');
+      }).join('') +
+      '<div class="nav-section analytics-nav-context"><p class="nav-section-heading">Module lié</p><a href="#/dashboard" class="analytics-nav-link"><span class="nav-icon" aria-hidden="true">↗</span>Comptabilité générale</a></div>';
+  }
+
+  function setModuleSidebar(route, params) {
+    var nav = $('.sidebar-nav');
+    if (!nav) return;
+    if (accountingSidebarMarkup == null) accountingSidebarMarkup = nav.innerHTML;
+    var analytical = route === 'analytics';
+    nav.innerHTML = analytical ? analyticalSidebarMarkup(params) : accountingSidebarMarkup;
+    nav.setAttribute('aria-label', analytical ? 'Navigation du module Suivi Analytique' : 'Navigation de la comptabilité générale');
+    var brandCaption = $('.sidebar .brand-text small');
+    if (brandCaption) brandCaption.textContent = analytical ? 'Cabinet GOBEX · Suivi Analytique' : 'Cabinet GOBEX · SYSCOHADA';
   }
 
   function accountingGroupForRoute(route) {
@@ -1007,7 +1051,8 @@
       journalLinesReportMode = requestedJournalReportMode;
     }
     var phoneViewport = isPhoneViewport();
-    var phoneRouteAllowed = route === 'dossiers' ||
+    setModuleSidebar(route, parsed.params);
+    var phoneRouteAllowed = route === 'dossiers' || route === 'analytics' ||
       (route === 'menu' && parsed.params.g === 'editions') ||
       PHONE_REPORT_ROUTES.indexOf(route) !== -1;
     if (phoneViewport && (route === 'payroll' || route === 'sales')) {
@@ -1112,7 +1157,8 @@
     var dossiersListMode = route === 'dossiers';
     document.body.classList.toggle('launcher-mode', launcherMode);
     document.body.classList.toggle('dossiers-list-mode', dossiersListMode);
-    document.body.classList.toggle('phone-editions-mode', phoneViewport && ACCOUNTING_ROUTES.indexOf(route) !== -1);
+    document.body.classList.toggle('phone-editions-mode', phoneViewport && ACCOUNTING_ROUTES.indexOf(route) !== -1 && route !== 'analytics');
+    document.body.classList.toggle('analytics-module-mode', route === 'analytics');
 
     var html = '';
     switch (route) {
@@ -1121,6 +1167,7 @@
       case 'organization': html = viewOrganization(); break;
       case 'payroll': html = viewPayrollModule(); break;
       case 'sales': html = viewSalesModule(); break;
+      case 'analytics': html = viewAnalyticalModule(parsed.params); break;
       case 'dossiers': html = viewDossiers(); break;
       case 'dashboard': html = viewDashboard(); break;
       case 'accounts': html = viewAccounts(); break;
@@ -1155,9 +1202,14 @@
     var dossiersReturn = $('#dossier-list-return');
     if (dossiersReturn) dossiersReturn.hidden = !selectedDossierMode;
     var topbarEntry = $('a[href="#/entry"].btn.btn-primary');
-    if (topbarEntry && (route === 'dossiers' || route === 'payroll' || route === 'sales')) topbarEntry.hidden = true;
+    if (topbarEntry && (route === 'dossiers' || route === 'payroll' || route === 'sales' || route === 'analytics')) topbarEntry.hidden = true;
 
     var title = TITLES[route] || TITLES.login;
+    if (route === 'analytics') {
+      var analyticalGroupForTitle = AnalyticalNavigation.getGroup(parsed.params.g);
+      var analyticalItemForTitle = AnalyticalNavigation.getItem(analyticalGroupForTitle.id, parsed.params.i);
+      title = [analyticalItemForTitle.label, analyticalGroupForTitle.label];
+    }
     if (route === 'menu') {
       var menuGroupForTitle = AccountingNavigation.getGroup(phoneViewport ? 'editions' : parsed.params.g);
       var menuTabForTitle = AccountingNavigation.getTab(menuGroupForTitle.id, parsed.params.t || menuGroupForTitle.defaultTab);
@@ -1168,7 +1220,9 @@
     var topbarEyebrow = $('.topbar-titles .eyebrow');
     if (topbarEyebrow) topbarEyebrow.textContent = route === 'payroll'
       ? 'CABINET GOBEX · Paie & RH'
-      : (route === 'sales' ? 'CABINET GOBEX · Ventes, stock & facturation' : 'CABINET GOBEX · Comptabilité générale');
+      : (route === 'sales'
+        ? 'CABINET GOBEX · Ventes, stock & facturation'
+        : (route === 'analytics' ? 'CABINET GOBEX · Suivi Analytique' : 'CABINET GOBEX · Comptabilité générale'));
     document.title = 'PERFECTO · ' + title[0];
 
     $$('[data-route]').forEach(function (link) {
@@ -25138,7 +25192,7 @@
       '<td><button type="button" class="btn btn-ghost btn-sm" data-analytical-dimension-remove' + disabled + '>Retirer</button></td></tr>';
   }
 
-  function viewAnalyticalDimensionValues(natureId) {
+  function viewAnalyticalDimensionValues(natureId, returnHash) {
     var dossier = S.currentDossier();
     var nature = (S.analyticalNaturesConfiguration().rows || []).find(function (row) { return row && !row.group && row.id === natureId; });
     if (!nature || ANALYTICAL_VALUE_REGISTRY_NATURES.indexOf(natureId) === -1) {
@@ -25151,7 +25205,10 @@
       ? '<div class="alert warning">Consultation seule : un droit explicite de configuration des valeurs analytiques est nécessaire.</div>'
       : (isPhoneViewport() ? '<div class="alert info">Consultation sur téléphone ; la modification est réservée à un ordinateur ou une tablette.</div>' : '');
     var body = records.map(function (row) { return analyticalDimensionValueRowHtml(row, !readOnly); }).join('') || '<tr class="analytical-dimension-empty"><td colspan="3">Aucune valeur définie pour cette nature. Les référentiels restent vides tant que l’utilisateur n’a pas ajouté ses propres valeurs.</td></tr>';
-    var backLink = '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(accountingMenuHash('definitions', 'general-accounts')) + '">← Définitions</a>';
+    var defaultBackHash = parseHash().route === 'analytics'
+      ? analyticalMenuHash('references', 'values')
+      : accountingMenuHash('definitions', 'general-accounts');
+    var backLink = '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(returnHash || defaultBackHash) + '">← ' + (parseHash().route === 'analytics' ? 'Valeurs analytiques' : 'Définitions') + '</a>';
     return '<div class="analytical-dimension-view">' + backLink + accessNotice +
       '<header class="analytical-dimension-heading"><span class="page-kicker">SUIVI ANALYTIQUE · RÉFÉRENTIEL PAR DOSSIER</span><h2>' + esc(nature.genericName || nature.individualName) + '</h2><p>Valeurs définies par l’utilisateur pour les imputations explicites des lignes comptables. Aucun code, compte, montant ou classement prédéfini n’est ajouté.</p></header>' +
       '<form id="analytical-dimension-values-form" data-nature-id="' + esc(natureId) + '"><div id="analytical-dimension-values-errors" aria-live="assertive"></div>' +
@@ -25356,10 +25413,10 @@
     return '<div class="exchange-workspace analytical-center-workspace">' +
       '<div class="alert info"><div><strong>Suivi Analytique · dossier ' + esc(S.currentDossier().reference) + '.</strong> Ce référentiel et les imputations des lignes sont intégrés au dossier de Comptabilité générale actif. Les centres ne sont pas des comptes généraux et ne créent pas d’écritures. Les ventilations explicites peuvent être saisies dans le formulaire d’écriture ; le cumul par centres les reprend après validation de la pièce.</div></div>' +
       '<nav class="analytical-center-shortcuts" aria-label="Parcours du Suivi Analytique">' +
-        '<a class="btn btn-ghost btn-sm" href="' + esc(accountingMenuHash('parametres', 'sections-accounts')) + '">Sections et comptes</a>' +
-        '<a class="btn btn-ghost btn-sm" href="' + esc(accountingMenuHash('parametres', 'allocation-keys')) + '">Clés de répartition</a>' +
-        '<a class="btn btn-ghost btn-sm" href="' + esc(accountingMenuHash('parametres', 'analytic-natures')) + '">Natures analytiques</a>' +
-        '<a class="btn btn-ghost btn-sm" href="' + esc(accountingMenuHash('editions', 'journals', 'journal-analytic-center-totals')) + '">Cumul par centres</a>' +
+        '<a class="btn btn-ghost btn-sm" href="' + esc(analyticalWorkspaceHash('references', 'sections-accounts', 'parametres', 'sections-accounts')) + '">Sections et comptes</a>' +
+        '<a class="btn btn-ghost btn-sm" href="' + esc(analyticalWorkspaceHash('references', 'allocation-keys', 'parametres', 'allocation-keys')) + '">Clés de répartition</a>' +
+        '<a class="btn btn-ghost btn-sm" href="' + esc(analyticalWorkspaceHash('references', 'natures', 'parametres', 'analytic-natures')) + '">Natures analytiques</a>' +
+        '<a class="btn btn-ghost btn-sm" href="' + esc(analyticalWorkspaceHash('reports', 'analytic-center-balance', 'editions', 'journals', 'journal-analytic-center-totals')) + '">Balance des centres</a>' +
       '</nav>' +
       '<div class="exchange-summary-grid supplier-summary-grid"><div><small>Centres actifs</small><strong>' + activeCount + '</strong></div><div><small>Centres archivés</small><strong>' + (records.length - activeCount) + '</strong></div><div><small>Résultats affichés</small><strong>' + visible.length + '</strong></div></div>' +
       '<section class="exchange-card analytical-center-card"><div class="supplier-directory-head"><div><h4>Centres analytiques</h4><p>Codes et libellés analytiques du dossier, distincts des comptes et journaux généraux.</p></div><button type="button" class="btn btn-primary" data-action="new-analytical-center">＋ Nouveau centre</button></div>' +
@@ -30654,6 +30711,60 @@
       '</section></div>';
   }
 
+  function viewAnalyticalModuleHome() {
+    var dossier = S.currentDossier();
+    var postedCount = S.postedEntries().length;
+    var natures = (S.analyticalNaturesConfiguration().rows || []).filter(function (nature) { return nature && !nature.group; });
+    var centers = S.analyticalCenters();
+    var cards = [
+      { group: 'imputations', item: 'movements', title: 'Mouvements analytiques', text: 'Consulter les ventilations explicites des écritures validées.' },
+      { group: 'imputations', item: 'consistency', title: 'Contrôle de cohérence', text: 'Repérer les anomalies et les montants laissés « À ventiler ».' },
+      { group: 'references', item: 'centers', title: 'Référentiels analytiques', text: 'Accéder aux centres, axes, valeurs et règles configurés dans ce dossier.' },
+      { group: 'reports', item: 'analytic-center-balance', title: 'États analytiques', text: 'Consulter les états issus des mouvements analytiques enregistrés.' }
+    ];
+    return '<section class="analytical-module-home">' +
+      '<header class="analytical-module-welcome"><div><span class="analytical-module-kicker">ESPACE ANALYTIQUE · DOSSIER ' + esc(dossier.reference) + '</span><h2>Suivre les imputations analytiques</h2><p>Un parcours dédié pour consulter les mouvements, configurer les axes et produire les états analytiques. Les données restent celles du dossier de Comptabilité générale actif.</p></div><a class="btn btn-ghost" href="#/dashboard">Ouvrir la Comptabilité générale <span aria-hidden="true">↗</span></a></header>' +
+      '<div class="analytical-module-metrics"><article><span>Pièces comptabilisées</span><strong>' + esc(String(postedCount)) + '</strong><small>Source : écritures validées du dossier</small></article><article><span>Natures configurées</span><strong>' + esc(String(natures.length)) + '</strong><small>Aucun axe supplémentaire n’est déduit</small></article><article><span>Centres enregistrés</span><strong>' + esc(String(centers.length)) + '</strong><small>Référentiel propre au dossier</small></article></div>' +
+      '<div class="analytical-module-card-grid">' + cards.map(function (card) {
+        return '<a class="analytical-module-card" href="' + esc(analyticalMenuHash(card.group, card.item)) + '"><span class="analytical-module-card-mark" aria-hidden="true">↗</span><h3>' + esc(card.title) + '</h3><p>' + esc(card.text) + '</p><span class="analytical-module-card-action">Accéder <span aria-hidden="true">→</span></span></a>';
+      }).join('') + '</div>' +
+      '<div class="alert info analytical-module-data-note"><div><strong>Un module distinct, un dossier partagé.</strong> L’ouverture d’une vue analytique ne duplique ni les écritures ni les montants. Les états reprennent les imputations explicites existantes ; aucun report ou classement n’est créé automatiquement.</div></div>' +
+      '</section>';
+  }
+
+  function viewAnalyticalValuesIndex() {
+    var natures = (S.analyticalNaturesConfiguration().rows || []).filter(function (nature) { return nature && !nature.group; });
+    var available = natures.filter(function (nature) { return ANALYTICAL_VALUE_REGISTRY_NATURES.indexOf(nature.id) !== -1; });
+    if (!available.length) return '<div class="empty-state"><h3>Aucune nature compatible disponible</h3><p>Configurez d’abord une nature analytique pour ce dossier. Aucune nature n’est créée par défaut depuis ce menu.</p></div>';
+    return '<div class="analytical-values-index"><p>Choisissez explicitement la nature dont vous souhaitez gérer les valeurs. Ce choix ne modifie aucune imputation existante.</p><div class="analytical-module-card-grid">' + available.map(function (nature) {
+      return '<a class="analytical-module-card" href="' + esc(analyticalMenuHash('references', 'values', { natureId: nature.id })) + '"><h3>' + esc(nature.genericName || nature.individualName || nature.id) + '</h3><p>' + esc(nature.individualName || 'Valeurs analytiques définies pour le dossier actif.') + '</p><span class="analytical-module-card-action">Gérer les valeurs <span aria-hidden="true">→</span></span></a>';
+    }).join('') + '</div></div>';
+  }
+
+  function viewAnalyticalModule(params) {
+    params = params || {};
+    var group = AnalyticalNavigation.getGroup(params.g);
+    var item = AnalyticalNavigation.getItem(group.id, params.i);
+    var dossier = S.currentDossier();
+    var backLink = '<a class="btn btn-ghost btn-sm edition-report-back" href="' + esc(analyticalMenuHash(group.id, group.defaultItem)) + '">← ' + esc(group.label) + '</a>';
+    var content;
+    if (item.view === 'overview') return viewAnalyticalModuleHome();
+    if (item.view === 'movements') content = viewAnalyticalMovements();
+    else if (item.view === 'consistency') content = viewAnalyticalConsistencyControl(backLink);
+    else if (item.view === 'centers') content = viewAnalyticalCenters();
+    else if (item.view === 'natures') content = viewAnalyticalNatures();
+    else if (item.view === 'values') {
+      var natureId = params.n || '';
+      content = natureId ? viewAnalyticalDimensionValues(natureId, analyticalMenuHash('references', 'values')) : viewAnalyticalValuesIndex();
+    } else if (item.view === 'account-rules') content = viewAnalyticalAccountRules();
+    else if (item.view === 'allocation-keys') content = viewAnalyticalAllocationKeys();
+    else if (item.view === 'sections-accounts') content = viewAnalyticalSectionsConfiguration();
+    else if (item.view === 'report') content = viewAnalyticalStatement({ id: item.reportId || item.id, label: item.label }, backLink);
+    else content = '<div class="alert warning">Cette page analytique n’est pas disponible.</div>';
+    if (item.view === 'report' || item.view === 'consistency') return content;
+    return '<section class="analytical-module-page"><header class="analytical-module-page-heading"><div><span class="analytical-module-kicker">' + esc(group.label.toUpperCase()) + ' · DOSSIER ' + esc(dossier.reference) + '</span><h2>' + esc(item.label) + '</h2><p>' + esc(item.description || 'Espace de gestion analytique rattaché au dossier actif.') + '</p></div></header><div class="analytical-module-page-content">' + content + '</div></section>';
+  }
+
   function viewAccountingMenu(params) {
     params = params || {};
     var phone = isPhoneViewport();
@@ -31717,7 +31828,9 @@
       if (!button) return;
       var action = button.getAttribute('data-analytical-nature-action');
       if (action === 'close') {
-        navigate(accountingMenuHash('parametres', 'dossier-configuration'));
+        navigate(parseHash().route === 'analytics'
+          ? analyticalMenuHash('home', 'overview')
+          : accountingMenuHash('parametres', 'dossier-configuration'));
       } else if (action === 'toggle-io') {
         if (isPhoneViewport() || !canConfigure) {
           toast('Modification refusée : un droit explicite sur ce dossier est requis.', 'warning');
@@ -32162,6 +32275,19 @@
     }
     if (route === 'organization') {
       bindOrganizationView();
+      return;
+    }
+    if (route === 'analytics') {
+      var analyticalParams = parseHash().params;
+      var analyticalGroup = AnalyticalNavigation.getGroup(analyticalParams.g);
+      var analyticalItem = AnalyticalNavigation.getItem(analyticalGroup.id, analyticalParams.i);
+      if (analyticalItem.view === 'consistency') bindAnalyticalConsistencyControl();
+      else if (analyticalItem.view === 'report') bindAnalyticalStatement();
+      else if (analyticalItem.view === 'natures') bindAnalyticalNatures();
+      else if (analyticalItem.view === 'values' && analyticalParams.n) bindAnalyticalDimensionValues(analyticalParams.n);
+      else if (analyticalItem.view === 'account-rules') bindAnalyticalAccountRules();
+      else if (analyticalItem.view === 'allocation-keys') bindAnalyticalAllocationKeys();
+      else if (analyticalItem.view === 'sections-accounts') bindAnalyticalSectionsConfiguration();
       return;
     }
     if (route === 'menu') {

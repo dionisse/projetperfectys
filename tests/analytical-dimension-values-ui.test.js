@@ -12,7 +12,7 @@ const permissions = fs.readFileSync(path.join(root, 'js', 'permissions.js'), 'ut
 const css = fs.readFileSync(path.join(root, 'css', 'modern.css'), 'utf8');
 const worker = fs.readFileSync(path.join(root, 'service-worker.js'), 'utf8');
 
-assert.match(app, /function viewAnalyticalDimensionValues\(natureId\)/);
+assert.match(app, /function viewAnalyticalDimensionValues\(natureId, returnHash\)/);
 assert.match(app, /function bindAnalyticalDimensionValues\(natureId\)/);
 assert.match(app, /entry-analytical-values-/);
 assert.match(app, /aucune classification automatique/);

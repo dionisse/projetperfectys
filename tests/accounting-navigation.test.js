@@ -227,7 +227,7 @@ assert.equal(analyticalCenters.status, 'active');
 assert.equal(analyticalCenters.label, 'Centres analytiques');
 assert.ok(analyticalCenters.reason.includes('partagé avec le Suivi Analytique'));
 assert.match(appSource, /Suivi Analytique · dossier [\s\S]*imputations des lignes sont intégrés au dossier de Comptabilité générale actif/);
-assert.match(appSource, /analytical-center-shortcuts[\s\S]*Sections et comptes[\s\S]*Clés de répartition[\s\S]*Natures analytiques[\s\S]*Cumul par centres/);
+assert.match(appSource, /analytical-center-shortcuts[\s\S]*Sections et comptes[\s\S]*Clés de répartition[\s\S]*Natures analytiques[\s\S]*Balance des centres/);
 assert.equal(findTab('fichier', 'export-other').status, 'partial');
 assert.equal(findTab('fichier', 'import-other').status, 'partial');
 assert.equal(findTab('fichier', 'import-fec').status, 'partial');

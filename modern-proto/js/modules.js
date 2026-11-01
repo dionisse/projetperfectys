@@ -24,13 +24,13 @@
       id: 'analytics',
       name: 'Suivi Analytique',
       category: 'COMPTABILITÉ · SYSCOHADA',
-      description: 'Imputations analytiques sur les lignes comptables, rattachées au dossier général actif.',
+      description: 'Menus dédiés aux imputations, référentiels et états analytiques, reliés aux écritures du dossier actif.',
       icon: '∑',
       accent: 'analytics',
       status: 'partial',
       statusLabel: 'PARTIEL · INTÉGRÉ',
-      version: 'Dans la Comptabilité générale',
-      route: 'menu?g=definitions&t=responsibility-centers'
+      version: 'Module analytique · menus dédiés',
+      route: 'analytics?g=home&i=overview'
     },
     {
       id: 'payroll-hr',

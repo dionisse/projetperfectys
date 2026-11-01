@@ -1,0 +1,106 @@
+/* Navigation et tableau de bord propres au Suivi Analytique. */
+body.analytics-module-mode {
+  --primary: #6d4bc3;
+  --primary-dark: #5839a5;
+  --primary-soft: #eee8fb;
+  --success: #5f46ac;
+  --success-soft: #eee8fb;
+}
+
+body.analytics-module-mode .brand-text small { color: #7658c8; }
+body.analytics-module-mode .sidebar-nav .nav-section-heading { color: #7866a4; }
+body.analytics-module-mode .sidebar-nav .analytics-nav-link { color: #514763; }
+body.analytics-module-mode .sidebar-nav .analytics-nav-link:hover { color: #4a328e; background: #f1edfa; }
+body.analytics-module-mode .sidebar-nav .analytics-nav-link.active {
+  color: #5739a1;
+  background: #eee8fb;
+  box-shadow: inset 3px 0 0 #7656cb;
+}
+body.analytics-module-mode .sidebar-nav .analytics-nav-link .nav-icon {
+  color: #684ab5;
+  background: #f0ebfa;
+}
+body.analytics-module-mode .analytics-nav-context {
+  padding-top: 6px;
+  border-top: 1px solid #e8e2f0;
+}
+
+.analytical-module-home,
+.analytical-module-page { display: grid; gap: 22px; min-width: 0; }
+.analytical-module-welcome {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: clamp(22px, 4vw, 38px);
+  border: 1px solid #e6ddf4;
+  border-radius: 18px;
+  background: radial-gradient(120% 150% at 100% 0%, #eee8fb 0%, transparent 52%), linear-gradient(135deg, #fff 0%, #faf8fd 100%);
+  box-shadow: 0 10px 30px rgba(61, 42, 101, .055);
+}
+.analytical-module-welcome > div { max-width: 760px; }
+.analytical-module-kicker {
+  display: inline-block;
+  margin-bottom: 10px;
+  color: #6d4bc3;
+  font-size: .67rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.analytical-module-welcome h2,
+.analytical-module-page-heading h2 { color: #2c2440; font-size: clamp(1.45rem, 2.4vw, 2rem); line-height: 1.2; }
+.analytical-module-welcome p,
+.analytical-module-page-heading p { max-width: 760px; margin-top: 10px; color: #655f70; font-size: .94rem; line-height: 1.7; }
+.analytical-module-welcome .btn { flex: 0 0 auto; }
+.analytical-module-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.analytical-module-metrics article {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 17px 19px;
+  border: 1px solid #e5e1eb;
+  border-radius: 13px;
+  background: #fff;
+}
+.analytical-module-metrics article > span { color: #686171; font-size: .76rem; font-weight: 700; }
+.analytical-module-metrics article strong { color: #39285f; font-size: 1.6rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.analytical-module-metrics article small { color: #85808e; font-size: .72rem; }
+.analytical-module-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+.analytical-module-card {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 155px;
+  padding: 20px 22px;
+  border: 1px solid #e4dff0;
+  border-radius: 14px;
+  background: #fff;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.analytical-module-card:hover { border-color: #c6b7e7; box-shadow: 0 10px 24px rgba(61, 42, 101, .09); transform: translateY(-1px); }
+.analytical-module-card h3 { padding-right: 28px; color: #39285f; font-size: 1rem; }
+.analytical-module-card p { max-width: 560px; color: #6d6875; font-size: .84rem; line-height: 1.55; }
+.analytical-module-card-mark { position: absolute; top: 17px; right: 19px; color: #7656cb; font-size: 1.1rem; font-weight: 750; }
+.analytical-module-card-action { margin-top: auto; padding-top: 5px; color: #6948b7; font-size: .77rem; font-weight: 750; }
+.analytical-module-data-note { margin: 0; }
+.analytical-module-page-heading { padding: 20px 22px; border-left: 4px solid #7656cb; border-radius: 0 12px 12px 0; background: #f5f1fb; }
+.analytical-module-page-heading .analytical-module-kicker { margin-bottom: 6px; }
+.analytical-module-page-heading p { margin-top: 6px; font-size: .84rem; }
+.analytical-module-page-content { min-width: 0; }
+.analytical-values-index { display: grid; gap: 16px; }
+.analytical-values-index > p { color: #686171; font-size: .87rem; }
+
+@media (max-width: 760px) {
+  .analytical-module-welcome { align-items: flex-start; flex-direction: column; }
+  .analytical-module-welcome .btn { align-self: flex-start; }
+  .analytical-module-metrics { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .analytical-module-card-grid { grid-template-columns: 1fr; }
+  .analytical-module-card { min-height: 135px; }
+  .analytical-module-welcome { padding: 20px; }
+}
