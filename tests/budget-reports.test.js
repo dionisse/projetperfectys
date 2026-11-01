@@ -216,6 +216,39 @@ test('le suivi des commandes n’utilise que les liens explicites et exclut les 
   assert.equal(detail.rows[0].budgetLineLabel, 'Prestations');
 });
 
+test('les commandes hors budget exigent un classement explicite, un compte exact et une devise exploitable', () => {
+  const budget = {
+    id: 'budget-outside-2025', code: '2025C', year: '2025', type: 'C', label: 'Charges',
+    cycleStart: '2025-01-01', cycleEnd: '2025-12-31', decomposition: 'none', realizationMode: 'debit',
+    classification: 'C', analyticNatureIds: [], lines: [{ id: 'line-outside-601', accountCode: '601', label: 'Prestations', annualAmount: 1000, amountComplete: true }]
+  };
+  const supplierOrders = [
+    { id: 'outside-order', status: 'issued', date: '2025-02-01', reference: 'CMD-OUT', currencyCode: 'XOF', lines: [{ id: 'outside-line', description: 'Marché déclaré hors budget', amount: 125, budgetTreatment: 'outside', accountCode: '930100', market: 'MARCHÉ-01' }] },
+    { id: 'unclassified-order', status: 'issued', date: '2025-02-02', currencyCode: 'XOF', lines: [{ id: 'unclassified-line', amount: 500, accountCode: '930100' }] },
+    { id: 'linked-order', status: 'issued', date: '2025-02-03', currencyCode: 'XOF', lines: [{ id: 'linked-line', amount: 600, budgetId: budget.id, budgetLineId: 'line-outside-601' }] },
+    { id: 'foreign-outside-order', status: 'issued', date: '2025-02-04', currencyCode: 'USD', lines: [{ id: 'foreign-outside-line', amount: 700, budgetTreatment: 'outside', accountCode: '930100' }] },
+    { id: 'invalid-account-order', status: 'issued', date: '2025-02-05', currencyCode: 'XOF', lines: [{ id: 'invalid-account-line', amount: 800, budgetTreatment: 'outside', accountCode: '999999' }] },
+    { id: 'draft-outside-order', status: 'draft', date: '2025-02-06', currencyCode: 'XOF', lines: [{ id: 'draft-outside-line', amount: 900, budgetTreatment: 'outside', accountCode: '930100' }] }
+  ];
+  const report = BudgetReports.buildReport('budget-orders-outside', options({
+    budgetRegister: [budget], budgetCode: '2025C', supplierOrders,
+    accounts: [{ code: '930100', label: 'Compte de projet' }], baseCurrencyCode: 'XOF', from: '2025-01-01', to: '2025-12-31'
+  }));
+  assert.equal(report.ok, true, report.errors.join(' '));
+  assert.equal(report.rows.length, 1);
+  assert.equal(report.sourceOrderLineCount, 5, 'brouillons et annulations sont exclus du périmètre');
+  assert.deepEqual([report.rows[0].accountCode, report.rows[0].accountLabel, report.rows[0].market, report.rows[0].amount, report.rows[0].reserved1, report.rows[0].reserved2], ['930100', 'Compte de projet', 'MARCHÉ-01', 125, '-', '-']);
+  assert.equal(report.unclassifiedLineCount, 1, 'une absence de classification n’est pas interprétée hors budget');
+  assert.equal(report.linkedLineCount, 1, 'les lignes liées à un budget sont exclues');
+  assert.equal(report.nonBaseCurrencyLineCount, 1, 'aucune conversion n’est faite');
+  assert.equal(report.unknownAccountLineCount, 1, 'un compte absent du plan n’est pas exploité');
+  assert.equal(report.basis.noBudgetAmountsSimulated, true);
+  assert.equal(report.basis.noCommitmentsSimulated, false);
+  assert.equal(report.basis.noAccountingMutation, true);
+  assert.match(report.warnings.join(' '), /ne sont pas assimilées à des commandes hors budget/);
+  assert.match(report.warnings.join(' '), /ne sont ni converties/);
+});
+
 test('le suivi des réalisations relie le budget enregistré aux seules écritures validées', () => {
   const registeredBudget = {
     id: 'budget-2025c', code: '2025C', year: '2025', type: 'C', label: 'Charges enregistrées',

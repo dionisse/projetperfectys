@@ -393,6 +393,53 @@
     };
   }
 
+  function explicitOutsideOrderRows(budget, orders, from, to, accounts, configuredBaseCurrencyCode) {
+    var baseCurrencyCode = String(configuredBaseCurrencyCode || 'XOF').toUpperCase();
+    var accountLabels = Object.create(null);
+    (Array.isArray(accounts) ? accounts : []).forEach(function (account) {
+      var code = String(account && account.code || '');
+      if (code) accountLabels[code] = String(account.label || account.name || '');
+    });
+    var rows = [];
+    var sourceOrderLineCount = 0;
+    var unclassifiedLineCount = 0;
+    var linkedLineCount = 0;
+    var nonBaseCurrencyLineCount = 0;
+    var missingAccountLineCount = 0;
+    var unknownAccountLineCount = 0;
+    var invalidAmountCount = 0;
+    (Array.isArray(orders) ? orders : []).filter(function (order) {
+      return order && order.status === 'issued' && isIsoDate(order.date) && order.date >= budget.cycleStart && order.date >= from && order.date <= to;
+    }).forEach(function (order) {
+      (Array.isArray(order.lines) ? order.lines : []).forEach(function (line, lineIndex) {
+        sourceOrderLineCount += 1;
+        var budgetId = String(line && line.budgetId || '').trim();
+        var budgetLineId = String(line && line.budgetLineId || '').trim();
+        if (budgetId && budgetLineId) { linkedLineCount += 1; return; }
+        if (String(line && line.budgetTreatment || 'unclassified') !== 'outside') { unclassifiedLineCount += 1; return; }
+        if (String(order.currencyCode || '').toUpperCase() !== baseCurrencyCode) { nonBaseCurrencyLineCount += 1; return; }
+        var accountCode = String(line && line.accountCode || '').trim();
+        if (!accountCode) { missingAccountLineCount += 1; return; }
+        if (!Object.prototype.hasOwnProperty.call(accountLabels, accountCode)) { unknownAccountLineCount += 1; return; }
+        var amount = Number(line.amount);
+        if (!Number.isFinite(amount) || amount < 0) { invalidAmountCount += 1; return; }
+        rows.push({
+          date: String(order.date || ''), accountCode: accountCode,
+          accountLabel: accountLabels[accountCode] || accountCode,
+          market: String(line.market || ''), reserved1: '-', reserved2: '-', amount: amount,
+          sourceOrderId: String(order.id || ''), sourceOrderLineId: String(line.id || ''), sourceLineIndex: lineIndex
+        });
+      });
+    });
+    rows.sort(function (left, right) { return left.date.localeCompare(right.date) || left.accountCode.localeCompare(right.accountCode) || left.sourceOrderId.localeCompare(right.sourceOrderId) || left.sourceLineIndex - right.sourceLineIndex; });
+    return {
+      rows: rows, sourceOrderLineCount: sourceOrderLineCount, unclassifiedLineCount: unclassifiedLineCount,
+      linkedLineCount: linkedLineCount, nonBaseCurrencyLineCount: nonBaseCurrencyLineCount,
+      missingAccountLineCount: missingAccountLineCount, unknownAccountLineCount: unknownAccountLineCount,
+      invalidAmountCount: invalidAmountCount, baseCurrencyCode: baseCurrencyCode
+    };
+  }
+
   function forecastRows(budget, accountCodes, accounts, analyticNatures, lineSelection) {
     var accountRows = Array.isArray(accounts) ? accounts : [];
     var natureRows = Array.isArray(analyticNatures) ? analyticNatures : [];
@@ -567,7 +614,7 @@
         budgetRegisterAvailable: false,
         commitmentRegisterAvailable: false,
         realizationRegisterAvailable: false,
-        accountsLimitedToAnalyticClasses93to99: !(['budget-entered', 'budget-orders-followup', 'budget-orders-by-line', 'budget-realizations-followup', 'budget-realizations-by-line'].indexOf(reportId) !== -1 && !!budget && Array.isArray(options && options.budgetRegister)),
+        accountsLimitedToAnalyticClasses93to99: !(['budget-entered', 'budget-orders-followup', 'budget-orders-by-line', 'budget-orders-outside', 'budget-realizations-followup', 'budget-realizations-by-line'].indexOf(reportId) !== -1 && !!budget && Array.isArray(options && options.budgetRegister)),
         noBudgetAmountsSimulated: true,
         noCommitmentsSimulated: true,
         noRealizationsSimulated: true,
@@ -659,6 +706,44 @@
       orderReport.basis.noAvailabilityOrExecutionRateSimulated = true;
       orderReport.basis.noAccountingMutation = true;
       return orderReport;
+    }
+    if (definition.kind === 'orders-outside' && Array.isArray(options.budgetRegister)) {
+      if (!Array.isArray(options.supplierOrders)) return emptyResult(reportId, definition, options, ['Le registre des commandes fournisseurs n’est pas chargé.'], warnings, selectedBudget);
+      var outsideOrders = explicitOutsideOrderRows(selectedBudget, options.supplierOrders, from, to, options.accounts, options.baseCurrencyCode);
+      if (!outsideOrders.rows.length) warnings.push('Aucune ligne de commande émise et explicitement classée hors budget ne correspond à la période.');
+      if (outsideOrders.unclassifiedLineCount) warnings.push(outsideOrders.unclassifiedLineCount + ' ligne(s) sans classification budgétaire explicite sont exclues ; elles ne sont pas assimilées à des commandes hors budget.');
+      if (outsideOrders.linkedLineCount) warnings.push(outsideOrders.linkedLineCount + ' ligne(s) explicitement liées à un budget sont exclues de cet état.');
+      if (outsideOrders.nonBaseCurrencyLineCount) warnings.push(outsideOrders.nonBaseCurrencyLineCount + ' ligne(s) classée(s) hors budget en devise autre que ' + outsideOrders.baseCurrencyCode + ' ne sont ni converties ni présentées dans les montants.');
+      if (outsideOrders.missingAccountLineCount) warnings.push(outsideOrders.missingAccountLineCount + ' ligne(s) classée(s) hors budget sans compte général explicite sont exclues.');
+      if (outsideOrders.unknownAccountLineCount) warnings.push(outsideOrders.unknownAccountLineCount + ' ligne(s) classée(s) hors budget référencent un compte absent du plan ; elles sont exclues.');
+      if (outsideOrders.invalidAmountCount) warnings.push(outsideOrders.invalidAmountCount + ' montant(s) hors budget invalides sont exclus sans montant de remplacement.');
+      warnings.push('Source : commandes émises, classées explicitement hors budget avec un compte choisi ; brouillons et annulations sont exclus. Ces commandes ne créent ni facture ni écriture comptable.');
+      var outsideReport = emptyResult(reportId, definition, options, [], warnings, selectedBudget);
+      outsideReport.cycleStart = cycleStart;
+      outsideReport.cycleEnd = cycleEnd;
+      outsideReport.from = from;
+      outsideReport.to = to;
+      outsideReport.budgetOptions = availableBudgets.map(function (item) { return Object.assign({}, item); });
+      outsideReport.rows = outsideOrders.rows;
+      outsideReport.generatedLineCount = outsideOrders.rows.length;
+      outsideReport.dataAvailable = outsideOrders.rows.length > 0;
+      outsideReport.sourceOrderLineCount = outsideOrders.sourceOrderLineCount;
+      outsideReport.unclassifiedLineCount = outsideOrders.unclassifiedLineCount;
+      outsideReport.linkedLineCount = outsideOrders.linkedLineCount;
+      outsideReport.nonBaseCurrencyLineCount = outsideOrders.nonBaseCurrencyLineCount;
+      outsideReport.missingAccountLineCount = outsideOrders.missingAccountLineCount;
+      outsideReport.unknownAccountLineCount = outsideOrders.unknownAccountLineCount;
+      outsideReport.baseCurrencyCode = outsideOrders.baseCurrencyCode;
+      outsideReport.commitmentRegisterAvailable = true;
+      outsideReport.outsideClassificationAvailable = true;
+      outsideReport.basis.budgetRegisterAvailable = true;
+      outsideReport.basis.commitmentRegisterAvailable = true;
+      outsideReport.basis.noBudgetAmountsSimulated = true;
+      outsideReport.basis.noCommitmentsSimulated = false;
+      outsideReport.basis.noRealizationsSimulated = true;
+      outsideReport.basis.noAvailabilityOrExecutionRateSimulated = true;
+      outsideReport.basis.noAccountingMutation = true;
+      return outsideReport;
     }
     if (definition.kind === 'forecast' && Array.isArray(options.budgetRegister)) {
       var forecast = forecastRows(selectedBudget, accountFilter.codes, options.accounts, options.analyticNatures, {

@@ -1325,7 +1325,9 @@
             amount: Number.isFinite(Number(item.amount)) ? Number(item.amount) : 0
           };
         });
-        return { id: lineId, description: String(line.description || '').trim().replace(/\s+/g, ' ').slice(0, 240), amount: Number.isFinite(amount) ? amount : 0, analyticalAllocations: analyticalAllocations, budgetId: String(line.budgetId || '').trim().slice(0, 100), budgetLineId: String(line.budgetLineId || '').trim().slice(0, 100) };
+        var budgetId = String(line.budgetId || '').trim().slice(0, 100);
+        var budgetLineId = String(line.budgetLineId || '').trim().slice(0, 100);
+        return { id: lineId, description: String(line.description || '').trim().replace(/\s+/g, ' ').slice(0, 240), amount: Number.isFinite(amount) ? amount : 0, analyticalAllocations: analyticalAllocations, budgetId: budgetId, budgetLineId: budgetLineId, budgetTreatment: budgetId && budgetLineId ? 'budgeted' : line.budgetTreatment === 'outside' ? 'outside' : 'unclassified', accountCode: String(line.accountCode || '').trim().slice(0, 32), market: String(line.market || '').trim().replace(/\s+/g, ' ').slice(0, 160) };
       }).filter(Boolean);
       var status = ['draft', 'issued', 'cancelled'].indexOf(record.status) !== -1 ? record.status : 'draft';
       return {
@@ -3004,11 +3006,12 @@
     var analyticNatures = normalizeAnalyticalNaturesConfiguration(dossier.analyticalNaturesConfiguration).rows.filter(function (nature) { return nature && !nature.group; });
     var dimensionValues = normalizeAnalyticalDimensionValuesConfiguration(dossier.analyticalDimensionValuesConfiguration).rows;
     var centers = analyticalCenters();
+    var orderAccounts = accounts();
     var registeredBudgets = normalizeBudgetRegisterConfiguration(dossier.budgetRegisterConfiguration).rows;
     var now = new Date().toISOString();
     function signature(row) {
       return JSON.stringify({ reference: row.reference, date: row.date, supplierId: row.supplierId, natureId: row.natureId, description: row.description,
-        currencyCode: row.currencyCode, lines: row.lines.map(function (line) { return { id: line.id, description: line.description, amount: line.amount, analyticalAllocations: line.analyticalAllocations, budgetId: line.budgetId, budgetLineId: line.budgetLineId }; }) });
+        currencyCode: row.currencyCode, lines: row.lines.map(function (line) { return { id: line.id, description: line.description, amount: line.amount, analyticalAllocations: line.analyticalAllocations, budgetId: line.budgetId, budgetLineId: line.budgetLineId, budgetTreatment: line.budgetTreatment, accountCode: line.accountCode, market: line.market }; }) });
     }
     var rows = sourceRows.map(function (input, orderIndex) {
       input = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
@@ -3067,6 +3070,15 @@
           var linkIsCurrent = !!(linkedBudgetLine && linkedBudget.cycleStart === dossier.cycleStart && linkedBudget.cycleEnd === dossier.cycleEnd);
           if (!linkIsCurrent && !priorBudgetLinkUnchanged) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : le lien doit viser une ligne d’un budget enregistré du cycle courant.');
         }
+        if (line.budgetTreatment === 'outside' && (budgetId || budgetLineId)) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : une ligne explicitement hors budget ne peut pas porter de liaison budgétaire.');
+        var budgetTreatment = budgetId && budgetLineId ? 'budgeted' : line.budgetTreatment === 'outside' ? 'outside' : 'unclassified';
+        var accountCode = String(line.accountCode || '').trim();
+        var priorAccountUnchanged = !!(priorLine && priorLine.accountCode === accountCode);
+        var accountRecord = orderAccounts.find(function (item) { return item && String(item.code || '') === accountCode; });
+        if (accountCode && (!accountRecord || accountRecord.postable === false) && !priorAccountUnchanged) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : le compte doit être choisi dans les comptes généraux imputables.');
+        if (budgetTreatment === 'outside' && !accountCode) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : choisissez explicitement un compte pour une commande hors budget.');
+        var market = String(line.market || '').trim().replace(/\s+/g, ' ');
+        if (market.length > 160) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : le marché ne peut pas dépasser 160 caractères.');
         var totals = Object.create(null);
         var assignedKeys = Object.create(null);
         var allocations = (Array.isArray(line.analyticalAllocations) ? line.analyticalAllocations : []).slice(0, 500).map(function (raw, allocationIndex) {
@@ -3098,7 +3110,7 @@
           var priorNature = priorLine && priorLine.analyticalAllocations.find(function (item) { return item.natureId === analyticNatureId; });
           return { natureId: nature ? nature.id : analyticNatureId, natureLabel: priorNature && priorNature.natureLabel || nature && (nature.individualName || nature.genericName) || '', valueId: valueId.slice(0, 160), valueLabel: valueLabel.slice(0, 160), centerCode: centerCode.slice(0, 32), centerName: centerName.slice(0, 150), amount: Number.isFinite(assignedAmount) ? assignedAmount : 0 };
         });
-        return { id: lineId, description: lineDescription.slice(0, 240), amount: Number.isFinite(amount) ? amount : 0, analyticalAllocations: allocations, budgetId: budgetId, budgetLineId: budgetLineId };
+        return { id: lineId, description: lineDescription.slice(0, 240), amount: Number.isFinite(amount) ? amount : 0, analyticalAllocations: allocations, budgetId: budgetId, budgetLineId: budgetLineId, budgetTreatment: budgetTreatment, accountCode: accountCode, market: market.slice(0, 160) };
       });
       var candidate = {
         id: id, reference: reference.slice(0, 120), date: date, supplierId: supplierId,
