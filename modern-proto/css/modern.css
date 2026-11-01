@@ -3854,7 +3854,7 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .supplier-order-line-editor { margin-top: 1rem; padding: .9rem; border: 1px solid #acd3db; border-radius: 12px; background: #f8fcfd; }
 .supplier-order-line-editor-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .7rem; margin-bottom: .7rem; }
 .supplier-order-line-editor-heading h4 { color: #15566a; }
-.supplier-order-line { display: grid; grid-template-columns: minmax(240px, 2fr) minmax(140px, 1fr) auto auto; align-items: end; gap: .6rem; padding: .65rem 0; border-top: 1px solid #d7e7e9; }
+.supplier-order-line { display: grid; grid-template-columns: minmax(200px, 1.5fr) minmax(125px, .7fr) minmax(240px, 1.7fr) auto auto; align-items: end; gap: .6rem; padding: .65rem 0; border-top: 1px solid #d7e7e9; }
 .supplier-order-line-analytic-status { padding: .45rem .55rem; border-radius: 7px; background: #fff8e8; color: #74551a; font-size: .8rem; font-weight: 700; }
 .supplier-order-unclassified { display: inline-flex; padding: .28rem .48rem; border: 1px solid #d6b45e; border-radius: 7px; background: #fff8e8; color: #74551a; font-weight: 700; }
 .supplier-order-analytic-chip { display: inline-block; margin: .12rem; padding: .35rem .5rem; border: 1px solid #9bcfd9; border-left: 3px solid #087f9f; border-radius: 7px; background: #f0fbfd; color: #15566a; font-size: .78rem; }

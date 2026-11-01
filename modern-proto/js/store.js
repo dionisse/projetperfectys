@@ -1325,7 +1325,7 @@
             amount: Number.isFinite(Number(item.amount)) ? Number(item.amount) : 0
           };
         });
-        return { id: lineId, description: String(line.description || '').trim().replace(/\s+/g, ' ').slice(0, 240), amount: Number.isFinite(amount) ? amount : 0, analyticalAllocations: analyticalAllocations };
+        return { id: lineId, description: String(line.description || '').trim().replace(/\s+/g, ' ').slice(0, 240), amount: Number.isFinite(amount) ? amount : 0, analyticalAllocations: analyticalAllocations, budgetId: String(line.budgetId || '').trim().slice(0, 100), budgetLineId: String(line.budgetLineId || '').trim().slice(0, 100) };
       }).filter(Boolean);
       var status = ['draft', 'issued', 'cancelled'].indexOf(record.status) !== -1 ? record.status : 'draft';
       return {
@@ -3004,10 +3004,11 @@
     var analyticNatures = normalizeAnalyticalNaturesConfiguration(dossier.analyticalNaturesConfiguration).rows.filter(function (nature) { return nature && !nature.group; });
     var dimensionValues = normalizeAnalyticalDimensionValuesConfiguration(dossier.analyticalDimensionValuesConfiguration).rows;
     var centers = analyticalCenters();
+    var registeredBudgets = normalizeBudgetRegisterConfiguration(dossier.budgetRegisterConfiguration).rows;
     var now = new Date().toISOString();
     function signature(row) {
       return JSON.stringify({ reference: row.reference, date: row.date, supplierId: row.supplierId, natureId: row.natureId, description: row.description,
-        currencyCode: row.currencyCode, lines: row.lines.map(function (line) { return { id: line.id, description: line.description, amount: line.amount, analyticalAllocations: line.analyticalAllocations }; }) });
+        currencyCode: row.currencyCode, lines: row.lines.map(function (line) { return { id: line.id, description: line.description, amount: line.amount, analyticalAllocations: line.analyticalAllocations, budgetId: line.budgetId, budgetLineId: line.budgetLineId }; }) });
     }
     var rows = sourceRows.map(function (input, orderIndex) {
       input = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
@@ -3056,6 +3057,16 @@
         if (lineDescription.length > 240) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : le libellé dépasse 240 caractères.');
         if (!Number.isFinite(amount) || amount <= 0 || amount > 1e15) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : le montant saisi doit être positif.');
         else if (Math.abs(amount * precision - Math.round(amount * precision)) > 1e-7) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : le montant dépasse la précision configurée.');
+        var budgetId = String(line.budgetId || '').trim();
+        var budgetLineId = String(line.budgetLineId || '').trim();
+        var priorBudgetLinkUnchanged = !!(priorLine && priorLine.budgetId === budgetId && priorLine.budgetLineId === budgetLineId);
+        if (!!budgetId !== !!budgetLineId) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : sélectionnez explicitement un budget et une ligne, ou retirez le lien.');
+        if (budgetId && budgetLineId) {
+          var linkedBudget = registeredBudgets.find(function (budget) { return budget.id === budgetId; });
+          var linkedBudgetLine = linkedBudget && linkedBudget.lines.find(function (item) { return item.id === budgetLineId; });
+          var linkIsCurrent = !!(linkedBudgetLine && linkedBudget.cycleStart === dossier.cycleStart && linkedBudget.cycleEnd === dossier.cycleEnd);
+          if (!linkIsCurrent && !priorBudgetLinkUnchanged) errors.push(label + 'ligne ' + (lineIndex + 1) + ' : le lien doit viser une ligne d’un budget enregistré du cycle courant.');
+        }
         var totals = Object.create(null);
         var assignedKeys = Object.create(null);
         var allocations = (Array.isArray(line.analyticalAllocations) ? line.analyticalAllocations : []).slice(0, 500).map(function (raw, allocationIndex) {
@@ -3087,7 +3098,7 @@
           var priorNature = priorLine && priorLine.analyticalAllocations.find(function (item) { return item.natureId === analyticNatureId; });
           return { natureId: nature ? nature.id : analyticNatureId, natureLabel: priorNature && priorNature.natureLabel || nature && (nature.individualName || nature.genericName) || '', valueId: valueId.slice(0, 160), valueLabel: valueLabel.slice(0, 160), centerCode: centerCode.slice(0, 32), centerName: centerName.slice(0, 150), amount: Number.isFinite(assignedAmount) ? assignedAmount : 0 };
         });
-        return { id: lineId, description: lineDescription.slice(0, 240), amount: Number.isFinite(amount) ? amount : 0, analyticalAllocations: allocations };
+        return { id: lineId, description: lineDescription.slice(0, 240), amount: Number.isFinite(amount) ? amount : 0, analyticalAllocations: allocations, budgetId: budgetId, budgetLineId: budgetLineId };
       });
       var candidate = {
         id: id, reference: reference.slice(0, 120), date: date, supplierId: supplierId,

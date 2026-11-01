@@ -26,7 +26,24 @@ assert.match(record.lines[0].id, /^supplier-order-line-/);
 assert.equal(record.status, 'draft');
 assert.equal(record.supplierId, supplier.id);
 assert.equal(record.lines[0].analyticalAllocations.length, 0);
+assert.equal(record.lines[0].budgetId, '', 'aucune liaison budgétaire n’est déduite de la commande');
+assert.equal(record.lines[0].budgetLineId, '');
 assert.equal(S.entries().length, entriesBefore, 'un brouillon ne crée aucune écriture');
+const budgetSaved = S.saveBudgetRegisterConfiguration([{
+  year: '2026', type: 'C', label: 'Budget lié', cycleStart: '2026-01-01', cycleEnd: '2026-12-31',
+  decomposition: 'none', realizationMode: 'debit-credit', accountPrefixes: ['6'], analyticNatureIds: [], classification: 'C',
+  lines: [{ accountCode: '601', label: 'Prestations', annualAmount: 50000 }]
+}]);
+assert.equal(budgetSaved.ok, true, budgetSaved.errors && budgetSaved.errors.join(' '));
+const linkedBudget = S.budgetRegisterConfiguration().rows[0];
+const explicitLink = { budgetId: linkedBudget.id, budgetLineId: linkedBudget.lines[0].id };
+let linkedSave = S.saveAnalyticalSupplierOrdersConfiguration([{ ...record, lines: [{ ...record.lines[0], ...explicitLink }] }]);
+assert.equal(linkedSave.ok, true, linkedSave.errors && linkedSave.errors.join(' '));
+record = JSON.parse(JSON.stringify(S.analyticalSupplierOrdersConfiguration().rows[0]));
+assert.equal(record.lines[0].budgetId, linkedBudget.id);
+assert.equal(record.lines[0].budgetLineId, linkedBudget.lines[0].id);
+assert.equal(S.saveAnalyticalSupplierOrdersConfiguration([{ ...record, lines: [{ ...record.lines[0], budgetLineId: 'missing-line' }] }]).ok, false, 'une ligne inexistante ne peut pas être liée');
+assert.equal(S.saveAnalyticalSupplierOrdersConfiguration([{ ...record, lines: [{ ...record.lines[0], budgetId: '', budgetLineId: linkedBudget.lines[0].id }] }]).ok, false, 'les deux identifiants du lien sont requis ensemble');
 
 const invalidDate = S.saveAnalyticalSupplierOrdersConfiguration([{ ...record, date: '2027-01-01' }]);
 assert.equal(invalidDate.ok, false);
@@ -84,7 +101,11 @@ assert.match(app, /exchangeFeature = viewAnalyticalSupplierOrdersEdition\(\)/);
 assert.match(app, /function openAnalyticalSupplierOrderEditionDetails\(/);
 assert.match(app, /function bindAnalyticalSupplierOrdersEdition\(\)/);
 assert.match(app, /Édition en lecture seule des commandes enregistrées/);
-assert.match(app, /aucun lien budgétaire, conversion ou écriture n’est créé/i);
+assert.match(app, /Ligne budgétaire liée · facultatif/);
+assert.match(app, /data-budget-line-link/);
+assert.match(app, /budgetId: String\(budgetLink\[0\] \|\| ''\), budgetLineId: String\(budgetLink\[1\] \|\| ''\)/);
+assert.match(app, /Ligne budgétaire liée/);
+assert.match(app, /aucune conversion de devise, facture ou écriture n’est créée/i);
 assert.match(app, /Imputations analytiques enregistrées · par nature/);
 assert.match(app, /Aperçu plein écran \/ imprimer/);
 const editionView = app.slice(app.indexOf('function viewAnalyticalSupplierOrdersEdition()'), app.indexOf('function openAnalyticalSupplierOrderEditionDetails('));

@@ -30,7 +30,8 @@ const expected = [
 assert.ok(budgetTab, 'le sous-menu Budget existe');
 assert.equal(budgetTab.status, 'active');
 assert.match(budgetTab.reason, /écritures validées/);
-assert.match(budgetTab.reason, /commandes transformées en dépenses comptabilisées/i);
+assert.match(budgetTab.reason, /liées manuellement aux lignes budgétaires/i);
+assert.match(budgetTab.reason, /cinq autres éditions restent vides/i);
 for (const [id, label, viewFunction] of expected) {
   const child = budgetTab.children.find(item => item.id === id);
   assert.ok(child, `${id} est un enfant distinct du sous-menu Budget`);
@@ -40,6 +41,12 @@ for (const [id, label, viewFunction] of expected) {
     assert.match(child.reason, /budget réellement enregistré/i);
     assert.match(child.reason, /montants annuels saisis/i);
     assert.match(child.reason, /Pourcentage du total reste « — »/i);
+  } else if (id === 'budget-orders-followup' || id === 'budget-orders-by-line') {
+    assert.match(child.reason, /budget enregistré/i);
+    assert.match(child.reason, /explicitement liées|reliées manuellement/i);
+    if (id === 'budget-orders-followup') assert.match(child.reason, /aucune facture ni écriture n’est créée/i);
+    else assert.match(child.reason, /ne sont pas présentés comme des engagements budgétaires/i);
+    assert.doesNotMatch(child.reason, /93–99/);
   } else if (id === 'budget-realizations-followup' || id === 'budget-realizations-by-line') {
     assert.match(child.reason, /budget (réellement )?enregistré/i);
     assert.match(child.reason, /écritures validées|lignes validées/i);
@@ -75,14 +82,14 @@ assert.match(appSource, /function bindBudgetReport\([\s\S]*openCurrencyBalancePi
 assert.match(appSource, /aucun montant n’est simulé/i);
 assert.match(appSource, /Aucune ligne générée/);
 assert.match(reportSource, /budgetRegisterAvailable: false[\s\S]*commitmentRegisterAvailable: false[\s\S]*realizationRegisterAvailable: false[\s\S]*accountsLimitedToAnalyticClasses93to99:/);
-assert.match(reportSource, /accountsLimitedToAnalyticClasses93to99: !\(\['budget-entered', 'budget-realizations-followup', 'budget-realizations-by-line'\]/);
+assert.match(reportSource, /accountsLimitedToAnalyticClasses93to99: !\(\['budget-entered', 'budget-orders-followup', 'budget-orders-by-line', 'budget-realizations-followup', 'budget-realizations-by-line'\]/);
 assert.match(reportSource, /function forecastRows\([\s\S]*shareOfTotal: null[\s\S]*incompleteLineCount/);
 assert.match(reportSource, /function realizationDetailRows\([\s\S]*sourceEntryCount:[\s\S]*matchedSourceLineCount:[\s\S]*unallocatedCount/);
 assert.match(appSource, /analyticNatures: S\.analyticalNaturesConfiguration\(\)\.rows/);
 assert.match(appSource, /pourcentage du total n’est pas calculé, car sa formule n’est pas définie/i);
 assert.match(reportSource, /À ventiler · reliquat analytique explicite/);
-assert.ok(appSource.includes("var reportRows = ['forecast', 'realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1 ? (report.rows || []).map"));
-assert.ok(appSource.includes("var rows = ['forecast', 'realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1 ? (report.rows || []).map"));
+assert.ok(appSource.includes("var reportRows = ['forecast', 'orders-followup', 'orders-by-line', 'realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1 ? (report.rows || []).map"));
+assert.ok(appSource.includes("var rows = ['forecast', 'orders-followup', 'orders-by-line', 'realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1 ? (report.rows || []).map"));
 assert.match(reportSource, /var year = match\[1\][\s\S]*var code = year \+ type\.suffix/);
 assert.match(reportSource, /suffix: 'C'[\s\S]*suffix: 'I'[\s\S]*suffix: 'P'/);
 
@@ -92,7 +99,7 @@ assert.ok(htmlSource.indexOf('js/budget-reports.js') < htmlSource.indexOf('js/ap
 assert.match(htmlSource, /css\/budget-reports\.css/);
 assert.match(serviceWorkerSource, /\.\/js\/budget-reports\.js/);
 assert.match(serviceWorkerSource, /\.\/css\/budget-reports\.css/);
-assert.match(serviceWorkerSource, /perfecto-static-v190/);
+assert.match(serviceWorkerSource, /perfecto-static-v191/);
 assert.match(cssSource, /\.budget-report-filter-grid[\s\S]*\.budget-report-column-option[\s\S]*\.budget-report-table/);
 assert.match(cssSource, /max-width: 640px/);
 assert.match(cssSource, /body\.report-preview-printing[\s\S]*\.budget-report-table/);

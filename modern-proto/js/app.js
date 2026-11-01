@@ -6090,6 +6090,8 @@
       accountFilter: session.filters.accounts,
       accounts: S.accounts(),
       analyticNatures: S.analyticalNaturesConfiguration().rows,
+      supplierOrders: S.analyticalSupplierOrdersConfiguration().rows,
+      baseCurrencyCode: S.currenciesConfiguration().defaultCurrencyCode,
       entries: S.postedEntries(),
       from: session.filters.from,
       to: session.filters.to,
@@ -6116,7 +6118,7 @@
     }
     if (key === 'accounts') {
       var label = definition.accountLabel || 'Compte';
-      if (['forecast', 'realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1) {
+      if (['forecast', 'orders-followup', 'orders-by-line', 'realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1) {
         var filterLabel = label === 'Comptes généraux' ? label + ' budgétés' : label + 's budgétés';
         return '<div class="field"><label for="budget-report-accounts">' + esc(filterLabel) + '</label><input id="budget-report-accounts" data-budget-report-filter="accounts" type="text" value="' + esc(session.filters.accounts) + '" placeholder="* ou code exact / préfixe*" autocomplete="off" required><span class="hint">Filtre limité aux comptes présents dans les lignes du budget sélectionné. Le code est rapproché des lignes enregistrées ; « * » sélectionne toutes les lignes compatibles.</span></div>';
       }
@@ -6188,9 +6190,11 @@
       : '';
     var sourceNote = definition.kind === 'forecast'
       ? '<div class="alert info budget-report-source-note"><div><strong>Source de cet état.</strong> Les lignes et montants annuels viennent du budget enregistré dans le registre du dossier. Les lignes incomplètes restent sans montant ; le pourcentage du total n’est pas calculé, car sa formule n’est pas définie.</div></div>'
-      : ['realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1
-        ? '<div class="alert info budget-report-source-note"><div><strong>Sources de cet état.</strong> Le budget et son classement proviennent du registre du dossier ; les réalisations sont calculées à partir des seules écritures validées et comptabilisées. Aucun engagement de commande fournisseur n’est transformé en réalisation.' + (definition.kind === 'realizations-followup' ? ' Les colonnes N-1 restent indisponibles dans cette étape.' : ' Les allocations analytiques n’apparaissent que lorsqu’elles sont explicitement enregistrées sur la ligne source.') + '</div></div>'
-        : '<div class="alert info budget-report-source-note"><div><strong>Lecture seule.</strong> Les autres états attendent le raccordement de leurs registres de commandes ou de réalisations ; aucun montant n’est simulé. Leurs filtres de compte restent limités aux rubriques analytiques 93 à 99.</div></div>';
+      : ['orders-followup', 'orders-by-line'].indexOf(definition.kind) !== -1
+        ? '<div class="alert info budget-report-source-note"><div><strong>Sources de cet état.</strong> Seules les commandes émises et explicitement liées à une ligne du budget sont prises en compte ; brouillons, commandes annulées et lignes non liées sont exclus ou signalés. Les montants d’une devise autre que XOF ne sont ni convertis ni additionnés. Une commande ne crée ni facture ni écriture comptable.</div></div>'
+        : ['realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1
+          ? '<div class="alert info budget-report-source-note"><div><strong>Sources de cet état.</strong> Le budget et son classement proviennent du registre du dossier ; les réalisations sont calculées à partir des seules écritures validées et comptabilisées. Aucun engagement de commande fournisseur n’est transformé en réalisation.' + (definition.kind === 'realizations-followup' ? ' Les colonnes N-1 restent indisponibles dans cette étape.' : ' Les allocations analytiques n’apparaissent que lorsqu’elles sont explicitement enregistrées sur la ligne source.') + '</div></div>'
+          : '<div class="alert info budget-report-source-note"><div><strong>Lecture seule.</strong> Les autres états attendent le raccordement de leurs sources explicites ; aucun montant n’est simulé. Leurs filtres de compte restent limités aux rubriques analytiques 93 à 99.</div></div>';
     var criteria = ['le budget'];
     if (definition.filters.indexOf('accounts') !== -1) criteria.push('les comptes');
     if (definition.filters.indexOf('from') !== -1) criteria.push('la période');
@@ -6250,7 +6254,7 @@
     var styleClass = session.layout.style === 'color10' ? 'budget-report-style-color' : 'budget-report-style-plain';
     var decimals = Number(S.accountingConfiguration().decimalPlaces) || 0;
     var formatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-    var reportRows = ['forecast', 'realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1 ? (report.rows || []).map(function (row) {
+    var reportRows = ['forecast', 'orders-followup', 'orders-by-line', 'realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1 ? (report.rows || []).map(function (row) {
       return '<tr class="' + (row.status && row.status !== 'budgeted' ? 'budget-realization-special-row' : '') + '"><td>' + esc(report.budget && report.budget.code || '') + '</td>' + columns.map(function (column) {
         var value = row[column.key];
         var text = value == null || !Number.isFinite(Number(value)) && !column.text ? '—' : (column.text ? String(value == null ? '' : value) : formatter.format(Number(value)));
@@ -6260,32 +6264,38 @@
     var tableBody = reportRows
       ? '<tbody>' + reportRows + '</tbody>'
       : '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune ligne générée</strong>Le dossier ne fournit aucune source enregistrée pour cet état.</div></td></tr></tbody>';
+    if (definition.kind === 'orders-by-line' && !reportRows) tableBody = '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune commande liée explicitement</strong>Aucune ligne de commande émise, en devise du dossier, ne correspond au budget et à la période sélectionnés.</div></td></tr></tbody>';
     if (definition.kind === 'forecast' && !reportRows) tableBody = '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune ligne budgétaire correspondante</strong>Le budget enregistré ne contient aucune ligne compatible avec les comptes sélectionnés.</div></td></tr></tbody>';
     if (definition.kind === 'realizations-followup' && !reportRows) tableBody = '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune ligne générée</strong>Le budget sélectionné ne comporte pas de ligne compatible avec le filtre.</div></td></tr></tbody>';
     if (definition.kind === 'realizations-by-line' && !reportRows) tableBody = '<tbody><tr><td colspan="' + columnCount + '"><div class="empty-state"><strong>Aucune ligne comptabilisée correspondante</strong>Aucun mouvement validé ne correspond aux comptes et à la période sélectionnés.</div></td></tr></tbody>';
     var isForecastReport = definition.kind === 'forecast';
+    var isOrderReport = ['orders-followup', 'orders-by-line'].indexOf(definition.kind) !== -1;
     var isRealizationReport = ['realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1;
     var sourceLabel = isForecastReport
       ? 'Lignes et montants issus du registre de budget enregistré'
-      : isRealizationReport
+      : isOrderReport
+        ? 'Engagements issus des seules commandes émises et explicitement liées'
+        : isRealizationReport
         ? 'Comptes et classement issus du budget enregistré · source : écritures comptabilisées'
         : 'Comptes analytiques 93 à 99';
     var realizationNature = report.axisNatureId && (S.analyticalNaturesConfiguration().rows || []).find(function (nature) { return nature && nature.id === report.axisNatureId; });
     var realizationBasisLabel = String(report.realizationBasis || '') + (realizationNature ? ' Nature : ' + (realizationNature.individualName || realizationNature.genericName || realizationNature.id) + '.' : '');
     var basis = isForecastReport && report.budgetRegisterAvailable
       ? '<p class="budget-report-source-note">Lignes sources du registre · montant annuel affiché uniquement si la ligne est complète · pourcentage du total non calculé, formule non définie</p>'
-      : isRealizationReport && report.realizationBasis
-        ? '<p class="budget-report-source-note">' + (definition.kind === 'realizations-followup' ? 'Base de réalisation : ' + esc(budgetRealizationModeLabel(report.realizationMode)) + ' · ' : 'Détail des mouvements bruts · base de réalisation du budget : ' + esc(budgetRealizationModeLabel(report.realizationMode)) + ' · ') + esc(realizationBasisLabel) + (report.sourceEntryCount != null ? ' · ' + esc(String(report.sourceEntryCount)) + ' écriture(s) · ' + esc(String(report.matchedSourceLineCount)) + ' ligne(s) comptable(s) correspondante(s)' : '') + '</p>'
-        : '';
+      : isOrderReport && report.commitmentRegisterAvailable
+        ? '<p class="budget-report-source-note">' + esc(String(report.matchedOrderLineCount || 0)) + ' ligne(s) de commande liée(s) · montants en ' + esc(report.baseCurrencyCode || 'XOF') + ' sans conversion' + (report.unlinkedOrderLineCount ? ' · ' + esc(String(report.unlinkedOrderLineCount)) + ' ligne(s) émise(s) non liée(s)' : '') + '</p>'
+        : isRealizationReport && report.realizationBasis
+          ? '<p class="budget-report-source-note">' + (definition.kind === 'realizations-followup' ? 'Base de réalisation : ' + esc(budgetRealizationModeLabel(report.realizationMode)) + ' · ' : 'Détail des mouvements bruts · base de réalisation du budget : ' + esc(budgetRealizationModeLabel(report.realizationMode)) + ' · ') + esc(realizationBasisLabel) + (report.sourceEntryCount != null ? ' · ' + esc(String(report.sourceEntryCount)) + ' écriture(s) · ' + esc(String(report.matchedSourceLineCount)) + ' ligne(s) comptable(s) correspondante(s)' : '') + '</p>'
+          : '';
     return '<article class="budget-report-print ' + styleClass + '"><header class="budget-report-print-heading"><p class="page-kicker">ÉDITIONS · BUDGET</p><h2>' + esc(definition.title) + '</h2><p>' + esc(report.budget && (report.budget.label || report.budget.code) || '') + ' · ' + period + ' · ' + sourceLabel + '</p>' + basis + '</header>' +
       budgetReportWarningsHtml(report) + '<div class="budget-report-table-wrap"><table class="budget-report-table"><thead>' + tableHeader + '</thead>' + tableBody + '</table></div>' +
-      '<p class="budget-report-print-note">État en lecture seule. Aucune commande fournisseur ne constitue une réalisation comptable ; les écritures sources restent inchangées.</p></article>';
+      '<p class="budget-report-print-note">' + (isOrderReport ? 'État en lecture seule : les commandes émises représentent des engagements, pas des factures ni des écritures comptables.' : 'État en lecture seule. Aucune commande fournisseur ne constitue une réalisation comptable ; les écritures sources restent inchangées.') + '</p></article>';
   }
 
   function budgetReportExportMatrix(session, report, definition) {
     var columns = budgetReportSelectedColumns(session, definition);
     var headers = ['Budget'].concat(columns.map(function (column) { return column.label; }));
-    var rows = ['forecast', 'realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1 ? (report.rows || []).map(function (row) {
+    var rows = ['forecast', 'orders-followup', 'orders-by-line', 'realizations-followup', 'realizations-by-line'].indexOf(definition.kind) !== -1 ? (report.rows || []).map(function (row) {
       return [report.budget && report.budget.code || ''].concat(columns.map(function (column) {
         var value = row[column.key];
         return value == null || !Number.isFinite(Number(value)) && !column.text ? '—' : (column.text ? String(value == null ? '' : value) : Number(value));
@@ -26181,11 +26191,28 @@
     var orderNatureConfig = S.orderNaturesConfiguration();
     var natures = (orderNatureConfig.rows || []).concat(orderNatureConfig.additionalRows || []);
     var currencies = S.currenciesConfiguration().rows || [];
+    var budgetRegisterRows = S.budgetRegisterConfiguration().rows || [];
+    var availableBudgets = BudgetReports.budgetOptions(dossier.cycleStart, budgetRegisterRows, dossier.cycleEnd);
     var lines = existing && existing.lines.length ? existing.lines : [{ id: '', description: '', amount: '', analyticalAllocations: [] }];
-    function lineHtml(line, index) {
-      return '<div class="supplier-order-line" data-supplier-order-line data-line-id="' + esc(line.id || '') + '"><label class="field"><span>Ligne ' + (index + 1) + ' · objet</span><input data-line-description maxlength="240" value="' + esc(line.description || '') + '" required></label><label class="field"><span>Montant saisi</span><input data-line-amount type="number" min="' + esc(String(1 / Math.pow(10, Number(S.accountingConfiguration().decimalPlaces) || 0))) + '" step="' + esc(String(1 / Math.pow(10, Number(S.accountingConfiguration().decimalPlaces) || 0))) + '" value="' + esc(line.amount == null ? '' : line.amount) + '" required></label><span class="supplier-order-line-analytic-status">' + (line.analyticalAllocations && line.analyticalAllocations.length ? line.analyticalAllocations.length + ' imputation(s)' : 'À ventiler') + '</span><button type="button" class="btn btn-ghost btn-sm" data-supplier-order-remove-line>Retirer</button></div>';
+    function budgetLineLinkOptions(line) {
+      var currentKey = line.budgetId && line.budgetLineId ? JSON.stringify([line.budgetId, line.budgetLineId]) : '';
+      var options = '<option value="">Aucune liaison budgétaire explicite</option>';
+      var currentFound = !currentKey;
+      availableBudgets.forEach(function (budgetOption) {
+        (budgetOption.budget.lines || []).forEach(function (budgetLine) {
+          var key = JSON.stringify([budgetOption.budget.id, budgetLine.id]);
+          if (key === currentKey) currentFound = true;
+          options += '<option value="' + esc(key) + '"' + (key === currentKey ? ' selected' : '') + '>' + esc(budgetOption.code + ' · ' + budgetLine.accountCode + ' · ' + budgetLine.label) + '</option>';
+        });
+      });
+      if (!currentFound) options += '<option value="' + esc(currentKey) + '" selected>Association enregistrée · ligne budgétaire absente à vérifier</option>';
+      return options;
     }
-    var body = '<form id="supplier-order-form" novalidate><div id="supplier-order-form-errors" aria-live="assertive"></div><div class="form-grid supplier-order-form-grid"><label class="field"><span>Référence</span><input id="supplier-order-reference" maxlength="120" value="' + esc(existing && existing.reference || '') + '" required></label><label class="field"><span>Date dans le cycle</span><input id="supplier-order-date" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(existing && existing.date || '') + '" required></label><label class="field"><span>Fournisseur existant</span><select id="supplier-order-supplier" required>' + analyticalSupplierOrderOptions(suppliers, existing && existing.supplierId || '', 'Choisir un fournisseur…', 'id', function (row) { return row.code + ' · ' + row.name; }) + '</select></label><label class="field"><span>Nature de commande</span><select id="supplier-order-nature" required>' + analyticalSupplierOrderOptions(natures, existing && existing.natureId || '', 'Choisir une nature…', 'id', function (row) { return row.number + ' · ' + row.name; }) + '</select></label><label class="field"><span>Devise</span><select id="supplier-order-currency" required>' + analyticalSupplierOrderOptions(currencies, existing && existing.currencyCode || '', 'Choisir une devise…', 'code', function (row) { return row.code + ' · ' + row.label; }) + '</select></label><label class="field"><span>Objet général</span><input id="supplier-order-description" maxlength="240" value="' + esc(existing && existing.description || '') + '" required></label></div><section class="supplier-order-line-editor"><div class="supplier-order-line-editor-heading"><h4>Lignes saisies</h4><button type="button" class="btn btn-ghost btn-sm" data-supplier-order-add-line>＋ Ajouter une ligne</button></div><div id="supplier-order-line-list">' + lines.map(lineHtml).join('') + '</div></section></form>';
+    function lineHtml(line, index) {
+      var commitmentField = '<label class="field"><span>Ligne budgétaire liée · facultatif</span><select data-budget-line-link>' + budgetLineLinkOptions(line) + '</select><small>Choisissez explicitement une ligne du registre ; aucune correspondance n’est déduite.</small></label>';
+      return '<div class="supplier-order-line" data-supplier-order-line data-line-id="' + esc(line.id || '') + '"><label class="field"><span>Ligne ' + (index + 1) + ' · objet</span><input data-line-description maxlength="240" value="' + esc(line.description || '') + '" required></label><label class="field"><span>Montant saisi</span><input data-line-amount type="number" min="' + esc(String(1 / Math.pow(10, Number(S.accountingConfiguration().decimalPlaces) || 0))) + '" step="' + esc(String(1 / Math.pow(10, Number(S.accountingConfiguration().decimalPlaces) || 0))) + '" value="' + esc(line.amount == null ? '' : line.amount) + '" required></label>' + commitmentField + '<span class="supplier-order-line-analytic-status">' + (line.analyticalAllocations && line.analyticalAllocations.length ? line.analyticalAllocations.length + ' imputation(s)' : 'À ventiler') + '</span><button type="button" class="btn btn-ghost btn-sm" data-supplier-order-remove-line>Retirer</button></div>';
+    }
+    var body = '<div class="alert info"><div>Le rattachement budgétaire est facultatif et doit être choisi explicitement sur chaque ligne. Seules les commandes émises avec lien valide participent aux états budgétaires ; aucune conversion de devise, facture ou écriture n’est créée.</div></div><form id="supplier-order-form" novalidate><div id="supplier-order-form-errors" aria-live="assertive"></div><div class="form-grid supplier-order-form-grid"><label class="field"><span>Référence</span><input id="supplier-order-reference" maxlength="120" value="' + esc(existing && existing.reference || '') + '" required></label><label class="field"><span>Date dans le cycle</span><input id="supplier-order-date" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(existing && existing.date || '') + '" required></label><label class="field"><span>Fournisseur existant</span><select id="supplier-order-supplier" required>' + analyticalSupplierOrderOptions(suppliers, existing && existing.supplierId || '', 'Choisir un fournisseur…', 'id', function (row) { return row.code + ' · ' + row.name; }) + '</select></label><label class="field"><span>Nature de commande</span><select id="supplier-order-nature" required>' + analyticalSupplierOrderOptions(natures, existing && existing.natureId || '', 'Choisir une nature…', 'id', function (row) { return row.number + ' · ' + row.name; }) + '</select></label><label class="field"><span>Devise</span><select id="supplier-order-currency" required>' + analyticalSupplierOrderOptions(currencies, existing && existing.currencyCode || '', 'Choisir une devise…', 'code', function (row) { return row.code + ' · ' + row.label; }) + '</select></label><label class="field"><span>Objet général</span><input id="supplier-order-description" maxlength="240" value="' + esc(existing && existing.description || '') + '" required></label></div><section class="supplier-order-line-editor"><div class="supplier-order-line-editor-heading"><h4>Lignes saisies</h4><button type="button" class="btn btn-ghost btn-sm" data-supplier-order-add-line>＋ Ajouter une ligne</button></div><div id="supplier-order-line-list">' + lines.map(lineHtml).join('') + '</div></section></form>';
     openModal(existing ? 'Modifier le brouillon' : 'Nouveau brouillon de commande fournisseur', 'Dossier ' + esc(dossier.reference), body, '<button type="button" class="btn btn-ghost" data-action="close-modal">Fermer</button><button type="submit" class="btn btn-primary" form="supplier-order-form">Enregistrer le brouillon</button>', true);
     var form = $('#supplier-order-form');
     var lineList = $('#supplier-order-line-list', form);
@@ -26201,7 +26228,9 @@
       var lineRows = $$('#supplier-order-line-list [data-supplier-order-line]', form).map(function (node) {
         var id = node.getAttribute('data-line-id') || '';
         var prior = existing && existing.lines.find(function (line) { return line.id === id; });
-        return { id: id, description: $('[data-line-description]', node).value, amount: $('[data-line-amount]', node).value, analyticalAllocations: prior ? prior.analyticalAllocations : [] };
+        var budgetLink = [];
+        try { budgetLink = JSON.parse($('[data-budget-line-link]', node).value || '[]'); } catch (_error) { budgetLink = []; }
+        return { id: id, description: $('[data-line-description]', node).value, amount: $('[data-line-amount]', node).value, analyticalAllocations: prior ? prior.analyticalAllocations : [], budgetId: String(budgetLink[0] || ''), budgetLineId: String(budgetLink[1] || '') };
       });
       var candidate = { id: existing && existing.id || '', reference: $('#supplier-order-reference', form).value, date: $('#supplier-order-date', form).value, supplierId: $('#supplier-order-supplier', form).value, natureId: $('#supplier-order-nature', form).value, description: $('#supplier-order-description', form).value, currencyCode: $('#supplier-order-currency', form).value, status: 'draft', lines: lineRows };
       var rows = existing ? current.rows.map(function (row) { return row.id === existing.id ? candidate : row; }) : current.rows.concat([candidate]);
@@ -26270,8 +26299,15 @@
     if (!order) return;
     var decimals = Number(S.accountingConfiguration().decimalPlaces) || 0;
     var formatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-    var rows = order.lines.map(function (line) { return '<tr><td>' + esc(line.description) + '</td><td class="number-cell">' + esc(formatter.format(line.amount)) + ' ' + esc(order.currencyCode) + '</td><td>' + (line.analyticalAllocations.length ? line.analyticalAllocations.map(function (item) { return '<span class="supplier-order-analytic-chip">' + esc(item.natureLabel) + ' · ' + esc(item.valueLabel) + ' · ' + esc(formatter.format(item.amount)) + ' ' + esc(order.currencyCode) + '</span>'; }).join(' ') : '<span class="supplier-order-unclassified">À ventiler</span>') + '</td><td>' + (order.status === 'draft' ? '<button type="button" class="btn btn-ghost btn-sm" data-edit-line-analytic="' + esc(line.id) + '">Imputer</button>' : '') + '</td></tr>'; }).join('');
-    var body = '<div class="supplier-order-detail-context"><strong>Référence :</strong> ' + esc(order.reference) + '<br><strong>Fournisseur :</strong> ' + esc(order.supplierCode + ' · ' + order.supplierName) + '<br><strong>Nature :</strong> ' + esc(order.natureNumber + ' · ' + order.natureName) + '<br><strong>État :</strong> ' + esc(order.status === 'issued' ? 'Émise · engagement déclaré' : order.status === 'cancelled' ? 'Annulée' : 'Brouillon') + '</div><div class="table-wrap"><table class="data-table"><thead><tr><th>Ligne</th><th>Montant saisi</th><th>Imputation analytique</th><th></th></tr></thead><tbody>' + rows + '</tbody><tfoot><tr><th>Total des lignes</th><th class="number-cell">' + esc(formatter.format(analyticalSupplierOrderLineTotal(order))) + ' ' + esc(order.currencyCode) + '</th><td colspan="2">Montants saisis, sans taxe ni conversion.</td></tr></tfoot></table></div><p>Les imputations n’affectent aucune écriture.</p>';
+    var budgetRows = S.budgetRegisterConfiguration().rows || [];
+    function budgetLinkLabel(line) {
+      if (!line.budgetId || !line.budgetLineId) return 'Non liée explicitement';
+      var budget = budgetRows.find(function (item) { return item.id === line.budgetId; });
+      var budgetLine = budget && (budget.lines || []).find(function (item) { return item.id === line.budgetLineId; });
+      return budget && budgetLine ? budget.code + ' · ' + budgetLine.accountCode + ' · ' + budgetLine.label : 'Lien explicite enregistré · ligne absente à vérifier';
+    }
+    var rows = order.lines.map(function (line) { return '<tr><td>' + esc(line.description) + '</td><td class="number-cell">' + esc(formatter.format(line.amount)) + ' ' + esc(order.currencyCode) + '</td><td>' + esc(budgetLinkLabel(line)) + '</td><td>' + (line.analyticalAllocations.length ? line.analyticalAllocations.map(function (item) { return '<span class="supplier-order-analytic-chip">' + esc(item.natureLabel) + ' · ' + esc(item.valueLabel) + ' · ' + esc(formatter.format(item.amount)) + ' ' + esc(order.currencyCode) + '</span>'; }).join(' ') : '<span class="supplier-order-unclassified">À ventiler</span>') + '</td><td>' + (order.status === 'draft' ? '<button type="button" class="btn btn-ghost btn-sm" data-edit-line-analytic="' + esc(line.id) + '">Imputer</button>' : '') + '</td></tr>'; }).join('');
+    var body = '<div class="supplier-order-detail-context"><strong>Référence :</strong> ' + esc(order.reference) + '<br><strong>Fournisseur :</strong> ' + esc(order.supplierCode + ' · ' + order.supplierName) + '<br><strong>Nature :</strong> ' + esc(order.natureNumber + ' · ' + order.natureName) + '<br><strong>État :</strong> ' + esc(order.status === 'issued' ? 'Émise · engagement déclaré' : order.status === 'cancelled' ? 'Annulée' : 'Brouillon') + '</div><div class="table-wrap"><table class="data-table"><thead><tr><th>Ligne</th><th>Montant saisi</th><th>Ligne budgétaire liée</th><th>Imputation analytique</th><th></th></tr></thead><tbody>' + rows + '</tbody><tfoot><tr><th>Total des lignes</th><th class="number-cell">' + esc(formatter.format(analyticalSupplierOrderLineTotal(order))) + ' ' + esc(order.currencyCode) + '</th><td colspan="3">Liens budgétaires explicites ; montants saisis, sans taxe ni conversion.</td></tr></tfoot></table></div><p>Les imputations n’affectent aucune écriture.</p>';
     openModal('Détail de la commande', order.reference, body, '<button type="button" class="btn btn-ghost" data-action="close-modal">Fermer</button>', true);
     $$('[data-edit-line-analytic]').forEach(function (button) { button.addEventListener('click', function () { closeModal(true); openAnalyticalSupplierOrderLine(orderId, button.getAttribute('data-edit-line-analytic')); }); });
   }

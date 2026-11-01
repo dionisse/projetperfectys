@@ -160,6 +160,62 @@ test('le budget prévisionnel restitue les lignes enregistrées sans inventer le
   assert.equal(incomplete.rows.filter(row => row.status === 'incomplete-grouping').length, 2);
 });
 
+test('le suivi des commandes n’utilise que les liens explicites et exclut les devises non converties', () => {
+  const budget = {
+    id: 'budget-orders-2025', code: '2025C', year: '2025', type: 'C', label: 'Charges',
+    cycleStart: '2025-01-01', cycleEnd: '2025-12-31', decomposition: 'none', realizationMode: 'debit',
+    classification: 'C', analyticNatureIds: [], lines: [{ id: 'line-orders-601', accountCode: '601', label: 'Prestations', annualAmount: 1000, amountComplete: true }]
+  };
+  const accounts = [{ code: '601', label: 'Prestations de services' }];
+  const linkedOrders = [
+    { id: 'order-before', status: 'issued', date: '2025-01-05', reference: 'CMD-1', description: 'Avant période', currencyCode: 'XOF', lines: [{ id: 'line-before', description: 'Acompte', amount: 200, budgetId: budget.id, budgetLineId: 'line-orders-601' }] },
+    { id: 'order-period', status: 'issued', date: '2025-01-15', reference: 'CMD-2', description: 'Dans période', currencyCode: 'XOF', lines: [{ id: 'line-period', description: 'Intervention', amount: 300, budgetId: budget.id, budgetLineId: 'line-orders-601' }] },
+    { id: 'order-draft', status: 'draft', date: '2025-01-16', currencyCode: 'XOF', lines: [{ id: 'line-draft', amount: 900, budgetId: budget.id, budgetLineId: 'line-orders-601' }] },
+    { id: 'order-cancelled', status: 'cancelled', date: '2025-01-17', currencyCode: 'XOF', lines: [{ id: 'line-cancelled', amount: 800, budgetId: budget.id, budgetLineId: 'line-orders-601' }] }
+  ];
+  const followup = BudgetReports.buildReport('budget-orders-followup', options({
+    budgetRegister: [budget], budgetCode: '2025C', supplierOrders: linkedOrders,
+    accountFilter: '601', accounts, baseCurrencyCode: 'XOF', from: '2025-01-10', to: '2025-01-20'
+  }));
+  assert.equal(followup.ok, true, followup.errors.join(' '));
+  assert.equal(followup.generatedLineCount, 1);
+  assert.equal(followup.rows[0].budgetAmount, 1000);
+  assert.equal(followup.rows[0].priorCommitments, 200);
+  assert.equal(followup.rows[0].periodCommitments, 300);
+  assert.equal(followup.rows[0].totalCommitments, 500);
+  assert.equal(followup.rows[0].remainingOnExercise, 500);
+  assert.equal(followup.sourceOrderLineCount, 2, 'brouillons et annulations sont exclus');
+  assert.equal(followup.matchedOrderLineCount, 2);
+  assert.equal(followup.basis.commitmentRegisterAvailable, true);
+  assert.equal(followup.basis.noAccountingMutation, true);
+
+  const incompleteOrders = linkedOrders.concat([
+    { id: 'order-fx', status: 'issued', date: '2025-01-16', reference: 'CMD-FX', currencyCode: 'USD', lines: [{ id: 'line-fx', amount: 100, budgetId: budget.id, budgetLineId: 'line-orders-601' }] },
+    { id: 'order-unlinked', status: 'issued', date: '2025-01-17', reference: 'CMD-UNLINKED', currencyCode: 'XOF', lines: [{ id: 'line-unlinked', amount: 70 }] },
+    { id: 'order-stale', status: 'issued', date: '2025-01-18', reference: 'CMD-STALE', currencyCode: 'XOF', lines: [{ id: 'line-stale', amount: 50, budgetId: budget.id, budgetLineId: 'missing-line' }] }
+  ]);
+  const partial = BudgetReports.buildReport('budget-orders-followup', options({
+    budgetRegister: [budget], budgetCode: '2025C', supplierOrders: incompleteOrders,
+    accountFilter: '601', accounts, baseCurrencyCode: 'XOF', from: '2025-01-10', to: '2025-01-20'
+  }));
+  assert.equal(partial.rows[0].periodCommitments, null, 'un montant lié en devise étrangère n’est pas converti');
+  assert.equal(partial.rows[0].remainingOnExercise, null, 'les liens incomplets empêchent de certifier le reste');
+  assert.equal(partial.unlinkedOrderLineCount, 1);
+  assert.equal(partial.staleLinkCount, 1);
+  assert.equal(partial.nonBaseCurrencyLineCount, 1);
+  assert.match(partial.warnings.join(' '), /sans liaison budgétaire explicite/);
+  assert.match(partial.warnings.join(' '), /ne sont pas converties/);
+
+  const detail = BudgetReports.buildReport('budget-orders-by-line', options({
+    budgetRegister: [budget], budgetCode: '2025C', supplierOrders: incompleteOrders,
+    accountFilter: '601', accounts, baseCurrencyCode: 'XOF', from: '2025-01-10', to: '2025-01-20'
+  }));
+  assert.equal(detail.rows.length, 1, 'seule la commande émise XOF explicitement liée est détaillée');
+  assert.equal(detail.rows[0].order, 'CMD-2');
+  assert.equal(detail.rows[0].amount, 300);
+  assert.equal(detail.rows[0].budgetLineLabel, 'Prestations');
+});
+
 test('le suivi des réalisations relie le budget enregistré aux seules écritures validées', () => {
   const registeredBudget = {
     id: 'budget-2025c', code: '2025C', year: '2025', type: 'C', label: 'Charges enregistrées',
