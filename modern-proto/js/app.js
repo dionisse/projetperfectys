@@ -20679,6 +20679,16 @@
       (missionRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Mission</th><th>Participant</th><th>Unité</th><th>Période saisie</th><th>Nature</th></tr></thead><tbody>' + missionRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucune mission synthétique</strong></div>') + '</details></section>';
   }
 
+  function viewPayrollPayslipsAndPayments(dossier) {
+    var readiness = PayrollHR.payslipAndPaymentReadiness(dossier.id);
+    var reasons = readiness.reasons.map(function (reason) { return '<li>' + esc(reason) + '</li>'; }).join('');
+    return '<section class="exchange-card payroll-payslips-payments"><p class="page-kicker">ÉTAPE 14 · DOCUMENTS ET PAIEMENTS BLOQUÉS</p><h3>Bulletins et suivi des paiements</h3>' +
+      '<div class="alert warning"><div><strong>Aucun bulletin ni suivi de paiement n’est disponible.</strong> La génération exige un lot calculé, contrôlé, approuvé et verrouillé. Un paiement ne peut être confirmé sans source et preuve vérifiables. Cette interface ne reçoit aucune donnée bancaire ni preuve réelle.</div></div>' +
+      '<details open><summary>Prérequis non satisfaits (' + reasons.length + ')</summary><ul>' + reasons + '</ul></details>' +
+      '<div class="payroll-payslip-actions"><button class="btn btn-secondary" type="button" disabled>Prévisualiser (non disponible)</button><button class="btn btn-secondary" type="button" disabled>Émettre un bulletin</button><button class="btn btn-secondary" type="button" disabled>Enregistrer une preuve de paiement</button></div>' +
+      '<p class="small muted">Aucun document, montant, devise, référence de transaction, statut payé, paiement bancaire ou écriture comptable n’est créé. Aucun format d’impression/export n’est proposé à cette étape.</p></section>';
+  }
+
   function viewPayrollModule() {
     var dossier = PayrollHR.currentDossier();
     if (!dossier) return '<div class="empty-state"><strong>Aucun dossier Paie & RH sélectionné</strong><a class="btn btn-primary" href="#/payroll-dossiers">Choisir un dossier RH</a></div>';
@@ -20737,7 +20747,7 @@
       '<section class="exchange-card"><p class="page-kicker">CYCLE DE PAIE</p><h3>Lots du dossier</h3>' +
         '<div class="alert info"><div>Aucun calcul ni lot de paie n’est créé automatiquement. Les éventuelles fiches de préparation restent distinctes des lots et bloquées tant que les règles applicables, données source et contrôles ne sont pas validés.</div></div>' +
         (runRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Référence</th><th>Période</th><th>État</th><th>Référence comptable</th></tr></thead><tbody>' + runRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucun lot de paie disponible</strong><span>Les lots ne peuvent pas être créés avec des montants, comptes ou règles inventés.</span></div>') +
-      '</section>' +
+      '</section>' + viewPayrollPayslipsAndPayments(dossier) +
       '<p class="dossiers-storage-footnote">Le stockage local du navigateur ne constitue ni un stockage serveur protégé, ni une synchronisation Google Drive ou multi-utilisateur.</p>' +
     '</div>';
   }

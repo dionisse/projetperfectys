@@ -345,4 +345,15 @@ for (const transition of [PayrollHR.submitPayrollBatchForReview, PayrollHR.appro
 }
 assert.equal(PayrollHR.payrollBatchPreparations(testDossier.dossier.id)[0].status, 'calcul incomplet / bloqué', 'aucune transition refusée ne modifie la fiche');
 assert.equal(PayrollHR.payrollBatchPreparations(testDossier.dossier.id)[0].history.length, 1, 'les actions refusées ne fabriquent pas de traces d’approbation');
-console.log('Paie & RH : préparations bloquées, revue et approbation désactivées, historique inchangé — OK');
+const documentReadiness = PayrollHR.payslipAndPaymentReadiness(testDossier.dossier.id);
+assert.equal(documentReadiness.ready, false);
+assert.equal(documentReadiness.finalPayslipEnabled, false);
+assert.equal(documentReadiness.paymentTrackingEnabled, false);
+assert.deepEqual(PayrollHR.payslipDocuments(testDossier.dossier.id), []);
+assert.deepEqual(PayrollHR.payrollPaymentRecords(testDossier.dossier.id), []);
+assert.equal(PayrollHR.createPayslipPreview(testDossier.dossier.id, { employeeId: created.employee.id, testOnly: true }).ok, false);
+assert.equal(PayrollHR.issuePayslip(testDossier.dossier.id, { amount: 1, testOnly: true }).ok, false);
+assert.equal(PayrollHR.recordPayrollPayment(testDossier.dossier.id, { amount: 1, currency: 'XOF', testOnly: true }).ok, false);
+assert.deepEqual(PayrollHR.payslipDocuments(testDossier.dossier.id), [], 'un aperçu ou bulletin refusé n’est pas enregistré');
+assert.deepEqual(PayrollHR.payrollPaymentRecords(testDossier.dossier.id), [], 'aucun faux suivi de paiement n’est créé');
+console.log('Paie & RH : workflow bloqué, bulletins et paiements refusés sans données inventées — OK');

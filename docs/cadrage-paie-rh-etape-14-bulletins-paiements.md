@@ -1,7 +1,9 @@
 # Étape 14 — Bulletins et suivi des paiements
 
-**Statut :** proposition de cadrage à valider avant implémentation.
+**Statut :** le panneau de disponibilité est implémenté avec toutes les actions désactivées ; génération, émission, paiement et remise restent bloqués jusqu’à validation des dépendances, des règles, de la sécurité et des décisions métier.
 **Dépendances :** lot calculé, contrôlé, approuvé et verrouillé (étapes 12–13), règles applicables et données sources validées. Le pilote est mensuel et béninois.
+
+Le prototype n’enregistre aucun bulletin, aperçu, montant, devise, référence de transaction, preuve ou statut de paiement. Il n’affiche pas de modèle final ni de coordonnées et n’autorise aucun transfert ou export.
 **Plan complet :** [Plan d’implémentation Paie & RH en 18 étapes](proposition-implementation-paie-rh.md).
 
 ## 1. Objectif et limites

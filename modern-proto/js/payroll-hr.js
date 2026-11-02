@@ -867,6 +867,47 @@
   function reopenPayrollBatch() { return refusePayrollBatchTransition(); }
   function cancelPayrollBatch() { return refusePayrollBatchTransition(); }
 
+  function payslipAndPaymentReadiness(dossierId) {
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId || ''); });
+    if (!dossier) return { ok: false, ready: false, reasons: ['Dossier Paie & RH introuvable.'] };
+    return {
+      ok: true, ready: false, finalPayslipEnabled: false, paymentTrackingEnabled: false,
+      payslipCount: Array.isArray(dossier.payslipDocuments) ? dossier.payslipDocuments.length : 0,
+      paymentRecordCount: Array.isArray(dossier.payrollPaymentRecords) ? dossier.payrollPaymentRecords.length : 0,
+      reasons: [
+        'Aucun lot calculé, contrôlé, approuvé et verrouillé n’est disponible comme source.',
+        'Aucun résultat approuvé, employé admissible ou snapshot de paie n’est disponible.',
+        'Les mentions de bulletin, la numérotation, les rôles et le canal sécurisé de remise restent à valider.',
+        'Aucune preuve de paiement vérifiée ni procédure d’allocation n’est configurée.',
+        'Le stockage local ne protège pas les bulletins ou justificatifs réels.'
+      ]
+    };
+  }
+
+  function payslipDocuments(dossierId) {
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId || ''); });
+    if (!dossier || !Array.isArray(dossier.payslipDocuments)) return [];
+    return clone(dossier.payslipDocuments.filter(function (item) { return item && item.dossierId === String(dossierId); }));
+  }
+
+  function payrollPaymentRecords(dossierId) {
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId || ''); });
+    if (!dossier || !Array.isArray(dossier.payrollPaymentRecords)) return [];
+    return clone(dossier.payrollPaymentRecords.filter(function (item) { return item && item.dossierId === String(dossierId); }));
+  }
+
+  function createPayslipPreview() {
+    return { ok: false, errors: ['Aperçu refusé : aucun résultat calculé et vérifié n’est disponible. Aucun bulletin ni aperçu n’a été créé.'] };
+  }
+
+  function issuePayslip() {
+    return { ok: false, errors: ['Émission refusée : un bulletin final exige un lot approuvé et verrouillé, des mentions validées et un stockage protégé.'] };
+  }
+
+  function recordPayrollPayment() {
+    return { ok: false, errors: ['Paiement refusé : aucune somme, preuve, transaction ou allocation ne peut être enregistrée dans ce prototype.'] };
+  }
+
   function dossierById(dossierId) {
     return clone(loadDossierCatalog().dossiers.find(function (dossier) { return dossier.id === String(dossierId || ''); }) || null);
   }
@@ -1104,6 +1145,12 @@
     lockPayrollBatch: lockPayrollBatch,
     reopenPayrollBatch: reopenPayrollBatch,
     cancelPayrollBatch: cancelPayrollBatch,
+    payslipAndPaymentReadiness: payslipAndPaymentReadiness,
+    payslipDocuments: payslipDocuments,
+    payrollPaymentRecords: payrollPaymentRecords,
+    createPayslipPreview: createPayslipPreview,
+    issuePayslip: issuePayslip,
+    recordPayrollPayment: recordPayrollPayment,
     hrTrackingRecords: hrTrackingRecords,
     createHRTrackingRecord: createHRTrackingRecord,
     createDossier: createDossier,
