@@ -4185,23 +4185,37 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .sidebar-nav .payroll-sidebar-menu {
   display: block;
   width: 100%;
-  padding: 5px 10px;
-  margin-bottom: 3px;
+  padding: 8px 11px;
+  margin-bottom: 0;
   border: 0;
   border-radius: 8px;
-  color: #82918b;
+  color: #69583a;
   background: transparent;
   font: inherit;
-  font-size: .66rem;
-  font-weight: 750;
-  letter-spacing: .12em;
+  font-size: .8rem;
+  font-weight: 700;
+  letter-spacing: .075em;
+  line-height: 1.3;
   text-align: left;
   text-transform: uppercase;
   cursor: pointer;
+  transition: color .15s ease, background .15s ease, box-shadow .15s ease;
 }
 .sidebar-nav .payroll-sidebar-menu:hover,
-.sidebar-nav .payroll-sidebar-menu.is-active { color: #fff; background: rgba(14, 165, 233, .16); }
-.sidebar-nav .payroll-sidebar-menu:focus-visible { outline: 2px solid #38bdf8; outline-offset: 1px; }
+.sidebar-nav .payroll-sidebar-menu.is-active {
+  color: #704b0b;
+  background: #f6edd9;
+  box-shadow: inset 3px 0 0 #b47b1f;
+}
+.sidebar-nav .payroll-sidebar-menu:focus-visible { outline: 2px solid #9b6b1e; outline-offset: 2px; }
+body.payroll-module-mode .sidebar-nav .analytics-nav-section { margin-bottom: 6px; }
+body.payroll-module-mode .sidebar-nav p.nav-section-heading {
+  margin-bottom: 7px;
+  color: #80571b;
+  font-size: .72rem;
+  font-weight: 750;
+  letter-spacing: .085em;
+}
 .payroll-menu-page { margin-top: 0; }
 .payroll-menu-page .accounting-subtab { font-family: inherit; cursor: pointer; }
 .payroll-menu-page .accounting-menu-panel .alert { margin: 13px 0 0; line-height: 1.55; }
@@ -4229,12 +4243,12 @@ body.payroll-module-mode {
   --warning-soft: #f8efd9;
 }
 body.payroll-module-mode .brand-text small { color: #e3bb69; }
-body.payroll-module-mode .sidebar-nav .nav-section-heading { color: #d3b36f; }
+body.payroll-module-mode .sidebar-nav p.nav-section-heading { color: #80571b; }
 body.payroll-module-mode .sidebar-nav .payroll-sidebar-menu:hover,
 body.payroll-module-mode .sidebar-nav .payroll-sidebar-menu.is-active {
-  color: #ffdf93;
-  background: rgba(192, 138, 49, .24);
-  box-shadow: inset 3px 0 0 #d8a445;
+  color: #704b0b;
+  background: #f6edd9;
+  box-shadow: inset 3px 0 0 #b47b1f;
 }
 body.payroll-module-mode .accounting-subtab.is-active {
   color: #785216;
