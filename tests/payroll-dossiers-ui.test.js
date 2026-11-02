@@ -25,10 +25,10 @@ assert.match(payroll, /function employees\(dossierId\)[\s\S]*employee\.dossierId
 assert.match(app, /payroll-employee-create-form/);
 assert.match(app, /ne saisissez aucune donnée réelle/);
 assert.match(app, /Aucun calcul ni lot de paie n’est créé automatiquement/);
-assert.ok(app.includes('function viewPayrollMainMenu()'));
+assert.ok(app.includes('function viewPayrollMainMenu(dossier)'));
 for (const menu of ['Fichier', 'Définitions', 'Salaires', 'Editions', 'Comptabilisations', 'Paramètres', 'Outils']) assert.ok(app.includes("'" + menu + "'"), 'menu principal présent : ' + menu);
 for (const fileItem of ['Export des fichiers', 'Import des fichiers', "Import d'une rubrique de bulletins", 'Import de plusieurs rubriques de bulletins', 'Recalcul des bulletins du mois en cours', 'Réparation des fichiers', 'Clôture de la paie en cours', 'Ouverture de la paie du mois suivant', "Guide d'utilisation", 'Quitter']) assert.ok(app.includes(fileItem), 'commande Fichier présente : ' + fileItem);
-assert.match(app, /payroll-sidebar-command[\s\S]*role=.{1}tab.{1} aria-selected/);
+assert.match(app, /accounting-subtab[\s\S]*role=.{1}tab.{1} aria-controls/);
 assert.match(app, /role=.{0,3}tablist[\s\S]*aria-orientation=.{0,3}vertical/);
 assert.match(app, /role=.{0,3}tabpanel/);
 assert.match(app, /data-action=.{1}payroll-menu-item/);
@@ -36,7 +36,7 @@ assert.match(app, /Fonctionnalités déjà développées — à reclasser dans l
 assert.ok(app.includes('function buildPayrollSidebarMarkup()'));
 assert.ok(app.includes('buildPayrollSidebarMarkup() : accountingSidebarMarkup'));
 assert.ok(css.includes('.sidebar-nav .payroll-sidebar-menu'));
-assert.ok(css.includes('.payroll-sidebar-command.is-active'));
+assert.ok(css.includes('.payroll-menu-page .accounting-subtab'));
 assert.ok(css.includes('.payroll-legacy-views'));
 assert.match(payroll, /function createEmployee\(dossierId, input\)/);
 assert.match(payroll, /testOnly !== true/);
@@ -151,5 +151,5 @@ assert.match(payroll, /function createDossier\(input\)[\s\S]*'PRH-' \+ clientCod
 assert.match(payroll, /accountingDossierId: accountingDossierId/);
 assert.match(payroll, /function storageKey\(dossierId\)[\s\S]*STORAGE_PREFIX \+ encodeURIComponent/);
 assert.match(css, /\.payroll-dossier-grid[\s\S]*\.payroll-dossier-card/);
-assert.match(worker, /perfecto-static-v218/);
+assert.match(worker, /perfecto-static-v219/);
 console.log('UI Paie & RH : route dossier dédiée, référence PRH, sélection par dossier et association non automatique — OK');

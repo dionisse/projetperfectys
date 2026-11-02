@@ -4181,54 +4181,32 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .payroll-accounting-readiness code { overflow-wrap: anywhere; }
 @media (max-width: 650px) { .payroll-edition-readiness-grid { grid-template-columns: 1fr; } }
 
-/* Menu Paie & RH en navigation latérale, aligné sur les autres modules */
-.sidebar-nav .payroll-sidebar-menu,
-.sidebar-nav .payroll-sidebar-command {
+/* Menus Paie & RH : rubrique principale à gauche, sous-menus verticaux et panneau de détail */
+.sidebar-nav .payroll-sidebar-menu {
   display: block;
   width: 100%;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: #cbd5e1;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.sidebar-nav .payroll-sidebar-menu {
   padding: 5px 10px;
   margin-bottom: 3px;
+  border: 0;
+  border-radius: 8px;
   color: #82918b;
+  background: transparent;
+  font: inherit;
   font-size: .66rem;
   font-weight: 750;
   letter-spacing: .12em;
+  text-align: left;
   text-transform: uppercase;
+  cursor: pointer;
 }
 .sidebar-nav .payroll-sidebar-menu:hover,
-.sidebar-nav .payroll-sidebar-menu.is-active {
-  color: #fff;
-  background: rgba(14, 165, 233, .16);
-}
-.sidebar-nav .payroll-sidebar-command {
-  min-height: 30px;
-  padding: 5px 9px 5px 16px;
-  color: #cbd5e1;
-  font-size: .78rem;
-  line-height: 1.3;
-  white-space: normal;
-}
-.sidebar-nav .payroll-sidebar-command:disabled { color: #aab7b2; cursor: not-allowed; opacity: .8; }
-.payroll-sidebar-separator { height: 1px; margin: 5px 9px; background: rgba(148, 163, 184, .24); }
-.payroll-menu-selection { margin: 14px 0 18px; }
-.payroll-legacy-views { margin-top: 12px; border: 1px dashed #cbd7d0; border-radius: 9px; background: #f8faf9; }
+.sidebar-nav .payroll-sidebar-menu.is-active { color: #fff; background: rgba(14, 165, 233, .16); }
+.sidebar-nav .payroll-sidebar-menu:focus-visible { outline: 2px solid #38bdf8; outline-offset: 1px; }
+.payroll-menu-page { margin-top: 0; }
+.payroll-menu-page .accounting-subtab { font-family: inherit; cursor: pointer; }
+.payroll-menu-page .accounting-menu-panel .alert { margin: 13px 0 0; line-height: 1.55; }
+.payroll-menu-empty { padding: 10px; }
+.payroll-legacy-views { margin-top: 18px; border: 1px dashed #cbd7d0; border-radius: 9px; background: #f8faf9; }
 .payroll-legacy-views > summary { padding: 12px 15px; color: #41564e; font-weight: 650; cursor: pointer; }
 .payroll-legacy-views[open] { padding: 0 12px 12px; }
 .payroll-legacy-views[open] > summary { margin: 0 -12px 12px; border-bottom: 1px solid #e0e7e3; }
-.payroll-sidebar-tabs { margin-top: 2px; }
-.sidebar-nav .payroll-sidebar-command.is-active {
-  color: #fff;
-  background: linear-gradient(90deg, rgba(14, 165, 233, .22), rgba(14, 165, 233, .06));
-  box-shadow: inset 2px 0 0 #0ea5e9;
-}
-.sidebar-nav .payroll-sidebar-command:hover:not(:disabled) { color: #fff; background: rgba(148, 163, 184, .13); }
-.sidebar-nav .payroll-sidebar-command:focus-visible,
-.sidebar-nav .payroll-sidebar-menu:focus-visible { outline: 2px solid #38bdf8; outline-offset: 1px; }

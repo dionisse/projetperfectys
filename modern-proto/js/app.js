@@ -351,21 +351,13 @@
   function buildPayrollSidebarMarkup() {
     var menus = ['Fichier', 'Définitions', 'Salaires', 'Editions', 'Comptabilisations', 'Paramètres', 'Outils'];
     var activeMenu = ui.payrollMainMenu || 'Fichier';
-    var fileGroups = payrollFileMenuGroups();
-    return '<div class="nav-section nav-context-links"><p class="nav-section-heading">PAIE &amp; RH</p><a href="#/payroll" class="analytics-nav-link active"><span class="nav-icon" aria-hidden="true">◷</span>Menu Paie &amp; RH</a></div>' +
+    return '<div class="nav-section nav-context-links"><p class="nav-section-heading">DOSSIER ACTIF</p><a href="#/payroll-dossiers" class="analytics-nav-link" data-payroll-nav="dossiers"><span class="nav-icon" aria-hidden="true">▰</span>Dossiers RH</a></div>' +
+      '<div class="nav-section nav-context-links"><p class="nav-section-heading">MENUS PAIE &amp; RH</p></div>' +
       menus.map(function (name) {
         var active = name === activeMenu;
-        var children = name === 'Fichier' && active
-          ? '<div class="payroll-sidebar-tabs" role="tablist" aria-label="Sous-rubriques Fichier" aria-orientation="vertical">' + fileGroups.map(function (group, groupIndex) {
-            return (groupIndex ? '<div class="payroll-sidebar-separator" role="separator"></div>' : '') + group.map(function (item) {
-              var selected = item.id === ui.payrollMenuItem;
-              return '<button type="button" id="payroll-menu-tab-' + esc(item.id) + '" class="analytics-nav-link payroll-sidebar-command' + (selected ? ' is-active' : '') + '" role="tab" aria-selected="' + (selected ? 'true' : 'false') + '" aria-controls="payroll-menu-panel" data-action="payroll-menu-item" data-menu-item="' + esc(item.id) + '">' + esc(item.label) + '</button>';
-            }).join('');
-          }).join('') + '</div>'
-          : '';
-        return '<div class="nav-section analytics-nav-section"><button type="button" class="nav-section-heading payroll-sidebar-menu' + (active ? ' is-active' : '') + '" data-action="payroll-main-menu" data-menu-name="' + esc(name) + '" aria-pressed="' + (active ? 'true' : 'false') + '">' + esc(name) + '</button>' + children + '</div>';
+        return '<div class="nav-section analytics-nav-section"><button type="button" class="nav-section-heading payroll-sidebar-menu' + (active ? ' is-active' : '') + '" data-action="payroll-main-menu" data-menu-name="' + esc(name) + '" aria-pressed="' + (active ? 'true' : 'false') + '">' + esc(name) + '</button></div>';
       }).join('') +
-      '<div class="nav-section nav-context-links"><p class="nav-section-heading">Autres modules</p><a href="#/payroll-dossiers" class="analytics-nav-link" data-payroll-nav="dossiers"><span class="nav-icon" aria-hidden="true">▰</span>Dossiers RH</a><a href="#/launcher" class="analytics-nav-link"><span class="nav-icon" aria-hidden="true">⌂</span>Modules</a><a href="#/dossiers" class="analytics-nav-link"><span class="nav-icon" aria-hidden="true">▤</span>Comptabilité générale</a></div>';
+      '<div class="nav-section nav-context-links"><p class="nav-section-heading">AUTRES MODULES</p><a href="#/launcher" class="analytics-nav-link"><span class="nav-icon" aria-hidden="true">⌂</span>Modules</a><a href="#/dossiers" class="analytics-nav-link"><span class="nav-icon" aria-hidden="true">▤</span>Comptabilité générale</a></div>';
   }
 
   function analyticalSidebarMarkup(params, route) {
@@ -20856,23 +20848,20 @@
       '<p class="small muted">Aucun document, montant, devise, référence de transaction, statut payé, paiement bancaire ou écriture comptable n’est créé. Aucun format d’impression/export n’est proposé à cette étape.</p></section>';
   }
 
-  function viewPayrollMainMenu() {
+  function viewPayrollMainMenu(dossier) {
     var activeMenu = ui.payrollMainMenu || 'Fichier';
-    var selectedItem = null;
-    if (activeMenu === 'Fichier') {
-      payrollFileMenuGroups().some(function (group) {
-        selectedItem = group.find(function (item) { return item.id === ui.payrollMenuItem; }) || selectedItem;
-        return !!selectedItem;
-      });
-    }
-    var heading = selectedItem ? selectedItem.label : activeMenu;
-    var description = selectedItem
-      ? 'Onglet « ' + esc(selectedItem.label) + ' » sélectionné dans « Fichier ». L’action associée n’est pas activée : cette étape construit uniquement la navigation.'
-      : 'La rubrique « ' + esc(activeMenu) + ' » est sélectionnée. Ses sous-rubriques seront ajoutées progressivement, sans présumer de règles métier.';
-    var panelAttributes = selectedItem
-      ? ' id="payroll-menu-panel" role="tabpanel" aria-labelledby="payroll-menu-tab-' + esc(selectedItem.id) + '"'
-      : '';
-    return '<section class="exchange-card payroll-menu-selection"' + panelAttributes + '><p class="page-kicker">MENU PAIE &amp; RH · ' + esc(activeMenu) + '</p><h3>' + esc(heading) + '</h3><p>' + description + '</p></section>';
+    var items = activeMenu === 'Fichier' ? payrollFileMenuGroups().reduce(function (all, group) { return all.concat(group); }, []) : [];
+    var selectedItem = items.find(function (item) { return item.id === ui.payrollMenuItem; }) || items[0] || null;
+    var tabs = items.map(function (item) {
+      var selected = selectedItem && item.id === selectedItem.id;
+      return '<button type="button" id="payroll-menu-tab-' + esc(item.id) + '" class="accounting-subtab' + (selected ? ' is-active' : '') + '" role="tab" aria-controls="payroll-menu-tabpanel" aria-selected="' + (selected ? 'true' : 'false') + '"' + (selected ? ' aria-current="page"' : '') + ' data-action="payroll-menu-item" data-menu-item="' + esc(item.id) + '"><span class="accounting-subtab-label">' + esc(item.label) + '</span><small class="accounting-subtab-state">À construire</small></button>';
+    }).join('');
+    var itemHeading = selectedItem ? selectedItem.label : activeMenu;
+    var itemDescription = selectedItem
+      ? 'Cet onglet établit uniquement la navigation. Le traitement associé n’est pas encore construit ni activé.'
+      : 'Les sous-menus de cette rubrique seront ajoutés progressivement. Aucun contenu métier n’est présumé.';
+    var panel = '<section class="accounting-menu-panel"' + (selectedItem ? ' id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-' + esc(selectedItem.id) + '"' : '') + '><div class="accounting-menu-panel-head"><div><p class="page-kicker">SOUS-MENU · ' + esc(activeMenu.toUpperCase()) + '</p><h3>' + esc(itemHeading) + '</h3></div><span class="badge draft">' + (selectedItem ? 'À construire' : 'À définir') + '</span></div><p class="menu-item-reason">' + itemDescription + '</p><div class="alert info"><div>Aucune opération de fichier, modification de paie, clôture ou écriture comptable n’est exécutée depuis cette navigation.</div></div></section>';
+    return '<section class="accounting-menu-page payroll-menu-page" aria-label="Menu ' + esc(activeMenu) + '"><div class="accounting-menu-heading"><div><p class="page-kicker">PAIE &amp; RH · ' + esc(dossier.reference || '') + '</p><h2>' + esc(activeMenu) + '</h2></div></div><div class="accounting-menu-layout"><nav class="accounting-subtabs" role="tablist" aria-orientation="vertical" aria-label="Sous-menus ' + esc(activeMenu) + '">' + (tabs || '<p class="small muted payroll-menu-empty">Aucune sous-rubrique définie pour ce menu.</p>') + '</nav><div class="accounting-menu-detail"><div class="menu-status-legend" aria-label="Légende des statuts"><span><i class="legend-dot legend-dot-planned"></i>À construire</span></div>' + panel + '</div></div></section>';
   }
 
   function viewPayrollModule() {
@@ -20927,9 +20916,8 @@
       ? '<section class="exchange-card payroll-accounting-link-card"><p class="page-kicker">ASSOCIATION COMPTABLE FACULTATIVE</p><h3>Destination éventuelle des centralisations</h3><p>Ce choix explicite est indépendant du code client et de l’exercice. Sans association, aucune centralisation vers la Comptabilité n’est proposée.</p><form id="payroll-accounting-link-form" class="payroll-accounting-link-form"><div class="field"><label for="payroll-accounting-dossier-link">Dossier comptable associé</label><select id="payroll-accounting-dossier-link"><option value="">Aucun lien comptable</option>' + accountingFolders.map(function (accounting) { return '<option value="' + esc(accounting.id) + '"' + (accounting.id === dossier.accountingDossierId ? ' selected' : '') + '>' + esc(accounting.clientName + ' · ' + accounting.reference) + '</option>'; }).join('') + '</select></div><button type="submit" class="btn btn-secondary">Enregistrer l’association</button></form></section>'
       : '<div class="alert info"><div>' + (linkedAccountingDossier ? 'Association comptable explicite : ' + esc(linkedAccountingDossier.reference) + '.' : (storedAccountingAssociation ? 'Une association comptable existe, mais votre profil ne peut pas consulter ce dossier.' : 'Aucune association à un dossier comptable. Les lots restent en Paie & RH.')) + '</div></div>';
     return '<div class="payroll-module-workspace">' +
-      pageHeader('Paie & RH', 'Dossier client : <strong>' + esc(dossier.clientName) + '</strong> · ' + esc(dossier.reference) + ' · exercice ' + esc(dossier.exerciseYear) + '.', '<a class="btn btn-ghost" href="#/payroll-dossiers">Changer de dossier RH</a> <a class="btn btn-ghost" href="#/launcher">← Modules</a>') +
-      '<div class="alert warning"><div><strong>Base fonctionnelle en cours</strong><br>Les données sont encore stockées localement dans ce navigateur. Utilisez uniquement des données synthétiques. Le calcul de paie et les fonctions de production restent bloqués tant que les textes, règles et le stockage sécurisé ne sont pas validés.</div></div>' +
-      viewPayrollMainMenu() + '<details class="payroll-legacy-views"><summary>Fonctionnalités déjà développées — à reclasser dans les menus</summary>' +
+      viewPayrollMainMenu(dossier) + '<details class="payroll-legacy-views"><summary>Fonctionnalités déjà développées — à reclasser dans les menus</summary>' +
+      '<div class="alert warning"><div><strong>Prototype local — données synthétiques uniquement.</strong><br>Le stockage navigateur n’est pas adapté à des données réelles. Les calculs de paie et fonctions de production restent bloqués tant que les sources, règles et protections ne sont pas validées.</div></div>' +
       accountingLinkPanel + employeeSection + viewPayrollOrganizationUnits(dossier, organizationUnits, canCreatePayrollEmployee, canEditPayrollRecords) + viewPayrollAssignmentsMissions(dossier, dossierEmployees, organizationUnits, organizationAssignments, internalMissions, canCreatePayrollEmployee) + viewPayrollHRTracking(dossier, hrTrackingRecords, canCreatePayrollEmployee) + viewPayrollLeaveAbsences(dossier, dossierEmployees, leaveAbsenceRecords, canCreatePayrollEmployee) + viewPayrollComponentsAndReferences(dossier, dossierEmployees, payrollComponents, payrollVariableReferences, canCreatePayrollEmployee) + viewPayrollCountryRulePacks(dossier, countryRulePacks, countryRuleCandidates, canCreatePayrollEmployee) + viewPayrollBatchPreparations(dossier, countryRulePacks, payrollBatchPreparations, canCreatePayrollEmployee) +
       '<section class="exchange-card"><p class="page-kicker">CYCLE DE PAIE</p><h3>Lots du dossier</h3>' +
         '<div class="alert info"><div>Aucun calcul ni lot de paie n’est créé automatiquement. Les éventuelles fiches de préparation restent distinctes des lots et bloquées tant que les règles applicables, données source et contrôles ne sont pas validés.</div></div>' +
