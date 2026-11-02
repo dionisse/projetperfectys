@@ -168,6 +168,7 @@
     clients: { q: '' },
     otherParties: { q: '', type: 'all' },
     personnel: { q: '' },
+    payrollRegisters: { dossierId: '', registry: 'all', period: '', employeeId: '', query: '' },
     fixedAssets: { q: '', status: 'all', assetType: 'all' },
     financialFramework: { q: '' },
     financialResult: { asOfDate: '' },
@@ -20433,6 +20434,27 @@
       if (!result.ok) { toast(result.errors[0] || 'Préparation du lot de test impossible.', 'warning'); return; }
       toast('Fiche de préparation créée et bloquée ; aucun calcul ni résultat n’a été produit.', 'warning'); render();
     });
+    var registerFilterForm = $('#payroll-register-filter-form');
+    if (registerFilterForm) {
+      registerFilterForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        ui.payrollRegisters = {
+          dossierId: registerFilterForm.getAttribute('data-dossier-id') || '',
+          registry: registerFilterForm.elements.registry.value || 'all',
+          period: registerFilterForm.elements.period.value || '',
+          employeeId: registerFilterForm.elements.employeeId.value || '',
+          query: registerFilterForm.elements.query.value || ''
+        };
+        render();
+      });
+      registerFilterForm.addEventListener('reset', function () {
+        window.setTimeout(function () {
+          var activeDossier = PayrollHR.currentDossier();
+          ui.payrollRegisters = { dossierId: activeDossier ? activeDossier.id : '', registry: 'all', period: '', employeeId: '', query: '' };
+          render();
+        }, 0);
+      });
+    }
   }
 
   function payrollEntryForRun(run, dossierId) {
@@ -20679,6 +20701,76 @@
       (missionRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Mission</th><th>Participant</th><th>Unité</th><th>Période saisie</th><th>Nature</th></tr></thead><tbody>' + missionRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucune mission synthétique</strong></div>') + '</details></section>';
   }
 
+  function viewPayrollRegisters(dossier, data, filters) {
+    filters = Object.assign({ dossierId: '', registry: 'all', period: '', employeeId: '', query: '' }, filters || {});
+    if (filters.dossierId && filters.dossierId !== dossier.id) filters = { dossierId: dossier.id, registry: 'all', period: '', employeeId: '', query: '' };
+    else filters.dossierId = dossier.id;
+    ui.payrollRegisters = filters;
+    var employeeById = Object.create(null);
+    data.employees.forEach(function (employee) { employeeById[employee.id] = employee; });
+    var unitById = Object.create(null);
+    data.units.forEach(function (unit) { unitById[unit.id] = unit; });
+    var componentById = Object.create(null);
+    data.components.forEach(function (component) { componentById[component.id] = component; });
+    var rows = [];
+    function add(registry, sourceId, employeeId, period, type, status, label) {
+      var employee = employeeById[employeeId];
+      rows.push({ registry: registry, sourceId: sourceId, employeeId: employeeId || '',
+        employeeLabel: employee ? (employee.employeeNumber || employee.id) : '—',
+        period: period || '', type: type || '', status: status || '', label: label || '' });
+    }
+    data.employees.forEach(function (item) { add('employees', item.id, item.id, item.createdAt ? item.createdAt.slice(0, 7) : '', 'Fiche employé', 'Test uniquement', item.displayName || item.employeeNumber || item.id); });
+    data.tracking.forEach(function (item) { add('tracking', item.id, item.employeeId, item.date ? PayrollHR.periodForDate(item.date) : '', item.kind, 'Test uniquement', item.reference + ' · ' + item.label); });
+    data.assignments.forEach(function (item) { add('assignments', item.id, item.employeeId, item.startDate ? PayrollHR.periodForDate(item.startDate) : '', 'Affectation', 'Test uniquement', (unitById[item.unitId] ? unitById[item.unitId].label : 'Unité non liée') + ' · ' + (item.functionLabel || 'Fonction non renseignée')); });
+    data.missions.forEach(function (item) { add('missions', item.id, item.employeeId, item.startDate ? PayrollHR.periodForDate(item.startDate) : '', 'Mission', 'Test uniquement', item.title); });
+    data.leaves.forEach(function (item) { add('leaves', item.id, item.employeeId, item.startDate ? PayrollHR.periodForDate(item.startDate) : '', item.kind === 'request' ? 'Demande de congé' : 'Absence constatée', 'Non qualifiée · test', item.typeLabel + ' · ' + item.startDate + ' → ' + item.endDate); });
+    data.references.forEach(function (item) { add('variables', item.id, item.employeeId, item.period, 'Référence sans valeur', 'Non calculée', (componentById[item.componentId] ? componentById[item.componentId].label : 'Rubrique historique') + ' · ' + item.label); });
+    data.packs.forEach(function (item) { add('country-packs', item.id, '', '', 'Cadre pays · ' + item.domainCode, item.status + ' · inactif', item.countryLabel + ' · ' + item.domainLabel + ' · ' + item.versionLabel); });
+    data.candidates.forEach(function (item) { add('candidates', item.id, '', item.validFrom ? PayrollHR.periodForDate(item.validFrom) : '', 'Fiche candidate · référence à vérifier', 'À documenter · inactive', item.title + ' · ' + (item.sourceReference || 'sans référence')); });
+    data.preparations.forEach(function (item) { add('preparations', item.id, '', item.period, 'Préparation de lot', item.status, item.countryLabel + ' · ' + item.packVersion); });
+    data.runs.forEach(function (item) { add('payroll-runs', item.id, '', item.period, 'Lot de paie', item.status, item.reference); });
+    var registryLabels = {
+      employees: 'Employés', tracking: 'Suivis RH et références contractuelles', assignments: 'Affectations',
+      missions: 'Missions', leaves: 'Congés et absences', variables: 'Références de variables',
+      'country-packs': 'Cadres pays', candidates: 'Fiches candidates de règles', preparations: 'Préparations de lots',
+      'payroll-runs': 'Lots de paie', payslips: 'Bulletins', payments: 'Paiements', transfers: 'Transferts comptables'
+    };
+    var ids = Object.keys(registryLabels);
+    var registryOptions = '<option value="all"' + (filters.registry === 'all' ? ' selected' : '') + '>Tous les registres</option>' + ids.map(function (id) {
+      return '<option value="' + esc(id) + '"' + (filters.registry === id ? ' selected' : '') + '>' + esc(registryLabels[id]) + '</option>';
+    }).join('');
+    var employeeOptions = '<option value="">Tous les employés fictifs</option>' + data.employees.map(function (employee) {
+      return '<option value="' + esc(employee.id) + '"' + (filters.employeeId === employee.id ? ' selected' : '') + '>' + esc((employee.employeeNumber || employee.id) + ' · ' + (employee.displayName || 'Fictif')) + '</option>';
+    }).join('');
+    var needle = String(filters.query || '').trim().toLocaleLowerCase();
+    var filteredRows = rows.filter(function (row) {
+      if (filters.registry !== 'all' && row.registry !== filters.registry) return false;
+      if (filters.period && row.period !== filters.period) return false;
+      if (filters.employeeId && row.employeeId !== filters.employeeId) return false;
+      if (needle && [row.registry, row.sourceId, row.employeeLabel, row.type, row.status, row.label].join(' ').toLocaleLowerCase().indexOf(needle) < 0) return false;
+      return true;
+    });
+    var tableRows = filteredRows.map(function (row) {
+      return '<tr data-register="' + esc(row.registry) + '" data-source-id="' + esc(row.sourceId) + '" data-dossier-id="' + esc(dossier.id) + '"><td>' + esc(registryLabels[row.registry]) + '</td><td><strong>' + esc(row.sourceId) + '</strong><br>' + esc(row.label) + '</td><td>' + esc(row.employeeLabel) + '</td><td>' + esc(row.period || '—') + '</td><td>' + esc(row.type) + '</td><td>' + esc(row.status) + '</td></tr>';
+    }).join('');
+    var emptyReason = filters.registry === 'payslips' ? 'Les bulletins ne sont pas disponibles : aucun lot calculé, approuvé et verrouillé.'
+      : filters.registry === 'payments' ? 'Aucun paiement ni preuve n’est enregistré ; ce parcours est désactivé.'
+      : filters.registry === 'transfers' ? 'Le registre des transferts comptables reste séparé et n’est pas exposé dans cette vue sans contrôle explicite de l’accès au dossier comptable.'
+      : 'Aucune ligne ne correspond aux filtres dans le dossier RH actif.';
+    var selectedEmployee = data.employees.find(function (employee) { return employee.id === filters.employeeId; });
+    return '<section class="exchange-card payroll-readonly-registers"><p class="page-kicker">ÉTAPE 15 · REGISTRES CONSULTABLES · LECTURE SEULE</p><h3>Registres RH et de paie</h3>' +
+      '<div class="alert warning"><div>Vue de consultation construite à partir des sources du dossier RH courant, sans copie ni modification. Cette version n’affiche que les données de test prévues; les documents sensibles et exports restent indisponibles. Les menus définitifs, filtres sensibles, archivage et droits détaillés restent à valider.</div></div>' +
+      '<form id="payroll-register-filter-form" class="payroll-register-filter-form" data-dossier-id="' + esc(dossier.id) + '"><div class="payroll-register-filter-grid">' +
+        '<div class="field"><label>Registre</label><select name="registry">' + registryOptions + '</select></div>' +
+        '<div class="field"><label>Période mensuelle</label><input name="period" type="month" value="' + esc(filters.period) + '"></div>' +
+        '<div class="field"><label>Employé fictif</label><select name="employeeId">' + employeeOptions + '</select></div>' +
+        '<div class="field"><label>Recherche dans les références visibles</label><input name="query" maxlength="100" value="' + esc(filters.query) + '"></div>' +
+        '<div class="payroll-register-filter-actions"><button class="btn btn-primary" type="submit">Filtrer</button><button class="btn btn-secondary" type="reset">Effacer les filtres</button></div>' +
+      '</div></form>' +
+      '<p class="small muted">' + filteredRows.length + ' ligne(s) affichée(s) sur ' + rows.length + ' source(s) disponible(s) dans ce dossier. Filtres appliqués — registre : ' + esc(filters.registry === 'all' ? 'tous' : registryLabels[filters.registry] || filters.registry) + ' · période : ' + esc(filters.period || 'toutes') + ' · employé : ' + esc(selectedEmployee ? (selectedEmployee.employeeNumber || selectedEmployee.id) : 'tous') + ' · recherche : ' + esc(filters.query || 'aucune') + '.</p>' +
+      (tableRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Registre</th><th>Identifiant source / libellé</th><th>Employé ou entité</th><th>Période</th><th>Type</th><th>État</th></tr></thead><tbody>' + tableRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucun résultat dans ce périmètre</strong><span>' + esc(emptyReason) + '</span></div>') + '</section>';
+  }
+
   function viewPayrollPayslipsAndPayments(dossier) {
     var readiness = PayrollHR.payslipAndPaymentReadiness(dossier.id);
     var reasons = readiness.reasons.map(function (reason) { return '<li>' + esc(reason) + '</li>'; }).join('');
@@ -20747,7 +20839,11 @@
       '<section class="exchange-card"><p class="page-kicker">CYCLE DE PAIE</p><h3>Lots du dossier</h3>' +
         '<div class="alert info"><div>Aucun calcul ni lot de paie n’est créé automatiquement. Les éventuelles fiches de préparation restent distinctes des lots et bloquées tant que les règles applicables, données source et contrôles ne sont pas validés.</div></div>' +
         (runRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Référence</th><th>Période</th><th>État</th><th>Référence comptable</th></tr></thead><tbody>' + runRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucun lot de paie disponible</strong><span>Les lots ne peuvent pas être créés avec des montants, comptes ou règles inventés.</span></div>') +
-      '</section>' + viewPayrollPayslipsAndPayments(dossier) +
+      '</section>' + viewPayrollPayslipsAndPayments(dossier) + viewPayrollRegisters(dossier, {
+        employees: dossierEmployees, tracking: hrTrackingRecords, assignments: organizationAssignments, missions: internalMissions,
+        leaves: leaveAbsenceRecords, references: payrollVariableReferences, components: payrollComponents,
+        packs: countryRulePacks, candidates: countryRuleCandidates, preparations: payrollBatchPreparations, runs: runs, units: organizationUnits
+      }, ui.payrollRegisters) +
       '<p class="dossiers-storage-footnote">Le stockage local du navigateur ne constitue ni un stockage serveur protégé, ni une synchronisation Google Drive ou multi-utilisateur.</p>' +
     '</div>';
   }

@@ -1,7 +1,9 @@
 # Étape 15 — Registres RH et de paie
 
-**Statut :** proposition de cadrage à valider avant implémentation.
+**Statut :** une vue locale en lecture seule, limitée aux sources synthétiques du dossier RH actif et filtrable, est ajoutée au dossier ; menus définitifs, colonnes sensibles, permissions fines, exports et conservation restent à valider.
 **Dépendances :** étapes 3 à 14 ; les données des modules sources et les règles de permission doivent être définies. La validation des menus de l’étape 2 reste reportée.
+
+La vue ne stocke pas de copie ni de modification et réinitialise ses filtres lors d’un changement de dossier. Elle n’expose que les enregistrements de test disponibles; contrats complets, bulletins, paiements et transferts réels ne sont pas fournis par le prototype. Aucun nouveau menu n’est créé.
 **Plan complet :** [Plan d’implémentation Paie & RH en 18 étapes](proposition-implementation-paie-rh.md).
 
 ## 1. Objectif et périmètre

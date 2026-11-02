@@ -27,7 +27,7 @@ assert.match(css, /table tbody > tr:nth-child\(even\)[\s\S]*var\(--table-row-alt
   'les lignes utilisent un zébrage discret');
 assert.match(css, /--table-head-bg:\s*#eff4f1/);
 assert.match(css, /--table-row-alt:\s*#f8faf9/);
-assert.match(serviceWorker, /perfecto-static-v212/);
+assert.match(serviceWorker, /perfecto-static-v213/);
 assert.match(serviceWorker, /\.\/css\/table-design-system\.css/,
   'le nouveau style est inclus dans le cache hors ligne');
 

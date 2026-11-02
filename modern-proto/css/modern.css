@@ -4149,3 +4149,14 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .payroll-payslips-payments details li { margin: 5px 0; }
 .payroll-payslip-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 8px; }
 .payroll-payslip-actions .btn:disabled { cursor: not-allowed; opacity: .55; }
+
+/* Étape 15 : consultation filtrable des registres sources, sans édition dupliquée */
+.payroll-readonly-registers > .alert { margin: 10px 0 14px; line-height: 1.55; }
+.payroll-register-filter-form { margin: 10px 0 14px; padding: 13px; border: 1px solid #e3eae5; border-radius: 8px; background: #fbfcfb; }
+.payroll-register-filter-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 11px; }
+.payroll-register-filter-grid .field { min-width: 0; margin: 0; }
+.payroll-register-filter-grid input, .payroll-register-filter-grid select { width: 100%; }
+.payroll-register-filter-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.payroll-readonly-registers .exchange-mapping-table td { vertical-align: top; }
+@media (max-width: 900px) { .payroll-register-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .payroll-register-filter-grid { grid-template-columns: 1fr; } }

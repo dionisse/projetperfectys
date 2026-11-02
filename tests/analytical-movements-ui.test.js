@@ -54,6 +54,6 @@ assert.match(app, /child\.id === 'general-analytic-balance' \? 'analytic-general
 assert.match(app, /menuParams\.t === 'general-accounts' && menuParams\.c === 'general-analytic-balance'\) bindAnalyticalStatement\(\)/);
 assert.match(css, /\.analytical-statement-view/);
 assert.match(css, /--analytical-tint: #f2f6f5/);
-assert.match(worker, /perfecto-static-v212/);
+assert.match(worker, /perfecto-static-v213/);
 
 console.log('Vue des mouvements analytiques : accès, filtres et résumés entièrement en français — OK');

@@ -27,6 +27,6 @@ assert.match(app, /exchangeFeature = viewAnalyticalPayablesEdition\(\)/);
 assert.match(app, /bindAnalyticalPayablesEdition\(\)/);
 assert.match(app, /function openReportPreview\(/);
 assert.match(html, /js\/app\.js/);
-assert.match(worker, /perfecto-static-v212/);
+assert.match(worker, /perfecto-static-v213/);
 assert.match(css, /\.analytical-payables-workspace/);
 console.log('Comptes à payer analytiques : comptes configurés, une nature choisie, mouvements validés et lecture seule — OK');
