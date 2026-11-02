@@ -4017,3 +4017,24 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
   .payroll-employee-create-grid { grid-template-columns: 1fr; }
   .payroll-test-confirm { grid-column: auto; }
 }
+
+/* Structure organisationnelle Paie & RH */
+.payroll-org-units > .alert { margin: 10px 0 14px; line-height: 1.55; }
+.payroll-org-unit-create-form { margin: 12px 0 16px; padding: 14px; border: 1px solid #e3eae5; border-radius: 8px; background: #fbfcfb; }
+.payroll-unit-create-grid, .payroll-unit-edit-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 12px; }
+.payroll-unit-create-grid .field, .payroll-unit-edit-grid .field { min-width: 0; margin: 0; }
+.payroll-unit-create-grid input, .payroll-unit-create-grid select, .payroll-unit-edit-grid input, .payroll-unit-edit-grid select { width: 100%; }
+.payroll-unit-create-grid .payroll-test-confirm { grid-column: 1 / -1; }
+.payroll-unit-actions { min-width: 160px; }
+.payroll-unit-actions summary, .payroll-unit-history summary { color: #286f65; cursor: pointer; font-size: .66rem; font-weight: 750; }
+.payroll-unit-edit-form, .payroll-org-unit-archive-form { min-width: min(620px, 70vw); margin-top: 10px; padding: 10px; border: 1px solid #e7ece8; border-radius: 7px; background: #fff; }
+.payroll-org-unit-archive-form { display: flex; align-items: end; gap: 10px; border-color: #eadfda; background: #fffafa; }
+.payroll-org-unit-archive-form .field { min-width: 160px; margin: 0; }
+.payroll-org-unit-archive-form input { width: 100%; }
+.payroll-unit-history { margin-top: 5px; }
+.payroll-unit-history ol { margin: 5px 0 0; padding-left: 17px; color: #65766f; font-size: .65rem; line-height: 1.45; }
+.payroll-unit-history li + li { margin-top: 3px; }
+.payroll-unit-history li span { display: block; }
+.payroll-org-units td { vertical-align: top; }
+@media (max-width: 800px) { .payroll-unit-create-grid, .payroll-unit-edit-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .payroll-unit-edit-form, .payroll-org-unit-archive-form { min-width: min(560px, 78vw); } }
+@media (max-width: 560px) { .payroll-unit-create-grid, .payroll-unit-edit-grid { grid-template-columns: 1fr; } .payroll-unit-create-grid .payroll-test-confirm { grid-column: auto; } .payroll-org-unit-archive-form { align-items: stretch; flex-direction: column; } .payroll-org-unit-archive-form .field { min-width: 0; } }

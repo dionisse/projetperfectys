@@ -114,6 +114,127 @@
     return { ok: true, errors: [], employee: clone(employee) };
   }
 
+  function organizationUnits(dossierId) {
+    dossierId = String(dossierId || '');
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier || !Array.isArray(dossier.organizationUnits)) return [];
+    return clone(dossier.organizationUnits.filter(function (unit) {
+      return unit && unit.dossierId === dossierId && typeof unit.id === 'string';
+    }));
+  }
+
+  function validateUnitFields(dossier, input, excludedId) {
+    var label = String(input.label || '').trim().replace(/\s+/g, ' ');
+    var type = String(input.type || '').trim().replace(/\s+/g, ' ');
+    var code = String(input.code || '').trim();
+    var description = String(input.description || '').trim();
+    var effectiveDate = String(input.effectiveDate || '');
+    var parentId = String(input.parentId || '').trim();
+    var errors = [];
+    if (!label) errors.push('Le libellé de l’unité est obligatoire.');
+    if (label.length > 120) errors.push('Le libellé ne peut pas dépasser 120 caractères.');
+    if (!type) errors.push('Le type d’unité est obligatoire.');
+    if (type.length > 40) errors.push('Le type d’unité ne peut pas dépasser 40 caractères.');
+    if (code.length > 40) errors.push('Le code d’unité ne peut pas dépasser 40 caractères.');
+    if (description.length > 240) errors.push('La description ne peut pas dépasser 240 caractères.');
+    if (!dateParts(effectiveDate)) errors.push('La date d’effet doit être une date valide.');
+    var units = Array.isArray(dossier.organizationUnits) ? dossier.organizationUnits : [];
+    if (code && units.some(function (unit) {
+      return unit && unit.id !== excludedId && String(unit.code || '').trim().toLocaleLowerCase() === code.toLocaleLowerCase();
+    })) errors.push('Ce code d’unité existe déjà dans ce dossier RH.');
+    if (parentId) {
+      var parent = units.find(function (unit) { return unit && unit.id === parentId && unit.dossierId === dossier.id; });
+      if (!parent) errors.push('L’unité parente doit appartenir au même dossier RH.');
+      else if (parent.status !== 'active') errors.push('Une unité archivée ne peut pas être le parent d’une nouvelle structure.');
+      else if (parent.id === excludedId) errors.push('Une unité ne peut pas être son propre parent.');
+    }
+    return { ok: errors.length === 0, errors: errors, value: {
+      label: label, type: type, code: code, description: description,
+      effectiveDate: effectiveDate, parentId: parentId
+    } };
+  }
+
+  function createOrganizationUnit(dossierId, input) {
+    input = input || {};
+    dossierId = String(dossierId || '');
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Cette version locale accepte uniquement une structure synthétique de test.'] };
+    dossier.organizationUnits = Array.isArray(dossier.organizationUnits) ? dossier.organizationUnits : [];
+    var validation = validateUnitFields(dossier, input);
+    if (!validation.ok) return validation;
+    var id;
+    do { id = 'org-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); }
+    while (dossier.organizationUnits.some(function (unit) { return unit && unit.id === id; }));
+    var now = new Date().toISOString();
+    var unit = Object.assign({
+      id: id, dossierId: dossierId, status: 'active',
+      history: [{ action: 'created', effectiveDate: validation.value.effectiveDate, changedAt: now }],
+      createdAt: now
+    }, validation.value);
+    dossier.organizationUnits.push(unit);
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer l’unité dans le stockage local.'] };
+    return { ok: true, errors: [], unit: clone(unit) };
+  }
+
+  function updateOrganizationUnit(dossierId, unitId, input) {
+    input = input || {};
+    dossierId = String(dossierId || '');
+    unitId = String(unitId || '');
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    var units = Array.isArray(dossier.organizationUnits) ? dossier.organizationUnits : [];
+    var unit = units.find(function (item) { return item && item.id === unitId && item.dossierId === dossierId; });
+    if (!unit) return { ok: false, errors: ['Unité introuvable dans ce dossier RH.'] };
+    if (unit.status !== 'active') return { ok: false, errors: ['Une unité archivée ne peut pas être modifiée.'] };
+    var validation = validateUnitFields(dossier, input, unitId);
+    if (!validation.ok) return validation;
+    var parentId = validation.value.parentId;
+    var seen = Object.create(null);
+    while (parentId) {
+      if (parentId === unitId) return { ok: false, errors: ['Cette modification créerait un cycle dans l’organigramme.'] };
+      if (seen[parentId]) return { ok: false, errors: ['La structure parente contient déjà un cycle ; corrigez-la avant cette modification.'] };
+      seen[parentId] = true;
+      var parent = units.find(function (candidate) { return candidate && candidate.id === parentId && candidate.dossierId === dossierId; });
+      parentId = parent ? String(parent.parentId || '') : '';
+    }
+    var before = { label: unit.label, type: unit.type, code: unit.code || '', description: unit.description || '', parentId: unit.parentId || '', effectiveDate: unit.effectiveDate };
+    var after = validation.value;
+    if (!Object.keys(after).some(function (key) { return before[key] !== after[key]; })) {
+      return { ok: false, errors: ['Aucun changement à enregistrer.'] };
+    }
+    unit.history = Array.isArray(unit.history) ? unit.history : [];
+    unit.history.push({ action: 'updated', effectiveDate: after.effectiveDate, changedAt: new Date().toISOString(), before: before, after: clone(after) });
+    Object.assign(unit, after);
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la modification de l’unité.'] };
+    return { ok: true, errors: [], unit: clone(unit) };
+  }
+
+  function archiveOrganizationUnit(dossierId, unitId, effectiveDate) {
+    dossierId = String(dossierId || '');
+    unitId = String(unitId || '');
+    effectiveDate = String(effectiveDate || '');
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    var units = Array.isArray(dossier.organizationUnits) ? dossier.organizationUnits : [];
+    var unit = units.find(function (item) { return item && item.id === unitId && item.dossierId === dossierId; });
+    if (!unit) return { ok: false, errors: ['Unité introuvable dans ce dossier RH.'] };
+    if (unit.status !== 'active') return { ok: false, errors: ['Cette unité est déjà archivée.'] };
+    if (!dateParts(effectiveDate)) return { ok: false, errors: ['La date d’archivage doit être valide.'] };
+    if (units.some(function (candidate) { return candidate && candidate.dossierId === dossierId && candidate.parentId === unitId && candidate.status === 'active'; })) {
+      return { ok: false, errors: ['Déplacez ou archivez d’abord les unités enfants actives.'] };
+    }
+    unit.status = 'archived';
+    unit.archivedAt = effectiveDate;
+    unit.history = Array.isArray(unit.history) ? unit.history : [];
+    unit.history.push({ action: 'archived', effectiveDate: effectiveDate, changedAt: new Date().toISOString() });
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’archiver l’unité dans le stockage local.'] };
+    return { ok: true, errors: [], unit: clone(unit) };
+  }
+
   function dossierById(dossierId) {
     return clone(loadDossierCatalog().dossiers.find(function (dossier) { return dossier.id === String(dossierId || ''); }) || null);
   }
@@ -313,6 +434,10 @@
     dossier: dossierById,
     employees: employees,
     createEmployee: createEmployee,
+    organizationUnits: organizationUnits,
+    createOrganizationUnit: createOrganizationUnit,
+    updateOrganizationUnit: updateOrganizationUnit,
+    archiveOrganizationUnit: archiveOrganizationUnit,
     createDossier: createDossier,
     createTestDossier: createTestDossier,
     selectDossier: selectDossier,

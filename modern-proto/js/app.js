@@ -494,7 +494,11 @@
       case 'save-payroll-accounting-link':
         return { moduleId: 'organization', actionId: 'organization.manageDossiers' };
       case 'create-payroll-test-employee':
+      case 'create-payroll-org-unit':
         return { moduleId: 'payroll-hr', actionId: 'record.create' };
+      case 'edit-payroll-org-unit':
+      case 'archive-payroll-org-unit':
+        return { moduleId: 'payroll-hr', actionId: 'record.edit' };
       case 'open-accounting-payroll-centralization':
         return { moduleId: 'payroll-hr', actionId: 'module.view' };
       case 'commit-accounting-payroll-centralization':
@@ -20195,6 +20199,55 @@
       toast('Fiche fictive créée dans le dossier RH actif. Aucun champ sensible ou élément de paie n’a été saisi.', 'success');
       render();
     });
+    var unitCreateForm = $('#payroll-org-unit-create-form');
+    if (unitCreateForm) unitCreateForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('create-payroll-org-unit', null, true)) return;
+      var dossier = PayrollHR.currentDossier();
+      if (!dossier || unitCreateForm.getAttribute('data-dossier-id') !== dossier.id) {
+        toast('Création refusée : le dossier RH actif a changé. Rechargez la page.', 'warning'); return;
+      }
+      var fields = unitCreateForm.elements;
+      var result = PayrollHR.createOrganizationUnit(dossier.id, {
+        label: fields.label.value, type: fields.type.value, code: fields.code.value,
+        parentId: fields.parentId.value, description: fields.description.value,
+        effectiveDate: fields.effectiveDate.value, testOnly: fields.testOnly.checked
+      });
+      if (!result.ok) { toast(result.errors[0] || 'Création de l’unité impossible.', 'warning'); return; }
+      toast('Unité fictive créée dans le dossier RH actif.', 'success'); render();
+    });
+    $$('.payroll-org-unit-edit-form').forEach(function (unitForm) {
+      unitForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        if (!canPerformDemoAction('edit-payroll-org-unit', null, true)) return;
+        var dossier = PayrollHR.currentDossier();
+        if (!dossier || unitForm.getAttribute('data-dossier-id') !== dossier.id) {
+          toast('Modification refusée : le dossier RH actif a changé. Rechargez la page.', 'warning'); return;
+        }
+        var fields = unitForm.elements;
+        var result = PayrollHR.updateOrganizationUnit(dossier.id, unitForm.getAttribute('data-unit-id'), {
+          label: fields.label.value, type: fields.type.value, code: fields.code.value,
+          parentId: fields.parentId.value, description: fields.description.value,
+          effectiveDate: fields.effectiveDate.value
+        });
+        if (!result.ok) { toast(result.errors[0] || 'Modification de l’unité impossible.', 'warning'); return; }
+        toast('Nouvelle version de l’unité enregistrée avec sa date d’effet.', 'success'); render();
+      });
+    });
+    $$('.payroll-org-unit-archive-form').forEach(function (archiveForm) {
+      archiveForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        if (!canPerformDemoAction('archive-payroll-org-unit', null, true)) return;
+        var dossier = PayrollHR.currentDossier();
+        if (!dossier || archiveForm.getAttribute('data-dossier-id') !== dossier.id) {
+          toast('Archivage refusé : le dossier RH actif a changé. Rechargez la page.', 'warning'); return;
+        }
+        if (!window.confirm('Archiver cette unité à la date indiquée ? Son historique sera conservé.')) return;
+        var result = PayrollHR.archiveOrganizationUnit(dossier.id, archiveForm.getAttribute('data-unit-id'), archiveForm.elements.effectiveDate.value);
+        if (!result.ok) { toast(result.errors[0] || 'Archivage de l’unité impossible.', 'warning'); return; }
+        toast('Unité archivée ; les données historiques sont conservées.', 'success'); render();
+      });
+    });
   }
 
   function payrollEntryForRun(run, dossierId) {
@@ -20203,6 +20256,58 @@
     return S.entries().find(function (entry) {
       return entry.sourceSystem === 'PERFECTO-PAIE-RH' && entry.sourceId === sourceId;
     }) || null;
+  }
+
+  function payrollUnitParentOptions(units, selectedParentId, excludedUnitId) {
+    return '<option value="">— Aucune unité parente —</option>' + units.filter(function (unit) {
+      return unit.status === 'active' && unit.id !== excludedUnitId;
+    }).map(function (unit) {
+      return '<option value="' + esc(unit.id) + '"' + (unit.id === selectedParentId ? ' selected' : '') + '>' + esc(unit.label + ' · ' + unit.type) + '</option>';
+    }).join('');
+  }
+
+  function viewPayrollOrganizationUnits(dossier, units, canCreate, canEdit) {
+    var parentName = function (parentId) { var parent = units.find(function (unit) { return unit.id === parentId; }); return parent ? parent.label : '—'; };
+    var activeUnits = units.filter(function (unit) { return unit.status === 'active'; });
+    var depth = function (unit) {
+      var count = 0, parentId = unit.parentId, seen = Object.create(null);
+      while (parentId && count < 12 && !seen[parentId]) {
+        seen[parentId] = true;
+        var parent = units.find(function (candidate) { return candidate.id === parentId; });
+        if (!parent) break;
+        count += 1; parentId = parent.parentId;
+      }
+      return count;
+    };
+    var ordered = units.slice().sort(function (a, b) { return depth(a) - depth(b) || String(a.label).localeCompare(String(b.label)); });
+    var rows = ordered.map(function (unit) {
+      var history = Array.isArray(unit.history) ? unit.history : [];
+      var historyRows = history.map(function (item) {
+        var action = item.action === 'created' ? 'Création' : item.action === 'updated' ? 'Modification' : item.action === 'archived' ? 'Archivage' : item.action;
+        var changed = item.before && item.after ? '<span>' + esc(item.before.label || '—') + ' → ' + esc(item.after.label || '—') + '</span>' : '';
+        return '<li><strong>' + esc(action) + '</strong> · effet ' + esc(item.effectiveDate || 'non daté') + changed + '</li>';
+      }).join('');
+      var actions = '';
+      if (canEdit && unit.status === 'active') actions = '<details class="payroll-unit-actions"><summary>Modifier / archiver</summary>' +
+        '<form class="payroll-org-unit-edit-form" data-unit-id="' + esc(unit.id) + '" data-dossier-id="' + esc(dossier.id) + '"><div class="payroll-unit-edit-grid">' +
+        '<div class="field"><label>Libellé</label><input name="label" maxlength="120" value="' + esc(unit.label) + '" required></div>' +
+        '<div class="field"><label>Type personnalisé</label><input name="type" maxlength="40" value="' + esc(unit.type) + '" required></div>' +
+        '<div class="field"><label>Code (facultatif)</label><input name="code" maxlength="40" value="' + esc(unit.code || '') + '"></div>' +
+        '<div class="field"><label>Unité parente</label><select name="parentId">' + payrollUnitParentOptions(activeUnits, unit.parentId || '', unit.id) + '</select></div>' +
+        '<div class="field"><label>Description</label><input name="description" maxlength="240" value="' + esc(unit.description || '') + '"></div>' +
+        '<div class="field"><label>Date d’effet</label><input name="effectiveDate" type="date" required></div>' +
+        '<button type="submit" class="btn btn-secondary">Enregistrer la version</button></div></form>' +
+        '<form class="payroll-org-unit-archive-form" data-unit-id="' + esc(unit.id) + '" data-dossier-id="' + esc(dossier.id) + '"><div class="field"><label>Date d’effet de l’archivage</label><input name="effectiveDate" type="date" required></div><button class="btn btn-ghost" type="submit">Archiver sans supprimer l’historique</button></form></details>';
+      return '<tr data-unit-id="' + esc(unit.id) + '" data-dossier-id="' + esc(dossier.id) + '"><td><span style="display:inline-block;padding-left:' + Math.min(depth(unit) * 18, 108) + 'px">' + (depth(unit) ? '↳ ' : '') + '<strong>' + esc(unit.label) + '</strong></span><br><small>' + esc(unit.id) + '</small><details class="payroll-unit-history"><summary>Historique (' + history.length + ')</summary><ol>' + historyRows + '</ol></details></td><td>' + esc(unit.type) + '</td><td>' + esc(unit.code || '—') + '</td><td>' + esc(parentName(unit.parentId)) + '</td><td><span class="badge ' + (unit.status === 'active' ? 'posted' : 'draft') + '">' + (unit.status === 'active' ? 'Active' : 'Archivée') + '</span></td><td>' + actions + '</td></tr>';
+    }).join('');
+    var form = canCreate ? '<form id="payroll-org-unit-create-form" class="payroll-org-unit-create-form" data-dossier-id="' + esc(dossier.id) + '"><div class="payroll-unit-create-grid">' +
+      '<div class="field"><label>Libellé *</label><input name="label" maxlength="120" required></div><div class="field"><label>Type personnalisé *</label><input name="type" maxlength="40" placeholder="Direction, service…" required></div>' +
+      '<div class="field"><label>Code facultatif</label><input name="code" maxlength="40"></div><div class="field"><label>Unité parente</label><select name="parentId">' + payrollUnitParentOptions(activeUnits, '', '') + '</select></div>' +
+      '<div class="field"><label>Description facultative</label><input name="description" maxlength="240"></div><div class="field"><label>Date d’effet *</label><input name="effectiveDate" type="date" required></div>' +
+      '<label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Je confirme que cette structure est fictive et destinée aux tests locaux.</span></label><button class="btn btn-primary" type="submit">＋ Créer l’unité</button></div></form>'
+      : '<p class="small muted">Votre profil ne dispose pas du droit de création d’unités.</p>';
+    return '<section class="exchange-card payroll-org-units"><p class="page-kicker">ORGANISATION · DONNÉES DE TEST LOCALES</p><h3>Unités organisationnelles (' + units.length + ')</h3><div class="alert info"><div>Types et relations parents libres, isolés dans ce dossier RH. Les modifications sont historisées ; l’archivage conserve les versions antérieures.</div></div>' + form +
+      (rows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Unité</th><th>Type</th><th>Code</th><th>Parent</th><th>État</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucune unité définie</strong><span>Aucune unité n’est précréée.</span></div>') + '</section>';
   }
 
   function viewPayrollModule() {
@@ -20215,6 +20320,8 @@
     var canManagePayrollDossiers = hasDemoPermission(member, 'organization', 'organization.manageDossiers', demoAccessContext('organization'));
     var canCreatePayrollEmployee = hasDemoPermission(member, 'payroll-hr', 'record.create', payrollAccessContext(dossier));
     var dossierEmployees = PayrollHR.employees(dossier.id);
+    var organizationUnits = PayrollHR.organizationUnits(dossier.id);
+    var canEditPayrollRecords = hasDemoPermission(member, 'payroll-hr', 'record.edit', payrollAccessContext(dossier));
     var employeeRows = dossierEmployees.map(function (employee) {
       return '<tr data-employee-id="' + esc(employee.id) + '" data-dossier-id="' + esc(employee.dossierId) + '"><td><strong>' + esc(employee.employeeNumber || employee.id) + '</strong></td><td>' + esc(employee.displayName || '—') + '</td><td><span class="badge draft">Test uniquement</span></td><td><small>' + esc(employee.id) + '</small></td></tr>';
     }).join('');
@@ -20238,7 +20345,7 @@
     return '<div class="payroll-module-workspace">' +
       pageHeader('Paie & RH', 'Dossier client : <strong>' + esc(dossier.clientName) + '</strong> · ' + esc(dossier.reference) + ' · exercice ' + esc(dossier.exerciseYear) + '.', '<a class="btn btn-ghost" href="#/payroll-dossiers">Changer de dossier RH</a> <a class="btn btn-ghost" href="#/launcher">← Modules</a>') +
       '<div class="alert warning"><div><strong>Base fonctionnelle en cours</strong><br>Les données sont encore stockées localement dans ce navigateur. Utilisez uniquement des données synthétiques. Le calcul de paie et les fonctions de production restent bloqués tant que les textes, règles et le stockage sécurisé ne sont pas validés.</div></div>' +
-      accountingLinkPanel + employeeSection +
+      accountingLinkPanel + employeeSection + viewPayrollOrganizationUnits(dossier, organizationUnits, canCreatePayrollEmployee, canEditPayrollRecords) +
       '<section class="exchange-card"><p class="page-kicker">CYCLE DE PAIE</p><h3>Lots du dossier</h3>' +
         '<div class="alert info"><div>Aucun calcul ou lot fictif n’est créé. Le moteur restera indisponible tant que les règles applicables, les données source et les contrôles d’approbation ne sont pas validés.</div></div>' +
         (runRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Référence</th><th>Période</th><th>État</th><th>Référence comptable</th></tr></thead><tbody>' + runRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucun lot de paie disponible</strong><span>Les lots ne peuvent pas être créés avec des montants, comptes ou règles inventés.</span></div>') +

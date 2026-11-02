@@ -47,6 +47,49 @@ assert.equal(PayrollHR.createEmployee(dossier.id, {
   employeeNumber: 'TEST-002', displayName: '   ', testOnly: true
 }).ok, false, 'un nom d’affichage fictif vide est refusé');
 
+assert.equal(PayrollHR.createOrganizationUnit(dossier.id, {
+  label: 'Direction test', type: 'Direction', effectiveDate: '2026-01-01', testOnly: false
+}).ok, false, 'une structure non confirmée comme test est refusée');
+const rootUnit = PayrollHR.createOrganizationUnit(dossier.id, {
+  label: 'Direction test', type: 'Direction', code: 'DIR-TEST',
+  description: 'Structure synthétique', effectiveDate: '2026-01-01', testOnly: true
+});
+assert.equal(rootUnit.ok, true, rootUnit.errors.join('\\n'));
+const childUnit = PayrollHR.createOrganizationUnit(dossier.id, {
+  label: 'Service fictif', type: 'Service', code: 'SRV-TEST', parentId: rootUnit.unit.id,
+  effectiveDate: '2026-02-01', testOnly: true
+});
+assert.equal(childUnit.ok, true, childUnit.errors.join('\\n'));
+assert.equal(childUnit.unit.parentId, rootUnit.unit.id);
+assert.equal(PayrollHR.organizationUnits(dossier.id).length, 2);
+assert.deepEqual(PayrollHR.organizationUnits('other-dossier'), [], 'les unités sont isolées par dossier RH');
+assert.equal(PayrollHR.createOrganizationUnit(dossier.id, {
+  label: 'Code dupliqué', type: 'Équipe', code: 'dir-test', effectiveDate: '2026-01-01', testOnly: true
+}).ok, false, 'un code est unique sans distinction de casse dans le dossier');
+assert.equal(PayrollHR.updateOrganizationUnit(dossier.id, rootUnit.unit.id, {
+  label: 'Direction test', type: 'Direction', code: 'DIR-TEST', parentId: childUnit.unit.id,
+  description: '', effectiveDate: '2026-03-01'
+}).ok, false, 'un cycle hiérarchique est refusé');
+const updatedUnit = PayrollHR.updateOrganizationUnit(dossier.id, childUnit.unit.id, {
+  label: 'Service fictif modifié', type: 'Service', code: 'SRV-TEST', parentId: rootUnit.unit.id,
+  description: '', effectiveDate: '2026-03-01'
+});
+assert.equal(updatedUnit.ok, true, updatedUnit.errors.join('\\n'));
+assert.equal(updatedUnit.unit.history.at(-1).action, 'updated');
+assert.equal(updatedUnit.unit.history.at(-1).before.label, 'Service fictif');
+assert.equal(updatedUnit.unit.history.at(-1).after.label, 'Service fictif modifié');
+assert.equal(PayrollHR.archiveOrganizationUnit(dossier.id, rootUnit.unit.id, '2026-04-01').ok, false,
+  'une unité parente avec enfants actifs ne peut pas être archivée');
+const archivedChild = PayrollHR.archiveOrganizationUnit(dossier.id, childUnit.unit.id, '2026-04-01');
+assert.equal(archivedChild.ok, true, archivedChild.errors.join('\\n'));
+assert.equal(archivedChild.unit.status, 'archived');
+assert.equal(archivedChild.unit.history.at(-1).action, 'archived');
+assert.equal(PayrollHR.updateOrganizationUnit(dossier.id, childUnit.unit.id, {
+  label: 'Autre', type: 'Service', effectiveDate: '2026-05-01'
+}).ok, false, 'une unité archivée est immuable');
+assert.equal(PayrollHR.archiveOrganizationUnit(dossier.id, rootUnit.unit.id, '2026-04-02').ok, true);
+assert.equal(PayrollHR.organizationUnits(dossier.id).filter(unit => unit.status === 'archived').length, 2);
+
 assert.deepEqual(PayrollHR.accountingAccountCatalog(), [], 'aucun compte de paie n’est préconfiguré');
 const fakeRun = PayrollHR.createDemoRun(dossier, '2026-01');
 assert.equal(fakeRun.ok, false, 'aucun lot avec montant ou compte inventé ne peut être créé');
