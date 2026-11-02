@@ -501,6 +501,9 @@
       case 'seed-payroll-organization-demo':
       case 'create-payroll-leave-record':
       case 'seed-payroll-leave-demo':
+      case 'create-payroll-component':
+      case 'create-payroll-variable-reference':
+      case 'seed-payroll-variable-demo':
         return { moduleId: 'payroll-hr', actionId: 'record.create' };
       case 'edit-payroll-org-unit':
       case 'archive-payroll-org-unit':
@@ -20335,6 +20338,46 @@
       if (!result.ok) { toast(result.errors[0] || 'Chargement des exemples impossible.', 'warning'); return; }
       toast('Deux exemples fictifs ajoutés : une demande et une absence constatée.', 'success'); render();
     });
+    var componentForm = $('#payroll-component-form');
+    if (componentForm) componentForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('create-payroll-component', null, true)) return;
+      var dossier = PayrollHR.currentDossier();
+      if (!dossier || componentForm.getAttribute('data-dossier-id') !== dossier.id) { toast('Création refusée : le dossier RH actif a changé.', 'warning'); return; }
+      var fields = componentForm.elements;
+      var result = PayrollHR.createPayrollComponent(dossier.id, {
+        code: fields.code.value, label: fields.label.value, description: fields.description.value,
+        natureLabel: fields.natureLabel.value, entryModeLabel: fields.entryModeLabel.value,
+        testOnly: fields.testOnly.checked
+      });
+      if (!result.ok) { toast(result.errors[0] || 'Création de la rubrique impossible.', 'warning'); return; }
+      toast('Rubrique descriptive de test enregistrée, sans paramètre de calcul.', 'success'); render();
+    });
+    var variableReferenceForm = $('#payroll-variable-reference-form');
+    if (variableReferenceForm) variableReferenceForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('create-payroll-variable-reference', null, true)) return;
+      var dossier = PayrollHR.currentDossier();
+      if (!dossier || variableReferenceForm.getAttribute('data-dossier-id') !== dossier.id) { toast('Création refusée : le dossier RH actif a changé.', 'warning'); return; }
+      var fields = variableReferenceForm.elements;
+      var result = PayrollHR.createPayrollVariableReference(dossier.id, {
+        employeeId: fields.employeeId.value, componentId: fields.componentId.value, period: fields.period.value,
+        sourceReference: fields.sourceReference.value, label: fields.label.value, testOnly: fields.testOnly.checked
+      });
+      if (!result.ok) { toast(result.errors[0] || 'Référence de variable impossible à enregistrer.', 'warning'); return; }
+      toast('Référence de variable fictive enregistrée sans montant, quantité ni calcul.', 'success'); render();
+    });
+    var payrollDemoSeedForm = $('#payroll-variable-demo-seed-form');
+    if (payrollDemoSeedForm) payrollDemoSeedForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('seed-payroll-variable-demo', null, true)) return;
+      var dossier = PayrollHR.currentDossier();
+      if (!dossier || payrollDemoSeedForm.getAttribute('data-dossier-id') !== dossier.id) { toast('Chargement refusé : le dossier RH actif a changé.', 'warning'); return; }
+      if (!payrollDemoSeedForm.elements.testOnly.checked) { toast('Confirmez le caractère fictif avant le chargement.', 'warning'); return; }
+      var result = PayrollHR.seedDemoPayrollReferences(dossier.id);
+      if (!result.ok) { toast(result.errors[0] || 'Chargement des références DEMO impossible.', 'warning'); return; }
+      toast('Exemples DEMO chargés, sans aucune valeur de rémunération.', 'success'); render();
+    });
   }
 
   function payrollEntryForRun(run, dossierId) {
@@ -20413,6 +20456,41 @@
     return '<section class="exchange-card payroll-hr-tracking"><p class="page-kicker">ÉTAPES 6–7 · SUIVIS SYNTHÉTIQUES</p><h3>Candidatures, contrats, intérim et départs</h3>' +
       '<div class="alert warning"><div>Socle de démonstration uniquement. Les libellés sont des types de suivi, pas des statuts ni des conclusions juridiques. Un suivi de départ ne modifie aucun statut d’employé, contrat ou accès. Aucun nom, motif de départ, document, catégorie légale, échéance, employeur/payeur ou élément de rémunération n’est enregistré.</div></div>' + form +
       (rows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Type</th><th>Référence</th><th>Libellé</th><th>Date de suivi</th><th>Nature</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucun suivi de test</strong><span>Aucun candidat, contrat ou dossier d’intérim n’est créé automatiquement.</span></div>') + '</section>';
+  }
+
+  function viewPayrollComponentsAndReferences(dossier, employees, components, references, canCreate) {
+    var componentRows = components.map(function (component) {
+      return '<tr data-component-id="' + esc(component.id) + '" data-dossier-id="' + esc(dossier.id) + '"><td><strong>' + esc(component.code) + '</strong></td><td>' + esc(component.label) + '</td><td>' + esc(component.natureLabel || 'Non renseignée') + '</td><td>' + esc(component.entryModeLabel || 'Non renseigné') + '</td><td><span class="badge ' + (component.origin === 'demo-mock' ? 'posted' : 'draft') + '">' + (component.origin === 'demo-mock' ? 'DEMO fictif' : 'Test uniquement') + '</span><br><small>Calcul non configuré</small></td></tr>';
+    }).join('');
+    var referenceRows = references.map(function (reference) {
+      var employee = employees.find(function (item) { return item.id === reference.employeeId; });
+      var component = components.find(function (item) { return item.id === reference.componentId; });
+      return '<tr data-variable-reference-id="' + esc(reference.id) + '" data-dossier-id="' + esc(dossier.id) + '"><td>' + esc(employee ? (employee.employeeNumber || employee.id) : 'Employé historique indisponible') + '</td><td>' + esc(component ? component.code + ' · ' + component.label : 'Rubrique historique indisponible') + '</td><td>' + esc(reference.period) + '</td><td>' + esc(reference.sourceReference || '—') + '</td><td>' + esc(reference.label) + '</td><td><span class="badge ' + (reference.origin === 'demo-mock' ? 'posted' : 'draft') + '">' + (reference.origin === 'demo-mock' ? 'DEMO fictif' : 'Référence de test') + '</span><br><small>Sans valeur · non calculée</small></td></tr>';
+    }).join('');
+    var componentForm = canCreate ? '<form id="payroll-component-form" class="payroll-component-form" data-dossier-id="' + esc(dossier.id) + '"><h4>Créer une rubrique descriptive fictive</h4><div class="payroll-component-grid">' +
+      '<div class="field"><label>Code fictif *</label><input name="code" maxlength="40" required></div><div class="field"><label>Libellé *</label><input name="label" maxlength="120" required></div>' +
+      '<div class="field"><label>Description facultative</label><input name="description" maxlength="240"></div><div class="field"><label>Nature (libellé libre, non traité)</label><input name="natureLabel" maxlength="60"></div>' +
+      '<div class="field"><label>Mode de saisie (libellé libre, non traité)</label><input name="entryModeLabel" maxlength="60"></div>' +
+      '<label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Cette rubrique est fictive ; aucune règle, valeur ou classification légale n’est définie.</span></label><button class="btn btn-primary" type="submit">＋ Ajouter la rubrique de test</button></div></form>' : '';
+    var componentOptions = '<option value="" selected disabled>Choisir une rubrique fictive…</option>' + components.map(function (component) {
+      return '<option value="' + esc(component.id) + '">' + esc(component.code + ' · ' + component.label) + '</option>';
+    }).join('');
+    var variableForm = canCreate ? '<form id="payroll-variable-reference-form" class="payroll-variable-reference-form" data-dossier-id="' + esc(dossier.id) + '"><h4>Ajouter une référence de variable sans valeur</h4><div class="payroll-component-grid">' +
+      '<div class="field"><label>Employé fictif *</label><select name="employeeId" required>' + payrollTestEmployeeOptions(employees) + '</select></div>' +
+      '<div class="field"><label>Rubrique fictive *</label><select name="componentId" required>' + componentOptions + '</select></div>' +
+      '<div class="field"><label>Période de référence *</label><input name="period" type="month" required></div>' +
+      '<div class="field"><label>Référence de source facultative</label><input name="sourceReference" maxlength="80"></div>' +
+      '<div class="field"><label>Libellé non salarial *</label><input name="label" maxlength="120" required></div>' +
+      '<label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Cette référence est fictive et ne contient aucun montant ni quantité.</span></label><button class="btn btn-primary" type="submit">＋ Ajouter la référence</button></div></form>' : '';
+    var seedForm = canCreate && PayrollHR.isDemoTestDossier(dossier.id) && !PayrollHR.demoPayrollReferencesSeeded(dossier.id)
+      ? '<form id="payroll-variable-demo-seed-form" class="payroll-variable-demo-seed" data-dossier-id="' + esc(dossier.id) + '"><p><strong>Exemples DEMO facultatifs :</strong> deux rubriques descriptives et deux références de source liées aux employés fictifs, sans valeur salariale.</p><label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Charger uniquement ces métadonnées et références synthétiques.</span></label><button class="btn btn-secondary" type="submit">Charger les exemples sans montant</button></form>'
+      : (PayrollHR.demoPayrollReferencesSeeded(dossier.id) ? '<div class="alert success"><div>Les rubriques et références DEMO sont déjà chargées ; aucune valeur de rémunération n’y est associée.</div></div>' : '');
+    return '<section class="exchange-card payroll-components-variables"><p class="page-kicker">ÉTAPE 10 · MÉTADONNÉES UNIQUEMENT</p><h3>Rubriques et références de variables</h3>' +
+      '<div class="alert warning"><div>Cette base ne saisit ni salaire, montant, quantité, devise, taux, avantage, retenue ou règle fiscale/sociale. Les libellés et modes restent descriptifs. Les références de variable ne sont pas des valeurs et ne peuvent pas alimenter un calcul de paie.</div></div>' + seedForm +
+      '<details class="payroll-subregistry" open><summary>Catalogue descriptif (' + components.length + ')</summary>' + componentForm +
+      (componentRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Code</th><th>Libellé</th><th>Nature libre</th><th>Mode libre</th><th>Traitement</th></tr></thead><tbody>' + componentRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucune rubrique de test</strong><span>Le catalogue reste vide tant que vous ne créez pas une rubrique fictive ou ne chargez pas les exemples DEMO.</span></div>') + '</details>' +
+      '<details class="payroll-subregistry" open><summary>Références sans valeur (' + references.length + ')</summary>' + variableForm +
+      (referenceRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Employé</th><th>Rubrique descriptive</th><th>Période</th><th>Source</th><th>Libellé</th><th>État de données</th></tr></thead><tbody>' + referenceRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucune référence de variable</strong><span>Aucun montant, zéro implicite ni calcul n’est créé automatiquement.</span></div>') + '</details></section>';
   }
 
   function viewPayrollLeaveAbsences(dossier, employees, records, canCreate) {
@@ -20501,6 +20579,8 @@
     var organizationAssignments = PayrollHR.organizationAssignments(dossier.id);
     var internalMissions = PayrollHR.internalMissions(dossier.id);
     var leaveAbsenceRecords = PayrollHR.leaveAbsenceRecords(dossier.id);
+    var payrollComponents = PayrollHR.payrollComponents(dossier.id);
+    var payrollVariableReferences = PayrollHR.payrollVariableReferences(dossier.id);
     var canEditPayrollRecords = hasDemoPermission(member, 'payroll-hr', 'record.edit', payrollAccessContext(dossier));
     var employeeRows = dossierEmployees.map(function (employee) {
       var createdLabel = employee.createdAt ? String(employee.createdAt).slice(0, 10) : 'Non renseignée';
@@ -20535,7 +20615,7 @@
     return '<div class="payroll-module-workspace">' +
       pageHeader('Paie & RH', 'Dossier client : <strong>' + esc(dossier.clientName) + '</strong> · ' + esc(dossier.reference) + ' · exercice ' + esc(dossier.exerciseYear) + '.', '<a class="btn btn-ghost" href="#/payroll-dossiers">Changer de dossier RH</a> <a class="btn btn-ghost" href="#/launcher">← Modules</a>') +
       '<div class="alert warning"><div><strong>Base fonctionnelle en cours</strong><br>Les données sont encore stockées localement dans ce navigateur. Utilisez uniquement des données synthétiques. Le calcul de paie et les fonctions de production restent bloqués tant que les textes, règles et le stockage sécurisé ne sont pas validés.</div></div>' +
-      accountingLinkPanel + employeeSection + viewPayrollOrganizationUnits(dossier, organizationUnits, canCreatePayrollEmployee, canEditPayrollRecords) + viewPayrollAssignmentsMissions(dossier, dossierEmployees, organizationUnits, organizationAssignments, internalMissions, canCreatePayrollEmployee) + viewPayrollHRTracking(dossier, hrTrackingRecords, canCreatePayrollEmployee) + viewPayrollLeaveAbsences(dossier, dossierEmployees, leaveAbsenceRecords, canCreatePayrollEmployee) +
+      accountingLinkPanel + employeeSection + viewPayrollOrganizationUnits(dossier, organizationUnits, canCreatePayrollEmployee, canEditPayrollRecords) + viewPayrollAssignmentsMissions(dossier, dossierEmployees, organizationUnits, organizationAssignments, internalMissions, canCreatePayrollEmployee) + viewPayrollHRTracking(dossier, hrTrackingRecords, canCreatePayrollEmployee) + viewPayrollLeaveAbsences(dossier, dossierEmployees, leaveAbsenceRecords, canCreatePayrollEmployee) + viewPayrollComponentsAndReferences(dossier, dossierEmployees, payrollComponents, payrollVariableReferences, canCreatePayrollEmployee) +
       '<section class="exchange-card"><p class="page-kicker">CYCLE DE PAIE</p><h3>Lots du dossier</h3>' +
         '<div class="alert info"><div>Aucun calcul ou lot fictif n’est créé. Le moteur restera indisponible tant que les règles applicables, les données source et les contrôles d’approbation ne sont pas validés.</div></div>' +
         (runRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Référence</th><th>Période</th><th>État</th><th>Référence comptable</th></tr></thead><tbody>' + runRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucun lot de paie disponible</strong><span>Les lots ne peuvent pas être créés avec des montants, comptes ou règles inventés.</span></div>') +

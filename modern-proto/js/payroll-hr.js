@@ -502,6 +502,126 @@
     return { ok: true, errors: [], records: clone(records) };
   }
 
+  function payrollComponents(dossierId) {
+    dossierId = String(dossierId || '');
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier || !Array.isArray(dossier.payrollComponents)) return [];
+    return clone(dossier.payrollComponents.filter(function (item) { return item && item.dossierId === dossierId; }));
+  }
+
+  function createPayrollComponent(dossierId, input) {
+    input = input || {};
+    dossierId = String(dossierId || '');
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Cette version locale accepte uniquement des rubriques descriptives de test.'] };
+    var code = String(input.code || '').trim().toLocaleUpperCase();
+    var label = String(input.label || '').trim().replace(/\s+/g, ' ');
+    var description = String(input.description || '').trim().replace(/\s+/g, ' ');
+    var natureLabel = String(input.natureLabel || '').trim().replace(/\s+/g, ' ');
+    var entryModeLabel = String(input.entryModeLabel || '').trim().replace(/\s+/g, ' ');
+    var errors = [];
+    if (!code) errors.push('Le code de rubrique fictive est obligatoire.');
+    if (code.length > 40) errors.push('Le code ne peut pas dépasser 40 caractères.');
+    if (!label) errors.push('Le libellé de rubrique fictive est obligatoire.');
+    if (label.length > 120) errors.push('Le libellé ne peut pas dépasser 120 caractères.');
+    if (description.length > 240) errors.push('La description ne peut pas dépasser 240 caractères.');
+    if (natureLabel.length > 60 || entryModeLabel.length > 60) errors.push('Les libellés descriptifs ne peuvent pas dépasser 60 caractères.');
+    dossier.payrollComponents = Array.isArray(dossier.payrollComponents) ? dossier.payrollComponents : [];
+    if (code && dossier.payrollComponents.some(function (item) { return item && String(item.code || '').toLocaleLowerCase() === code.toLocaleLowerCase(); })) {
+      errors.push('Ce code de rubrique existe déjà dans ce dossier RH.');
+    }
+    if (errors.length) return { ok: false, errors: errors };
+    var id;
+    do { id = 'component-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); }
+    while (dossier.payrollComponents.some(function (item) { return item && item.id === id; }));
+    var now = new Date().toISOString();
+    var component = { id: id, dossierId: dossierId, code: code, label: label, description: description,
+      natureLabel: natureLabel, entryModeLabel: entryModeLabel, origin: 'test-only',
+      calculationConfigured: false, createdAt: now, history: [{ action: 'created', changedAt: now }] };
+    dossier.payrollComponents.push(component);
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la rubrique de test.'] };
+    return { ok: true, errors: [], component: clone(component) };
+  }
+
+  function payrollVariableReferences(dossierId) {
+    dossierId = String(dossierId || '');
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier || !Array.isArray(dossier.payrollVariableReferences)) return [];
+    return clone(dossier.payrollVariableReferences.filter(function (item) { return item && item.dossierId === dossierId; }));
+  }
+
+  function createPayrollVariableReference(dossierId, input) {
+    input = input || {};
+    dossierId = String(dossierId || '');
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Cette version locale accepte uniquement des références de variable de test.'] };
+    var employeeId = String(input.employeeId || '');
+    var componentId = String(input.componentId || '');
+    var period = String(input.period || '');
+    var sourceReference = String(input.sourceReference || '').trim();
+    var label = String(input.label || '').trim().replace(/\s+/g, ' ');
+    var errors = [];
+    if (!validDemoEmployee(dossier, employeeId)) errors.push('Choisissez un employé fictif du dossier RH courant.');
+    dossier.payrollComponents = Array.isArray(dossier.payrollComponents) ? dossier.payrollComponents : [];
+    var component = dossier.payrollComponents.find(function (item) { return item && item.id === componentId && item.dossierId === dossierId; });
+    if (!component) errors.push('Choisissez une rubrique fictive du même dossier RH.');
+    if (!validPeriod(period)) errors.push('Choisissez une période mensuelle de test valide.');
+    if (sourceReference.length > 80) errors.push('La référence de source ne peut pas dépasser 80 caractères.');
+    if (!label) errors.push('Le libellé de référence est obligatoire.');
+    if (label.length > 120) errors.push('Le libellé ne peut pas dépasser 120 caractères.');
+    if (errors.length) return { ok: false, errors: errors };
+    dossier.payrollVariableReferences = Array.isArray(dossier.payrollVariableReferences) ? dossier.payrollVariableReferences : [];
+    var id;
+    do { id = 'variable-ref-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); }
+    while (dossier.payrollVariableReferences.some(function (item) { return item && item.id === id; }));
+    var now = new Date().toISOString();
+    var reference = { id: id, dossierId: dossierId, employeeId: employeeId, componentId: componentId,
+      period: period, sourceReference: sourceReference, label: label, origin: 'test-only',
+      valueProvided: false, createdAt: now, history: [{ action: 'created', changedAt: now }] };
+    dossier.payrollVariableReferences.push(reference);
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la référence de variable.'] };
+    return { ok: true, errors: [], reference: clone(reference) };
+  }
+
+  function demoPayrollReferencesSeeded(dossierId) {
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId || ''); });
+    return !!(dossier && dossier.demoPayrollReferencesSeededAt);
+  }
+
+  function seedDemoPayrollReferences(dossierId) {
+    dossierId = String(dossierId || '');
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['Les données préremplies sont réservées au dossier PRH-TEST-2026.'] };
+    if (dossier.demoPayrollReferencesSeededAt) return { ok: false, errors: ['Les références de rémunération DEMO sont déjà chargées.'] };
+    dossier.payrollComponents = Array.isArray(dossier.payrollComponents) ? dossier.payrollComponents : [];
+    dossier.payrollVariableReferences = Array.isArray(dossier.payrollVariableReferences) ? dossier.payrollVariableReferences : [];
+    if (dossier.payrollComponents.some(function (item) { return item && /^MOCK-COMP-/.test(item.code || ''); }) ||
+        dossier.payrollVariableReferences.some(function (item) { return item && /^mock-variable-ref-/.test(item.id || ''); })) {
+      return { ok: false, errors: ['Des exemples DEMO similaires existent déjà ; aucun doublon n’a été ajouté.'] };
+    }
+    var now = new Date().toISOString();
+    var components = [
+      { id: 'mock-component-a', dossierId: dossierId, code: 'MOCK-COMP-A', label: 'Composante fictive A — DEMO', description: 'Libellé synthétique sans règle de calcul.', natureLabel: '', entryModeLabel: '', origin: 'demo-mock', calculationConfigured: false, createdAt: now, history: [{ action: 'created', changedAt: now }] },
+      { id: 'mock-component-b', dossierId: dossierId, code: 'MOCK-COMP-B', label: 'Composante fictive B — DEMO', description: 'Libellé synthétique sans règle de calcul.', natureLabel: '', entryModeLabel: '', origin: 'demo-mock', calculationConfigured: false, createdAt: now, history: [{ action: 'created', changedAt: now }] }
+    ];
+    var employees = dossier.demoEmployees.slice(0, 2);
+    var references = [
+      { id: 'mock-variable-ref-a', dossierId: dossierId, employeeId: employees[0].id, componentId: components[0].id, period: '2026-05', sourceReference: 'DEMO-SOURCE-A', label: 'Référence fictive sans valeur', origin: 'demo-mock', valueProvided: false, createdAt: now, history: [{ action: 'created', changedAt: now }] },
+      { id: 'mock-variable-ref-b', dossierId: dossierId, employeeId: employees[1].id, componentId: components[1].id, period: '2026-06', sourceReference: 'DEMO-SOURCE-B', label: 'Référence fictive sans valeur', origin: 'demo-mock', valueProvided: false, createdAt: now, history: [{ action: 'created', changedAt: now }] }
+    ];
+    dossier.payrollComponents.push.apply(dossier.payrollComponents, components);
+    dossier.payrollVariableReferences.push.apply(dossier.payrollVariableReferences, references);
+    dossier.demoPayrollReferencesSeededAt = now;
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer le jeu DEMO des rubriques.'] };
+    return { ok: true, errors: [], components: clone(components), references: clone(references) };
+  }
+
   function dossierById(dossierId) {
     return clone(loadDossierCatalog().dossiers.find(function (dossier) { return dossier.id === String(dossierId || ''); }) || null);
   }
@@ -717,6 +837,12 @@
     createLeaveAbsenceRecord: createLeaveAbsenceRecord,
     demoLeaveAbsenceSeeded: demoLeaveAbsenceSeeded,
     seedDemoLeaveAbsenceData: seedDemoLeaveAbsenceData,
+    payrollComponents: payrollComponents,
+    createPayrollComponent: createPayrollComponent,
+    payrollVariableReferences: payrollVariableReferences,
+    createPayrollVariableReference: createPayrollVariableReference,
+    demoPayrollReferencesSeeded: demoPayrollReferencesSeeded,
+    seedDemoPayrollReferences: seedDemoPayrollReferences,
     hrTrackingRecords: hrTrackingRecords,
     createHRTrackingRecord: createHRTrackingRecord,
     createDossier: createDossier,

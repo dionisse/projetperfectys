@@ -176,6 +176,39 @@ assert.equal(PayrollHR.createLeaveAbsenceRecord(dossier.id, {
 assert.equal(PayrollHR.leaveAbsenceRecords(dossier.id).length, 2);
 assert.deepEqual(PayrollHR.leaveAbsenceRecords('other-dossier'), [], 'les événements restent isolés par dossier');
 
+assert.equal(PayrollHR.createPayrollComponent(dossier.id, {
+  code: 'TEST-COMP-A', label: 'Composante de test A', natureLabel: '', entryModeLabel: '', testOnly: false
+}).ok, false, 'une rubrique non confirmée comme test est refusée');
+const component = PayrollHR.createPayrollComponent(dossier.id, {
+  code: 'TEST-COMP-A', label: 'Composante de test A', description: 'Descriptive uniquement',
+  natureLabel: 'Type libre de test', entryModeLabel: '', testOnly: true
+});
+assert.equal(component.ok, true, component.errors.join('\\n'));
+assert.equal(component.component.calculationConfigured, false);
+assert.equal(PayrollHR.createPayrollComponent(dossier.id, {
+  code: 'test-comp-a', label: 'Doublon fictif', testOnly: true
+}).ok, false, 'le code de rubrique est unique par dossier');
+const variableReference = PayrollHR.createPayrollVariableReference(dossier.id, {
+  employeeId: created.employee.id, componentId: component.component.id,
+  period: '2026-05', sourceReference: 'SOURCE-TEST-A', label: 'Référence sans valeur', testOnly: true
+});
+assert.equal(variableReference.ok, true, variableReference.errors.join('\\n'));
+assert.equal(variableReference.reference.valueProvided, false);
+assert.equal('amount' in variableReference.reference, false);
+assert.equal('quantity' in variableReference.reference, false);
+assert.equal(PayrollHR.createPayrollVariableReference(dossier.id, {
+  employeeId: 'employee-from-other-folder', componentId: component.component.id,
+  period: '2026-05', label: 'Référence croisée', testOnly: true
+}).ok, false, 'une référence rejette les relations employé inter-dossiers');
+assert.equal(PayrollHR.createPayrollVariableReference(dossier.id, {
+  employeeId: created.employee.id, componentId: component.component.id,
+  period: '2026-13', label: 'Période invalide', testOnly: true
+}).ok, false, 'la période mensuelle doit être valide');
+assert.equal(PayrollHR.payrollComponents(dossier.id).length, 1);
+assert.equal(PayrollHR.payrollVariableReferences(dossier.id).length, 1);
+assert.equal(PayrollHR.payrollComponents('other-dossier').length, 0);
+assert.equal(PayrollHR.payrollVariableReferences('other-dossier').length, 0);
+
 assert.deepEqual(PayrollHR.accountingAccountCatalog(), [], 'aucun compte de paie n’est préconfiguré');
 const fakeRun = PayrollHR.createDemoRun(dossier, '2026-01');
 assert.equal(fakeRun.ok, false, 'aucun lot avec montant ou compte inventé ne peut être créé');
@@ -221,4 +254,13 @@ assert.ok(leaveSeed.records.every(record => record.origin === 'demo-mock' && rec
 assert.equal(PayrollHR.demoLeaveAbsenceSeeded(testDossier.dossier.id), true);
 assert.equal(PayrollHR.seedDemoLeaveAbsenceData(testDossier.dossier.id).ok, false, 'les exemples congés/absences ne se dupliquent pas');
 assert.equal(PayrollHR.seedDemoLeaveAbsenceData(dossier.id).ok, false, 'les exemples congés restent réservés au dossier de test');
-console.log('Paie & RH : jeux fictifs isolés, demandes et absences sans calcul — OK');
+const payrollSeed = PayrollHR.seedDemoPayrollReferences(testDossier.dossier.id);
+assert.equal(payrollSeed.ok, true, payrollSeed.errors.join('\\n'));
+assert.equal(payrollSeed.components.length, 2);
+assert.equal(payrollSeed.references.length, 2);
+assert.ok(payrollSeed.components.every(item => item.origin === 'demo-mock' && item.calculationConfigured === false));
+assert.ok(payrollSeed.references.every(item => item.origin === 'demo-mock' && item.valueProvided === false && !('amount' in item)));
+assert.equal(PayrollHR.demoPayrollReferencesSeeded(testDossier.dossier.id), true);
+assert.equal(PayrollHR.seedDemoPayrollReferences(testDossier.dossier.id).ok, false, 'les rubriques DEMO ne peuvent pas être dupliquées');
+assert.equal(PayrollHR.seedDemoPayrollReferences(dossier.id).ok, false, 'les valeurs DEMO sont réservées au dossier de test');
+console.log('Paie & RH : jeux fictifs isolés, demandes, absences et références sans calcul — OK');
