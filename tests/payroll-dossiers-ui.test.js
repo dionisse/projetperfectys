@@ -33,10 +33,30 @@ assert.match(app, /role=.{0,3}tablist[\s\S]*aria-orientation=.{0,3}vertical/);
 assert.match(app, /role=.{0,3}tabpanel/);
 assert.match(app, /data-action=.{1}payroll-menu-item/);
 assert.match(app, /Fonctionnalités déjà développées — à reclasser dans les menus/);
+for (const menuItem of [
+  'Employés', 'Statuts', 'Catégories', 'Zones géographiques', 'Services', 'Fonctions', 'Diplômes et Qualifications', 'Professions',
+  "Caisses complémentaires d'assurance sociales", 'Banques', 'Bulletins de salaire', 'Bulletins complémentaires après débauchage',
+  'Heures de présence', 'Natures des Avances et Prêts', 'Indemnité de licenciement', 'Indemnité de départ en retraite',
+  'Etats sur la paie du mois en cours', 'Déclarations C.N.S.S., I.P.T.S. et F.N.R.', 'Etat des versements aux caisses complémentaires',
+  'Etats personnalisés sur les salaires', 'Etats sur le Personnel', 'Tableau 11 des tableaux financiers OHADA', 'Définitions et Paramètres',
+  'Etats spécifiques au dossier', 'Génération du journal de paie :', 'Edition du journal', 'Exportation par fichier-texte',
+  'Imputations des rubriques', 'Imputation des remboursements de prêt', 'Imputations auxiliaires', 'Imputations analytiques',
+  'Emplacement du fichier des comptes généraux', 'Paramètres généraux', "Activation du module de l'administration du personnel",
+  'Jours ouvrés et chômés de l’année', 'Paramètres de calcul des heures supplémentaires',
+  "Paramètres de calcul de l'indemnité de licenciement", "Paramètres de calcul de l'indemnités de départ à la retraite",
+  'Libellés des informations diverses sur les employés', 'Informations communes aux états imprimés', 'Activation de rubriques de salaire',
+  'Rubriques de salaire liées à la catégorie', 'Rubriques de salaires liées à la fonction', 'Droits des utilisateurs', 'Rubriques de salaire'
+]) assert.ok(app.includes(menuItem), 'sous-menu reçu de la capture : ' + menuItem);
+assert.match(app, /function payrollMenuSections\(menu\)/);
+assert.match(app, /selectedItem\.hasChildren[\s\S]*ses sous-éléments ne sont pas fournis/);
+assert.ok(app.includes('esc(activeMenu)'));
+assert.match(app, /disabled aria-disabled=.{1}true/);
 assert.ok(app.includes('function buildPayrollSidebarMarkup()'));
 assert.ok(app.includes('buildPayrollSidebarMarkup() : accountingSidebarMarkup'));
 assert.ok(css.includes('.sidebar-nav .payroll-sidebar-menu'));
 assert.ok(css.includes('.payroll-menu-page .accounting-subtab'));
+assert.ok(css.includes('.payroll-subtab-group-heading'));
+assert.ok(css.includes('.payroll-subtab-separator'));
 assert.ok(css.includes('.payroll-legacy-views'));
 assert.match(payroll, /function createEmployee\(dossierId, input\)/);
 assert.match(payroll, /testOnly !== true/);
@@ -151,5 +171,5 @@ assert.match(payroll, /function createDossier\(input\)[\s\S]*'PRH-' \+ clientCod
 assert.match(payroll, /accountingDossierId: accountingDossierId/);
 assert.match(payroll, /function storageKey\(dossierId\)[\s\S]*STORAGE_PREFIX \+ encodeURIComponent/);
 assert.match(css, /\.payroll-dossier-grid[\s\S]*\.payroll-dossier-card/);
-assert.match(worker, /perfecto-static-v219/);
+assert.match(worker, /perfecto-static-v220/);
 console.log('UI Paie & RH : route dossier dédiée, référence PRH, sélection par dossier et association non automatique — OK');

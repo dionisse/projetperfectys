@@ -4210,3 +4210,8 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .payroll-legacy-views > summary { padding: 12px 15px; color: #41564e; font-weight: 650; cursor: pointer; }
 .payroll-legacy-views[open] { padding: 0 12px 12px; }
 .payroll-legacy-views[open] > summary { margin: 0 -12px 12px; border-bottom: 1px solid #e0e7e3; }
+.payroll-subtab-group-heading { margin: 6px 2px 3px; color: #527168; font-size: .7rem; font-weight: 750; }
+.payroll-subtab-separator { height: 1px; margin: 5px 0; background: #dce4df; }
+.payroll-menu-page .accounting-subtab.is-disabled { color: #9aa49f; background: #fafbf9; cursor: not-allowed; }
+.payroll-menu-page .accounting-subtab.is-disabled .accounting-subtab-state { color: #9aa49f; }
+.payroll-subtab-chevron { align-self: start; margin-left: auto; color: #64756d; font-size: 1rem; line-height: 1; }

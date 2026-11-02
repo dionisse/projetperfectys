@@ -337,15 +337,61 @@
       : accountingMenuHash(accountingGroup, accountingTab, accountingChild);
   }
 
-  function payrollFileMenuGroups() {
-    return [
-      [{ id: 'export-files', label: 'Export des fichiers' }, { id: 'import-files', label: 'Import des fichiers' }],
-      [{ id: 'import-one-component', label: "Import d'une rubrique de bulletins" }, { id: 'import-components', label: 'Import de plusieurs rubriques de bulletins' }],
-      [{ id: 'recalculate-current-month', label: 'Recalcul des bulletins du mois en cours' }, { id: 'repair-files', label: 'Réparation des fichiers' }],
-      [{ id: 'close-current-payroll', label: 'Clôture de la paie en cours' }, { id: 'open-next-month', label: 'Ouverture de la paie du mois suivant' }],
-      [{ id: 'user-guide', label: "Guide d'utilisation" }],
-      [{ id: 'quit', label: 'Quitter' }]
+  function payrollMenuSections(menu) {
+    var files = [
+      { items: [{ id: 'export-files', label: 'Export des fichiers' }, { id: 'import-files', label: 'Import des fichiers' }] },
+      { items: [{ id: 'import-one-component', label: "Import d'une rubrique de bulletins" }, { id: 'import-components', label: 'Import de plusieurs rubriques de bulletins' }] },
+      { items: [{ id: 'recalculate-current-month', label: 'Recalcul des bulletins du mois en cours' }, { id: 'repair-files', label: 'Réparation des fichiers' }] },
+      { items: [{ id: 'close-current-payroll', label: 'Clôture de la paie en cours' }, { id: 'open-next-month', label: 'Ouverture de la paie du mois suivant' }] },
+      { items: [{ id: 'user-guide', label: "Guide d'utilisation" }] },
+      { items: [{ id: 'quit', label: 'Quitter' }] }
     ];
+    var definitions = [
+      { items: [{ id: 'employees', label: 'Employés' }] },
+      { items: [{ id: 'employee-statuses', label: 'Statuts' }, { id: 'employee-categories', label: 'Catégories' }, { id: 'geographic-zones', label: 'Zones géographiques' }, { id: 'services', label: 'Services' }, { id: 'functions', label: 'Fonctions' }] },
+      { items: [{ id: 'degrees-qualifications', label: 'Diplômes et Qualifications' }, { id: 'professions', label: 'Professions' }] },
+      { items: [{ id: 'complementary-social-funds', label: "Caisses complémentaires d'assurance sociales" }, { id: 'banks', label: 'Banques' }] }
+    ];
+    var salaries = [
+      { items: [{ id: 'payslips', label: 'Bulletins de salaire' }, { id: 'post-hire-payslips', label: 'Bulletins complémentaires après débauchage' }] },
+      { items: [{ id: 'attendance-hours', label: 'Heures de présence' }] },
+      { items: [{ id: 'advances-loans', label: 'Natures des Avances et Prêts' }] },
+      { items: [{ id: 'dismissal-compensation', label: 'Indemnité de licenciement' }, { id: 'retirement-compensation', label: 'Indemnité de départ en retraite' }] }
+    ];
+    var editions = [
+      { heading: 'Bulletins de salaire', items: [
+        { id: 'exceptional-payslip-1', label: '1 - Bulletins exceptionnels de salaire', disabled: true },
+        { id: 'exceptional-payslip-2', label: '2 - Bulletins exceptionnels de salaire', disabled: true },
+        { id: 'exceptional-payslip-3', label: '3 - Bulletins exceptionnels de salaire', disabled: true }
+      ] },
+      { items: [{ id: 'current-month-payroll-reports', label: 'Etats sur la paie du mois en cours', hasChildren: true }] },
+      { items: [{ id: 'cnss-ipts-fnr-declarations', label: 'Déclarations C.N.S.S., I.P.T.S. et F.N.R.', hasChildren: true }] },
+      { items: [{ id: 'complementary-fund-payments', label: 'Etat des versements aux caisses complémentaires' }] },
+      { items: [{ id: 'custom-salary-reports', label: 'Etats personnalisés sur les salaires' }, { id: 'personnel-reports', label: 'Etats sur le Personnel', hasChildren: true }, { id: 'ohada-table-11', label: 'Tableau 11 des tableaux financiers OHADA' }] },
+      { items: [{ id: 'definitions-settings-reports', label: 'Définitions et Paramètres', hasChildren: true }] },
+      { items: [{ id: 'dossier-specific-reports', label: 'Etats spécifiques au dossier' }] }
+    ];
+    var accounting = [
+      { heading: 'Génération du journal de paie :', items: [{ id: 'payroll-journal-edition', label: 'Edition du journal' }, { id: 'payroll-text-export', label: 'Exportation par fichier-texte' }] },
+      { items: [{ id: 'component-postings', label: 'Imputations des rubriques' }, { id: 'loan-repayment-postings', label: 'Imputation des remboursements de prêt' }, { id: 'auxiliary-postings', label: 'Imputations auxiliaires' }, { id: 'analytic-postings', label: 'Imputations analytiques' }] },
+      { items: [{ id: 'general-accounts-file-location', label: 'Emplacement du fichier des comptes généraux' }] }
+    ];
+    var parameters = [
+      { items: [{ id: 'general-settings', label: 'Paramètres généraux' }, { id: 'personnel-administration-module', label: "Activation du module de l'administration du personnel" }] },
+      { items: [{ id: 'working-holidays-calendar', label: 'Jours ouvrés et chômés de l’année' }, { id: 'overtime-calculation-settings', label: 'Paramètres de calcul des heures supplémentaires' }, { id: 'dismissal-calculation-settings', label: "Paramètres de calcul de l'indemnité de licenciement" }, { id: 'retirement-calculation-settings', label: "Paramètres de calcul de l'indemnités de départ à la retraite" }] },
+      { items: [{ id: 'employee-misc-labels', label: 'Libellés des informations diverses sur les employés' }, { id: 'printed-reports-common-info', label: 'Informations communes aux états imprimés' }] },
+      { items: [{ id: 'salary-components-activation', label: 'Activation de rubriques de salaire' }, { id: 'salary-components-by-category', label: 'Rubriques de salaire liées à la catégorie' }, { id: 'salary-components-by-function', label: 'Rubriques de salaires liées à la fonction' }] },
+      { items: [{ id: 'user-rights', label: 'Droits des utilisateurs' }, { id: 'salary-components', label: 'Rubriques de salaire', disabled: true }] }
+    ];
+    return ({
+      Fichier: files,
+      Définitions: definitions,
+      Salaires: salaries,
+      Editions: editions,
+      Comptabilisations: accounting,
+      Paramètres: parameters,
+      Outils: []
+    })[menu] || [];
   }
 
   function buildPayrollSidebarMarkup() {
@@ -20850,18 +20896,30 @@
 
   function viewPayrollMainMenu(dossier) {
     var activeMenu = ui.payrollMainMenu || 'Fichier';
-    var items = activeMenu === 'Fichier' ? payrollFileMenuGroups().reduce(function (all, group) { return all.concat(group); }, []) : [];
-    var selectedItem = items.find(function (item) { return item.id === ui.payrollMenuItem; }) || items[0] || null;
-    var tabs = items.map(function (item) {
-      var selected = selectedItem && item.id === selectedItem.id;
-      return '<button type="button" id="payroll-menu-tab-' + esc(item.id) + '" class="accounting-subtab' + (selected ? ' is-active' : '') + '" role="tab" aria-controls="payroll-menu-tabpanel" aria-selected="' + (selected ? 'true' : 'false') + '"' + (selected ? ' aria-current="page"' : '') + ' data-action="payroll-menu-item" data-menu-item="' + esc(item.id) + '"><span class="accounting-subtab-label">' + esc(item.label) + '</span><small class="accounting-subtab-state">À construire</small></button>';
+    var sections = payrollMenuSections(activeMenu);
+    var items = sections.reduce(function (all, section) { return all.concat(section.items || []); }, []);
+    var selectableItems = items.filter(function (item) { return !item.disabled; });
+    var selectedItem = selectableItems.find(function (item) { return item.id === ui.payrollMenuItem; }) || selectableItems[0] || null;
+    var tabs = sections.map(function (section, sectionIndex) {
+      var heading = section.heading ? '<p class="payroll-subtab-group-heading">' + esc(section.heading) + '</p>' : '';
+      var rows = (section.items || []).map(function (item) {
+        var selected = selectedItem && item.id === selectedItem.id;
+        var state = item.disabled ? 'Inactif' : (item.hasChildren ? 'Sous-menu' : 'À construire');
+        var disclosure = item.hasChildren ? '<span class="payroll-subtab-chevron" aria-hidden="true">›</span>' : '';
+        return '<button type="button" id="payroll-menu-tab-' + esc(item.id) + '" class="accounting-subtab' + (selected ? ' is-active' : '') + (item.disabled ? ' is-disabled' : '') + '" role="tab" aria-controls="payroll-menu-tabpanel" aria-selected="' + (selected ? 'true' : 'false') + '"' + (item.disabled ? ' disabled aria-disabled="true"' : (selected ? ' aria-current="page"' : '')) + ' data-action="payroll-menu-item" data-menu-name="' + esc(activeMenu) + '" data-menu-item="' + esc(item.id) + '"><span class="accounting-subtab-label">' + esc(item.label) + '</span>' + disclosure + '<small class="accounting-subtab-state">' + state + '</small></button>';
+      }).join('');
+      return (sectionIndex ? '<div class="payroll-subtab-separator" role="separator"></div>' : '') + heading + rows;
     }).join('');
     var itemHeading = selectedItem ? selectedItem.label : activeMenu;
-    var itemDescription = selectedItem
-      ? 'Cet onglet établit uniquement la navigation. Le traitement associé n’est pas encore construit ni activé.'
-      : 'Les sous-menus de cette rubrique seront ajoutés progressivement. Aucun contenu métier n’est présumé.';
-    var panel = '<section class="accounting-menu-panel"' + (selectedItem ? ' id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-' + esc(selectedItem.id) + '"' : '') + '><div class="accounting-menu-panel-head"><div><p class="page-kicker">SOUS-MENU · ' + esc(activeMenu.toUpperCase()) + '</p><h3>' + esc(itemHeading) + '</h3></div><span class="badge draft">' + (selectedItem ? 'À construire' : 'À définir') + '</span></div><p class="menu-item-reason">' + itemDescription + '</p><div class="alert info"><div>Aucune opération de fichier, modification de paie, clôture ou écriture comptable n’est exécutée depuis cette navigation.</div></div></section>';
-    return '<section class="accounting-menu-page payroll-menu-page" aria-label="Menu ' + esc(activeMenu) + '"><div class="accounting-menu-heading"><div><p class="page-kicker">PAIE &amp; RH · ' + esc(dossier.reference || '') + '</p><h2>' + esc(activeMenu) + '</h2></div></div><div class="accounting-menu-layout"><nav class="accounting-subtabs" role="tablist" aria-orientation="vertical" aria-label="Sous-menus ' + esc(activeMenu) + '">' + (tabs || '<p class="small muted payroll-menu-empty">Aucune sous-rubrique définie pour ce menu.</p>') + '</nav><div class="accounting-menu-detail"><div class="menu-status-legend" aria-label="Légende des statuts"><span><i class="legend-dot legend-dot-planned"></i>À construire</span></div>' + panel + '</div></div></section>';
+    var itemDescription = !selectedItem
+      ? 'Aucun sous-menu n’est encore défini pour cette rubrique.'
+      : (selectedItem.hasChildren
+        ? 'La capture indique un niveau complémentaire pour cet élément, mais ses sous-éléments ne sont pas fournis. Aucun contenu ne sera déduit.'
+        : 'Cet onglet établit uniquement la navigation. Le traitement associé n’est pas encore construit ni activé.');
+    var panelStatus = !selectedItem ? 'À définir' : (selectedItem.hasChildren ? 'Sous-menu à préciser' : 'À construire');
+    var panel = '<section class="accounting-menu-panel"' + (selectedItem ? ' id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-' + esc(selectedItem.id) + '"' : '') + '><div class="accounting-menu-panel-head"><div><p class="page-kicker">SOUS-MENU · ' + esc(activeMenu.toUpperCase()) + '</p><h3>' + esc(itemHeading) + '</h3></div><span class="badge draft">' + panelStatus + '</span></div><p class="menu-item-reason">' + itemDescription + '</p><div class="alert info"><div>Navigation uniquement : aucune importation, exportation, modification de paie, clôture ou écriture comptable n’est exécutée ici.</div></div></section>';
+    var legend = '<div class="menu-status-legend" aria-label="Légende des statuts"><span><i class="legend-dot legend-dot-planned"></i>À construire</span><span><i class="legend-dot legend-dot-inactive"></i>Inactif dans la capture</span></div>';
+    return '<section class="accounting-menu-page payroll-menu-page" aria-label="Menu ' + esc(activeMenu) + '"><div class="accounting-menu-heading"><div><p class="page-kicker">PAIE &amp; RH · ' + esc(dossier.reference || '') + '</p><h2>' + esc(activeMenu) + '</h2></div></div><div class="accounting-menu-layout"><nav class="accounting-subtabs" role="tablist" aria-orientation="vertical" aria-label="Sous-menus ' + esc(activeMenu) + '">' + (tabs || '<p class="small muted payroll-menu-empty">Aucun élément de menu n’a été fourni.</p>') + '</nav><div class="accounting-menu-detail">' + legend + panel + '</div></div></section>';
   }
 
   function viewPayrollModule() {
@@ -33725,14 +33783,16 @@
     if (!canPerformDemoAction(action, trigger)) { event.preventDefault(); return; }
 
     switch (action) {
-      case 'payroll-main-menu':
+      case 'payroll-main-menu': {
         ui.payrollMainMenu = trigger.getAttribute('data-menu-name') || 'Fichier';
-        ui.payrollMenuItem = ui.payrollMainMenu === 'Fichier' ? (ui.payrollMenuItem || 'export-files') : '';
+        var menuItems = payrollMenuSections(ui.payrollMainMenu).reduce(function (all, section) { return all.concat(section.items || []); }, []).filter(function (item) { return !item.disabled; });
+        if (!menuItems.some(function (item) { return item.id === ui.payrollMenuItem; })) ui.payrollMenuItem = menuItems.length ? menuItems[0].id : '';
         render();
         break;
+      }
       case 'payroll-menu-item':
-        ui.payrollMainMenu = 'Fichier';
-        ui.payrollMenuItem = trigger.getAttribute('data-menu-item') || 'export-files';
+        ui.payrollMainMenu = trigger.getAttribute('data-menu-name') || ui.payrollMainMenu || 'Fichier';
+        ui.payrollMenuItem = trigger.getAttribute('data-menu-item') || '';
         render();
         break;
       case 'launcher-filter':
