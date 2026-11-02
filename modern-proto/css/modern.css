@@ -4122,3 +4122,17 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .payroll-country-candidate-details form { margin-top: 10px; padding: 12px; border: 1px solid #e7ece8; border-radius: 7px; background: #fff; }
 @media (max-width: 800px) { .payroll-country-rule-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .payroll-country-rule-grid { grid-template-columns: 1fr; } .payroll-country-rule-grid .payroll-test-confirm { grid-column: auto; } }
+
+/* Étape 12 : fiche de préparation explicitement bloquée, sans exécution ni résultats */
+.payroll-batch-preparations > .alert { margin: 10px 0 14px; line-height: 1.55; }
+.payroll-batch-preparation-form { margin: 10px 0 14px; padding: 13px; border: 1px solid #e3eae5; border-radius: 8px; background: #fbfcfb; }
+.payroll-batch-preparation-form h4 { margin: 0 0 10px; font-size: .86rem; }
+.payroll-batch-preparation-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 11px; }
+.payroll-batch-preparation-grid .field { min-width: 0; margin: 0; }
+.payroll-batch-preparation-grid input, .payroll-batch-preparation-grid select { width: 100%; }
+.payroll-batch-preparation-grid .payroll-test-confirm { grid-column: 1 / -1; }
+.payroll-batch-preparation-grid > .btn { justify-self: start; }
+.payroll-batch-preparations td details ul { margin: 8px 0 4px; padding-left: 20px; }
+.payroll-batch-preparations td details li { margin: 4px 0; }
+@media (max-width: 800px) { .payroll-batch-preparation-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .payroll-batch-preparation-grid { grid-template-columns: 1fr; } .payroll-batch-preparation-grid .payroll-test-confirm { grid-column: auto; } }

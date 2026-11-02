@@ -1,7 +1,9 @@
 # Étape 12 — Moteur de calcul et lots de paie
 
-**Statut :** proposition de cadrage à valider avant toute réalisation ou calcul réel.
+**Statut :** seul un formulaire local de préparation fictive, qui reste bloqué et ne lance aucune exécution, est implémenté ; le cadrage métier, les sources et les règles pays approuvées restent requis avant tout moteur ou calcul.
 **Dépendances :** données contractuelles (étape 6), congés/absences (étape 9), rémunérations et variables (étape 10) et règles pays approuvées (étape 11). Le pilote est mensuel et béninois.
+
+Le prototype enregistre uniquement un dossier de période et un lien explicite vers un cadre pays de test. Aucun employé ni aucune entrée n’est sélectionné, aucun résultat n’est produit et la tentative d’exécution est refusée. Ces fiches de préparation ne sont pas des lots de paie.
 **Plan complet :** [Plan d’implémentation Paie & RH en 18 étapes](proposition-implementation-paie-rh.md).
 
 ## 1. Objectif et limite de l’étape

@@ -314,4 +314,26 @@ assert.equal(countryPackSeed.candidate.sourceVerified, false);
 assert.equal(PayrollHR.demoCountryRulePackSeeded(testDossier.dossier.id), true);
 assert.equal(PayrollHR.seedDemoCountryRulePack(testDossier.dossier.id).ok, false, 'le pack DEMO ne se duplique pas');
 assert.equal(PayrollHR.seedDemoCountryRulePack(dossier.id).ok, false, 'le jeu DEMO est réservé à PRH-TEST-2026');
-console.log('Paie & RH : jeux fictifs isolés, demandes, absences, variables et packs de règles non activables — OK');
+const blockedPreparation = PayrollHR.createPayrollBatchPreparation(testDossier.dossier.id, {
+  packId: countryPackSeed.pack.id, period: '2026-09', testOnly: true
+});
+assert.equal(blockedPreparation.ok, true, blockedPreparation.errors.join('\\n'));
+assert.equal(blockedPreparation.preparation.status, 'calcul incomplet / bloqué');
+assert.equal(blockedPreparation.preparation.executionEnabled, false);
+assert.deepEqual(blockedPreparation.preparation.employeeIds, []);
+assert.deepEqual(blockedPreparation.preparation.sourceSnapshot.employeeIds, []);
+assert.equal('amount' in blockedPreparation.preparation, false);
+assert.equal('total' in blockedPreparation.preparation, false);
+assert.ok(blockedPreparation.preparation.blockers.some(reason => reason.includes('Aucune règle')));
+assert.ok(blockedPreparation.preparation.blockers.some(reason => reason.includes('Aucun employé')));
+assert.equal(PayrollHR.createPayrollBatchPreparation(testDossier.dossier.id, {
+  packId: countryPackSeed.pack.id, period: '2027-01', testOnly: true
+}).ok, false, 'la période doit rester dans le cycle du dossier');
+assert.equal(PayrollHR.createPayrollBatchPreparation(dossier.id, {
+  packId: countryPackSeed.pack.id, period: '2026-09', testOnly: true
+}).ok, false, 'le pack doit appartenir au même dossier RH');
+assert.equal(PayrollHR.payrollBatchPreparations(testDossier.dossier.id).length, 1);
+assert.equal(PayrollHR.payrollBatchPreparations(dossier.id).length, 0);
+assert.equal(PayrollHR.executePayrollBatchPreparation(testDossier.dossier.id, blockedPreparation.preparation.id).ok, false);
+assert.equal(PayrollHR.payrollBatchPreparations(testDossier.dossier.id).length, 1, 'une tentative refusée ne crée pas de résultat');
+console.log('Paie & RH : préparation de lots sans sélection d’employés, règles non activables et aucun calcul — OK');

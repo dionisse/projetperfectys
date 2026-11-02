@@ -507,6 +507,7 @@
       case 'create-payroll-country-pack':
       case 'create-payroll-country-rule-candidate':
       case 'seed-payroll-country-demo':
+      case 'create-payroll-batch-preparation':
         return { moduleId: 'payroll-hr', actionId: 'record.create' };
       case 'edit-payroll-org-unit':
       case 'archive-payroll-org-unit':
@@ -20421,6 +20422,17 @@
       if (!result.ok) { toast(result.errors[0] || 'Chargement des exemples DEMO impossible.', 'warning'); return; }
       toast('Cadre de démonstration chargé : aucune règle légale ni source réelle.', 'success'); render();
     });
+    var batchPreparationForm = $('#payroll-batch-preparation-form');
+    if (batchPreparationForm) batchPreparationForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('create-payroll-batch-preparation', null, true)) return;
+      var dossier = PayrollHR.currentDossier();
+      if (!dossier || batchPreparationForm.getAttribute('data-dossier-id') !== dossier.id) { toast('Création refusée : le dossier RH actif a changé.', 'warning'); return; }
+      var fields = batchPreparationForm.elements;
+      var result = PayrollHR.createPayrollBatchPreparation(dossier.id, { packId: fields.packId.value, period: fields.period.value, testOnly: fields.testOnly.checked });
+      if (!result.ok) { toast(result.errors[0] || 'Préparation du lot de test impossible.', 'warning'); return; }
+      toast('Fiche de préparation créée et bloquée ; aucun calcul ni résultat n’a été produit.', 'warning'); render();
+    });
   }
 
   function payrollEntryForRun(run, dossierId) {
@@ -20499,6 +20511,24 @@
     return '<section class="exchange-card payroll-hr-tracking"><p class="page-kicker">ÉTAPES 6–7 · SUIVIS SYNTHÉTIQUES</p><h3>Candidatures, contrats, intérim et départs</h3>' +
       '<div class="alert warning"><div>Socle de démonstration uniquement. Les libellés sont des types de suivi, pas des statuts ni des conclusions juridiques. Un suivi de départ ne modifie aucun statut d’employé, contrat ou accès. Aucun nom, motif de départ, document, catégorie légale, échéance, employeur/payeur ou élément de rémunération n’est enregistré.</div></div>' + form +
       (rows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Type</th><th>Référence</th><th>Libellé</th><th>Date de suivi</th><th>Nature</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucun suivi de test</strong><span>Aucun candidat, contrat ou dossier d’intérim n’est créé automatiquement.</span></div>') + '</section>';
+  }
+
+  function viewPayrollBatchPreparations(dossier, packs, preparations, canCreate) {
+    var packOptions = '<option value="" selected disabled>Choisir un cadre pays de test…</option>' + packs.map(function (pack) {
+      return '<option value="' + esc(pack.id) + '">' + esc(pack.countryCode + ' · ' + pack.domainLabel + ' · ' + pack.versionLabel) + '</option>';
+    }).join('');
+    var form = canCreate ? '<form id="payroll-batch-preparation-form" class="payroll-batch-preparation-form" data-dossier-id="' + esc(dossier.id) + '"><h4>Créer une fiche de préparation (sans exécution)</h4><div class="payroll-batch-preparation-grid">' +
+      '<div class="field"><label>Cadre pays de test *</label><select name="packId" required>' + packOptions + '</select></div>' +
+      '<div class="field"><label>Période mensuelle *</label><input name="period" type="month" required></div>' +
+      '<label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Cette fiche est fictive ; elle ne sélectionne aucun employé et ne produira aucun calcul.</span></label>' +
+      '<button class="btn btn-primary" type="submit"' + (!packs.length ? ' disabled' : '') + '>＋ Créer la fiche bloquée</button></div></form>' : '';
+    var rows = preparations.map(function (preparation) {
+      var blockers = preparation.blockers.map(function (reason) { return '<li>' + esc(reason) + '</li>'; }).join('');
+      return '<tr data-payroll-batch-preparation-id="' + esc(preparation.id) + '"><td><strong>' + esc(preparation.period) + '</strong></td><td>' + esc(preparation.countryLabel) + '<br><small>' + esc(preparation.packDomainLabel) + ' · ' + esc(preparation.packVersion) + '</small></td><td><span class="badge draft">Calcul incomplet / bloqué</span><br><small>0 employé sélectionné · aucun résultat</small></td><td><details><summary>Voir les blocages (' + preparation.blockers.length + ')</summary><ul>' + blockers + '</ul></details></td></tr>';
+    }).join('');
+    return '<section class="exchange-card payroll-batch-preparations"><p class="page-kicker">ÉTAPE 12 · PRÉPARATION BLOQUÉE · AUCUN CALCUL</p><h3>Préparation des lots mensuels</h3>' +
+      '<div class="alert warning"><div>Cette étape ne fait qu’enregistrer un brouillon de préparation synthétique. Elle ne sélectionne ni employé ni entrée, ne produit aucun montant ou résultat, ne crée aucun lot de paie approuvé et n’écrit rien en Comptabilité. Les dates de coupure, inclusions et règles restent à définir.</div></div>' + form +
+      (rows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Période</th><th>Pays et cadre sélectionné</th><th>État</th><th>Prérequis bloquants</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucune fiche de préparation</strong><span>Un cadre de test et une période valide sont nécessaires. L’enregistrement restera bloqué tant que les règles et données sources n’auront pas été validées.</span></div>') + '</section>';
   }
 
   function viewPayrollComponentsAndReferences(dossier, employees, components, references, canCreate) {
@@ -20667,6 +20697,7 @@
     var payrollVariableReferences = PayrollHR.payrollVariableReferences(dossier.id);
     var countryRulePacks = PayrollHR.countryRulePacks(dossier.id);
     var countryRuleCandidates = PayrollHR.countryRuleCandidates(dossier.id);
+    var payrollBatchPreparations = PayrollHR.payrollBatchPreparations(dossier.id);
     var canEditPayrollRecords = hasDemoPermission(member, 'payroll-hr', 'record.edit', payrollAccessContext(dossier));
     var employeeRows = dossierEmployees.map(function (employee) {
       var createdLabel = employee.createdAt ? String(employee.createdAt).slice(0, 10) : 'Non renseignée';
@@ -20701,9 +20732,9 @@
     return '<div class="payroll-module-workspace">' +
       pageHeader('Paie & RH', 'Dossier client : <strong>' + esc(dossier.clientName) + '</strong> · ' + esc(dossier.reference) + ' · exercice ' + esc(dossier.exerciseYear) + '.', '<a class="btn btn-ghost" href="#/payroll-dossiers">Changer de dossier RH</a> <a class="btn btn-ghost" href="#/launcher">← Modules</a>') +
       '<div class="alert warning"><div><strong>Base fonctionnelle en cours</strong><br>Les données sont encore stockées localement dans ce navigateur. Utilisez uniquement des données synthétiques. Le calcul de paie et les fonctions de production restent bloqués tant que les textes, règles et le stockage sécurisé ne sont pas validés.</div></div>' +
-      accountingLinkPanel + employeeSection + viewPayrollOrganizationUnits(dossier, organizationUnits, canCreatePayrollEmployee, canEditPayrollRecords) + viewPayrollAssignmentsMissions(dossier, dossierEmployees, organizationUnits, organizationAssignments, internalMissions, canCreatePayrollEmployee) + viewPayrollHRTracking(dossier, hrTrackingRecords, canCreatePayrollEmployee) + viewPayrollLeaveAbsences(dossier, dossierEmployees, leaveAbsenceRecords, canCreatePayrollEmployee) + viewPayrollComponentsAndReferences(dossier, dossierEmployees, payrollComponents, payrollVariableReferences, canCreatePayrollEmployee) + viewPayrollCountryRulePacks(dossier, countryRulePacks, countryRuleCandidates, canCreatePayrollEmployee) +
+      accountingLinkPanel + employeeSection + viewPayrollOrganizationUnits(dossier, organizationUnits, canCreatePayrollEmployee, canEditPayrollRecords) + viewPayrollAssignmentsMissions(dossier, dossierEmployees, organizationUnits, organizationAssignments, internalMissions, canCreatePayrollEmployee) + viewPayrollHRTracking(dossier, hrTrackingRecords, canCreatePayrollEmployee) + viewPayrollLeaveAbsences(dossier, dossierEmployees, leaveAbsenceRecords, canCreatePayrollEmployee) + viewPayrollComponentsAndReferences(dossier, dossierEmployees, payrollComponents, payrollVariableReferences, canCreatePayrollEmployee) + viewPayrollCountryRulePacks(dossier, countryRulePacks, countryRuleCandidates, canCreatePayrollEmployee) + viewPayrollBatchPreparations(dossier, countryRulePacks, payrollBatchPreparations, canCreatePayrollEmployee) +
       '<section class="exchange-card"><p class="page-kicker">CYCLE DE PAIE</p><h3>Lots du dossier</h3>' +
-        '<div class="alert info"><div>Aucun calcul ou lot fictif n’est créé. Le moteur restera indisponible tant que les règles applicables, les données source et les contrôles d’approbation ne sont pas validés.</div></div>' +
+        '<div class="alert info"><div>Aucun calcul ni lot de paie n’est créé automatiquement. Les éventuelles fiches de préparation restent distinctes des lots et bloquées tant que les règles applicables, données source et contrôles ne sont pas validés.</div></div>' +
         (runRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Référence</th><th>Période</th><th>État</th><th>Référence comptable</th></tr></thead><tbody>' + runRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucun lot de paie disponible</strong><span>Les lots ne peuvent pas être créés avec des montants, comptes ou règles inventés.</span></div>') +
       '</section>' +
       '<p class="dossiers-storage-footnote">Le stockage local du navigateur ne constitue ni un stockage serveur protégé, ni une synchronisation Google Drive ou multi-utilisateur.</p>' +

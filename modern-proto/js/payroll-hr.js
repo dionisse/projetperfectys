@@ -784,6 +784,60 @@
     return { ok: true, errors: [], pack: clone(pack), candidate: clone(candidate) };
   }
 
+  function payrollBatchPreparations(dossierId) {
+    dossierId = String(dossierId || '');
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier || !Array.isArray(dossier.payrollBatchPreparations)) return [];
+    return clone(dossier.payrollBatchPreparations.filter(function (item) { return item && item.dossierId === dossierId; })
+      .sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); }));
+  }
+
+  function createPayrollBatchPreparation(dossierId, input) {
+    input = input || {};
+    dossierId = String(dossierId || '');
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Cette version locale accepte uniquement des fiches de préparation de test.'] };
+    var packId = String(input.packId || '');
+    var period = String(input.period || '');
+    var pack = (Array.isArray(dossier.countryRulePacks) ? dossier.countryRulePacks : []).find(function (item) {
+      return item && item.id === packId && item.dossierId === dossierId;
+    });
+    var errors = [];
+    if (!pack) errors.push('Choisissez un cadre pays du même dossier RH.');
+    if (!validPeriod(period)) errors.push('Choisissez une période de paie mensuelle valide.');
+    else if (!periodFitsDossier(period, dossier)) errors.push('La période doit se situer dans le cycle du dossier RH.');
+    if (errors.length) return { ok: false, errors: errors };
+    dossier.payrollBatchPreparations = Array.isArray(dossier.payrollBatchPreparations) ? dossier.payrollBatchPreparations : [];
+    var now = new Date().toISOString();
+    var coverage = countryRulePackCoverage(dossierId, packId);
+    var blockers = coverage.ok ? coverage.reasons.slice() : ['Le cadre pays n’a pas pu être contrôlé.'];
+    blockers.push('Aucun employé n’est sélectionné ni qualifié pour ce lot de préparation.');
+    blockers.push('Aucun contrat, événement ou référence de variable n’est approuvé comme entrée du calcul.');
+    blockers.push('Les dates de coupure, règles d’inclusion et rôles de lancement restent à valider.');
+    blockers.push('Aucune exécution de calcul n’est disponible dans ce prototype.');
+    var id;
+    do { id = 'payroll-batch-prep-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); }
+    while (dossier.payrollBatchPreparations.some(function (item) { return item && item.id === id; }));
+    var preparation = {
+      id: id, dossierId: dossierId, packId: packId, countryCode: pack.countryCode,
+      countryLabel: pack.countryLabel, packDomainCode: pack.domainCode,
+      packDomainLabel: pack.domainLabel, packVersion: pack.versionLabel, period: period,
+      status: 'calcul incomplet / bloqué', origin: 'test-only', executionEnabled: false,
+      employeeIds: [], blockers: blockers, createdAt: now,
+      sourceSnapshot: { employeeIds: [], contractIds: [], leaveAbsenceRecordIds: [], payrollVariableReferenceIds: [], capturedAt: now },
+      history: [{ action: 'created', changedAt: now, status: 'calcul incomplet / bloqué' }]
+    };
+    dossier.payrollBatchPreparations.push(preparation);
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la fiche de préparation de test.'] };
+    return { ok: true, errors: [], preparation: clone(preparation) };
+  }
+
+  function executePayrollBatchPreparation() {
+    return { ok: false, errors: ['Calcul refusé : aucune règle approuvée, entrée qualifiée ou exécution de paie n’est disponible. La fiche de préparation reste bloquée et aucun résultat n’a été créé.'] };
+  }
+
   function dossierById(dossierId) {
     return clone(loadDossierCatalog().dossiers.find(function (dossier) { return dossier.id === String(dossierId || ''); }) || null);
   }
@@ -1012,6 +1066,9 @@
     countryRulePackCoverage: countryRulePackCoverage,
     demoCountryRulePackSeeded: demoCountryRulePackSeeded,
     seedDemoCountryRulePack: seedDemoCountryRulePack,
+    payrollBatchPreparations: payrollBatchPreparations,
+    createPayrollBatchPreparation: createPayrollBatchPreparation,
+    executePayrollBatchPreparation: executePayrollBatchPreparation,
     hrTrackingRecords: hrTrackingRecords,
     createHRTrackingRecord: createHRTrackingRecord,
     createDossier: createDossier,
