@@ -41,8 +41,9 @@ assert.match(app, /Les sections identité détaillée, famille, banque, évaluat
 assert.match(payroll, /function employee\(dossierId, employeeId\)/);
 assert.match(payroll, /function createHRTrackingRecord\(dossierId, input\)/);
 assert.match(app, /payroll-hr-tracking-form/);
-assert.match(app, /Candidatures, contrats et intérim/);
-assert.match(app, /Aucun nom, document, catégorie légale, échéance, employeur\/payeur/);
+assert.match(app, /Candidatures, contrats, intérim et départs/);
+assert.match(app, /Un suivi de départ ne modifie aucun statut d’employé, contrat ou accès/);
+assert.match(app, /Aucun nom, motif de départ, document, catégorie légale, échéance, employeur\/payeur/);
 assert.match(css, /\.payroll-unit-create-grid/);
 assert.match(css, /\.payroll-hr-tracking-grid/);
 assert.match(css, /\.payroll-employee-profile-body/);
@@ -59,5 +60,5 @@ assert.match(payroll, /function createDossier\(input\)[\s\S]*'PRH-' \+ clientCod
 assert.match(payroll, /accountingDossierId: accountingDossierId/);
 assert.match(payroll, /function storageKey\(dossierId\)[\s\S]*STORAGE_PREFIX \+ encodeURIComponent/);
 assert.match(css, /\.payroll-dossier-grid[\s\S]*\.payroll-dossier-card/);
-assert.match(worker, /perfecto-static-v204/);
+assert.match(worker, /perfecto-static-v205/);
 console.log('UI Paie & RH : route dossier dédiée, référence PRH, sélection par dossier et association non automatique — OK');

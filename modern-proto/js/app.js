@@ -20328,20 +20328,20 @@
   }
 
   function viewPayrollHRTracking(dossier, records, canCreate) {
-    var labels = { recruitment: 'Candidature', contract: 'Contrat', interim: 'Intérim' };
+    var labels = { recruitment: 'Candidature', contract: 'Contrat', interim: 'Intérim', departure: 'Suivi de départ' };
     var rows = records.map(function (record) {
       return '<tr data-record-id="' + esc(record.id) + '" data-dossier-id="' + esc(record.dossierId) + '"><td>' + esc(labels[record.kind] || record.kind) + '</td><td><strong>' + esc(record.reference) + '</strong></td><td>' + esc(record.label) + '</td><td>' + esc(record.date) + '</td><td><span class="badge draft">Test uniquement</span></td></tr>';
     }).join('');
     var form = canCreate ? '<form id="payroll-hr-tracking-form" class="payroll-hr-tracking-form" data-dossier-id="' + esc(dossier.id) + '"><div class="payroll-hr-tracking-grid">' +
-      '<div class="field"><label for="payroll-hr-tracking-kind">Type de suivi</label><select id="payroll-hr-tracking-kind" name="kind" required><option value="" selected disabled>Choisir…</option><option value="recruitment">Candidature</option><option value="contract">Contrat</option><option value="interim">Intérim</option></select></div>' +
+      '<div class="field"><label for="payroll-hr-tracking-kind">Type de suivi</label><select id="payroll-hr-tracking-kind" name="kind" required><option value="" selected disabled>Choisir…</option><option value="recruitment">Candidature</option><option value="contract">Contrat</option><option value="interim">Intérim</option><option value="departure">Suivi de départ</option></select></div>' +
       '<div class="field"><label for="payroll-hr-tracking-reference">Référence fictive</label><input id="payroll-hr-tracking-reference" name="reference" maxlength="60" required></div>' +
       '<div class="field"><label for="payroll-hr-tracking-label">Libellé non nominatif</label><input id="payroll-hr-tracking-label" name="label" maxlength="120" placeholder="Ex. suivi de test A" required></div>' +
       '<div class="field"><label for="payroll-hr-tracking-date">Date de suivi</label><input id="payroll-hr-tracking-date" name="date" type="date" required></div>' +
       '<label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Je confirme qu’il s’agit d’un suivi fictif, sans nom de candidat, pièce contractuelle ou donnée réelle.</span></label>' +
       '<button type="submit" class="btn btn-primary">＋ Ajouter un suivi fictif</button></div></form>'
       : '<p class="small muted">Votre profil ne dispose pas du droit de création dans ce dossier.</p>';
-    return '<section class="exchange-card payroll-hr-tracking"><p class="page-kicker">ÉTAPE 6 · SUIVIS SYNTHÉTIQUES</p><h3>Candidatures, contrats et intérim</h3>' +
-      '<div class="alert warning"><div>Socle de démonstration uniquement. Les libellés « candidature », « contrat » et « intérim » sont des types de suivi, pas des statuts ni des conclusions juridiques. Aucun nom, document, catégorie légale, échéance, employeur/payeur ou élément de rémunération n’est enregistré.</div></div>' + form +
+    return '<section class="exchange-card payroll-hr-tracking"><p class="page-kicker">ÉTAPES 6–7 · SUIVIS SYNTHÉTIQUES</p><h3>Candidatures, contrats, intérim et départs</h3>' +
+      '<div class="alert warning"><div>Socle de démonstration uniquement. Les libellés sont des types de suivi, pas des statuts ni des conclusions juridiques. Un suivi de départ ne modifie aucun statut d’employé, contrat ou accès. Aucun nom, motif de départ, document, catégorie légale, échéance, employeur/payeur ou élément de rémunération n’est enregistré.</div></div>' + form,
       (rows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Type</th><th>Référence</th><th>Libellé</th><th>Date de suivi</th><th>Nature</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucun suivi de test</strong><span>Aucun candidat, contrat ou dossier d’intérim n’est créé automatiquement.</span></div>') + '</section>';
   }
 

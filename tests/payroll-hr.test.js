@@ -105,10 +105,14 @@ const contractTracking = PayrollHR.createHRTrackingRecord(dossier.id, {
 const interimTracking = PayrollHR.createHRTrackingRecord(dossier.id, {
   kind: 'interim', reference: 'TEST-INT-01', label: 'Suivi intérim neutre', date: '2026-04-03', testOnly: true
 });
+const departureTracking = PayrollHR.createHRTrackingRecord(dossier.id, {
+  kind: 'departure', reference: 'TEST-DEP-01', label: 'Suivi de départ fictif', date: '2026-04-04', testOnly: true
+});
 assert.equal(candidateTracking.ok, true, candidateTracking.errors.join('\\n'));
 assert.equal(contractTracking.ok, true, contractTracking.errors.join('\\n'));
 assert.equal(interimTracking.ok, true, interimTracking.errors.join('\\n'));
-assert.deepEqual(PayrollHR.hrTrackingRecords(dossier.id).map(record => record.kind), ['recruitment', 'contract', 'interim']);
+assert.equal(departureTracking.ok, true, departureTracking.errors.join('\\n'));
+assert.deepEqual(PayrollHR.hrTrackingRecords(dossier.id).map(record => record.kind), ['recruitment', 'contract', 'interim', 'departure']);
 assert.deepEqual(PayrollHR.hrTrackingRecords('other-dossier'), [], 'les suivis restent isolés dans leur dossier RH');
 assert.equal(PayrollHR.createHRTrackingRecord(dossier.id, {
   kind: 'contract', reference: 'test-ctr-01', label: 'Doublon', date: '2026-04-04', testOnly: true

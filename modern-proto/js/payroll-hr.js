@@ -263,7 +263,7 @@
     if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
     if (input.testOnly !== true) return { ok: false, errors: ['Cette version locale accepte uniquement des suivis synthétiques de test.'] };
     var kind = String(input.kind || '');
-    var kinds = ['recruitment', 'contract', 'interim'];
+    var kinds = ['recruitment', 'contract', 'interim', 'departure'];
     var reference = String(input.reference || '').trim();
     var label = String(input.label || '').trim().replace(/\s+/g, ' ');
     var date = String(input.date || '');
