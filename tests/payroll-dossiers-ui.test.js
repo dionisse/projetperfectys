@@ -36,7 +36,11 @@ assert.match(app, /payroll-org-unit-create-form/);
 assert.match(app, /payroll-org-unit-edit-form/);
 assert.match(app, /payroll-org-unit-archive-form/);
 assert.match(app, /payroll-unit-history/);
+assert.match(app, /payroll-employee-profile/);
+assert.match(app, /Les sections identité détaillée, famille, banque, évaluation, discipline et documents restent désactivées/);
+assert.match(payroll, /function employee\(dossierId, employeeId\)/);
 assert.match(css, /\.payroll-unit-create-grid/);
+assert.match(css, /\.payroll-employee-profile-body/);
 assert.match(payroll, /return \[\];[\s\S]*function runs\(dossierId\)/);
 assert.doesNotMatch(payroll, /750000|675000|demoAccountingLines/);
 assert.doesNotMatch(app, /Brut illustratif \(XOF\)|create-demo-payroll-run/);
@@ -50,5 +54,5 @@ assert.match(payroll, /function createDossier\(input\)[\s\S]*'PRH-' \+ clientCod
 assert.match(payroll, /accountingDossierId: accountingDossierId/);
 assert.match(payroll, /function storageKey\(dossierId\)[\s\S]*STORAGE_PREFIX \+ encodeURIComponent/);
 assert.match(css, /\.payroll-dossier-grid[\s\S]*\.payroll-dossier-card/);
-assert.match(worker, /perfecto-static-v202/);
+assert.match(worker, /perfecto-static-v203/);
 console.log('UI Paie & RH : route dossier dédiée, référence PRH, sélection par dossier et association non automatique — OK');

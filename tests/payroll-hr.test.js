@@ -36,6 +36,9 @@ assert.ok(created.employee.id);
 assert.equal('salary' in created.employee, false);
 assert.equal('bankAccount' in created.employee, false);
 assert.equal(PayrollHR.employees(dossier.id).length, 1);
+assert.equal(PayrollHR.employee(dossier.id, created.employee.id).displayName, 'Personne fictive 001');
+assert.equal(PayrollHR.employee('other-dossier', created.employee.id), null, 'la lecture d’une fiche vérifie le dossier explicite');
+assert.equal(PayrollHR.employee(dossier.id, 'missing-employee'), null, 'une fiche absente n’est pas exposée');
 assert.deepEqual(PayrollHR.employees('other-dossier'), [], 'les fiches sont filtrées par dossier RH explicite');
 assert.equal(PayrollHR.createEmployee(dossier.id, {
   employeeNumber: 'test-001', displayName: 'Autre fiche fictive', testOnly: true

@@ -78,6 +78,17 @@
     }));
   }
 
+  function employee(dossierId, employeeId) {
+    dossierId = String(dossierId || '');
+    employeeId = String(employeeId || '');
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier || !Array.isArray(dossier.demoEmployees)) return null;
+    var match = dossier.demoEmployees.find(function (item) {
+      return item && item.id === employeeId && item.dossierId === dossierId;
+    });
+    return match ? clone(Object.assign({}, match, { employeeNumber: match.employeeNumber || match.id || '' })) : null;
+  }
+
   function createEmployee(dossierId, input) {
     input = input || {};
     dossierId = String(dossierId || '');
@@ -433,6 +444,7 @@
     currentDossier: currentDossier,
     dossier: dossierById,
     employees: employees,
+    employee: employee,
     createEmployee: createEmployee,
     organizationUnits: organizationUnits,
     createOrganizationUnit: createOrganizationUnit,

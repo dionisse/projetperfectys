@@ -4038,3 +4038,13 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .payroll-org-units td { vertical-align: top; }
 @media (max-width: 800px) { .payroll-unit-create-grid, .payroll-unit-edit-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .payroll-unit-edit-form, .payroll-org-unit-archive-form { min-width: min(560px, 78vw); } }
 @media (max-width: 560px) { .payroll-unit-create-grid, .payroll-unit-edit-grid { grid-template-columns: 1fr; } .payroll-unit-create-grid .payroll-test-confirm { grid-column: auto; } .payroll-org-unit-archive-form { align-items: stretch; flex-direction: column; } .payroll-org-unit-archive-form .field { min-width: 0; } }
+
+/* Profil employé minimal : synthèse synthétique en lecture seule */
+.payroll-employee-profile { margin-top: 6px; }
+.payroll-employee-profile summary { color: #286f65; cursor: pointer; font-size: .7rem; font-weight: 750; }
+.payroll-employee-profile-body { min-width: min(460px, 72vw); max-width: 540px; margin-top: 8px; padding: 12px; border: 1px solid #e4ebe6; border-radius: 8px; background: #fbfcfb; white-space: normal; }
+.payroll-employee-profile-body dl { display: grid; grid-template-columns: minmax(120px, .8fr) minmax(150px, 1.2fr); gap: 6px 12px; margin: 10px 0; font-size: .75rem; }
+.payroll-employee-profile-body dt { color: #718078; }
+.payroll-employee-profile-body dd { margin: 0; color: #263a32; overflow-wrap: anywhere; }
+.payroll-employee-profile-body .alert { margin: 10px 0 0; font-size: .72rem; }
+@media (max-width: 560px) { .payroll-employee-profile-body { min-width: 75vw; } .payroll-employee-profile-body dl { grid-template-columns: 1fr; gap: 2px; } .payroll-employee-profile-body dd { margin-bottom: 6px; } }

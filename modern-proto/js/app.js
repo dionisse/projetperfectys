@@ -20323,7 +20323,17 @@
     var organizationUnits = PayrollHR.organizationUnits(dossier.id);
     var canEditPayrollRecords = hasDemoPermission(member, 'payroll-hr', 'record.edit', payrollAccessContext(dossier));
     var employeeRows = dossierEmployees.map(function (employee) {
-      return '<tr data-employee-id="' + esc(employee.id) + '" data-dossier-id="' + esc(employee.dossierId) + '"><td><strong>' + esc(employee.employeeNumber || employee.id) + '</strong></td><td>' + esc(employee.displayName || '—') + '</td><td><span class="badge draft">Test uniquement</span></td><td><small>' + esc(employee.id) + '</small></td></tr>';
+      var createdLabel = employee.createdAt ? String(employee.createdAt).slice(0, 10) : 'Non renseignée';
+      var profile = '<details class="payroll-employee-profile"><summary>Ouvrir la fiche synthèse</summary><div class="payroll-employee-profile-body">' +
+        '<p class="small muted">Profil fictif en lecture seule. Cette synthèse n’ajoute aucun champ personnel au registre.</p><dl>' +
+        '<dt>Numéro employé</dt><dd>' + esc(employee.employeeNumber || employee.id) + '</dd>' +
+        '<dt>Nom d’affichage de test</dt><dd>' + esc(employee.displayName || '—') + '</dd>' +
+        '<dt>Dossier RH</dt><dd>' + esc(dossier.reference) + '</dd>' +
+        '<dt>Statut</dt><dd>Test uniquement</dd>' +
+        '<dt>Créée le</dt><dd>' + esc(createdLabel) + '</dd>' +
+        '<dt>Identifiant technique</dt><dd><code>' + esc(employee.id) + '</code></dd>' +
+        '</dl><div class="alert info"><div>Les sections identité détaillée, famille, banque, évaluation, discipline et documents restent désactivées. Le stockage local n’est pas adapté à des données réelles.</div></div></div></details>';
+      return '<tr data-employee-id="' + esc(employee.id) + '" data-dossier-id="' + esc(employee.dossierId) + '"><td><strong>' + esc(employee.employeeNumber || employee.id) + '</strong></td><td>' + esc(employee.displayName || '—') + '</td><td><span class="badge draft">Test uniquement</span></td><td><small>' + esc(employee.id) + '</small>' + profile + '</td></tr>';
     }).join('');
     var employeeSection = '<section class="exchange-card payroll-employee-registry"><p class="page-kicker">REGISTRE DES EMPLOYÉS · DONNÉES DE TEST UNIQUEMENT</p><h3>' + dossierEmployees.length + ' fiche(s) dans ce dossier</h3>' +
       '<div class="alert warning"><div><strong>Prototype local — ne saisissez aucune donnée réelle.</strong><br>Les fiches sont enregistrées dans le stockage du navigateur, sans protection serveur ni synchronisation multi-utilisateur. Aucune donnée bancaire, médicale, familiale, pièce jointe ou rémunération ne peut être saisie ici.</div></div>' +
