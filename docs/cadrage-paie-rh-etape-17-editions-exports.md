@@ -71,3 +71,6 @@ Avant téléchargement ou impression, afficher un aperçu avec le nom du documen
 8. Aucun format, contenu légal, montant ou donnée personnelle n’est inventé comme norme ou valeur réelle.
 
 **Étape suivante :** l’étape 18 cadrera l’association explicite aux dossiers comptables, le transfert contrôlé et la recette intégrée. Cette fiche ne génère aucun fichier réel.
+## Statut d’implémentation (2026-11-02)
+
+Le prototype présente désormais un catalogue de disponibilité pour les bulletins, registres/états et documents de paiement. Chaque édition reste désactivée; les actions Imprimer, Télécharger et Partager sont des boutons désactivés sans gestionnaire métier. Aucun aperçu ni fichier n’est créé. Les raisons affichées indiquent les validations manquantes pour les formats, périmètres, champs, droits, sources et stockage sécurisé. Cette interface ne vaut pas validation des décisions listées plus haut et ne rend pas la fonctionnalité prête pour la production.

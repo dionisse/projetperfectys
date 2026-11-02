@@ -867,6 +867,62 @@
   function reopenPayrollBatch() { return refusePayrollBatchTransition(); }
   function cancelPayrollBatch() { return refusePayrollBatchTransition(); }
 
+  function payrollEditionReadiness(dossierId) {
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId || ''); });
+    if (!dossier) return { ok: false, available: false, editions: [], errors: ['Dossier Paie & RH introuvable.'] };
+    var editions = [
+      { id: 'payslip', label: 'Bulletin individuel', reasons: [
+        'Aucun lot calculé, contrôlé, approuvé et verrouillé n’est disponible.',
+        'Mentions, numérotation, rôles et canal de remise non validés.',
+        'Aucun stockage protégé ni journal de génération n’est configuré.'
+      ] },
+      { id: 'register', label: 'Registre RH ou de paie', reasons: [
+        'Colonnes, format, périmètre d’export et politique de masquage non validés.',
+        'Les droits de génération, téléchargement, partage et conservation ne sont pas définis.'
+      ] },
+      { id: 'report', label: 'État ou tableau de suivi', reasons: [
+        'Aucune définition ou méthode d’agrégation n’est approuvée.',
+        'Période, filtres, sources et traitement des données manquantes restent à préciser.'
+      ] },
+      { id: 'payment-proof', label: 'Preuve ou document de paiement', reasons: [
+        'Aucune preuve de paiement vérifiée ni procédure de remise n’est disponible.',
+        'Aucun stockage protégé ou accès restreint aux pièces n’est configuré.'
+      ] }
+    ].map(function (edition) { return Object.assign({}, edition, { enabled: false, fileGenerated: false }); });
+    return { ok: true, available: false, dossierId: dossier.id, editions: clone(editions),
+      note: 'Aucun PDF, tableur, document imprimable, fichier ou lien de partage n’est généré.' };
+  }
+
+  function payrollAccountingCentralizationReadiness(dossierId) {
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId || ''); });
+    if (!dossier) return { ok: false, available: false, transferEnabled: false, errors: ['Dossier Paie & RH introuvable.'] };
+    var associated = typeof dossier.accountingDossierId === 'string' && dossier.accountingDossierId.trim().length > 0;
+    return {
+      ok: true,
+      available: false,
+      transferEnabled: false,
+      accountingEntryCreated: false,
+      dossierId: dossier.id,
+      associationConfigured: associated,
+      associationReference: associated ? dossier.accountingDossierId : '',
+      checks: [
+        { id: 'destination', label: 'Dossier comptable existant, accessible et confirmé', ready: false,
+          reason: associated ? 'Une référence explicite est enregistrée, mais son existence, son accès et sa confirmation pour cette opération doivent être vérifiés.' : 'Aucun dossier comptable n’est associé explicitement.' },
+        { id: 'source', label: 'Lot source approuvé et verrouillé', ready: false,
+          reason: 'Aucun lot calculé, approuvé et verrouillé avec version source qualifiée n’est disponible.' },
+        { id: 'mappings', label: 'Comptes et dimensions exactement mappés', ready: false,
+          reason: 'Aucun mapping comptable Paie & RH exact, sourcé et approuvé n’est configuré.' },
+        { id: 'preview', label: 'Aperçu contrôlé avant transfert', ready: false,
+          reason: 'Aucun aperçu Paie & RH n’est produit tant que les dossiers, sources et mappings ne sont pas validés.' },
+        { id: 'authorization', label: 'Confirmation par un rôle autorisé', ready: false,
+          reason: 'Les rôles, délégations et séparation des tâches applicables restent à définir.' },
+        { id: 'accounting-workflow', label: 'Écriture créée et suivie par la Comptabilité', ready: false,
+          reason: 'Aucun adaptateur ni retour réel de création comptable n’est qualifié dans ce parcours.' }
+      ],
+      note: 'Aucune écriture, ligne, montant, compte, transfert ou lien de source n’est créé. Toute correction reste dans le parcours Comptabilité générale.'
+    };
+  }
+
   function payrollReportReadiness(dossierId) {
     var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId || ''); });
     if (!dossier) return { ok: false, available: false, families: [], errors: ['Dossier Paie & RH introuvable.'] };
@@ -1179,6 +1235,8 @@
     lockPayrollBatch: lockPayrollBatch,
     reopenPayrollBatch: reopenPayrollBatch,
     cancelPayrollBatch: cancelPayrollBatch,
+    payrollEditionReadiness: payrollEditionReadiness,
+    payrollAccountingCentralizationReadiness: payrollAccountingCentralizationReadiness,
     payrollReportReadiness: payrollReportReadiness,
     payslipAndPaymentReadiness: payslipAndPaymentReadiness,
     payslipDocuments: payslipDocuments,

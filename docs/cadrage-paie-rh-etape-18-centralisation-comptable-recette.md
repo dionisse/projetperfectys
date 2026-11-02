@@ -104,3 +104,6 @@ Les valeurs attendues des écritures d’essai proviendront de règles et corres
 10. La recette n’utilise aucune donnée personnelle, règle, montant ou compte réel non autorisé et n’effectue aucune écriture réelle sans demande et confirmation explicites.
 
 **Fin du plan :** la recette intégrée ne peut être considérée complète qu’après validation des règles et sources de paie, des mappings comptables, des droits et des tests de référence. Cette fiche ne crée aucune association ou écriture comptable.
+## Statut d’implémentation (2026-11-02)
+
+Une vue locale de disponibilité liste les prérequis de destination explicite, lot approuvé/verrouillé, mappings exacts, aperçu, autorisation et retour réel du parcours comptable. Même si une référence de dossier comptable est déjà enregistrée séparément, elle n’est pas traitée comme une confirmation pour une opération. Les actions d’aperçu et de transfert restent désactivées; aucun montant, mapping, source, transfert ou écriture n’est généré par ce panneau. Les changements d’association existants demeurent un choix explicite, et toute correction d’écriture reste dans la Comptabilité générale. La recette complète reste en attente des décisions et sources répertoriées ci-dessus.

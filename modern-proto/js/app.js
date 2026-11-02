@@ -20717,6 +20717,32 @@
       '<div class="alert info"><div>' + esc(readiness.note) + ' Les critères futurs devront indiquer leur période, filtres, sources, version éventuelle des règles et comportement des valeurs manquantes.</div></div></section>';
   }
 
+  function viewPayrollAccountingReadiness(dossier) {
+    var readiness = PayrollHR.payrollAccountingCentralizationReadiness(dossier.id);
+    if (!readiness.ok) return '';
+    var checks = readiness.checks.map(function (check) {
+      return '<article class="payroll-report-readiness-card" data-accounting-check="' + esc(check.id) + '"><div class="payroll-report-readiness-heading"><h4>' + esc(check.label) + '</h4><span class="badge draft">À valider</span></div><p>' + esc(check.reason) + '</p></article>';
+    }).join('');
+    var association = readiness.associationConfigured
+      ? '<p class="small">Référence explicitement enregistrée : <code>' + esc(readiness.associationReference) + '</code>. Cela ne confirme ni l’existence, ni les droits, ni la destination de cette opération.</p>'
+      : '<p class="small">Aucun dossier comptable n’est associé. Aucun rapprochement par nom, code ou exercice n’est effectué.</p>';
+    return '<section class="exchange-card payroll-accounting-readiness"><p class="page-kicker">ÉTAPE 18 · CENTRALISATION COMPTABLE BLOQUÉE</p><h3>Préparation de la recette intégrée</h3>' +
+      '<div class="alert warning"><div>État de disponibilité seulement. L’association éventuelle affichée ci-dessous n’est pas une autorisation de transfert. Les dossiers doivent être choisis et confirmés pour l’opération, et les sources, mappings, rôles et mécanisme comptable restent à qualifier.</div></div>' + association +
+      '<div class="payroll-report-readiness-grid">' + checks + '</div><div class="payroll-workflow-actions"><button class="btn btn-secondary" type="button" disabled>Préparer l’aperçu comptable</button><button class="btn btn-primary" type="button" disabled>Confirmer et transférer</button></div>' +
+      '<div class="alert info"><div>' + esc(readiness.note) + '</div></div></section>';
+  }
+
+  function viewPayrollEditionAvailability(dossier) {
+    var readiness = PayrollHR.payrollEditionReadiness(dossier.id);
+    if (!readiness.ok) return '';
+    var cards = readiness.editions.map(function (edition) {
+      return '<article class="payroll-edition-readiness-card" data-edition-id="' + esc(edition.id) + '"><div class="payroll-report-readiness-heading"><h4>' + esc(edition.label) + '</h4><span class="badge draft">Indisponible</span></div><ul>' + edition.reasons.map(function (reason) { return '<li>' + esc(reason) + '</li>'; }).join('') + '</ul><div class="payroll-workflow-actions"><button class="btn btn-secondary" type="button" disabled>Imprimer</button><button class="btn btn-secondary" type="button" disabled>Télécharger</button><button class="btn btn-secondary" type="button" disabled>Partager</button></div></article>';
+    }).join('');
+    return '<section class="exchange-card payroll-edition-availability"><p class="page-kicker">ÉTAPE 17 · ÉDITIONS ET EXPORTS BLOQUÉS</p><h3>Disponibilité des éditions</h3>' +
+      '<div class="alert warning"><div>Catalogue de disponibilité uniquement. Les formats, champs, filtres, rôles et règles de conservation n’étant pas validés, aucun document réel ou fictif n’est généré et aucun fichier n’est téléchargé.</div></div>' +
+      '<div class="payroll-edition-readiness-grid">' + cards + '</div><div class="alert info"><div>' + esc(readiness.note) + ' L’impression, la remise et le partage ne prouveraient ni approbation ni réception.</div></div></section>';
+  }
+
   function viewPayrollRegisters(dossier, data, filters) {
     filters = Object.assign({ dossierId: '', registry: 'all', period: '', employeeId: '', query: '' }, filters || {});
     if (filters.dossierId && filters.dossierId !== dossier.id) filters = { dossierId: dossier.id, registry: 'all', period: '', employeeId: '', query: '' };
@@ -20859,7 +20885,7 @@
         employees: dossierEmployees, tracking: hrTrackingRecords, assignments: organizationAssignments, missions: internalMissions,
         leaves: leaveAbsenceRecords, references: payrollVariableReferences, components: payrollComponents,
         packs: countryRulePacks, candidates: countryRuleCandidates, preparations: payrollBatchPreparations, runs: runs, units: organizationUnits
-      }, ui.payrollRegisters) + viewPayrollReportReadiness(dossier) +
+      }, ui.payrollRegisters) + viewPayrollReportReadiness(dossier) + viewPayrollEditionAvailability(dossier) + viewPayrollAccountingReadiness(dossier) +
       '<p class="dossiers-storage-footnote">Le stockage local du navigateur ne constitue ni un stockage serveur protégé, ni une synchronisation Google Drive ou multi-utilisateur.</p>' +
     '</div>';
   }

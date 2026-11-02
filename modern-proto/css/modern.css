@@ -4169,3 +4169,14 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .payroll-report-readiness-heading h4 { margin: 0; font-size: .9rem; }
 .payroll-report-readiness-card p { margin: 8px 0 0; }
 @media (max-width: 650px) { .payroll-report-readiness-grid { grid-template-columns: 1fr; } }
+
+/* Étapes 17–18 : éditions et centralisation explicitement indisponibles */
+.payroll-edition-availability > .alert,
+.payroll-accounting-readiness > .alert { margin: 10px 0 14px; line-height: 1.55; }
+.payroll-edition-readiness-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; margin: 12px 0; }
+.payroll-edition-readiness-card { min-width: 0; padding: 13px; border: 1px solid #e3eae5; border-radius: 8px; background: #fbfcfb; }
+.payroll-edition-readiness-card ul { margin: 9px 0; padding-left: 20px; }
+.payroll-edition-readiness-card li { margin: 5px 0; }
+.payroll-edition-readiness-card .payroll-workflow-actions { margin-top: 12px; }
+.payroll-accounting-readiness code { overflow-wrap: anywhere; }
+@media (max-width: 650px) { .payroll-edition-readiness-grid { grid-template-columns: 1fr; } }
