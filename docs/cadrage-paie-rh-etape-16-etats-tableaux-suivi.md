@@ -1,7 +1,9 @@
 # Étape 16 — États et tableaux de suivi
 
-**Statut :** proposition de cadrage à valider avant implémentation.
+**Statut :** un panneau de disponibilité des sources de test est implémenté ; les états métier, agrégats et indicateurs restent bloqués jusqu’à validation de leurs définitions, sources, méthodes et permissions.
 **Dépendances :** registres et sources métiers (étape 15), lots contrôlés et approuvés (étapes 12–13), bulletins et paiements sourcés (étape 14), packs de règles validés (étape 11).
+
+Le panneau vérifie seulement la présence ou l’absence de catégories de sources fictives. Il ne calcule aucun effectif, solde, montant, total, taux, projection ou comparaison et ne transforme pas une donnée absente en zéro.
 **Plan complet :** [Plan d’implémentation Paie & RH en 18 étapes](proposition-implementation-paie-rh.md).
 
 ## 1. Objectif et limites

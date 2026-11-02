@@ -356,4 +356,12 @@ assert.equal(PayrollHR.issuePayslip(testDossier.dossier.id, { amount: 1, testOnl
 assert.equal(PayrollHR.recordPayrollPayment(testDossier.dossier.id, { amount: 1, currency: 'XOF', testOnly: true }).ok, false);
 assert.deepEqual(PayrollHR.payslipDocuments(testDossier.dossier.id), [], 'un aperçu ou bulletin refusé n’est pas enregistré');
 assert.deepEqual(PayrollHR.payrollPaymentRecords(testDossier.dossier.id), [], 'aucun faux suivi de paiement n’est créé');
-console.log('Paie & RH : workflow bloqué, bulletins et paiements refusés sans données inventées — OK');
+const reportReadiness = PayrollHR.payrollReportReadiness(testDossier.dossier.id);
+assert.equal(reportReadiness.ok, true);
+assert.equal(reportReadiness.available, false);
+assert.equal(reportReadiness.families.length, 6);
+assert.ok(reportReadiness.families.every(family => family.reportAvailable === false && family.status === 'non défini / bloqué'));
+assert.equal(reportReadiness.families.find(family => family.id === 'headcount').sourcePresent, true);
+assert.equal(reportReadiness.families.find(family => family.id === 'payments').sourcePresent, false);
+assert.ok(reportReadiness.families.every(family => !('amount' in family) && !('total' in family) && !('count' in family)));
+console.log('Paie & RH : préparation bloquée, bulletins/paiements indisponibles, états sans indicateur inventé — OK');

@@ -867,6 +867,40 @@
   function reopenPayrollBatch() { return refusePayrollBatchTransition(); }
   function cancelPayrollBatch() { return refusePayrollBatchTransition(); }
 
+  function payrollReportReadiness(dossierId) {
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId || ''); });
+    if (!dossier) return { ok: false, available: false, families: [], errors: ['Dossier Paie & RH introuvable.'] };
+    var employees = Array.isArray(dossier.demoEmployees) ? dossier.demoEmployees : [];
+    var tracking = Array.isArray(dossier.hrTrackingRecords) ? dossier.hrTrackingRecords : [];
+    var assignments = Array.isArray(dossier.organizationAssignments) ? dossier.organizationAssignments : [];
+    var missions = Array.isArray(dossier.internalMissions) ? dossier.internalMissions : [];
+    var leaveAbsences = Array.isArray(dossier.leaveAbsenceRecords) ? dossier.leaveAbsenceRecords : [];
+    var components = Array.isArray(dossier.payrollComponents) ? dossier.payrollComponents : [];
+    var variableReferences = Array.isArray(dossier.payrollVariableReferences) ? dossier.payrollVariableReferences : [];
+    var rulePacks = Array.isArray(dossier.countryRulePacks) ? dossier.countryRulePacks : [];
+    var preparations = Array.isArray(dossier.payrollBatchPreparations) ? dossier.payrollBatchPreparations : [];
+    var payslips = Array.isArray(dossier.payslipDocuments) ? dossier.payslipDocuments : [];
+    var paymentRecords = Array.isArray(dossier.payrollPaymentRecords) ? dossier.payrollPaymentRecords : [];
+    var families = [
+      { id: 'headcount', label: 'Effectifs et dossiers', sourceLabels: ['Fiches employés fictives'], sourcePresent: employees.length > 0,
+        reason: 'La population à décompter, le statut retenu et la date de référence ne sont pas définis.' },
+      { id: 'employment', label: 'Contrats, affectations et missions', sourceLabels: ['Suivis RH génériques', 'Affectations', 'Missions'], sourcePresent: tracking.length + assignments.length + missions.length > 0,
+        reason: 'Les suivis et périodes saisies ne prouvent ni validité juridique, ni admissibilité, ni échéance.' },
+      { id: 'leave-absence', label: 'Congés et absences', sourceLabels: ['Demandes et événements de test'], sourcePresent: leaveAbsences.length > 0,
+        reason: 'Calendrier et règles de droits absents ; jours consommés et soldes non calculés.' },
+      { id: 'payroll-results', label: 'Rémunérations et résultats de paie', sourceLabels: ['Catalogue descriptif', 'Références sans valeur', 'Préparations bloquées'], sourcePresent: components.length + variableReferences.length + preparations.length > 0,
+        reason: 'Aucun calcul, résultat ou lot complet et approuvé n’est disponible.' },
+      { id: 'tax-social', label: 'Fiscalité et cotisations', sourceLabels: ['Cadres pays de test'], sourcePresent: rulePacks.length > 0,
+        reason: 'Aucun pack de règle n’est validé ou applicable ; aucun taux ni total ne peut être présenté.' },
+      { id: 'payments', label: 'Paiements', sourceLabels: ['Bulletins et références de paiement'], sourcePresent: payslips.length + paymentRecords.length > 0,
+        reason: 'Aucun bulletin source ni preuve de paiement vérifiée n’est disponible.' }
+    ].map(function (family) {
+      return Object.assign({}, family, { status: 'non défini / bloqué', reportAvailable: false });
+    });
+    return { ok: true, available: false, dossierId: dossier.id, families: clone(families),
+      note: 'État de disponibilité seulement : aucun total, taux, solde, ratio, projection ou indicateur n’est calculé.' };
+  }
+
   function payslipAndPaymentReadiness(dossierId) {
     var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId || ''); });
     if (!dossier) return { ok: false, ready: false, reasons: ['Dossier Paie & RH introuvable.'] };
@@ -1145,6 +1179,7 @@
     lockPayrollBatch: lockPayrollBatch,
     reopenPayrollBatch: reopenPayrollBatch,
     cancelPayrollBatch: cancelPayrollBatch,
+    payrollReportReadiness: payrollReportReadiness,
     payslipAndPaymentReadiness: payslipAndPaymentReadiness,
     payslipDocuments: payslipDocuments,
     payrollPaymentRecords: payrollPaymentRecords,

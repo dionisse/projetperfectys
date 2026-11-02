@@ -103,6 +103,11 @@ assert.match(app, /payroll-register-filter-form/);
 assert.match(app, /data-source-id=/);
 assert.match(app, /Filtres appliqués — registre/);
 assert.match(app, /Le registre des transferts comptables reste séparé/);
+assert.match(payroll, /function payrollReportReadiness\(dossierId\)/);
+assert.match(app, /viewPayrollReportReadiness/);
+assert.match(app, /Aucune définition d’état ni méthode de calcul n’a encore été approuvée/);
+assert.match(app, /Données de test présentes/);
+assert.match(app, /Aucune population, période de calcul, formule, solde, taux, total ou comparaison n’est présumé/);
 assert.match(app, /filters\.dossierId && filters\.dossierId !== dossier\.id[\s\S]*filters = \{ dossierId: dossier\.id/);
 const registerView = app.slice(app.indexOf('function viewPayrollRegisters'), app.indexOf('function viewPayrollPayslipsAndPayments'));
 assert.doesNotMatch(registerView, /PayrollHR\.create|data-action=/, 'les lignes de registre n’écrivent pas et ne déclenchent pas d’action métier');
@@ -123,5 +128,5 @@ assert.match(payroll, /function createDossier\(input\)[\s\S]*'PRH-' \+ clientCod
 assert.match(payroll, /accountingDossierId: accountingDossierId/);
 assert.match(payroll, /function storageKey\(dossierId\)[\s\S]*STORAGE_PREFIX \+ encodeURIComponent/);
 assert.match(css, /\.payroll-dossier-grid[\s\S]*\.payroll-dossier-card/);
-assert.match(worker, /perfecto-static-v213/);
+assert.match(worker, /perfecto-static-v214/);
 console.log('UI Paie & RH : route dossier dédiée, référence PRH, sélection par dossier et association non automatique — OK');

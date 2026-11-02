@@ -20701,6 +20701,22 @@
       (missionRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Mission</th><th>Participant</th><th>Unité</th><th>Période saisie</th><th>Nature</th></tr></thead><tbody>' + missionRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucune mission synthétique</strong></div>') + '</details></section>';
   }
 
+  function viewPayrollReportReadiness(dossier) {
+    var readiness = PayrollHR.payrollReportReadiness(dossier.id);
+    if (!readiness.ok) return '<section class="exchange-card payroll-report-readiness"><div class="alert warning"><div>Disponibilité des états impossible à déterminer pour ce dossier RH.</div></div></section>';
+    var cards = readiness.families.map(function (family) {
+      return '<article class="payroll-report-readiness-card" data-report-family="' + esc(family.id) + '"><div class="payroll-report-readiness-heading"><h4>' + esc(family.label) + '</h4><span class="badge draft">' + esc(family.status) + '</span></div>' +
+        '<p class="small muted">Sources attendues : ' + family.sourceLabels.map(esc).join(' · ') + '</p>' +
+        '<p><strong>' + (family.sourcePresent ? 'Données de test présentes' : 'Aucune source de test disponible') + '</strong></p>' +
+        '<p class="small">' + esc(family.reason) + '</p></article>';
+    }).join('');
+    return '<section class="exchange-card payroll-report-readiness"><p class="page-kicker">ÉTAPE 16 · DISPONIBILITÉ DES ÉTATS · AUCUN INDICATEUR</p><h3>États et tableaux de suivi</h3>' +
+      '<div class="alert warning"><div>Ce panneau vérifie uniquement la présence de catégories de sources de test. Ce n’est pas un état de paie ni un tableau de bord chiffré. Aucune population, période de calcul, formule, solde, taux, total ou comparaison n’est présumé.</div></div>' +
+      '<p class="small muted">Aucune définition d’état ni méthode de calcul n’a encore été approuvée. Les cartes ci-dessous indiquent si une source de test existe, mais toutes les sorties restent bloquées.</p>' +
+      '<div class="payroll-report-readiness-grid">' + cards + '</div>' +
+      '<div class="alert info"><div>' + esc(readiness.note) + ' Les critères futurs devront indiquer leur période, filtres, sources, version éventuelle des règles et comportement des valeurs manquantes.</div></div></section>';
+  }
+
   function viewPayrollRegisters(dossier, data, filters) {
     filters = Object.assign({ dossierId: '', registry: 'all', period: '', employeeId: '', query: '' }, filters || {});
     if (filters.dossierId && filters.dossierId !== dossier.id) filters = { dossierId: dossier.id, registry: 'all', period: '', employeeId: '', query: '' };
@@ -20843,7 +20859,7 @@
         employees: dossierEmployees, tracking: hrTrackingRecords, assignments: organizationAssignments, missions: internalMissions,
         leaves: leaveAbsenceRecords, references: payrollVariableReferences, components: payrollComponents,
         packs: countryRulePacks, candidates: countryRuleCandidates, preparations: payrollBatchPreparations, runs: runs, units: organizationUnits
-      }, ui.payrollRegisters) +
+      }, ui.payrollRegisters) + viewPayrollReportReadiness(dossier) +
       '<p class="dossiers-storage-footnote">Le stockage local du navigateur ne constitue ni un stockage serveur protégé, ni une synchronisation Google Drive ou multi-utilisateur.</p>' +
     '</div>';
   }
