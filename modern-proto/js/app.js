@@ -499,6 +499,8 @@
       case 'create-payroll-organization-assignment':
       case 'create-payroll-internal-mission':
       case 'seed-payroll-organization-demo':
+      case 'create-payroll-leave-record':
+      case 'seed-payroll-leave-demo':
         return { moduleId: 'payroll-hr', actionId: 'record.create' };
       case 'edit-payroll-org-unit':
       case 'archive-payroll-org-unit':
@@ -20307,6 +20309,32 @@
       if (!result.ok) { toast(result.errors[0] || 'Chargement des données de démonstration impossible.', 'warning'); return; }
       toast('Jeu de démonstration chargé : unités, affectations et missions fictives.', 'success'); render();
     });
+    var leaveForm = $('#payroll-leave-absence-form');
+    if (leaveForm) leaveForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('create-payroll-leave-record', null, true)) return;
+      var dossier = PayrollHR.currentDossier();
+      if (!dossier || leaveForm.getAttribute('data-dossier-id') !== dossier.id) { toast('Création refusée : le dossier RH actif a changé.', 'warning'); return; }
+      var fields = leaveForm.elements;
+      var result = PayrollHR.createLeaveAbsenceRecord(dossier.id, {
+        kind: fields.kind.value, employeeId: fields.employeeId.value, typeLabel: fields.typeLabel.value,
+        startDate: fields.startDate.value, endDate: fields.endDate.value, comment: fields.comment.value,
+        testOnly: fields.testOnly.checked
+      });
+      if (!result.ok) { toast(result.errors[0] || 'Enregistrement impossible.', 'warning'); return; }
+      toast('Demande ou absence fictive enregistrée ; aucun solde ni effet de paie n’a été calculé.', 'success'); render();
+    });
+    var leaveSeedForm = $('#payroll-leave-absence-seed-form');
+    if (leaveSeedForm) leaveSeedForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('seed-payroll-leave-demo', null, true)) return;
+      var dossier = PayrollHR.currentDossier();
+      if (!dossier || leaveSeedForm.getAttribute('data-dossier-id') !== dossier.id) { toast('Chargement refusé : le dossier RH actif a changé.', 'warning'); return; }
+      if (!leaveSeedForm.elements.testOnly.checked) { toast('Confirmez le caractère fictif avant le chargement.', 'warning'); return; }
+      var result = PayrollHR.seedDemoLeaveAbsenceData(dossier.id);
+      if (!result.ok) { toast(result.errors[0] || 'Chargement des exemples impossible.', 'warning'); return; }
+      toast('Deux exemples fictifs ajoutés : une demande et une absence constatée.', 'success'); render();
+    });
   }
 
   function payrollEntryForRun(run, dossierId) {
@@ -20387,6 +20415,29 @@
       (rows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Type</th><th>Référence</th><th>Libellé</th><th>Date de suivi</th><th>Nature</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucun suivi de test</strong><span>Aucun candidat, contrat ou dossier d’intérim n’est créé automatiquement.</span></div>') + '</section>';
   }
 
+  function viewPayrollLeaveAbsences(dossier, employees, records, canCreate) {
+    var kindLabels = { request: 'Demande de congé', absence: 'Absence constatée' };
+    var rows = records.map(function (record) {
+      var employee = employees.find(function (item) { return item.id === record.employeeId; });
+      return '<tr data-leave-record-id="' + esc(record.id) + '" data-dossier-id="' + esc(dossier.id) + '"><td>' + esc(kindLabels[record.kind] || record.kind) + '</td><td>' + esc(employee ? (employee.employeeNumber || employee.id) : 'Employé historique indisponible') + '</td><td>' + esc(record.typeLabel) + '</td><td>' + esc(record.startDate) + ' → ' + esc(record.endDate) + '</td><td><span class="badge ' + (record.origin === 'demo-mock' ? 'posted' : 'draft') + '">' + (record.origin === 'demo-mock' ? 'DEMO fictif' : 'Test uniquement') + '</span></td></tr>';
+    }).join('');
+    var form = canCreate ? '<form id="payroll-leave-absence-form" class="payroll-leave-absence-form" data-dossier-id="' + esc(dossier.id) + '"><div class="payroll-leave-absence-grid">' +
+      '<div class="field"><label>Enregistrement *</label><select name="kind" required><option value="" selected disabled>Choisir…</option><option value="request">Demande de congé</option><option value="absence">Absence constatée</option></select></div>' +
+      '<div class="field"><label>Employé fictif *</label><select name="employeeId" required>' + payrollTestEmployeeOptions(employees) + '</select></div>' +
+      '<div class="field"><label>Type libre de test *</label><input name="typeLabel" maxlength="60" placeholder="Type de test DEMO" required></div>' +
+      '<div class="field"><label>Début de période *</label><input name="startDate" type="date" required></div><div class="field"><label>Fin de période *</label><input name="endDate" type="date" required></div>' +
+      '<div class="field"><label>Commentaire opérationnel non médical (facultatif)</label><input name="comment" maxlength="160"></div>' +
+      '<label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Je confirme que cet enregistrement est fictif et ne contient aucune information médicale ou réelle.</span></label>' +
+      '<button class="btn btn-primary" type="submit">＋ Ajouter au registre de test</button></div></form>'
+      : '<p class="small muted">Votre profil ne dispose pas du droit de création dans ce dossier.</p>';
+    var seed = canCreate && PayrollHR.isDemoTestDossier(dossier.id) && !PayrollHR.demoLeaveAbsenceSeeded(dossier.id)
+      ? '<form id="payroll-leave-absence-seed-form" class="payroll-leave-demo-seed" data-dossier-id="' + esc(dossier.id) + '"><p><strong>Exemples disponibles :</strong> une demande et une absence constatée, sur deux employés fictifs. Le type est volontairement non juridique.</p><label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Charger uniquement ces exemples fictifs DEMO.</span></label><button class="btn btn-secondary" type="submit">Charger 2 exemples</button></form>'
+      : (PayrollHR.demoLeaveAbsenceSeeded(dossier.id) ? '<div class="alert success"><div>Les deux exemples DEMO de congé/absence sont déjà chargés.</div></div>' : '');
+    return '<section class="exchange-card payroll-leave-absence"><p class="page-kicker">ÉTAPE 9 · SUIVI SANS CALCUL</p><h3>Demandes de congé et absences constatées</h3>' +
+      '<div class="alert warning"><div>Les deux natures sont distinctes. Aucun statut d’approbation, droit acquis, solde, nombre de jours ouvrés, calendrier, justificatif médical ou effet sur la paie n’est présumé ni calculé. Le type reste un libellé libre de test.</div></div>' + seed + form +
+      (rows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Nature</th><th>Employé fictif</th><th>Type libre</th><th>Période saisie</th><th>Nature des données</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucune demande ou absence de test</strong><span>Aucun solde initial ni enregistrement n’est créé automatiquement hors jeu DEMO explicite.</span></div>') + '</section>';
+  }
+
   function payrollTestEmployeeOptions(employees) {
     return '<option value="" selected disabled>Choisir un employé fictif…</option>' + employees.filter(function (employee) {
       return employee.status === 'test-only';
@@ -20449,6 +20500,7 @@
     var hrTrackingRecords = PayrollHR.hrTrackingRecords(dossier.id);
     var organizationAssignments = PayrollHR.organizationAssignments(dossier.id);
     var internalMissions = PayrollHR.internalMissions(dossier.id);
+    var leaveAbsenceRecords = PayrollHR.leaveAbsenceRecords(dossier.id);
     var canEditPayrollRecords = hasDemoPermission(member, 'payroll-hr', 'record.edit', payrollAccessContext(dossier));
     var employeeRows = dossierEmployees.map(function (employee) {
       var createdLabel = employee.createdAt ? String(employee.createdAt).slice(0, 10) : 'Non renseignée';
@@ -20483,7 +20535,7 @@
     return '<div class="payroll-module-workspace">' +
       pageHeader('Paie & RH', 'Dossier client : <strong>' + esc(dossier.clientName) + '</strong> · ' + esc(dossier.reference) + ' · exercice ' + esc(dossier.exerciseYear) + '.', '<a class="btn btn-ghost" href="#/payroll-dossiers">Changer de dossier RH</a> <a class="btn btn-ghost" href="#/launcher">← Modules</a>') +
       '<div class="alert warning"><div><strong>Base fonctionnelle en cours</strong><br>Les données sont encore stockées localement dans ce navigateur. Utilisez uniquement des données synthétiques. Le calcul de paie et les fonctions de production restent bloqués tant que les textes, règles et le stockage sécurisé ne sont pas validés.</div></div>' +
-      accountingLinkPanel + employeeSection + viewPayrollOrganizationUnits(dossier, organizationUnits, canCreatePayrollEmployee, canEditPayrollRecords) + viewPayrollAssignmentsMissions(dossier, dossierEmployees, organizationUnits, organizationAssignments, internalMissions, canCreatePayrollEmployee) + viewPayrollHRTracking(dossier, hrTrackingRecords, canCreatePayrollEmployee) +
+      accountingLinkPanel + employeeSection + viewPayrollOrganizationUnits(dossier, organizationUnits, canCreatePayrollEmployee, canEditPayrollRecords) + viewPayrollAssignmentsMissions(dossier, dossierEmployees, organizationUnits, organizationAssignments, internalMissions, canCreatePayrollEmployee) + viewPayrollHRTracking(dossier, hrTrackingRecords, canCreatePayrollEmployee) + viewPayrollLeaveAbsences(dossier, dossierEmployees, leaveAbsenceRecords, canCreatePayrollEmployee) +
       '<section class="exchange-card"><p class="page-kicker">CYCLE DE PAIE</p><h3>Lots du dossier</h3>' +
         '<div class="alert info"><div>Aucun calcul ou lot fictif n’est créé. Le moteur restera indisponible tant que les règles applicables, les données source et les contrôles d’approbation ne sont pas validés.</div></div>' +
         (runRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Référence</th><th>Période</th><th>État</th><th>Référence comptable</th></tr></thead><tbody>' + runRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucun lot de paie disponible</strong><span>Les lots ne peuvent pas être créés avec des montants, comptes ou règles inventés.</span></div>') +

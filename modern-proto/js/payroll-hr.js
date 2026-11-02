@@ -433,6 +433,75 @@
     return { ok: true, errors: [], dossierId: dossierId, organizationUnits: [clone(unitA), clone(unitB)], assignments: clone(dossier.organizationAssignments.slice(-2)), missions: clone(dossier.internalMissions.slice(-2)) };
   }
 
+  function leaveAbsenceRecords(dossierId) {
+    dossierId = String(dossierId || '');
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier || !Array.isArray(dossier.leaveAbsenceRecords)) return [];
+    return clone(dossier.leaveAbsenceRecords.filter(function (item) { return item && item.dossierId === dossierId; }));
+  }
+
+  function createLeaveAbsenceRecord(dossierId, input) {
+    input = input || {};
+    dossierId = String(dossierId || '');
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Cette version locale accepte uniquement des demandes et absences fictives de test.'] };
+    var kind = String(input.kind || '');
+    var employeeId = String(input.employeeId || '');
+    var typeLabel = String(input.typeLabel || '').trim().replace(/\s+/g, ' ');
+    var startDate = String(input.startDate || '');
+    var endDate = String(input.endDate || '');
+    var comment = String(input.comment || '').trim().replace(/\s+/g, ' ');
+    var errors = [];
+    if (kind !== 'request' && kind !== 'absence') errors.push('Choisissez demande de congé ou absence constatée.');
+    if (!validDemoEmployee(dossier, employeeId)) errors.push('Choisissez un employé fictif du dossier RH courant.');
+    if (!typeLabel) errors.push('Le type libre de test est obligatoire.');
+    if (typeLabel.length > 60) errors.push('Le type de test ne peut pas dépasser 60 caractères.');
+    if (comment.length > 160) errors.push('Le commentaire de test ne peut pas dépasser 160 caractères.');
+    errors = errors.concat(validateTrackingDates(startDate, endDate, 'de période'));
+    if (errors.length) return { ok: false, errors: errors };
+    dossier.leaveAbsenceRecords = Array.isArray(dossier.leaveAbsenceRecords) ? dossier.leaveAbsenceRecords : [];
+    var id;
+    do { id = 'leave-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); }
+    while (dossier.leaveAbsenceRecords.some(function (item) { return item && item.id === id; }));
+    var now = new Date().toISOString();
+    var record = { id: id, dossierId: dossierId, employeeId: employeeId, kind: kind,
+      typeLabel: typeLabel, startDate: startDate, endDate: endDate, comment: comment,
+      origin: 'test-only', history: [{ action: 'created', changedAt: now }], createdAt: now };
+    dossier.leaveAbsenceRecords.push(record);
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer l’enregistrement de test.'] };
+    return { ok: true, errors: [], record: clone(record) };
+  }
+
+  function demoLeaveAbsenceSeeded(dossierId) {
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId || ''); });
+    return !!(dossier && dossier.demoLeaveAbsenceSeededAt);
+  }
+
+  function seedDemoLeaveAbsenceData(dossierId) {
+    dossierId = String(dossierId || '');
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['Le jeu prérempli est réservé au dossier de démonstration PRH-TEST-2026.'] };
+    if (dossier.demoLeaveAbsenceSeededAt) return { ok: false, errors: ['Les exemples de demandes et absences sont déjà chargés.'] };
+    dossier.leaveAbsenceRecords = Array.isArray(dossier.leaveAbsenceRecords) ? dossier.leaveAbsenceRecords : [];
+    if (dossier.leaveAbsenceRecords.some(function (item) { return item && /^mock-leave-/.test(item.id || ''); })) {
+      return { ok: false, errors: ['Des exemples DEMO similaires existent déjà ; aucune donnée n’a été ajoutée.'] };
+    }
+    var employees = dossier.demoEmployees.slice(0, 2);
+    var now = new Date().toISOString();
+    var records = [
+      { id: 'mock-leave-request-001', dossierId: dossierId, employeeId: employees[0].id, kind: 'request', typeLabel: 'Type de test DEMO A — sans qualification légale', startDate: '2026-05-04', endDate: '2026-05-05', comment: 'Exemple de demande fictive', origin: 'demo-mock', history: [{ action: 'created', changedAt: now }], createdAt: now },
+      { id: 'mock-leave-absence-001', dossierId: dossierId, employeeId: employees[1].id, kind: 'absence', typeLabel: 'Type de test DEMO B — sans qualification légale', startDate: '2026-06-08', endDate: '2026-06-09', comment: 'Exemple d’absence fictive', origin: 'demo-mock', history: [{ action: 'created', changedAt: now }], createdAt: now }
+    ];
+    dossier.leaveAbsenceRecords.push.apply(dossier.leaveAbsenceRecords, records);
+    dossier.demoLeaveAbsenceSeededAt = now;
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer les exemples de congés et absences.'] };
+    return { ok: true, errors: [], records: clone(records) };
+  }
+
   function dossierById(dossierId) {
     return clone(loadDossierCatalog().dossiers.find(function (dossier) { return dossier.id === String(dossierId || ''); }) || null);
   }
@@ -644,6 +713,10 @@
     internalMissions: internalMissions,
     createInternalMission: createInternalMission,
     seedDemoOrganizationData: seedDemoOrganizationData,
+    leaveAbsenceRecords: leaveAbsenceRecords,
+    createLeaveAbsenceRecord: createLeaveAbsenceRecord,
+    demoLeaveAbsenceSeeded: demoLeaveAbsenceSeeded,
+    seedDemoLeaveAbsenceData: seedDemoLeaveAbsenceData,
     hrTrackingRecords: hrTrackingRecords,
     createHRTrackingRecord: createHRTrackingRecord,
     createDossier: createDossier,

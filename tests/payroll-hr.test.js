@@ -151,6 +151,31 @@ assert.equal(PayrollHR.createHRTrackingRecord(dossier.id, {
   kind: 'unknown', reference: 'TEST-UNK', label: 'Type non configuré', date: '2026-04-04', testOnly: true
 }).ok, false, 'un type de suivi non prévu est refusé');
 
+assert.equal(PayrollHR.createLeaveAbsenceRecord(dossier.id, {
+  kind: 'request', employeeId: created.employee.id, typeLabel: 'Type de test',
+  startDate: '2026-05-04', endDate: '2026-05-05', testOnly: false
+}).ok, false, 'une demande non confirmée comme test est refusée');
+const leaveRequest = PayrollHR.createLeaveAbsenceRecord(dossier.id, {
+  kind: 'request', employeeId: created.employee.id, typeLabel: 'Type libre fictif',
+  startDate: '2026-05-04', endDate: '2026-05-05', comment: 'Note de test non médicale', testOnly: true
+});
+const absenceRecord = PayrollHR.createLeaveAbsenceRecord(dossier.id, {
+  kind: 'absence', employeeId: created.employee.id, typeLabel: 'Autre type libre',
+  startDate: '2026-05-04', endDate: '2026-05-05', testOnly: true
+});
+assert.equal(leaveRequest.ok, true, leaveRequest.errors.join('\\n'));
+assert.equal(absenceRecord.ok, true, absenceRecord.errors.join('\\n'));
+assert.equal(leaveRequest.record.kind, 'request');
+assert.equal(absenceRecord.record.kind, 'absence');
+assert.equal('status' in leaveRequest.record, false, 'aucun statut d’approbation n’est présumé');
+assert.equal('days' in leaveRequest.record, false, 'aucun décompte de jours n’est calculé');
+assert.equal(PayrollHR.createLeaveAbsenceRecord(dossier.id, {
+  kind: 'absence', employeeId: 'employee-from-other-folder', typeLabel: 'Type fictif',
+  startDate: '2026-05-04', endDate: '2026-05-05', testOnly: true
+}).ok, false, 'une absence doit référencer un employé fictif du dossier');
+assert.equal(PayrollHR.leaveAbsenceRecords(dossier.id).length, 2);
+assert.deepEqual(PayrollHR.leaveAbsenceRecords('other-dossier'), [], 'les événements restent isolés par dossier');
+
 assert.deepEqual(PayrollHR.accountingAccountCatalog(), [], 'aucun compte de paie n’est préconfiguré');
 const fakeRun = PayrollHR.createDemoRun(dossier, '2026-01');
 assert.equal(fakeRun.ok, false, 'aucun lot avec montant ou compte inventé ne peut être créé');
@@ -188,4 +213,12 @@ assert.ok(mockSeed.missions.every(item => item.origin === 'demo-mock' && item.do
 assert.equal(PayrollHR.demoOrganizationSeeded(testDossier.dossier.id), true);
 assert.equal(PayrollHR.seedDemoOrganizationData(testDossier.dossier.id).ok, false, 'le jeu exemple ne peut pas être dupliqué');
 assert.equal(PayrollHR.seedDemoOrganizationData(dossier.id).ok, false, 'aucun jeu fictif prérempli dans un dossier ordinaire');
-console.log('Paie & RH : structures, affectations, missions et jeu de test isolés — OK');
+const leaveSeed = PayrollHR.seedDemoLeaveAbsenceData(testDossier.dossier.id);
+assert.equal(leaveSeed.ok, true, leaveSeed.errors.join('\\n'));
+assert.equal(leaveSeed.records.length, 2);
+assert.deepEqual(leaveSeed.records.map(record => record.kind), ['request', 'absence']);
+assert.ok(leaveSeed.records.every(record => record.origin === 'demo-mock' && record.dossierId === testDossier.dossier.id));
+assert.equal(PayrollHR.demoLeaveAbsenceSeeded(testDossier.dossier.id), true);
+assert.equal(PayrollHR.seedDemoLeaveAbsenceData(testDossier.dossier.id).ok, false, 'les exemples congés/absences ne se dupliquent pas');
+assert.equal(PayrollHR.seedDemoLeaveAbsenceData(dossier.id).ok, false, 'les exemples congés restent réservés au dossier de test');
+console.log('Paie & RH : jeux fictifs isolés, demandes et absences sans calcul — OK');
