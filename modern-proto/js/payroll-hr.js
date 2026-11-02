@@ -289,6 +289,150 @@
     return { ok: true, errors: [], record: clone(record) };
   }
 
+  function isDemoTestDossier(dossierId) {
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId || ''); });
+    return !!(dossier && dossier.reference === 'PRH-TEST-2026' && dossier.clientCode === 'TEST' &&
+      dossier.clientName === 'Entreprise fictive de test' && Array.isArray(dossier.demoEmployees) &&
+      dossier.demoEmployees.length >= 2 && dossier.demoEmployees.every(function (employee) {
+        return employee && employee.dossierId === dossier.id && employee.status === 'test-only' && /^EMP-TEST-/.test(employee.id || '');
+      }));
+  }
+
+  function demoOrganizationSeeded(dossierId) {
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId || ''); });
+    return !!(dossier && dossier.demoOrganizationSeededAt);
+  }
+
+  function validDemoEmployee(dossier, employeeId) {
+    return Array.isArray(dossier.demoEmployees) && dossier.demoEmployees.some(function (employee) {
+      return employee && employee.id === employeeId && employee.dossierId === dossier.id && employee.status === 'test-only';
+    });
+  }
+
+  function validateTrackingDates(startDate, endDate, label) {
+    var errors = [];
+    if (!dateParts(startDate)) errors.push('La date de début ' + label + ' doit être valide.');
+    if (endDate && !dateParts(endDate)) errors.push('La date de fin ' + label + ' doit être valide.');
+    if (dateParts(startDate) && dateParts(endDate) && endDate < startDate) errors.push('La date de fin ' + label + ' ne peut pas précéder la date de début.');
+    return errors;
+  }
+
+  function organizationAssignments(dossierId) {
+    dossierId = String(dossierId || '');
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier || !Array.isArray(dossier.organizationAssignments)) return [];
+    return clone(dossier.organizationAssignments.filter(function (item) { return item && item.dossierId === dossierId; }));
+  }
+
+  function createOrganizationAssignment(dossierId, input) {
+    input = input || {};
+    dossierId = String(dossierId || '');
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Cette version locale accepte uniquement des affectations de test.'] };
+    var employeeId = String(input.employeeId || '');
+    var unitId = String(input.unitId || '');
+    var functionLabel = String(input.functionLabel || '').trim().replace(/\s+/g, ' ');
+    var startDate = String(input.startDate || '');
+    var endDate = String(input.endDate || '');
+    var errors = [];
+    if (!validDemoEmployee(dossier, employeeId)) errors.push('Choisissez un employé fictif du dossier RH courant.');
+    var units = Array.isArray(dossier.organizationUnits) ? dossier.organizationUnits : [];
+    if (unitId && !units.some(function (unit) { return unit && unit.id === unitId && unit.dossierId === dossierId && unit.status === 'active'; })) {
+      errors.push('L’unité choisie doit être active et appartenir au même dossier RH.');
+    }
+    if (functionLabel.length > 100) errors.push('La fonction de test ne peut pas dépasser 100 caractères.');
+    errors = errors.concat(validateTrackingDates(startDate, endDate, 'd’affectation'));
+    if (errors.length) return { ok: false, errors: errors };
+    dossier.organizationAssignments = Array.isArray(dossier.organizationAssignments) ? dossier.organizationAssignments : [];
+    var id;
+    do { id = 'assignment-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); }
+    while (dossier.organizationAssignments.some(function (item) { return item && item.id === id; }));
+    var now = new Date().toISOString();
+    var record = { id: id, dossierId: dossierId, employeeId: employeeId, unitId: unitId,
+      functionLabel: functionLabel, startDate: startDate, endDate: endDate, origin: 'test-only',
+      history: [{ action: 'created', changedAt: now }], createdAt: now };
+    dossier.organizationAssignments.push(record);
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer l’affectation de test.'] };
+    return { ok: true, errors: [], assignment: clone(record) };
+  }
+
+  function internalMissions(dossierId) {
+    dossierId = String(dossierId || '');
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier || !Array.isArray(dossier.internalMissions)) return [];
+    return clone(dossier.internalMissions.filter(function (item) { return item && item.dossierId === dossierId; }));
+  }
+
+  function createInternalMission(dossierId, input) {
+    input = input || {};
+    dossierId = String(dossierId || '');
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Cette version locale accepte uniquement des missions synthétiques de test.'] };
+    var employeeId = String(input.employeeId || '');
+    var title = String(input.title || '').trim().replace(/\s+/g, ' ');
+    var unitId = String(input.unitId || '');
+    var startDate = String(input.startDate || '');
+    var endDate = String(input.endDate || '');
+    var errors = [];
+    if (!validDemoEmployee(dossier, employeeId)) errors.push('Choisissez un participant fictif du dossier RH courant.');
+    if (!title) errors.push('Le libellé de mission fictive est obligatoire.');
+    if (title.length > 120) errors.push('Le libellé de mission ne peut pas dépasser 120 caractères.');
+    var units = Array.isArray(dossier.organizationUnits) ? dossier.organizationUnits : [];
+    if (unitId && !units.some(function (unit) { return unit && unit.id === unitId && unit.dossierId === dossierId && unit.status === 'active'; })) {
+      errors.push('L’unité choisie doit être active et appartenir au même dossier RH.');
+    }
+    errors = errors.concat(validateTrackingDates(startDate, endDate, 'de mission'));
+    if (errors.length) return { ok: false, errors: errors };
+    dossier.internalMissions = Array.isArray(dossier.internalMissions) ? dossier.internalMissions : [];
+    var id;
+    do { id = 'mission-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); }
+    while (dossier.internalMissions.some(function (item) { return item && item.id === id; }));
+    var now = new Date().toISOString();
+    var mission = { id: id, dossierId: dossierId, employeeId: employeeId, unitId: unitId,
+      title: title, startDate: startDate, endDate: endDate, origin: 'test-only',
+      history: [{ action: 'created', changedAt: now }], createdAt: now };
+    dossier.internalMissions.push(mission);
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la mission de test.'] };
+    return { ok: true, errors: [], mission: clone(mission) };
+  }
+
+  function seedDemoOrganizationData(dossierId) {
+    dossierId = String(dossierId || '');
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['Le jeu prérempli est réservé au dossier « PRH-TEST-2026 » et à ses fiches employé fictives.'] };
+    if (dossier.demoOrganizationSeededAt) return { ok: false, errors: ['Le jeu de démonstration a déjà été chargé dans ce dossier.'] };
+    dossier.organizationUnits = Array.isArray(dossier.organizationUnits) ? dossier.organizationUnits : [];
+    dossier.organizationAssignments = Array.isArray(dossier.organizationAssignments) ? dossier.organizationAssignments : [];
+    dossier.internalMissions = Array.isArray(dossier.internalMissions) ? dossier.internalMissions : [];
+    if (dossier.organizationUnits.some(function (unit) { return unit && (unit.code === 'MOCK-UNIT-A' || unit.code === 'MOCK-UNIT-B'); }) ||
+        dossier.organizationAssignments.some(function (item) { return item && String(item.id || '').indexOf('mock-assignment-') === 0; }) ||
+        dossier.internalMissions.some(function (item) { return item && String(item.id || '').indexOf('mock-mission-') === 0; })) {
+      return { ok: false, errors: ['Des données de démonstration similaires existent déjà ; aucune donnée n’a été ajoutée.'] };
+    }
+    var now = new Date().toISOString();
+    var unitA = { id: 'mock-org-unit-a', dossierId: dossierId, label: 'Unité fictive A — DEMO', type: 'Unité de démonstration', code: 'MOCK-UNIT-A', description: '', parentId: '', effectiveDate: '2026-01-01', status: 'active', origin: 'demo-mock', createdAt: now, history: [{ action: 'created', effectiveDate: '2026-01-01', changedAt: now }] };
+    var unitB = { id: 'mock-org-unit-b', dossierId: dossierId, label: 'Unité fictive B — DEMO', type: 'Unité de démonstration', code: 'MOCK-UNIT-B', description: '', parentId: '', effectiveDate: '2026-01-01', status: 'active', origin: 'demo-mock', createdAt: now, history: [{ action: 'created', effectiveDate: '2026-01-01', changedAt: now }] };
+    dossier.organizationUnits.push(unitA, unitB);
+    var employees = dossier.demoEmployees.slice(0, 2);
+    dossier.organizationAssignments.push(
+      { id: 'mock-assignment-001', dossierId: dossierId, employeeId: employees[0].id, unitId: unitA.id, functionLabel: 'Fonction fictive A — DEMO', startDate: '2026-01-05', endDate: '', origin: 'demo-mock', history: [{ action: 'created', changedAt: now }], createdAt: now },
+      { id: 'mock-assignment-002', dossierId: dossierId, employeeId: employees[1].id, unitId: unitB.id, functionLabel: 'Fonction fictive B — DEMO', startDate: '2026-02-02', endDate: '', origin: 'demo-mock', history: [{ action: 'created', changedAt: now }], createdAt: now }
+    );
+    dossier.internalMissions.push(
+      { id: 'mock-mission-001', dossierId: dossierId, employeeId: employees[0].id, unitId: unitA.id, title: 'Mission synthétique A — DEMO', startDate: '2026-03-10', endDate: '2026-03-12', origin: 'demo-mock', history: [{ action: 'created', changedAt: now }], createdAt: now },
+      { id: 'mock-mission-002', dossierId: dossierId, employeeId: employees[1].id, unitId: unitB.id, title: 'Mission synthétique B — DEMO', startDate: '2026-04-06', endDate: '2026-04-07', origin: 'demo-mock', history: [{ action: 'created', changedAt: now }], createdAt: now }
+    );
+    dossier.demoOrganizationSeededAt = now;
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer le jeu de démonstration.'] };
+    return { ok: true, errors: [], dossierId: dossierId, organizationUnits: [clone(unitA), clone(unitB)], assignments: clone(dossier.organizationAssignments.slice(-2)), missions: clone(dossier.internalMissions.slice(-2)) };
+  }
+
   function dossierById(dossierId) {
     return clone(loadDossierCatalog().dossiers.find(function (dossier) { return dossier.id === String(dossierId || ''); }) || null);
   }
@@ -493,6 +637,13 @@
     createOrganizationUnit: createOrganizationUnit,
     updateOrganizationUnit: updateOrganizationUnit,
     archiveOrganizationUnit: archiveOrganizationUnit,
+    isDemoTestDossier: isDemoTestDossier,
+    demoOrganizationSeeded: demoOrganizationSeeded,
+    organizationAssignments: organizationAssignments,
+    createOrganizationAssignment: createOrganizationAssignment,
+    internalMissions: internalMissions,
+    createInternalMission: createInternalMission,
+    seedDemoOrganizationData: seedDemoOrganizationData,
     hrTrackingRecords: hrTrackingRecords,
     createHRTrackingRecord: createHRTrackingRecord,
     createDossier: createDossier,

@@ -92,6 +92,36 @@ assert.equal(PayrollHR.updateOrganizationUnit(dossier.id, childUnit.unit.id, {
 }).ok, false, 'une unité archivée est immuable');
 assert.equal(PayrollHR.archiveOrganizationUnit(dossier.id, rootUnit.unit.id, '2026-04-02').ok, true);
 assert.equal(PayrollHR.organizationUnits(dossier.id).filter(unit => unit.status === 'archived').length, 2);
+const assignmentUnit = PayrollHR.createOrganizationUnit(dossier.id, {
+  label: 'Unité affectation test', type: 'Unité de test', code: 'AFFECT-TEST',
+  effectiveDate: '2026-05-01', testOnly: true
+});
+assert.equal(assignmentUnit.ok, true, assignmentUnit.errors.join('\\n'));
+const assignment = PayrollHR.createOrganizationAssignment(dossier.id, {
+  employeeId: created.employee.id, unitId: assignmentUnit.unit.id,
+  functionLabel: 'Fonction de test', startDate: '2026-05-01', endDate: '', testOnly: true
+});
+assert.equal(assignment.ok, true, assignment.errors.join('\\n'));
+assert.equal(assignment.assignment.history[0].action, 'created');
+assert.equal(PayrollHR.createOrganizationAssignment(dossier.id, {
+  employeeId: 'employee-from-other-folder', unitId: assignmentUnit.unit.id,
+  startDate: '2026-05-01', testOnly: true
+}).ok, false, 'une affectation exige un employé fictif du dossier');
+assert.equal(PayrollHR.createOrganizationAssignment(dossier.id, {
+  employeeId: created.employee.id, unitId: assignmentUnit.unit.id,
+  startDate: '2026-06-02', endDate: '2026-06-01', testOnly: true
+}).ok, false, 'une période d’affectation inversée est refusée');
+assert.equal(PayrollHR.organizationAssignments('other-dossier').length, 0);
+const mission = PayrollHR.createInternalMission(dossier.id, {
+  employeeId: created.employee.id, unitId: assignmentUnit.unit.id, title: 'Mission fictive A',
+  startDate: '2026-05-04', endDate: '2026-05-05', testOnly: true
+});
+assert.equal(mission.ok, true, mission.errors.join('\\n'));
+assert.equal(mission.mission.history[0].action, 'created');
+assert.equal(PayrollHR.createInternalMission(dossier.id, {
+  employeeId: 'employee-from-other-folder', title: 'Mission test', startDate: '2026-05-04', testOnly: true
+}).ok, false, 'une mission exige un participant fictif du dossier');
+assert.equal(PayrollHR.internalMissions('other-dossier').length, 0);
 
 assert.equal(PayrollHR.createHRTrackingRecord(dossier.id, {
   kind: 'contract', reference: 'TEST-CTR-01', label: 'Suivi fictif', date: '2026-04-01', testOnly: false
@@ -146,4 +176,16 @@ assert.equal(testDossier.dossier.demoEmployees.length, 10);
 assert.ok(testDossier.dossier.demoEmployees.every(employee => employee.dossierId === testDossier.dossier.id));
 assert.ok(testDossier.dossier.demoEmployees.every(employee => employee.status === 'test-only' && !('salary' in employee)));
 assert.deepEqual(PayrollHR.runs(testDossier.dossier.id), []);
-console.log('Paie & RH : création fictive d’employé, isolation dossier et blocage de paie non sourcée — OK');
+assert.equal(PayrollHR.isDemoTestDossier(testDossier.dossier.id), true);
+assert.equal(PayrollHR.isDemoTestDossier(dossier.id), false, 'le préchargement est limité au dossier de démonstration identifié');
+const mockSeed = PayrollHR.seedDemoOrganizationData(testDossier.dossier.id);
+assert.equal(mockSeed.ok, true, mockSeed.errors.join('\\n'));
+assert.equal(mockSeed.organizationUnits.length, 2);
+assert.equal(mockSeed.assignments.length, 2);
+assert.equal(mockSeed.missions.length, 2);
+assert.ok(mockSeed.assignments.every(item => item.origin === 'demo-mock' && item.dossierId === testDossier.dossier.id));
+assert.ok(mockSeed.missions.every(item => item.origin === 'demo-mock' && item.dossierId === testDossier.dossier.id));
+assert.equal(PayrollHR.demoOrganizationSeeded(testDossier.dossier.id), true);
+assert.equal(PayrollHR.seedDemoOrganizationData(testDossier.dossier.id).ok, false, 'le jeu exemple ne peut pas être dupliqué');
+assert.equal(PayrollHR.seedDemoOrganizationData(dossier.id).ok, false, 'aucun jeu fictif prérempli dans un dossier ordinaire');
+console.log('Paie & RH : structures, affectations, missions et jeu de test isolés — OK');

@@ -496,6 +496,9 @@
       case 'create-payroll-test-employee':
       case 'create-payroll-org-unit':
       case 'create-payroll-hr-tracking':
+      case 'create-payroll-organization-assignment':
+      case 'create-payroll-internal-mission':
+      case 'seed-payroll-organization-demo':
         return { moduleId: 'payroll-hr', actionId: 'record.create' };
       case 'edit-payroll-org-unit':
       case 'archive-payroll-org-unit':
@@ -20265,6 +20268,45 @@
       if (!result.ok) { toast(result.errors[0] || 'Création du suivi impossible.', 'warning'); return; }
       toast('Suivi fictif enregistré dans le dossier RH.', 'success'); render();
     });
+    var assignmentForm = $('#payroll-assignment-form');
+    if (assignmentForm) assignmentForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('create-payroll-organization-assignment', null, true)) return;
+      var dossier = PayrollHR.currentDossier();
+      if (!dossier || assignmentForm.getAttribute('data-dossier-id') !== dossier.id) { toast('Création refusée : le dossier RH actif a changé.', 'warning'); return; }
+      var fields = assignmentForm.elements;
+      var result = PayrollHR.createOrganizationAssignment(dossier.id, {
+        employeeId: fields.employeeId.value, unitId: fields.unitId.value, functionLabel: fields.functionLabel.value,
+        startDate: fields.startDate.value, endDate: fields.endDate.value, testOnly: fields.testOnly.checked
+      });
+      if (!result.ok) { toast(result.errors[0] || 'Création de l’affectation impossible.', 'warning'); return; }
+      toast('Affectation fictive enregistrée.', 'success'); render();
+    });
+    var missionForm = $('#payroll-internal-mission-form');
+    if (missionForm) missionForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('create-payroll-internal-mission', null, true)) return;
+      var dossier = PayrollHR.currentDossier();
+      if (!dossier || missionForm.getAttribute('data-dossier-id') !== dossier.id) { toast('Création refusée : le dossier RH actif a changé.', 'warning'); return; }
+      var fields = missionForm.elements;
+      var result = PayrollHR.createInternalMission(dossier.id, {
+        employeeId: fields.employeeId.value, unitId: fields.unitId.value, title: fields.title.value,
+        startDate: fields.startDate.value, endDate: fields.endDate.value, testOnly: fields.testOnly.checked
+      });
+      if (!result.ok) { toast(result.errors[0] || 'Création de la mission impossible.', 'warning'); return; }
+      toast('Mission fictive enregistrée.', 'success'); render();
+    });
+    var demoSeedForm = $('#payroll-organization-demo-seed-form');
+    if (demoSeedForm) demoSeedForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('seed-payroll-organization-demo', null, true)) return;
+      var dossier = PayrollHR.currentDossier();
+      if (!dossier || demoSeedForm.getAttribute('data-dossier-id') !== dossier.id) { toast('Chargement refusé : le dossier RH actif a changé.', 'warning'); return; }
+      if (!demoSeedForm.elements.testOnly.checked) { toast('Confirmez que le jeu est fictif avant le chargement.', 'warning'); return; }
+      var result = PayrollHR.seedDemoOrganizationData(dossier.id);
+      if (!result.ok) { toast(result.errors[0] || 'Chargement des données de démonstration impossible.', 'warning'); return; }
+      toast('Jeu de démonstration chargé : unités, affectations et missions fictives.', 'success'); render();
+    });
   }
 
   function payrollEntryForRun(run, dossierId) {
@@ -20341,8 +20383,56 @@
       '<button type="submit" class="btn btn-primary">＋ Ajouter un suivi fictif</button></div></form>'
       : '<p class="small muted">Votre profil ne dispose pas du droit de création dans ce dossier.</p>';
     return '<section class="exchange-card payroll-hr-tracking"><p class="page-kicker">ÉTAPES 6–7 · SUIVIS SYNTHÉTIQUES</p><h3>Candidatures, contrats, intérim et départs</h3>' +
-      '<div class="alert warning"><div>Socle de démonstration uniquement. Les libellés sont des types de suivi, pas des statuts ni des conclusions juridiques. Un suivi de départ ne modifie aucun statut d’employé, contrat ou accès. Aucun nom, motif de départ, document, catégorie légale, échéance, employeur/payeur ou élément de rémunération n’est enregistré.</div></div>' + form,
+      '<div class="alert warning"><div>Socle de démonstration uniquement. Les libellés sont des types de suivi, pas des statuts ni des conclusions juridiques. Un suivi de départ ne modifie aucun statut d’employé, contrat ou accès. Aucun nom, motif de départ, document, catégorie légale, échéance, employeur/payeur ou élément de rémunération n’est enregistré.</div></div>' + form +
       (rows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Type</th><th>Référence</th><th>Libellé</th><th>Date de suivi</th><th>Nature</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucun suivi de test</strong><span>Aucun candidat, contrat ou dossier d’intérim n’est créé automatiquement.</span></div>') + '</section>';
+  }
+
+  function payrollTestEmployeeOptions(employees) {
+    return '<option value="" selected disabled>Choisir un employé fictif…</option>' + employees.filter(function (employee) {
+      return employee.status === 'test-only';
+    }).map(function (employee) {
+      return '<option value="' + esc(employee.id) + '">' + esc((employee.employeeNumber || employee.id) + ' · ' + (employee.displayName || 'Employé fictif')) + '</option>';
+    }).join('');
+  }
+
+  function payrollActiveUnitOptions(units) {
+    return '<option value="">Aucune unité</option>' + units.filter(function (unit) { return unit.status === 'active'; }).map(function (unit) {
+      return '<option value="' + esc(unit.id) + '">' + esc(unit.label + ' · ' + unit.type) + '</option>';
+    }).join('');
+  }
+
+  function viewPayrollAssignmentsMissions(dossier, employees, units, assignments, missions, canCreate) {
+    var assignmentRows = assignments.map(function (assignment) {
+      var employee = employees.find(function (item) { return item.id === assignment.employeeId; });
+      var unit = units.find(function (item) { return item.id === assignment.unitId; });
+      return '<tr data-assignment-id="' + esc(assignment.id) + '" data-dossier-id="' + esc(dossier.id) + '"><td>' + esc(employee ? (employee.employeeNumber || employee.id) : 'Employé historique indisponible') + '<br><small>' + esc(assignment.employeeId) + '</small></td><td>' + esc(unit ? unit.label : '—') + '</td><td>' + esc(assignment.functionLabel || '—') + '</td><td>' + esc(assignment.startDate) + (assignment.endDate ? ' → ' + esc(assignment.endDate) : ' → non renseignée') + '</td><td><span class="badge ' + (assignment.origin === 'demo-mock' ? 'posted' : 'draft') + '">' + (assignment.origin === 'demo-mock' ? 'DEMO fictif' : 'Test') + '</span></td></tr>';
+    }).join('');
+    var missionRows = missions.map(function (mission) {
+      var employee = employees.find(function (item) { return item.id === mission.employeeId; });
+      var unit = units.find(function (item) { return item.id === mission.unitId; });
+      return '<tr data-mission-id="' + esc(mission.id) + '" data-dossier-id="' + esc(dossier.id) + '"><td><strong>' + esc(mission.title) + '</strong><br><small>' + esc(mission.id) + '</small></td><td>' + esc(employee ? (employee.employeeNumber || employee.id) : 'Participant historique indisponible') + '</td><td>' + esc(unit ? unit.label : '—') + '</td><td>' + esc(mission.startDate) + (mission.endDate ? ' → ' + esc(mission.endDate) : ' → non renseignée') + '</td><td><span class="badge ' + (mission.origin === 'demo-mock' ? 'posted' : 'draft') + '">' + (mission.origin === 'demo-mock' ? 'DEMO fictif' : 'Test') + '</span></td></tr>';
+    }).join('');
+    var assignmentForm = canCreate ? '<form id="payroll-assignment-form" class="payroll-assignment-form" data-dossier-id="' + esc(dossier.id) + '"><h4>Ajouter une affectation synthétique</h4><div class="payroll-assignment-grid">' +
+      '<div class="field"><label>Employé fictif *</label><select name="employeeId" required>' + payrollTestEmployeeOptions(employees) + '</select></div>' +
+      '<div class="field"><label>Unité active facultative</label><select name="unitId">' + payrollActiveUnitOptions(units) + '</select></div>' +
+      '<div class="field"><label>Fonction (libellé libre)</label><input name="functionLabel" maxlength="100"></div>' +
+      '<div class="field"><label>Date de début *</label><input name="startDate" type="date" required></div><div class="field"><label>Date de fin (facultative)</label><input name="endDate" type="date"></div>' +
+      '<label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Cette affectation est fictive et réservée aux tests.</span></label><button class="btn btn-primary" type="submit">＋ Ajouter l’affectation</button></div></form>' : '';
+    var missionForm = canCreate ? '<form id="payroll-internal-mission-form" class="payroll-internal-mission-form" data-dossier-id="' + esc(dossier.id) + '"><h4>Ajouter une mission opérationnelle synthétique</h4><div class="payroll-assignment-grid">' +
+      '<div class="field"><label>Participant fictif *</label><select name="employeeId" required>' + payrollTestEmployeeOptions(employees) + '</select></div>' +
+      '<div class="field"><label>Unité active facultative</label><select name="unitId">' + payrollActiveUnitOptions(units) + '</select></div>' +
+      '<div class="field"><label>Libellé fictif *</label><input name="title" maxlength="120" required></div>' +
+      '<div class="field"><label>Date de début *</label><input name="startDate" type="date" required></div><div class="field"><label>Date de fin (facultative)</label><input name="endDate" type="date"></div>' +
+      '<label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Cette mission est fictive, sans frais ni déplacement calculé.</span></label><button class="btn btn-primary" type="submit">＋ Ajouter la mission</button></div></form>' : '';
+    var seedForm = canCreate && PayrollHR.isDemoTestDossier(dossier.id) && !PayrollHR.demoOrganizationSeeded(dossier.id)
+      ? '<form id="payroll-organization-demo-seed-form" class="payroll-demo-seed-form" data-dossier-id="' + esc(dossier.id) + '"><p><strong>Jeu d’exemple disponible</strong> : 2 unités fictives, 2 affectations et 2 missions, liés aux deux premiers employés du dossier de test.</p><label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Je confirme le chargement de données entièrement fictives marquées DEMO.</span></label><button class="btn btn-secondary" type="submit">Charger le jeu synthétique</button></form>'
+      : (PayrollHR.demoOrganizationSeeded(dossier.id) ? '<div class="alert success"><div>Jeu DEMO déjà chargé dans ce dossier de test.</div></div>' : '');
+    return '<section class="exchange-card payroll-assignment-mission"><p class="page-kicker">ÉTAPE 8 · HISTORIQUE PROFESSIONNEL</p><h3>Affectations et missions</h3>' +
+      '<div class="alert info"><div>Les affectations sont des enregistrements datés séparés des contrats. Les missions sont des activités internes distinctes. Aucune règle de chevauchement, statut, approbation, rémunération, dépense, remboursement ou écriture comptable n’est calculée.</div></div>' + seedForm +
+      '<details class="payroll-subregistry" open><summary>Affectations (' + assignments.length + ')</summary>' + assignmentForm +
+      (assignmentRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Employé</th><th>Unité</th><th>Fonction</th><th>Période saisie</th><th>Nature</th></tr></thead><tbody>' + assignmentRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucune affectation synthétique</strong></div>') + '</details>' +
+      '<details class="payroll-subregistry" open><summary>Missions opérationnelles (' + missions.length + ')</summary>' + missionForm +
+      (missionRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Mission</th><th>Participant</th><th>Unité</th><th>Période saisie</th><th>Nature</th></tr></thead><tbody>' + missionRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucune mission synthétique</strong></div>') + '</details></section>';
   }
 
   function viewPayrollModule() {
@@ -20357,6 +20447,8 @@
     var dossierEmployees = PayrollHR.employees(dossier.id);
     var organizationUnits = PayrollHR.organizationUnits(dossier.id);
     var hrTrackingRecords = PayrollHR.hrTrackingRecords(dossier.id);
+    var organizationAssignments = PayrollHR.organizationAssignments(dossier.id);
+    var internalMissions = PayrollHR.internalMissions(dossier.id);
     var canEditPayrollRecords = hasDemoPermission(member, 'payroll-hr', 'record.edit', payrollAccessContext(dossier));
     var employeeRows = dossierEmployees.map(function (employee) {
       var createdLabel = employee.createdAt ? String(employee.createdAt).slice(0, 10) : 'Non renseignée';
@@ -20391,7 +20483,7 @@
     return '<div class="payroll-module-workspace">' +
       pageHeader('Paie & RH', 'Dossier client : <strong>' + esc(dossier.clientName) + '</strong> · ' + esc(dossier.reference) + ' · exercice ' + esc(dossier.exerciseYear) + '.', '<a class="btn btn-ghost" href="#/payroll-dossiers">Changer de dossier RH</a> <a class="btn btn-ghost" href="#/launcher">← Modules</a>') +
       '<div class="alert warning"><div><strong>Base fonctionnelle en cours</strong><br>Les données sont encore stockées localement dans ce navigateur. Utilisez uniquement des données synthétiques. Le calcul de paie et les fonctions de production restent bloqués tant que les textes, règles et le stockage sécurisé ne sont pas validés.</div></div>' +
-      accountingLinkPanel + employeeSection + viewPayrollOrganizationUnits(dossier, organizationUnits, canCreatePayrollEmployee, canEditPayrollRecords) + viewPayrollHRTracking(dossier, hrTrackingRecords, canCreatePayrollEmployee) +
+      accountingLinkPanel + employeeSection + viewPayrollOrganizationUnits(dossier, organizationUnits, canCreatePayrollEmployee, canEditPayrollRecords) + viewPayrollAssignmentsMissions(dossier, dossierEmployees, organizationUnits, organizationAssignments, internalMissions, canCreatePayrollEmployee) + viewPayrollHRTracking(dossier, hrTrackingRecords, canCreatePayrollEmployee) +
       '<section class="exchange-card"><p class="page-kicker">CYCLE DE PAIE</p><h3>Lots du dossier</h3>' +
         '<div class="alert info"><div>Aucun calcul ou lot fictif n’est créé. Le moteur restera indisponible tant que les règles applicables, les données source et les contrôles d’approbation ne sont pas validés.</div></div>' +
         (runRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Référence</th><th>Période</th><th>État</th><th>Référence comptable</th></tr></thead><tbody>' + runRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucun lot de paie disponible</strong><span>Les lots ne peuvent pas être créés avec des montants, comptes ou règles inventés.</span></div>') +

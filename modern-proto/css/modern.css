@@ -4059,3 +4059,19 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .payroll-hr-tracking-grid > .btn { justify-self: start; }
 @media (max-width: 800px) { .payroll-hr-tracking-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .payroll-hr-tracking-grid { grid-template-columns: 1fr; } .payroll-hr-tracking-grid .payroll-test-confirm { grid-column: auto; } }
+
+/* Affectations et missions synthétiques Paie & RH */
+.payroll-assignment-mission > .alert { margin: 10px 0 14px; line-height: 1.55; }
+.payroll-assignment-form, .payroll-internal-mission-form, .payroll-demo-seed-form { margin: 10px 0 14px; padding: 13px; border: 1px solid #e3eae5; border-radius: 8px; background: #fbfcfb; }
+.payroll-assignment-form h4, .payroll-internal-mission-form h4 { margin: 0 0 10px; font-size: .85rem; }
+.payroll-assignment-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 11px; }
+.payroll-assignment-grid .field { min-width: 0; margin: 0; }
+.payroll-assignment-grid input, .payroll-assignment-grid select { width: 100%; }
+.payroll-assignment-grid .payroll-test-confirm { grid-column: 1 / -1; }
+.payroll-assignment-grid > .btn { justify-self: start; }
+.payroll-demo-seed-form p { margin: 0 0 9px; color: #4c6158; font-size: .8rem; }
+.payroll-demo-seed-form .payroll-test-confirm { margin-bottom: 10px; }
+.payroll-subregistry { margin: 12px 0; }
+.payroll-subregistry > summary { color: #285f56; cursor: pointer; font-weight: 750; }
+@media (max-width: 800px) { .payroll-assignment-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .payroll-assignment-grid { grid-template-columns: 1fr; } .payroll-assignment-grid .payroll-test-confirm { grid-column: auto; } }
