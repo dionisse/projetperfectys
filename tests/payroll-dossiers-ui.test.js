@@ -34,8 +34,9 @@ assert.ok(css.includes('--primary: #9b6b1e'));
 assert.ok(css.includes('body.sales-module-mode {'));
 assert.ok(css.includes('body.organization-module-mode {'));
 assert.ok(analyticsCss.includes('--primary: #6d4bc3'));
-assert.ok(css.includes('font-size: .8rem;'), 'menus Paie & RH assez grands pour être lisibles');
+assert.ok(css.includes('font-size: .76rem;'), 'menus Paie & RH assez grands pour être lisibles');
 assert.ok(css.includes('color: #69583a;'), 'libellés de menu avec contraste renforcé');
+assert.ok(css.includes('font-weight: 800;'), 'libellés principaux en gras');
 assert.ok(css.includes('background: #f6edd9;'), 'sélection de menu avec fond ambre pâle');
 assert.ok(css.includes('color: #80571b;'), 'titre de section en ambre foncé lisible');
 assert.ok(app.includes('function viewPayrollMainMenu(dossier)'));
@@ -184,5 +185,5 @@ assert.match(payroll, /function createDossier\(input\)[\s\S]*'PRH-' \+ clientCod
 assert.match(payroll, /accountingDossierId: accountingDossierId/);
 assert.match(payroll, /function storageKey\(dossierId\)[\s\S]*STORAGE_PREFIX \+ encodeURIComponent/);
 assert.match(css, /\.payroll-dossier-grid[\s\S]*\.payroll-dossier-card/);
-assert.match(worker, /perfecto-static-v223/);
+assert.match(worker, /perfecto-static-v224/);
 console.log('UI Paie & RH : route dossier dédiée, référence PRH, sélection par dossier et association non automatique — OK');

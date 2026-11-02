@@ -34,6 +34,6 @@ assert.match(store, /id: lineId, account: acc/);
 assert.match(app, /data-entry-line-id/);
 assert.match(app, /id: row\.getAttribute\('data-entry-line-id'\)/);
 assert.match(css, /\.analytical-source-line-focused/);
-assert.match(worker, /perfecto-static-v223/);
+assert.match(worker, /perfecto-static-v224/);
 
 console.log('Traçabilité analytique bidirectionnelle : source exacte, lecture seule et parcours de correction comptable vérifiés — OK');
