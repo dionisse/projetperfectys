@@ -504,6 +504,9 @@
       case 'create-payroll-component':
       case 'create-payroll-variable-reference':
       case 'seed-payroll-variable-demo':
+      case 'create-payroll-country-pack':
+      case 'create-payroll-country-rule-candidate':
+      case 'seed-payroll-country-demo':
         return { moduleId: 'payroll-hr', actionId: 'record.create' };
       case 'edit-payroll-org-unit':
       case 'archive-payroll-org-unit':
@@ -20378,6 +20381,46 @@
       if (!result.ok) { toast(result.errors[0] || 'Chargement des références DEMO impossible.', 'warning'); return; }
       toast('Exemples DEMO chargés, sans aucune valeur de rémunération.', 'success'); render();
     });
+    var countryPackForm = $('#payroll-country-pack-form');
+    if (countryPackForm) countryPackForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('create-payroll-country-pack', null, true)) return;
+      var dossier = PayrollHR.currentDossier();
+      if (!dossier || countryPackForm.getAttribute('data-dossier-id') !== dossier.id) { toast('Création refusée : le dossier RH actif a changé.', 'warning'); return; }
+      var fields = countryPackForm.elements;
+      var result = PayrollHR.createCountryRulePack(dossier.id, { countryCode: fields.countryCode.value, countryLabel: fields.countryLabel.value, domainCode: fields.domainCode.value, domainLabel: fields.domainLabel.value, versionLabel: fields.versionLabel.value, testOnly: fields.testOnly.checked });
+      if (!result.ok) { toast(result.errors[0] || 'Création du cadre pays de test impossible.', 'warning'); return; }
+      toast('Cadre de test créé en préparation ; aucun contenu juridique ni calcul n’est activé.', 'success'); render();
+    });
+    $$('.payroll-country-rule-candidate-form').forEach(function (candidateForm) {
+      candidateForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        if (!canPerformDemoAction('create-payroll-country-rule-candidate', null, true)) return;
+        var dossier = PayrollHR.currentDossier();
+        if (!dossier || candidateForm.getAttribute('data-dossier-id') !== dossier.id) { toast('Création refusée : le dossier RH actif a changé.', 'warning'); return; }
+        var fields = candidateForm.elements;
+        var result = PayrollHR.createCountryRuleCandidate(dossier.id, candidateForm.getAttribute('data-pack-id'), {
+          title: fields.title.value, sourceKind: fields.sourceKind.value, sourceTitle: fields.sourceTitle.value,
+          sourceAuthority: fields.sourceAuthority.value, sourceVersion: fields.sourceVersion.value,
+          sourceLocation: fields.sourceLocation.value, sourceReference: fields.sourceReference.value,
+          applicabilityNote: fields.applicabilityNote.value, validFrom: fields.validFrom.value,
+          validTo: fields.validTo.value, testOnly: fields.testOnly.checked
+        });
+        if (!result.ok) { toast(result.errors[0] || 'Fiche candidate impossible à enregistrer.', 'warning'); return; }
+        toast('Fiche candidate de test enregistrée, non vérifiée et non applicable.', 'success'); render();
+      });
+    });
+    var countryDemoSeedForm = $('#payroll-country-demo-seed-form');
+    if (countryDemoSeedForm) countryDemoSeedForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('seed-payroll-country-demo', null, true)) return;
+      var dossier = PayrollHR.currentDossier();
+      if (!dossier || countryDemoSeedForm.getAttribute('data-dossier-id') !== dossier.id) { toast('Chargement refusé : le dossier RH actif a changé.', 'warning'); return; }
+      if (!countryDemoSeedForm.elements.testOnly.checked) { toast('Confirmez le caractère fictif avant le chargement.', 'warning'); return; }
+      var result = PayrollHR.seedDemoCountryRulePack(dossier.id);
+      if (!result.ok) { toast(result.errors[0] || 'Chargement des exemples DEMO impossible.', 'warning'); return; }
+      toast('Cadre de démonstration chargé : aucune règle légale ni source réelle.', 'success'); render();
+    });
   }
 
   function payrollEntryForRun(run, dossierId) {
@@ -20493,6 +20536,47 @@
       (referenceRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Employé</th><th>Rubrique descriptive</th><th>Période</th><th>Source</th><th>Libellé</th><th>État de données</th></tr></thead><tbody>' + referenceRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucune référence de variable</strong><span>Aucun montant, zéro implicite ni calcul n’est créé automatiquement.</span></div>') + '</details></section>';
   }
 
+  function viewPayrollCountryRulePacks(dossier, packs, candidates, canCreate) {
+    var sourceLabels = {
+      'official-text': 'Texte officiel (référence à vérifier)',
+      'collective-agreement': 'Convention (référence à vérifier)',
+      'public-instruction': 'Instruction publique (référence à vérifier)',
+      'internal-policy': 'Politique interne (référence à vérifier)',
+      'synthetic-test': 'Référence synthétique de test'
+    };
+    var seedForm = canCreate && PayrollHR.isDemoTestDossier(dossier.id) && !PayrollHR.demoCountryRulePackSeeded(dossier.id)
+      ? '<form id="payroll-country-demo-seed-form" class="payroll-country-demo-seed" data-dossier-id="' + esc(dossier.id) + '"><p><strong>Exemple facultatif, réservé à PRH-TEST-2026 :</strong> un cadre « Bénin » de démonstration avec une référence fictive explicitement sans source juridique.</p><label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Charger uniquement ce jeu DEMO non juridique et non activable.</span></label><button class="btn btn-secondary" type="submit">Charger le cadre DEMO</button></form>'
+      : (PayrollHR.demoCountryRulePackSeeded(dossier.id) ? '<div class="alert success"><div>Le cadre DEMO est déjà chargé dans ce dossier de test ; il ne contient aucune règle béninoise.</div></div>' : '');
+    var packForm = canCreate ? '<form id="payroll-country-pack-form" class="payroll-country-pack-form" data-dossier-id="' + esc(dossier.id) + '"><h4>Créer un cadre pays descriptif de test</h4><div class="payroll-country-rule-grid">' +
+      '<div class="field"><label>Code pays explicite *</label><input name="countryCode" maxlength="2" pattern="[A-Za-z]{2}" required placeholder="Ex. BJ"></div>' +
+      '<div class="field"><label>Libellé de pays *</label><input name="countryLabel" maxlength="80" required></div>' +
+      '<div class="field"><label>Code de domaine de test *</label><input name="domainCode" maxlength="32" required placeholder="Ex. TEST-FISCAL"></div>' +
+      '<div class="field"><label>Libellé de domaine descriptif *</label><input name="domainLabel" maxlength="100" required></div>' +
+      '<div class="field"><label>Étiquette de version de test *</label><input name="versionLabel" maxlength="40" required placeholder="Ex. DEMO-0.1"></div>' +
+      '<label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Cadre fictif uniquement : pas de règle, montant, formule, source validée ou activation.</span></label><button class="btn btn-primary" type="submit">＋ Créer en préparation</button></div></form>' : '';
+    var packCards = packs.map(function (pack) {
+      var coverage = PayrollHR.countryRulePackCoverage(dossier.id, pack.id);
+      var packCandidates = candidates.filter(function (candidate) { return candidate.packId === pack.id; });
+      var rows = packCandidates.map(function (candidate) {
+        return '<tr data-country-rule-candidate-id="' + esc(candidate.id) + '"><td>' + esc(candidate.title) + '</td><td>' + esc(sourceLabels[candidate.sourceKind] || 'Type non reconnu') + '</td><td>' + esc(candidate.sourceTitle || 'Non renseigné') + '<br><small>' + esc(candidate.sourceAuthority || 'Émetteur non renseigné') + '</small></td><td>' + esc(candidate.sourceReference || '—') + (candidate.sourceLocation ? '<br><small>' + esc(candidate.sourceLocation) + '</small>' : '') + '</td><td>' + esc(candidate.validFrom || '—') + (candidate.validTo ? ' → ' + esc(candidate.validTo) : '') + '</td><td><span class="badge draft">À documenter</span><br><small>Source non vérifiée · non approuvée · inactive</small></td></tr>';
+      }).join('');
+      var candidateForm = canCreate ? '<details class="payroll-country-candidate-details"><summary>Ajouter une fiche candidate synthétique</summary><form class="payroll-country-rule-candidate-form" data-dossier-id="' + esc(dossier.id) + '" data-pack-id="' + esc(pack.id) + '"><div class="payroll-country-rule-grid">' +
+        '<div class="field"><label>Titre descriptif *</label><input name="title" maxlength="120" required></div>' +
+        '<div class="field"><label>Nature de la référence *</label><select name="sourceKind" required><option value="" selected disabled>Choisir…</option><option value="official-text">Texte officiel (référence non vérifiée)</option><option value="collective-agreement">Convention (référence non vérifiée)</option><option value="public-instruction">Instruction publique (référence non vérifiée)</option><option value="internal-policy">Politique interne (référence non vérifiée)</option><option value="synthetic-test">Référence synthétique de test</option></select></div>' +
+        '<div class="field"><label>Titre de la source (référence seulement)</label><input name="sourceTitle" maxlength="160"></div><div class="field"><label>Autorité / émetteur (non vérifié)</label><input name="sourceAuthority" maxlength="120"></div>' +
+        '<div class="field"><label>Version de source (facultatif)</label><input name="sourceVersion" maxlength="80"></div><div class="field"><label>Article / section / page (facultatif)</label><input name="sourceLocation" maxlength="120"></div>' +
+        '<div class="field"><label>Référence documentaire (pas de pièce jointe)</label><input name="sourceReference" maxlength="120"></div><div class="field"><label>Périmètre à vérifier</label><input name="applicabilityNote" maxlength="240"></div>' +
+        '<div class="field"><label>Début de validité annoncé</label><input name="validFrom" type="date"></div><div class="field"><label>Fin de validité annoncée</label><input name="validTo" type="date"></div>' +
+        '<label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Fiche fictive de test : la référence n’est ni vérifiée, ni interprétée, ni approuvée, ni applicable.</span></label><button class="btn btn-secondary" type="submit">＋ Enregistrer la fiche candidate</button></div></form></details>' : '';
+      return '<article class="payroll-country-pack-card" data-country-pack-id="' + esc(pack.id) + '"><div class="payroll-country-pack-heading"><div><span class="badge draft">' + esc(pack.status) + ' · non activable</span><h4>' + esc(pack.countryLabel) + ' · ' + esc(pack.domainLabel) + '</h4><p>' + esc(pack.countryCode) + ' / ' + esc(pack.domainCode) + ' · version ' + esc(pack.versionLabel) + ' · ' + (pack.origin === 'demo-mock' ? 'DEMO fictif' : 'Test uniquement') + '</p></div></div>' +
+        '<div class="alert warning"><div><strong>Couverture bloquée — calcul impossible.</strong> ' + coverage.reasons.map(esc).join(' ') + '</div></div>' + candidateForm +
+        (rows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Fiche candidate</th><th>Nature de la source</th><th>Source / émetteur</th><th>Référence précise</th><th>Dates annoncées</th><th>État</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucune fiche candidate</strong><span>Aucune source ni règle n’est supposée. Le cadre reste en préparation.</span></div>') + '</article>';
+    }).join('');
+    return '<section class="exchange-card payroll-country-rule-packs"><p class="page-kicker">ÉTAPE 11 · GOUVERNANCE SANS RÈGLE ACTIVE</p><h3>Packs de règles par pays</h3>' +
+      '<div class="alert warning"><div>Registre de préparation uniquement. Il n’enregistre aucun taux, base, seuil, plafond, montant, formule ou résultat. Les mentions de source sont des références saisies, non vérifiées. Aucun pack ne peut être validé ou activé ici ; aucune règle béninoise n’est présumée. Le stockage navigateur ne convient pas aux sources confidentielles ou aux données réelles.</div></div>' + seedForm + packForm +
+      (packCards || '<div class="empty-state"><strong>Aucun cadre pays dans ce dossier</strong><span>Aucun pays, domaine requis ou règle n’est sélectionné automatiquement.</span></div>') + '</section>';
+  }
+
   function viewPayrollLeaveAbsences(dossier, employees, records, canCreate) {
     var kindLabels = { request: 'Demande de congé', absence: 'Absence constatée' };
     var rows = records.map(function (record) {
@@ -20581,6 +20665,8 @@
     var leaveAbsenceRecords = PayrollHR.leaveAbsenceRecords(dossier.id);
     var payrollComponents = PayrollHR.payrollComponents(dossier.id);
     var payrollVariableReferences = PayrollHR.payrollVariableReferences(dossier.id);
+    var countryRulePacks = PayrollHR.countryRulePacks(dossier.id);
+    var countryRuleCandidates = PayrollHR.countryRuleCandidates(dossier.id);
     var canEditPayrollRecords = hasDemoPermission(member, 'payroll-hr', 'record.edit', payrollAccessContext(dossier));
     var employeeRows = dossierEmployees.map(function (employee) {
       var createdLabel = employee.createdAt ? String(employee.createdAt).slice(0, 10) : 'Non renseignée';
@@ -20615,7 +20701,7 @@
     return '<div class="payroll-module-workspace">' +
       pageHeader('Paie & RH', 'Dossier client : <strong>' + esc(dossier.clientName) + '</strong> · ' + esc(dossier.reference) + ' · exercice ' + esc(dossier.exerciseYear) + '.', '<a class="btn btn-ghost" href="#/payroll-dossiers">Changer de dossier RH</a> <a class="btn btn-ghost" href="#/launcher">← Modules</a>') +
       '<div class="alert warning"><div><strong>Base fonctionnelle en cours</strong><br>Les données sont encore stockées localement dans ce navigateur. Utilisez uniquement des données synthétiques. Le calcul de paie et les fonctions de production restent bloqués tant que les textes, règles et le stockage sécurisé ne sont pas validés.</div></div>' +
-      accountingLinkPanel + employeeSection + viewPayrollOrganizationUnits(dossier, organizationUnits, canCreatePayrollEmployee, canEditPayrollRecords) + viewPayrollAssignmentsMissions(dossier, dossierEmployees, organizationUnits, organizationAssignments, internalMissions, canCreatePayrollEmployee) + viewPayrollHRTracking(dossier, hrTrackingRecords, canCreatePayrollEmployee) + viewPayrollLeaveAbsences(dossier, dossierEmployees, leaveAbsenceRecords, canCreatePayrollEmployee) + viewPayrollComponentsAndReferences(dossier, dossierEmployees, payrollComponents, payrollVariableReferences, canCreatePayrollEmployee) +
+      accountingLinkPanel + employeeSection + viewPayrollOrganizationUnits(dossier, organizationUnits, canCreatePayrollEmployee, canEditPayrollRecords) + viewPayrollAssignmentsMissions(dossier, dossierEmployees, organizationUnits, organizationAssignments, internalMissions, canCreatePayrollEmployee) + viewPayrollHRTracking(dossier, hrTrackingRecords, canCreatePayrollEmployee) + viewPayrollLeaveAbsences(dossier, dossierEmployees, leaveAbsenceRecords, canCreatePayrollEmployee) + viewPayrollComponentsAndReferences(dossier, dossierEmployees, payrollComponents, payrollVariableReferences, canCreatePayrollEmployee) + viewPayrollCountryRulePacks(dossier, countryRulePacks, countryRuleCandidates, canCreatePayrollEmployee) +
       '<section class="exchange-card"><p class="page-kicker">CYCLE DE PAIE</p><h3>Lots du dossier</h3>' +
         '<div class="alert info"><div>Aucun calcul ou lot fictif n’est créé. Le moteur restera indisponible tant que les règles applicables, les données source et les contrôles d’approbation ne sont pas validés.</div></div>' +
         (runRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Référence</th><th>Période</th><th>État</th><th>Référence comptable</th></tr></thead><tbody>' + runRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucun lot de paie disponible</strong><span>Les lots ne peuvent pas être créés avec des montants, comptes ou règles inventés.</span></div>') +

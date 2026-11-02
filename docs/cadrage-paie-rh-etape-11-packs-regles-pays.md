@@ -1,7 +1,9 @@
 # Étape 11 — Packs de règles par pays
 
-**Statut :** proposition de cadrage à valider avant implémentation ou activation de règles.
+**Statut :** un registre de préparation local, limité aux données fictives, est implémenté ; les sources, règles, validations et toute activation restent à fournir et approuver.
 **Pays pilote :** Bénin ; le dossier Paie & RH propose le Bénin par défaut, sans empêcher un choix explicite d’un autre pays lorsqu’un pack applicable sera prêt.
+
+Le prototype permet uniquement de créer des cadres de test et des fiches candidates descriptives, toujours « en préparation » / « à documenter ». Il ne stocke aucun paramètre de calcul et ne permet ni approbation ni activation. Les données DEMO sont réservées à `PRH-TEST-2026`; le stockage local n’est pas adapté aux sources confidentielles ni à des données de production.
 **Dépendances :** règles et catégories du dossier RH, contrat, rémunérations/variables (étape 10) et sources officielles fournies et validées.
 **Plan complet :** [Plan d’implémentation Paie & RH en 18 étapes](proposition-implementation-paie-rh.md).
 

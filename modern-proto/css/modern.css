@@ -4102,3 +4102,23 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .payroll-component-grid > .btn { justify-self: start; }
 @media (max-width: 800px) { .payroll-component-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .payroll-component-grid { grid-template-columns: 1fr; } .payroll-component-grid .payroll-test-confirm { grid-column: auto; } }
+
+/* Étape 11 : registre de préparation des packs pays, sans règle activable */
+.payroll-country-rule-packs > .alert { margin: 10px 0 14px; line-height: 1.55; }
+.payroll-country-pack-form, .payroll-country-demo-seed, .payroll-country-pack-card { margin: 12px 0; padding: 14px; border: 1px solid #e3eae5; border-radius: 8px; background: #fbfcfb; }
+.payroll-country-pack-form h4 { margin: 0 0 10px; font-size: .86rem; }
+.payroll-country-demo-seed p { margin: 0 0 9px; color: #4c6158; font-size: .8rem; }
+.payroll-country-demo-seed .payroll-test-confirm { margin-bottom: 10px; }
+.payroll-country-rule-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 11px; }
+.payroll-country-rule-grid .field { min-width: 0; margin: 0; }
+.payroll-country-rule-grid input, .payroll-country-rule-grid select { width: 100%; }
+.payroll-country-rule-grid .payroll-test-confirm { grid-column: 1 / -1; }
+.payroll-country-rule-grid > .btn { justify-self: start; }
+.payroll-country-pack-heading h4 { margin: 8px 0 4px; font-size: .92rem; }
+.payroll-country-pack-heading p { margin: 0 0 10px; color: #53675d; font-size: .8rem; }
+.payroll-country-pack-card > .alert { margin: 10px 0 14px; line-height: 1.5; }
+.payroll-country-candidate-details { margin: 10px 0 14px; }
+.payroll-country-candidate-details > summary { cursor: pointer; color: #176d62; font-weight: 650; }
+.payroll-country-candidate-details form { margin-top: 10px; padding: 12px; border: 1px solid #e7ece8; border-radius: 7px; background: #fff; }
+@media (max-width: 800px) { .payroll-country-rule-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .payroll-country-rule-grid { grid-template-columns: 1fr; } .payroll-country-rule-grid .payroll-test-confirm { grid-column: auto; } }

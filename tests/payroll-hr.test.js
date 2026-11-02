@@ -263,4 +263,55 @@ assert.ok(payrollSeed.references.every(item => item.origin === 'demo-mock' && it
 assert.equal(PayrollHR.demoPayrollReferencesSeeded(testDossier.dossier.id), true);
 assert.equal(PayrollHR.seedDemoPayrollReferences(testDossier.dossier.id).ok, false, 'les rubriques DEMO ne peuvent pas être dupliquées');
 assert.equal(PayrollHR.seedDemoPayrollReferences(dossier.id).ok, false, 'les valeurs DEMO sont réservées au dossier de test');
-console.log('Paie & RH : jeux fictifs isolés, demandes, absences et références sans calcul — OK');
+
+assert.equal(PayrollHR.createCountryRulePack(dossier.id, {
+  countryCode: 'BJ', countryLabel: 'Bénin test', domainCode: 'FISCAL-TEST', domainLabel: 'Domaine fictif', versionLabel: 'DEMO-0.1', testOnly: false
+}).ok, false, 'un cadre pays non confirmé comme test est refusé');
+const countryPack = PayrollHR.createCountryRulePack(dossier.id, {
+  countryCode: 'BJ', countryLabel: 'Bénin test', domainCode: 'FISCAL-TEST',
+  domainLabel: 'Domaine fictif non juridique', versionLabel: 'DEMO-0.1', testOnly: true
+});
+assert.equal(countryPack.ok, true, countryPack.errors.join('\\n'));
+assert.equal(countryPack.pack.status, 'en préparation');
+assert.equal(countryPack.pack.activationEnabled, false);
+assert.equal(countryPack.pack.activated, false);
+assert.equal(PayrollHR.createCountryRulePack(dossier.id, {
+  countryCode: 'BJ', countryLabel: 'Bénin test', domainCode: 'FISCAL-TEST',
+  domainLabel: 'Domaine fictif', versionLabel: 'demo-0.1', testOnly: true
+}).ok, false, 'une version de cadre ne peut pas être dupliquée');
+const countryCandidate = PayrollHR.createCountryRuleCandidate(dossier.id, countryPack.pack.id, {
+  title: 'Fiche candidate de test', sourceKind: 'synthetic-test', sourceTitle: 'Source fictive',
+  sourceReference: 'DEMO-NON-SOURCE', applicabilityNote: 'Scénario non juridique',
+  validFrom: '', validTo: '', testOnly: true
+});
+assert.equal(countryCandidate.ok, true, countryCandidate.errors.join('\\n'));
+assert.equal(countryCandidate.candidate.status, 'à documenter');
+assert.equal(countryCandidate.candidate.sourceVerified, false);
+assert.equal(countryCandidate.candidate.interpretationValidated, false);
+assert.equal(countryCandidate.candidate.approved, false);
+assert.equal(countryCandidate.candidate.active, false);
+assert.equal('rate' in countryCandidate.candidate, false);
+assert.equal('amount' in countryCandidate.candidate, false);
+assert.equal(PayrollHR.createCountryRuleCandidate(dossier.id, countryPack.pack.id, {
+  title: 'Période inversée', sourceKind: 'synthetic-test', validFrom: '2026-12-01', validTo: '2026-01-01', testOnly: true
+}).ok, false, 'une période de validité inversée est rejetée');
+assert.equal(PayrollHR.createCountryRuleCandidate('other-dossier', countryPack.pack.id, {
+  title: 'Lien croisé', sourceKind: 'synthetic-test', testOnly: true
+}).ok, false, 'une fiche candidate ne peut pas référencer le pack d’un autre dossier');
+assert.equal(PayrollHR.countryRuleCandidates(dossier.id, countryPack.pack.id).length, 1);
+assert.equal(PayrollHR.countryRulePacks('other-dossier').length, 0);
+const countryCoverage = PayrollHR.countryRulePackCoverage(dossier.id, countryPack.pack.id);
+assert.equal(countryCoverage.ready, false);
+assert.equal(countryCoverage.activated, false);
+assert.ok(countryCoverage.reasons.some(reason => reason.includes('Aucune règle')));
+const countryPackSeed = PayrollHR.seedDemoCountryRulePack(testDossier.dossier.id);
+assert.equal(countryPackSeed.ok, true, countryPackSeed.errors.join('\\n'));
+assert.equal(countryPackSeed.pack.countryCode, 'BJ');
+assert.equal(countryPackSeed.pack.origin, 'demo-mock');
+assert.equal(countryPackSeed.pack.activationEnabled, false);
+assert.equal(countryPackSeed.candidate.sourceKind, 'synthetic-test');
+assert.equal(countryPackSeed.candidate.sourceVerified, false);
+assert.equal(PayrollHR.demoCountryRulePackSeeded(testDossier.dossier.id), true);
+assert.equal(PayrollHR.seedDemoCountryRulePack(testDossier.dossier.id).ok, false, 'le pack DEMO ne se duplique pas');
+assert.equal(PayrollHR.seedDemoCountryRulePack(dossier.id).ok, false, 'le jeu DEMO est réservé à PRH-TEST-2026');
+console.log('Paie & RH : jeux fictifs isolés, demandes, absences, variables et packs de règles non activables — OK');

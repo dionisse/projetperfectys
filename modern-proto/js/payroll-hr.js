@@ -622,6 +622,168 @@
     return { ok: true, errors: [], components: clone(components), references: clone(references) };
   }
 
+  var COUNTRY_RULE_SOURCE_KINDS = ['official-text', 'collective-agreement', 'public-instruction', 'internal-policy', 'synthetic-test'];
+
+  function countryRulePacks(dossierId) {
+    dossierId = String(dossierId || '');
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier || !Array.isArray(dossier.countryRulePacks)) return [];
+    return clone(dossier.countryRulePacks.filter(function (item) { return item && item.dossierId === dossierId; }));
+  }
+
+  function countryRuleCandidates(dossierId, packId) {
+    dossierId = String(dossierId || '');
+    packId = String(packId || '');
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier || !Array.isArray(dossier.countryRuleCandidates)) return [];
+    return clone(dossier.countryRuleCandidates.filter(function (item) {
+      return item && item.dossierId === dossierId && (!packId || item.packId === packId);
+    }));
+  }
+
+  function createCountryRulePack(dossierId, input) {
+    input = input || {};
+    dossierId = String(dossierId || '');
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Cette version locale accepte uniquement des cadres pays de test.'] };
+    var countryCode = String(input.countryCode || '').trim().toLocaleUpperCase();
+    var countryLabel = String(input.countryLabel || '').trim().replace(/\s+/g, ' ');
+    var domainCode = String(input.domainCode || '').trim().toLocaleUpperCase();
+    var domainLabel = String(input.domainLabel || '').trim().replace(/\s+/g, ' ');
+    var versionLabel = String(input.versionLabel || '').trim();
+    var errors = [];
+    if (!/^[A-Z]{2}$/.test(countryCode)) errors.push('Le code pays doit être un code à deux lettres saisi explicitement.');
+    if (!countryLabel) errors.push('Le libellé du pays est obligatoire.');
+    if (countryLabel.length > 80) errors.push('Le libellé du pays ne peut pas dépasser 80 caractères.');
+    if (!/^[A-Z0-9_-]{2,32}$/.test(domainCode)) errors.push('Le code de domaine de test doit contenir de 2 à 32 lettres, chiffres, tirets ou soulignés.');
+    if (!domainLabel) errors.push('Le libellé du domaine est obligatoire.');
+    if (domainLabel.length > 100) errors.push('Le libellé du domaine ne peut pas dépasser 100 caractères.');
+    if (!versionLabel) errors.push('L’étiquette de version de test est obligatoire.');
+    if (versionLabel.length > 40) errors.push('L’étiquette de version ne peut pas dépasser 40 caractères.');
+    dossier.countryRulePacks = Array.isArray(dossier.countryRulePacks) ? dossier.countryRulePacks : [];
+    if (dossier.countryRulePacks.some(function (item) {
+      return item && item.countryCode === countryCode && item.domainCode === domainCode && String(item.versionLabel || '').toLocaleLowerCase() === versionLabel.toLocaleLowerCase();
+    })) errors.push('Cette version de cadre existe déjà dans ce dossier RH.');
+    if (errors.length) return { ok: false, errors: errors };
+    var id;
+    do { id = 'country-pack-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); }
+    while (dossier.countryRulePacks.some(function (item) { return item && item.id === id; }));
+    var now = new Date().toISOString();
+    var pack = {
+      id: id, dossierId: dossierId, countryCode: countryCode, countryLabel: countryLabel,
+      domainCode: domainCode, domainLabel: domainLabel, versionLabel: versionLabel,
+      status: 'en préparation', origin: 'test-only', activated: false,
+      activationEnabled: false, createdAt: now,
+      history: [{ action: 'created', changedAt: now, status: 'en préparation' }]
+    };
+    dossier.countryRulePacks.push(pack);
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer le cadre pays de test.'] };
+    return { ok: true, errors: [], pack: clone(pack) };
+  }
+
+  function createCountryRuleCandidate(dossierId, packId, input) {
+    input = input || {};
+    dossierId = String(dossierId || '');
+    packId = String(packId || '');
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Cette version locale accepte uniquement des fiches candidates fictives.'] };
+    dossier.countryRulePacks = Array.isArray(dossier.countryRulePacks) ? dossier.countryRulePacks : [];
+    var pack = dossier.countryRulePacks.find(function (item) { return item && item.id === packId && item.dossierId === dossierId; });
+    if (!pack) return { ok: false, errors: ['Le cadre pays doit appartenir au même dossier RH.'] };
+    var title = String(input.title || '').trim().replace(/\s+/g, ' ');
+    var sourceKind = String(input.sourceKind || '');
+    var sourceTitle = String(input.sourceTitle || '').trim().replace(/\s+/g, ' ');
+    var sourceAuthority = String(input.sourceAuthority || '').trim().replace(/\s+/g, ' ');
+    var sourceVersion = String(input.sourceVersion || '').trim();
+    var sourceLocation = String(input.sourceLocation || '').trim();
+    var sourceReference = String(input.sourceReference || '').trim();
+    var applicabilityNote = String(input.applicabilityNote || '').trim().replace(/\s+/g, ' ');
+    var validFrom = String(input.validFrom || '');
+    var validTo = String(input.validTo || '');
+    var errors = [];
+    if (!title) errors.push('Le titre descriptif de la fiche candidate est obligatoire.');
+    if (title.length > 120) errors.push('Le titre ne peut pas dépasser 120 caractères.');
+    if (COUNTRY_RULE_SOURCE_KINDS.indexOf(sourceKind) < 0) errors.push('Choisissez un type de référence connu.');
+    if (sourceTitle.length > 160 || sourceAuthority.length > 120 || sourceVersion.length > 80 || sourceLocation.length > 120 || sourceReference.length > 120) errors.push('Une référence de source dépasse la longueur autorisée.');
+    if (applicabilityNote.length > 240) errors.push('La note de périmètre ne peut pas dépasser 240 caractères.');
+    if ((validFrom && !dateParts(validFrom)) || (validTo && !dateParts(validTo))) errors.push('Les dates de validité, si renseignées, doivent être des dates valides.');
+    if (validFrom && validTo && validTo < validFrom) errors.push('La fin de validité ne peut pas précéder le début.');
+    if (errors.length) return { ok: false, errors: errors };
+    dossier.countryRuleCandidates = Array.isArray(dossier.countryRuleCandidates) ? dossier.countryRuleCandidates : [];
+    var id;
+    do { id = 'country-rule-candidate-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); }
+    while (dossier.countryRuleCandidates.some(function (item) { return item && item.id === id; }));
+    var now = new Date().toISOString();
+    var candidate = {
+      id: id, dossierId: dossierId, packId: packId, title: title, sourceKind: sourceKind,
+      sourceTitle: sourceTitle, sourceAuthority: sourceAuthority, sourceVersion: sourceVersion,
+      sourceLocation: sourceLocation, sourceReference: sourceReference, applicabilityNote: applicabilityNote,
+      validFrom: validFrom, validTo: validTo, status: 'à documenter', sourceVerified: false,
+      interpretationValidated: false, approved: false, active: false, origin: 'test-only',
+      createdAt: now, history: [{ action: 'created', changedAt: now, status: 'à documenter' }]
+    };
+    dossier.countryRuleCandidates.push(candidate);
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la fiche candidate de test.'] };
+    return { ok: true, errors: [], candidate: clone(candidate) };
+  }
+
+  function countryRulePackCoverage(dossierId, packId) {
+    var packs = countryRulePacks(dossierId);
+    var pack = packs.find(function (item) { return item.id === String(packId || ''); });
+    if (!pack) return { ok: false, ready: false, reasons: ['Cadre pays introuvable dans ce dossier RH.'] };
+    var candidates = countryRuleCandidates(dossierId, pack.id);
+    var reasons = ['Aucune règle n’est validée ou activée dans ce prototype.'];
+    if (!candidates.length) reasons.unshift('Aucune fiche candidate ni source n’est documentée.');
+    else if (candidates.some(function (item) { return !item.sourceVerified; })) reasons.unshift('Les références de source restent à vérifier.');
+    reasons.push('Le périmètre requis et les catégories applicables ne sont pas définis.');
+    reasons.push('L’approbateur et les cas de référence ne sont pas renseignés.');
+    reasons.push('Aucune formule, base, valeur ou donnée de calcul n’est enregistrée.');
+    return { ok: true, ready: false, activated: false, reasons: reasons, candidateCount: candidates.length };
+  }
+
+  function demoCountryRulePackSeeded(dossierId) {
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item && item.id === String(dossierId || ''); });
+    return !!(dossier && dossier.demoCountryRulePackSeededAt);
+  }
+
+  function seedDemoCountryRulePack(dossierId) {
+    dossierId = String(dossierId || '');
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['Le jeu de cadres pays est réservé au dossier PRH-TEST-2026.'] };
+    if (dossier.demoCountryRulePackSeededAt) return { ok: false, errors: ['Le jeu DEMO des cadres pays est déjà chargé.'] };
+    dossier.countryRulePacks = Array.isArray(dossier.countryRulePacks) ? dossier.countryRulePacks : [];
+    dossier.countryRuleCandidates = Array.isArray(dossier.countryRuleCandidates) ? dossier.countryRuleCandidates : [];
+    if (dossier.countryRulePacks.some(function (item) { return item && item.id === 'demo-country-pack-bj-v1'; }) ||
+        dossier.countryRuleCandidates.some(function (item) { return item && item.id === 'demo-country-candidate-empty'; })) return { ok: false, errors: ['Un cadre DEMO existe déjà ; aucun doublon n’a été ajouté.'] };
+    var now = new Date().toISOString();
+    var pack = {
+      id: 'demo-country-pack-bj-v1', dossierId: dossierId, countryCode: 'BJ', countryLabel: 'Bénin — démonstration',
+      domainCode: 'DEMO-EMPTY', domainLabel: 'Domaine fictif non juridique', versionLabel: 'DEMO-0.1',
+      status: 'en préparation', origin: 'demo-mock', activated: false, activationEnabled: false,
+      createdAt: now, history: [{ action: 'created', changedAt: now, status: 'en préparation' }]
+    };
+    var candidate = {
+      id: 'demo-country-candidate-empty', dossierId: dossierId, packId: pack.id,
+      title: 'Entrée synthétique — aucune règle juridique', sourceKind: 'synthetic-test',
+      sourceTitle: 'Référence fictive de démonstration', sourceAuthority: 'Aucune autorité — jeu DEMO',
+      sourceVersion: '', sourceLocation: '', sourceReference: 'DEMO-SANS-SOURCE', applicabilityNote: 'Scénario de test uniquement ; aucune applicabilité réelle.',
+      validFrom: '', validTo: '', status: 'à documenter', sourceVerified: false,
+      interpretationValidated: false, approved: false, active: false, origin: 'demo-mock',
+      createdAt: now, history: [{ action: 'created', changedAt: now, status: 'à documenter' }]
+    };
+    dossier.countryRulePacks.push(pack);
+    dossier.countryRuleCandidates.push(candidate);
+    dossier.demoCountryRulePackSeededAt = now;
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer le jeu DEMO des cadres pays.'] };
+    return { ok: true, errors: [], pack: clone(pack), candidate: clone(candidate) };
+  }
+
   function dossierById(dossierId) {
     return clone(loadDossierCatalog().dossiers.find(function (dossier) { return dossier.id === String(dossierId || ''); }) || null);
   }
@@ -843,6 +1005,13 @@
     createPayrollVariableReference: createPayrollVariableReference,
     demoPayrollReferencesSeeded: demoPayrollReferencesSeeded,
     seedDemoPayrollReferences: seedDemoPayrollReferences,
+    countryRulePacks: countryRulePacks,
+    countryRuleCandidates: countryRuleCandidates,
+    createCountryRulePack: createCountryRulePack,
+    createCountryRuleCandidate: createCountryRuleCandidate,
+    countryRulePackCoverage: countryRulePackCoverage,
+    demoCountryRulePackSeeded: demoCountryRulePackSeeded,
+    seedDemoCountryRulePack: seedDemoCountryRulePack,
     hrTrackingRecords: hrTrackingRecords,
     createHRTrackingRecord: createHRTrackingRecord,
     createDossier: createDossier,
