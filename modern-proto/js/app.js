@@ -1310,6 +1310,9 @@
     document.body.classList.toggle('dossiers-list-mode', dossiersListMode);
     document.body.classList.toggle('phone-editions-mode', phoneViewport && ACCOUNTING_ROUTES.indexOf(route) !== -1 && route !== 'analytics' && route !== 'analytics-dossiers');
     document.body.classList.toggle('analytics-module-mode', route === 'analytics' || route === 'analytics-dossiers');
+    document.body.classList.toggle('payroll-module-mode', route === 'payroll' || route === 'payroll-dossiers');
+    document.body.classList.toggle('sales-module-mode', route === 'sales');
+    document.body.classList.toggle('organization-module-mode', route === 'organization');
     document.body.classList.toggle('analytical-table-mode', route === 'analytics' || (route === 'menu' && isAnalyticalAccountingMenuRoute(parsed.params)));
 
     var html = '';

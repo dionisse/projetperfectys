@@ -1701,8 +1701,8 @@ body.launcher-mode .content { background: #f7f6f0; }
 .module-status.flexible { color: #62736d; }
 .module-icon { background: color-mix(in srgb, var(--module-accent), white 91%); }
 .module-accounting { --module-accent: #0e8e83; }
-.module-analytics { --module-accent: #416e9d; }
-.module-hr { --module-accent: #a97822; }
+.module-analytics { --module-accent: #6d4bc3; }
+.module-hr { --module-accent: #9b6b1e; }
 .module-mail { --module-accent: #865d7a; }
 .module-sales { --module-accent: #a85c3d; }
 .module-future { --module-accent: #566a65; }
@@ -4215,3 +4215,78 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .payroll-menu-page .accounting-subtab.is-disabled { color: #9aa49f; background: #fafbf9; cursor: not-allowed; }
 .payroll-menu-page .accounting-subtab.is-disabled .accounting-subtab-state { color: #9aa49f; }
 .payroll-subtab-chevron { align-self: start; margin-left: auto; color: #64756d; font-size: 1rem; line-height: 1; }
+
+/* Identité couleur par module : Comptabilité (teal), RH (ambre), Analytique (violet), Ventes (terre cuite). */
+body.payroll-module-mode {
+  --primary: #9b6b1e;
+  --primary-dark: #785216;
+  --primary-soft: #f6edd9;
+  --accent: #c08a31;
+  --accent-soft: #f8efd9;
+  --success: #785216;
+  --success-soft: #f6edd9;
+  --warning: #785216;
+  --warning-soft: #f8efd9;
+}
+body.payroll-module-mode .brand-text small { color: #e3bb69; }
+body.payroll-module-mode .sidebar-nav .nav-section-heading { color: #d3b36f; }
+body.payroll-module-mode .sidebar-nav .payroll-sidebar-menu:hover,
+body.payroll-module-mode .sidebar-nav .payroll-sidebar-menu.is-active {
+  color: #ffdf93;
+  background: rgba(192, 138, 49, .24);
+  box-shadow: inset 3px 0 0 #d8a445;
+}
+body.payroll-module-mode .accounting-subtab.is-active {
+  color: #785216;
+  border-color: #ead9b2;
+  border-left-color: var(--primary);
+  background: var(--primary-soft);
+}
+body.payroll-module-mode .accounting-subtab:hover:not(.is-disabled) { color: #785216; border-color: #dfc68f; background: #fcf7eb; }
+body.payroll-module-mode .sidebar-nav a.active {
+  color: #785216;
+  background: #f6edd9;
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+body.payroll-module-mode .nav-icon { color: #a97822; background: #fbf3e2; }
+body.payroll-module-mode .btn-primary { background: linear-gradient(180deg, #b9832c, var(--primary)); box-shadow: 0 4px 12px rgba(155, 107, 30, .23); }
+body.payroll-module-mode .btn-primary:hover { background: linear-gradient(180deg, #a97822, #785216); }
+body.payroll-module-mode :focus-visible { outline-color: rgba(155, 107, 30, .55); }
+
+body.sales-module-mode {
+  --primary: #a85c3d;
+  --primary-dark: #82432f;
+  --primary-soft: #f7e7df;
+  --accent: #c77a53;
+  --accent-soft: #faeee7;
+  --success: #82432f;
+  --success-soft: #f7e7df;
+}
+body.sales-module-mode .brand-text small { color: #e1a487; }
+body.sales-module-mode .sidebar-nav .nav-section-heading { color: #dfad97; }
+body.sales-module-mode .sidebar-nav a.active { background: rgba(168, 92, 61, .22); box-shadow: inset 3px 0 0 var(--accent); }
+body.sales-module-mode .nav-icon { color: #a85c3d; background: #faeee7; }
+body.sales-module-mode .btn-primary { background: linear-gradient(180deg, #bd704f, var(--primary)); box-shadow: 0 4px 12px rgba(168, 92, 61, .23); }
+body.sales-module-mode .btn-primary:hover { background: linear-gradient(180deg, #a85c3d, #82432f); }
+body.sales-module-mode :focus-visible { outline-color: rgba(168, 92, 61, .55); }
+
+body.organization-module-mode {
+  --primary: #53788f;
+  --primary-dark: #3d5e72;
+  --primary-soft: #e7eff4;
+  --accent: #7597ac;
+  --accent-soft: #eef4f7;
+  --success: #3d5e72;
+  --success-soft: #e7eff4;
+}
+body.organization-module-mode .brand-text small { color: #a9cadb; }
+body.organization-module-mode .sidebar-nav .nav-section-heading { color: #a4bdcb; }
+body.organization-module-mode .sidebar-nav a.active { background: rgba(83, 120, 143, .24); box-shadow: inset 3px 0 0 var(--accent); }
+body.organization-module-mode .nav-icon { color: #53788f; background: #eef4f7; }
+body.organization-module-mode .btn-primary { background: linear-gradient(180deg, #668ba2, var(--primary)); box-shadow: 0 4px 12px rgba(83, 120, 143, .23); }
+body.organization-module-mode .btn-primary:hover { background: linear-gradient(180deg, #53788f, #3d5e72); }
+body.organization-module-mode :focus-visible { outline-color: rgba(83, 120, 143, .55); }
+
+body.analytics-module-mode .btn-primary { background: linear-gradient(180deg, #8060d2, var(--primary)); box-shadow: 0 4px 12px rgba(109, 75, 195, .23); }
+body.analytics-module-mode .btn-primary:hover { background: linear-gradient(180deg, #7655c3, #5839a5); }
+body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5); }

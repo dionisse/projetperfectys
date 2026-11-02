@@ -9,6 +9,7 @@ const app = fs.readFileSync(path.join(root, 'modern-proto/js/app.js'), 'utf8');
 const modules = fs.readFileSync(path.join(root, 'modern-proto/js/modules.js'), 'utf8');
 const payroll = fs.readFileSync(path.join(root, 'modern-proto/js/payroll-hr.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'modern-proto/css/modern.css'), 'utf8');
+const analyticsCss = fs.readFileSync(path.join(root, 'modern-proto/css/analytical-module.css'), 'utf8');
 const worker = fs.readFileSync(path.join(root, 'modern-proto/service-worker.js'), 'utf8');
 
 assert.match(modules, /id: 'payroll-hr'[\s\S]*route: 'payroll-dossiers'/);
@@ -25,6 +26,14 @@ assert.match(payroll, /function employees\(dossierId\)[\s\S]*employee\.dossierId
 assert.match(app, /payroll-employee-create-form/);
 assert.match(app, /ne saisissez aucune donnée réelle/);
 assert.match(app, /Aucun calcul ni lot de paie n’est créé automatiquement/);
+assert.ok(app.includes("classList.toggle(\'payroll-module-mode\'"));
+assert.ok(app.includes("classList.toggle(\'sales-module-mode\'"));
+assert.ok(app.includes("classList.toggle(\'organization-module-mode\'"));
+assert.ok(css.includes('body.payroll-module-mode {'));;
+assert.ok(css.includes('--primary: #9b6b1e'));;
+assert.ok(css.includes('body.sales-module-mode {'));;
+assert.ok(css.includes('body.organization-module-mode {'));;
+assert.ok(analyticsCss.includes('--primary: #6d4bc3'));;
 assert.ok(app.includes('function viewPayrollMainMenu(dossier)'));
 for (const menu of ['Fichier', 'Définitions', 'Salaires', 'Editions', 'Comptabilisations', 'Paramètres', 'Outils']) assert.ok(app.includes("'" + menu + "'"), 'menu principal présent : ' + menu);
 for (const fileItem of ['Export des fichiers', 'Import des fichiers', "Import d'une rubrique de bulletins", 'Import de plusieurs rubriques de bulletins', 'Recalcul des bulletins du mois en cours', 'Réparation des fichiers', 'Clôture de la paie en cours', 'Ouverture de la paie du mois suivant', "Guide d'utilisation", 'Quitter']) assert.ok(app.includes(fileItem), 'commande Fichier présente : ' + fileItem);
@@ -171,5 +180,5 @@ assert.match(payroll, /function createDossier\(input\)[\s\S]*'PRH-' \+ clientCod
 assert.match(payroll, /accountingDossierId: accountingDossierId/);
 assert.match(payroll, /function storageKey\(dossierId\)[\s\S]*STORAGE_PREFIX \+ encodeURIComponent/);
 assert.match(css, /\.payroll-dossier-grid[\s\S]*\.payroll-dossier-card/);
-assert.match(worker, /perfecto-static-v220/);
+assert.match(worker, /perfecto-static-v222/);
 console.log('UI Paie & RH : route dossier dédiée, référence PRH, sélection par dossier et association non automatique — OK');
