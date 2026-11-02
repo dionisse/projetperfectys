@@ -169,6 +169,8 @@
     otherParties: { q: '', type: 'all' },
     personnel: { q: '' },
     payrollRegisters: { dossierId: '', registry: 'all', period: '', employeeId: '', query: '' },
+    payrollMainMenu: 'Fichier',
+    payrollMenuItem: 'export-files',
     fixedAssets: { q: '', status: 'all', assetType: 'all' },
     financialFramework: { q: '' },
     financialResult: { asOfDate: '' },
@@ -335,25 +337,32 @@
       : accountingMenuHash(accountingGroup, accountingTab, accountingChild);
   }
 
+  function payrollFileMenuGroups() {
+    return [
+      [{ id: 'export-files', label: 'Export des fichiers' }, { id: 'import-files', label: 'Import des fichiers' }],
+      [{ id: 'import-one-component', label: "Import d'une rubrique de bulletins" }, { id: 'import-components', label: 'Import de plusieurs rubriques de bulletins' }],
+      [{ id: 'recalculate-current-month', label: 'Recalcul des bulletins du mois en cours' }, { id: 'repair-files', label: 'Réparation des fichiers' }],
+      [{ id: 'close-current-payroll', label: 'Clôture de la paie en cours' }, { id: 'open-next-month', label: 'Ouverture de la paie du mois suivant' }],
+      [{ id: 'user-guide', label: "Guide d'utilisation" }],
+      [{ id: 'quit', label: 'Quitter' }]
+    ];
+  }
+
   function buildPayrollSidebarMarkup() {
     var menus = ['Fichier', 'Définitions', 'Salaires', 'Editions', 'Comptabilisations', 'Paramètres', 'Outils'];
     var activeMenu = ui.payrollMainMenu || 'Fichier';
-    var fileGroups = [
-      ['Export des fichiers', 'Import des fichiers'],
-      ["Import d'une rubrique de bulletins", 'Import de plusieurs rubriques de bulletins'],
-      ['Recalcul des bulletins du mois en cours', 'Réparation des fichiers'],
-      ['Clôture de la paie en cours', 'Ouverture de la paie du mois suivant'],
-      ["Guide d'utilisation"],
-      ['Quitter']
-    ];
+    var fileGroups = payrollFileMenuGroups();
     return '<div class="nav-section nav-context-links"><p class="nav-section-heading">PAIE &amp; RH</p><a href="#/payroll" class="analytics-nav-link active"><span class="nav-icon" aria-hidden="true">◷</span>Menu Paie &amp; RH</a></div>' +
       menus.map(function (name) {
         var active = name === activeMenu;
-        var children = name === 'Fichier' ? fileGroups.map(function (group, groupIndex) {
-          return (groupIndex ? '<div class="payroll-sidebar-separator" role="separator"></div>' : '') + group.map(function (label) {
-            return '<button type="button" class="analytics-nav-link payroll-sidebar-command" disabled aria-disabled="true">' + esc(label) + '</button>';
-          }).join('');
-        }).join('') : '';
+        var children = name === 'Fichier' && active
+          ? '<div class="payroll-sidebar-tabs" role="tablist" aria-label="Sous-rubriques Fichier" aria-orientation="vertical">' + fileGroups.map(function (group, groupIndex) {
+            return (groupIndex ? '<div class="payroll-sidebar-separator" role="separator"></div>' : '') + group.map(function (item) {
+              var selected = item.id === ui.payrollMenuItem;
+              return '<button type="button" id="payroll-menu-tab-' + esc(item.id) + '" class="analytics-nav-link payroll-sidebar-command' + (selected ? ' is-active' : '') + '" role="tab" aria-selected="' + (selected ? 'true' : 'false') + '" aria-controls="payroll-menu-panel" data-action="payroll-menu-item" data-menu-item="' + esc(item.id) + '">' + esc(item.label) + '</button>';
+            }).join('');
+          }).join('') + '</div>'
+          : '';
         return '<div class="nav-section analytics-nav-section"><button type="button" class="nav-section-heading payroll-sidebar-menu' + (active ? ' is-active' : '') + '" data-action="payroll-main-menu" data-menu-name="' + esc(name) + '" aria-pressed="' + (active ? 'true' : 'false') + '">' + esc(name) + '</button>' + children + '</div>';
       }).join('') +
       '<div class="nav-section nav-context-links"><p class="nav-section-heading">Autres modules</p><a href="#/payroll-dossiers" class="analytics-nav-link" data-payroll-nav="dossiers"><span class="nav-icon" aria-hidden="true">▰</span>Dossiers RH</a><a href="#/launcher" class="analytics-nav-link"><span class="nav-icon" aria-hidden="true">⌂</span>Modules</a><a href="#/dossiers" class="analytics-nav-link"><span class="nav-icon" aria-hidden="true">▤</span>Comptabilité générale</a></div>';
@@ -20849,10 +20858,21 @@
 
   function viewPayrollMainMenu() {
     var activeMenu = ui.payrollMainMenu || 'Fichier';
-    var description = activeMenu === 'Fichier'
-      ? 'Les commandes du menu Fichier sont présentées dans la navigation latérale gauche. Elles restent inactives à ce stade.'
-      : 'La rubrique « ' + esc(activeMenu) + ' » est sélectionnée. Ses sous-rubriques seront organisées progressivement, sans présumer de règles métier.';
-    return '<section class="exchange-card payroll-menu-selection"><p class="page-kicker">MENU PAIE &amp; RH</p><h3>' + esc(activeMenu) + '</h3><p>' + description + '</p></section>';
+    var selectedItem = null;
+    if (activeMenu === 'Fichier') {
+      payrollFileMenuGroups().some(function (group) {
+        selectedItem = group.find(function (item) { return item.id === ui.payrollMenuItem; }) || selectedItem;
+        return !!selectedItem;
+      });
+    }
+    var heading = selectedItem ? selectedItem.label : activeMenu;
+    var description = selectedItem
+      ? 'Onglet « ' + esc(selectedItem.label) + ' » sélectionné dans « Fichier ». L’action associée n’est pas activée : cette étape construit uniquement la navigation.'
+      : 'La rubrique « ' + esc(activeMenu) + ' » est sélectionnée. Ses sous-rubriques seront ajoutées progressivement, sans présumer de règles métier.';
+    var panelAttributes = selectedItem
+      ? ' id="payroll-menu-panel" role="tabpanel" aria-labelledby="payroll-menu-tab-' + esc(selectedItem.id) + '"'
+      : '';
+    return '<section class="exchange-card payroll-menu-selection"' + panelAttributes + '><p class="page-kicker">MENU PAIE &amp; RH · ' + esc(activeMenu) + '</p><h3>' + esc(heading) + '</h3><p>' + description + '</p></section>';
   }
 
   function viewPayrollModule() {
@@ -33719,6 +33739,12 @@
     switch (action) {
       case 'payroll-main-menu':
         ui.payrollMainMenu = trigger.getAttribute('data-menu-name') || 'Fichier';
+        ui.payrollMenuItem = ui.payrollMainMenu === 'Fichier' ? (ui.payrollMenuItem || 'export-files') : '';
+        render();
+        break;
+      case 'payroll-menu-item':
+        ui.payrollMainMenu = 'Fichier';
+        ui.payrollMenuItem = trigger.getAttribute('data-menu-item') || 'export-files';
         render();
         break;
       case 'launcher-filter':

@@ -4223,3 +4223,12 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .payroll-legacy-views > summary { padding: 12px 15px; color: #41564e; font-weight: 650; cursor: pointer; }
 .payroll-legacy-views[open] { padding: 0 12px 12px; }
 .payroll-legacy-views[open] > summary { margin: 0 -12px 12px; border-bottom: 1px solid #e0e7e3; }
+.payroll-sidebar-tabs { margin-top: 2px; }
+.sidebar-nav .payroll-sidebar-command.is-active {
+  color: #fff;
+  background: linear-gradient(90deg, rgba(14, 165, 233, .22), rgba(14, 165, 233, .06));
+  box-shadow: inset 2px 0 0 #0ea5e9;
+}
+.sidebar-nav .payroll-sidebar-command:hover:not(:disabled) { color: #fff; background: rgba(148, 163, 184, .13); }
+.sidebar-nav .payroll-sidebar-command:focus-visible,
+.sidebar-nav .payroll-sidebar-menu:focus-visible { outline: 2px solid #38bdf8; outline-offset: 1px; }
