@@ -246,6 +246,49 @@
     return { ok: true, errors: [], unit: clone(unit) };
   }
 
+  function hrTrackingRecords(dossierId) {
+    dossierId = String(dossierId || '');
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier || !Array.isArray(dossier.hrTrackingRecords)) return [];
+    return clone(dossier.hrTrackingRecords.filter(function (record) {
+      return record && record.dossierId === dossierId && typeof record.id === 'string';
+    }));
+  }
+
+  function createHRTrackingRecord(dossierId, input) {
+    input = input || {};
+    dossierId = String(dossierId || '');
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Cette version locale accepte uniquement des suivis synthétiques de test.'] };
+    var kind = String(input.kind || '');
+    var kinds = ['recruitment', 'contract', 'interim'];
+    var reference = String(input.reference || '').trim();
+    var label = String(input.label || '').trim().replace(/\s+/g, ' ');
+    var date = String(input.date || '');
+    var errors = [];
+    if (kinds.indexOf(kind) === -1) errors.push('Choisissez un type de suivi disponible.');
+    if (!reference) errors.push('La référence synthétique est obligatoire.');
+    if (reference.length > 60) errors.push('La référence ne peut pas dépasser 60 caractères.');
+    if (!label) errors.push('Le libellé de suivi est obligatoire.');
+    if (label.length > 120) errors.push('Le libellé ne peut pas dépasser 120 caractères.');
+    if (!dateParts(date)) errors.push('La date de suivi doit être une date valide.');
+    dossier.hrTrackingRecords = Array.isArray(dossier.hrTrackingRecords) ? dossier.hrTrackingRecords : [];
+    if (reference && dossier.hrTrackingRecords.some(function (record) {
+      return record && record.kind === kind && String(record.reference || '').toLocaleLowerCase() === reference.toLocaleLowerCase();
+    })) errors.push('Cette référence existe déjà pour ce type de suivi dans le dossier RH.');
+    if (errors.length) return { ok: false, errors: errors };
+    var id;
+    do { id = 'hr-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); }
+    while (dossier.hrTrackingRecords.some(function (record) { return record && record.id === id; }));
+    var record = { id: id, dossierId: dossierId, kind: kind, reference: reference, label: label,
+      date: date, status: 'test-only', createdAt: new Date().toISOString() };
+    dossier.hrTrackingRecords.push(record);
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer ce suivi dans le stockage local.'] };
+    return { ok: true, errors: [], record: clone(record) };
+  }
+
   function dossierById(dossierId) {
     return clone(loadDossierCatalog().dossiers.find(function (dossier) { return dossier.id === String(dossierId || ''); }) || null);
   }
@@ -450,6 +493,8 @@
     createOrganizationUnit: createOrganizationUnit,
     updateOrganizationUnit: updateOrganizationUnit,
     archiveOrganizationUnit: archiveOrganizationUnit,
+    hrTrackingRecords: hrTrackingRecords,
+    createHRTrackingRecord: createHRTrackingRecord,
     createDossier: createDossier,
     createTestDossier: createTestDossier,
     selectDossier: selectDossier,

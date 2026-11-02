@@ -495,6 +495,7 @@
         return { moduleId: 'organization', actionId: 'organization.manageDossiers' };
       case 'create-payroll-test-employee':
       case 'create-payroll-org-unit':
+      case 'create-payroll-hr-tracking':
         return { moduleId: 'payroll-hr', actionId: 'record.create' };
       case 'edit-payroll-org-unit':
       case 'archive-payroll-org-unit':
@@ -20248,6 +20249,22 @@
         toast('Unité archivée ; les données historiques sont conservées.', 'success'); render();
       });
     });
+    var trackingForm = $('#payroll-hr-tracking-form');
+    if (trackingForm) trackingForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('create-payroll-hr-tracking', null, true)) return;
+      var dossier = PayrollHR.currentDossier();
+      if (!dossier || trackingForm.getAttribute('data-dossier-id') !== dossier.id) {
+        toast('Création refusée : le dossier RH actif a changé. Rechargez la page.','warning'); return;
+      }
+      var fields = trackingForm.elements;
+      var result = PayrollHR.createHRTrackingRecord(dossier.id, {
+        kind: fields.kind.value, reference: fields.reference.value, label: fields.label.value,
+        date: fields.date.value, testOnly: fields.testOnly.checked
+      });
+      if (!result.ok) { toast(result.errors[0] || 'Création du suivi impossible.', 'warning'); return; }
+      toast('Suivi fictif enregistré dans le dossier RH.', 'success'); render();
+    });
   }
 
   function payrollEntryForRun(run, dossierId) {
@@ -20310,6 +20327,24 @@
       (rows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Unité</th><th>Type</th><th>Code</th><th>Parent</th><th>État</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucune unité définie</strong><span>Aucune unité n’est précréée.</span></div>') + '</section>';
   }
 
+  function viewPayrollHRTracking(dossier, records, canCreate) {
+    var labels = { recruitment: 'Candidature', contract: 'Contrat', interim: 'Intérim' };
+    var rows = records.map(function (record) {
+      return '<tr data-record-id="' + esc(record.id) + '" data-dossier-id="' + esc(record.dossierId) + '"><td>' + esc(labels[record.kind] || record.kind) + '</td><td><strong>' + esc(record.reference) + '</strong></td><td>' + esc(record.label) + '</td><td>' + esc(record.date) + '</td><td><span class="badge draft">Test uniquement</span></td></tr>';
+    }).join('');
+    var form = canCreate ? '<form id="payroll-hr-tracking-form" class="payroll-hr-tracking-form" data-dossier-id="' + esc(dossier.id) + '"><div class="payroll-hr-tracking-grid">' +
+      '<div class="field"><label for="payroll-hr-tracking-kind">Type de suivi</label><select id="payroll-hr-tracking-kind" name="kind" required><option value="" selected disabled>Choisir…</option><option value="recruitment">Candidature</option><option value="contract">Contrat</option><option value="interim">Intérim</option></select></div>' +
+      '<div class="field"><label for="payroll-hr-tracking-reference">Référence fictive</label><input id="payroll-hr-tracking-reference" name="reference" maxlength="60" required></div>' +
+      '<div class="field"><label for="payroll-hr-tracking-label">Libellé non nominatif</label><input id="payroll-hr-tracking-label" name="label" maxlength="120" placeholder="Ex. suivi de test A" required></div>' +
+      '<div class="field"><label for="payroll-hr-tracking-date">Date de suivi</label><input id="payroll-hr-tracking-date" name="date" type="date" required></div>' +
+      '<label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Je confirme qu’il s’agit d’un suivi fictif, sans nom de candidat, pièce contractuelle ou donnée réelle.</span></label>' +
+      '<button type="submit" class="btn btn-primary">＋ Ajouter un suivi fictif</button></div></form>'
+      : '<p class="small muted">Votre profil ne dispose pas du droit de création dans ce dossier.</p>';
+    return '<section class="exchange-card payroll-hr-tracking"><p class="page-kicker">ÉTAPE 6 · SUIVIS SYNTHÉTIQUES</p><h3>Candidatures, contrats et intérim</h3>' +
+      '<div class="alert warning"><div>Socle de démonstration uniquement. Les libellés « candidature », « contrat » et « intérim » sont des types de suivi, pas des statuts ni des conclusions juridiques. Aucun nom, document, catégorie légale, échéance, employeur/payeur ou élément de rémunération n’est enregistré.</div></div>' + form +
+      (rows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Type</th><th>Référence</th><th>Libellé</th><th>Date de suivi</th><th>Nature</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucun suivi de test</strong><span>Aucun candidat, contrat ou dossier d’intérim n’est créé automatiquement.</span></div>') + '</section>';
+  }
+
   function viewPayrollModule() {
     var dossier = PayrollHR.currentDossier();
     if (!dossier) return '<div class="empty-state"><strong>Aucun dossier Paie & RH sélectionné</strong><a class="btn btn-primary" href="#/payroll-dossiers">Choisir un dossier RH</a></div>';
@@ -20321,6 +20356,7 @@
     var canCreatePayrollEmployee = hasDemoPermission(member, 'payroll-hr', 'record.create', payrollAccessContext(dossier));
     var dossierEmployees = PayrollHR.employees(dossier.id);
     var organizationUnits = PayrollHR.organizationUnits(dossier.id);
+    var hrTrackingRecords = PayrollHR.hrTrackingRecords(dossier.id);
     var canEditPayrollRecords = hasDemoPermission(member, 'payroll-hr', 'record.edit', payrollAccessContext(dossier));
     var employeeRows = dossierEmployees.map(function (employee) {
       var createdLabel = employee.createdAt ? String(employee.createdAt).slice(0, 10) : 'Non renseignée';
@@ -20355,7 +20391,7 @@
     return '<div class="payroll-module-workspace">' +
       pageHeader('Paie & RH', 'Dossier client : <strong>' + esc(dossier.clientName) + '</strong> · ' + esc(dossier.reference) + ' · exercice ' + esc(dossier.exerciseYear) + '.', '<a class="btn btn-ghost" href="#/payroll-dossiers">Changer de dossier RH</a> <a class="btn btn-ghost" href="#/launcher">← Modules</a>') +
       '<div class="alert warning"><div><strong>Base fonctionnelle en cours</strong><br>Les données sont encore stockées localement dans ce navigateur. Utilisez uniquement des données synthétiques. Le calcul de paie et les fonctions de production restent bloqués tant que les textes, règles et le stockage sécurisé ne sont pas validés.</div></div>' +
-      accountingLinkPanel + employeeSection + viewPayrollOrganizationUnits(dossier, organizationUnits, canCreatePayrollEmployee, canEditPayrollRecords) +
+      accountingLinkPanel + employeeSection + viewPayrollOrganizationUnits(dossier, organizationUnits, canCreatePayrollEmployee, canEditPayrollRecords) + viewPayrollHRTracking(dossier, hrTrackingRecords, canCreatePayrollEmployee) +
       '<section class="exchange-card"><p class="page-kicker">CYCLE DE PAIE</p><h3>Lots du dossier</h3>' +
         '<div class="alert info"><div>Aucun calcul ou lot fictif n’est créé. Le moteur restera indisponible tant que les règles applicables, les données source et les contrôles d’approbation ne sont pas validés.</div></div>' +
         (runRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Référence</th><th>Période</th><th>État</th><th>Référence comptable</th></tr></thead><tbody>' + runRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucun lot de paie disponible</strong><span>Les lots ne peuvent pas être créés avec des montants, comptes ou règles inventés.</span></div>') +

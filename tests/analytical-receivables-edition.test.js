@@ -27,6 +27,6 @@ assert.match(app, /exchangeFeature = viewAnalyticalReceivablesEdition\(\)/);
 assert.match(app, /bindAnalyticalReceivablesEdition\(\)/);
 assert.match(app, /function openReportPreview\(/);
 assert.match(html, /js\/app\.js/);
-assert.match(worker, /perfecto-static-v203/);
+assert.match(worker, /perfecto-static-v204/);
 assert.match(css, /\.analytical-receivables-workspace/);
 console.log('Comptes à recevoir analytiques : comptes configurés, une nature choisie, mouvements validés et lecture seule — OK');

@@ -93,6 +93,30 @@ assert.equal(PayrollHR.updateOrganizationUnit(dossier.id, childUnit.unit.id, {
 assert.equal(PayrollHR.archiveOrganizationUnit(dossier.id, rootUnit.unit.id, '2026-04-02').ok, true);
 assert.equal(PayrollHR.organizationUnits(dossier.id).filter(unit => unit.status === 'archived').length, 2);
 
+assert.equal(PayrollHR.createHRTrackingRecord(dossier.id, {
+  kind: 'contract', reference: 'TEST-CTR-01', label: 'Suivi fictif', date: '2026-04-01', testOnly: false
+}).ok, false, 'les suivis non confirmés comme test sont refusés');
+const candidateTracking = PayrollHR.createHRTrackingRecord(dossier.id, {
+  kind: 'recruitment', reference: 'TEST-CAND-01', label: 'Étape fictive alpha', date: '2026-04-01', testOnly: true
+});
+const contractTracking = PayrollHR.createHRTrackingRecord(dossier.id, {
+  kind: 'contract', reference: 'TEST-CTR-01', label: 'Suivi contractuel synthétique', date: '2026-04-02', testOnly: true
+});
+const interimTracking = PayrollHR.createHRTrackingRecord(dossier.id, {
+  kind: 'interim', reference: 'TEST-INT-01', label: 'Suivi intérim neutre', date: '2026-04-03', testOnly: true
+});
+assert.equal(candidateTracking.ok, true, candidateTracking.errors.join('\\n'));
+assert.equal(contractTracking.ok, true, contractTracking.errors.join('\\n'));
+assert.equal(interimTracking.ok, true, interimTracking.errors.join('\\n'));
+assert.deepEqual(PayrollHR.hrTrackingRecords(dossier.id).map(record => record.kind), ['recruitment', 'contract', 'interim']);
+assert.deepEqual(PayrollHR.hrTrackingRecords('other-dossier'), [], 'les suivis restent isolés dans leur dossier RH');
+assert.equal(PayrollHR.createHRTrackingRecord(dossier.id, {
+  kind: 'contract', reference: 'test-ctr-01', label: 'Doublon', date: '2026-04-04', testOnly: true
+}).ok, false, 'une référence de suivi est unique par type et dossier');
+assert.equal(PayrollHR.createHRTrackingRecord(dossier.id, {
+  kind: 'unknown', reference: 'TEST-UNK', label: 'Type non configuré', date: '2026-04-04', testOnly: true
+}).ok, false, 'un type de suivi non prévu est refusé');
+
 assert.deepEqual(PayrollHR.accountingAccountCatalog(), [], 'aucun compte de paie n’est préconfiguré');
 const fakeRun = PayrollHR.createDemoRun(dossier, '2026-01');
 assert.equal(fakeRun.ok, false, 'aucun lot avec montant ou compte inventé ne peut être créé');

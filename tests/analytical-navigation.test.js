@@ -42,7 +42,7 @@ assert.match(app, /phoneRouteAllowed = route === 'dossiers' \|\| route === 'anal
 assert.match(html, /css\/analytical-module\.css/);
 assert.ok(html.indexOf('js/analytical-navigation.js') < html.indexOf('js/app.js'),
   'le catalogue analytique est chargé avant le routeur');
-assert.match(serviceWorker, /perfecto-static-v203/);
+assert.match(serviceWorker, /perfecto-static-v204/);
 assert.match(serviceWorker, /\.\/js\/analytical-navigation\.js/);
 assert.match(serviceWorker, /\.\/css\/analytical-module\.css/);
 assert.match(css, /body\.analytics-module-mode/);

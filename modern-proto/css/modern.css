@@ -4048,3 +4048,14 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .payroll-employee-profile-body dd { margin: 0; color: #263a32; overflow-wrap: anywhere; }
 .payroll-employee-profile-body .alert { margin: 10px 0 0; font-size: .72rem; }
 @media (max-width: 560px) { .payroll-employee-profile-body { min-width: 75vw; } .payroll-employee-profile-body dl { grid-template-columns: 1fr; gap: 2px; } .payroll-employee-profile-body dd { margin-bottom: 6px; } }
+
+/* Suivi neutre des candidatures, contrats et intérim — démonstration uniquement */
+.payroll-hr-tracking > .alert { margin: 10px 0 14px; line-height: 1.55; }
+.payroll-hr-tracking-form { margin: 12px 0 16px; padding: 14px; border: 1px solid #e3eae5; border-radius: 8px; background: #fbfcfb; }
+.payroll-hr-tracking-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 12px; }
+.payroll-hr-tracking-grid .field { min-width: 0; margin: 0; }
+.payroll-hr-tracking-grid input, .payroll-hr-tracking-grid select { width: 100%; }
+.payroll-hr-tracking-grid .payroll-test-confirm { grid-column: 1 / -1; }
+.payroll-hr-tracking-grid > .btn { justify-self: start; }
+@media (max-width: 800px) { .payroll-hr-tracking-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .payroll-hr-tracking-grid { grid-template-columns: 1fr; } .payroll-hr-tracking-grid .payroll-test-confirm { grid-column: auto; } }
