@@ -20823,6 +20823,34 @@
       '<p class="small muted">Aucun document, montant, devise, référence de transaction, statut payé, paiement bancaire ou écriture comptable n’est créé. Aucun format d’impression/export n’est proposé à cette étape.</p></section>';
   }
 
+  function viewPayrollMainMenu() {
+    var menuNames = ['Fichier', 'Définitions', 'Salaires', 'Editions', 'Comptabilisations', 'Paramètres', 'Outils'];
+    var activeMenu = ui.payrollMainMenu || 'Fichier';
+    var topLevel = menuNames.map(function (name) {
+      return '<button type="button" class="payroll-main-menu-button' + (name === activeMenu ? ' is-active' : '') + '" data-action="payroll-main-menu" data-menu-name="' + esc(name) + '" aria-pressed="' + (name === activeMenu ? 'true' : 'false') + '">' + esc(name) + '</button>';
+    }).join('');
+    var panel;
+    if (activeMenu === 'Fichier') {
+      var groups = [
+        ['Export des fichiers', 'Import des fichiers'],
+        ["Import d'une rubrique de bulletins", 'Import de plusieurs rubriques de bulletins'],
+        ['Recalcul des bulletins du mois en cours', 'Réparation des fichiers'],
+        ['Clôture de la paie en cours', 'Ouverture de la paie du mois suivant'],
+        ["Guide d'utilisation"],
+        ['Quitter']
+      ];
+      panel = '<div class="payroll-main-menu-panel" role="group" aria-label="Options du menu Fichier">' + groups.map(function (group, index) {
+        return (index ? '<div class="payroll-main-menu-separator" role="separator"></div>' : '') + group.map(function (label) {
+          return '<button type="button" class="payroll-file-menu-item" disabled aria-disabled="true">' + esc(label) + '</button>';
+        }).join('');
+      }).join('') + '</div>';
+    } else {
+      panel = '<div class="payroll-main-menu-panel payroll-main-menu-placeholder"><strong>' + esc(activeMenu) + '</strong><span>Menu créé. Ses rubriques et traitements seront ajoutés progressivement, sans présumer de règles métier.</span></div>';
+    }
+    return '<nav class="payroll-main-menu" aria-label="Menu principal Paie & RH"><div class="payroll-main-menu-bar" role="toolbar" aria-label="Menus Paie & RH">' + topLevel + '</div>' + panel +
+      '<p class="payroll-main-menu-note">Structure de navigation uniquement : les commandes Fichier sont volontairement inactives tant que leurs formats, sources, droits et règles ne sont pas cadrés.</p></nav>';
+  }
+
   function viewPayrollModule() {
     var dossier = PayrollHR.currentDossier();
     if (!dossier) return '<div class="empty-state"><strong>Aucun dossier Paie & RH sélectionné</strong><a class="btn btn-primary" href="#/payroll-dossiers">Choisir un dossier RH</a></div>';
@@ -20877,6 +20905,7 @@
     return '<div class="payroll-module-workspace">' +
       pageHeader('Paie & RH', 'Dossier client : <strong>' + esc(dossier.clientName) + '</strong> · ' + esc(dossier.reference) + ' · exercice ' + esc(dossier.exerciseYear) + '.', '<a class="btn btn-ghost" href="#/payroll-dossiers">Changer de dossier RH</a> <a class="btn btn-ghost" href="#/launcher">← Modules</a>') +
       '<div class="alert warning"><div><strong>Base fonctionnelle en cours</strong><br>Les données sont encore stockées localement dans ce navigateur. Utilisez uniquement des données synthétiques. Le calcul de paie et les fonctions de production restent bloqués tant que les textes, règles et le stockage sécurisé ne sont pas validés.</div></div>' +
+      viewPayrollMainMenu() + '<details class="payroll-legacy-views"><summary>Fonctionnalités déjà développées — à reclasser dans les menus</summary>' +
       accountingLinkPanel + employeeSection + viewPayrollOrganizationUnits(dossier, organizationUnits, canCreatePayrollEmployee, canEditPayrollRecords) + viewPayrollAssignmentsMissions(dossier, dossierEmployees, organizationUnits, organizationAssignments, internalMissions, canCreatePayrollEmployee) + viewPayrollHRTracking(dossier, hrTrackingRecords, canCreatePayrollEmployee) + viewPayrollLeaveAbsences(dossier, dossierEmployees, leaveAbsenceRecords, canCreatePayrollEmployee) + viewPayrollComponentsAndReferences(dossier, dossierEmployees, payrollComponents, payrollVariableReferences, canCreatePayrollEmployee) + viewPayrollCountryRulePacks(dossier, countryRulePacks, countryRuleCandidates, canCreatePayrollEmployee) + viewPayrollBatchPreparations(dossier, countryRulePacks, payrollBatchPreparations, canCreatePayrollEmployee) +
       '<section class="exchange-card"><p class="page-kicker">CYCLE DE PAIE</p><h3>Lots du dossier</h3>' +
         '<div class="alert info"><div>Aucun calcul ni lot de paie n’est créé automatiquement. Les éventuelles fiches de préparation restent distinctes des lots et bloquées tant que les règles applicables, données source et contrôles ne sont pas validés.</div></div>' +
@@ -20887,7 +20916,7 @@
         packs: countryRulePacks, candidates: countryRuleCandidates, preparations: payrollBatchPreparations, runs: runs, units: organizationUnits
       }, ui.payrollRegisters) + viewPayrollReportReadiness(dossier) + viewPayrollEditionAvailability(dossier) + viewPayrollAccountingReadiness(dossier) +
       '<p class="dossiers-storage-footnote">Le stockage local du navigateur ne constitue ni un stockage serveur protégé, ni une synchronisation Google Drive ou multi-utilisateur.</p>' +
-    '</div>';
+      '</details></div>';
   }
 
   function salesEntryForRun(run, dossierId) {
@@ -33684,6 +33713,10 @@
     if (!canPerformDemoAction(action, trigger)) { event.preventDefault(); return; }
 
     switch (action) {
+      case 'payroll-main-menu':
+        ui.payrollMainMenu = trigger.getAttribute('data-menu-name') || 'Fichier';
+        render();
+        break;
       case 'launcher-filter':
         launcherUi.filter = trigger.getAttribute('data-filter-value') || 'all';
         $$('[data-action="launcher-filter"]').forEach(function (button) {

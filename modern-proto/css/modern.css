@@ -4180,3 +4180,21 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .payroll-edition-readiness-card .payroll-workflow-actions { margin-top: 12px; }
 .payroll-accounting-readiness code { overflow-wrap: anywhere; }
 @media (max-width: 650px) { .payroll-edition-readiness-grid { grid-template-columns: 1fr; } }
+
+/* Navigation principale Paie & RH : menu construit avant les traitements */
+.payroll-main-menu { margin: 14px 0 18px; padding: 13px; border: 1px solid #dbe4df; border-radius: 10px; background: #fff; box-shadow: 0 3px 12px rgba(28, 54, 47, .05); }
+.payroll-main-menu-bar { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid #dce4df; }
+.payroll-main-menu-button { min-height: 40px; padding: 8px 13px; border: 0; border-radius: 7px 7px 0 0; color: #34514a; background: transparent; font: inherit; font-weight: 650; cursor: pointer; }
+.payroll-main-menu-button:hover { background: #f2f6f3; }
+.payroll-main-menu-button.is-active { color: #fff; background: #315a4c; }
+.payroll-main-menu-panel { display: flex; flex-direction: column; align-items: stretch; width: min(100%, 560px); padding: 5px 0; border-bottom: 1px solid #e3e8e5; }
+.payroll-file-menu-item { min-height: 38px; padding: 7px 12px; border: 0; color: #263a35; background: transparent; text-align: left; font: inherit; }
+.payroll-file-menu-item:disabled { color: #66746f; cursor: not-allowed; opacity: 1; }
+.payroll-main-menu-separator { height: 1px; margin: 5px 0; background: #d8dfdb; }
+.payroll-main-menu-placeholder { min-height: 100px; justify-content: center; gap: 7px; color: #42534d; }
+.payroll-main-menu-note { margin: 9px 0 0; color: #65736d; font-size: .82rem; }
+.payroll-legacy-views { margin-top: 12px; border: 1px dashed #cbd7d0; border-radius: 9px; background: #f8faf9; }
+.payroll-legacy-views > summary { padding: 12px 15px; color: #41564e; font-weight: 650; cursor: pointer; }
+.payroll-legacy-views[open] { padding: 0 12px 12px; }
+.payroll-legacy-views[open] > summary { margin: 0 -12px 12px; border-bottom: 1px solid #e0e7e3; }
+@media (max-width: 650px) { .payroll-main-menu { padding: 9px; } .payroll-main-menu-button { padding-inline: 9px; font-size: .9rem; } }

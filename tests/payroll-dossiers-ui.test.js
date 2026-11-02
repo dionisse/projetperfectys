@@ -25,6 +25,13 @@ assert.match(payroll, /function employees\(dossierId\)[\s\S]*employee\.dossierId
 assert.match(app, /payroll-employee-create-form/);
 assert.match(app, /ne saisissez aucune donnée réelle/);
 assert.match(app, /Aucun calcul ni lot de paie n’est créé automatiquement/);
+assert.ok(app.includes('function viewPayrollMainMenu()'));
+for (const menu of ['Fichier', 'Définitions', 'Salaires', 'Editions', 'Comptabilisations', 'Paramètres', 'Outils']) assert.ok(app.includes("'" + menu + "'"), 'menu principal présent : ' + menu);
+for (const fileItem of ['Export des fichiers', 'Import des fichiers', "Import d'une rubrique de bulletins", 'Import de plusieurs rubriques de bulletins', 'Recalcul des bulletins du mois en cours', 'Réparation des fichiers', 'Clôture de la paie en cours', 'Ouverture de la paie du mois suivant', "Guide d'utilisation", 'Quitter']) assert.ok(app.includes(fileItem), 'commande Fichier présente : ' + fileItem);
+assert.match(app, /payroll-file-menu-item.*disabled aria-disabled/);
+assert.match(app, /Fonctionnalités déjà développées — à reclasser dans les menus/);
+assert.ok(css.includes('.payroll-main-menu-bar'));
+assert.ok(css.includes('.payroll-legacy-views'));
 assert.match(payroll, /function createEmployee\(dossierId, input\)/);
 assert.match(payroll, /testOnly !== true/);
 assert.match(payroll, /function organizationUnits\(dossierId\)/);
@@ -138,5 +145,5 @@ assert.match(payroll, /function createDossier\(input\)[\s\S]*'PRH-' \+ clientCod
 assert.match(payroll, /accountingDossierId: accountingDossierId/);
 assert.match(payroll, /function storageKey\(dossierId\)[\s\S]*STORAGE_PREFIX \+ encodeURIComponent/);
 assert.match(css, /\.payroll-dossier-grid[\s\S]*\.payroll-dossier-card/);
-assert.match(worker, /perfecto-static-v215/);
+assert.match(worker, /perfecto-static-v216/);
 console.log('UI Paie & RH : route dossier dédiée, référence PRH, sélection par dossier et association non automatique — OK');
