@@ -4136,3 +4136,8 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .payroll-batch-preparations td details li { margin: 4px 0; }
 @media (max-width: 800px) { .payroll-batch-preparation-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .payroll-batch-preparation-grid { grid-template-columns: 1fr; } .payroll-batch-preparation-grid .payroll-test-confirm { grid-column: auto; } }
+
+/* Étape 13 : contrôles visibles, transitions de workflow volontairement bloquées */
+.payroll-workflow-actions { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0 4px; }
+.payroll-workflow-actions .btn:disabled { cursor: not-allowed; opacity: .55; }
+.payroll-batch-preparations td details > p { margin: 8px 0; }

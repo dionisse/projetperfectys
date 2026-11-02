@@ -336,4 +336,13 @@ assert.equal(PayrollHR.payrollBatchPreparations(testDossier.dossier.id).length, 
 assert.equal(PayrollHR.payrollBatchPreparations(dossier.id).length, 0);
 assert.equal(PayrollHR.executePayrollBatchPreparation(testDossier.dossier.id, blockedPreparation.preparation.id).ok, false);
 assert.equal(PayrollHR.payrollBatchPreparations(testDossier.dossier.id).length, 1, 'une tentative refusée ne crée pas de résultat');
-console.log('Paie & RH : préparation de lots sans sélection d’employés, règles non activables et aucun calcul — OK');
+const blockedWorkflow = PayrollHR.payrollBatchControlState(testDossier.dossier.id, blockedPreparation.preparation.id);
+assert.equal(blockedWorkflow.approved, false);
+assert.equal(blockedWorkflow.locked, false);
+assert.ok(blockedWorkflow.transitions.every(transition => transition.enabled === false));
+for (const transition of [PayrollHR.submitPayrollBatchForReview, PayrollHR.approvePayrollBatch, PayrollHR.lockPayrollBatch, PayrollHR.reopenPayrollBatch, PayrollHR.cancelPayrollBatch]) {
+  assert.equal(transition(testDossier.dossier.id, blockedPreparation.preparation.id, { testOnly: true }).ok, false);
+}
+assert.equal(PayrollHR.payrollBatchPreparations(testDossier.dossier.id)[0].status, 'calcul incomplet / bloqué', 'aucune transition refusée ne modifie la fiche');
+assert.equal(PayrollHR.payrollBatchPreparations(testDossier.dossier.id)[0].history.length, 1, 'les actions refusées ne fabriquent pas de traces d’approbation');
+console.log('Paie & RH : préparations bloquées, revue et approbation désactivées, historique inchangé — OK');

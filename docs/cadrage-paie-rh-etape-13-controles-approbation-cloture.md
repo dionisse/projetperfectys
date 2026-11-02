@@ -1,7 +1,9 @@
 # Étape 13 — Contrôles, approbation et clôture
 
-**Statut :** proposition de cadrage à valider avant implémentation.
+**Statut :** les blocages structurels sont visibles sur les fiches de préparation de test ; les contrôles métier, rôles et transitions d’approbation/clôture restent à valider et ne sont pas activés.
 **Dépendances :** lots et calculs explicables (étape 12), règles pays versionnées (étape 11), données sources des étapes 6 à 10. Le cycle pilote est mensuel.
+
+Le prototype affiche les raisons de blocage et des actions de workflow désactivées. Il ne crée aucune anomalie métier, approbation, clôture, réouverture ou annulation. Les fiches restent fictives, bloquées et sans résultat de paie.
 **Plan complet :** [Plan d’implémentation Paie & RH en 18 étapes](proposition-implementation-paie-rh.md).
 
 ## 1. Objectif et limites

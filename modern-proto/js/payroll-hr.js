@@ -838,6 +838,35 @@
     return { ok: false, errors: ['Calcul refusé : aucune règle approuvée, entrée qualifiée ou exécution de paie n’est disponible. La fiche de préparation reste bloquée et aucun résultat n’a été créé.'] };
   }
 
+  function payrollBatchControlState(dossierId, preparationId) {
+    var preparation = payrollBatchPreparations(dossierId).find(function (item) { return item.id === String(preparationId || ''); });
+    if (!preparation) return { ok: false, approved: false, locked: false, reasons: ['Fiche de préparation introuvable dans ce dossier RH.'] };
+    return {
+      ok: true, preparationId: preparation.id, status: preparation.status,
+      approved: false, locked: false,
+      reasons: preparation.blockers.concat([
+        'Aucun rôle ni séparation des tâches n’est configuré pour ce prototype local.',
+        'Aucun contrôle métier n’a été qualifié ou exécuté ; les blocages affichés sont structurels.',
+        'Aucune action de revue, approbation, verrouillage, réouverture ou annulation n’est activée.'
+      ]),
+      transitions: [
+        { action: 'review', enabled: false }, { action: 'approve', enabled: false },
+        { action: 'lock', enabled: false }, { action: 'reopen', enabled: false },
+        { action: 'cancel', enabled: false }
+      ]
+    };
+  }
+
+  function refusePayrollBatchTransition() {
+    return { ok: false, errors: ['Action refusée : aucun rôle, contrôle ou calcul validé n’est disponible. La fiche et son historique restent inchangés.'] };
+  }
+
+  function submitPayrollBatchForReview() { return refusePayrollBatchTransition(); }
+  function approvePayrollBatch() { return refusePayrollBatchTransition(); }
+  function lockPayrollBatch() { return refusePayrollBatchTransition(); }
+  function reopenPayrollBatch() { return refusePayrollBatchTransition(); }
+  function cancelPayrollBatch() { return refusePayrollBatchTransition(); }
+
   function dossierById(dossierId) {
     return clone(loadDossierCatalog().dossiers.find(function (dossier) { return dossier.id === String(dossierId || ''); }) || null);
   }
@@ -1069,6 +1098,12 @@
     payrollBatchPreparations: payrollBatchPreparations,
     createPayrollBatchPreparation: createPayrollBatchPreparation,
     executePayrollBatchPreparation: executePayrollBatchPreparation,
+    payrollBatchControlState: payrollBatchControlState,
+    submitPayrollBatchForReview: submitPayrollBatchForReview,
+    approvePayrollBatch: approvePayrollBatch,
+    lockPayrollBatch: lockPayrollBatch,
+    reopenPayrollBatch: reopenPayrollBatch,
+    cancelPayrollBatch: cancelPayrollBatch,
     hrTrackingRecords: hrTrackingRecords,
     createHRTrackingRecord: createHRTrackingRecord,
     createDossier: createDossier,
