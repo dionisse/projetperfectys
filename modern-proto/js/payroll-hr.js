@@ -118,6 +118,9 @@
         return item && (item.id === requestedFunction || String(item.code || '').toLocaleLowerCase() === requestedFunction.toLocaleLowerCase() || String(item.label || '').toLocaleLowerCase() === requestedFunction.toLocaleLowerCase());
       });
     });
+    var requestedQualificationIds = Array.isArray(input.qualificationIds) ? input.qualificationIds.map(function (value) { return String(value || '').trim(); }).filter(Boolean) : [];
+    var availableQualifications = Array.isArray(dossier.employeeQualifications) ? dossier.employeeQualifications : [];
+    var matchingQualifications = requestedQualificationIds.map(function (requestedId) { return availableQualifications.find(function (item) { return item && item.id === requestedId; }); });
     var availableEmployeeServices = Array.isArray(dossier.employeeServices) ? dossier.employeeServices : [];
     var matchingEmployeeService = availableEmployeeServices.find(function (item) {
       return item && (item.id === requestedEmployeeServiceId || String(item.code || '').toLocaleLowerCase() === requestedEmployeeServiceId.toLocaleLowerCase() || String(item.label || '').toLocaleLowerCase() === requestedEmployeeServiceId.toLocaleLowerCase());
@@ -137,6 +140,8 @@
     if (availableEmployeeServices.length && requestedEmployeeServiceId && !matchingEmployeeService) errors.push('Choisissez un service existant dans le dossier de test.');
     if (availableEmployeeFunctions.length && matchingEmployeeFunctions.some(function (item) { return !item; })) errors.push('Choisissez des fonctions existantes dans le dossier de test.');
     if (new Set(requestedEmployeeFunctionValues).size !== requestedEmployeeFunctionValues.length) errors.push('Une fonction ne peut être sélectionnée qu’une seule fois sur la fiche.');
+    if (requestedQualificationIds.some(function (id, index) { return !matchingQualifications[index]; })) errors.push('Choisissez des diplômes ou qualifications existants dans le dossier de test.');
+    if (new Set(requestedQualificationIds).size !== requestedQualificationIds.length) errors.push('Un diplôme ou une qualification ne peut être sélectionné qu’une seule fois.');
     if (availableGeographicZones.length && requestedGeographicZoneId && !matchingGeographicZone) errors.push('Choisissez une zone géographique existante dans le dossier de test.');
     var current = Array.isArray(dossier.demoEmployees) ? dossier.demoEmployees : [];
     if (employeeNumber && current.some(function (employee) {
@@ -160,6 +165,8 @@
       functionIds: matchingEmployeeFunctions.filter(Boolean).map(function (item) { return item.id; }),
       functionId: matchingEmployeeFunctions.filter(Boolean).length === 1 ? matchingEmployeeFunctions.filter(Boolean)[0].id : '',
       function: matchingEmployeeFunctions.filter(Boolean).map(function (item) { return item.label; }).join(' · ') || requestedEmployeeFunctionValues.join(' · '),
+      qualificationIds: matchingQualifications.filter(Boolean).map(function (item) { return item.id; }),
+      degree: matchingQualifications.filter(Boolean).map(function (item) { return item.label; }).join(' · '),
       geographicZoneId: matchingGeographicZone ? matchingGeographicZone.id : '',
       zone: matchingGeographicZone ? matchingGeographicZone.label : requestedGeographicZoneId,
       status: 'test-only',
@@ -272,6 +279,15 @@
       patch.functionIds = matchingFunctions.filter(Boolean).map(function (item) { return item.id; });
       patch.functionId = patch.functionIds.length === 1 ? patch.functionIds[0] : '';
       patch.function = matchingFunctions.filter(Boolean).map(function (item) { return item.label; }).join(' · ') || (availableFunctions.length ? '' : requestedFunctions.join(' · '));
+    }
+    if (Object.prototype.hasOwnProperty.call(input, 'qualificationIds')) {
+      var requestedQualificationIds = Array.isArray(input.qualificationIds) ? input.qualificationIds.map(function (value) { return String(value || '').trim(); }).filter(Boolean) : [];
+      var availableQualifications = Array.isArray(dossier.employeeQualifications) ? dossier.employeeQualifications : [];
+      var matchingQualifications = requestedQualificationIds.map(function (requestedId) { return availableQualifications.find(function (item) { return item && item.id === requestedId; }); });
+      if (requestedQualificationIds.some(function (id, index) { return !matchingQualifications[index]; })) errors.push('Choisissez des diplômes ou qualifications existants dans le dossier de test.');
+      if (new Set(requestedQualificationIds).size !== requestedQualificationIds.length) errors.push('Un diplôme ou une qualification ne peut être sélectionné qu’une seule fois.');
+      patch.qualificationIds = matchingQualifications.filter(Boolean).map(function (item) { return item.id; });
+      patch.degree = matchingQualifications.filter(Boolean).map(function (item) { return item.label; }).join(' · ');
     }
     if (Object.prototype.hasOwnProperty.call(input, 'geographicZoneId')) {
       var requestedGeographicZone = String(input.geographicZoneId || '').trim();
@@ -1081,6 +1097,189 @@
     dossier.employeeServices = services.filter(function (item) { return item && item.id !== sourceServiceId; }).sort(function (left, right) { return Number(left.order || 0) - Number(right.order || 0); }).map(function (item, index) { item.order = index; return item; });
     if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la fusion des services.'] };
     return { ok: true, errors: [], sourceServiceId: sourceServiceId, destinationServiceId: destinationServiceId, reassignedCount: reassignedCount, services: employeeServices(dossierId) };
+  }
+
+  var EMPLOYEE_DEFINITION_CONFIG = {
+    qualifications: {
+      storageKey: 'employeeQualifications', plural: 'qualifications', noun: 'diplômes et qualifications',
+      fields: ['code', 'label'], codeRequired: true,
+      seed: [{ code: '01', label: 'Bac G2' }, { code: '11', label: 'BTS en Informatique de Gestion' }]
+    },
+    professions: {
+      storageKey: 'employeeProfessions', plural: 'professions', noun: 'professions',
+      fields: ['code', 'label'], codeRequired: true,
+      seed: [
+        { code: '1', label: 'Cadre Dirigeant' }, { code: '2', label: 'Cadre Supérieur' },
+        { code: '3', label: 'Cadre Moyen' }, { code: '4', label: 'Employé' },
+        { code: '5', label: 'Ouvrier' }, { code: '6', label: 'Manœuvre' },
+        { code: '7', label: 'Apprenti' }
+      ]
+    },
+    socialFunds: {
+      storageKey: 'employeeComplementarySocialFunds', plural: 'funds', noun: 'caisses complémentaires',
+      fields: ['label', 'address'], codeRequired: false,
+      seed: [{ label: 'GROUPAMA-VIE', address: 'Cotonou' }]
+    },
+    banks: {
+      storageKey: 'employeeBanks', plural: 'banks', noun: 'banques',
+      fields: ['code', 'label', 'address', 'bankBranchCode', 'accountNumber'], codeRequired: true,
+      seed: [
+        { code: 'BOA', label: 'Bank Of Africa', address: 'Cotonou', bankBranchCode: '', accountNumber: '' },
+        { code: 'EB', label: 'EcoBank', address: 'Cotonou', bankBranchCode: '', accountNumber: '' },
+        { code: 'OB', label: 'OraBank', address: 'Cotonou', bankBranchCode: '', accountNumber: '' }
+      ]
+    }
+  };
+
+  function employeeDefinitionConfig(kind) {
+    return EMPLOYEE_DEFINITION_CONFIG[String(kind || '')] || null;
+  }
+
+  function employeeDefinitionItems(dossierId, kind) {
+    var config = employeeDefinitionConfig(kind);
+    if (!config || !isDemoTestDossier(dossierId)) return [];
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId); });
+    return clone((dossier && Array.isArray(dossier[config.storageKey]) ? dossier[config.storageKey] : []).slice().sort(function (left, right) { return Number(left.order || 0) - Number(right.order || 0); }));
+  }
+
+  function seedDemoEmployeeDefinitionItems(dossierId, kind) {
+    dossierId = String(dossierId || '');
+    var config = employeeDefinitionConfig(kind);
+    if (!config) return { ok: false, errors: ['Ce référentiel de définitions n’existe pas.'] };
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['Les référentiels sont réservés au dossier fictif PRH-TEST-2026.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (Array.isArray(dossier[config.storageKey]) && dossier[config.storageKey].length) return { ok: false, errors: ['Des éléments existent déjà ; aucun doublon n’a été ajouté.'] };
+    var now = new Date().toISOString();
+    dossier[config.storageKey] = config.seed.map(function (value, index) {
+      return Object.assign({ id: 'employee-' + kind + '-test-' + (index + 1), dossierId: dossierId, order: index, status: 'test-only', origin: 'demo-mock', createdAt: now, updatedAt: now }, value);
+    });
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible de charger les exemples fictifs de ' + config.noun + '.'] };
+    return { ok: true, errors: [], items: employeeDefinitionItems(dossierId, kind) };
+  }
+
+  function normalizeEmployeeDefinitionInput(kind, input) {
+    var config = employeeDefinitionConfig(kind);
+    input = input || {};
+    var value = {};
+    var errors = [];
+    if (!config) return { ok: false, errors: ['Ce référentiel de définitions n’existe pas.'] };
+    config.fields.forEach(function (field) {
+      var raw = String(input[field] == null ? '' : input[field]).trim();
+      if (field === 'code' || field === 'label') raw = raw.replace(/\s+/g, ' ');
+      var limit = field === 'accountNumber' ? 80 : (field === 'address' ? 240 : (field === 'label' ? 120 : 40));
+      if (raw.length > limit) errors.push('Le champ « ' + field + ' » ne peut pas dépasser ' + limit + ' caractères.');
+      value[field] = raw;
+    });
+    if (config.codeRequired && !value.code) errors.push('Le code est obligatoire.');
+    if (config.fields.indexOf('label') !== -1 && !value.label) errors.push('L’intitulé est obligatoire.');
+    return { ok: errors.length === 0, errors: errors, value: value };
+  }
+
+  function createEmployeeDefinitionItem(dossierId, kind, input) {
+    dossierId = String(dossierId || ''); input = input || {};
+    var config = employeeDefinitionConfig(kind);
+    if (!config) return { ok: false, errors: ['Ce référentiel de définitions n’existe pas.'] };
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La création est réservée au dossier fictif PRH-TEST-2026.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Confirmez qu’il s’agit d’une définition fictive de test.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    var validation = normalizeEmployeeDefinitionInput(kind, input);
+    if (!validation.ok) return { ok: false, errors: validation.errors };
+    var items = Array.isArray(dossier[config.storageKey]) ? dossier[config.storageKey] : [];
+    var duplicate = items.some(function (item) {
+      if (!item) return false;
+      if (config.codeRequired) return String(item.code || '').toLocaleLowerCase() === validation.value.code.toLocaleLowerCase();
+      return String(item.label || '').toLocaleLowerCase() === validation.value.label.toLocaleLowerCase();
+    });
+    if (duplicate) return { ok: false, errors: ['Cette définition existe déjà dans le dossier de test.'] };
+    var now = new Date().toISOString();
+    var record = Object.assign({ id: 'employee-' + kind + '-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), dossierId: dossierId, order: items.length, status: 'test-only', origin: 'user-test', createdAt: now, updatedAt: now }, validation.value);
+    dossier[config.storageKey] = items.concat([record]);
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer cette définition.'] };
+    return { ok: true, errors: [], item: clone(record) };
+  }
+
+  function updateEmployeeDefinitionItem(dossierId, kind, itemId, input) {
+    dossierId = String(dossierId || ''); itemId = String(itemId || ''); input = input || {};
+    var config = employeeDefinitionConfig(kind);
+    if (!config) return { ok: false, errors: ['Ce référentiel de définitions n’existe pas.'] };
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La modification est réservée au dossier fictif PRH-TEST-2026.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Confirmez qu’il s’agit d’une modification fictive.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var items = dossier && Array.isArray(dossier[config.storageKey]) ? dossier[config.storageKey] : [];
+    var record = items.find(function (item) { return item && item.id === itemId && item.dossierId === dossierId; });
+    if (!record) return { ok: false, errors: ['La définition est introuvable.'] };
+    var validation = normalizeEmployeeDefinitionInput(kind, input);
+    if (!validation.ok) return { ok: false, errors: validation.errors };
+    var duplicate = items.some(function (item) {
+      if (!item || item.id === itemId) return false;
+      if (config.codeRequired) return String(item.code || '').toLocaleLowerCase() === validation.value.code.toLocaleLowerCase();
+      return String(item.label || '').toLocaleLowerCase() === validation.value.label.toLocaleLowerCase();
+    });
+    if (duplicate) return { ok: false, errors: ['Cette définition existe déjà dans le dossier de test.'] };
+    Object.assign(record, validation.value, { updatedAt: new Date().toISOString() });
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la modification.'] };
+    return { ok: true, errors: [], item: clone(record) };
+  }
+
+  function deleteEmployeeDefinitionItem(dossierId, kind, itemId) {
+    dossierId = String(dossierId || ''); itemId = String(itemId || '');
+    var config = employeeDefinitionConfig(kind);
+    if (!config) return { ok: false, errors: ['Ce référentiel de définitions n’existe pas.'] };
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La suppression est réservée au dossier fictif PRH-TEST-2026.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var items = dossier && Array.isArray(dossier[config.storageKey]) ? dossier[config.storageKey] : [];
+    var record = items.find(function (item) { return item && item.id === itemId && item.dossierId === dossierId; });
+    if (!record) return { ok: false, errors: ['La définition est introuvable.'] };
+    if (kind === 'qualifications' && (dossier.demoEmployees || []).some(function (employee) { return employee && Array.isArray(employee.qualificationIds) && employee.qualificationIds.indexOf(itemId) !== -1; })) return { ok: false, errors: ['Cette qualification est affectée à un employé et ne peut pas être supprimée.'] };
+    dossier[config.storageKey] = items.filter(function (item) { return item && item.id !== itemId; }).map(function (item, index) { item.order = index; return item; });
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible de supprimer la définition.'] };
+    return { ok: true, errors: [], deletedItemId: itemId };
+  }
+
+  function positionEmployeeDefinitionItem(dossierId, kind, itemId, position) {
+    dossierId = String(dossierId || ''); itemId = String(itemId || ''); position = Number(position);
+    var config = employeeDefinitionConfig(kind);
+    if (!config) return { ok: false, errors: ['Ce référentiel de définitions n’existe pas.'] };
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['Le positionnement est réservé au dossier fictif PRH-TEST-2026.'] };
+    if (!Number.isInteger(position) || position < 1) return { ok: false, errors: ['La position doit être un entier positif.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var items = dossier && Array.isArray(dossier[config.storageKey]) ? dossier[config.storageKey].slice().sort(function (left, right) { return Number(left.order || 0) - Number(right.order || 0); }) : [];
+    var currentIndex = items.findIndex(function (item) { return item && item.id === itemId && item.dossierId === dossierId; });
+    if (currentIndex === -1) return { ok: false, errors: ['La définition à positionner est introuvable.'] };
+    if (position > items.length) return { ok: false, errors: ['La position ne peut pas dépasser le nombre d’éléments.'] };
+    var moved = items.splice(currentIndex, 1)[0];
+    items.splice(position - 1, 0, moved);
+    items.forEach(function (item, index) { item.order = index; });
+    dossier[config.storageKey] = items;
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer le positionnement.'] };
+    return { ok: true, errors: [], items: clone(items) };
+  }
+
+  function mergeEmployeeBanks(dossierId, sourceBankId, destinationBankId) {
+    dossierId = String(dossierId || ''); sourceBankId = String(sourceBankId || ''); destinationBankId = String(destinationBankId || '');
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La fusion est réservée au dossier fictif PRH-TEST-2026.'] };
+    if (!sourceBankId || !destinationBankId || sourceBankId === destinationBankId) return { ok: false, errors: ['Choisissez deux banques distinctes pour la fusion.'] };
+    var config = employeeDefinitionConfig('banks');
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var banks = dossier && Array.isArray(dossier[config.storageKey]) ? dossier[config.storageKey] : [];
+    var source = banks.find(function (item) { return item && item.id === sourceBankId && item.dossierId === dossierId; });
+    var destination = banks.find(function (item) { return item && item.id === destinationBankId && item.dossierId === dossierId; });
+    if (!source || !destination) return { ok: false, errors: ['La banque d’origine ou de destination est introuvable.'] };
+    var fields = ['address', 'bankBranchCode', 'accountNumber'];
+    var conflicts = fields.filter(function (field) { return source[field] && destination[field] && source[field] !== destination[field]; });
+    if (conflicts.length) return { ok: false, errors: ['Fusion refusée : des champs de la banque d’origine et de destination sont différents. Résolvez les différences manuellement avant la fusion.'] };
+    fields.forEach(function (field) { if (!destination[field]) destination[field] = source[field] || ''; });
+    destination.updatedAt = new Date().toISOString();
+    dossier[config.storageKey] = banks.filter(function (item) { return item && item.id !== sourceBankId; }).map(function (item, index) { item.order = index; return item; });
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la fusion des banques.'] };
+    return { ok: true, errors: [], sourceBankId: sourceBankId, destinationBankId: destinationBankId, banks: employeeDefinitionItems(dossierId, 'banks') };
   }
 
   var EMPLOYEE_FUNCTION_PREMIUM_CATALOG = [{ id: 'responsibility-premium', label: 'Prime de responsabilité' }];
@@ -2180,6 +2379,13 @@
     deleteEmployeeService: deleteEmployeeService,
     positionEmployeeService: positionEmployeeService,
     mergeEmployeeServices: mergeEmployeeServices,
+    employeeDefinitionItems: employeeDefinitionItems,
+    seedDemoEmployeeDefinitionItems: seedDemoEmployeeDefinitionItems,
+    createEmployeeDefinitionItem: createEmployeeDefinitionItem,
+    updateEmployeeDefinitionItem: updateEmployeeDefinitionItem,
+    deleteEmployeeDefinitionItem: deleteEmployeeDefinitionItem,
+    positionEmployeeDefinitionItem: positionEmployeeDefinitionItem,
+    mergeEmployeeBanks: mergeEmployeeBanks,
     employeeFunctionPremiumCatalog: employeeFunctionPremiumCatalog,
     createEmployeeFunctionPremium: createEmployeeFunctionPremium,
     deleteEmployeeFunctionPremium: deleteEmployeeFunctionPremium,

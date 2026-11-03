@@ -187,6 +187,7 @@
     payrollEmployeeFunctionId: '',
     payrollEmployeeFunctionMode: 'view',
     payrollEmployeeFunctionDraft: null,
+    payrollDefinitionState: {},
     fixedAssets: { q: '', status: 'all', assetType: 'all' },
     financialFramework: { q: '' },
     financialResult: { asOfDate: '' },
@@ -590,6 +591,8 @@
       case 'new-payroll-employee-function':
       case 'seed-payroll-employee-functions':
       case 'new-payroll-employee-function-premium':
+      case 'new-payroll-definition-item':
+      case 'seed-payroll-definition-items':
       case 'new-payroll-employee-status':
       case 'duplicate-payroll-employee-status':
       case 'seed-payroll-employee-statuses':
@@ -621,6 +624,9 @@
       case 'edit-payroll-employee-service':
       case 'position-payroll-employee-service':
       case 'merge-payroll-employee-services':
+      case 'edit-payroll-definition-item':
+      case 'position-payroll-definition-item':
+      case 'merge-payroll-banks':
       case 'edit-payroll-employee-function':
       case 'position-payroll-employee-function':
       case 'edit-payroll-employee-status':
@@ -633,6 +639,7 @@
       case 'delete-payroll-employee':
       case 'delete-payroll-geographic-zone':
       case 'delete-payroll-employee-service':
+      case 'delete-payroll-definition-item':
       case 'delete-payroll-employee-function':
       case 'delete-payroll-employee-status':
       case 'delete-payroll-employee-category':
@@ -20377,6 +20384,7 @@
         categoryId: ($('#payroll-employee-create-category', employeeForm) || {}).value || '',
         geographicZoneId: ($('#payroll-employee-create-geographic-zone', employeeForm) || {}).value || '',
         serviceId: ($('#payroll-employee-create-service', employeeForm) || {}).value || '',
+        qualificationIds: Array.prototype.map.call(employeeForm.querySelectorAll('input[name="qualificationIds"]:checked'), function (input) { return input.value; }),
         functionIds: Array.prototype.map.call(employeeForm.querySelectorAll('input[name="functionIds"]:checked'), function (input) { return input.value; }),
         testOnly: confirmed
       });
@@ -20507,6 +20515,59 @@
       var serviceDialog = $('#payroll-employee-service-merge-dialog');
       if (serviceDialog && serviceDialog.open) serviceDialog.close();
       toast('Fusion terminée : ' + result.reassignedCount + ' fiche(s) employé transférée(s). Le service d’origine a été supprimé.', 'success'); render();
+    });
+    var payrollDefinitionForm = $('#payroll-definition-reference-form');
+    if (payrollDefinitionForm) payrollDefinitionForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var kind = payrollDefinitionForm.getAttribute('data-kind') || '';
+      var mode = payrollDefinitionForm.getAttribute('data-mode') || 'view';
+      var action = mode === 'create' ? 'new-payroll-definition-item' : 'edit-payroll-definition-item';
+      if (!canPerformDemoAction(action, null, true)) return;
+      var dossier = PayrollHR.currentDossier();
+      if (!dossier || payrollDefinitionForm.getAttribute('data-dossier-id') !== dossier.id || !PayrollHR.isDemoTestDossier(dossier.id)) { toast('Ces référentiels sont réservés à PRH-TEST-2026.', 'warning'); return; }
+      var confirmation = payrollDefinitionForm.elements.namedItem('testOnly');
+      if (!confirmation || !confirmation.checked) { toast('Confirmez que cette définition contient uniquement des données fictives.', 'warning'); return; }
+      var payload = {};
+      Array.prototype.forEach.call(payrollDefinitionForm.querySelectorAll('[data-definition-field]'), function (field) { payload[field.name] = field.value; });
+      payload.testOnly = true;
+      var state = ui.payrollDefinitionState[kind] || {};
+      var result = mode === 'create'
+        ? PayrollHR.createEmployeeDefinitionItem(dossier.id, kind, payload)
+        : PayrollHR.updateEmployeeDefinitionItem(dossier.id, kind, payrollDefinitionForm.getAttribute('data-item-id'), payload);
+      if (!result.ok) { toast(result.errors[0] || 'Enregistrement impossible.', 'warning'); return; }
+      ui.payrollDefinitionState[kind] = { id: result.item.id, mode: 'view', draft: null };
+      toast(mode === 'create' ? 'Définition fictive créée.' : 'Définition fictive modifiée.', 'success');
+      render();
+    });
+    var payrollDefinitionPositionForm = $('#payroll-definition-position-form');
+    if (payrollDefinitionPositionForm) payrollDefinitionPositionForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('position-payroll-definition-item', null, true)) return;
+      var dossier = PayrollHR.currentDossier();
+      var kind = payrollDefinitionPositionForm.getAttribute('data-kind') || '';
+      var itemId = payrollDefinitionPositionForm.getAttribute('data-item-id') || '';
+      if (!dossier || payrollDefinitionPositionForm.getAttribute('data-dossier-id') !== dossier.id) { toast('Le dossier actif a changé.', 'warning'); return; }
+      var result = PayrollHR.positionEmployeeDefinitionItem(dossier.id, kind, itemId, payrollDefinitionPositionForm.elements.namedItem('position').value);
+      if (!result.ok) { toast(result.errors[0] || 'Positionnement impossible.', 'warning'); return; }
+      ui.payrollDefinitionState[kind] = { id: itemId, mode: 'view', draft: null };
+      toast('Position enregistrée.', 'success');
+      render();
+    });
+    var payrollBankMergeForm = $('#payroll-bank-merge-form');
+    if (payrollBankMergeForm) payrollBankMergeForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('merge-payroll-banks', null, true)) return;
+      var dossier = PayrollHR.currentDossier();
+      if (!dossier || payrollBankMergeForm.getAttribute('data-dossier-id') !== dossier.id || !PayrollHR.isDemoTestDossier(dossier.id)) { toast('La fusion est réservée à PRH-TEST-2026.', 'warning'); return; }
+      var confirmation = payrollBankMergeForm.elements.namedItem('testOnly');
+      if (!confirmation || !confirmation.checked) { toast('Confirmez la fusion des références bancaires fictives.', 'warning'); return; }
+      var result = PayrollHR.mergeEmployeeBanks(dossier.id, payrollBankMergeForm.getAttribute('data-source-bank-id'), payrollBankMergeForm.elements.namedItem('destinationBankId').value);
+      if (!result.ok) { toast(result.errors[0] || 'Fusion impossible.', 'warning'); return; }
+      ui.payrollDefinitionState.banks = { id: result.destinationBankId, mode: 'view', draft: null };
+      var bankDialog = $('#payroll-bank-merge-dialog');
+      if (bankDialog && bankDialog.open) bankDialog.close();
+      toast('Fusion des références bancaires terminée.', 'success');
+      render();
     });
     var employeeFunctionForm = $('#payroll-employee-function-form');
     if (employeeFunctionForm) employeeFunctionForm.addEventListener('change', function (event) {
@@ -20647,6 +20708,7 @@
       var profileFields = ['employeeNumber', 'displayName', 'firstHireDate', 'seniorityMonthsToDeduct', 'seniorityReferenceDate', 'vpsExemptionEndDate', 'terminationDate', 'terminationReason', 'rehireDate', 'birthDate', 'sex', 'maritalStatus', 'childrenCount', 'birthplace', 'nationality', 'socialInsuranceNumber', 'taxId', 'supplementaryInsuranceCompany', 'supplementaryInsuranceNumber', 'degree', 'profession', 'employeeStatus', 'categoryId', 'categoryStep', 'effectiveDate', 'geographicZoneId', 'zone', 'serviceId', 'service', 'function', 'paymentMethod', 'bankName', 'bankAccountNumber'];
       var employeeProfile = payrollEmployeeFormValues(employeeEditForm, profileFields);
       if (employeeEditForm.querySelector('input[name="functionIds"]')) employeeProfile.functionIds = Array.prototype.map.call(employeeEditForm.querySelectorAll('input[name="functionIds"]:checked'), function (input) { return input.value; });
+      if (employeeEditForm.querySelector('input[name="qualificationIds"]')) employeeProfile.qualificationIds = Array.prototype.map.call(employeeEditForm.querySelectorAll('input[name="qualificationIds"]:checked'), function (input) { return input.value; });
       var result = PayrollHR.updateEmployee(PayrollHR.currentDossier().id, employeeEditForm.getAttribute('data-employee-id'), employeeProfile);
       if (!result.ok) { toast(result.errors[0] || 'Enregistrement de test impossible.', 'warning'); return; }
       toast('Fiche fictive mise à jour dans PRH-TEST-2026.', 'success'); render();
@@ -21298,6 +21360,7 @@
     var employeeGeographicZoneCatalog = isTestDossier ? PayrollHR.employeeGeographicZones(dossier.id) : [];
     var employeeServiceCatalog = isTestDossier ? PayrollHR.employeeServices(dossier.id) : [];
     var employeeFunctionCatalog = isTestDossier ? PayrollHR.employeeFunctions(dossier.id) : [];
+    var employeeQualificationCatalog = isTestDossier ? PayrollHR.employeeDefinitionItems(dossier.id, 'qualifications') : [];
     var selected = employees.find(function (employee) { return employee.id === ui.payrollEmployeeId; }) || employees[0] || null;
     if (selected) ui.payrollEmployeeId = selected.id;
     function textField(name, label, type, value, maxLength) {
@@ -21331,6 +21394,13 @@
     var createEmployeeServiceField = employeeServiceCatalog.length
       ? '<div class="field"><label for="payroll-employee-create-service">Service</label><select id="payroll-employee-create-service"><option value="">— Non défini —</option>' + employeeServiceCatalog.map(function (service) { return '<option value="' + esc(service.id) + '">' + esc(service.code + ' · ' + service.label) + '</option>'; }).join('') + '</select></div>'
       : '';
+    var selectedQualificationIds = selected && Array.isArray(selected.qualificationIds) ? selected.qualificationIds : [];
+    var employeeQualificationField = employeeQualificationCatalog.length
+      ? '<fieldset class="payroll-employee-function-field"><legend>Diplômes et qualifications</legend><div class="payroll-employee-function-checklist">' + employeeQualificationCatalog.map(function (qualification) { return '<label><input type="checkbox" name="qualificationIds" value="' + esc(qualification.id) + '"' + (selectedQualificationIds.indexOf(qualification.id) !== -1 ? ' checked' : '') + '><span>' + esc(qualification.code + ' · ' + qualification.label) + '</span></label>'; }).join('') + '</div><small>Plusieurs diplômes ou qualifications peuvent être associés à une fiche.</small></fieldset>'
+      : textField('degree', 'Diplôme', 'text', selected && selected.degree, 120);
+    var createEmployeeQualificationField = employeeQualificationCatalog.length
+      ? '<div class="field payroll-employee-function-field"><span>Diplômes et qualifications</span><div class="payroll-employee-function-checklist">' + employeeQualificationCatalog.map(function (qualification) { return '<label><input type="checkbox" name="qualificationIds" value="' + esc(qualification.id) + '"><span>' + esc(qualification.code + ' · ' + qualification.label) + '</span></label>'; }).join('') + '</div><small>Plusieurs éléments peuvent être associés à une fiche fictive.</small></div>'
+      : '';
     var selectedFunctionIds = selected && Array.isArray(selected.functionIds) ? selected.functionIds : employeeFunctionCatalog.filter(function (employeeFunction) {
       return selected && (selected.functionId === employeeFunction.id || selected.function === employeeFunction.code || selected.function === employeeFunction.label);
     }).map(function (employeeFunction) { return employeeFunction.id; });
@@ -21343,7 +21413,7 @@
     var createForm = isTestDossier && canCreatePayrollEmployee
       ? '<form id="payroll-employee-create-form" class="payroll-employee-create-form" data-dossier-id="' + esc(dossier.id) + '"><p class="small"><strong>Ajouter une fiche fictive</strong></p><div class="payroll-employee-create-grid">' +
         '<div class="field"><label for="payroll-employee-number">Matricule interne *</label><input id="payroll-employee-number" type="text" maxlength="40" required autocomplete="off"></div>' +
-        '<div class="field"><label for="payroll-employee-display-name">Nom d’affichage fictif *</label><input id="payroll-employee-display-name" type="text" maxlength="120" required autocomplete="off"></div>' + createEmployeeStatusField + createEmployeeCategoryField + createEmployeeGeographicZoneField + createEmployeeServiceField + createEmployeeFunctionField +
+        '<div class="field"><label for="payroll-employee-display-name">Nom d’affichage fictif *</label><input id="payroll-employee-display-name" type="text" maxlength="120" required autocomplete="off"></div>' + createEmployeeStatusField + createEmployeeCategoryField + createEmployeeGeographicZoneField + createEmployeeServiceField + createEmployeeQualificationField + createEmployeeFunctionField +
         '<label class="payroll-test-confirm"><input id="payroll-test-data-confirmation" type="checkbox" required><span>Fiche fictive de test uniquement.</span></label>' +
         '<button type="submit" class="btn btn-primary">＋ Ajouter</button></div></form>'
       : (isTestDossier ? '<p class="small muted">Création indisponible pour ce profil.</p>' : '<div class="alert info"><div>La saisie de test est réservée au dossier fictif <strong>PRH-TEST-2026</strong>. Ouvrez ce dossier depuis <a href="#/payroll-dossiers">Dossiers RH</a>. Aucune donnée d’un autre dossier n’est affichée ici.</div></div>');
@@ -21354,7 +21424,7 @@
         '<fieldset><legend>Embauche et situation</legend><div class="payroll-employee-field-grid">' + textField('firstHireDate', 'Première embauche', 'date', selected.firstHireDate) + textField('seniorityMonthsToDeduct', 'Ancienneté à déduire · mois', 'number', selected.seniorityMonthsToDeduct) + textField('seniorityReferenceDate', 'Référence ancienneté au', 'date', selected.seniorityReferenceDate) + textField('vpsExemptionEndDate', 'Fin exonération V.P.S.', 'date', selected.vpsExemptionEndDate) + textField('terminationDate', 'Débauchage', 'date', selected.terminationDate) + textField('terminationReason', 'Motif', 'text', selected.terminationReason, 160) + textField('rehireDate', 'Dernière réembauche', 'date', selected.rehireDate) + '</div></fieldset>' +
         '<fieldset><legend>Identité et situation personnelle</legend><div class="payroll-employee-field-grid">' + textField('birthDate', 'Date de naissance', 'date', selected.birthDate) + textField('sex', 'Sexe', 'text', selected.sex, 40) + textField('maritalStatus', 'Situation matrimoniale', 'text', selected.maritalStatus, 60) + textField('childrenCount', 'Enfants', 'number', selected.childrenCount) + textField('birthplace', 'Lieu de naissance', 'text', selected.birthplace, 120) + textField('nationality', 'Pays de nationalité', 'text', selected.nationality, 80) + '</div></fieldset>' +
         '<fieldset><legend>Identifiants et assurance complémentaire</legend><div class="payroll-employee-field-grid">' + textField('socialInsuranceNumber', 'N° d’assuré social', 'text', selected.socialInsuranceNumber, 80) + textField('taxId', 'Numéro IFU', 'text', selected.taxId, 80) + textField('supplementaryInsuranceCompany', 'Compagnie', 'text', selected.supplementaryInsuranceCompany, 120) + textField('supplementaryInsuranceNumber', 'Numéro d’assuré', 'text', selected.supplementaryInsuranceNumber, 80) + '</div></fieldset>' +
-        '<fieldset><legend>Parcours et affectation</legend><div class="payroll-employee-field-grid">' + textField('degree', 'Diplôme', 'text', selected.degree, 120) + textField('profession', 'Profession', 'text', selected.profession, 120) + employeeStatusField + employeeCategoryField + textField('effectiveDate', 'Date d’effet', 'date', selected.effectiveDate) + employeeGeographicZoneField + employeeServiceField + employeeFunctionField + '</div></fieldset>' +
+        '<fieldset><legend>Parcours et affectation</legend><div class="payroll-employee-field-grid">' + textField('profession', 'Profession', 'text', selected.profession, 120) + employeeStatusField + employeeCategoryField + textField('effectiveDate', 'Date d’effet', 'date', selected.effectiveDate) + employeeGeographicZoneField + employeeServiceField + employeeQualificationField + employeeFunctionField + '</div></fieldset>' +
         '<fieldset><legend>Règlement des salaires</legend><div class="payroll-employee-field-grid">' + textField('paymentMethod', 'Mode de règlement', 'text', selected.paymentMethod, 80) + textField('bankName', 'Banque', 'text', selected.bankName, 120) + textField('bankAccountNumber', 'N° de compte', 'text', selected.bankAccountNumber, 100) + '</div></fieldset>' +
         '</div><label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Je confirme que les valeurs de cette fiche sont fictives et réservées au test.</span></label>' +
         '<div class="payroll-employee-edit-actions"><button type="button" class="btn btn-danger" data-action="delete-payroll-employee" data-employee-id="' + esc(selected.id) + '">Supprimer</button><button type="reset" class="btn btn-secondary">Annuler</button><button type="submit" class="btn btn-primary">Enregistrer la fiche</button></div></form>'
@@ -21577,17 +21647,75 @@
     return '<section class="payroll-status-workspace" aria-label="Statuts des employés"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · DÉFINITIONS</p><h3>Statuts</h3></div><span class="badge draft">' + (isTestDossier ? 'PRH-TEST-2026 · TEST' : 'DOSSIER NON TEST') + '</span></div><div class="alert warning"><div>Configuration locale de démonstration uniquement. Les rubriques ne déclenchent aucun calcul; le stockage navigateur n’est pas adapté aux données réelles.</div></div><div class="payroll-status-workspace-layout"><aside class="payroll-status-list"><div class="payroll-status-list-head"><h4>Statuts (' + statuses.length + ')</h4>' + (statuses.length && isTestDossier && canCreatePayrollEmployee ? '<button type="button" class="btn btn-primary btn-sm" data-action="new-payroll-employee-status">＋</button>' : '') + '</div><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Code</th><th>Intitulé</th></tr></thead><tbody>' + (statusRows || '<tr><td colspan="2">Aucun statut.</td></tr>') + '</tbody></table></div></aside><div class="payroll-status-detail"><div class="payroll-status-detail-head"><h4>' + esc(mode === 'create' ? 'Nouveau statut' : (selected ? selected.label : 'Statut')) + '</h4>' + controls + '</div>' + statusForm + '</div></div>' + rubricDialog + '</section>';
   }
 
+  function viewPayrollEmployeeDefinitions(dossier, kind, canCreatePayrollEmployee, canEditPayrollEmployee) {
+    var configs = {
+      qualifications: { menuId: 'degrees-qualifications', title: 'Diplômes et Qualifications', listTitle: 'Code / Intitulé', columns: ['code', 'label'], fields: ['code', 'label'], labels: { code: 'Code', label: 'Intitulé' }, blank: 'Aucun diplôme ou qualification chargé.', seedText: 'Charger les exemples de la capture', intro: 'Un employé peut être associé à plusieurs diplômes et qualifications.' },
+      professions: { menuId: 'professions', title: 'Professions', listTitle: 'Code / Intitulé', columns: ['code', 'label'], fields: ['code', 'label'], labels: { code: 'Code', label: 'Intitulé' }, blank: 'Aucune profession chargée.', seedText: 'Charger les exemples de la capture', intro: 'Référentiel de professions du dossier fictif.' },
+      socialFunds: { menuId: 'complementary-social-funds', title: "Caisses complémentaires d'assurance sociales", listTitle: 'Intitulé', columns: ['label'], fields: ['label', 'address'], labels: { label: 'Intitulé', address: 'Adresse' }, blank: 'Aucune caisse complémentaire chargée.', seedText: 'Charger l’exemple de la capture', intro: 'Référentiel fictif des caisses complémentaires.' },
+      banks: { menuId: 'banks', title: 'Banques', listTitle: 'Code / Intitulé', columns: ['code', 'label'], fields: ['code', 'label', 'address', 'bankBranchCode', 'accountNumber'], labels: { code: 'Code', label: 'Intitulé', address: 'Adresse', bankBranchCode: 'Code banque / Code guichet', accountNumber: 'N° de compte' }, blank: 'Aucune banque chargée.', seedText: 'Charger les exemples de la capture', intro: 'Référentiel de test uniquement. N’enregistrez aucune donnée bancaire réelle ou sensible; les champs RIB des exemples restent vides.' }
+    };
+    var config = configs[kind];
+    if (!config) return '';
+    var isTestDossier = PayrollHR.isDemoTestDossier(dossier.id);
+    var items = isTestDossier ? PayrollHR.employeeDefinitionItems(dossier.id, kind) : [];
+    var state = ui.payrollDefinitionState[kind] || (ui.payrollDefinitionState[kind] = { id: '', mode: 'view', draft: null });
+    var mode = state.mode || 'view';
+    var selected = items.find(function (item) { return item.id === state.id; }) || items[0] || null;
+    if (selected && mode === 'view') state.id = selected.id;
+    var source = mode === 'create' ? state.draft || {} : selected;
+    function displayValue(item, field) { return item && item[field] != null ? String(item[field]) : ''; }
+    var rows = items.map(function (item) {
+      var active = mode !== 'create' && selected && item.id === selected.id;
+      var cells = config.columns.map(function (field) {
+        var value = displayValue(item, field);
+        if (field === 'code') return '<td><button type="button" class="payroll-status-select' + (active ? ' is-active' : '') + '" data-action="payroll-definition-select" data-kind="' + esc(kind) + '" data-item-id="' + esc(item.id) + '" aria-pressed="' + (active ? 'true' : 'false') + '"><strong>' + esc(value) + '</strong></button></td>';
+        return '<td>' + esc(value) + '</td>';
+      }).join('');
+      if (config.columns.indexOf('code') === -1) cells = '<td><button type="button" class="payroll-status-select' + (active ? ' is-active' : '') + '" data-action="payroll-definition-select" data-kind="' + esc(kind) + '" data-item-id="' + esc(item.id) + '" aria-pressed="' + (active ? 'true' : 'false') + '"><strong>' + esc(displayValue(item, config.columns[0])) + '</strong></button></td>';
+      return '<tr>' + cells + '</tr>';
+    }).join('');
+    function fieldMarkup(field) {
+      var value = displayValue(source, field);
+      var label = config.labels[field];
+      var id = 'payroll-definition-' + kind + '-' + field;
+      var disabled = mode === 'view' ? ' readonly' : '';
+      if (field === 'address') return '<div class="field"><label for="' + id + '">' + esc(label) + '</label><textarea id="' + id + '" name="' + field + '" data-definition-field rows="3" maxlength="240"' + disabled + '>' + esc(value) + '</textarea></div>';
+      return '<div class="field"><label for="' + id + '">' + esc(label) + '</label><input id="' + id + '" name="' + field + '" data-definition-field type="text" maxlength="' + (field === 'accountNumber' ? '80' : (field === 'label' ? '120' : 40)) + '" value="' + esc(value) + '"' + (field === 'code' || field === 'label' ? (mode === 'view' ? ' required' : ' required') : '') + disabled + '></div>';
+    }
+    var fields = config.fields.map(fieldMarkup).join('');
+    if (kind === 'banks') {
+      var baseFields = ['code', 'label', 'address'].map(fieldMarkup).join('');
+      var ribFields = ['bankBranchCode', 'accountNumber'].map(fieldMarkup).join('');
+      fields = baseFields + '<fieldset class="payroll-definition-rib"><legend>RIB de l’entreprise · données fictives uniquement</legend><div class="payroll-geographic-zone-fields">' + ribFields + '</div></fieldset>';
+    }
+    var itemForm = isTestDossier && source
+      ? '<form id="payroll-definition-reference-form" data-kind="' + esc(kind) + '" data-mode="' + esc(mode) + '" data-dossier-id="' + esc(dossier.id) + '" data-item-id="' + esc(selected ? selected.id : '') + '"><div class="payroll-definition-fields">' + fields + '</div>' + (mode !== 'view' ? '<label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Je confirme que cette définition est fictive et réservée au test.</span></label><div class="payroll-status-actions"><button type="button" class="btn btn-secondary" data-action="cancel-payroll-definition-edit" data-kind="' + esc(kind) + '">Annuler</button><button type="submit" class="btn btn-primary">Valider</button></div>' : '') + '</form>'
+      : '<div class="empty-state"><strong>' + (isTestDossier ? config.blank : 'Dossier de test requis') + '</strong><span>' + (isTestDossier ? config.intro : 'Ces définitions sont réservées à PRH-TEST-2026.') + '</span>' + (isTestDossier && canCreatePayrollEmployee ? '<button type="button" class="btn btn-secondary" data-action="seed-payroll-definition-items" data-kind="' + esc(kind) + '">' + esc(config.seedText) + '</button>' : '') + '</div>';
+    var position = selected ? items.findIndex(function (item) { return item.id === selected.id; }) + 1 : 1;
+    var actions = '<div class="payroll-status-actions">' +
+      (isTestDossier && canCreatePayrollEmployee ? '<button type="button" class="btn btn-primary" data-action="new-payroll-definition-item" data-kind="' + esc(kind) + '">Insérer</button>' : '') +
+      (selected && isTestDossier && canEditPayrollEmployee && mode === 'view' ? '<button type="button" class="btn btn-secondary" data-action="edit-payroll-definition-item" data-kind="' + esc(kind) + '" data-item-id="' + esc(selected.id) + '">Modifier</button><button type="button" class="btn btn-danger" data-action="delete-payroll-definition-item" data-kind="' + esc(kind) + '" data-item-id="' + esc(selected.id) + '">Supprimer</button>' : '') +
+      (kind === 'banks' && selected && items.length > 1 && isTestDossier && canEditPayrollEmployee && mode === 'view' ? '<button type="button" class="btn btn-secondary" data-action="open-payroll-bank-merge" data-bank-id="' + esc(selected.id) + '">Fusionner</button>' : '') + '</div>';
+    var positionForm = selected && isTestDossier && canEditPayrollEmployee && mode === 'view'
+      ? '<form id="payroll-definition-position-form" data-kind="' + esc(kind) + '" data-dossier-id="' + esc(dossier.id) + '" data-item-id="' + esc(selected.id) + '"><label for="payroll-definition-position">Positionner</label><input id="payroll-definition-position" name="position" type="number" min="1" max="' + items.length + '" step="1" value="' + position + '" required><button type="submit" class="btn btn-secondary">Positionner</button></form>' : '';
+    var destinationOptions = kind === 'banks' ? items.filter(function (item) { return selected && item.id !== selected.id; }).map(function (item) { return '<option value="' + esc(item.id) + '">' + esc(item.code + ' · ' + item.label) + '</option>'; }).join('') : '';
+    var mergeDialog = kind === 'banks' && selected && items.length > 1
+      ? '<dialog class="payroll-employee-dialog payroll-service-merge-dialog" id="payroll-bank-merge-dialog" aria-labelledby="payroll-bank-merge-title"><div class="payroll-employee-dialog-head"><h3 id="payroll-bank-merge-title">Fusion de banques</h3><button type="button" class="icon-btn" data-action="close-payroll-bank-merge" aria-label="Fermer">×</button></div><p>La destination conserve ses valeurs. Les champs vides peuvent être complétés par ceux de l’origine; les valeurs conflictuelles bloquent la fusion.</p><form id="payroll-bank-merge-form" data-dossier-id="' + esc(dossier.id) + '" data-source-bank-id="' + esc(selected.id) + '"><div class="field"><label>Banque d’origine</label><input type="text" value="' + esc(selected.code + ' · ' + selected.label) + '" readonly></div><div class="field"><label for="payroll-bank-merge-destination">Banque de destination</label><select id="payroll-bank-merge-destination" name="destinationBankId" required><option value="">— Choisir une banque —</option>' + destinationOptions + '</select></div><div class="alert warning"><div>Aucun RIB réel ne doit être saisi dans le dossier de test. La fusion ne remplace pas les champs destination non vides.</div></div><label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Je confirme la fusion des références fictives.</span></label><div class="payroll-employee-dialog-actions"><button type="button" class="btn btn-secondary" data-action="close-payroll-bank-merge">Annuler</button><button type="submit" class="btn btn-primary">Valider la fusion</button></div></form></dialog>' : '';
+    return '<section class="payroll-status-workspace payroll-definition-reference-workspace" aria-label="' + esc(config.title) + '"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · DÉFINITIONS</p><h3>' + esc(config.title) + '</h3></div><span class="badge draft">' + (isTestDossier ? 'PRH-TEST-2026 · TEST' : 'DOSSIER NON TEST') + '</span></div><div class="alert warning"><div>' + esc(config.intro) + (kind === 'banks' ? ' Ne saisissez aucune donnée bancaire réelle ou sensible.' : '') + ' Aucune donnée de paie n’est calculée par ces référentiels.</div></div><div class="payroll-status-workspace-layout"><aside class="payroll-status-list"><div class="payroll-status-list-head"><h4>' + esc(config.title) + ' (' + items.length + ')</h4></div><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr>' + config.columns.map(function (field) { return '<th>' + esc(config.labels[field]) + '</th>'; }).join('') + '</tr></thead><tbody>' + (rows || '<tr><td colspan="' + config.columns.length + '">' + esc(config.blank) + '</td></tr>') + '</tbody></table></div></aside><div class="payroll-status-detail"><div class="payroll-status-detail-head"><h4>' + esc(mode === 'create' ? 'Nouvelle définition' : (selected ? selected.label : config.title)) + '</h4>' + actions + '</div>' + positionForm + itemForm + '</div></div>' + mergeDialog + '</section>';
+  }
+
   function viewPayrollMainMenu(dossier, dossierEmployees, canCreatePayrollEmployee, canEditPayrollEmployee) {
     var activeMenu = ui.payrollMainMenu || 'Fichier';
     var sections = payrollMenuSections(activeMenu);
     var items = sections.reduce(function (all, section) { return all.concat(section.items || []); }, []);
     var selectableItems = items.filter(function (item) { return !item.disabled; });
     var selectedItem = selectableItems.find(function (item) { return item.id === ui.payrollMenuItem; }) || selectableItems[0] || null;
+    var availableDefinitionItems = ['employee-statuses', 'employee-categories', 'geographic-zones', 'services', 'functions', 'degrees-qualifications', 'professions', 'complementary-social-funds', 'banks'];
     var tabs = sections.map(function (section, sectionIndex) {
       var heading = section.heading ? '<p class="payroll-subtab-group-heading">' + esc(section.heading) + '</p>' : '';
       var rows = (section.items || []).map(function (item) {
         var selected = selectedItem && item.id === selectedItem.id;
-        var state = item.disabled ? 'Inactif' : (item.hasChildren ? 'Sous-menu' : 'À construire');
+        var state = item.disabled ? 'Inactif' : (item.hasChildren ? 'Sous-menu' : (availableDefinitionItems.indexOf(item.id) !== -1 ? 'Référentiel test' : 'À construire'));
         var disclosure = item.hasChildren ? '<span class="payroll-subtab-chevron" aria-hidden="true">›</span>' : '';
         return '<button type="button" id="payroll-menu-tab-' + esc(item.id) + '" class="accounting-subtab' + (selected ? ' is-active' : '') + (item.disabled ? ' is-disabled' : '') + '" role="tab" aria-controls="payroll-menu-tabpanel" aria-selected="' + (selected ? 'true' : 'false') + '"' + (item.disabled ? ' disabled aria-disabled="true"' : (selected ? ' aria-current="page"' : '')) + ' data-action="payroll-menu-item" data-menu-name="' + esc(activeMenu) + '" data-menu-item="' + esc(item.id) + '"><span class="accounting-subtab-label">' + esc(item.label) + '</span>' + disclosure + '<small class="accounting-subtab-state">' + state + '</small></button>';
       }).join('');
@@ -21600,19 +21728,18 @@
         ? 'La capture indique un niveau complémentaire pour cet élément, mais ses sous-éléments ne sont pas fournis. Aucun contenu ne sera déduit.'
         : 'Cet onglet établit uniquement la navigation. Le traitement associé n’est pas encore construit ni activé.');
     var panelStatus = !selectedItem ? 'À définir' : (selectedItem.hasChildren ? 'Sous-menu à préciser' : 'À construire');
-    var panel = selectedItem && selectedItem.id === 'employees'
-      ? '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-employees">' + viewPayrollEmployeeDetails(dossier, dossierEmployees || [], canCreatePayrollEmployee === true) + '</div>'
-      : (selectedItem && selectedItem.id === 'employee-statuses'
-        ? '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-employee-statuses">' + viewPayrollEmployeeStatuses(dossier, canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>'
-        : (selectedItem && selectedItem.id === 'employee-categories'
-          ? '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-employee-categories">' + viewPayrollEmployeeCategories(dossier, canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>'
-          : (selectedItem && selectedItem.id === 'geographic-zones'
-            ? '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-geographic-zones">' + viewPayrollEmployeeGeographicZones(dossier, canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>'
-            : (selectedItem && selectedItem.id === 'services'
-              ? '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-services">' + viewPayrollEmployeeServices(dossier, canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>'
-              : (selectedItem && selectedItem.id === 'functions'
-                ? '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-functions">' + viewPayrollEmployeeFunctions(dossier, canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>'
-                : '<section class="accounting-menu-panel"' + (selectedItem ? ' id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-' + esc(selectedItem.id) + '"' : '') + '><div class="accounting-menu-panel-head"><div><p class="page-kicker">SOUS-MENU · ' + esc(activeMenu.toUpperCase()) + '</p><h3>' + esc(itemHeading) + '</h3></div><span class="badge draft">' + panelStatus + '</span></div><p class="menu-item-reason">' + itemDescription + '</p><div class="alert info"><div>Navigation uniquement : aucune importation, exportation, modification de paie, clôture ou écriture comptable n’est exécutée ici.</div></div></section>')))));
+    var panel;
+    if (selectedItem && selectedItem.id === 'employees') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-employees">' + viewPayrollEmployeeDetails(dossier, dossierEmployees || [], canCreatePayrollEmployee === true) + '</div>';
+    else if (selectedItem && selectedItem.id === 'employee-statuses') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-employee-statuses">' + viewPayrollEmployeeStatuses(dossier, canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>';
+    else if (selectedItem && selectedItem.id === 'employee-categories') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-employee-categories">' + viewPayrollEmployeeCategories(dossier, canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>';
+    else if (selectedItem && selectedItem.id === 'geographic-zones') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-geographic-zones">' + viewPayrollEmployeeGeographicZones(dossier, canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>';
+    else if (selectedItem && selectedItem.id === 'services') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-services">' + viewPayrollEmployeeServices(dossier, canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>';
+    else if (selectedItem && selectedItem.id === 'functions') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-functions">' + viewPayrollEmployeeFunctions(dossier, canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>';
+    else if (selectedItem && selectedItem.id === 'degrees-qualifications') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-degrees-qualifications">' + viewPayrollEmployeeDefinitions(dossier, 'qualifications', canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>';
+    else if (selectedItem && selectedItem.id === 'professions') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-professions">' + viewPayrollEmployeeDefinitions(dossier, 'professions', canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>';
+    else if (selectedItem && selectedItem.id === 'complementary-social-funds') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-complementary-social-funds">' + viewPayrollEmployeeDefinitions(dossier, 'socialFunds', canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>';
+    else if (selectedItem && selectedItem.id === 'banks') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-banks">' + viewPayrollEmployeeDefinitions(dossier, 'banks', canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>';
+    else panel = '<section class="accounting-menu-panel"' + (selectedItem ? ' id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-' + esc(selectedItem.id) + '"' : '') + '><div class="accounting-menu-panel-head"><div><p class="page-kicker">SOUS-MENU · ' + esc(activeMenu.toUpperCase()) + '</p><h3>' + esc(itemHeading) + '</h3></div><span class="badge draft">' + panelStatus + '</span></div><p class="menu-item-reason">' + itemDescription + '</p><div class="alert info"><div>Navigation uniquement : aucune importation, exportation, modification de paie, clôture ou écriture comptable n’est exécutée ici.</div></div></section>';
     var legend = '<div class="menu-status-legend" aria-label="Légende des statuts"><span><i class="legend-dot legend-dot-planned"></i>À construire</span><span><i class="legend-dot legend-dot-inactive"></i>Inactif dans la capture</span></div>';
     return '<section class="accounting-menu-page payroll-menu-page" aria-label="Menu ' + esc(activeMenu) + '"><div class="accounting-menu-heading"><div><p class="page-kicker">PAIE &amp; RH · ' + esc(dossier.reference || '') + '</p><h2>' + esc(activeMenu) + '</h2></div></div><div class="accounting-menu-layout"><nav class="accounting-subtabs" role="tablist" aria-orientation="vertical" aria-label="Sous-menus ' + esc(activeMenu) + '">' + (tabs || '<p class="small muted payroll-menu-empty">Aucun élément de menu n’a été fourni.</p>') + '</nav><div class="accounting-menu-detail">' + (selectedItem && selectedItem.id === 'employees' ? '' : legend) + panel + '</div></div></section>';
   }
@@ -34517,6 +34644,68 @@
         ui.payrollEmployeeGeographicZoneId = '';
         ui.payrollEmployeeGeographicZoneMode = 'view';
         toast('Zone géographique supprimée.', 'success'); render();
+        break;
+      }
+      case 'payroll-definition-select': {
+        var definitionKind = trigger.getAttribute('data-kind') || '';
+        ui.payrollDefinitionState[definitionKind] = { id: trigger.getAttribute('data-item-id') || '', mode: 'view', draft: null };
+        render();
+        break;
+      }
+      case 'new-payroll-definition-item': {
+        var newDefinitionKind = trigger.getAttribute('data-kind') || '';
+        var definitionFields = { qualifications: ['code', 'label'], professions: ['code', 'label'], socialFunds: ['label', 'address'], banks: ['code', 'label', 'address', 'bankBranchCode', 'accountNumber'] }[newDefinitionKind] || [];
+        var definitionDraft = {};
+        definitionFields.forEach(function (field) { definitionDraft[field] = ''; });
+        ui.payrollDefinitionState[newDefinitionKind] = { id: '', mode: 'create', draft: definitionDraft };
+        render();
+        break;
+      }
+      case 'edit-payroll-definition-item': {
+        var editDefinitionKind = trigger.getAttribute('data-kind') || '';
+        ui.payrollDefinitionState[editDefinitionKind] = { id: trigger.getAttribute('data-item-id') || '', mode: 'edit', draft: null };
+        render();
+        break;
+      }
+      case 'cancel-payroll-definition-edit': {
+        var cancelDefinitionKind = trigger.getAttribute('data-kind') || '';
+        var cancelDefinitionState = ui.payrollDefinitionState[cancelDefinitionKind] || {};
+        cancelDefinitionState.mode = 'view';
+        cancelDefinitionState.draft = null;
+        ui.payrollDefinitionState[cancelDefinitionKind] = cancelDefinitionState;
+        render();
+        break;
+      }
+      case 'seed-payroll-definition-items': {
+        var seedDefinitionKind = trigger.getAttribute('data-kind') || '';
+        var seedDefinitionDossier = PayrollHR.currentDossier();
+        var seededDefinitions = PayrollHR.seedDemoEmployeeDefinitionItems(seedDefinitionDossier && seedDefinitionDossier.id, seedDefinitionKind);
+        if (!seededDefinitions.ok) { toast(seededDefinitions.errors[0] || 'Chargement des exemples impossible.', 'warning'); break; }
+        ui.payrollDefinitionState[seedDefinitionKind] = { id: seededDefinitions.items[0] && seededDefinitions.items[0].id || '', mode: 'view', draft: null };
+        toast('Les exemples fictifs visibles sur la capture ont été chargés dans PRH-TEST-2026.', 'success');
+        render();
+        break;
+      }
+      case 'delete-payroll-definition-item': {
+        var deleteDefinitionKind = trigger.getAttribute('data-kind') || '';
+        var deleteDefinitionDossier = PayrollHR.currentDossier();
+        if (!deleteDefinitionDossier || !PayrollHR.isDemoTestDossier(deleteDefinitionDossier.id)) { toast('Suppression réservée à PRH-TEST-2026.', 'warning'); break; }
+        if (typeof window.confirm === 'function' && !window.confirm('Supprimer cette définition fictive ?')) break;
+        var deletedDefinition = PayrollHR.deleteEmployeeDefinitionItem(deleteDefinitionDossier.id, deleteDefinitionKind, trigger.getAttribute('data-item-id'));
+        if (!deletedDefinition.ok) { toast(deletedDefinition.errors[0] || 'Suppression impossible.', 'warning'); break; }
+        ui.payrollDefinitionState[deleteDefinitionKind] = { id: '', mode: 'view', draft: null };
+        toast('Définition supprimée.', 'success');
+        render();
+        break;
+      }
+      case 'open-payroll-bank-merge': {
+        var payrollBankMergeDialog = $('#payroll-bank-merge-dialog');
+        if (payrollBankMergeDialog && typeof payrollBankMergeDialog.showModal === 'function') payrollBankMergeDialog.showModal();
+        break;
+      }
+      case 'close-payroll-bank-merge': {
+        var openPayrollBankMergeDialog = trigger.closest('dialog');
+        if (openPayrollBankMergeDialog && openPayrollBankMergeDialog.open) openPayrollBankMergeDialog.close();
         break;
       }
       case 'payroll-employee-service-select':

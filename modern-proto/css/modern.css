@@ -4488,3 +4488,14 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .payroll-function-premiums .exchange-mapping-table td:last-child { width: 58px; text-align: center; }
 .payroll-function-premium-amount { box-sizing: border-box; width: 100%; min-width: 92px; min-height: 31px; padding: 5px 7px; border: 1px solid #cbd7d2; border-radius: 5px; color: #34443b; background: #fff; }
 .payroll-function-premium-amount:disabled { color: #87938c; background: #f2f4f2; }
+
+.payroll-definition-reference-workspace .payroll-status-detail { display: grid; gap: 10px; }
+.payroll-definition-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.payroll-definition-fields .field { min-width: 0; margin: 0; }
+.payroll-definition-fields input,
+.payroll-definition-fields textarea { box-sizing: border-box; width: 100%; }
+.payroll-definition-rib { grid-column: 1 / -1; min-width: 0; margin: 0; padding: 10px; border: 1px solid #d8e0da; border-radius: 7px; }
+.payroll-definition-rib legend { padding: 0 5px; color: #43534a; font-size: .76rem; font-weight: 800; }
+.payroll-definition-reference-workspace #payroll-definition-position-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 9px; border: 1px solid #e2e8e3; border-radius: 7px; background: #fafbf9; }
+.payroll-definition-reference-workspace #payroll-definition-position-form input { width: 76px; min-height: 31px; padding: 5px 7px; border: 1px solid #cbd7d2; border-radius: 5px; }
+@media (max-width: 600px) { .payroll-definition-fields { grid-template-columns: 1fr; } }
