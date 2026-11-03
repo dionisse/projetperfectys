@@ -4135,6 +4135,18 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .payroll-status-rubrics-dialog .payroll-employee-dialog-head h3 { font-size: .98rem; }
 .payroll-rubric-row { min-height: 25px; padding-top: 2px; padding-bottom: 2px; font-size: .75rem; line-height: 1.15; }
 .payroll-rubric-row[data-level="1"] { padding-left: 28px; }
+.payroll-category-fields { display: grid; grid-template-columns: minmax(120px, .8fr) minmax(130px, .9fr) minmax(250px, 1.8fr); gap: 10px; align-items: end; }
+.payroll-category-fields .field { min-width: 0; margin: 0; }
+.payroll-category-premiums { min-width: 0; margin: 16px 0 10px; padding: 10px; border: 1px solid #e2e8e3; border-radius: 7px; }
+.payroll-category-premiums legend { padding: 0 5px; color: #596a60; font-size: .76rem; font-weight: 750; }
+.payroll-category-premiums .exchange-table-wrap { max-height: 420px; }
+.payroll-category-premium-choice { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.payroll-category-premium-choice input { accent-color: #176ed8; }
+#payroll-category-position-form { display: flex; align-items: center; gap: 7px; margin: 8px 0 12px; padding: 8px; border: 1px solid #e2e8e3; border-radius: 7px; background: #fafbf9; }
+#payroll-category-position-form label { margin: 0; font-size: .72rem; font-weight: 700; }
+#payroll-category-position-form input { width: 72px; min-height: 29px; padding: 4px 6px; }
+#payroll-category-position-form .btn { padding: 5px 8px; }
+@media (max-width: 700px) { .payroll-category-fields { grid-template-columns: 1fr; } }
 
 /* Suivi neutre des candidatures, contrats et intérim — démonstration uniquement */
 .payroll-hr-tracking > .alert { margin: 10px 0 14px; line-height: 1.55; }

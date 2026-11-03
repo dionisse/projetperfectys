@@ -42,6 +42,21 @@ assert.ok(css.includes('background: #f6edd9;'), 'sélection de menu avec fond am
 assert.ok(css.includes('color: #80571b;'), 'titre de section en ambre foncé lisible');
 assert.ok(app.includes('function viewPayrollEmployeeDetails(dossier, dossierEmployees, canCreatePayrollEmployee)'));
 assert.ok(app.includes('function viewPayrollEmployeeStatuses(dossier, canCreatePayrollEmployee, canEditPayrollEmployee)'));
+assert.ok(app.includes('function viewPayrollEmployeeCategories(dossier, canCreatePayrollEmployee, canEditPayrollEmployee)'));
+assert.match(app, /selectedItem\.id === 'employee-categories'[\s\S]*viewPayrollEmployeeCategories/);
+assert.match(app, /Catégorie \/ Échelon[\s\S]*Salaire indiciaire[\s\S]*Primes liées à la catégorie/);
+assert.match(payroll, /Technicien supérieur\/Cadre moyen[\s\S]*Technicien\/Agent de maîtrise\/Ouvrier qualifié[\s\S]*Employé\/Ouvrier\/Manœuvre\/Apprenti/);
+assert.match(app, /data-action="seed-payroll-employee-categories"/);
+assert.match(app, /data-action="position-payroll-employee-category"|positionEmployeeCategory\(/);
+assert.match(app, /var employeeCategoryCatalog = isTestDossier \? PayrollHR\.employeeCategories/);
+assert.match(app, /employeeCategoryField \+ textField\('effectiveDate'/);
+assert.ok(app.includes("categoryId: ($('#payroll-employee-create-category', employeeForm) || {}).value || ''"));
+assert.match(payroll, /function employeeCategories\(dossierId\)/);
+assert.match(payroll, /function seedDemoEmployeeCategories\(dossierId\)/);
+assert.match(payroll, /function createEmployeeCategory\(dossierId, input\)/);
+assert.match(payroll, /function updateEmployeeCategory\(dossierId, categoryId, input\)/);
+assert.match(payroll, /function deleteEmployeeCategory\(dossierId, categoryId\)/);
+assert.match(payroll, /function positionEmployeeCategory\(dossierId, categoryId, position\)/);
 assert.ok(app.includes('function viewPayrollMainMenu(dossier, dossierEmployees, canCreatePayrollEmployee, canEditPayrollEmployee)'));
 assert.match(app, /selectedItem\.id === 'employee-statuses'[\s\S]*viewPayrollEmployeeStatuses/);
 assert.ok(app.includes("Rubriques (' + ((selected.rubricIds || []).length)"));
@@ -232,5 +247,5 @@ assert.match(payroll, /function createDossier\(input\)[\s\S]*'PRH-' \+ clientCod
 assert.match(payroll, /accountingDossierId: accountingDossierId/);
 assert.match(payroll, /function storageKey\(dossierId\)[\s\S]*STORAGE_PREFIX \+ encodeURIComponent/);
 assert.match(css, /\.payroll-dossier-grid[\s\S]*\.payroll-dossier-card/);
-assert.match(worker, /perfecto-static-v230/);
+assert.match(worker, /perfecto-static-v231/);
 console.log('UI Paie & RH : route dossier dédiée, référence PRH, sélection par dossier et association non automatique — OK');

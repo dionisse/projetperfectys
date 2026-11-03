@@ -103,12 +103,18 @@
     var matchingEmployeeStatus = availableEmployeeStatuses.find(function (item) {
       return item && (item.id === requestedEmployeeStatus || String(item.code || '').toLocaleLowerCase() === requestedEmployeeStatus.toLocaleLowerCase() || String(item.label || '').toLocaleLowerCase() === requestedEmployeeStatus.toLocaleLowerCase());
     });
+    var requestedCategoryId = String(input.categoryId || input.categoryStep || '').trim();
+    var availableEmployeeCategories = Array.isArray(dossier.employeeCategories) ? dossier.employeeCategories : [];
+    var matchingEmployeeCategory = availableEmployeeCategories.find(function (item) {
+      return item && (item.id === requestedCategoryId || String(item.code || '').toLocaleLowerCase() === requestedCategoryId.toLocaleLowerCase());
+    });
     var errors = [];
     if (!employeeNumber) errors.push('Le numéro employé interne est obligatoire.');
     if (employeeNumber.length > 40) errors.push('Le numéro employé ne peut pas dépasser 40 caractères.');
     if (!displayName) errors.push('Le nom d’affichage est obligatoire pour cette fiche de test.');
     if (displayName.length > 120) errors.push('Le nom d’affichage ne peut pas dépasser 120 caractères.');
     if (availableEmployeeStatuses.length && requestedEmployeeStatus && !matchingEmployeeStatus) errors.push('Choisissez un statut existant dans le dossier de test.');
+    if (availableEmployeeCategories.length && requestedCategoryId && !matchingEmployeeCategory) errors.push('Choisissez une catégorie/échelon existant dans le dossier de test.');
     var current = Array.isArray(dossier.demoEmployees) ? dossier.demoEmployees : [];
     if (employeeNumber && current.some(function (employee) {
       return String(employee && (employee.employeeNumber || employee.id) || '').trim().toLocaleLowerCase() === employeeNumber.toLocaleLowerCase();
@@ -124,6 +130,8 @@
       employeeNumber: employeeNumber,
       displayName: displayName,
       employeeStatus: matchingEmployeeStatus ? matchingEmployeeStatus.id : requestedEmployeeStatus,
+      categoryId: matchingEmployeeCategory ? matchingEmployeeCategory.id : '',
+      categoryStep: matchingEmployeeCategory ? matchingEmployeeCategory.code : requestedCategoryId,
       status: 'test-only',
       createdAt: new Date().toISOString()
     };
@@ -136,7 +144,7 @@
     employeeNumber: 40, displayName: 120, sex: 40, maritalStatus: 60, birthplace: 120,
     nationality: 80, socialInsuranceNumber: 80, taxId: 80, supplementaryInsuranceCompany: 120,
     supplementaryInsuranceNumber: 80, degree: 120, profession: 120, employeeStatus: 80,
-    categoryStep: 80, zone: 120, service: 120, function: 120, terminationReason: 160,
+    categoryStep: 80, categoryId: 80, zone: 120, service: 120, function: 120, terminationReason: 160,
     paymentMethod: 80, bankName: 120, bankAccountNumber: 100, address: 240, contactPhone: 80, contactEmail: 160,
     miscellaneousLabel: 120, miscellaneousValue: 500
   };
@@ -194,6 +202,18 @@
       });
       if (availableStatuses.length && requestedStatus && !matchingStatus) errors.push('Choisissez un statut existant dans le dossier de test.');
       else patch.employeeStatus = matchingStatus ? matchingStatus.id : requestedStatus;
+    }
+    if (Object.prototype.hasOwnProperty.call(input, 'categoryId')) {
+      var requestedCategory = String(input.categoryId || '').trim();
+      var availableCategories = Array.isArray(dossier.employeeCategories) ? dossier.employeeCategories : [];
+      var matchingCategory = availableCategories.find(function (item) {
+        return item && (item.id === requestedCategory || String(item.code || '').toLocaleLowerCase() === requestedCategory.toLocaleLowerCase());
+      });
+      if (availableCategories.length && requestedCategory && !matchingCategory) errors.push('Choisissez une catégorie/échelon existant dans le dossier de test.');
+      else {
+        patch.categoryId = matchingCategory ? matchingCategory.id : requestedCategory;
+        patch.categoryStep = matchingCategory ? matchingCategory.code : '';
+      }
     }
     if (Object.prototype.hasOwnProperty.call(input, 'photoDataUrl')) {
       var photoDataUrl = String(input.photoDataUrl || '');
@@ -598,6 +618,116 @@
     dossier.employeeStatuses = statuses.filter(function (item) { return item && item.id !== statusId; });
     if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible de supprimer le statut de test.'] };
     return { ok: true, errors: [], deletedStatusId: statusId };
+  }
+
+  var EMPLOYEE_CATEGORY_CLASSIFICATIONS = ['Aucune', 'Cadre supérieur', 'Technicien supérieur/Cadre moyen', 'Technicien/Agent de maîtrise/Ouvrier qualifié', 'Employé/Ouvrier/Manœuvre/Apprenti'];
+  var EMPLOYEE_CATEGORY_PREMIUM_CATALOG = [{ id: 'categorical-salary', label: 'Salaire catégoriel' }];
+
+  function employeeCategoryClassifications() { return EMPLOYEE_CATEGORY_CLASSIFICATIONS.slice(); }
+  function employeeCategoryPremiumCatalog() { return clone(EMPLOYEE_CATEGORY_PREMIUM_CATALOG); }
+
+  function employeeCategories(dossierId) {
+    if (!isDemoTestDossier(dossierId)) return [];
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId); });
+    return clone((dossier && Array.isArray(dossier.employeeCategories) ? dossier.employeeCategories : []).slice().sort(function (left, right) { return Number(left.order || 0) - Number(right.order || 0); }));
+  }
+
+  function seedDemoEmployeeCategories(dossierId) {
+    dossierId = String(dossierId || '');
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['Les catégories de démonstration sont réservées au dossier PRH-TEST-2026.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (Array.isArray(dossier.employeeCategories) && dossier.employeeCategories.length) return { ok: false, errors: ['Des catégories existent déjà ; aucun doublon n’a été ajouté.'] };
+    var now = new Date().toISOString();
+    dossier.employeeCategories = [{ id: 'category-test-c1', dossierId: dossierId, code: 'C1', salaryIndex: '', ohadaClassification: 'Cadre supérieur', linkedPremiumIds: ['categorical-salary'], order: 0, status: 'test-only', createdAt: now, updatedAt: now }];
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la catégorie de test.'] };
+    return { ok: true, errors: [], categories: employeeCategories(dossierId) };
+  }
+
+  function normalizeEmployeeCategoryInput(input) {
+    input = input || {};
+    var code = String(input.code || '').trim();
+    var salaryIndex = String(input.salaryIndex || '').trim();
+    var ohadaClassification = String(input.ohadaClassification || 'Aucune').trim();
+    var linkedPremiumIds = Array.isArray(input.linkedPremiumIds) ? Array.from(new Set(input.linkedPremiumIds.map(String))) : [];
+    var position = input.position == null || input.position === '' ? null : Number(input.position);
+    var errors = [];
+    if (!code) errors.push('Le code catégorie/échelon est obligatoire.');
+    if (code.length > 24) errors.push('Le code est limité à 24 caractères.');
+    if (salaryIndex && (!/^\d+(?:[.,]\d+)?$/.test(salaryIndex) || !Number.isFinite(Number(salaryIndex.replace(',', '.'))))) errors.push('Le salaire indiciaire doit être un nombre positif ou vide.');
+    if (EMPLOYEE_CATEGORY_CLASSIFICATIONS.indexOf(ohadaClassification) === -1) errors.push('Choisissez une classification OHADA proposée.');
+    if (position !== null && (!Number.isInteger(position) || position < 1)) errors.push('La position doit être un entier positif.');
+    var knownPremiums = Object.create(null);
+    EMPLOYEE_CATEGORY_PREMIUM_CATALOG.forEach(function (item) { knownPremiums[item.id] = true; });
+    if (linkedPremiumIds.some(function (id) { return !knownPremiums[id]; })) errors.push('La sélection contient une prime inconnue.');
+    return { ok: errors.length === 0, errors: errors, value: { code: code, salaryIndex: salaryIndex, ohadaClassification: ohadaClassification, linkedPremiumIds: linkedPremiumIds, position: position } };
+  }
+
+  function createEmployeeCategory(dossierId, input) {
+    dossierId = String(dossierId || ''); input = input || {};
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La création est réservée au dossier fictif PRH-TEST-2026.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Confirmez qu’il s’agit d’une catégorie de test.'] };
+    var validation = normalizeEmployeeCategoryInput(input);
+    if (!validation.ok) return { ok: false, errors: validation.errors };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    dossier.employeeCategories = Array.isArray(dossier.employeeCategories) ? dossier.employeeCategories : [];
+    if (dossier.employeeCategories.some(function (item) { return String(item.code || '').toLocaleLowerCase() === validation.value.code.toLocaleLowerCase(); })) return { ok: false, errors: ['Ce code catégorie/échelon existe déjà.'] };
+    var now = new Date().toISOString();
+    var record = Object.assign({ id: 'category-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), dossierId: dossierId, status: 'test-only', createdAt: now, updatedAt: now, order: dossier.employeeCategories.length }, validation.value);
+    dossier.employeeCategories.push(record);
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la catégorie.'] };
+    return { ok: true, errors: [], category: clone(record) };
+  }
+
+  function updateEmployeeCategory(dossierId, categoryId, input) {
+    dossierId = String(dossierId || ''); categoryId = String(categoryId || ''); input = input || {};
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La modification est réservée au dossier fictif PRH-TEST-2026.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Confirmez qu’il s’agit d’une modification fictive.'] };
+    var validation = normalizeEmployeeCategoryInput(input);
+    if (!validation.ok) return { ok: false, errors: validation.errors };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var categories = Array.isArray(dossier.employeeCategories) ? dossier.employeeCategories : [];
+    var record = categories.find(function (item) { return item && item.id === categoryId && item.dossierId === dossierId; });
+    if (!record) return { ok: false, errors: ['La catégorie est introuvable.'] };
+    if (categories.some(function (item) { return item && item.id !== categoryId && String(item.code || '').toLocaleLowerCase() === validation.value.code.toLocaleLowerCase(); })) return { ok: false, errors: ['Ce code catégorie/échelon existe déjà.'] };
+    var nextPosition = validation.value.position == null ? Number(record.order || 0) + 1 : validation.value.position;
+    Object.assign(record, validation.value, { order: nextPosition - 1, updatedAt: new Date().toISOString() });
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la catégorie.'] };
+    return { ok: true, errors: [], category: clone(record) };
+  }
+
+  function deleteEmployeeCategory(dossierId, categoryId) {
+    dossierId = String(dossierId || ''); categoryId = String(categoryId || '');
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La suppression est réservée au dossier fictif PRH-TEST-2026.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var categories = dossier && Array.isArray(dossier.employeeCategories) ? dossier.employeeCategories : [];
+    var category = categories.find(function (item) { return item && item.id === categoryId && item.dossierId === dossierId; });
+    if (!category) return { ok: false, errors: ['La catégorie est introuvable.'] };
+    if ((dossier.demoEmployees || []).some(function (employee) { return employee && (employee.categoryId === categoryId || employee.categoryStep === category.code); })) return { ok: false, errors: ['Cette catégorie est liée à une fiche employé et ne peut pas être supprimée.'] };
+    dossier.employeeCategories = categories.filter(function (item) { return item && item.id !== categoryId; }).map(function (item, index) { item.order = index; return item; });
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible de supprimer la catégorie.'] };
+    return { ok: true, errors: [], deletedCategoryId: categoryId };
+  }
+
+  function positionEmployeeCategory(dossierId, categoryId, position) {
+    dossierId = String(dossierId || ''); categoryId = String(categoryId || ''); position = Number(position);
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['Le positionnement est réservé au dossier fictif PRH-TEST-2026.'] };
+    if (!Number.isInteger(position) || position < 1) return { ok: false, errors: ['La position doit être un entier positif.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var categories = dossier && Array.isArray(dossier.employeeCategories) ? dossier.employeeCategories.slice().sort(function (left, right) { return Number(left.order || 0) - Number(right.order || 0); }) : [];
+    var currentIndex = categories.findIndex(function (item) { return item && item.id === categoryId && item.dossierId === dossierId; });
+    if (currentIndex === -1) return { ok: false, errors: ['La catégorie à positionner est introuvable.'] };
+    if (position > categories.length) return { ok: false, errors: ['La position ne peut pas dépasser le nombre de catégories.'] };
+    var moved = categories.splice(currentIndex, 1)[0];
+    categories.splice(position - 1, 0, moved);
+    categories.forEach(function (item, index) { item.order = index; });
+    dossier.employeeCategories = categories;
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer le positionnement.'] };
+    return { ok: true, errors: [], categories: clone(categories) };
   }
 
   function demoOrganizationSeeded(dossierId) {
@@ -1509,6 +1639,14 @@
     createEmployeeStatus: createEmployeeStatus,
     updateEmployeeStatus: updateEmployeeStatus,
     deleteEmployeeStatus: deleteEmployeeStatus,
+    employeeCategories: employeeCategories,
+    employeeCategoryClassifications: employeeCategoryClassifications,
+    employeeCategoryPremiumCatalog: employeeCategoryPremiumCatalog,
+    seedDemoEmployeeCategories: seedDemoEmployeeCategories,
+    createEmployeeCategory: createEmployeeCategory,
+    updateEmployeeCategory: updateEmployeeCategory,
+    deleteEmployeeCategory: deleteEmployeeCategory,
+    positionEmployeeCategory: positionEmployeeCategory,
     organizationUnits: organizationUnits,
     createOrganizationUnit: createOrganizationUnit,
     updateOrganizationUnit: updateOrganizationUnit,
