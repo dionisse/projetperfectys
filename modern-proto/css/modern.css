@@ -4474,8 +4474,17 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .payroll-employee-function-checklist > label:hover { background: #f1f5f0; }
 .payroll-employee-function-checklist input { flex: 0 0 auto; width: 16px; height: 16px; margin: 2px 0 0; accent-color: #98701a; }
 .payroll-employee-function-field > small { display: block; margin-top: 6px; color: #637168; font-size: .7rem; line-height: 1.45; }
-/* Le formulaire de création occupe la largeur sous la liste et la fiche sélectionnée. */
-.payroll-employee-create-form { container-type: inline-size; margin-top: 14px; }
+/* La colonne Employés accueille la création sous la liste, sans laisser son espace inférieur vide. */
+.payroll-employee-list h4 { font-size: .78rem; }
+.payroll-employee-list .exchange-mapping-table { font-size: .62rem; }
+.payroll-employee-list .exchange-mapping-table th,
+.payroll-employee-list .exchange-mapping-table td { padding: 6px 7px; }
+.payroll-employee-select { font: inherit; font-size: .66rem; padding: 3px 4px; }
+.payroll-employee-create-form { container-type: inline-size; margin-top: 12px; padding: 10px; }
+.payroll-employee-create-form .field label,
+.payroll-employee-create-form .payroll-employee-function-field > span { font-size: .68rem; }
+.payroll-employee-create-form .field input,
+.payroll-employee-create-form .field select { min-height: 34px; font-size: .72rem; }
 .payroll-employee-create-grid { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
 .payroll-employee-create-grid .payroll-test-confirm { grid-column: auto; }
 .payroll-employee-function-checklist { box-sizing: border-box; min-width: 0; overflow-x: hidden; overflow-y: auto; }

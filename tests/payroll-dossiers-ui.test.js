@@ -22,7 +22,7 @@ assert.match(app, /data-action=\"create-payroll-test-dossier\"/);
 assert.match(app, /dix fiches « Employé fictif »/);
 assert.match(app, /Employés \(' \+ employees\.length \+ '\)/);
 assert.match(app, /payroll-employee-create-form[\s\S]*data-dossier-id=\"' \+ esc\(dossier\.id\)/);
-assert.ok(app.includes("'</div></div>' + createForm + infoDialog + photoDialog + '</section>'"), 'formulaire de création placé sous la liste et la fiche employé');
+assert.ok(app.includes("</table></div>' + createForm + '</aside>' +"), 'formulaire de création placé sous la liste pour occuper sa colonne');
 assert.match(payroll, /function employees\(dossierId\)[\s\S]*employee\.dossierId === dossierId/);
 assert.match(app, /payroll-employee-create-form/);
 assert.match(app, /Fiche fictive de test uniquement/);
