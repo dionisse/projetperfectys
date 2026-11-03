@@ -51,7 +51,10 @@ assert.match(app, /employeeStatusCatalog\.map/);
 assert.match(app, /var createEmployeeStatusField = employeeStatusCatalog\.length/);
 assert.match(app, /name="employeeStatus"/);
 assert.match(payroll, /var matchingStatus = availableStatuses\.find/);
+assert.match(app, /option value="Permanent"[\s\S]*option value="Occasionnel"/);
 assert.match(app, /Jours de congés par mois[\s\S]*Ouvrables[\s\S]*Calendaires/);
+assert.match(payroll, /function employeeStatusDefaults\(\)/);
+assert.match(payroll, /monthlyWorkDays: '21\.66'[\s\S]*monthlyWorkHours: '173\.33'[\s\S]*leaveDaysPerMonth: '2\.00'/);
 assert.match(payroll, /function employeeStatuses\(dossierId\)/);
 assert.match(payroll, /function employeeRubricCatalog\(\)/);
 assert.match(payroll, /function seedDemoEmployeeStatuses\(dossierId\)/);
@@ -227,5 +230,5 @@ assert.match(payroll, /function createDossier\(input\)[\s\S]*'PRH-' \+ clientCod
 assert.match(payroll, /accountingDossierId: accountingDossierId/);
 assert.match(payroll, /function storageKey\(dossierId\)[\s\S]*STORAGE_PREFIX \+ encodeURIComponent/);
 assert.match(css, /\.payroll-dossier-grid[\s\S]*\.payroll-dossier-card/);
-assert.match(worker, /perfecto-static-v228/);
+assert.match(worker, /perfecto-static-v229/);
 console.log('UI Paie & RH : route dossier dédiée, référence PRH, sélection par dossier et association non automatique — OK');

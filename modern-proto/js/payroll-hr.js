@@ -472,12 +472,34 @@
   addEmployeeRubric('professional-expenses-total', 'TOTAL REMBOURSEMENT DE FRAIS', true, 0, true);
   addEmployeeRubric('amount-payable', 'MONTANT À PAYER', true, 0, true);
 
+  function employeeStatusDefaults() {
+    return { ohadaClassification: 'Permanent', monthlyWorkDays: '21.66', monthlyWorkHours: '173.33',
+      leaveDaysPerMonth: '2.00', leaveDayType: 'ouvrables',
+      rubricIds: EMPLOYEE_RUBRIC_CATALOG.filter(function (item) { return item.selectedByReference; }).map(function (item) { return item.id; }) };
+  }
+
   function employeeRubricCatalog() { return clone(EMPLOYEE_RUBRIC_CATALOG); }
 
   function employeeStatuses(dossierId) {
     if (!isDemoTestDossier(dossierId)) return [];
-    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId); });
-    return clone(dossier && Array.isArray(dossier.employeeStatuses) ? dossier.employeeStatuses : []);
+    dossierId = String(dossierId);
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var records = dossier && Array.isArray(dossier.employeeStatuses) ? dossier.employeeStatuses : [];
+    var changed = false;
+    records.forEach(function (record) {
+      if (!record || record.defaultProfileVersion === 1) return;
+      var defaults = employeeStatusDefaults();
+      ['monthlyWorkDays', 'monthlyWorkHours', 'leaveDaysPerMonth', 'leaveDayType'].forEach(function (key) {
+        if (!String(record[key] || '').trim()) { record[key] = defaults[key]; changed = true; }
+      });
+      if (['Permanent', 'Occasionnel'].indexOf(record.ohadaClassification) === -1) { record.ohadaClassification = defaults.ohadaClassification; changed = true; }
+      if (!Array.isArray(record.rubricIds) || !record.rubricIds.length) { record.rubricIds = defaults.rubricIds.slice(); changed = true; }
+      record.defaultProfileVersion = 1;
+      changed = true;
+    });
+    if (changed) saveDossierCatalog(catalog);
+    return clone(records);
   }
 
   function seedDemoEmployeeStatuses(dossierId) {
@@ -488,13 +510,13 @@
     if (Array.isArray(dossier.employeeStatuses) && dossier.employeeStatuses.length) return { ok: false, errors: ['Des statuts existent déjà dans ce dossier ; aucun doublon n’a été ajouté.'] };
     var now = new Date().toISOString();
     var defaults = [
-      { code: 'A', label: 'Agent de l’État', ohadaClassification: 'Permanent', monthlyWorkDays: '21.66', monthlyWorkHours: '173.33', leaveDaysPerMonth: '2.00', leaveDayType: 'ouvrables', rubricIds: EMPLOYEE_RUBRIC_CATALOG.filter(function (item) { return item.selectedByReference; }).map(function (item) { return item.id; }) },
-      { code: 'C', label: 'Contractuel', ohadaClassification: '', monthlyWorkDays: '', monthlyWorkHours: '', leaveDaysPerMonth: '', leaveDayType: '', rubricIds: [] },
-      { code: 'O', label: 'Occasionnel', ohadaClassification: '', monthlyWorkDays: '', monthlyWorkHours: '', leaveDaysPerMonth: '', leaveDayType: '', rubricIds: [] },
-      { code: 'S', label: 'Stagiaire', ohadaClassification: '', monthlyWorkDays: '', monthlyWorkHours: '', leaveDaysPerMonth: '', leaveDayType: '', rubricIds: [] }
+      { code: 'A', label: 'Agent de l’État' },
+      { code: 'C', label: 'Contractuel' },
+      { code: 'O', label: 'Occasionnel' },
+      { code: 'S', label: 'Stagiaire' }
     ];
     dossier.employeeStatuses = defaults.map(function (item, index) {
-      return Object.assign({ id: 'status-test-' + item.code.toLowerCase(), dossierId: dossierId, status: 'test-only', createdAt: now, updatedAt: now, order: index }, item);
+      return Object.assign({ id: 'status-test-' + item.code.toLowerCase(), dossierId: dossierId, status: 'test-only', createdAt: now, updatedAt: now, order: index, defaultProfileVersion: 1 }, employeeStatusDefaults(), item);
     });
     if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer les statuts fictifs dans le stockage local.'] };
     return { ok: true, errors: [], statuses: employeeStatuses(dossierId) };
@@ -502,19 +524,21 @@
 
   function normalizeEmployeeStatusInput(input) {
     input = input || {};
+    var defaults = employeeStatusDefaults();
     var code = String(input.code || '').trim();
     var label = String(input.label || '').trim().replace(/\s+/g, ' ');
-    var ohadaClassification = String(input.ohadaClassification || '').trim().replace(/\s+/g, ' ');
-    var monthlyWorkDays = String(input.monthlyWorkDays || '').trim();
-    var monthlyWorkHours = String(input.monthlyWorkHours || '').trim();
-    var leaveDaysPerMonth = String(input.leaveDaysPerMonth || '').trim();
-    var leaveDayType = String(input.leaveDayType || '').trim();
-    var rubricIds = Array.isArray(input.rubricIds) ? Array.from(new Set(input.rubricIds.map(String))) : [];
+    var ohadaClassification = String(input.ohadaClassification || defaults.ohadaClassification).trim().replace(/\s+/g, ' ');
+    var monthlyWorkDays = String(input.monthlyWorkDays || defaults.monthlyWorkDays).trim();
+    var monthlyWorkHours = String(input.monthlyWorkHours || defaults.monthlyWorkHours).trim();
+    var leaveDaysPerMonth = String(input.leaveDaysPerMonth || defaults.leaveDaysPerMonth).trim();
+    var leaveDayType = String(input.leaveDayType || defaults.leaveDayType).trim();
+    var rubricIds = Array.isArray(input.rubricIds) ? Array.from(new Set(input.rubricIds.map(String))) : defaults.rubricIds.slice();
     var errors = [];
     if (!code) errors.push('Le code du statut est obligatoire.');
     if (code.length > 24) errors.push('Le code est limité à 24 caractères.');
     if (!label) errors.push('L’intitulé du statut est obligatoire.');
     if (label.length > 120 || ohadaClassification.length > 80) errors.push('Un texte dépasse la longueur autorisée.');
+    if (['Permanent', 'Occasionnel'].indexOf(ohadaClassification) === -1) errors.push('Choisissez Permanent ou Occasionnel pour la classification OHADA.');
     [monthlyWorkDays, monthlyWorkHours, leaveDaysPerMonth].forEach(function (value) {
       if (value && (!/^\d+(?:[.,]\d+)?$/.test(value) || !Number.isFinite(Number(value.replace(',', '.'))))) errors.push('Les bases et jours acquis doivent être des nombres positifs ou vides.');
     });
@@ -537,7 +561,7 @@
     var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
     dossier.employeeStatuses = Array.isArray(dossier.employeeStatuses) ? dossier.employeeStatuses : [];
     if (dossier.employeeStatuses.some(function (item) { return String(item.code).toLocaleLowerCase() === validation.value.code.toLocaleLowerCase(); })) return { ok: false, errors: ['Ce code existe déjà dans le dossier test.'] };
-    var record = Object.assign({ id: 'status-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), dossierId: dossierId, status: 'test-only', createdAt: new Date().toISOString() }, validation.value);
+    var record = Object.assign({ id: 'status-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), dossierId: dossierId, status: 'test-only', createdAt: new Date().toISOString(), defaultProfileVersion: 1 }, validation.value);
     dossier.employeeStatuses.push(record);
     if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer le statut de test.'] };
     return { ok: true, errors: [], employeeStatus: clone(record) };
@@ -556,6 +580,7 @@
     if (!record) return { ok: false, errors: ['Le statut de test est introuvable.'] };
     if (records.some(function (item) { return item && item.id !== statusId && String(item.code).toLocaleLowerCase() === validation.value.code.toLocaleLowerCase(); })) return { ok: false, errors: ['Ce code existe déjà dans le dossier test.'] };
     Object.keys(validation.value).forEach(function (key) { record[key] = validation.value[key]; });
+    record.defaultProfileVersion = 1;
     record.updatedAt = new Date().toISOString();
     if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer les modifications du statut.'] };
     return { ok: true, errors: [], employeeStatus: clone(record) };
@@ -1479,6 +1504,7 @@
     deleteEmployee: deleteEmployee,
     employeeStatuses: employeeStatuses,
     employeeRubricCatalog: employeeRubricCatalog,
+    employeeStatusDefaults: employeeStatusDefaults,
     seedDemoEmployeeStatuses: seedDemoEmployeeStatuses,
     createEmployeeStatus: createEmployeeStatus,
     updateEmployeeStatus: updateEmployeeStatus,

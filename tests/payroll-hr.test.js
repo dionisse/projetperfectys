@@ -265,6 +265,24 @@ assert.equal(statusesSeed.statuses[0].monthlyWorkDays, '21.66');
 assert.equal(statusesSeed.statuses[0].monthlyWorkHours, '173.33');
 assert.equal(statusesSeed.statuses[0].leaveDaysPerMonth, '2.00');
 assert.equal(statusesSeed.statuses[0].leaveDayType, 'ouvrables');
+const statusDefaults = PayrollHR.employeeStatusDefaults();
+assert.equal(statusDefaults.rubricIds.length, 66, 'les 66 cases de référence sont cochées par défaut');
+assert.ok(statusesSeed.statuses.every(status => status.ohadaClassification === 'Permanent' && status.monthlyWorkDays === '21.66' && status.monthlyWorkHours === '173.33' && status.leaveDaysPerMonth === '2.00' && status.leaveDayType === 'ouvrables'), 'tous les statuts reprennent les mêmes valeurs par défaut');
+assert.ok(statusesSeed.statuses.every(status => JSON.stringify(status.rubricIds) === JSON.stringify(statusesSeed.statuses[0].rubricIds)), 'les mêmes 66 rubriques sont cochées par défaut pour chaque statut');
+const legacyStatusCatalog = JSON.parse(localStorage.getItem('perfecto.payroll.dossiers.v1'));
+const legacyStatusDossier = legacyStatusCatalog.dossiers.find(item => item.id === testDossier.dossier.id);
+legacyStatusDossier.employeeStatuses.filter(status => status.code !== 'A').forEach(status => {
+  delete status.defaultProfileVersion;
+  status.ohadaClassification = '';
+  status.monthlyWorkDays = '';
+  status.monthlyWorkHours = '';
+  status.leaveDaysPerMonth = '';
+  status.leaveDayType = '';
+  status.rubricIds = [];
+});
+localStorage.setItem('perfecto.payroll.dossiers.v1', JSON.stringify(legacyStatusCatalog));
+const migratedStatuses = PayrollHR.employeeStatuses(testDossier.dossier.id);
+assert.ok(migratedStatuses.every(status => status.rubricIds.length === 66 && status.ohadaClassification === 'Permanent' && status.monthlyWorkDays === '21.66'), 'les profils déjà chargés reçoivent les valeurs et rubriques communes');
 const rubricCatalog = PayrollHR.employeeRubricCatalog();
 assert.equal(new Set(rubricCatalog.map(item => item.id)).size, rubricCatalog.length, 'chaque rubrique possède un identifiant unique');
 assert.ok(rubricCatalog.some(item => item.label === 'MONTANT À PAYER'));
@@ -292,7 +310,7 @@ assert.deepEqual(customStatus.employeeStatus.rubricIds, [independentlyConfigurab
 assert.ok(!statusA.rubricIds.includes(independentlyConfigurableRubric.id), 'la sélection est propre à chaque statut');
 assert.equal(PayrollHR.createEmployeeStatus(testDossier.dossier.id, { code: 'x', label: 'Code déjà pris', testOnly: true }).ok, false);
 const updatedStatus = PayrollHR.updateEmployeeStatus(testDossier.dossier.id, customStatus.employeeStatus.id, {
-  code: 'X', label: 'Statut fictif modifié', ohadaClassification: 'Test', monthlyWorkDays: '21.25',
+  code: 'X', label: 'Statut fictif modifié', ohadaClassification: 'Occasionnel', monthlyWorkDays: '21.25',
   monthlyWorkHours: '170', leaveDaysPerMonth: '1.5', leaveDayType: 'ouvrables', rubricIds: rubricCatalog.slice(0, 2).map(item => item.id), testOnly: true
 });
 assert.equal(updatedStatus.ok, true, updatedStatus.errors.join('\\n'));

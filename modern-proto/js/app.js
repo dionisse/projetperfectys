@@ -21099,6 +21099,10 @@
     function statusField(name, label, value, type) {
       return '<div class="field"><label for="payroll-status-' + name + '">' + esc(label) + '</label><input id="payroll-status-' + name + '" name="' + name + '" type="' + (type || 'text') + '" value="' + esc(value || '') + '"' + (mode === 'view' ? ' readonly' : '') + (mode !== 'view' && (name === 'code' || name === 'label') ? ' required' : '') + (type === 'number' ? ' step="any" min="0"' : '') + '></div>';
     }
+    function classificationField(value) {
+      value = value || 'Permanent';
+      return '<div class="field"><label for="payroll-status-ohadaClassification">Classification OHADA</label><select id="payroll-status-ohadaClassification" name="ohadaClassification"' + (mode === 'view' ? ' disabled' : ' required') + '><option value="Permanent"' + (value === 'Permanent' ? ' selected' : '') + '>Permanent</option><option value="Occasionnel"' + (value === 'Occasionnel' ? ' selected' : '') + '>Occasionnel</option></select></div>';
+    }
     var statusRows = statuses.map(function (item) {
       var active = mode !== 'create' && selected && item.id === selected.id;
       return '<tr><td><button type="button" class="payroll-status-select' + (active ? ' is-active' : '') + '" data-action="payroll-employee-status-select" data-status-id="' + esc(item.id) + '" aria-pressed="' + (active ? 'true' : 'false') + '"><strong>' + esc(item.code) + '</strong></button></td><td>' + esc(item.label) + '</td></tr>';
@@ -21112,7 +21116,7 @@
       (selected && canEditPayrollEmployee && mode === 'view' ? '<button type="button" class="btn btn-secondary" data-action="open-payroll-employee-rubrics" data-status-id="' + esc(selected.id) + '">Rubriques (' + ((selected.rubricIds || []).length) + ')</button>' : '') + '</div>';
     var statusForm = isTestDossier && displayed
       ? '<form id="payroll-employee-status-form" class="payroll-employee-status-form" data-mode="' + esc(mode) + '" data-status-id="' + esc(selected ? selected.id : '') + '"><div class="payroll-status-fields">' +
-        statusField('code', 'Code', source.code, 'text') + statusField('label', 'Intitulé', source.label, 'text') + statusField('ohadaClassification', 'Classification OHADA', source.ohadaClassification, 'text') + '</div>' +
+        statusField('code', 'Code', source.code, 'text') + statusField('label', 'Intitulé', source.label, 'text') + classificationField(source.ohadaClassification) + '</div>' +
         '<fieldset><legend>Base mensuelle de travail</legend><div class="payroll-status-fields">' + statusField('monthlyWorkDays', 'En jours', source.monthlyWorkDays, 'number') + statusField('monthlyWorkHours', 'En heures', source.monthlyWorkHours, 'number') + '</div></fieldset>' +
         '<fieldset><legend>Jours de congés par mois</legend><div class="payroll-status-fields">' + statusField('leaveDaysPerMonth', 'Jours acquis', source.leaveDaysPerMonth, 'number') + '</div><div class="payroll-status-radio"><label><input type="radio" name="leaveDayType" value="ouvrables"' + (source.leaveDayType === 'ouvrables' ? ' checked' : '') + (mode === 'view' ? ' disabled' : '') + '> Ouvrables</label><label><input type="radio" name="leaveDayType" value="calendaires"' + (source.leaveDayType === 'calendaires' ? ' checked' : '') + (mode === 'view' ? ' disabled' : '') + '> Calendaires</label></div></fieldset>' +
         (editable ? '<label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Je confirme qu’il s’agit d’un paramétrage fictif du dossier de test.</span></label><div class="payroll-status-actions"><button type="button" class="btn btn-secondary" data-action="cancel-payroll-employee-status-edit">Annuler</button><button type="submit" class="btn btn-primary">Valider</button></div>' : '') + '</form>'
@@ -34018,7 +34022,7 @@
       case 'new-payroll-employee-status':
         ui.payrollEmployeeStatusId = '';
         ui.payrollEmployeeStatusMode = 'create';
-        ui.payrollEmployeeStatusDraft = { code: '', label: '', ohadaClassification: '', monthlyWorkDays: '', monthlyWorkHours: '', leaveDaysPerMonth: '', leaveDayType: '', rubricIds: [] };
+        ui.payrollEmployeeStatusDraft = Object.assign({ code: '', label: '' }, PayrollHR.employeeStatusDefaults());
         render();
         break;
       case 'duplicate-payroll-employee-status': {
