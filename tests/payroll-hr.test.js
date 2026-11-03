@@ -235,6 +235,12 @@ assert.ok(testDossier.dossier.demoEmployees.every(employee => employee.dossierId
 assert.ok(testDossier.dossier.demoEmployees.every(employee => employee.status === 'test-only' && !('salary' in employee)));
 assert.deepEqual(PayrollHR.runs(testDossier.dossier.id), []);
 assert.equal(PayrollHR.isDemoTestDossier(testDossier.dossier.id), true);
+const addedTestEmployee = PayrollHR.createEmployee(testDossier.dossier.id, {
+  employeeNumber: 'TEST-ADDED-01', displayName: 'Employé fictif supplémentaire', testOnly: true
+});
+assert.equal(addedTestEmployee.ok, true, addedTestEmployee.errors.join('\\n'));
+assert.match(addedTestEmployee.employee.id, /^EMP-TEST-/);
+assert.equal(PayrollHR.isDemoTestDossier(testDossier.dossier.id), true, 'l’ajout d’une fiche fictive conserve le dossier de test reconnu');
 assert.equal(PayrollHR.isDemoTestDossier(dossier.id), false, 'le préchargement est limité au dossier de démonstration identifié');
 const mockSeed = PayrollHR.seedDemoOrganizationData(testDossier.dossier.id);
 assert.equal(mockSeed.ok, true, mockSeed.errors.join('\\n'));

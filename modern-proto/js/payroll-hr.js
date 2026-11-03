@@ -110,7 +110,7 @@
     if (errors.length) return { ok: false, errors: errors };
     var id;
     do {
-      id = 'emp-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+      id = 'EMP-TEST-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
     } while (current.some(function (employee) { return employee && employee.id === id; }));
     var employee = {
       id: id,

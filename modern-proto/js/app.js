@@ -171,6 +171,7 @@
     payrollRegisters: { dossierId: '', registry: 'all', period: '', employeeId: '', query: '' },
     payrollMainMenu: 'Fichier',
     payrollMenuItem: 'export-files',
+    payrollEmployeeId: '',
     fixedAssets: { q: '', status: 'all', assetType: 'all' },
     financialFramework: { q: '' },
     financialResult: { asOfDate: '' },
@@ -20277,14 +20278,18 @@
       event.preventDefault();
       if (!canPerformDemoAction('create-payroll-test-employee', null, true)) return;
       var dossier = PayrollHR.currentDossier();
+      if (!dossier || employeeForm.getAttribute('data-dossier-id') !== dossier.id || !PayrollHR.isDemoTestDossier(dossier.id)) {
+        toast('Création refusée : les fiches fictives sont réservées au dossier PRH-TEST-2026 actif.', 'warning'); return;
+      }
       var confirmed = !!($('#payroll-test-data-confirmation', employeeForm) || {}).checked;
-      var result = PayrollHR.createEmployee(dossier && dossier.id, {
+      var result = PayrollHR.createEmployee(dossier.id, {
         employeeNumber: ($('#payroll-employee-number', employeeForm) || {}).value || '',
         displayName: ($('#payroll-employee-display-name', employeeForm) || {}).value || '',
         testOnly: confirmed
       });
       if (!result.ok) { toast(result.errors[0] || 'Création de la fiche de test impossible.', 'warning'); return; }
-      toast('Fiche fictive créée dans le dossier RH actif. Aucun champ sensible ou élément de paie n’a été saisi.', 'success');
+      ui.payrollEmployeeId = result.employee.id;
+      toast('Fiche fictive créée dans PRH-TEST-2026. Aucun champ sensible ou élément de paie n’a été saisi.', 'success');
       render();
     });
     var unitCreateForm = $('#payroll-org-unit-create-form');
@@ -20897,7 +20902,48 @@
       '<p class="small muted">Aucun document, montant, devise, référence de transaction, statut payé, paiement bancaire ou écriture comptable n’est créé. Aucun format d’impression/export n’est proposé à cette étape.</p></section>';
   }
 
-  function viewPayrollMainMenu(dossier) {
+  function viewPayrollEmployeeDetails(dossier, dossierEmployees, canCreatePayrollEmployee) {
+    var isTestDossier = PayrollHR.isDemoTestDossier(dossier.id);
+    var employees = isTestDossier ? dossierEmployees : [];
+    var selected = employees.find(function (employee) { return employee.id === ui.payrollEmployeeId; }) || employees[0] || null;
+    if (selected) ui.payrollEmployeeId = selected.id;
+    function lockedField(label, type) {
+      return '<div class="field payroll-employee-locked-field"><label>' + esc(label) + '</label><input type="' + (type || 'text') + '" disabled aria-label="' + esc(label + ' — désactivé') + '" placeholder="Désactivé · cadrage requis"></div>';
+    }
+    function lockedSelect(label) {
+      return '<div class="field payroll-employee-locked-field"><label>' + esc(label) + '</label><select disabled aria-label="' + esc(label + ' — désactivé') + '"><option>Indisponible</option></select></div>';
+    }
+    var rows = employees.map(function (employee) {
+      var active = selected && selected.id === employee.id;
+      return '<tr><td><button type="button" class="payroll-employee-select' + (active ? ' is-active' : '') + '" data-action="payroll-employee-select" data-employee-id="' + esc(employee.id) + '" aria-pressed="' + (active ? 'true' : 'false') + '"><strong>' + esc(employee.employeeNumber || employee.id) + '</strong></button></td><td>' + esc(employee.displayName || 'Employé fictif') + '</td></tr>';
+    }).join('');
+    var createForm = isTestDossier && canCreatePayrollEmployee
+      ? '<form id="payroll-employee-create-form" class="payroll-employee-create-form" data-dossier-id="' + esc(dossier.id) + '"><p class="small"><strong>Ajouter une fiche fictive</strong></p><div class="payroll-employee-create-grid">' +
+        '<div class="field"><label for="payroll-employee-number">Matricule interne *</label><input id="payroll-employee-number" type="text" maxlength="40" required autocomplete="off"></div>' +
+        '<div class="field"><label for="payroll-employee-display-name">Nom d’affichage fictif *</label><input id="payroll-employee-display-name" type="text" maxlength="120" required autocomplete="off"></div>' +
+        '<label class="payroll-test-confirm"><input id="payroll-test-data-confirmation" type="checkbox" required><span>Fiche fictive de test uniquement (aucune donnée réelle).</span></label>' +
+        '<button type="submit" class="btn btn-primary">＋ Ajouter l’employé fictif</button></div></form>'
+      : (isTestDossier ? '<p class="small muted">Création indisponible : votre profil ne possède pas le droit requis.</p>' : '<div class="alert info"><div>La saisie de test est réservée au dossier fictif <strong>PRH-TEST-2026</strong>. Ouvrez ce dossier depuis <a href="#/payroll-dossiers">Dossiers RH</a>. Aucune donnée d’un autre dossier n’est affichée ici.</div></div>');
+    var selectedFields = selected
+      ? '<div class="payroll-employee-identity"><div class="field"><label>Matricule</label><input type="text" readonly value="' + esc(selected.employeeNumber || selected.id) + '"></div><div class="field"><label>Nom d’affichage fictif</label><input type="text" readonly value="' + esc(selected.displayName || 'Employé fictif') + '"></div></div>'
+      : '<div class="alert info"><div>Aucune fiche de démonstration sélectionnée. Les fiches réelles ne sont pas chargées dans ce prototype.</div></div>';
+    var fieldsets = '<div class="payroll-employee-fieldsets">' +
+      '<fieldset><legend>Embauche et situation</legend><div class="payroll-employee-field-grid">' + lockedField('Première embauche', 'date') + lockedField('Ancienneté à déduire · mois') + lockedField('Date de référence') + lockedField('Fin exonération V.P.S.', 'date') + lockedField('Débauchage', 'date') + lockedField('Motif') + lockedField('Dernière réembauche', 'date') + '</div></fieldset>' +
+      '<fieldset><legend>Identité et situation personnelle · désactivé</legend><div class="payroll-employee-field-grid">' + lockedField('Date de naissance', 'date') + lockedSelect('Sexe') + lockedSelect('Situation matrimoniale') + lockedField('Enfants', 'number') + lockedField('Lieu de naissance') + lockedField('Pays de nationalité') + '</div></fieldset>' +
+      '<fieldset><legend>Identifiants et assurance · désactivé</legend><div class="payroll-employee-field-grid">' + lockedField('N° d’assuré social') + lockedField('Numéro IFU') + lockedField('Compagnie d’assurance complémentaire') + lockedField('Numéro d’assuré complémentaire') + '</div></fieldset>' +
+      '<fieldset><legend>Parcours et affectation · à préciser</legend><div class="payroll-employee-field-grid">' + lockedField('Diplôme') + lockedField('Profession') + lockedField('Statut') + lockedField('Catégorie / échelon') + lockedField('Date d’effet', 'date') + lockedField('Zone') + lockedField('Service') + lockedField('Fonction') + '</div></fieldset>' +
+      '<fieldset><legend>Règlement des salaires · désactivé</legend><div class="payroll-employee-field-grid">' + lockedSelect('Mode de règlement') + lockedField('Banque') + lockedField('N° de compte') + '</div><p class="small muted">Aucune coordonnée bancaire ni instruction de paiement ne peut être saisie.</p></fieldset>' +
+      '</div>';
+    var dialogs = '<dialog class="payroll-employee-dialog" id="payroll-employee-info-dialog" aria-labelledby="payroll-employee-info-title"><div class="payroll-employee-dialog-head"><h3 id="payroll-employee-info-title">Informations diverses</h3><button type="button" class="icon-btn" data-action="close-payroll-employee-dialog" aria-label="Fermer">×</button></div><p class="small muted">Champs non configurés. Les informations personnelles restent désactivées.</p><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Libellé</th><th>Valeur</th></tr></thead><tbody><tr><td>Adresse</td><td>Indisponible</td></tr><tr><td>Contact</td><td>Indisponible</td></tr><tr><td>Divers</td><td>Indisponible</td></tr></tbody></table></div><div class="payroll-employee-dialog-actions"><button type="button" class="btn btn-secondary" data-action="close-payroll-employee-dialog">Fermer</button></div></dialog>' +
+      '<dialog class="payroll-employee-dialog payroll-employee-photo-dialog" id="payroll-employee-photo-dialog" aria-labelledby="payroll-employee-photo-title"><div class="payroll-employee-dialog-head"><h3 id="payroll-employee-photo-title">Photo du salarié</h3><button type="button" class="icon-btn" data-action="close-payroll-employee-dialog" aria-label="Fermer">×</button></div><div class="payroll-employee-photo-placeholder" role="img" aria-label="Aucune photo disponible">Photo indisponible</div><p class="small muted">Le stockage, le chargement et la suppression d’images sont désactivés.</p><div class="payroll-employee-dialog-actions"><button type="button" class="btn btn-secondary" disabled>Lire une nouvelle photo</button><button type="button" class="btn btn-secondary" disabled>Effacer la photo</button><button type="button" class="btn btn-primary" data-action="close-payroll-employee-dialog">Fermer</button></div></dialog>';
+    return '<section class="payroll-employee-workspace" aria-label="Fiche des employés"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · DÉFINITIONS</p><h3>Employés</h3></div><span class="badge draft">' + (isTestDossier ? 'PRH-TEST-2026 · TEST UNIQUEMENT' : 'FICHE RÉELLE NON DISPONIBLE') + '</span></div>' +
+      '<div class="alert warning"><div><strong>Prototype local, données fictives uniquement.</strong> Les données sensibles, pièces jointes, photos, renseignements bancaires, modifications de fiche, impression et validation restent désactivés jusqu’à validation des protections et du cadrage.</div></div>' +
+      '<div class="payroll-employee-layout"><aside class="payroll-employee-list"><h4>Employés (' + employees.length + ')</h4><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Matricule</th><th>Nom</th></tr></thead><tbody>' + (rows || '<tr><td colspan="2">Aucune fiche de test disponible.</td></tr>') + '</tbody></table></div>' + createForm + '</aside>' +
+      '<div class="payroll-employee-detail"><div class="payroll-employee-detail-head"><div><h4>' + esc(selected ? selected.displayName : 'Aucune fiche sélectionnée') + '</h4><p class="small muted">' + (selected ? 'Matricule ' + esc(selected.employeeNumber || selected.id) + ' · fiche fictive en lecture seule' : 'Sélection désactivée') + '</p></div><div class="payroll-employee-actions"><button type="button" class="btn btn-secondary" data-action="open-payroll-employee-info"' + (selected ? '' : ' disabled') + '>Informations diverses</button><button type="button" class="btn btn-secondary" data-action="open-payroll-employee-photo"' + (selected ? '' : ' disabled') + '>Photo</button></div></div>' + selectedFields + fieldsets +
+      '<div class="payroll-employee-locked-actions"><button type="button" class="btn btn-secondary" disabled>Modifier</button><button type="button" class="btn btn-secondary" disabled>Supprimer</button><button type="button" class="btn btn-secondary" disabled>Sélectionner…</button><button type="button" class="btn btn-primary" disabled>Valider</button></div></div></div>' + dialogs + '</section>';
+  }
+
+  function viewPayrollMainMenu(dossier, dossierEmployees, canCreatePayrollEmployee) {
     var activeMenu = ui.payrollMainMenu || 'Fichier';
     var sections = payrollMenuSections(activeMenu);
     var items = sections.reduce(function (all, section) { return all.concat(section.items || []); }, []);
@@ -20920,9 +20966,11 @@
         ? 'La capture indique un niveau complémentaire pour cet élément, mais ses sous-éléments ne sont pas fournis. Aucun contenu ne sera déduit.'
         : 'Cet onglet établit uniquement la navigation. Le traitement associé n’est pas encore construit ni activé.');
     var panelStatus = !selectedItem ? 'À définir' : (selectedItem.hasChildren ? 'Sous-menu à préciser' : 'À construire');
-    var panel = '<section class="accounting-menu-panel"' + (selectedItem ? ' id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-' + esc(selectedItem.id) + '"' : '') + '><div class="accounting-menu-panel-head"><div><p class="page-kicker">SOUS-MENU · ' + esc(activeMenu.toUpperCase()) + '</p><h3>' + esc(itemHeading) + '</h3></div><span class="badge draft">' + panelStatus + '</span></div><p class="menu-item-reason">' + itemDescription + '</p><div class="alert info"><div>Navigation uniquement : aucune importation, exportation, modification de paie, clôture ou écriture comptable n’est exécutée ici.</div></div></section>';
+    var panel = selectedItem && selectedItem.id === 'employees'
+      ? '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-employees">' + viewPayrollEmployeeDetails(dossier, dossierEmployees || [], canCreatePayrollEmployee === true) + '</div>'
+      : '<section class="accounting-menu-panel"' + (selectedItem ? ' id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-' + esc(selectedItem.id) + '"' : '') + '><div class="accounting-menu-panel-head"><div><p class="page-kicker">SOUS-MENU · ' + esc(activeMenu.toUpperCase()) + '</p><h3>' + esc(itemHeading) + '</h3></div><span class="badge draft">' + panelStatus + '</span></div><p class="menu-item-reason">' + itemDescription + '</p><div class="alert info"><div>Navigation uniquement : aucune importation, exportation, modification de paie, clôture ou écriture comptable n’est exécutée ici.</div></div></section>';
     var legend = '<div class="menu-status-legend" aria-label="Légende des statuts"><span><i class="legend-dot legend-dot-planned"></i>À construire</span><span><i class="legend-dot legend-dot-inactive"></i>Inactif dans la capture</span></div>';
-    return '<section class="accounting-menu-page payroll-menu-page" aria-label="Menu ' + esc(activeMenu) + '"><div class="accounting-menu-heading"><div><p class="page-kicker">PAIE &amp; RH · ' + esc(dossier.reference || '') + '</p><h2>' + esc(activeMenu) + '</h2></div></div><div class="accounting-menu-layout"><nav class="accounting-subtabs" role="tablist" aria-orientation="vertical" aria-label="Sous-menus ' + esc(activeMenu) + '">' + (tabs || '<p class="small muted payroll-menu-empty">Aucun élément de menu n’a été fourni.</p>') + '</nav><div class="accounting-menu-detail">' + legend + panel + '</div></div></section>';
+    return '<section class="accounting-menu-page payroll-menu-page" aria-label="Menu ' + esc(activeMenu) + '"><div class="accounting-menu-heading"><div><p class="page-kicker">PAIE &amp; RH · ' + esc(dossier.reference || '') + '</p><h2>' + esc(activeMenu) + '</h2></div></div><div class="accounting-menu-layout"><nav class="accounting-subtabs" role="tablist" aria-orientation="vertical" aria-label="Sous-menus ' + esc(activeMenu) + '">' + (tabs || '<p class="small muted payroll-menu-empty">Aucun élément de menu n’a été fourni.</p>') + '</nav><div class="accounting-menu-detail">' + (selectedItem && selectedItem.id === 'employees' ? '' : legend) + panel + '</div></div></section>';
   }
 
   function viewPayrollModule() {
@@ -20946,28 +20994,6 @@
     var countryRuleCandidates = PayrollHR.countryRuleCandidates(dossier.id);
     var payrollBatchPreparations = PayrollHR.payrollBatchPreparations(dossier.id);
     var canEditPayrollRecords = hasDemoPermission(member, 'payroll-hr', 'record.edit', payrollAccessContext(dossier));
-    var employeeRows = dossierEmployees.map(function (employee) {
-      var createdLabel = employee.createdAt ? String(employee.createdAt).slice(0, 10) : 'Non renseignée';
-      var profile = '<details class="payroll-employee-profile"><summary>Ouvrir la fiche synthèse</summary><div class="payroll-employee-profile-body">' +
-        '<p class="small muted">Profil fictif en lecture seule. Cette synthèse n’ajoute aucun champ personnel au registre.</p><dl>' +
-        '<dt>Numéro employé</dt><dd>' + esc(employee.employeeNumber || employee.id) + '</dd>' +
-        '<dt>Nom d’affichage de test</dt><dd>' + esc(employee.displayName || '—') + '</dd>' +
-        '<dt>Dossier RH</dt><dd>' + esc(dossier.reference) + '</dd>' +
-        '<dt>Statut</dt><dd>Test uniquement</dd>' +
-        '<dt>Créée le</dt><dd>' + esc(createdLabel) + '</dd>' +
-        '<dt>Identifiant technique</dt><dd><code>' + esc(employee.id) + '</code></dd>' +
-        '</dl><div class="alert info"><div>Les sections identité détaillée, famille, banque, évaluation, discipline et documents restent désactivées. Le stockage local n’est pas adapté à des données réelles.</div></div></div></details>';
-      return '<tr data-employee-id="' + esc(employee.id) + '" data-dossier-id="' + esc(employee.dossierId) + '"><td><strong>' + esc(employee.employeeNumber || employee.id) + '</strong></td><td>' + esc(employee.displayName || '—') + '</td><td><span class="badge draft">Test uniquement</span></td><td><small>' + esc(employee.id) + '</small>' + profile + '</td></tr>';
-    }).join('');
-    var employeeSection = '<section class="exchange-card payroll-employee-registry"><p class="page-kicker">REGISTRE DES EMPLOYÉS · DONNÉES DE TEST UNIQUEMENT</p><h3>' + dossierEmployees.length + ' fiche(s) dans ce dossier</h3>' +
-      '<div class="alert warning"><div><strong>Prototype local — ne saisissez aucune donnée réelle.</strong><br>Les fiches sont enregistrées dans le stockage du navigateur, sans protection serveur ni synchronisation multi-utilisateur. Aucune donnée bancaire, médicale, familiale, pièce jointe ou rémunération ne peut être saisie ici.</div></div>' +
-      (canCreatePayrollEmployee ? '<form id="payroll-employee-create-form" class="payroll-employee-create-form"><div class="payroll-employee-create-grid">' +
-        '<div class="field"><label for="payroll-employee-number">Numéro employé interne <span class="required-mark">*</span></label><input id="payroll-employee-number" type="text" maxlength="40" required></div>' +
-        '<div class="field"><label for="payroll-employee-display-name">Nom d’affichage fictif <span class="required-mark">*</span></label><input id="payroll-employee-display-name" type="text" maxlength="120" required></div>' +
-        '<label class="payroll-test-confirm"><input id="payroll-test-data-confirmation" type="checkbox" required><span>Je confirme qu’il s’agit d’une donnée fictive de test, et non d’une donnée personnelle réelle.</span></label>' +
-        '<button type="submit" class="btn btn-primary">＋ Créer la fiche fictive</button></div></form>' : '<p class="small muted">Votre profil ne dispose pas du droit de création dans ce dossier.</p>') +
-      (employeeRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Numéro</th><th>Nom d’affichage</th><th>Nature</th><th>Identifiant technique</th></tr></thead><tbody>' + employeeRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucune fiche dans ce dossier RH</strong><span>Aucune fiche n’est créée automatiquement.</span></div>') +
-      '</section>';
     var runs = PayrollHR.runs(dossier.id);
     var runRows = runs.map(function (run) {
       var linkedEntry = payrollEntryForRun(run, dossier.id);
@@ -20977,9 +21003,9 @@
       ? '<section class="exchange-card payroll-accounting-link-card"><p class="page-kicker">ASSOCIATION COMPTABLE FACULTATIVE</p><h3>Destination éventuelle des centralisations</h3><p>Ce choix explicite est indépendant du code client et de l’exercice. Sans association, aucune centralisation vers la Comptabilité n’est proposée.</p><form id="payroll-accounting-link-form" class="payroll-accounting-link-form"><div class="field"><label for="payroll-accounting-dossier-link">Dossier comptable associé</label><select id="payroll-accounting-dossier-link"><option value="">Aucun lien comptable</option>' + accountingFolders.map(function (accounting) { return '<option value="' + esc(accounting.id) + '"' + (accounting.id === dossier.accountingDossierId ? ' selected' : '') + '>' + esc(accounting.clientName + ' · ' + accounting.reference) + '</option>'; }).join('') + '</select></div><button type="submit" class="btn btn-secondary">Enregistrer l’association</button></form></section>'
       : '<div class="alert info"><div>' + (linkedAccountingDossier ? 'Association comptable explicite : ' + esc(linkedAccountingDossier.reference) + '.' : (storedAccountingAssociation ? 'Une association comptable existe, mais votre profil ne peut pas consulter ce dossier.' : 'Aucune association à un dossier comptable. Les lots restent en Paie & RH.')) + '</div></div>';
     return '<div class="payroll-module-workspace">' +
-      viewPayrollMainMenu(dossier) + '<details class="payroll-legacy-views"><summary>Fonctionnalités déjà développées — à reclasser dans les menus</summary>' +
+      viewPayrollMainMenu(dossier, dossierEmployees, canCreatePayrollEmployee) + '<details class="payroll-legacy-views"><summary>Fonctionnalités déjà développées — à reclasser dans les menus</summary>' +
       '<div class="alert warning"><div><strong>Prototype local — données synthétiques uniquement.</strong><br>Le stockage navigateur n’est pas adapté à des données réelles. Les calculs de paie et fonctions de production restent bloqués tant que les sources, règles et protections ne sont pas validées.</div></div>' +
-      accountingLinkPanel + employeeSection + viewPayrollOrganizationUnits(dossier, organizationUnits, canCreatePayrollEmployee, canEditPayrollRecords) + viewPayrollAssignmentsMissions(dossier, dossierEmployees, organizationUnits, organizationAssignments, internalMissions, canCreatePayrollEmployee) + viewPayrollHRTracking(dossier, hrTrackingRecords, canCreatePayrollEmployee) + viewPayrollLeaveAbsences(dossier, dossierEmployees, leaveAbsenceRecords, canCreatePayrollEmployee) + viewPayrollComponentsAndReferences(dossier, dossierEmployees, payrollComponents, payrollVariableReferences, canCreatePayrollEmployee) + viewPayrollCountryRulePacks(dossier, countryRulePacks, countryRuleCandidates, canCreatePayrollEmployee) + viewPayrollBatchPreparations(dossier, countryRulePacks, payrollBatchPreparations, canCreatePayrollEmployee) +
+      accountingLinkPanel + viewPayrollOrganizationUnits(dossier, organizationUnits, canCreatePayrollEmployee, canEditPayrollRecords) + viewPayrollAssignmentsMissions(dossier, dossierEmployees, organizationUnits, organizationAssignments, internalMissions, canCreatePayrollEmployee) + viewPayrollHRTracking(dossier, hrTrackingRecords, canCreatePayrollEmployee) + viewPayrollLeaveAbsences(dossier, dossierEmployees, leaveAbsenceRecords, canCreatePayrollEmployee) + viewPayrollComponentsAndReferences(dossier, dossierEmployees, payrollComponents, payrollVariableReferences, canCreatePayrollEmployee) + viewPayrollCountryRulePacks(dossier, countryRulePacks, countryRuleCandidates, canCreatePayrollEmployee) + viewPayrollBatchPreparations(dossier, countryRulePacks, payrollBatchPreparations, canCreatePayrollEmployee) +
       '<section class="exchange-card"><p class="page-kicker">CYCLE DE PAIE</p><h3>Lots du dossier</h3>' +
         '<div class="alert info"><div>Aucun calcul ni lot de paie n’est créé automatiquement. Les éventuelles fiches de préparation restent distinctes des lots et bloquées tant que les règles applicables, données source et contrôles ne sont pas validés.</div></div>' +
         (runRows ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Référence</th><th>Période</th><th>État</th><th>Référence comptable</th></tr></thead><tbody>' + runRows + '</tbody></table></div>' : '<div class="empty-state"><strong>Aucun lot de paie disponible</strong><span>Les lots ne peuvent pas être créés avec des montants, comptes ou règles inventés.</span></div>') +
@@ -33791,6 +33817,21 @@
         var menuItems = payrollMenuSections(ui.payrollMainMenu).reduce(function (all, section) { return all.concat(section.items || []); }, []).filter(function (item) { return !item.disabled; });
         if (!menuItems.some(function (item) { return item.id === ui.payrollMenuItem; })) ui.payrollMenuItem = menuItems.length ? menuItems[0].id : '';
         render();
+        break;
+      }
+      case 'payroll-employee-select':
+        ui.payrollEmployeeId = trigger.getAttribute('data-employee-id') || '';
+        render();
+        break;
+      case 'open-payroll-employee-info':
+        if ($('#payroll-employee-info-dialog') && typeof $('#payroll-employee-info-dialog').showModal === 'function') $('#payroll-employee-info-dialog').showModal();
+        break;
+      case 'open-payroll-employee-photo':
+        if ($('#payroll-employee-photo-dialog') && typeof $('#payroll-employee-photo-dialog').showModal === 'function') $('#payroll-employee-photo-dialog').showModal();
+        break;
+      case 'close-payroll-employee-dialog': {
+        var employeeDialog = trigger.closest('dialog');
+        if (employeeDialog && typeof employeeDialog.close === 'function' && employeeDialog.open) employeeDialog.close();
         break;
       }
       case 'payroll-menu-item':
