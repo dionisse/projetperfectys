@@ -73,7 +73,7 @@ assert.ok(css.includes('#payroll-employee-function-premium-dialog'));
 assert.match(app, /PayrollHR\.createEmployeeFunctionPremium\(/);
 assert.match(app, /linkedPremiumAmounts/);
 assert.match(app, /name="linkedPremiumAmount"/);
-assert.match(app, /Montant<\/th>/);
+assert.match(app, /<th>Prime<\/th><th>Montant<\/th><th>Liée<\/th>/, 'le montant précède la case de liaison');
 assert.match(app, /amountInput\.disabled = !checkbox\.checked/);
 assert.match(app, /Lier ' \+ esc\(premium\.label\)/);
 assert.match(app, /payrollEmployeeFunctionDraft\.linkedPremiumIds\.push\(createdPremium\.premium\.id\)/);
