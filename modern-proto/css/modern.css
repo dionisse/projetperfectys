@@ -4090,9 +4090,6 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .payroll-employee-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .payroll-employee-dialog-head h3 { margin: 0; }
 .payroll-employee-dialog > .small { margin: 10px 0; }
-.payroll-employee-completion-notification { width: min(500px, calc(100vw - 28px)); }
-.payroll-employee-completion-notification > p { margin: 12px 0; color: #52645b; font-size: .8rem; line-height: 1.55; }
-#payroll-employee-employment-section { scroll-margin-block: 24px; }
 .payroll-employee-dialog-actions { justify-content: flex-end; margin-top: 14px; }
 .payroll-employee-photo-dialog { width: min(420px, calc(100vw - 28px)); }
 .payroll-employee-photo-placeholder { display: grid; min-height: 230px; place-items: center; margin: 12px 0; border: 1px solid #e2e7e3; background: #fafbfa; color: #9aa39c; }

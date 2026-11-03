@@ -97,7 +97,9 @@
     if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
     if (input.testOnly !== true) return { ok: false, errors: ['Cette version locale accepte uniquement des fiches synthétiques de test.'] };
     var employeeNumber = String(input.employeeNumber || '').trim();
-    var displayName = String(input.displayName || '').trim().replace(/\s+/g, ' ');
+    var lastName = String(input.lastName || '').trim().replace(/\s+/g, ' ');
+    var firstName = String(input.firstName || '').trim().replace(/\s+/g, ' ');
+    var displayName = [lastName, firstName].filter(Boolean).join(' ');
     var requestedEmployeeStatus = String(input.employeeStatus || '').trim();
     var availableEmployeeStatuses = Array.isArray(dossier.employeeStatuses) ? dossier.employeeStatuses : [];
     var matchingEmployeeStatus = availableEmployeeStatuses.find(function (item) {
@@ -133,8 +135,11 @@
     var errors = [];
     if (!employeeNumber) errors.push('Le numéro employé interne est obligatoire.');
     if (employeeNumber.length > 40) errors.push('Le numéro employé ne peut pas dépasser 40 caractères.');
-    if (!displayName) errors.push('Le nom d’affichage est obligatoire pour cette fiche de test.');
-    if (displayName.length > 120) errors.push('Le nom d’affichage ne peut pas dépasser 120 caractères.');
+    if (!lastName) errors.push('Le nom de l’employé est obligatoire.');
+    if (!firstName) errors.push('Les prénoms de l’employé sont obligatoires.');
+    if (lastName.length > 80) errors.push('Le nom ne peut pas dépasser 80 caractères.');
+    if (firstName.length > 120) errors.push('Les prénoms ne peuvent pas dépasser 120 caractères.');
+    if (displayName.length > 120) errors.push('Le nom complet ne peut pas dépasser 120 caractères.');
     if (availableEmployeeStatuses.length && requestedEmployeeStatus && !matchingEmployeeStatus) errors.push('Choisissez un statut existant dans le dossier de test.');
     if (availableEmployeeCategories.length && requestedCategoryId && !matchingEmployeeCategory) errors.push('Choisissez une catégorie/échelon existant dans le dossier de test.');
     if (availableEmployeeServices.length && requestedEmployeeServiceId && !matchingEmployeeService) errors.push('Choisissez un service existant dans le dossier de test.');
@@ -156,6 +161,8 @@
       id: id,
       dossierId: dossierId,
       employeeNumber: employeeNumber,
+      lastName: lastName,
+      firstName: firstName,
       displayName: displayName,
       employeeStatus: matchingEmployeeStatus ? matchingEmployeeStatus.id : requestedEmployeeStatus,
       categoryId: matchingEmployeeCategory ? matchingEmployeeCategory.id : '',
@@ -178,7 +185,7 @@
   }
 
   var EMPLOYEE_PROFILE_TEXT_LIMITS = {
-    employeeNumber: 40, displayName: 120, sex: 40, maritalStatus: 60, birthplace: 120,
+    employeeNumber: 40, displayName: 120, lastName: 80, firstName: 120, sex: 40, maritalStatus: 60, birthplace: 120,
     nationality: 80, socialInsuranceNumber: 80, taxId: 80, supplementaryInsuranceCompany: 120,
     supplementaryInsuranceNumber: 80, degree: 120, profession: 120, employeeStatus: 80,
     categoryStep: 80, categoryId: 80, geographicZoneId: 80, zone: 120, serviceId: 80, service: 120, functionId: 80, function: 120, terminationReason: 160,
@@ -230,6 +237,16 @@
     if (Object.prototype.hasOwnProperty.call(input, 'displayName')) {
       patch.displayName = String(input.displayName || '').trim().replace(/\s+/g, ' ');
       if (!patch.displayName) errors.push('Le nom d’affichage fictif est obligatoire.');
+    }
+    if (Object.prototype.hasOwnProperty.call(input, 'lastName') || Object.prototype.hasOwnProperty.call(input, 'firstName')) {
+      patch.lastName = Object.prototype.hasOwnProperty.call(input, 'lastName') ? String(input.lastName || '').trim().replace(/\s+/g, ' ') : String(employee.lastName || '').trim();
+      patch.firstName = Object.prototype.hasOwnProperty.call(input, 'firstName') ? String(input.firstName || '').trim().replace(/\s+/g, ' ') : String(employee.firstName || '').trim();
+      if (!patch.lastName) errors.push('Le nom de l’employé est obligatoire.');
+      if (!patch.firstName) errors.push('Les prénoms de l’employé sont obligatoires.');
+      if (patch.lastName && patch.firstName) {
+        patch.displayName = patch.lastName + ' ' + patch.firstName;
+        if (patch.displayName.length > EMPLOYEE_PROFILE_TEXT_LIMITS.displayName) errors.push('Le nom complet ne peut pas dépasser 120 caractères.');
+      }
     }
     if (Object.prototype.hasOwnProperty.call(input, 'employeeStatus')) {
       var requestedStatus = String(input.employeeStatus || '').trim();

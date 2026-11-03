@@ -19,36 +19,41 @@ const dossier = dossierResult.dossier;
 assert.deepEqual(PayrollHR.runs(dossier.id), []);
 
 const unconfirmed = PayrollHR.createEmployee(dossier.id, {
-  employeeNumber: 'TEST-001', displayName: 'Personne fictive 001', testOnly: false
+  employeeNumber: 'TEST-001', lastName: 'Personne', firstName: 'Fictive 001', testOnly: false
 });
 assert.equal(unconfirmed.ok, false, 'la saisie non confirmée comme test est refusée');
 assert.deepEqual(PayrollHR.employees(dossier.id), []);
 
 const created = PayrollHR.createEmployee(dossier.id, {
-  employeeNumber: 'TEST-001', displayName: 'Personne fictive 001', testOnly: true
+  employeeNumber: 'TEST-001', lastName: 'Personne', firstName: 'Fictive 001', testOnly: true
 });
 assert.equal(created.ok, true, created.errors.join('\n'));
 assert.equal(created.employee.dossierId, dossier.id);
 assert.equal(created.employee.employeeNumber, 'TEST-001');
-assert.equal(created.employee.displayName, 'Personne fictive 001');
+assert.equal(created.employee.lastName, 'Personne');
+assert.equal(created.employee.firstName, 'Fictive 001');
+assert.equal(created.employee.displayName, 'Personne Fictive 001');
 assert.equal(created.employee.status, 'test-only');
 assert.ok(created.employee.id);
 assert.equal('salary' in created.employee, false);
 assert.equal('bankAccount' in created.employee, false);
 assert.equal(PayrollHR.employees(dossier.id).length, 1);
-assert.equal(PayrollHR.employee(dossier.id, created.employee.id).displayName, 'Personne fictive 001');
+assert.equal(PayrollHR.employee(dossier.id, created.employee.id).displayName, 'Personne Fictive 001');
 assert.equal(PayrollHR.employee('other-dossier', created.employee.id), null, 'la lecture d’une fiche vérifie le dossier explicite');
 assert.equal(PayrollHR.employee(dossier.id, 'missing-employee'), null, 'une fiche absente n’est pas exposée');
 assert.deepEqual(PayrollHR.employees('other-dossier'), [], 'les fiches sont filtrées par dossier RH explicite');
 assert.equal(PayrollHR.createEmployee(dossier.id, {
-  employeeNumber: 'test-001', displayName: 'Autre fiche fictive', testOnly: true
+  employeeNumber: 'test-001', lastName: 'Autre', firstName: 'Fiche fictive', testOnly: true
 }).ok, false, 'le numéro est unique sans distinction de casse dans le dossier');
 assert.equal(PayrollHR.createEmployee('unknown-dossier', {
-  employeeNumber: 'TEST-002', displayName: 'Personne fictive 002', testOnly: true
+  employeeNumber: 'TEST-002', lastName: 'Personne', firstName: 'Fictive 002', testOnly: true
 }).ok, false, 'un employé ne peut être créé que dans un dossier existant');
 assert.equal(PayrollHR.createEmployee(dossier.id, {
-  employeeNumber: 'TEST-002', displayName: '   ', testOnly: true
-}).ok, false, 'un nom d’affichage fictif vide est refusé');
+  employeeNumber: 'TEST-002', lastName: '   ', firstName: '   ', testOnly: true
+}).ok, false, 'le nom et les prénoms vides sont refusés');
+assert.equal(PayrollHR.createEmployee(dossier.id, {
+  employeeNumber: 'TEST-003', displayName: 'Identité legacy uniquement', testOnly: true
+}).ok, false, 'un nom d’affichage seul ne remplace pas le nom et les prénoms obligatoires');
 
 assert.equal(PayrollHR.createOrganizationUnit(dossier.id, {
   label: 'Direction test', type: 'Direction', effectiveDate: '2026-01-01', testOnly: false
@@ -236,18 +241,19 @@ assert.ok(testDossier.dossier.demoEmployees.every(employee => employee.status ==
 assert.deepEqual(PayrollHR.runs(testDossier.dossier.id), []);
 assert.equal(PayrollHR.isDemoTestDossier(testDossier.dossier.id), true);
 const addedTestEmployee = PayrollHR.createEmployee(testDossier.dossier.id, {
-  employeeNumber: 'TEST-ADDED-01', displayName: 'Employé fictif supplémentaire', testOnly: true
+  employeeNumber: 'TEST-ADDED-01', lastName: 'Employé', firstName: 'Fictif supplémentaire', testOnly: true
 });
 assert.equal(addedTestEmployee.ok, true, addedTestEmployee.errors.join('\\n'));
 assert.match(addedTestEmployee.employee.id, /^EMP-TEST-/);
 assert.equal(PayrollHR.isDemoTestDossier(testDossier.dossier.id), true, 'l’ajout d’une fiche fictive conserve le dossier de test reconnu');
 const profileUpdate = PayrollHR.updateEmployee(testDossier.dossier.id, addedTestEmployee.employee.id, {
-  employeeNumber: 'TEST-ADDED-UPDATED', displayName: 'Employé fictif mis à jour', birthDate: '1990-05-12',
+  employeeNumber: 'TEST-ADDED-UPDATED', lastName: 'Employé', firstName: 'Fictif mis à jour', birthDate: '1990-05-12',
   childrenCount: '2', seniorityMonthsToDeduct: '1', socialInsuranceNumber: 'TEST-SS-0001',
   bankAccountNumber: 'TEST-ACCOUNT-0001', address: 'Adresse fictive 1', photoDataUrl: 'data:image/png;base64,ZmFrZQ=='
 });
 assert.equal(profileUpdate.ok, true, profileUpdate.errors.join('\\n'));
 assert.equal(PayrollHR.employee(testDossier.dossier.id, addedTestEmployee.employee.id).birthDate, '1990-05-12');
+assert.equal(PayrollHR.employee(testDossier.dossier.id, addedTestEmployee.employee.id).displayName, 'Employé Fictif mis à jour');
 assert.equal(PayrollHR.employee(testDossier.dossier.id, addedTestEmployee.employee.id).bankAccountNumber, 'TEST-ACCOUNT-0001');
 assert.equal(PayrollHR.updateEmployee(testDossier.dossier.id, addedTestEmployee.employee.id, { birthDate: '2026-02-31' }).ok, false, 'les dates de saisie sont contrôlées');
 assert.equal(PayrollHR.updateEmployee(testDossier.dossier.id, addedTestEmployee.employee.id, { photoDataUrl: 'data:image/svg+xml;base64,PHN2Zz4=' }).ok, false, 'les photos sont limitées aux formats raster autorisés');
@@ -295,7 +301,7 @@ const independentlyConfigurableRubric = rubricCatalog.find(item => !item.selecte
 assert.ok(independentlyConfigurableRubric);
 const assignedStatus = PayrollHR.updateEmployee(testDossier.dossier.id, testDossier.dossier.demoEmployees[0].id, { employeeStatus: statusA.id });
 assert.equal(assignedStatus.ok, true, assignedStatus.errors.join('\\n'));
-const createdWithStatus = PayrollHR.createEmployee(testDossier.dossier.id, { employeeNumber: 'TEST-STATUS-01', displayName: 'Employé lié au statut', employeeStatus: statusA.id, testOnly: true });
+const createdWithStatus = PayrollHR.createEmployee(testDossier.dossier.id, { employeeNumber: 'TEST-STATUS-01', lastName: 'Employé', firstName: 'Lié au statut', employeeStatus: statusA.id, testOnly: true });
 assert.equal(createdWithStatus.ok, true, createdWithStatus.errors.join('\\n'));
 assert.equal(createdWithStatus.employee.employeeStatus, statusA.id);
 assert.equal(PayrollHR.deleteEmployee(testDossier.dossier.id, createdWithStatus.employee.id).ok, true);
@@ -334,7 +340,7 @@ assert.deepEqual(categoryWithClassification.category.additionalClassificationIds
 assert.equal(PayrollHR.deleteEmployeeCategoryAdditionalClassification(testDossier.dossier.id, addedClassification.classification.id).ok, false, 'une classification utilisée ne peut pas être supprimée');
 const categoryLinkedEmployee = PayrollHR.updateEmployee(testDossier.dossier.id, testDossier.dossier.demoEmployees[1].id, { categoryId: categoryC1.id });
 assert.equal(categoryLinkedEmployee.ok, true, categoryLinkedEmployee.errors.join('\\n'));
-const createdWithCategory = PayrollHR.createEmployee(testDossier.dossier.id, { employeeNumber: 'TEST-CATEGORY-01', displayName: 'Employé lié à C1', categoryId: categoryC1.id, testOnly: true });
+const createdWithCategory = PayrollHR.createEmployee(testDossier.dossier.id, { employeeNumber: 'TEST-CATEGORY-01', lastName: 'Employé', firstName: 'Lié à C1', categoryId: categoryC1.id, testOnly: true });
 assert.equal(createdWithCategory.ok, true, createdWithCategory.errors.join('\\n'));
 assert.equal(createdWithCategory.employee.categoryId, categoryC1.id);
 assert.equal(PayrollHR.deleteEmployee(testDossier.dossier.id, createdWithCategory.employee.id).ok, true);
@@ -358,7 +364,7 @@ assert.equal(PayrollHR.createEmployeeGeographicZone(testDossier.dossier.id, { co
 assert.equal(PayrollHR.positionEmployeeGeographicZone(testDossier.dossier.id, secondGeographicZone.zone.id, 1).ok, true);
 assert.equal(PayrollHR.employeeGeographicZones(testDossier.dossier.id)[0].id, secondGeographicZone.zone.id);
 assert.equal(PayrollHR.updateEmployeeGeographicZone(testDossier.dossier.id, secondGeographicZone.zone.id, { code: '2', label: 'Agence régionale', testOnly: true }).ok, true);
-assert.equal(PayrollHR.createEmployee(testDossier.dossier.id, { employeeNumber: 'TEST-GEO-001', displayName: 'Employé zone fictif', geographicZoneId: geographicZone.id, testOnly: true }).employee.geographicZoneId, geographicZone.id);
+assert.equal(PayrollHR.createEmployee(testDossier.dossier.id, { employeeNumber: 'TEST-GEO-001', lastName: 'Employé', firstName: 'Zone fictive', geographicZoneId: geographicZone.id, testOnly: true }).employee.geographicZoneId, geographicZone.id);
 const geographicEmployee = PayrollHR.employees(testDossier.dossier.id).find(employee => employee.employeeNumber === 'TEST-GEO-001');
 assert.equal(geographicEmployee.zone, 'Siège', 'la valeur historique Zone reste lisible');
 assert.equal(PayrollHR.deleteEmployeeGeographicZone(testDossier.dossier.id, geographicZone.id).ok, false, 'une zone associée ne peut être supprimée');
@@ -410,7 +416,7 @@ assert.equal(temporaryFunction.ok, true, temporaryFunction.errors.join('\\n'));
 assert.deepEqual(temporaryFunction.employeeFunction.linkedPremiumAmounts, { [additionalFunctionPremium.premium.id]: '1250.50' }, 'le montant décimal est enregistré avec la liaison sans être calculé');
 assert.equal(PayrollHR.createEmployeeFunction(testDossier.dossier.id, { code: 'BAD-AMOUNT', label: 'Montant invalide', linkedPremiumIds: [additionalFunctionPremium.premium.id], linkedPremiumAmounts: { [additionalFunctionPremium.premium.id]: 'non-numérique' }, testOnly: true }).ok, false, 'un montant non numérique est refusé');
 assert.equal(PayrollHR.createEmployeeFunction(testDossier.dossier.id, { code: 'assist', label: 'Autre assistant', testOnly: true }).ok, false, 'les codes fonction sont uniques sans distinction de casse');
-const employeeCreatedWithFunctions = PayrollHR.createEmployee(testDossier.dossier.id, { employeeNumber: 'TEST-FUNC-001', displayName: 'Employé fonctions fictives', functionIds: [capturedFunction.id, temporaryFunction.employeeFunction.id], testOnly: true });
+const employeeCreatedWithFunctions = PayrollHR.createEmployee(testDossier.dossier.id, { employeeNumber: 'TEST-FUNC-001', lastName: 'Employé', firstName: 'Fonctions fictives', functionIds: [capturedFunction.id, temporaryFunction.employeeFunction.id], testOnly: true });
 assert.equal(employeeCreatedWithFunctions.ok, true, employeeCreatedWithFunctions.errors.join('\\n'));
 assert.deepEqual(employeeCreatedWithFunctions.employee.functionIds, [capturedFunction.id, temporaryFunction.employeeFunction.id], 'une fiche peut cumuler plusieurs fonctions distinctes');
 assert.equal(employeeCreatedWithFunctions.employee.functionId, '', 'aucune fonction principale n’est inventée en cas de cumul');
@@ -434,7 +440,7 @@ assert.equal(PayrollHR.seedDemoEmployeeDefinitionItems(dossier.id, 'banks').ok, 
 const seededQualifications = PayrollHR.seedDemoEmployeeDefinitionItems(testDossier.dossier.id, 'qualifications');
 assert.equal(seededQualifications.ok, true, seededQualifications.errors.join('\\n'));
 assert.deepEqual(seededQualifications.items.map(item => [item.code, item.label]), [['01', 'Bac G2'], ['11', 'BTS en Informatique de Gestion']]);
-const createdEmployeeWithQualifications = PayrollHR.createEmployee(testDossier.dossier.id, { employeeNumber: 'TEST-QUAL-001', displayName: 'Employé qualifié fictif', qualificationIds: seededQualifications.items.map(item => item.id), testOnly: true });
+const createdEmployeeWithQualifications = PayrollHR.createEmployee(testDossier.dossier.id, { employeeNumber: 'TEST-QUAL-001', lastName: 'Employé', firstName: 'Qualifié fictif', qualificationIds: seededQualifications.items.map(item => item.id), testOnly: true });
 assert.equal(createdEmployeeWithQualifications.ok, true, createdEmployeeWithQualifications.errors.join('\\n'));
 assert.deepEqual(createdEmployeeWithQualifications.employee.qualificationIds, seededQualifications.items.map(item => item.id), 'la création accepte plusieurs diplômes et qualifications');
 const employeeWithQualifications = PayrollHR.updateEmployee(testDossier.dossier.id, geographicEmployee.id, { qualificationIds: seededQualifications.items.map(item => item.id) });
