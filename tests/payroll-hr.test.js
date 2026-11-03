@@ -241,10 +241,23 @@ assert.ok(testDossier.dossier.demoEmployees.every(employee => employee.status ==
 assert.deepEqual(PayrollHR.runs(testDossier.dossier.id), []);
 assert.equal(PayrollHR.isDemoTestDossier(testDossier.dossier.id), true);
 const addedTestEmployee = PayrollHR.createEmployee(testDossier.dossier.id, {
-  employeeNumber: 'TEST-ADDED-01', lastName: 'Employé', firstName: 'Fictif supplémentaire', testOnly: true
+  employeeNumber: 'TEST-ADDED-01', lastName: 'Employé', firstName: 'Fictif supplémentaire',
+  firstHireDate: '2026-01-15', birthDate: '1990-05-12', sex: 'Test', profession: 'Profession fictive',
+  socialInsuranceNumber: 'TEST-SS-CREATE-01', paymentMethod: 'Test', bankName: 'Banque fictive',
+  bankAccountNumber: 'TEST-ACCOUNT-CREATE-01', address: 'Adresse fictive 1', contactEmail: 'test@example.invalid',
+  miscellaneousLabel: 'Note', miscellaneousValue: 'Donnée de test', testOnly: true
 });
 assert.equal(addedTestEmployee.ok, true, addedTestEmployee.errors.join('\\n'));
 assert.match(addedTestEmployee.employee.id, /^EMP-TEST-/);
+assert.equal(addedTestEmployee.employee.firstHireDate, '2026-01-15');
+assert.equal(addedTestEmployee.employee.birthDate, '1990-05-12');
+assert.equal(addedTestEmployee.employee.profession, 'Profession fictive');
+assert.equal(addedTestEmployee.employee.contactEmail, 'test@example.invalid');
+assert.equal(addedTestEmployee.employee.miscellaneousValue, 'Donnée de test');
+assert.equal(addedTestEmployee.employee.bankAccountNumber, 'TEST-ACCOUNT-CREATE-01');
+assert.equal(PayrollHR.createEmployee(testDossier.dossier.id, {
+  employeeNumber: 'TEST-ADDED-INVALID-DATE', lastName: 'Employé', firstName: 'Date invalide', birthDate: '2026-02-31', testOnly: true
+}).ok, false, 'les dates de création sont validées avant persistance');
 assert.equal(PayrollHR.isDemoTestDossier(testDossier.dossier.id), true, 'l’ajout d’une fiche fictive conserve le dossier de test reconnu');
 const profileUpdate = PayrollHR.updateEmployee(testDossier.dossier.id, addedTestEmployee.employee.id, {
   employeeNumber: 'TEST-ADDED-UPDATED', lastName: 'Employé', firstName: 'Fictif mis à jour', birthDate: '1990-05-12',

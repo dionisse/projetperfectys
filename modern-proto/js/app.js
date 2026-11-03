@@ -20353,6 +20353,66 @@
     return !!(dossier && form && form.getAttribute('data-dossier-id') === dossier.id && PayrollHR.isDemoTestDossier(dossier.id));
   }
 
+  function updatePayrollEmployeeCreateReview(form) {
+    var review = form && $('[data-payroll-employee-create-review]', form);
+    if (!review) return;
+    var sections = Array.prototype.map.call(form.querySelectorAll('[data-payroll-employee-step-panel]'), function (panel) {
+      var title = panel.querySelector('legend') ? panel.querySelector('legend').textContent : 'Section';
+      var lines = [];
+      Array.prototype.forEach.call(panel.querySelectorAll('input:not([type="checkbox"]), select, textarea'), function (control) {
+        if (!String(control.value || '').trim()) return;
+        var label = control.labels && control.labels.length ? control.labels[0].textContent : '';
+        var value = control.tagName === 'SELECT' && control.selectedOptions.length ? control.selectedOptions[0].textContent : control.value;
+        lines.push('<li><strong>' + esc(label || 'Information') + '</strong> : ' + esc(value) + '</li>');
+      });
+      ['qualificationIds', 'functionIds'].forEach(function (name) {
+        var checked = panel.querySelectorAll('input[name="' + name + '"]:checked');
+        if (!checked.length) return;
+        var parent = checked[0].closest('.payroll-employee-function-field');
+        var label = parent && (parent.querySelector('legend') || parent.querySelector('span'));
+        Array.prototype.forEach.call(checked, function (input) {
+          var itemLabel = input.closest('label');
+          if (itemLabel) lines.push('<li><strong>' + esc(label ? label.textContent : name) + '</strong> : ' + esc(itemLabel.textContent) + '</li>');
+        });
+      });
+      return '<section><h5>' + esc(title) + '</h5>' + (lines.length ? '<ul>' + lines.join('') + '</ul>' : '<p class="small muted">Aucune autre valeur renseignée.</p>') + '</section>';
+    }).join('');
+    review.innerHTML = '<strong>Vérifier la fiche</strong><p>Récapitulatif des valeurs avant création. Revenez à une étape pour les corriger.</p><div class="payroll-employee-create-review-sections">' + sections + '</div>';
+  }
+
+  function setPayrollEmployeeCreateStep(form, requestedStep) {
+    if (!form) return;
+    var panels = Array.prototype.slice.call(form.querySelectorAll('[data-payroll-employee-step-panel]'));
+    var currentStep = Number(form.getAttribute('data-current-step')) || 1;
+    var nextStep = Math.max(1, Math.min(panels.length, Number(requestedStep) || 1));
+    if (nextStep > currentStep) {
+      var currentPanel = panels[currentStep - 1];
+      var invalidControl = currentPanel && currentPanel.querySelector('input:invalid, select:invalid, textarea:invalid');
+      if (invalidControl) {
+        invalidControl.reportValidity();
+        invalidControl.focus();
+        return;
+      }
+    }
+    panels.forEach(function (panel, index) { panel.hidden = index + 1 !== nextStep; });
+    Array.prototype.forEach.call(form.querySelectorAll('[data-payroll-employee-step-indicator]'), function (indicator) {
+      var step = Number(indicator.getAttribute('data-payroll-employee-step-indicator'));
+      indicator.classList.toggle('is-current', step === nextStep);
+      indicator.classList.toggle('is-complete', step < nextStep);
+      if (step === nextStep) indicator.setAttribute('aria-current', 'step');
+      else indicator.removeAttribute('aria-current');
+    });
+    var status = $('[data-payroll-employee-step-status]', form);
+    var legend = panels[nextStep - 1] && panels[nextStep - 1].querySelector('legend');
+    form.setAttribute('data-current-step', String(nextStep));
+    if (status) status.textContent = 'Étape ' + nextStep + ' sur ' + panels.length + ' · ' + (legend ? legend.textContent : '');
+    if (nextStep === panels.length) updatePayrollEmployeeCreateReview(form);
+    if (legend) {
+      legend.setAttribute('tabindex', '-1');
+      legend.focus();
+    }
+  }
+
   function bindPayrollModuleView() {
     var form = $('#payroll-accounting-link-form');
     if (form) form.addEventListener('submit', function (event) {
@@ -20370,33 +20430,32 @@
       render();
     });
     var employeeForm = $('#payroll-employee-create-form');
-    if (employeeForm) employeeForm.addEventListener('submit', function (event) {
-      event.preventDefault();
-      if (!canPerformDemoAction('create-payroll-test-employee', null, true)) return;
-      var dossier = PayrollHR.currentDossier();
-      if (!dossier || employeeForm.getAttribute('data-dossier-id') !== dossier.id || !PayrollHR.isDemoTestDossier(dossier.id)) {
-        toast('Création refusée : les fiches fictives sont réservées au dossier PRH-TEST-2026 actif.', 'warning'); return;
-      }
-      var confirmed = !!($('#payroll-test-data-confirmation', employeeForm) || {}).checked;
-      var result = PayrollHR.createEmployee(dossier.id, {
-        employeeNumber: ($('#payroll-employee-number', employeeForm) || {}).value || '',
-        lastName: ($('#payroll-employee-last-name', employeeForm) || {}).value || '',
-        firstName: ($('#payroll-employee-first-name', employeeForm) || {}).value || '',
-        displayName: [($('#payroll-employee-last-name', employeeForm) || {}).value || '', ($('#payroll-employee-first-name', employeeForm) || {}).value || ''].join(' ').trim(),
-        employeeStatus: ($('#payroll-employee-create-status', employeeForm) || {}).value || '',
-        categoryId: ($('#payroll-employee-create-category', employeeForm) || {}).value || '',
-        geographicZoneId: ($('#payroll-employee-create-geographic-zone', employeeForm) || {}).value || '',
-        serviceId: ($('#payroll-employee-create-service', employeeForm) || {}).value || '',
-        qualificationIds: Array.prototype.map.call(employeeForm.querySelectorAll('input[name="qualificationIds"]:checked'), function (input) { return input.value; }),
-        functionIds: Array.prototype.map.call(employeeForm.querySelectorAll('input[name="functionIds"]:checked'), function (input) { return input.value; }),
-        testOnly: confirmed
+    if (employeeForm) {
+      employeeForm.addEventListener('input', function () {
+        if (Number(employeeForm.getAttribute('data-current-step')) === 7) updatePayrollEmployeeCreateReview(employeeForm);
       });
-      if (!result.ok) { toast(result.errors[0] || 'Création de la fiche de test impossible.', 'warning'); return; }
-      ui.payrollEmployeeId = result.employee.id;
-      ui.payrollEmployeeCreateMode = false;
-      toast('Fiche fictive créée dans PRH-TEST-2026.', 'success');
-      render();
-    });
+      employeeForm.addEventListener('change', function () {
+        if (Number(employeeForm.getAttribute('data-current-step')) === 7) updatePayrollEmployeeCreateReview(employeeForm);
+      });
+      employeeForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        if (!canPerformDemoAction('create-payroll-test-employee', null, true)) return;
+        var dossier = PayrollHR.currentDossier();
+        if (!dossier || employeeForm.getAttribute('data-dossier-id') !== dossier.id || !PayrollHR.isDemoTestDossier(dossier.id)) {
+          toast('Création refusée : les fiches fictives sont réservées au dossier PRH-TEST-2026 actif.', 'warning'); return;
+        }
+        var employeeProfile = payrollEmployeeFormValues(employeeForm, ['employeeNumber', 'lastName', 'firstName', 'firstHireDate', 'seniorityMonthsToDeduct', 'seniorityReferenceDate', 'vpsExemptionEndDate', 'terminationDate', 'terminationReason', 'rehireDate', 'birthDate', 'sex', 'maritalStatus', 'childrenCount', 'birthplace', 'nationality', 'socialInsuranceNumber', 'taxId', 'supplementaryInsuranceCompany', 'supplementaryInsuranceNumber', 'profession', 'employeeStatus', 'categoryId', 'effectiveDate', 'geographicZoneId', 'serviceId', 'qualificationIds', 'functionIds', 'paymentMethod', 'bankName', 'bankAccountNumber', 'address', 'contactPhone', 'contactEmail', 'miscellaneousLabel', 'miscellaneousValue']);
+        employeeProfile.qualificationIds = Array.prototype.map.call(employeeForm.querySelectorAll('input[name="qualificationIds"]:checked'), function (input) { return input.value; });
+        employeeProfile.functionIds = Array.prototype.map.call(employeeForm.querySelectorAll('input[name="functionIds"]:checked'), function (input) { return input.value; });
+        employeeProfile.testOnly = !!($('#payroll-test-data-confirmation', employeeForm) || {}).checked;
+        var result = PayrollHR.createEmployee(dossier.id, employeeProfile);
+        if (!result.ok) { toast(result.errors[0] || 'Création de la fiche de test impossible.', 'warning'); return; }
+        ui.payrollEmployeeId = result.employee.id;
+        ui.payrollEmployeeCreateMode = false;
+        toast('Fiche fictive créée dans PRH-TEST-2026.', 'success');
+        render();
+      });
+    }
     var employeeStatusForm = $('#payroll-employee-status-form');
     if (employeeStatusForm) employeeStatusForm.addEventListener('submit', function (event) {
       event.preventDefault();
@@ -21383,25 +21442,25 @@
       ? '<div class="field"><label for="payroll-employee-field-employeeStatus">Statut</label><select id="payroll-employee-field-employeeStatus" name="employeeStatus"><option value="">— Non défini —</option>' + employeeStatusCatalog.map(function (status) { return '<option value="' + esc(status.id) + '"' + (selected && selected.employeeStatus === status.id ? ' selected' : '') + '>' + esc(status.code + ' · ' + status.label) + '</option>'; }).join('') + '</select></div>'
       : textField('employeeStatus', 'Statut', 'text', selected && selected.employeeStatus, 80);
     var createEmployeeStatusField = employeeStatusCatalog.length
-      ? '<div class="field"><label for="payroll-employee-create-status">Statut</label><select id="payroll-employee-create-status"><option value="">— Non défini —</option>' + employeeStatusCatalog.map(function (status) { return '<option value="' + esc(status.id) + '">' + esc(status.code + ' · ' + status.label) + '</option>'; }).join('') + '</select></div>'
+      ? '<div class="field"><label for="payroll-employee-create-status">Statut</label><select id="payroll-employee-create-status" name="employeeStatus"><option value="">— Non défini —</option>' + employeeStatusCatalog.map(function (status) { return '<option value="' + esc(status.id) + '">' + esc(status.code + ' · ' + status.label) + '</option>'; }).join('') + '</select></div>'
       : '';
     var employeeCategoryField = employeeCategoryCatalog.length
       ? '<div class="field"><label for="payroll-employee-field-categoryId">Catégorie / échelon</label><select id="payroll-employee-field-categoryId" name="categoryId"><option value="">— Non défini —</option>' + employeeCategoryCatalog.map(function (category) { return '<option value="' + esc(category.id) + '"' + (selected && (selected.categoryId === category.id || selected.categoryStep === category.code) ? ' selected' : '') + '>' + esc(category.code + ' · ' + category.ohadaClassification) + '</option>'; }).join('') + '</select></div>'
       : textField('categoryStep', 'Catégorie / échelon', 'text', selected && selected.categoryStep, 80);
     var createEmployeeCategoryField = employeeCategoryCatalog.length
-      ? '<div class="field"><label for="payroll-employee-create-category">Catégorie / échelon</label><select id="payroll-employee-create-category"><option value="">— Non défini —</option>' + employeeCategoryCatalog.map(function (category) { return '<option value="' + esc(category.id) + '">' + esc(category.code + ' · ' + category.ohadaClassification) + '</option>'; }).join('') + '</select></div>'
+      ? '<div class="field"><label for="payroll-employee-create-category">Catégorie / échelon</label><select id="payroll-employee-create-category" name="categoryId"><option value="">— Non défini —</option>' + employeeCategoryCatalog.map(function (category) { return '<option value="' + esc(category.id) + '">' + esc(category.code + ' · ' + category.ohadaClassification) + '</option>'; }).join('') + '</select></div>'
       : '';
     var employeeGeographicZoneField = employeeGeographicZoneCatalog.length
       ? '<div class="field"><label for="payroll-employee-field-geographicZoneId">Zone géographique</label><select id="payroll-employee-field-geographicZoneId" name="geographicZoneId"><option value="">— Non définie —</option>' + employeeGeographicZoneCatalog.map(function (zone) { return '<option value="' + esc(zone.id) + '"' + (selected && (selected.geographicZoneId === zone.id || selected.zone === zone.code || selected.zone === zone.label) ? ' selected' : '') + '>' + esc(zone.code + ' · ' + zone.label) + '</option>'; }).join('') + '</select></div>'
       : textField('zone', 'Zone géographique', 'text', selected && selected.zone, 120);
     var createEmployeeGeographicZoneField = employeeGeographicZoneCatalog.length
-      ? '<div class="field"><label for="payroll-employee-create-geographic-zone">Zone géographique</label><select id="payroll-employee-create-geographic-zone"><option value="">— Non définie —</option>' + employeeGeographicZoneCatalog.map(function (zone) { return '<option value="' + esc(zone.id) + '">' + esc(zone.code + ' · ' + zone.label) + '</option>'; }).join('') + '</select></div>'
+      ? '<div class="field"><label for="payroll-employee-create-geographic-zone">Zone géographique</label><select id="payroll-employee-create-geographic-zone" name="geographicZoneId"><option value="">— Non définie —</option>' + employeeGeographicZoneCatalog.map(function (zone) { return '<option value="' + esc(zone.id) + '">' + esc(zone.code + ' · ' + zone.label) + '</option>'; }).join('') + '</select></div>'
       : '';
     var employeeServiceField = employeeServiceCatalog.length
       ? '<div class="field"><label for="payroll-employee-field-serviceId">Service</label><select id="payroll-employee-field-serviceId" name="serviceId"><option value="">— Non défini —</option>' + employeeServiceCatalog.map(function (service) { return '<option value="' + esc(service.id) + '"' + (selected && (selected.serviceId === service.id || selected.service === service.code || selected.service === service.label) ? ' selected' : '') + '>' + esc(service.code + ' · ' + service.label) + '</option>'; }).join('') + '</select></div>'
       : textField('service', 'Service', 'text', selected && selected.service, 120);
     var createEmployeeServiceField = employeeServiceCatalog.length
-      ? '<div class="field"><label for="payroll-employee-create-service">Service</label><select id="payroll-employee-create-service"><option value="">— Non défini —</option>' + employeeServiceCatalog.map(function (service) { return '<option value="' + esc(service.id) + '">' + esc(service.code + ' · ' + service.label) + '</option>'; }).join('') + '</select></div>'
+      ? '<div class="field"><label for="payroll-employee-create-service">Service</label><select id="payroll-employee-create-service" name="serviceId"><option value="">— Non défini —</option>' + employeeServiceCatalog.map(function (service) { return '<option value="' + esc(service.id) + '">' + esc(service.code + ' · ' + service.label) + '</option>'; }).join('') + '</select></div>'
       : '';
     var selectedQualificationIds = selected && Array.isArray(selected.qualificationIds) ? selected.qualificationIds : [];
     var employeeQualificationField = employeeQualificationCatalog.length
@@ -21419,14 +21478,31 @@
     var createEmployeeFunctionField = employeeFunctionCatalog.length
       ? '<div class="field payroll-employee-function-field"><span>Fonctions de l’employé</span><div class="payroll-employee-function-checklist">' + employeeFunctionCatalog.map(function (employeeFunction) { return '<label><input type="checkbox" name="functionIds" value="' + esc(employeeFunction.id) + '"><span>' + esc(employeeFunction.code + ' · ' + employeeFunction.label) + '</span></label>'; }).join('') + '</div><small>Plusieurs fonctions peuvent être associées. Aucun calcul de paie n’est exécuté.</small></div>'
       : '';
+    function createEmployeeProfileField(name, label, type, maxLength) {
+      var inputType = type || 'text';
+      return '<div class="field"><label for="payroll-employee-create-' + esc(name) + '">' + esc(label) + '</label><input id="payroll-employee-create-' + esc(name) + '" name="' + esc(name) + '" type="' + esc(inputType) + '"' + (maxLength ? ' maxlength="' + maxLength + '"' : '') + (inputType === 'number' ? ' min="0" max="9999" step="1"' : '') + '></div>';
+    }
+    var createWizardSteps = ['Identité', 'Embauche et situation', 'Situation personnelle', 'Parcours et affectation', 'Identifiants et assurance', 'Règlement des salaires', 'Informations diverses'];
+    function createWizardActions(step) {
+      return '<div class="payroll-employee-wizard-actions">' +
+        (step === 1 ? (employees.length ? '<button type="button" class="btn btn-secondary" data-action="cancel-new-payroll-employee">Annuler</button>' : '') : '<button type="button" class="btn btn-secondary" data-action="payroll-employee-create-back">Précédent</button>') +
+        (step < createWizardSteps.length ? '<button type="button" class="btn btn-primary" data-action="payroll-employee-create-next">Suivant</button>' : '<button type="submit" class="btn btn-primary">Créer la fiche fictive</button>') + '</div>';
+    }
+    function createWizardPanel(step, content) {
+      var title = createWizardSteps[step - 1];
+      return '<fieldset class="payroll-employee-wizard-panel" data-payroll-employee-step-panel="' + step + '"' + (step === 1 ? '' : ' hidden') + '><legend>' + esc(title) + '</legend>' + content + createWizardActions(step) + '</fieldset>';
+    }
     var createForm = isTestDossier && canCreatePayrollEmployee
-      ? '<form id="payroll-employee-create-form" class="payroll-employee-create-form" data-dossier-id="' + esc(dossier.id) + '"><div class="payroll-employee-identity">' +
-        '<div class="field"><label for="payroll-employee-number">Matricule interne *</label><input id="payroll-employee-number" type="text" maxlength="40" required autocomplete="off"></div>' +
-        '<div class="field"><label for="payroll-employee-last-name">Nom *</label><input id="payroll-employee-last-name" type="text" maxlength="80" required autocomplete="family-name"></div>' +
-        '<div class="field"><label for="payroll-employee-first-name">Prénoms *</label><input id="payroll-employee-first-name" type="text" maxlength="120" required autocomplete="given-name"></div></div>' +
-        '<div class="payroll-employee-fieldsets"><fieldset><legend>Parcours et affectation</legend><div class="payroll-employee-field-grid">' + createEmployeeStatusField + createEmployeeCategoryField + createEmployeeGeographicZoneField + createEmployeeServiceField + createEmployeeQualificationField + createEmployeeFunctionField + '</div></fieldset></div>' +
-        '<label class="payroll-test-confirm"><input id="payroll-test-data-confirmation" type="checkbox" required><span>Fiche fictive de test uniquement.</span></label>' +
-        '<div class="payroll-employee-edit-actions">' + (employees.length ? '<button type="button" class="btn btn-secondary" data-action="cancel-new-payroll-employee">Annuler</button>' : '') + '<button type="submit" class="btn btn-primary">＋ Ajouter</button></div></form>'
+      ? '<form id="payroll-employee-create-form" class="payroll-employee-create-form" data-dossier-id="' + esc(dossier.id) + '" data-current-step="1"><nav class="payroll-employee-wizard-progress" aria-label="Étapes de création de la fiche"><ol>' + createWizardSteps.map(function (stepTitle, index) { return '<li data-payroll-employee-step-indicator="' + (index + 1) + '"' + (index === 0 ? ' class="is-current" aria-current="step"' : '') + '><span class="payroll-employee-step-number">' + (index + 1) + '</span><span>' + esc(stepTitle) + '</span></li>'; }).join('') + '</ol><p data-payroll-employee-step-status aria-live="polite">Étape 1 sur ' + createWizardSteps.length + ' · ' + esc(createWizardSteps[0]) + '</p></nav>' +
+        '<div class="payroll-employee-wizard-panels">' +
+        createWizardPanel(1, '<div class="payroll-employee-identity"><div class="field"><label for="payroll-employee-number">Matricule interne *</label><input id="payroll-employee-number" name="employeeNumber" type="text" maxlength="40" required autocomplete="off"></div><div class="field"><label for="payroll-employee-last-name">Nom *</label><input id="payroll-employee-last-name" name="lastName" type="text" maxlength="80" required autocomplete="family-name"></div><div class="field"><label for="payroll-employee-first-name">Prénoms *</label><input id="payroll-employee-first-name" name="firstName" type="text" maxlength="120" required autocomplete="given-name"></div></div><p class="small muted">Ces éléments identifient la fiche à laquelle les autres sections seront rattachées.</p>') +
+        createWizardPanel(2, '<div class="payroll-employee-field-grid">' + createEmployeeProfileField('firstHireDate', 'Première embauche', 'date') + createEmployeeProfileField('seniorityMonthsToDeduct', 'Ancienneté à déduire · mois', 'number') + createEmployeeProfileField('seniorityReferenceDate', 'Référence ancienneté au', 'date') + createEmployeeProfileField('vpsExemptionEndDate', 'Fin exonération V.P.S.', 'date') + createEmployeeProfileField('terminationDate', 'Débauchage', 'date') + createEmployeeProfileField('terminationReason', 'Motif', 'text', 160) + createEmployeeProfileField('rehireDate', 'Dernière réembauche', 'date') + '</div>') +
+        createWizardPanel(3, '<div class="payroll-employee-field-grid">' + createEmployeeProfileField('birthDate', 'Date de naissance', 'date') + createEmployeeProfileField('sex', 'Sexe', 'text', 40) + createEmployeeProfileField('maritalStatus', 'Situation matrimoniale', 'text', 60) + createEmployeeProfileField('childrenCount', 'Enfants', 'number') + createEmployeeProfileField('birthplace', 'Lieu de naissance', 'text', 120) + createEmployeeProfileField('nationality', 'Pays de nationalité', 'text', 80) + '</div>') +
+        createWizardPanel(4, '<div class="payroll-employee-field-grid">' + createEmployeeProfileField('profession', 'Profession', 'text', 120) + createEmployeeStatusField + createEmployeeCategoryField + createEmployeeProfileField('effectiveDate', 'Date d’effet', 'date') + createEmployeeGeographicZoneField + createEmployeeServiceField + createEmployeeQualificationField + createEmployeeFunctionField + '</div>') +
+        createWizardPanel(5, '<div class="payroll-employee-field-grid">' + createEmployeeProfileField('socialInsuranceNumber', 'N° d’assuré social', 'text', 80) + createEmployeeProfileField('taxId', 'Numéro IFU', 'text', 80) + createEmployeeProfileField('supplementaryInsuranceCompany', 'Compagnie', 'text', 120) + createEmployeeProfileField('supplementaryInsuranceNumber', 'Numéro d’assuré', 'text', 80) + '</div>') +
+        createWizardPanel(6, '<div class="payroll-employee-field-grid">' + createEmployeeProfileField('paymentMethod', 'Mode de règlement', 'text', 80) + createEmployeeProfileField('bankName', 'Banque', 'text', 120) + createEmployeeProfileField('bankAccountNumber', 'N° de compte fictif', 'text', 100) + '</div><p class="small muted">N’utilisez que des valeurs inventées pour ce dossier de test. Aucun RIB réel ne doit être saisi.</p>') +
+        createWizardPanel(7, '<div class="payroll-employee-field-grid">' + createEmployeeProfileField('address', 'Adresse fictive', 'text', 240) + createEmployeeProfileField('contactPhone', 'Contact · téléphone fictif', 'text', 80) + createEmployeeProfileField('contactEmail', 'Contact · courriel fictif', 'email', 160) + createEmployeeProfileField('miscellaneousLabel', 'Divers · libellé', 'text', 120) + '<div class="field"><label for="payroll-employee-create-miscellaneousValue">Divers · valeur</label><textarea id="payroll-employee-create-miscellaneousValue" name="miscellaneousValue" maxlength="500" rows="3"></textarea></div></div><div class="payroll-employee-create-review" data-payroll-employee-create-review aria-live="polite"><strong>Vérifier la fiche</strong><p>Le récapitulatif des sections renseignées s’affichera ici avant la création.</p></div><label class="payroll-test-confirm"><input id="payroll-test-data-confirmation" name="testOnly" type="checkbox" required><span>Je confirme que cette fiche et ses informations sont fictives, réservées au dossier de test.</span></label><p class="small muted">La photo pourra être ajoutée à la fiche après son enregistrement.</p>') +
+        '</div></form>'
       : (isTestDossier ? '<p class="small muted">Création indisponible pour ce profil.</p>' : '<div class="alert info"><div>La saisie de test est réservée au dossier fictif <strong>PRH-TEST-2026</strong>. Ouvrez ce dossier depuis <a href="#/payroll-dossiers">Dossiers RH</a>. Aucune donnée d’un autre dossier n’est affichée ici.</div></div>');
     var employeeIdentityFields = selected && (selected.firstName || selected.lastName)
       ? textField('lastName', 'Nom *', 'text', selected.lastName, 80) + textField('firstName', 'Prénoms *', 'text', selected.firstName, 120)
@@ -34618,6 +34694,16 @@
         ui.payrollEmployeeCreateMode = false;
         render();
         break;
+      case 'payroll-employee-create-next': {
+        var nextEmployeeWizard = trigger.closest('#payroll-employee-create-form');
+        if (nextEmployeeWizard) setPayrollEmployeeCreateStep(nextEmployeeWizard, (Number(nextEmployeeWizard.getAttribute('data-current-step')) || 1) + 1);
+        break;
+      }
+      case 'payroll-employee-create-back': {
+        var previousEmployeeWizard = trigger.closest('#payroll-employee-create-form');
+        if (previousEmployeeWizard) setPayrollEmployeeCreateStep(previousEmployeeWizard, (Number(previousEmployeeWizard.getAttribute('data-current-step')) || 1) - 1);
+        break;
+      }
       case 'payroll-geographic-zone-select':
         ui.payrollEmployeeGeographicZoneId = trigger.getAttribute('data-zone-id') || '';
         ui.payrollEmployeeGeographicZoneMode = 'view';

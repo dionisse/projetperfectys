@@ -4471,6 +4471,29 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .payroll-employee-select { font: inherit; font-size: .66rem; padding: 3px 4px; }
 .payroll-employee-create-form { container-type: inline-size; margin: 0; padding: 0; border: 0; background: transparent; }
 .payroll-employee-new-button { width: 100%; justify-content: center; margin-top: 2px; }
+.payroll-employee-wizard-progress { margin: 0 0 14px; }
+.payroll-employee-wizard-progress ol { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(145px, 100%), 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; }
+.payroll-employee-wizard-progress li { display: flex; min-width: 0; align-items: center; gap: 7px; padding: 6px 8px; border: 1px solid #e1e8e2; border-radius: 7px; color: #758078; background: #fafbf9; font-size: .66rem; line-height: 1.25; }
+.payroll-employee-wizard-progress li.is-current { border-color: #9b6b1e; color: #604817; background: #fbf4e7; font-weight: 750; }
+.payroll-employee-wizard-progress li.is-complete { border-color: #b9d4c4; color: #2e684d; background: #f1f8f3; }
+.payroll-employee-step-number { display: grid; flex: 0 0 22px; width: 22px; height: 22px; place-items: center; border-radius: 50%; background: #e8ece9; font-size: .64rem; font-weight: 800; }
+.payroll-employee-wizard-progress li.is-current .payroll-employee-step-number { color: #fff; background: #9b6b1e; }
+.payroll-employee-wizard-progress li.is-complete .payroll-employee-step-number { color: #fff; background: #387456; }
+.payroll-employee-wizard-progress > p { margin: 7px 0 0; color: #66766d; font-size: .7rem; }
+.payroll-employee-wizard-panel { min-width: 0; margin: 0; padding: 12px; border: 1px solid #e3e9e4; border-radius: 8px; }
+.payroll-employee-wizard-panel[hidden] { display: none !important; }
+.payroll-employee-wizard-panel > legend { padding: 0 5px; color: #43534a; font-size: .82rem; font-weight: 800; }
+.payroll-employee-wizard-panel > .payroll-employee-field-grid { margin-top: 4px; }
+.payroll-employee-wizard-panel textarea { width: 100%; resize: vertical; }
+.payroll-employee-wizard-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 14px; padding-top: 10px; border-top: 1px solid #e5eae6; }
+.payroll-employee-wizard-actions > :first-child:last-child { margin-left: auto; }
+.payroll-employee-create-review { margin-top: 14px; padding: 10px; border: 1px solid #dce6de; border-radius: 7px; background: #f8faf8; }
+.payroll-employee-create-review > p { margin: 5px 0 8px; color: #65736a; font-size: .7rem; }
+.payroll-employee-create-review-sections { display: grid; gap: 7px; max-height: 280px; overflow: auto; }
+.payroll-employee-create-review-sections section { padding-top: 7px; border-top: 1px solid #e1e7e2; }
+.payroll-employee-create-review-sections h5 { margin: 0 0 4px; color: #45564c; font-size: .7rem; }
+.payroll-employee-create-review-sections ul { margin: 0; padding-left: 18px; color: #59675f; font-size: .66rem; line-height: 1.5; }
+.payroll-employee-create-review-sections .small { margin: 0; font-size: .66rem; }
 .payroll-employee-create-form .payroll-test-confirm { margin-top: 12px; }
 .payroll-employee-function-checklist { box-sizing: border-box; min-width: 0; overflow-x: hidden; overflow-y: auto; }
 .payroll-employee-function-checklist > label { box-sizing: border-box; width: 100%; align-items: center; }

@@ -152,6 +152,23 @@
     if (employeeNumber && current.some(function (employee) {
       return String(employee && (employee.employeeNumber || employee.id) || '').trim().toLocaleLowerCase() === employeeNumber.toLocaleLowerCase();
     })) errors.push('Ce numéro employé existe déjà dans ce dossier Paie & RH.');
+    var extraProfile = {};
+    ['sex', 'maritalStatus', 'birthplace', 'nationality', 'socialInsuranceNumber', 'taxId', 'supplementaryInsuranceCompany', 'supplementaryInsuranceNumber', 'profession', 'terminationReason', 'paymentMethod', 'bankName', 'bankAccountNumber', 'address', 'contactPhone', 'contactEmail', 'miscellaneousLabel', 'miscellaneousValue'].forEach(function (key) {
+      var value = String(input[key] == null ? '' : input[key]).trim().replace(/\s+/g, ' ');
+      var maxLength = EMPLOYEE_PROFILE_TEXT_LIMITS[key];
+      if (value.length > maxLength) errors.push('Le champ « ' + key + ' » dépasse sa longueur maximale de test.');
+      else extraProfile[key] = value;
+    });
+    EMPLOYEE_PROFILE_DATES.forEach(function (key) {
+      var value = String(input[key] || '').trim();
+      if (value && !dateParts(value)) errors.push('Le champ date « ' + key + ' » doit être une date valide.');
+      else extraProfile[key] = value;
+    });
+    ['childrenCount', 'seniorityMonthsToDeduct'].forEach(function (key) {
+      var value = String(input[key] == null ? '' : input[key]).trim();
+      if (value && (!/^\d+$/.test(value) || Number(value) > 9999)) errors.push('Le champ numérique « ' + key + ' » doit être un entier positif de test.');
+      else extraProfile[key] = value;
+    });
     if (errors.length) return { ok: false, errors: errors };
     var id;
     do {
@@ -179,6 +196,7 @@
       status: 'test-only',
       createdAt: new Date().toISOString()
     };
+    Object.keys(extraProfile).forEach(function (key) { employee[key] = extraProfile[key]; });
     dossier.demoEmployees = current.concat([employee]);
     if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la fiche fictive dans le stockage local.'] };
     return { ok: true, errors: [], employee: clone(employee) };
