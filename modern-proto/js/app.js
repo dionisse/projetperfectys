@@ -172,6 +172,7 @@
     payrollMainMenu: 'Fichier',
     payrollMenuItem: 'export-files',
     payrollEmployeeId: '',
+    payrollEmployeeCreateMode: false,
     payrollEmployeeStatusId: '',
     payrollEmployeeStatusMode: 'view',
     payrollEmployeeStatusDraft: null,
@@ -20392,6 +20393,7 @@
       });
       if (!result.ok) { toast(result.errors[0] || 'Création de la fiche de test impossible.', 'warning'); return; }
       ui.payrollEmployeeId = result.employee.id;
+      ui.payrollEmployeeCreateMode = false;
       toast('Fiche fictive créée dans PRH-TEST-2026.', 'success');
       render();
     });
@@ -21367,7 +21369,8 @@
     var employeeServiceCatalog = isTestDossier ? PayrollHR.employeeServices(dossier.id) : [];
     var employeeFunctionCatalog = isTestDossier ? PayrollHR.employeeFunctions(dossier.id) : [];
     var employeeQualificationCatalog = isTestDossier ? PayrollHR.employeeDefinitionItems(dossier.id, 'qualifications') : [];
-    var selected = employees.find(function (employee) { return employee.id === ui.payrollEmployeeId; }) || employees[0] || null;
+    var createMode = ui.payrollEmployeeCreateMode === true || (!ui.payrollEmployeeId && isTestDossier && canCreatePayrollEmployee === true);
+    var selected = createMode ? null : (employees.find(function (employee) { return employee.id === ui.payrollEmployeeId; }) || employees[0] || null);
     if (selected) ui.payrollEmployeeId = selected.id;
     function textField(name, label, type, value, maxLength) {
       return '<div class="field"><label for="payroll-employee-field-' + name + '">' + esc(label) + '</label><input id="payroll-employee-field-' + name + '" name="' + name + '" type="' + (type || 'text') + '"' + (maxLength ? ' maxlength="' + maxLength + '"' : '') + (['employeeNumber', 'displayName', 'lastName', 'firstName'].indexOf(name) !== -1 ? ' required' : '') + ' value="' + esc(value || '') + '"></div>';
@@ -21417,12 +21420,13 @@
       ? '<div class="field payroll-employee-function-field"><span>Fonctions de l’employé</span><div class="payroll-employee-function-checklist">' + employeeFunctionCatalog.map(function (employeeFunction) { return '<label><input type="checkbox" name="functionIds" value="' + esc(employeeFunction.id) + '"><span>' + esc(employeeFunction.code + ' · ' + employeeFunction.label) + '</span></label>'; }).join('') + '</div><small>Plusieurs fonctions peuvent être associées. Aucun calcul de paie n’est exécuté.</small></div>'
       : '';
     var createForm = isTestDossier && canCreatePayrollEmployee
-      ? '<form id="payroll-employee-create-form" class="payroll-employee-create-form" data-dossier-id="' + esc(dossier.id) + '"><p class="small"><strong>Ajouter une fiche fictive</strong></p><div class="payroll-employee-create-grid">' +
+      ? '<form id="payroll-employee-create-form" class="payroll-employee-create-form" data-dossier-id="' + esc(dossier.id) + '"><div class="payroll-employee-identity">' +
         '<div class="field"><label for="payroll-employee-number">Matricule interne *</label><input id="payroll-employee-number" type="text" maxlength="40" required autocomplete="off"></div>' +
         '<div class="field"><label for="payroll-employee-last-name">Nom *</label><input id="payroll-employee-last-name" type="text" maxlength="80" required autocomplete="family-name"></div>' +
-        '<div class="field"><label for="payroll-employee-first-name">Prénoms *</label><input id="payroll-employee-first-name" type="text" maxlength="120" required autocomplete="given-name"></div>' + createEmployeeStatusField + createEmployeeCategoryField + createEmployeeGeographicZoneField + createEmployeeServiceField + createEmployeeQualificationField + createEmployeeFunctionField +
+        '<div class="field"><label for="payroll-employee-first-name">Prénoms *</label><input id="payroll-employee-first-name" type="text" maxlength="120" required autocomplete="given-name"></div></div>' +
+        '<div class="payroll-employee-fieldsets"><fieldset><legend>Parcours et affectation</legend><div class="payroll-employee-field-grid">' + createEmployeeStatusField + createEmployeeCategoryField + createEmployeeGeographicZoneField + createEmployeeServiceField + createEmployeeQualificationField + createEmployeeFunctionField + '</div></fieldset></div>' +
         '<label class="payroll-test-confirm"><input id="payroll-test-data-confirmation" type="checkbox" required><span>Fiche fictive de test uniquement.</span></label>' +
-        '<button type="submit" class="btn btn-primary">＋ Ajouter</button></div></form>'
+        '<div class="payroll-employee-edit-actions">' + (employees.length ? '<button type="button" class="btn btn-secondary" data-action="cancel-new-payroll-employee">Annuler</button>' : '') + '<button type="submit" class="btn btn-primary">＋ Ajouter</button></div></form>'
       : (isTestDossier ? '<p class="small muted">Création indisponible pour ce profil.</p>' : '<div class="alert info"><div>La saisie de test est réservée au dossier fictif <strong>PRH-TEST-2026</strong>. Ouvrez ce dossier depuis <a href="#/payroll-dossiers">Dossiers RH</a>. Aucune donnée d’un autre dossier n’est affichée ici.</div></div>');
     var employeeIdentityFields = selected && (selected.firstName || selected.lastName)
       ? textField('lastName', 'Nom *', 'text', selected.lastName, 80) + textField('firstName', 'Prénoms *', 'text', selected.firstName, 120)
@@ -21448,8 +21452,8 @@
       (selected ? (selected.photoDataUrl ? '<img class="payroll-employee-photo-preview" src="' + esc(selected.photoDataUrl) + '" alt="Photo de test de ' + esc(selected.displayName || 'l’employé') + '">' : '<div class="payroll-employee-photo-placeholder">Aucune photo de test</div>') + photoForm : '<p class="small muted">Aucune fiche sélectionnée.</p>') + '</dialog>';
     return '<section class="payroll-employee-workspace" aria-label="Fiche des employés"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · DÉFINITIONS</p><h3>Employés</h3></div><span class="badge draft">' + (isTestDossier ? 'PRH-TEST-2026 · TEST' : 'DOSSIER NON TEST') + '</span></div>' +
       '<div class="alert info"><div><strong>Mode test</strong> · Les champs et valeurs créés dans cette fiche restent dans le dossier fictif PRH-TEST-2026.</div></div>' +
-      '<div class="payroll-employee-layout"><aside class="payroll-employee-list"><h4>Employés (' + employees.length + ')</h4><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Matricule</th><th>Nom</th></tr></thead><tbody>' + (rows || '<tr><td colspan="2">Aucune fiche de test disponible.</td></tr>') + '</tbody></table></div>' + createForm + '</aside>' +
-      '<div class="payroll-employee-detail"><div class="payroll-employee-detail-head"><div><h4>' + esc(selected ? selected.displayName : 'Aucune fiche sélectionnée') + '</h4><p class="small muted">' + (selected ? 'Matricule ' + esc(selected.employeeNumber || selected.id) + ' · fiche de test' : 'Sélectionnez ou ajoutez une fiche fictive') + '</p></div><div class="payroll-employee-actions"><button type="button" class="btn btn-secondary" data-action="open-payroll-employee-info" aria-haspopup="dialog" aria-controls="payroll-employee-info-dialog"' + (selected ? '' : ' disabled') + '>Informations diverses</button><button type="button" class="btn btn-secondary" data-action="open-payroll-employee-photo" aria-haspopup="dialog" aria-controls="payroll-employee-photo-dialog"' + (selected ? '' : ' disabled') + '>Photo</button><button type="button" class="btn btn-secondary" data-action="print-payroll-employee"' + (selected ? '' : ' disabled') + '>Imprimer</button></div></div>' + editForm + '</div></div>' + infoDialog + photoDialog + '</section>';
+      '<div class="payroll-employee-layout"><aside class="payroll-employee-list"><h4>Employés (' + employees.length + ')</h4><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Matricule</th><th>Nom</th></tr></thead><tbody>' + (rows || '<tr><td colspan="2">Aucune fiche de test disponible.</td></tr>') + '</tbody></table></div>' + (isTestDossier && canCreatePayrollEmployee && employees.length && !createMode ? '<button type="button" class="btn btn-primary payroll-employee-new-button" data-action="create-payroll-test-employee">＋ Ajouter une fiche fictive</button>' : '') + '</aside>' +
+      '<div class="payroll-employee-detail"><div class="payroll-employee-detail-head"><div><h4>' + esc(createMode ? 'Nouvelle fiche fictive' : (selected ? selected.displayName : 'Aucune fiche sélectionnée')) + '</h4><p class="small muted">' + (createMode ? 'Identité, parcours et affectation' : (selected ? 'Matricule ' + esc(selected.employeeNumber || selected.id) + ' · fiche de test' : 'Sélectionnez ou ajoutez une fiche fictive')) + '</p></div>' + (createMode ? '' : '<div class="payroll-employee-actions"><button type="button" class="btn btn-secondary" data-action="open-payroll-employee-info" aria-haspopup="dialog" aria-controls="payroll-employee-info-dialog"' + (selected ? '' : ' disabled') + '>Informations diverses</button><button type="button" class="btn btn-secondary" data-action="open-payroll-employee-photo" aria-haspopup="dialog" aria-controls="payroll-employee-photo-dialog"' + (selected ? '' : ' disabled') + '>Photo</button><button type="button" class="btn btn-secondary" data-action="print-payroll-employee"' + (selected ? '' : ' disabled') + '>Imprimer</button></div>') + '</div>' + (createMode ? createForm : editForm) + '</div></div>' + infoDialog + photoDialog + '</section>';
   }
 
   function viewPayrollEmployeeGeographicZones(dossier, canCreatePayrollEmployee, canEditPayrollEmployee) {
@@ -34603,6 +34607,15 @@
       }
       case 'payroll-employee-select':
         ui.payrollEmployeeId = trigger.getAttribute('data-employee-id') || '';
+        ui.payrollEmployeeCreateMode = false;
+        render();
+        break;
+      case 'create-payroll-test-employee':
+        ui.payrollEmployeeCreateMode = true;
+        render();
+        break;
+      case 'cancel-new-payroll-employee':
+        ui.payrollEmployeeCreateMode = false;
         render();
         break;
       case 'payroll-geographic-zone-select':
