@@ -589,6 +589,7 @@
       case 'seed-payroll-employee-services':
       case 'new-payroll-employee-function':
       case 'seed-payroll-employee-functions':
+      case 'new-payroll-employee-function-premium':
       case 'new-payroll-employee-status':
       case 'duplicate-payroll-employee-status':
       case 'seed-payroll-employee-statuses':
@@ -622,7 +623,6 @@
       case 'merge-payroll-employee-services':
       case 'edit-payroll-employee-function':
       case 'position-payroll-employee-function':
-      case 'merge-payroll-employee-functions':
       case 'edit-payroll-employee-status':
       case 'edit-payroll-employee-category':
       case 'position-payroll-employee-category':
@@ -20377,7 +20377,7 @@
         categoryId: ($('#payroll-employee-create-category', employeeForm) || {}).value || '',
         geographicZoneId: ($('#payroll-employee-create-geographic-zone', employeeForm) || {}).value || '',
         serviceId: ($('#payroll-employee-create-service', employeeForm) || {}).value || '',
-        functionId: ($('#payroll-employee-create-function', employeeForm) || {}).value || '',
+        functionIds: Array.prototype.map.call(employeeForm.querySelectorAll('input[name="functionIds"]:checked'), function (input) { return input.value; }),
         testOnly: confirmed
       });
       if (!result.ok) { toast(result.errors[0] || 'Création de la fiche de test impossible.', 'warning'); return; }
@@ -20530,6 +20530,37 @@
       ui.payrollEmployeeFunctionDraft = null;
       toast(mode === 'create' ? 'Fonction créée.' : 'Fonction modifiée.', 'success'); render();
     });
+    var employeeFunctionPremiumForm = $('#payroll-employee-function-premium-form');
+    if (employeeFunctionPremiumForm) employeeFunctionPremiumForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('new-payroll-employee-function-premium', null, true)) return;
+      var dossier = PayrollHR.currentDossier();
+      if (!dossier || employeeFunctionPremiumForm.getAttribute('data-dossier-id') !== dossier.id || !PayrollHR.isDemoTestDossier(dossier.id)) { toast('Les primes de fonction sont réservées à PRH-TEST-2026.', 'warning'); return; }
+      var confirmation = employeeFunctionPremiumForm.elements.namedItem('testOnly');
+      if (!confirmation || !confirmation.checked) { toast('Confirmez que ce libellé est une définition fictive.', 'warning'); return; }
+      var createdPremium = PayrollHR.createEmployeeFunctionPremium(dossier.id, { label: employeeFunctionPremiumForm.elements.namedItem('label').value, testOnly: true });
+      if (!createdPremium.ok) { toast(createdPremium.errors[0] || 'Ajout de la prime impossible.', 'warning'); return; }
+      var currentMode = ui.payrollEmployeeFunctionMode || 'view';
+      var currentFunctionForm = $('#payroll-employee-function-form');
+      var draft = currentFunctionForm && (currentMode === 'create' || currentMode === 'edit')
+        ? {
+            code: (currentFunctionForm.elements.namedItem('code') || {}).value || '',
+            label: (currentFunctionForm.elements.namedItem('label') || {}).value || '',
+            linkedPremiumIds: Array.prototype.map.call(currentFunctionForm.querySelectorAll('input[name="linkedPremiumIds"]:checked'), function (input) { return input.value; })
+          }
+        : (PayrollHR.employeeFunctions(dossier.id).find(function (item) { return item.id === ui.payrollEmployeeFunctionId; }) || null);
+      if (draft) {
+        ui.payrollEmployeeFunctionDraft = { code: draft.code || '', label: draft.label || '', linkedPremiumIds: (draft.linkedPremiumIds || []).slice() };
+        if (currentMode === 'view') ui.payrollEmployeeFunctionMode = 'edit';
+      } else {
+        ui.payrollEmployeeFunctionDraft = { code: '', label: '', linkedPremiumIds: [] };
+        ui.payrollEmployeeFunctionMode = 'create';
+      }
+      if (ui.payrollEmployeeFunctionDraft.linkedPremiumIds.indexOf(createdPremium.premium.id) === -1) ui.payrollEmployeeFunctionDraft.linkedPremiumIds.push(createdPremium.premium.id);
+      var premiumDialog = $('#payroll-employee-function-premium-dialog');
+      if (premiumDialog && premiumDialog.open) premiumDialog.close();
+      toast('Prime ajoutée à la liste; validez la fiche pour l’associer à cette fonction.', 'success'); render();
+    });
     var employeeFunctionPositionForm = $('#payroll-employee-function-position-form');
     if (employeeFunctionPositionForm) employeeFunctionPositionForm.addEventListener('submit', function (event) {
       event.preventDefault();
@@ -20540,21 +20571,6 @@
       if (!result.ok) { toast(result.errors[0] || 'Positionnement impossible.', 'warning'); return; }
       ui.payrollEmployeeFunctionId = employeeFunctionPositionForm.getAttribute('data-function-id');
       toast('Position de la fonction enregistrée.', 'success'); render();
-    });
-    var employeeFunctionMergeForm = $('#payroll-employee-function-merge-form');
-    if (employeeFunctionMergeForm) employeeFunctionMergeForm.addEventListener('submit', function (event) {
-      event.preventDefault();
-      if (!canPerformDemoAction('merge-payroll-employee-functions', null, true)) return;
-      var dossier = PayrollHR.currentDossier();
-      if (!dossier || employeeFunctionMergeForm.getAttribute('data-dossier-id') !== dossier.id || !PayrollHR.isDemoTestDossier(dossier.id)) { toast('La fusion est réservée à PRH-TEST-2026.', 'warning'); return; }
-      var confirmation = employeeFunctionMergeForm.elements.namedItem('testOnly');
-      if (!confirmation || !confirmation.checked) { toast('Confirmez la fusion des fonctions fictives.', 'warning'); return; }
-      var result = PayrollHR.mergeEmployeeFunctions(dossier.id, employeeFunctionMergeForm.getAttribute('data-source-function-id'), employeeFunctionMergeForm.elements.namedItem('destinationFunctionId').value);
-      if (!result.ok) { toast(result.errors[0] || 'Fusion impossible.', 'warning'); return; }
-      ui.payrollEmployeeFunctionId = result.destinationFunctionId;
-      var functionDialog = $('#payroll-employee-function-merge-dialog');
-      if (functionDialog && functionDialog.open) functionDialog.close();
-      toast('Fusion terminée : ' + result.reassignedCount + ' fiche(s) employé transférée(s); les primes liées ont été réunies.', 'success'); render();
     });
     var employeeCategoryForm = $('#payroll-employee-category-form');
     if (employeeCategoryForm) employeeCategoryForm.addEventListener('submit', function (event) {
@@ -20608,8 +20624,10 @@
       if (!canPerformDemoAction('edit-payroll-employee', employeeEditForm, true)) return;
       if (!validPayrollEmployeeFormTarget(employeeEditForm)) { toast('Modification refusée : ouvrez la fiche dans PRH-TEST-2026.', 'warning'); return; }
       if (!employeeEditForm.elements.namedItem('testOnly').checked) { toast('Confirmez que les valeurs saisies sont fictives.', 'warning'); return; }
-      var profileFields = ['employeeNumber', 'displayName', 'firstHireDate', 'seniorityMonthsToDeduct', 'seniorityReferenceDate', 'vpsExemptionEndDate', 'terminationDate', 'terminationReason', 'rehireDate', 'birthDate', 'sex', 'maritalStatus', 'childrenCount', 'birthplace', 'nationality', 'socialInsuranceNumber', 'taxId', 'supplementaryInsuranceCompany', 'supplementaryInsuranceNumber', 'degree', 'profession', 'employeeStatus', 'categoryId', 'categoryStep', 'effectiveDate', 'geographicZoneId', 'zone', 'serviceId', 'service', 'functionId', 'function', 'paymentMethod', 'bankName', 'bankAccountNumber'];
-      var result = PayrollHR.updateEmployee(PayrollHR.currentDossier().id, employeeEditForm.getAttribute('data-employee-id'), payrollEmployeeFormValues(employeeEditForm, profileFields));
+      var profileFields = ['employeeNumber', 'displayName', 'firstHireDate', 'seniorityMonthsToDeduct', 'seniorityReferenceDate', 'vpsExemptionEndDate', 'terminationDate', 'terminationReason', 'rehireDate', 'birthDate', 'sex', 'maritalStatus', 'childrenCount', 'birthplace', 'nationality', 'socialInsuranceNumber', 'taxId', 'supplementaryInsuranceCompany', 'supplementaryInsuranceNumber', 'degree', 'profession', 'employeeStatus', 'categoryId', 'categoryStep', 'effectiveDate', 'geographicZoneId', 'zone', 'serviceId', 'service', 'function', 'paymentMethod', 'bankName', 'bankAccountNumber'];
+      var employeeProfile = payrollEmployeeFormValues(employeeEditForm, profileFields);
+      if (employeeEditForm.querySelector('input[name="functionIds"]')) employeeProfile.functionIds = Array.prototype.map.call(employeeEditForm.querySelectorAll('input[name="functionIds"]:checked'), function (input) { return input.value; });
+      var result = PayrollHR.updateEmployee(PayrollHR.currentDossier().id, employeeEditForm.getAttribute('data-employee-id'), employeeProfile);
       if (!result.ok) { toast(result.errors[0] || 'Enregistrement de test impossible.', 'warning'); return; }
       toast('Fiche fictive mise à jour dans PRH-TEST-2026.', 'success'); render();
     });
@@ -21293,11 +21311,14 @@
     var createEmployeeServiceField = employeeServiceCatalog.length
       ? '<div class="field"><label for="payroll-employee-create-service">Service</label><select id="payroll-employee-create-service"><option value="">— Non défini —</option>' + employeeServiceCatalog.map(function (service) { return '<option value="' + esc(service.id) + '">' + esc(service.code + ' · ' + service.label) + '</option>'; }).join('') + '</select></div>'
       : '';
+    var selectedFunctionIds = selected && Array.isArray(selected.functionIds) ? selected.functionIds : employeeFunctionCatalog.filter(function (employeeFunction) {
+      return selected && (selected.functionId === employeeFunction.id || selected.function === employeeFunction.code || selected.function === employeeFunction.label);
+    }).map(function (employeeFunction) { return employeeFunction.id; });
     var employeeFunctionField = employeeFunctionCatalog.length
-      ? '<div class="field"><label for="payroll-employee-field-functionId">Fonction</label><select id="payroll-employee-field-functionId" name="functionId"><option value="">— Non définie —</option>' + employeeFunctionCatalog.map(function (employeeFunction) { return '<option value="' + esc(employeeFunction.id) + '"' + (selected && (selected.functionId === employeeFunction.id || selected.function === employeeFunction.code || selected.function === employeeFunction.label) ? ' selected' : '') + '>' + esc(employeeFunction.code + ' · ' + employeeFunction.label) + '</option>'; }).join('') + '</select></div>'
+      ? '<div class="field payroll-employee-function-field"><span>Fonctions de l’employé</span><div class="payroll-employee-function-checklist">' + employeeFunctionCatalog.map(function (employeeFunction) { return '<label><input type="checkbox" name="functionIds" value="' + esc(employeeFunction.id) + '"' + (selectedFunctionIds.indexOf(employeeFunction.id) !== -1 ? ' checked' : '') + '><span>' + esc(employeeFunction.code + ' · ' + employeeFunction.label) + '</span></label>'; }).join('') + '</div><small>Plusieurs fonctions peuvent être associées à une même fiche. Aucun cumul ou calcul de paie n’est appliqué automatiquement.</small></div>'
       : textField('function', 'Fonction', 'text', selected && selected.function, 120);
     var createEmployeeFunctionField = employeeFunctionCatalog.length
-      ? '<div class="field"><label for="payroll-employee-create-function">Fonction</label><select id="payroll-employee-create-function"><option value="">— Non définie —</option>' + employeeFunctionCatalog.map(function (employeeFunction) { return '<option value="' + esc(employeeFunction.id) + '">' + esc(employeeFunction.code + ' · ' + employeeFunction.label) + '</option>'; }).join('') + '</select></div>'
+      ? '<div class="field payroll-employee-function-field"><span>Fonctions de l’employé</span><div class="payroll-employee-function-checklist">' + employeeFunctionCatalog.map(function (employeeFunction) { return '<label><input type="checkbox" name="functionIds" value="' + esc(employeeFunction.id) + '"><span>' + esc(employeeFunction.code + ' · ' + employeeFunction.label) + '</span></label>'; }).join('') + '</div><small>Plusieurs fonctions peuvent être associées. Aucun calcul de paie n’est exécuté.</small></div>'
       : '';
     var createForm = isTestDossier && canCreatePayrollEmployee
       ? '<form id="payroll-employee-create-form" class="payroll-employee-create-form" data-dossier-id="' + esc(dossier.id) + '"><p class="small"><strong>Ajouter une fiche fictive</strong></p><div class="payroll-employee-create-grid">' +
@@ -21395,24 +21416,19 @@
     }).join('');
     var mergeDialog = selected && services.length > 1
       ? '<dialog class="payroll-employee-dialog payroll-service-merge-dialog" id="payroll-employee-service-merge-dialog" aria-labelledby="payroll-service-merge-title"><div class="payroll-employee-dialog-head"><h3 id="payroll-service-merge-title">Fusion de services</h3><button type="button" class="icon-btn" data-action="close-payroll-employee-service-merge" aria-label="Fermer">×</button></div><p>La fusion transfère les affectations des employés du service d’origine vers le service de destination.</p><form id="payroll-employee-service-merge-form" data-dossier-id="' + esc(dossier.id) + '" data-source-service-id="' + esc(selected.id) + '"><div class="payroll-service-merge-grid"><div class="field"><label for="payroll-service-merge-source">Service d’origine</label><input id="payroll-service-merge-source" type="text" value="' + esc(selected.code + ' · ' + selected.label) + '" readonly><small>' + employeeServiceCount(selected) + ' fiche(s) employé concernée(s)</small></div><div class="field"><label for="payroll-service-merge-destination">Service de destination</label><select id="payroll-service-merge-destination" name="destinationServiceId" required><option value="">— Choisir un service —</option>' + destinationOptions + '</select></div></div><div class="alert warning"><div>Le service d’origine sera supprimé après transfert de toutes ses affectations. Cette action ne peut pas être annulée.</div></div><label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Je confirme la fusion de ces services fictifs.</span></label><div class="payroll-employee-dialog-actions"><button type="button" class="btn btn-secondary" data-action="close-payroll-employee-service-merge">Annuler</button><button type="submit" class="btn btn-primary">Valider la fusion</button></div></form></dialog>' : '';
-    return '<section class="payroll-status-workspace payroll-employee-services-workspace" aria-label="Services"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · DÉFINITIONS</p><h3>Services</h3></div><span class="badge draft">' + (isTestDossier ? 'PRH-TEST-2026 · TEST' : 'DOSSIER NON TEST') + '</span></div><div class="alert warning"><div>Référentiel local des services des employés. Une fusion réaffecte les employés vers le service de destination puis supprime le service d’origine; aucun calcul de paie n’est déclenché.</div></div><div class="payroll-status-workspace-layout"><aside class="payroll-status-list"><div class="payroll-status-list-head"><h4>Services (' + services.length + ')</h4></div><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Code</th><th>Intitulé</th></tr></thead><tbody>' + (rows || '<tr><td colspan="2">Aucun service.</td></tr>') + '</tbody></table></div></aside><div class="payroll-status-detail"><div class="payroll-status-detail-head"><h4>' + esc(mode === 'create' ? 'Nouveau service' : (selected ? selected.label : 'Service')) + '</h4>' + actions + '</div>' + positionForm + serviceForm + '</div></div>' + mergeDialog + '</section>';
+    return '<section class="payroll-status-workspace payroll-employee-services-workspace" aria-label="Services"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · DÉFINITIONS</p><h3>Services</h3></div><span class="badge draft">' + (isTestDossier ? 'PRH-TEST-2026 · TEST' : 'DOSSIER NON TEST') + '</span></div><div class="alert warning"><div>Référentiel local des services des employés. Une fusion réaffecte les employés vers le service de destination puis supprime le service d’origine; aucun calcul de paie n’est déclenché.</div></div><div class="payroll-status-workspace-layout"><aside class="payroll-status-list"><div class="payroll-status-list-head"><h4>Services (' + services.length + ')</h4></div><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Code</th><th>Intitulé</th></tr></thead><tbody>' + (rows || '<tr><td colspan="2">Aucun service.</td></tr>') + '</tbody></table></div></aside><div class="payroll-status-detail"><div class="payroll-status-detail-head"><h4>' + esc(mode === 'create' ? 'Nouveau service' : (selected ? selected.label : 'Service')) + '</h4>' + actions + '</div>' + positionForm + serviceForm + '</div></div></section>';
   }
 
   function viewPayrollEmployeeFunctions(dossier, canCreatePayrollEmployee, canEditPayrollEmployee) {
     var isTestDossier = PayrollHR.isDemoTestDossier(dossier.id);
     var functions = isTestDossier ? PayrollHR.employeeFunctions(dossier.id) : [];
-    var premiums = PayrollHR.employeeFunctionPremiumCatalog();
+    var premiums = isTestDossier ? PayrollHR.employeeFunctionPremiumCatalog(dossier.id) : PayrollHR.employeeFunctionPremiumCatalog();
     var mode = ui.payrollEmployeeFunctionMode || 'view';
     var selected = functions.find(function (item) { return item.id === ui.payrollEmployeeFunctionId; }) || functions[0] || null;
     if (selected && mode === 'view') ui.payrollEmployeeFunctionId = selected.id;
     var draft = ui.payrollEmployeeFunctionDraft || {};
-    var source = mode === 'create' ? draft : selected;
-    var employees = isTestDossier ? PayrollHR.employees(dossier.id) : [];
-    function employeeFunctionCount(employeeFunction) {
-      return employees.filter(function (employee) {
-        return employee && (employee.functionId === employeeFunction.id || employee.function === employeeFunction.code || employee.function === employeeFunction.label);
-      }).length;
-    }
+    var source = mode === 'create' || (mode === 'edit' && ui.payrollEmployeeFunctionDraft) ? draft : selected;
+
     var rows = functions.map(function (item) {
       var active = mode !== 'create' && selected && item.id === selected.id;
       return '<tr><td><button type="button" class="payroll-status-select' + (active ? ' is-active' : '') + '" data-action="payroll-employee-function-select" data-function-id="' + esc(item.id) + '" aria-pressed="' + (active ? 'true' : 'false') + '"><strong>' + esc(item.code) + '</strong></button></td><td>' + esc(item.label) + '</td></tr>';
@@ -21429,20 +21445,16 @@
     var functionForm = isTestDossier && source
       ? '<form id="payroll-employee-function-form" data-mode="' + esc(mode) + '" data-dossier-id="' + esc(dossier.id) + '" data-function-id="' + esc(selected ? selected.id : '') + '"><div class="payroll-geographic-zone-fields">' + field('code', 'Code', source.code) + field('label', 'Intitulé', source.label) + '</div><fieldset class="payroll-function-premiums"><legend>Primes liées à la fonction</legend><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Prime</th><th>Liée</th></tr></thead><tbody>' + (premiumRows || '<tr><td colspan="2">Aucune prime définie.</td></tr>') + '</tbody></table></div></fieldset>' + (mode !== 'view' ? '<label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Je confirme que cette fonction et ses liens sont fictifs et réservés au test.</span></label><div class="payroll-status-actions"><button type="button" class="btn btn-secondary" data-action="cancel-payroll-employee-function-edit">Annuler</button><button type="submit" class="btn btn-primary">Valider</button></div>' : '') + '</form>'
       : '<div class="empty-state"><strong>' + (isTestDossier ? 'Aucune fonction chargée' : 'Dossier de test requis') + '</strong><span>' + (isTestDossier ? 'La capture montre DG · Directeur général, avec la prime de responsabilité liée.' : 'Les fonctions de démonstration sont réservées à PRH-TEST-2026.') + '</span>' + (isTestDossier && canCreatePayrollEmployee ? '<button type="button" class="btn btn-secondary" data-action="seed-payroll-employee-functions">Charger DG de la capture</button>' : '') + '</div>';
+    var functionPremiumDialog = isTestDossier && canCreatePayrollEmployee
+      ? '<dialog class="payroll-employee-dialog" id="payroll-employee-function-premium-dialog" aria-labelledby="payroll-function-premium-title"><div class="payroll-employee-dialog-head"><h3 id="payroll-function-premium-title">Ajouter une prime de fonction</h3><button type="button" class="icon-btn" data-action="close-payroll-employee-function-premium" aria-label="Fermer">×</button></div><p class="small muted">Ajoutez un libellé à la liste des primes liées. Aucun montant ni règle de calcul ne sera défini ici.</p><form id="payroll-employee-function-premium-form" data-dossier-id="' + esc(dossier.id) + '"><div class="field"><label for="payroll-function-premium-label">Libellé de la prime</label><input id="payroll-function-premium-label" name="label" type="text" maxlength="100" required></div><label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Définition fictive du dossier de test.</span></label><div class="payroll-employee-dialog-actions"><button type="button" class="btn btn-secondary" data-action="close-payroll-employee-function-premium">Annuler</button><button type="submit" class="btn btn-primary">Ajouter</button></div></form></dialog>' : '';
     var position = selected ? functions.findIndex(function (item) { return item.id === selected.id; }) + 1 : 1;
     var actions = '<div class="payroll-status-actions">' +
-      (isTestDossier && canCreatePayrollEmployee ? '<button type="button" class="btn btn-primary" data-action="new-payroll-employee-function">Insérer</button>' : '') +
+      (isTestDossier && canCreatePayrollEmployee ? '<button type="button" class="btn btn-primary" data-action="new-payroll-employee-function">Insérer</button><button type="button" class="btn btn-secondary" data-action="open-payroll-employee-function-premium">Ajouter une prime</button>' : '') +
       (selected && isTestDossier && canEditPayrollEmployee && mode === 'view' ? '<button type="button" class="btn btn-secondary" data-action="edit-payroll-employee-function" data-function-id="' + esc(selected.id) + '">Modifier</button><button type="button" class="btn btn-danger" data-action="delete-payroll-employee-function" data-function-id="' + esc(selected.id) + '">Supprimer</button>' : '') +
-      (selected && isTestDossier && canEditPayrollEmployee && mode === 'view' ? '<button type="button" class="btn btn-secondary" data-action="open-payroll-employee-function-merge" data-function-id="' + esc(selected.id) + '"' + (functions.length > 1 ? '' : ' disabled title="Ajoutez une autre fonction pour fusionner."') + '>Fusionner</button>' : '') +
       (isTestDossier ? '<button type="button" class="btn btn-secondary" data-action="close-payroll-functions-view">Fermer</button>' : '') + '</div>';
     var positionForm = selected && isTestDossier && canEditPayrollEmployee && mode === 'view'
       ? '<form id="payroll-employee-function-position-form" data-dossier-id="' + esc(dossier.id) + '" data-function-id="' + esc(selected.id) + '"><label for="payroll-employee-function-position">Position</label><input id="payroll-employee-function-position" name="position" type="number" min="1" max="' + functions.length + '" step="1" value="' + position + '" required><button type="submit" class="btn btn-secondary">Positionner</button></form>' : '';
-    var destinationOptions = functions.filter(function (item) { return selected && item.id !== selected.id; }).map(function (item) {
-      return '<option value="' + esc(item.id) + '">' + esc(item.code + ' · ' + item.label) + '</option>';
-    }).join('');
-    var mergeDialog = selected && functions.length > 1
-      ? '<dialog class="payroll-employee-dialog payroll-service-merge-dialog" id="payroll-employee-function-merge-dialog" aria-labelledby="payroll-function-merge-title"><div class="payroll-employee-dialog-head"><h3 id="payroll-function-merge-title">Fusion de fonctions</h3><button type="button" class="icon-btn" data-action="close-payroll-employee-function-merge" aria-label="Fermer">×</button></div><p>Les affectations des employés et les primes liées sont transférées vers la fonction de destination.</p><form id="payroll-employee-function-merge-form" data-dossier-id="' + esc(dossier.id) + '" data-source-function-id="' + esc(selected.id) + '"><div class="payroll-service-merge-grid"><div class="field"><label for="payroll-function-merge-source">Fonction d’origine</label><input id="payroll-function-merge-source" type="text" value="' + esc(selected.code + ' · ' + selected.label) + '" readonly><small>' + employeeFunctionCount(selected) + ' fiche(s) employé concernée(s)</small></div><div class="field"><label for="payroll-function-merge-destination">Fonction de destination</label><select id="payroll-function-merge-destination" name="destinationFunctionId" required><option value="">— Choisir une fonction —</option>' + destinationOptions + '</select></div></div><div class="alert warning"><div>La fonction d’origine sera supprimée après transfert des affectations et des primes liées. Cette action ne peut pas être annulée.</div></div><label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Je confirme la fusion de ces fonctions fictives.</span></label><div class="payroll-employee-dialog-actions"><button type="button" class="btn btn-secondary" data-action="close-payroll-employee-function-merge">Annuler</button><button type="submit" class="btn btn-primary">Valider la fusion</button></div></form></dialog>' : '';
-    return '<section class="payroll-status-workspace payroll-employee-functions-workspace" aria-label="Fonctions"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · DÉFINITIONS</p><h3>Fonctions</h3></div><span class="badge draft">' + (isTestDossier ? 'PRH-TEST-2026 · TEST' : 'DOSSIER NON TEST') + '</span></div><div class="alert warning"><div>Référentiel local des fonctions des employés. Les primes liées sont des associations descriptives uniquement : aucun montant ni calcul de paie n’est créé.</div></div><div class="payroll-status-workspace-layout"><aside class="payroll-status-list"><div class="payroll-status-list-head"><h4>Fonctions (' + functions.length + ')</h4></div><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Code</th><th>Intitulé</th></tr></thead><tbody>' + (rows || '<tr><td colspan="2">Aucune fonction.</td></tr>') + '</tbody></table></div></aside><div class="payroll-status-detail"><div class="payroll-status-detail-head"><h4>' + esc(mode === 'create' ? 'Nouvelle fonction' : (selected ? selected.label : 'Fonction')) + '</h4>' + actions + '</div>' + positionForm + functionForm + '</div></div>' + mergeDialog + '</section>';
+    return '<section class="payroll-status-workspace payroll-employee-functions-workspace" aria-label="Fonctions"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · DÉFINITIONS</p><h3>Fonctions</h3></div><span class="badge draft">' + (isTestDossier ? 'PRH-TEST-2026 · TEST' : 'DOSSIER NON TEST') + '</span></div><div class="alert warning"><div>Référentiel local des fonctions des employés. Les primes liées sont des associations descriptives uniquement : aucun montant ni calcul de paie n’est créé.</div></div><div class="payroll-status-workspace-layout"><aside class="payroll-status-list"><div class="payroll-status-list-head"><h4>Fonctions (' + functions.length + ')</h4></div><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Code</th><th>Intitulé</th></tr></thead><tbody>' + (rows || '<tr><td colspan="2">Aucune fonction.</td></tr>') + '</tbody></table></div></aside><div class="payroll-status-detail"><div class="payroll-status-detail-head"><h4>' + esc(mode === 'create' ? 'Nouvelle fonction' : (selected ? selected.label : 'Fonction')) + '</h4>' + actions + '</div>' + positionForm + functionForm + '</div></div>' + functionPremiumDialog + '</section>';
   }
 
   function viewPayrollEmployeeCategories(dossier, canCreatePayrollEmployee, canEditPayrollEmployee) {
@@ -34584,14 +34596,14 @@
         toast('Fonction supprimée.', 'success'); render();
         break;
       }
-      case 'open-payroll-employee-function-merge': {
-        var functionMergeDialog = $('#payroll-employee-function-merge-dialog');
-        if (functionMergeDialog && typeof functionMergeDialog.showModal === 'function') functionMergeDialog.showModal();
+      case 'open-payroll-employee-function-premium': {
+        var functionPremiumDialog = $('#payroll-employee-function-premium-dialog');
+        if (functionPremiumDialog && typeof functionPremiumDialog.showModal === 'function') functionPremiumDialog.showModal();
         break;
       }
-      case 'close-payroll-employee-function-merge': {
-        var openFunctionMergeDialog = trigger.closest('dialog');
-        if (openFunctionMergeDialog && openFunctionMergeDialog.open) openFunctionMergeDialog.close();
+      case 'close-payroll-employee-function-premium': {
+        var openFunctionPremiumDialog = trigger.closest('dialog');
+        if (openFunctionPremiumDialog && openFunctionPremiumDialog.open) openFunctionPremiumDialog.close();
         break;
       }
       case 'close-payroll-functions-view':

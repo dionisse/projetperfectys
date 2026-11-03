@@ -4465,3 +4465,20 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .payroll-function-premium-cell.is-linked { background: #fff4a8; color: #4c3a00; font-weight: 800; }
 .payroll-function-premium-choice { display: flex; min-height: 27px; align-items: center; justify-content: center; cursor: pointer; }
 .payroll-function-premium-choice input { width: 17px; height: 17px; accent-color: #98701a; }
+
+/* Associations multiples entre fonctions, employés et primes descriptives. */
+.payroll-employee-function-field { min-width: 0; }
+.payroll-employee-function-field > span { display: block; margin-bottom: 6px; color: #43534a; font-size: .76rem; font-weight: 800; }
+.payroll-employee-function-checklist { display: grid; gap: 6px; max-height: 190px; overflow: auto; padding: 9px; border: 1px solid #d8e0da; border-radius: 7px; background: #fafbf9; }
+.payroll-employee-function-checklist > label { display: flex; align-items: flex-start; gap: 8px; min-width: 0; padding: 5px 7px; border-radius: 5px; color: #405148; cursor: pointer; }
+.payroll-employee-function-checklist > label:hover { background: #f1f5f0; }
+.payroll-employee-function-checklist input { flex: 0 0 auto; width: 16px; height: 16px; margin: 2px 0 0; accent-color: #98701a; }
+.payroll-employee-function-field > small { display: block; margin-top: 6px; color: #637168; font-size: .7rem; line-height: 1.45; }
+#payroll-employee-function-premium-dialog { width: min(460px, calc(100vw - 28px)); }
+#payroll-employee-function-premium-dialog .field { margin: 0; }
+#payroll-employee-function-premium-dialog input[name="label"] { width: 100%; }
+.payroll-function-premiums legend { padding: 0 5px; color: #43534a; font-size: .76rem; font-weight: 800; }
+@media (max-width: 600px) {
+  .payroll-employee-function-checklist { max-height: 150px; }
+  .payroll-function-premiums { padding: 7px; }
+}

@@ -109,10 +109,14 @@
       return item && (item.id === requestedCategoryId || String(item.code || '').toLocaleLowerCase() === requestedCategoryId.toLocaleLowerCase());
     });
     var requestedEmployeeServiceId = String(input.serviceId || input.service || '').trim();
-    var requestedEmployeeFunctionId = String(input.functionId || input.function || '').trim();
+    var requestedEmployeeFunctionValues = Array.isArray(input.functionIds)
+      ? input.functionIds.map(function (value) { return String(value || '').trim(); }).filter(Boolean)
+      : [String(input.functionId || input.function || '').trim()].filter(Boolean);
     var availableEmployeeFunctions = Array.isArray(dossier.employeeFunctions) ? dossier.employeeFunctions : [];
-    var matchingEmployeeFunction = availableEmployeeFunctions.find(function (item) {
-      return item && (item.id === requestedEmployeeFunctionId || String(item.code || '').toLocaleLowerCase() === requestedEmployeeFunctionId.toLocaleLowerCase() || String(item.label || '').toLocaleLowerCase() === requestedEmployeeFunctionId.toLocaleLowerCase());
+    var matchingEmployeeFunctions = requestedEmployeeFunctionValues.map(function (requestedFunction) {
+      return availableEmployeeFunctions.find(function (item) {
+        return item && (item.id === requestedFunction || String(item.code || '').toLocaleLowerCase() === requestedFunction.toLocaleLowerCase() || String(item.label || '').toLocaleLowerCase() === requestedFunction.toLocaleLowerCase());
+      });
     });
     var availableEmployeeServices = Array.isArray(dossier.employeeServices) ? dossier.employeeServices : [];
     var matchingEmployeeService = availableEmployeeServices.find(function (item) {
@@ -131,7 +135,8 @@
     if (availableEmployeeStatuses.length && requestedEmployeeStatus && !matchingEmployeeStatus) errors.push('Choisissez un statut existant dans le dossier de test.');
     if (availableEmployeeCategories.length && requestedCategoryId && !matchingEmployeeCategory) errors.push('Choisissez une catégorie/échelon existant dans le dossier de test.');
     if (availableEmployeeServices.length && requestedEmployeeServiceId && !matchingEmployeeService) errors.push('Choisissez un service existant dans le dossier de test.');
-    if (availableEmployeeFunctions.length && requestedEmployeeFunctionId && !matchingEmployeeFunction) errors.push('Choisissez une fonction existante dans le dossier de test.');
+    if (availableEmployeeFunctions.length && matchingEmployeeFunctions.some(function (item) { return !item; })) errors.push('Choisissez des fonctions existantes dans le dossier de test.');
+    if (new Set(requestedEmployeeFunctionValues).size !== requestedEmployeeFunctionValues.length) errors.push('Une fonction ne peut être sélectionnée qu’une seule fois sur la fiche.');
     if (availableGeographicZones.length && requestedGeographicZoneId && !matchingGeographicZone) errors.push('Choisissez une zone géographique existante dans le dossier de test.');
     var current = Array.isArray(dossier.demoEmployees) ? dossier.demoEmployees : [];
     if (employeeNumber && current.some(function (employee) {
@@ -152,8 +157,9 @@
       categoryStep: matchingEmployeeCategory ? matchingEmployeeCategory.code : requestedCategoryId,
       serviceId: matchingEmployeeService ? matchingEmployeeService.id : '',
       service: matchingEmployeeService ? matchingEmployeeService.label : requestedEmployeeServiceId,
-      functionId: matchingEmployeeFunction ? matchingEmployeeFunction.id : '',
-      function: matchingEmployeeFunction ? matchingEmployeeFunction.label : requestedEmployeeFunctionId,
+      functionIds: matchingEmployeeFunctions.filter(Boolean).map(function (item) { return item.id; }),
+      functionId: matchingEmployeeFunctions.filter(Boolean).length === 1 ? matchingEmployeeFunctions.filter(Boolean)[0].id : '',
+      function: matchingEmployeeFunctions.filter(Boolean).map(function (item) { return item.label; }).join(' · ') || requestedEmployeeFunctionValues.join(' · '),
       geographicZoneId: matchingGeographicZone ? matchingGeographicZone.id : '',
       zone: matchingGeographicZone ? matchingGeographicZone.label : requestedGeographicZoneId,
       status: 'test-only',
@@ -251,17 +257,21 @@
         patch.service = matchingService ? matchingService.label : (availableServices.length ? '' : requestedService);
       }
     }
-    if (Object.prototype.hasOwnProperty.call(input, 'functionId') || Object.prototype.hasOwnProperty.call(input, 'function')) {
-      var requestedFunction = String(Object.prototype.hasOwnProperty.call(input, 'functionId') ? input.functionId || '' : input.function || '').trim();
+    if (Object.prototype.hasOwnProperty.call(input, 'functionIds') || Object.prototype.hasOwnProperty.call(input, 'functionId') || Object.prototype.hasOwnProperty.call(input, 'function')) {
+      var requestedFunctions = Array.isArray(input.functionIds)
+        ? input.functionIds.map(function (value) { return String(value || '').trim(); }).filter(Boolean)
+        : [String(Object.prototype.hasOwnProperty.call(input, 'functionId') ? input.functionId || '' : input.function || '').trim()].filter(Boolean);
       var availableFunctions = Array.isArray(dossier.employeeFunctions) ? dossier.employeeFunctions : [];
-      var matchingFunction = availableFunctions.find(function (item) {
-        return item && (item.id === requestedFunction || String(item.code || '').toLocaleLowerCase() === requestedFunction.toLocaleLowerCase() || String(item.label || '').toLocaleLowerCase() === requestedFunction.toLocaleLowerCase());
+      var matchingFunctions = requestedFunctions.map(function (requestedFunction) {
+        return availableFunctions.find(function (item) {
+          return item && (item.id === requestedFunction || String(item.code || '').toLocaleLowerCase() === requestedFunction.toLocaleLowerCase() || String(item.label || '').toLocaleLowerCase() === requestedFunction.toLocaleLowerCase());
+        });
       });
-      if (availableFunctions.length && requestedFunction && !matchingFunction) errors.push('Choisissez une fonction existante dans le dossier de test.');
-      else {
-        patch.functionId = matchingFunction ? matchingFunction.id : '';
-        patch.function = matchingFunction ? matchingFunction.label : (availableFunctions.length ? '' : requestedFunction);
-      }
+      if (availableFunctions.length && matchingFunctions.some(function (item) { return !item; })) errors.push('Choisissez des fonctions existantes dans le dossier de test.');
+      if (new Set(requestedFunctions).size !== requestedFunctions.length) errors.push('Une fonction ne peut être sélectionnée qu’une seule fois sur la fiche.');
+      patch.functionIds = matchingFunctions.filter(Boolean).map(function (item) { return item.id; });
+      patch.functionId = patch.functionIds.length === 1 ? patch.functionIds[0] : '';
+      patch.function = matchingFunctions.filter(Boolean).map(function (item) { return item.label; }).join(' · ') || (availableFunctions.length ? '' : requestedFunctions.join(' · '));
     }
     if (Object.prototype.hasOwnProperty.call(input, 'geographicZoneId')) {
       var requestedGeographicZone = String(input.geographicZoneId || '').trim();
@@ -1074,7 +1084,41 @@
   }
 
   var EMPLOYEE_FUNCTION_PREMIUM_CATALOG = [{ id: 'responsibility-premium', label: 'Prime de responsabilité' }];
-  function employeeFunctionPremiumCatalog() { return clone(EMPLOYEE_FUNCTION_PREMIUM_CATALOG); }
+  function employeeFunctionPremiumCatalog(dossierId) {
+    var dossier = isDemoTestDossier(dossierId) ? loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId); }) : null;
+    var custom = dossier && Array.isArray(dossier.employeeFunctionPremiums) ? dossier.employeeFunctionPremiums : [];
+    return clone(EMPLOYEE_FUNCTION_PREMIUM_CATALOG.concat(custom));
+  }
+
+  function createEmployeeFunctionPremium(dossierId, input) {
+    dossierId = String(dossierId || ''); input = input || {};
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['Les primes de fonction sont réservées à PRH-TEST-2026.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Confirmez que cette prime est une définition fictive de test.'] };
+    var label = String(input.label || '').trim().replace(/\s+/g, ' ');
+    if (!label) return { ok: false, errors: ['Le libellé de la prime est obligatoire.'] };
+    if (label.length > 100) return { ok: false, errors: ['Le libellé est limité à 100 caractères.'] };
+    if (employeeFunctionPremiumCatalog(dossierId).some(function (item) { return String(item.label || '').toLocaleLowerCase() === label.toLocaleLowerCase(); })) return { ok: false, errors: ['Cette prime existe déjà dans le dossier de test.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    dossier.employeeFunctionPremiums = Array.isArray(dossier.employeeFunctionPremiums) ? dossier.employeeFunctionPremiums : [];
+    var premium = { id: 'function-premium-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), dossierId: dossierId, label: label, status: 'test-only', createdAt: new Date().toISOString() };
+    dossier.employeeFunctionPremiums.push(premium);
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer cette prime de fonction.'] };
+    return { ok: true, errors: [], premium: clone(premium) };
+  }
+
+  function deleteEmployeeFunctionPremium(dossierId, premiumId) {
+    dossierId = String(dossierId || ''); premiumId = String(premiumId || '');
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La suppression des primes de fonction est réservée à PRH-TEST-2026.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var premiums = dossier && Array.isArray(dossier.employeeFunctionPremiums) ? dossier.employeeFunctionPremiums : [];
+    if (!premiums.some(function (item) { return item && item.id === premiumId && item.dossierId === dossierId; })) return { ok: false, errors: ['La prime complémentaire est introuvable.'] };
+    if ((dossier.employeeFunctions || []).some(function (item) { return item && Array.isArray(item.linkedPremiumIds) && item.linkedPremiumIds.indexOf(premiumId) !== -1; })) return { ok: false, errors: ['Cette prime est liée à une fonction et ne peut pas être supprimée.'] };
+    dossier.employeeFunctionPremiums = premiums.filter(function (item) { return item && item.id !== premiumId; });
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible de supprimer la prime complémentaire.'] };
+    return { ok: true, errors: [], deletedPremiumId: premiumId };
+  }
 
   function employeeFunctions(dossierId) {
     if (!isDemoTestDossier(dossierId)) return [];
@@ -1094,13 +1138,13 @@
     return { ok: true, errors: [], functions: employeeFunctions(dossierId) };
   }
 
-  function normalizeEmployeeFunctionInput(input) {
+  function normalizeEmployeeFunctionInput(input, dossier) {
     input = input || {};
     var code = String(input.code || '').trim();
-    var label = String(input.label || '').trim().replace(/\\s+/g, ' ');
+    var label = String(input.label || '').trim().replace(/\s+/g, ' ');
     var linkedPremiumIds = Array.isArray(input.linkedPremiumIds) ? Array.from(new Set(input.linkedPremiumIds.map(String))) : [];
     var knownPremiumIds = {};
-    EMPLOYEE_FUNCTION_PREMIUM_CATALOG.forEach(function (item) { knownPremiumIds[item.id] = true; });
+    employeeFunctionPremiumCatalog(dossier && dossier.id).forEach(function (item) { knownPremiumIds[item.id] = true; });
     var errors = [];
     if (!code) errors.push('Le code de la fonction est obligatoire.');
     if (code.length > 24) errors.push('Le code est limité à 24 caractères.');
@@ -1117,7 +1161,7 @@
     var catalog = loadDossierCatalog();
     var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
     if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
-    var validation = normalizeEmployeeFunctionInput(input);
+    var validation = normalizeEmployeeFunctionInput(input, dossier);
     if (!validation.ok) return { ok: false, errors: validation.errors };
     dossier.employeeFunctions = Array.isArray(dossier.employeeFunctions) ? dossier.employeeFunctions : [];
     if (dossier.employeeFunctions.some(function (item) { return String(item.code || '').toLocaleLowerCase() === validation.value.code.toLocaleLowerCase(); })) return { ok: false, errors: ['Ce code de fonction existe déjà.'] };
@@ -1137,16 +1181,23 @@
     var functions = dossier && Array.isArray(dossier.employeeFunctions) ? dossier.employeeFunctions : [];
     var record = functions.find(function (item) { return item && item.id === functionId && item.dossierId === dossierId; });
     if (!record) return { ok: false, errors: ['La fonction est introuvable.'] };
-    var validation = normalizeEmployeeFunctionInput(input);
+    var validation = normalizeEmployeeFunctionInput(input, dossier);
     if (!validation.ok) return { ok: false, errors: validation.errors };
     if (functions.some(function (item) { return item && item.id !== functionId && String(item.code || '').toLocaleLowerCase() === validation.value.code.toLocaleLowerCase(); })) return { ok: false, errors: ['Ce code de fonction existe déjà.'] };
     var previousCode = record.code;
     var previousLabel = record.label;
     Object.assign(record, validation.value, { updatedAt: new Date().toISOString() });
     (dossier.demoEmployees || []).forEach(function (employee) {
-      if (employee && (employee.functionId === functionId || employee.function === previousCode || employee.function === previousLabel)) {
-        employee.functionId = functionId;
-        employee.function = record.label;
+      if (!employee) return;
+      var assignedFunctionIds = Array.isArray(employee.functionIds) ? employee.functionIds.slice() : (employee.functionId ? [employee.functionId] : []);
+      if (assignedFunctionIds.indexOf(functionId) !== -1 || employee.function === previousCode || employee.function === previousLabel) {
+        if (assignedFunctionIds.indexOf(functionId) === -1) assignedFunctionIds.push(functionId);
+        employee.functionIds = assignedFunctionIds;
+        employee.functionId = assignedFunctionIds.length === 1 ? assignedFunctionIds[0] : '';
+        employee.function = assignedFunctionIds.map(function (assignedId) {
+          var assignedFunction = functions.find(function (item) { return item && item.id === assignedId; });
+          return assignedFunction ? assignedFunction.label : '';
+        }).filter(Boolean).join(' · ');
       }
     });
     if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la modification de la fonction.'] };
@@ -1161,7 +1212,7 @@
     var functions = dossier && Array.isArray(dossier.employeeFunctions) ? dossier.employeeFunctions : [];
     var record = functions.find(function (item) { return item && item.id === functionId && item.dossierId === dossierId; });
     if (!record) return { ok: false, errors: ['La fonction est introuvable.'] };
-    if ((dossier.demoEmployees || []).some(function (employee) { return employee && (employee.functionId === functionId || employee.function === record.code || employee.function === record.label); })) return { ok: false, errors: ['Cette fonction est affectée à une fiche employé ; utilisez la fusion vers une autre fonction ou modifiez son affectation.'] };
+    if ((dossier.demoEmployees || []).some(function (employee) { return employee && ((Array.isArray(employee.functionIds) && employee.functionIds.indexOf(functionId) !== -1) || employee.functionId === functionId || employee.function === record.code || employee.function === record.label); })) return { ok: false, errors: ['Cette fonction est affectée à une fiche employé et ne peut pas être supprimée. Retirez-la d’abord de chaque fiche.'] };
     dossier.employeeFunctions = functions.filter(function (item) { return item && item.id !== functionId; }).map(function (item, index) { item.order = index; return item; });
     if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible de supprimer la fonction.'] };
     return { ok: true, errors: [], deletedFunctionId: functionId };
@@ -1183,31 +1234,6 @@
     dossier.employeeFunctions = functions;
     if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer le positionnement de la fonction.'] };
     return { ok: true, errors: [], functions: clone(functions) };
-  }
-
-  function mergeEmployeeFunctions(dossierId, sourceFunctionId, destinationFunctionId) {
-    dossierId = String(dossierId || ''); sourceFunctionId = String(sourceFunctionId || ''); destinationFunctionId = String(destinationFunctionId || '');
-    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La fusion est réservée au dossier fictif PRH-TEST-2026.'] };
-    if (!sourceFunctionId || !destinationFunctionId || sourceFunctionId === destinationFunctionId) return { ok: false, errors: ['Choisissez deux fonctions distinctes pour la fusion.'] };
-    var catalog = loadDossierCatalog();
-    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
-    var functions = dossier && Array.isArray(dossier.employeeFunctions) ? dossier.employeeFunctions : [];
-    var source = functions.find(function (item) { return item && item.id === sourceFunctionId && item.dossierId === dossierId; });
-    var destination = functions.find(function (item) { return item && item.id === destinationFunctionId && item.dossierId === dossierId; });
-    if (!source || !destination) return { ok: false, errors: ['La fonction d’origine ou de destination n’existe plus dans ce dossier.'] };
-    var reassignedCount = 0;
-    (dossier.demoEmployees || []).forEach(function (employee) {
-      if (employee && (employee.functionId === sourceFunctionId || employee.function === source.code || employee.function === source.label)) {
-        employee.functionId = destinationFunctionId;
-        employee.function = destination.label;
-        reassignedCount += 1;
-      }
-    });
-    destination.linkedPremiumIds = Array.from(new Set((destination.linkedPremiumIds || []).concat(source.linkedPremiumIds || [])));
-    destination.updatedAt = new Date().toISOString();
-    dossier.employeeFunctions = functions.filter(function (item) { return item && item.id !== sourceFunctionId; }).sort(function (left, right) { return Number(left.order || 0) - Number(right.order || 0); }).map(function (item, index) { item.order = index; return item; });
-    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la fusion des fonctions.'] };
-    return { ok: true, errors: [], sourceFunctionId: sourceFunctionId, destinationFunctionId: destinationFunctionId, reassignedCount: reassignedCount, functions: employeeFunctions(dossierId) };
   }
 
   function demoOrganizationSeeded(dossierId) {
@@ -2144,13 +2170,14 @@
     positionEmployeeService: positionEmployeeService,
     mergeEmployeeServices: mergeEmployeeServices,
     employeeFunctionPremiumCatalog: employeeFunctionPremiumCatalog,
+    createEmployeeFunctionPremium: createEmployeeFunctionPremium,
+    deleteEmployeeFunctionPremium: deleteEmployeeFunctionPremium,
     employeeFunctions: employeeFunctions,
     seedDemoEmployeeFunctions: seedDemoEmployeeFunctions,
     createEmployeeFunction: createEmployeeFunction,
     updateEmployeeFunction: updateEmployeeFunction,
     deleteEmployeeFunction: deleteEmployeeFunction,
     positionEmployeeFunction: positionEmployeeFunction,
-    mergeEmployeeFunctions: mergeEmployeeFunctions,
     organizationUnits: organizationUnits,
     createOrganizationUnit: createOrganizationUnit,
     updateOrganizationUnit: updateOrganizationUnit,
