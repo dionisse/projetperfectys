@@ -108,6 +108,11 @@
     var matchingEmployeeCategory = availableEmployeeCategories.find(function (item) {
       return item && (item.id === requestedCategoryId || String(item.code || '').toLocaleLowerCase() === requestedCategoryId.toLocaleLowerCase());
     });
+    var requestedGeographicZoneId = String(input.geographicZoneId || input.zone || '').trim();
+    var availableGeographicZones = Array.isArray(dossier.employeeGeographicZones) ? dossier.employeeGeographicZones : [];
+    var matchingGeographicZone = availableGeographicZones.find(function (item) {
+      return item && (item.id === requestedGeographicZoneId || String(item.code || '').toLocaleLowerCase() === requestedGeographicZoneId.toLocaleLowerCase() || String(item.label || '').toLocaleLowerCase() === requestedGeographicZoneId.toLocaleLowerCase());
+    });
     var errors = [];
     if (!employeeNumber) errors.push('Le numéro employé interne est obligatoire.');
     if (employeeNumber.length > 40) errors.push('Le numéro employé ne peut pas dépasser 40 caractères.');
@@ -115,6 +120,7 @@
     if (displayName.length > 120) errors.push('Le nom d’affichage ne peut pas dépasser 120 caractères.');
     if (availableEmployeeStatuses.length && requestedEmployeeStatus && !matchingEmployeeStatus) errors.push('Choisissez un statut existant dans le dossier de test.');
     if (availableEmployeeCategories.length && requestedCategoryId && !matchingEmployeeCategory) errors.push('Choisissez une catégorie/échelon existant dans le dossier de test.');
+    if (availableGeographicZones.length && requestedGeographicZoneId && !matchingGeographicZone) errors.push('Choisissez une zone géographique existante dans le dossier de test.');
     var current = Array.isArray(dossier.demoEmployees) ? dossier.demoEmployees : [];
     if (employeeNumber && current.some(function (employee) {
       return String(employee && (employee.employeeNumber || employee.id) || '').trim().toLocaleLowerCase() === employeeNumber.toLocaleLowerCase();
@@ -132,6 +138,8 @@
       employeeStatus: matchingEmployeeStatus ? matchingEmployeeStatus.id : requestedEmployeeStatus,
       categoryId: matchingEmployeeCategory ? matchingEmployeeCategory.id : '',
       categoryStep: matchingEmployeeCategory ? matchingEmployeeCategory.code : requestedCategoryId,
+      geographicZoneId: matchingGeographicZone ? matchingGeographicZone.id : '',
+      zone: matchingGeographicZone ? matchingGeographicZone.label : requestedGeographicZoneId,
       status: 'test-only',
       createdAt: new Date().toISOString()
     };
@@ -144,7 +152,7 @@
     employeeNumber: 40, displayName: 120, sex: 40, maritalStatus: 60, birthplace: 120,
     nationality: 80, socialInsuranceNumber: 80, taxId: 80, supplementaryInsuranceCompany: 120,
     supplementaryInsuranceNumber: 80, degree: 120, profession: 120, employeeStatus: 80,
-    categoryStep: 80, categoryId: 80, zone: 120, service: 120, function: 120, terminationReason: 160,
+    categoryStep: 80, categoryId: 80, geographicZoneId: 80, zone: 120, service: 120, function: 120, terminationReason: 160,
     paymentMethod: 80, bankName: 120, bankAccountNumber: 100, address: 240, contactPhone: 80, contactEmail: 160,
     miscellaneousLabel: 120, miscellaneousValue: 500
   };
@@ -213,6 +221,18 @@
       else {
         patch.categoryId = matchingCategory ? matchingCategory.id : requestedCategory;
         patch.categoryStep = matchingCategory ? matchingCategory.code : '';
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(input, 'geographicZoneId')) {
+      var requestedGeographicZone = String(input.geographicZoneId || '').trim();
+      var availableGeographicZones = Array.isArray(dossier.employeeGeographicZones) ? dossier.employeeGeographicZones : [];
+      var matchingGeographicZone = availableGeographicZones.find(function (item) {
+        return item && (item.id === requestedGeographicZone || String(item.code || '').toLocaleLowerCase() === requestedGeographicZone.toLocaleLowerCase() || String(item.label || '').toLocaleLowerCase() === requestedGeographicZone.toLocaleLowerCase());
+      });
+      if (availableGeographicZones.length && requestedGeographicZone && !matchingGeographicZone) errors.push('Choisissez une zone géographique existante dans le dossier de test.');
+      else {
+        patch.geographicZoneId = matchingGeographicZone ? matchingGeographicZone.id : requestedGeographicZone;
+        patch.zone = matchingGeographicZone ? matchingGeographicZone.label : '';
       }
     }
     if (Object.prototype.hasOwnProperty.call(input, 'photoDataUrl')) {
@@ -771,6 +791,112 @@
     dossier.employeeCategories = categories;
     if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer le positionnement.'] };
     return { ok: true, errors: [], categories: clone(categories) };
+  }
+
+  function employeeGeographicZones(dossierId) {
+    if (!isDemoTestDossier(dossierId)) return [];
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId); });
+    return clone((dossier && Array.isArray(dossier.employeeGeographicZones) ? dossier.employeeGeographicZones : []).slice().sort(function (left, right) { return Number(left.order || 0) - Number(right.order || 0); }));
+  }
+
+  function seedDemoEmployeeGeographicZones(dossierId) {
+    dossierId = String(dossierId || '');
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['Les zones géographiques sont réservées au dossier fictif PRH-TEST-2026.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (Array.isArray(dossier.employeeGeographicZones) && dossier.employeeGeographicZones.length) return { ok: false, errors: ['Des zones existent déjà ; aucun doublon n’a été ajouté.'] };
+    var now = new Date().toISOString();
+    dossier.employeeGeographicZones = [{ id: 'geographic-zone-test-0', dossierId: dossierId, code: '0', label: 'Siège', order: 0, status: 'test-only', createdAt: now, updatedAt: now }];
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la zone de test.'] };
+    return { ok: true, errors: [], zones: employeeGeographicZones(dossierId) };
+  }
+
+  function normalizeEmployeeGeographicZoneInput(input) {
+    input = input || {};
+    var code = String(input.code || '').trim();
+    var label = String(input.label || '').trim().replace(/\s+/g, ' ');
+    var errors = [];
+    if (!code) errors.push('Le code de la zone est obligatoire.');
+    if (code.length > 24) errors.push('Le code est limité à 24 caractères.');
+    if (!label) errors.push('L’intitulé de la zone est obligatoire.');
+    if (label.length > 100) errors.push('L’intitulé est limité à 100 caractères.');
+    return { ok: errors.length === 0, errors: errors, value: { code: code, label: label } };
+  }
+
+  function createEmployeeGeographicZone(dossierId, input) {
+    dossierId = String(dossierId || ''); input = input || {};
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La création est réservée au dossier fictif PRH-TEST-2026.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Confirmez qu’il s’agit d’une zone de test.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    var validation = normalizeEmployeeGeographicZoneInput(input);
+    if (!validation.ok) return { ok: false, errors: validation.errors };
+    dossier.employeeGeographicZones = Array.isArray(dossier.employeeGeographicZones) ? dossier.employeeGeographicZones : [];
+    if (dossier.employeeGeographicZones.some(function (item) { return String(item.code || '').toLocaleLowerCase() === validation.value.code.toLocaleLowerCase(); })) return { ok: false, errors: ['Ce code de zone existe déjà.'] };
+    var now = new Date().toISOString();
+    var record = Object.assign({ id: 'geographic-zone-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), dossierId: dossierId, order: dossier.employeeGeographicZones.length, status: 'test-only', createdAt: now, updatedAt: now }, validation.value);
+    dossier.employeeGeographicZones.push(record);
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la zone de test.'] };
+    return { ok: true, errors: [], zone: clone(record) };
+  }
+
+  function updateEmployeeGeographicZone(dossierId, zoneId, input) {
+    dossierId = String(dossierId || ''); zoneId = String(zoneId || ''); input = input || {};
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La modification est réservée au dossier fictif PRH-TEST-2026.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Confirmez qu’il s’agit d’une modification fictive.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var zones = dossier && Array.isArray(dossier.employeeGeographicZones) ? dossier.employeeGeographicZones : [];
+    var record = zones.find(function (item) { return item && item.id === zoneId && item.dossierId === dossierId; });
+    if (!record) return { ok: false, errors: ['La zone est introuvable.'] };
+    var validation = normalizeEmployeeGeographicZoneInput(input);
+    if (!validation.ok) return { ok: false, errors: validation.errors };
+    if (zones.some(function (item) { return item && item.id !== zoneId && String(item.code || '').toLocaleLowerCase() === validation.value.code.toLocaleLowerCase(); })) return { ok: false, errors: ['Ce code de zone existe déjà.'] };
+    var previousCode = record.code;
+    var previousLabel = record.label;
+    Object.assign(record, validation.value, { updatedAt: new Date().toISOString() });
+    (dossier.demoEmployees || []).forEach(function (employee) {
+      if (!employee) return;
+      if (employee.geographicZoneId === zoneId || employee.zone === previousCode || employee.zone === previousLabel) {
+        employee.geographicZoneId = zoneId;
+        employee.zone = record.label;
+      }
+    });
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la zone.'] };
+    return { ok: true, errors: [], zone: clone(record) };
+  }
+
+  function deleteEmployeeGeographicZone(dossierId, zoneId) {
+    dossierId = String(dossierId || ''); zoneId = String(zoneId || '');
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La suppression est réservée au dossier fictif PRH-TEST-2026.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var zones = dossier && Array.isArray(dossier.employeeGeographicZones) ? dossier.employeeGeographicZones : [];
+    var zone = zones.find(function (item) { return item && item.id === zoneId && item.dossierId === dossierId; });
+    if (!zone) return { ok: false, errors: ['La zone est introuvable.'] };
+    if ((dossier.demoEmployees || []).some(function (employee) { return employee && (employee.geographicZoneId === zoneId || employee.zone === zone.code || employee.zone === zone.label); })) return { ok: false, errors: ['Cette zone est utilisée par une fiche employé et ne peut pas être supprimée.'] };
+    dossier.employeeGeographicZones = zones.filter(function (item) { return item && item.id !== zoneId; }).map(function (item, index) { item.order = index; return item; });
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible de supprimer la zone.'] };
+    return { ok: true, errors: [], deletedZoneId: zoneId };
+  }
+
+  function positionEmployeeGeographicZone(dossierId, zoneId, position) {
+    dossierId = String(dossierId || ''); zoneId = String(zoneId || ''); position = Number(position);
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['Le positionnement est réservé au dossier fictif PRH-TEST-2026.'] };
+    if (!Number.isInteger(position) || position < 1) return { ok: false, errors: ['La position doit être un entier positif.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var zones = dossier && Array.isArray(dossier.employeeGeographicZones) ? dossier.employeeGeographicZones.slice().sort(function (left, right) { return Number(left.order || 0) - Number(right.order || 0); }) : [];
+    var currentIndex = zones.findIndex(function (item) { return item && item.id === zoneId && item.dossierId === dossierId; });
+    if (currentIndex === -1) return { ok: false, errors: ['La zone à positionner est introuvable.'] };
+    if (position > zones.length) return { ok: false, errors: ['La position ne peut pas dépasser le nombre de zones.'] };
+    var moved = zones.splice(currentIndex, 1)[0];
+    zones.splice(position - 1, 0, moved);
+    zones.forEach(function (item, index) { item.order = index; });
+    dossier.employeeGeographicZones = zones;
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer le positionnement.'] };
+    return { ok: true, errors: [], zones: clone(zones) };
   }
 
   function demoOrganizationSeeded(dossierId) {
@@ -1693,6 +1819,12 @@
     updateEmployeeCategory: updateEmployeeCategory,
     deleteEmployeeCategory: deleteEmployeeCategory,
     positionEmployeeCategory: positionEmployeeCategory,
+    employeeGeographicZones: employeeGeographicZones,
+    seedDemoEmployeeGeographicZones: seedDemoEmployeeGeographicZones,
+    createEmployeeGeographicZone: createEmployeeGeographicZone,
+    updateEmployeeGeographicZone: updateEmployeeGeographicZone,
+    deleteEmployeeGeographicZone: deleteEmployeeGeographicZone,
+    positionEmployeeGeographicZone: positionEmployeeGeographicZone,
     organizationUnits: organizationUnits,
     createOrganizationUnit: createOrganizationUnit,
     updateOrganizationUnit: updateOrganizationUnit,
