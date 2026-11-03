@@ -454,6 +454,7 @@ assert.ok(seededBanks.items.every(bank => !bank.bankBranchCode && !bank.accountN
 assert.equal(PayrollHR.mergeEmployeeBanks(testDossier.dossier.id, seededBanks.items[0].id, seededBanks.items[0].id).ok, false, 'une banque ne peut pas être fusionnée avec elle-même');
 const mergedTestBanks = PayrollHR.mergeEmployeeBanks(testDossier.dossier.id, seededBanks.items[0].id, seededBanks.items[1].id);
 assert.equal(mergedTestBanks.ok, true, mergedTestBanks.errors.join('\\n'));
+assert.equal(mergedTestBanks.reassignedCount, 0, 'aucune opération sans lien explicite à une banque n’est réattribuée');
 assert.equal(mergedTestBanks.banks.some(bank => bank.id === seededBanks.items[0].id), false, 'la fusion retire la référence source');
 assert.equal(mergedTestBanks.banks.find(bank => bank.id === seededBanks.items[1].id).address, 'Cotonou');
 const customQualification = PayrollHR.createEmployeeDefinitionItem(testDossier.dossier.id, 'qualifications', { code: '20', label: 'Certification fictive', testOnly: true });

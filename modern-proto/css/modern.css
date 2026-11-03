@@ -4499,3 +4499,12 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .payroll-definition-reference-workspace #payroll-definition-position-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 9px; border: 1px solid #e2e8e3; border-radius: 7px; background: #fafbf9; }
 .payroll-definition-reference-workspace #payroll-definition-position-form input { width: 76px; min-height: 31px; padding: 5px 7px; border: 1px solid #cbd7d2; border-radius: 5px; }
 @media (max-width: 600px) { .payroll-definition-fields { grid-template-columns: 1fr; } }
+.payroll-bank-merge-dialog { width: min(720px, calc(100vw - 28px)); }
+.payroll-bank-merge-intro { margin: 0 0 24px; color: #26342c; font-size: .95rem; }
+.payroll-bank-merge-fields { display: grid; grid-template-columns: minmax(210px, 1fr) minmax(150px, 185px); gap: 14px 20px; align-items: center; max-width: 620px; margin: 0 auto; }
+.payroll-bank-merge-fields label { color: #37463d; font-size: .86rem; }
+.payroll-bank-merge-fields input { box-sizing: border-box; width: 100%; min-height: 38px; padding: 6px 8px; border: 1px solid #49544d; border-radius: 2px; color: #18221c; font-size: .95rem; }
+.payroll-bank-merge-fields input[readonly] { background: #f1f3f2; }
+.payroll-bank-merge-fields input[name="destinationBankCode"] { background: #fff200; }
+.payroll-bank-merge-delete-note { margin: 24px 0 14px; color: #37463d; font-size: .86rem; }
+@media (max-width: 560px) { .payroll-bank-merge-fields { grid-template-columns: 1fr; gap: 6px; } }

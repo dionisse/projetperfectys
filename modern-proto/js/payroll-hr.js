@@ -1276,10 +1276,22 @@
     var conflicts = fields.filter(function (field) { return source[field] && destination[field] && source[field] !== destination[field]; });
     if (conflicts.length) return { ok: false, errors: ['Fusion refusée : des champs de la banque d’origine et de destination sont différents. Résolvez les différences manuellement avant la fusion.'] };
     fields.forEach(function (field) { if (!destination[field]) destination[field] = source[field] || ''; });
+    var reassignedCount = 0;
+    var seenRecords = new Set();
+    [dossier.demoEmployees, dossier.payslipDocuments, dossier.payrollPaymentRecords, dossier.payrollBatchPreparations].forEach(function (records) {
+      (Array.isArray(records) ? records : []).forEach(function (record) {
+        if (!record || seenRecords.has(record)) return;
+        seenRecords.add(record);
+        if (record.bankId !== sourceBankId && record.bankReferenceId !== sourceBankId) return;
+        if (record.bankId === sourceBankId) record.bankId = destinationBankId;
+        if (record.bankReferenceId === sourceBankId) record.bankReferenceId = destinationBankId;
+        reassignedCount += 1;
+      });
+    });
     destination.updatedAt = new Date().toISOString();
     dossier[config.storageKey] = banks.filter(function (item) { return item && item.id !== sourceBankId; }).map(function (item, index) { item.order = index; return item; });
     if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la fusion des banques.'] };
-    return { ok: true, errors: [], sourceBankId: sourceBankId, destinationBankId: destinationBankId, banks: employeeDefinitionItems(dossierId, 'banks') };
+    return { ok: true, errors: [], sourceBankId: sourceBankId, destinationBankId: destinationBankId, reassignedCount: reassignedCount, banks: employeeDefinitionItems(dossierId, 'banks') };
   }
 
   var EMPLOYEE_FUNCTION_PREMIUM_CATALOG = [{ id: 'responsibility-premium', label: 'Prime de responsabilité' }];
