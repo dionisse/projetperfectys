@@ -1143,6 +1143,8 @@
     var code = String(input.code || '').trim();
     var label = String(input.label || '').trim().replace(/\s+/g, ' ');
     var linkedPremiumIds = Array.isArray(input.linkedPremiumIds) ? Array.from(new Set(input.linkedPremiumIds.map(String))) : [];
+    var requestedPremiumAmounts = input.linkedPremiumAmounts && typeof input.linkedPremiumAmounts === 'object' && !Array.isArray(input.linkedPremiumAmounts) ? input.linkedPremiumAmounts : {};
+    var linkedPremiumAmounts = {};
     var knownPremiumIds = {};
     employeeFunctionPremiumCatalog(dossier && dossier.id).forEach(function (item) { knownPremiumIds[item.id] = true; });
     var errors = [];
@@ -1151,7 +1153,16 @@
     if (!label) errors.push('L’intitulé de la fonction est obligatoire.');
     if (label.length > 100) errors.push('L’intitulé est limité à 100 caractères.');
     if (linkedPremiumIds.some(function (id) { return !knownPremiumIds[id]; })) errors.push('La sélection contient une prime inconnue.');
-    return { ok: errors.length === 0, errors: errors, value: { code: code, label: label, linkedPremiumIds: linkedPremiumIds } };
+    linkedPremiumIds.forEach(function (premiumId) {
+      var rawAmount = String(requestedPremiumAmounts[premiumId] == null ? '' : requestedPremiumAmounts[premiumId]).trim();
+      if (!rawAmount) return;
+      if (rawAmount.length > 30 || !/^-?\d+(?:[.,]\d+)?$/.test(rawAmount)) {
+        errors.push('Saisissez un montant numérique valide pour chaque prime liée.');
+        return;
+      }
+      linkedPremiumAmounts[premiumId] = rawAmount.replace(',', '.');
+    });
+    return { ok: errors.length === 0, errors: errors, value: { code: code, label: label, linkedPremiumIds: linkedPremiumIds, linkedPremiumAmounts: linkedPremiumAmounts } };
   }
 
   function createEmployeeFunction(dossierId, input) {

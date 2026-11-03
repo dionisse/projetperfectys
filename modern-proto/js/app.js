@@ -20509,6 +20509,13 @@
       toast('Fusion terminée : ' + result.reassignedCount + ' fiche(s) employé transférée(s). Le service d’origine a été supprimé.', 'success'); render();
     });
     var employeeFunctionForm = $('#payroll-employee-function-form');
+    if (employeeFunctionForm) employeeFunctionForm.addEventListener('change', function (event) {
+      var checkbox = event.target;
+      if (!checkbox || checkbox.name !== 'linkedPremiumIds') return;
+      var row = checkbox.closest('tr');
+      var amountInput = row && row.querySelector('input[name="linkedPremiumAmount"]');
+      if (amountInput) amountInput.disabled = !checkbox.checked;
+    });
     if (employeeFunctionForm) employeeFunctionForm.addEventListener('submit', function (event) {
       event.preventDefault();
       var mode = employeeFunctionForm.getAttribute('data-mode') || 'view';
@@ -20519,7 +20526,14 @@
       var confirmation = employeeFunctionForm.elements.namedItem('testOnly');
       if (!confirmation || !confirmation.checked) { toast('Confirmez que cette fonction est fictive.', 'warning'); return; }
       var payload = payrollEmployeeFormValues(employeeFunctionForm, ['code', 'label']);
-      payload.linkedPremiumIds = Array.prototype.map.call(employeeFunctionForm.querySelectorAll('input[name="linkedPremiumIds"]:checked'), function (input) { return input.value; });
+      var linkedPremiumInputs = Array.prototype.slice.call(employeeFunctionForm.querySelectorAll('input[name="linkedPremiumIds"]:checked'));
+      payload.linkedPremiumIds = linkedPremiumInputs.map(function (input) { return input.value; });
+      payload.linkedPremiumAmounts = {};
+      linkedPremiumInputs.forEach(function (input) {
+        var row = input.closest('tr');
+        var amountInput = row && row.querySelector('input[name="linkedPremiumAmount"]');
+        if (amountInput && amountInput.value.trim()) payload.linkedPremiumAmounts[input.value] = amountInput.value;
+      });
       payload.testOnly = true;
       var result = mode === 'create'
         ? PayrollHR.createEmployeeFunction(dossier.id, payload)
@@ -20546,11 +20560,17 @@
         ? {
             code: (currentFunctionForm.elements.namedItem('code') || {}).value || '',
             label: (currentFunctionForm.elements.namedItem('label') || {}).value || '',
-            linkedPremiumIds: Array.prototype.map.call(currentFunctionForm.querySelectorAll('input[name="linkedPremiumIds"]:checked'), function (input) { return input.value; })
+            linkedPremiumIds: Array.prototype.map.call(currentFunctionForm.querySelectorAll('input[name="linkedPremiumIds"]:checked'), function (input) { return input.value; }),
+            linkedPremiumAmounts: Array.prototype.reduce.call(currentFunctionForm.querySelectorAll('input[name="linkedPremiumIds"]:checked'), function (amounts, input) {
+              var row = input.closest('tr');
+              var amountInput = row && row.querySelector('input[name="linkedPremiumAmount"]');
+              if (amountInput && amountInput.value.trim()) amounts[input.value] = amountInput.value;
+              return amounts;
+            }, {})
           }
         : (PayrollHR.employeeFunctions(dossier.id).find(function (item) { return item.id === ui.payrollEmployeeFunctionId; }) || null);
       if (draft) {
-        ui.payrollEmployeeFunctionDraft = { code: draft.code || '', label: draft.label || '', linkedPremiumIds: (draft.linkedPremiumIds || []).slice() };
+        ui.payrollEmployeeFunctionDraft = { code: draft.code || '', label: draft.label || '', linkedPremiumIds: (draft.linkedPremiumIds || []).slice(), linkedPremiumAmounts: Object.assign({}, draft.linkedPremiumAmounts || {}) };
         if (currentMode === 'view') ui.payrollEmployeeFunctionMode = 'edit';
       } else {
         ui.payrollEmployeeFunctionDraft = { code: '', label: '', linkedPremiumIds: [] };
@@ -21437,16 +21457,19 @@
       return '<div class="field"><label for="payroll-employee-function-' + name + '">' + esc(label) + '</label><input id="payroll-employee-function-' + name + '" name="' + name + '" type="text" maxlength="' + (name === 'code' ? '24' : '100') + '" value="' + esc(value || '') + '"' + (mode === 'view' ? ' readonly' : (name === 'code' || name === 'label' ? ' required' : '')) + '></div>';
     }
     var selectedPremiumIds = source && Array.isArray(source.linkedPremiumIds) ? source.linkedPremiumIds : [];
+    var selectedPremiumAmounts = source && source.linkedPremiumAmounts && typeof source.linkedPremiumAmounts === 'object' ? source.linkedPremiumAmounts : {};
     var premiumRows = premiums.map(function (premium) {
       var checked = selectedPremiumIds.indexOf(premium.id) !== -1;
+      var amount = selectedPremiumAmounts[premium.id] == null ? '' : String(selectedPremiumAmounts[premium.id]);
       return '<tr><td>' + esc(premium.label) + '</td><td class="payroll-function-premium-cell' + (checked ? ' is-linked' : '') + '">' +
-        (mode === 'view' ? (checked ? '<span aria-label="Prime liée">✓</span>' : '<span aria-label="Prime non liée">—</span>') : '<label class="payroll-function-premium-choice"><input type="checkbox" name="linkedPremiumIds" value="' + esc(premium.id) + '"' + (checked ? ' checked' : '') + '><span class="sr-only">Lier ' + esc(premium.label) + '</span></label>') + '</td></tr>';
+        (mode === 'view' ? (checked ? '<span aria-label="Prime liée">✓</span>' : '<span aria-label="Prime non liée">—</span>') : '<label class="payroll-function-premium-choice"><input type="checkbox" name="linkedPremiumIds" value="' + esc(premium.id) + '"' + (checked ? ' checked' : '') + '><span class="sr-only">Lier ' + esc(premium.label) + '</span></label>') + '</td><td>' +
+        (mode === 'view' ? (checked && amount ? esc(amount) : '—') : '<input class="payroll-function-premium-amount" type="text" name="linkedPremiumAmount" inputmode="decimal" maxlength="30" placeholder="Saisir un montant" value="' + esc(amount) + '"' + (checked ? '' : ' disabled') + ' aria-label="Montant de ' + esc(premium.label) + '">') + '</td></tr>';
     }).join('');
     var functionForm = isTestDossier && source
-      ? '<form id="payroll-employee-function-form" data-mode="' + esc(mode) + '" data-dossier-id="' + esc(dossier.id) + '" data-function-id="' + esc(selected ? selected.id : '') + '"><div class="payroll-geographic-zone-fields">' + field('code', 'Code', source.code) + field('label', 'Intitulé', source.label) + '</div><fieldset class="payroll-function-premiums"><legend>Primes liées à la fonction</legend><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Prime</th><th>Liée</th></tr></thead><tbody>' + (premiumRows || '<tr><td colspan="2">Aucune prime définie.</td></tr>') + '</tbody></table></div></fieldset>' + (mode !== 'view' ? '<label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Je confirme que cette fonction et ses liens sont fictifs et réservés au test.</span></label><div class="payroll-status-actions"><button type="button" class="btn btn-secondary" data-action="cancel-payroll-employee-function-edit">Annuler</button><button type="submit" class="btn btn-primary">Valider</button></div>' : '') + '</form>'
+      ? '<form id="payroll-employee-function-form" data-mode="' + esc(mode) + '" data-dossier-id="' + esc(dossier.id) + '" data-function-id="' + esc(selected ? selected.id : '') + '"><div class="payroll-geographic-zone-fields">' + field('code', 'Code', source.code) + field('label', 'Intitulé', source.label) + '</div><fieldset class="payroll-function-premiums"><legend>Primes liées à la fonction</legend><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Prime</th><th>Liée</th><th>Montant</th></tr></thead><tbody>' + (premiumRows || '<tr><td colspan="3">Aucune prime définie.</td></tr>') + '</tbody></table></div></fieldset>' + (mode !== 'view' ? '<label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Je confirme que cette fonction et ses liens sont fictifs et réservés au test.</span></label><div class="payroll-status-actions"><button type="button" class="btn btn-secondary" data-action="cancel-payroll-employee-function-edit">Annuler</button><button type="submit" class="btn btn-primary">Valider</button></div>' : '') + '</form>'
       : '<div class="empty-state"><strong>' + (isTestDossier ? 'Aucune fonction chargée' : 'Dossier de test requis') + '</strong><span>' + (isTestDossier ? 'La capture montre DG · Directeur général, avec la prime de responsabilité liée.' : 'Les fonctions de démonstration sont réservées à PRH-TEST-2026.') + '</span>' + (isTestDossier && canCreatePayrollEmployee ? '<button type="button" class="btn btn-secondary" data-action="seed-payroll-employee-functions">Charger DG de la capture</button>' : '') + '</div>';
     var functionPremiumDialog = isTestDossier && canCreatePayrollEmployee
-      ? '<dialog class="payroll-employee-dialog" id="payroll-employee-function-premium-dialog" aria-labelledby="payroll-function-premium-title"><div class="payroll-employee-dialog-head"><h3 id="payroll-function-premium-title">Ajouter une prime de fonction</h3><button type="button" class="icon-btn" data-action="close-payroll-employee-function-premium" aria-label="Fermer">×</button></div><p class="small muted">Ajoutez un libellé à la liste des primes liées. Aucun montant ni règle de calcul ne sera défini ici.</p><form id="payroll-employee-function-premium-form" data-dossier-id="' + esc(dossier.id) + '"><div class="field"><label for="payroll-function-premium-label">Libellé de la prime</label><input id="payroll-function-premium-label" name="label" type="text" maxlength="100" required></div><label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Définition fictive du dossier de test.</span></label><div class="payroll-employee-dialog-actions"><button type="button" class="btn btn-secondary" data-action="close-payroll-employee-function-premium">Annuler</button><button type="submit" class="btn btn-primary">Ajouter</button></div></form></dialog>' : '';
+      ? '<dialog class="payroll-employee-dialog" id="payroll-employee-function-premium-dialog" aria-labelledby="payroll-function-premium-title"><div class="payroll-employee-dialog-head"><h3 id="payroll-function-premium-title">Ajouter une prime de fonction</h3><button type="button" class="icon-btn" data-action="close-payroll-employee-function-premium" aria-label="Fermer">×</button></div><p class="small muted">Ajoutez un libellé à la liste. Le montant éventuel se saisit lors de la liaison à une fonction; aucun calcul de paie n’est effectué.</p><form id="payroll-employee-function-premium-form" data-dossier-id="' + esc(dossier.id) + '"><div class="field"><label for="payroll-function-premium-label">Libellé de la prime</label><input id="payroll-function-premium-label" name="label" type="text" maxlength="100" required></div><label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Définition fictive du dossier de test.</span></label><div class="payroll-employee-dialog-actions"><button type="button" class="btn btn-secondary" data-action="close-payroll-employee-function-premium">Annuler</button><button type="submit" class="btn btn-primary">Ajouter</button></div></form></dialog>' : '';
     var position = selected ? functions.findIndex(function (item) { return item.id === selected.id; }) + 1 : 1;
     var actions = '<div class="payroll-status-actions">' +
       (isTestDossier && canCreatePayrollEmployee ? '<button type="button" class="btn btn-primary" data-action="new-payroll-employee-function">Insérer</button><button type="button" class="btn btn-secondary" data-action="open-payroll-employee-function-premium">Ajouter une prime</button>' : '') +
@@ -21454,7 +21477,7 @@
       (isTestDossier ? '<button type="button" class="btn btn-secondary" data-action="close-payroll-functions-view">Fermer</button>' : '') + '</div>';
     var positionForm = selected && isTestDossier && canEditPayrollEmployee && mode === 'view'
       ? '<form id="payroll-employee-function-position-form" data-dossier-id="' + esc(dossier.id) + '" data-function-id="' + esc(selected.id) + '"><label for="payroll-employee-function-position">Position</label><input id="payroll-employee-function-position" name="position" type="number" min="1" max="' + functions.length + '" step="1" value="' + position + '" required><button type="submit" class="btn btn-secondary">Positionner</button></form>' : '';
-    return '<section class="payroll-status-workspace payroll-employee-functions-workspace" aria-label="Fonctions"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · DÉFINITIONS</p><h3>Fonctions</h3></div><span class="badge draft">' + (isTestDossier ? 'PRH-TEST-2026 · TEST' : 'DOSSIER NON TEST') + '</span></div><div class="alert warning"><div>Référentiel local des fonctions des employés. Les primes liées sont des associations descriptives uniquement : aucun montant ni calcul de paie n’est créé.</div></div><div class="payroll-status-workspace-layout"><aside class="payroll-status-list"><div class="payroll-status-list-head"><h4>Fonctions (' + functions.length + ')</h4></div><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Code</th><th>Intitulé</th></tr></thead><tbody>' + (rows || '<tr><td colspan="2">Aucune fonction.</td></tr>') + '</tbody></table></div></aside><div class="payroll-status-detail"><div class="payroll-status-detail-head"><h4>' + esc(mode === 'create' ? 'Nouvelle fonction' : (selected ? selected.label : 'Fonction')) + '</h4>' + actions + '</div>' + positionForm + functionForm + '</div></div>' + functionPremiumDialog + '</section>';
+    return '<section class="payroll-status-workspace payroll-employee-functions-workspace" aria-label="Fonctions"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · DÉFINITIONS</p><h3>Fonctions</h3></div><span class="badge draft">' + (isTestDossier ? 'PRH-TEST-2026 · TEST' : 'DOSSIER NON TEST') + '</span></div><div class="alert warning"><div>Référentiel local des fonctions des employés. Le montant de chaque prime liée est une valeur saisie par l’utilisateur, à titre descriptif; aucun calcul de paie n’est effectué.</div></div><div class="payroll-status-workspace-layout"><aside class="payroll-status-list"><div class="payroll-status-list-head"><h4>Fonctions (' + functions.length + ')</h4></div><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Code</th><th>Intitulé</th></tr></thead><tbody>' + (rows || '<tr><td colspan="2">Aucune fonction.</td></tr>') + '</tbody></table></div></aside><div class="payroll-status-detail"><div class="payroll-status-detail-head"><h4>' + esc(mode === 'create' ? 'Nouvelle fonction' : (selected ? selected.label : 'Fonction')) + '</h4>' + actions + '</div>' + positionForm + functionForm + '</div></div>' + functionPremiumDialog + '</section>';
   }
 
   function viewPayrollEmployeeCategories(dossier, canCreatePayrollEmployee, canEditPayrollEmployee) {
