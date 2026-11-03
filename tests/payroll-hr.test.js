@@ -241,6 +241,20 @@ const addedTestEmployee = PayrollHR.createEmployee(testDossier.dossier.id, {
 assert.equal(addedTestEmployee.ok, true, addedTestEmployee.errors.join('\\n'));
 assert.match(addedTestEmployee.employee.id, /^EMP-TEST-/);
 assert.equal(PayrollHR.isDemoTestDossier(testDossier.dossier.id), true, 'l’ajout d’une fiche fictive conserve le dossier de test reconnu');
+const profileUpdate = PayrollHR.updateEmployee(testDossier.dossier.id, addedTestEmployee.employee.id, {
+  employeeNumber: 'TEST-ADDED-UPDATED', displayName: 'Employé fictif mis à jour', birthDate: '1990-05-12',
+  childrenCount: '2', seniorityMonthsToDeduct: '1', socialInsuranceNumber: 'TEST-SS-0001',
+  bankAccountNumber: 'TEST-ACCOUNT-0001', address: 'Adresse fictive 1', photoDataUrl: 'data:image/png;base64,ZmFrZQ=='
+});
+assert.equal(profileUpdate.ok, true, profileUpdate.errors.join('\\n'));
+assert.equal(PayrollHR.employee(testDossier.dossier.id, addedTestEmployee.employee.id).birthDate, '1990-05-12');
+assert.equal(PayrollHR.employee(testDossier.dossier.id, addedTestEmployee.employee.id).bankAccountNumber, 'TEST-ACCOUNT-0001');
+assert.equal(PayrollHR.updateEmployee(testDossier.dossier.id, addedTestEmployee.employee.id, { birthDate: '2026-02-31' }).ok, false, 'les dates de saisie sont contrôlées');
+assert.equal(PayrollHR.updateEmployee(testDossier.dossier.id, addedTestEmployee.employee.id, { photoDataUrl: 'data:image/svg+xml;base64,PHN2Zz4=' }).ok, false, 'les photos sont limitées aux formats raster autorisés');
+assert.equal(PayrollHR.updateEmployee(dossier.id, created.employee.id, { displayName: 'hors dossier test' }).ok, false, 'modification impossible hors PRH-TEST-2026');
+assert.equal(PayrollHR.deleteEmployee(testDossier.dossier.id, addedTestEmployee.employee.id).ok, true);
+assert.equal(PayrollHR.employee(testDossier.dossier.id, addedTestEmployee.employee.id), null);
+assert.equal(PayrollHR.isDemoTestDossier(testDossier.dossier.id), true, 'le dossier test reste valide après suppression d’une fiche non liée');
 assert.equal(PayrollHR.isDemoTestDossier(dossier.id), false, 'le préchargement est limité au dossier de démonstration identifié');
 const mockSeed = PayrollHR.seedDemoOrganizationData(testDossier.dossier.id);
 assert.equal(mockSeed.ok, true, mockSeed.errors.join('\\n'));
@@ -249,6 +263,7 @@ assert.equal(mockSeed.assignments.length, 2);
 assert.equal(mockSeed.missions.length, 2);
 assert.ok(mockSeed.assignments.every(item => item.origin === 'demo-mock' && item.dossierId === testDossier.dossier.id));
 assert.ok(mockSeed.missions.every(item => item.origin === 'demo-mock' && item.dossierId === testDossier.dossier.id));
+assert.equal(PayrollHR.deleteEmployee(testDossier.dossier.id, mockSeed.assignments[0].employeeId).ok, false, 'une fiche référencée par une affectation ne peut pas être supprimée');
 assert.equal(PayrollHR.demoOrganizationSeeded(testDossier.dossier.id), true);
 assert.equal(PayrollHR.seedDemoOrganizationData(testDossier.dossier.id).ok, false, 'le jeu exemple ne peut pas être dupliqué');
 assert.equal(PayrollHR.seedDemoOrganizationData(dossier.id).ok, false, 'aucun jeu fictif prérempli dans un dossier ordinaire');

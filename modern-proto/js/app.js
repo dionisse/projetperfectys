@@ -584,7 +584,13 @@
         return { moduleId: 'payroll-hr', actionId: 'record.create' };
       case 'edit-payroll-org-unit':
       case 'archive-payroll-org-unit':
+      case 'edit-payroll-employee':
+      case 'delete-payroll-employee-photo':
         return { moduleId: 'payroll-hr', actionId: 'record.edit' };
+      case 'delete-payroll-employee':
+        return { moduleId: 'payroll-hr', actionId: 'record.delete' };
+      case 'print-payroll-employee':
+        return { moduleId: 'payroll-hr', actionId: 'module.view' };
       case 'open-accounting-payroll-centralization':
         return { moduleId: 'payroll-hr', actionId: 'module.view' };
       case 'commit-accounting-payroll-centralization':
@@ -20257,6 +20263,39 @@
     });
   }
 
+  function printPayrollEmployee() {
+    var cleaned = false;
+    var cleanup = function () {
+      if (cleaned) return;
+      cleaned = true;
+      document.body.classList.remove('payroll-employee-printing');
+    };
+    try {
+      document.body.classList.add('payroll-employee-printing');
+      window.addEventListener('afterprint', cleanup, { once: true });
+      window.print();
+      window.setTimeout(cleanup, 30000);
+    } catch (error) {
+      window.removeEventListener('afterprint', cleanup);
+      cleanup();
+      toast('Impossible d’ouvrir l’impression de la fiche fictive.', 'warning');
+    }
+  }
+
+  function payrollEmployeeFormValues(form, fieldNames) {
+    var values = {};
+    fieldNames.forEach(function (name) {
+      var field = form.elements.namedItem(name);
+      if (field) values[name] = field.value;
+    });
+    return values;
+  }
+
+  function validPayrollEmployeeFormTarget(form) {
+    var dossier = PayrollHR.currentDossier();
+    return !!(dossier && form && form.getAttribute('data-dossier-id') === dossier.id && PayrollHR.isDemoTestDossier(dossier.id));
+  }
+
   function bindPayrollModuleView() {
     var form = $('#payroll-accounting-link-form');
     if (form) form.addEventListener('submit', function (event) {
@@ -20289,8 +20328,47 @@
       });
       if (!result.ok) { toast(result.errors[0] || 'Création de la fiche de test impossible.', 'warning'); return; }
       ui.payrollEmployeeId = result.employee.id;
-      toast('Fiche fictive créée dans PRH-TEST-2026. Aucun champ sensible ou élément de paie n’a été saisi.', 'success');
+      toast('Fiche fictive créée dans PRH-TEST-2026.', 'success');
       render();
+    });
+    var employeeEditForm = $('#payroll-employee-edit-form');
+    if (employeeEditForm) employeeEditForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('edit-payroll-employee', employeeEditForm, true)) return;
+      if (!validPayrollEmployeeFormTarget(employeeEditForm)) { toast('Modification refusée : ouvrez la fiche dans PRH-TEST-2026.', 'warning'); return; }
+      if (!employeeEditForm.elements.namedItem('testOnly').checked) { toast('Confirmez que les valeurs saisies sont fictives.', 'warning'); return; }
+      var profileFields = ['employeeNumber', 'displayName', 'firstHireDate', 'seniorityMonthsToDeduct', 'seniorityReferenceDate', 'vpsExemptionEndDate', 'terminationDate', 'terminationReason', 'rehireDate', 'birthDate', 'sex', 'maritalStatus', 'childrenCount', 'birthplace', 'nationality', 'socialInsuranceNumber', 'taxId', 'supplementaryInsuranceCompany', 'supplementaryInsuranceNumber', 'degree', 'profession', 'employeeStatus', 'categoryStep', 'effectiveDate', 'zone', 'service', 'function', 'paymentMethod', 'bankName', 'bankAccountNumber'];
+      var result = PayrollHR.updateEmployee(PayrollHR.currentDossier().id, employeeEditForm.getAttribute('data-employee-id'), payrollEmployeeFormValues(employeeEditForm, profileFields));
+      if (!result.ok) { toast(result.errors[0] || 'Enregistrement de test impossible.', 'warning'); return; }
+      toast('Fiche fictive mise à jour dans PRH-TEST-2026.', 'success'); render();
+    });
+    var employeeInfoForm = $('#payroll-employee-info-form');
+    if (employeeInfoForm) employeeInfoForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('edit-payroll-employee', employeeInfoForm, true)) return;
+      if (!validPayrollEmployeeFormTarget(employeeInfoForm)) { toast('Modification refusée : ouvrez la fiche dans PRH-TEST-2026.', 'warning'); return; }
+      if (!employeeInfoForm.elements.namedItem('testOnly').checked) { toast('Confirmez que les informations sont fictives.', 'warning'); return; }
+      var result = PayrollHR.updateEmployee(PayrollHR.currentDossier().id, employeeInfoForm.getAttribute('data-employee-id'), payrollEmployeeFormValues(employeeInfoForm, ['address', 'contactPhone', 'contactEmail', 'miscellaneousLabel', 'miscellaneousValue']));
+      if (!result.ok) { toast(result.errors[0] || 'Enregistrement des informations diverses impossible.', 'warning'); return; }
+      toast('Informations diverses fictives enregistrées.', 'success'); render();
+    });
+    var employeePhotoForm = $('#payroll-employee-photo-form');
+    if (employeePhotoForm) employeePhotoForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('edit-payroll-employee', employeePhotoForm, true)) return;
+      if (!validPayrollEmployeeFormTarget(employeePhotoForm)) { toast('Modification refusée : ouvrez la fiche dans PRH-TEST-2026.', 'warning'); return; }
+      if (!employeePhotoForm.elements.namedItem('testOnly').checked) { toast('Confirmez que la photo est une image fictive de test.', 'warning'); return; }
+      var file = employeePhotoForm.elements.namedItem('photo').files[0];
+      if (!file || !/^image\/(?:jpeg|png|webp)$/.test(file.type) || file.size > 1024 * 1024) { toast('Choisissez une image JPEG, PNG ou WebP de 1 Mo maximum.', 'warning'); return; }
+      if (typeof FileReader !== 'function') { toast('La lecture de fichier n’est pas prise en charge par ce navigateur.', 'warning'); return; }
+      var reader = new FileReader();
+      reader.onload = function () {
+        var result = PayrollHR.updateEmployee(employeePhotoForm.getAttribute('data-dossier-id'), employeePhotoForm.getAttribute('data-employee-id'), { photoDataUrl: String(reader.result || '') });
+        if (!result.ok) { toast(result.errors[0] || 'Enregistrement de la photo impossible.', 'warning'); return; }
+        toast('Photo fictive enregistrée dans le navigateur.', 'success'); render();
+      };
+      reader.onerror = function () { toast('Impossible de lire cette image de test.', 'error'); };
+      reader.readAsDataURL(file);
     });
     var unitCreateForm = $('#payroll-org-unit-create-form');
     if (unitCreateForm) unitCreateForm.addEventListener('submit', function (event) {
@@ -20904,14 +20982,12 @@
 
   function viewPayrollEmployeeDetails(dossier, dossierEmployees, canCreatePayrollEmployee) {
     var isTestDossier = PayrollHR.isDemoTestDossier(dossier.id);
+    var canEditEmployee = isTestDossier && hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'record.edit', payrollAccessContext(dossier));
     var employees = isTestDossier ? dossierEmployees : [];
     var selected = employees.find(function (employee) { return employee.id === ui.payrollEmployeeId; }) || employees[0] || null;
     if (selected) ui.payrollEmployeeId = selected.id;
-    function lockedField(label, type) {
-      return '<div class="field payroll-employee-locked-field"><label>' + esc(label) + '</label><input type="' + (type || 'text') + '" disabled aria-label="' + esc(label + ' — désactivé') + '" placeholder="Désactivé · cadrage requis"></div>';
-    }
-    function lockedSelect(label) {
-      return '<div class="field payroll-employee-locked-field"><label>' + esc(label) + '</label><select disabled aria-label="' + esc(label + ' — désactivé') + '"><option>Indisponible</option></select></div>';
+    function textField(name, label, type, value, maxLength) {
+      return '<div class="field"><label for="payroll-employee-field-' + name + '">' + esc(label) + '</label><input id="payroll-employee-field-' + name + '" name="' + name + '" type="' + (type || 'text') + '"' + (maxLength ? ' maxlength="' + maxLength + '"' : '') + (name === 'employeeNumber' || name === 'displayName' ? ' required' : '') + ' value="' + esc(value || '') + '"></div>';
     }
     var rows = employees.map(function (employee) {
       var active = selected && selected.id === employee.id;
@@ -20921,26 +20997,32 @@
       ? '<form id="payroll-employee-create-form" class="payroll-employee-create-form" data-dossier-id="' + esc(dossier.id) + '"><p class="small"><strong>Ajouter une fiche fictive</strong></p><div class="payroll-employee-create-grid">' +
         '<div class="field"><label for="payroll-employee-number">Matricule interne *</label><input id="payroll-employee-number" type="text" maxlength="40" required autocomplete="off"></div>' +
         '<div class="field"><label for="payroll-employee-display-name">Nom d’affichage fictif *</label><input id="payroll-employee-display-name" type="text" maxlength="120" required autocomplete="off"></div>' +
-        '<label class="payroll-test-confirm"><input id="payroll-test-data-confirmation" type="checkbox" required><span>Fiche fictive de test uniquement (aucune donnée réelle).</span></label>' +
-        '<button type="submit" class="btn btn-primary">＋ Ajouter l’employé fictif</button></div></form>'
-      : (isTestDossier ? '<p class="small muted">Création indisponible : votre profil ne possède pas le droit requis.</p>' : '<div class="alert info"><div>La saisie de test est réservée au dossier fictif <strong>PRH-TEST-2026</strong>. Ouvrez ce dossier depuis <a href="#/payroll-dossiers">Dossiers RH</a>. Aucune donnée d’un autre dossier n’est affichée ici.</div></div>');
-    var selectedFields = selected
-      ? '<div class="payroll-employee-identity"><div class="field"><label>Matricule</label><input type="text" readonly value="' + esc(selected.employeeNumber || selected.id) + '"></div><div class="field"><label>Nom d’affichage fictif</label><input type="text" readonly value="' + esc(selected.displayName || 'Employé fictif') + '"></div></div>'
-      : '<div class="alert info"><div>Aucune fiche de démonstration sélectionnée. Les fiches réelles ne sont pas chargées dans ce prototype.</div></div>';
-    var fieldsets = '<div class="payroll-employee-fieldsets">' +
-      '<fieldset><legend>Embauche et situation</legend><div class="payroll-employee-field-grid">' + lockedField('Première embauche', 'date') + lockedField('Ancienneté à déduire · mois') + lockedField('Date de référence') + lockedField('Fin exonération V.P.S.', 'date') + lockedField('Débauchage', 'date') + lockedField('Motif') + lockedField('Dernière réembauche', 'date') + '</div></fieldset>' +
-      '<fieldset><legend>Identité et situation personnelle · désactivé</legend><div class="payroll-employee-field-grid">' + lockedField('Date de naissance', 'date') + lockedSelect('Sexe') + lockedSelect('Situation matrimoniale') + lockedField('Enfants', 'number') + lockedField('Lieu de naissance') + lockedField('Pays de nationalité') + '</div></fieldset>' +
-      '<fieldset><legend>Identifiants et assurance · désactivé</legend><div class="payroll-employee-field-grid">' + lockedField('N° d’assuré social') + lockedField('Numéro IFU') + lockedField('Compagnie d’assurance complémentaire') + lockedField('Numéro d’assuré complémentaire') + '</div></fieldset>' +
-      '<fieldset><legend>Parcours et affectation · à préciser</legend><div class="payroll-employee-field-grid">' + lockedField('Diplôme') + lockedField('Profession') + lockedField('Statut') + lockedField('Catégorie / échelon') + lockedField('Date d’effet', 'date') + lockedField('Zone') + lockedField('Service') + lockedField('Fonction') + '</div></fieldset>' +
-      '<fieldset><legend>Règlement des salaires · désactivé</legend><div class="payroll-employee-field-grid">' + lockedSelect('Mode de règlement') + lockedField('Banque') + lockedField('N° de compte') + '</div><p class="small muted">Aucune coordonnée bancaire ni instruction de paiement ne peut être saisie.</p></fieldset>' +
-      '</div>';
-    var dialogs = '<dialog class="payroll-employee-dialog" id="payroll-employee-info-dialog" aria-labelledby="payroll-employee-info-title"><div class="payroll-employee-dialog-head"><h3 id="payroll-employee-info-title">Informations diverses</h3><button type="button" class="icon-btn" data-action="close-payroll-employee-dialog" aria-label="Fermer">×</button></div><p class="small muted">Champs non configurés. Les informations personnelles restent désactivées.</p><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Libellé</th><th>Valeur</th></tr></thead><tbody><tr><td>Adresse</td><td>Indisponible</td></tr><tr><td>Contact</td><td>Indisponible</td></tr><tr><td>Divers</td><td>Indisponible</td></tr></tbody></table></div><div class="payroll-employee-dialog-actions"><button type="button" class="btn btn-secondary" data-action="close-payroll-employee-dialog">Fermer</button></div></dialog>' +
-      '<dialog class="payroll-employee-dialog payroll-employee-photo-dialog" id="payroll-employee-photo-dialog" aria-labelledby="payroll-employee-photo-title"><div class="payroll-employee-dialog-head"><h3 id="payroll-employee-photo-title">Photo du salarié</h3><button type="button" class="icon-btn" data-action="close-payroll-employee-dialog" aria-label="Fermer">×</button></div><div class="payroll-employee-photo-placeholder" role="img" aria-label="Aucune photo disponible">Photo indisponible</div><p class="small muted">Le stockage, le chargement et la suppression d’images sont désactivés.</p><div class="payroll-employee-dialog-actions"><button type="button" class="btn btn-secondary" disabled>Lire une nouvelle photo</button><button type="button" class="btn btn-secondary" disabled>Effacer la photo</button><button type="button" class="btn btn-primary" data-action="close-payroll-employee-dialog">Fermer</button></div></dialog>';
-    return '<section class="payroll-employee-workspace" aria-label="Fiche des employés"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · DÉFINITIONS</p><h3>Employés</h3></div><span class="badge draft">' + (isTestDossier ? 'PRH-TEST-2026 · TEST UNIQUEMENT' : 'FICHE RÉELLE NON DISPONIBLE') + '</span></div>' +
-      '<div class="alert warning"><div><strong>Prototype local, données fictives uniquement.</strong> Les données sensibles, pièces jointes, photos, renseignements bancaires, modifications de fiche, impression et validation restent désactivés jusqu’à validation des protections et du cadrage.</div></div>' +
+        '<label class="payroll-test-confirm"><input id="payroll-test-data-confirmation" type="checkbox" required><span>Fiche fictive de test uniquement.</span></label>' +
+        '<button type="submit" class="btn btn-primary">＋ Ajouter</button></div></form>'
+      : (isTestDossier ? '<p class="small muted">Création indisponible pour ce profil.</p>' : '<div class="alert info"><div>La saisie de test est réservée au dossier fictif <strong>PRH-TEST-2026</strong>. Ouvrez ce dossier depuis <a href="#/payroll-dossiers">Dossiers RH</a>. Aucune donnée d’un autre dossier n’est affichée ici.</div></div>');
+    var editForm = selected && canEditEmployee
+      ? '<form id="payroll-employee-edit-form" class="payroll-employee-edit-form" data-dossier-id="' + esc(dossier.id) + '" data-employee-id="' + esc(selected.id) + '">' +
+        '<div class="payroll-employee-identity">' + textField('employeeNumber', 'Matricule', 'text', selected.employeeNumber || selected.id, 40) + textField('displayName', 'Nom d’affichage fictif', 'text', selected.displayName, 120) + '</div>' +
+        '<div class="payroll-employee-fieldsets">' +
+        '<fieldset><legend>Embauche et situation</legend><div class="payroll-employee-field-grid">' + textField('firstHireDate', 'Première embauche', 'date', selected.firstHireDate) + textField('seniorityMonthsToDeduct', 'Ancienneté à déduire · mois', 'number', selected.seniorityMonthsToDeduct) + textField('seniorityReferenceDate', 'Référence ancienneté au', 'date', selected.seniorityReferenceDate) + textField('vpsExemptionEndDate', 'Fin exonération V.P.S.', 'date', selected.vpsExemptionEndDate) + textField('terminationDate', 'Débauchage', 'date', selected.terminationDate) + textField('terminationReason', 'Motif', 'text', selected.terminationReason, 160) + textField('rehireDate', 'Dernière réembauche', 'date', selected.rehireDate) + '</div></fieldset>' +
+        '<fieldset><legend>Identité et situation personnelle</legend><div class="payroll-employee-field-grid">' + textField('birthDate', 'Date de naissance', 'date', selected.birthDate) + textField('sex', 'Sexe', 'text', selected.sex, 40) + textField('maritalStatus', 'Situation matrimoniale', 'text', selected.maritalStatus, 60) + textField('childrenCount', 'Enfants', 'number', selected.childrenCount) + textField('birthplace', 'Lieu de naissance', 'text', selected.birthplace, 120) + textField('nationality', 'Pays de nationalité', 'text', selected.nationality, 80) + '</div></fieldset>' +
+        '<fieldset><legend>Identifiants et assurance complémentaire</legend><div class="payroll-employee-field-grid">' + textField('socialInsuranceNumber', 'N° d’assuré social', 'text', selected.socialInsuranceNumber, 80) + textField('taxId', 'Numéro IFU', 'text', selected.taxId, 80) + textField('supplementaryInsuranceCompany', 'Compagnie', 'text', selected.supplementaryInsuranceCompany, 120) + textField('supplementaryInsuranceNumber', 'Numéro d’assuré', 'text', selected.supplementaryInsuranceNumber, 80) + '</div></fieldset>' +
+        '<fieldset><legend>Parcours et affectation</legend><div class="payroll-employee-field-grid">' + textField('degree', 'Diplôme', 'text', selected.degree, 120) + textField('profession', 'Profession', 'text', selected.profession, 120) + textField('employeeStatus', 'Statut', 'text', selected.employeeStatus, 80) + textField('categoryStep', 'Catégorie / échelon', 'text', selected.categoryStep, 80) + textField('effectiveDate', 'Date d’effet', 'date', selected.effectiveDate) + textField('zone', 'Zone', 'text', selected.zone, 120) + textField('service', 'Service', 'text', selected.service, 120) + textField('function', 'Fonction', 'text', selected.function, 120) + '</div></fieldset>' +
+        '<fieldset><legend>Règlement des salaires</legend><div class="payroll-employee-field-grid">' + textField('paymentMethod', 'Mode de règlement', 'text', selected.paymentMethod, 80) + textField('bankName', 'Banque', 'text', selected.bankName, 120) + textField('bankAccountNumber', 'N° de compte', 'text', selected.bankAccountNumber, 100) + '</div></fieldset>' +
+        '</div><label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Je confirme que les valeurs de cette fiche sont fictives et réservées au test.</span></label>' +
+        '<div class="payroll-employee-edit-actions"><button type="button" class="btn btn-danger" data-action="delete-payroll-employee" data-employee-id="' + esc(selected.id) + '">Supprimer</button><button type="reset" class="btn btn-secondary">Annuler</button><button type="submit" class="btn btn-primary">Enregistrer la fiche</button></div></form>'
+      : (selected ? '<div class="alert info"><div>Cette fiche est consultable, mais ce profil ne possède pas le droit de modification.</div></div>' : '<div class="empty-state"><strong>Aucun employé sélectionné</strong><span>Ajoutez une fiche fictive dans le dossier de test pour commencer.</span></div>');
+    var infoDialog = '<dialog class="payroll-employee-dialog" id="payroll-employee-info-dialog" aria-labelledby="payroll-employee-info-title"><div class="payroll-employee-dialog-head"><h3 id="payroll-employee-info-title">Informations diverses</h3><button type="button" class="icon-btn" data-action="close-payroll-employee-dialog" aria-label="Fermer">×</button></div>' +
+      (selected && canEditEmployee ? '<form id="payroll-employee-info-form" data-dossier-id="' + esc(dossier.id) + '" data-employee-id="' + esc(selected.id) + '"><div class="field"><label for="payroll-employee-address">Adresse</label><input id="payroll-employee-address" name="address" type="text" maxlength="240" value="' + esc(selected.address || '') + '"></div><div class="field"><label for="payroll-employee-contact-phone">Contact · téléphone</label><input id="payroll-employee-contact-phone" name="contactPhone" type="text" maxlength="80" value="' + esc(selected.contactPhone || '') + '"></div><div class="field"><label for="payroll-employee-contact-email">Contact · courriel</label><input id="payroll-employee-contact-email" name="contactEmail" type="email" maxlength="160" value="' + esc(selected.contactEmail || '') + '"></div><div class="field"><label for="payroll-employee-misc-label">Divers · libellé</label><input id="payroll-employee-misc-label" name="miscellaneousLabel" type="text" maxlength="120" value="' + esc(selected.miscellaneousLabel || '') + '"></div><div class="field"><label for="payroll-employee-misc-value">Divers · valeur</label><textarea id="payroll-employee-misc-value" name="miscellaneousValue" maxlength="500" rows="3">' + esc(selected.miscellaneousValue || '') + '</textarea></div><label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Informations fictives de test uniquement.</span></label><div class="payroll-employee-dialog-actions"><button type="button" class="btn btn-secondary" data-action="close-payroll-employee-dialog">Fermer</button><button type="submit" class="btn btn-primary">Enregistrer</button></div></form>' : (selected ? '<p class="small muted">Profil en lecture seule · Informations diverses</p><dl class="payroll-employee-readonly-info"><dt>Adresse</dt><dd>' + esc(selected.address || '—') + '</dd><dt>Contact</dt><dd>' + esc(selected.contactPhone || selected.contactEmail || '—') + '</dd><dt>Divers</dt><dd>' + esc(selected.miscellaneousValue || '—') + '</dd></dl>' : '<p class="small muted">Aucune fiche sélectionnée.</p>')) + '</dialog>';
+    var photoForm = selected && canEditEmployee
+      ? '<form id="payroll-employee-photo-form" data-dossier-id="' + esc(dossier.id) + '" data-employee-id="' + esc(selected.id) + '"><div class="field"><label for="payroll-employee-photo-file">Charger une image de test</label><input id="payroll-employee-photo-file" name="photo" type="file" accept="image/jpeg,image/png,image/webp" required></div><p class="small muted">JPEG, PNG ou WebP · 1 Mo maximum · conservé dans ce navigateur.</p><label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Photo fictive de test uniquement.</span></label><div class="payroll-employee-dialog-actions"><button type="button" class="btn btn-secondary" data-action="delete-payroll-employee-photo" data-employee-id="' + esc(selected.id) + '"' + (selected.photoDataUrl ? '' : ' disabled') + '>Effacer la photo</button><button type="button" class="btn btn-secondary" data-action="close-payroll-employee-dialog">Fermer</button><button type="submit" class="btn btn-primary">Enregistrer la photo</button></div></form>'
+      : (selected ? '<p class="small muted">Cette photo est consultable, mais ce profil ne possède pas le droit de modification.</p>' : '');
+    var photoDialog = '<dialog class="payroll-employee-dialog payroll-employee-photo-dialog" id="payroll-employee-photo-dialog" aria-labelledby="payroll-employee-photo-title"><div class="payroll-employee-dialog-head"><h3 id="payroll-employee-photo-title">Photo du salarié</h3><button type="button" class="icon-btn" data-action="close-payroll-employee-dialog" aria-label="Fermer">×</button></div>' +
+      (selected ? (selected.photoDataUrl ? '<img class="payroll-employee-photo-preview" src="' + esc(selected.photoDataUrl) + '" alt="Photo de test de ' + esc(selected.displayName || 'l’employé') + '">' : '<div class="payroll-employee-photo-placeholder">Aucune photo de test</div>') + photoForm : '<p class="small muted">Aucune fiche sélectionnée.</p>') + '</dialog>';
+    return '<section class="payroll-employee-workspace" aria-label="Fiche des employés"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · DÉFINITIONS</p><h3>Employés</h3></div><span class="badge draft">' + (isTestDossier ? 'PRH-TEST-2026 · TEST' : 'DOSSIER NON TEST') + '</span></div>' +
+      '<div class="alert info"><div><strong>Mode test</strong> · Les champs et valeurs créés dans cette fiche restent dans le dossier fictif PRH-TEST-2026.</div></div>' +
       '<div class="payroll-employee-layout"><aside class="payroll-employee-list"><h4>Employés (' + employees.length + ')</h4><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Matricule</th><th>Nom</th></tr></thead><tbody>' + (rows || '<tr><td colspan="2">Aucune fiche de test disponible.</td></tr>') + '</tbody></table></div>' + createForm + '</aside>' +
-      '<div class="payroll-employee-detail"><div class="payroll-employee-detail-head"><div><h4>' + esc(selected ? selected.displayName : 'Aucune fiche sélectionnée') + '</h4><p class="small muted">' + (selected ? 'Matricule ' + esc(selected.employeeNumber || selected.id) + ' · fiche fictive en lecture seule' : 'Sélection désactivée') + '</p></div><div class="payroll-employee-actions"><button type="button" class="btn btn-secondary" data-action="open-payroll-employee-info"' + (selected ? '' : ' disabled') + '>Informations diverses</button><button type="button" class="btn btn-secondary" data-action="open-payroll-employee-photo"' + (selected ? '' : ' disabled') + '>Photo</button></div></div>' + selectedFields + fieldsets +
-      '<div class="payroll-employee-locked-actions"><button type="button" class="btn btn-secondary" disabled>Modifier</button><button type="button" class="btn btn-secondary" disabled>Supprimer</button><button type="button" class="btn btn-secondary" disabled>Sélectionner…</button><button type="button" class="btn btn-primary" disabled>Valider</button></div></div></div>' + dialogs + '</section>';
+      '<div class="payroll-employee-detail"><div class="payroll-employee-detail-head"><div><h4>' + esc(selected ? selected.displayName : 'Aucune fiche sélectionnée') + '</h4><p class="small muted">' + (selected ? 'Matricule ' + esc(selected.employeeNumber || selected.id) + ' · fiche de test' : 'Sélectionnez ou ajoutez une fiche fictive') + '</p></div><div class="payroll-employee-actions"><button type="button" class="btn btn-secondary" data-action="open-payroll-employee-info" aria-haspopup="dialog" aria-controls="payroll-employee-info-dialog"' + (selected ? '' : ' disabled') + '>Informations diverses</button><button type="button" class="btn btn-secondary" data-action="open-payroll-employee-photo" aria-haspopup="dialog" aria-controls="payroll-employee-photo-dialog"' + (selected ? '' : ' disabled') + '>Photo</button><button type="button" class="btn btn-secondary" data-action="print-payroll-employee"' + (selected ? '' : ' disabled') + '>Imprimer</button></div></div>' + editForm + '</div></div>' + infoDialog + photoDialog + '</section>';
   }
 
   function viewPayrollMainMenu(dossier, dossierEmployees, canCreatePayrollEmployee) {
@@ -33832,6 +33914,30 @@
       case 'close-payroll-employee-dialog': {
         var employeeDialog = trigger.closest('dialog');
         if (employeeDialog && typeof employeeDialog.close === 'function' && employeeDialog.open) employeeDialog.close();
+        break;
+      }
+      case 'delete-payroll-employee': {
+        var employeeDossier = PayrollHR.currentDossier();
+        if (!employeeDossier || !PayrollHR.isDemoTestDossier(employeeDossier.id)) { toast('Suppression réservée au dossier PRH-TEST-2026.', 'warning'); break; }
+        if (typeof window.confirm === 'function' && !window.confirm('Supprimer cette fiche fictive du dossier de test ?')) break;
+        var deletedEmployee = PayrollHR.deleteEmployee(employeeDossier.id, trigger.getAttribute('data-employee-id'));
+        if (!deletedEmployee.ok) { toast(deletedEmployee.errors[0] || 'Suppression impossible.', 'warning'); break; }
+        ui.payrollEmployeeId = '';
+        toast('Fiche fictive supprimée.', 'success'); render();
+        break;
+      }
+      case 'delete-payroll-employee-photo': {
+        var photoDossier = PayrollHR.currentDossier();
+        if (!photoDossier || !PayrollHR.isDemoTestDossier(photoDossier.id)) { toast('Modification réservée au dossier PRH-TEST-2026.', 'warning'); break; }
+        var deletedPhoto = PayrollHR.updateEmployee(photoDossier.id, trigger.getAttribute('data-employee-id'), { photoDataUrl: '' });
+        if (!deletedPhoto.ok) { toast(deletedPhoto.errors[0] || 'Suppression de la photo impossible.', 'warning'); break; }
+        toast('Photo fictive effacée.', 'success'); render();
+        break;
+      }
+      case 'print-payroll-employee': {
+        var printDossier = PayrollHR.currentDossier();
+        if (!printDossier || !PayrollHR.isDemoTestDossier(printDossier.id)) { toast('Impression réservée à la fiche fictive PRH-TEST-2026.', 'warning'); break; }
+        printPayrollEmployee();
         break;
       }
       case 'payroll-menu-item':

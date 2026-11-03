@@ -125,6 +125,92 @@
     return { ok: true, errors: [], employee: clone(employee) };
   }
 
+  var EMPLOYEE_PROFILE_TEXT_LIMITS = {
+    employeeNumber: 40, displayName: 120, sex: 40, maritalStatus: 60, birthplace: 120,
+    nationality: 80, socialInsuranceNumber: 80, taxId: 80, supplementaryInsuranceCompany: 120,
+    supplementaryInsuranceNumber: 80, degree: 120, profession: 120, employeeStatus: 80,
+    categoryStep: 80, zone: 120, service: 120, function: 120, terminationReason: 160,
+    paymentMethod: 80, bankName: 120, bankAccountNumber: 100, address: 240, contactPhone: 80, contactEmail: 160,
+    miscellaneousLabel: 120, miscellaneousValue: 500
+  };
+  var EMPLOYEE_PROFILE_DATES = ['firstHireDate', 'seniorityReferenceDate', 'vpsExemptionEndDate', 'terminationDate', 'rehireDate', 'birthDate', 'effectiveDate'];
+
+  function updateEmployee(dossierId, employeeId, input) {
+    dossierId = String(dossierId || '');
+    employeeId = String(employeeId || '');
+    input = input || {};
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La modification est réservée au dossier fictif PRH-TEST-2026.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var employees = dossier && Array.isArray(dossier.demoEmployees) ? dossier.demoEmployees : [];
+    var employee = employees.find(function (item) { return item && item.id === employeeId && item.dossierId === dossierId && item.status === 'test-only'; });
+    if (!employee) return { ok: false, errors: ['La fiche fictive est introuvable dans le dossier actif.'] };
+    var patch = {};
+    Object.keys(EMPLOYEE_PROFILE_TEXT_LIMITS).forEach(function (key) {
+      if (!Object.prototype.hasOwnProperty.call(input, key)) return;
+      var value = String(input[key] == null ? '' : input[key]).trim().replace(/\s+/g, ' ');
+      if (value.length > EMPLOYEE_PROFILE_TEXT_LIMITS[key]) return;
+      patch[key] = value;
+    });
+    var errors = [];
+    Object.keys(EMPLOYEE_PROFILE_TEXT_LIMITS).forEach(function (key) {
+      if (Object.prototype.hasOwnProperty.call(input, key) && String(input[key] || '').trim().length > EMPLOYEE_PROFILE_TEXT_LIMITS[key]) {
+        errors.push('Le champ « ' + key + ' » dépasse sa longueur maximale de test.');
+      }
+    });
+    EMPLOYEE_PROFILE_DATES.forEach(function (key) {
+      if (!Object.prototype.hasOwnProperty.call(input, key)) return;
+      var value = String(input[key] || '').trim();
+      if (value && !dateParts(value)) errors.push('Le champ date « ' + key + ' » doit être une date valide.');
+      else patch[key] = value;
+    });
+    ['childrenCount', 'seniorityMonthsToDeduct'].forEach(function (key) {
+      if (!Object.prototype.hasOwnProperty.call(input, key)) return;
+      var value = String(input[key] == null ? '' : input[key]).trim();
+      if (value && (!/^\d+$/.test(value) || Number(value) > 9999)) errors.push('Le champ numérique « ' + key + ' » doit être un entier positif de test.');
+      else patch[key] = value;
+    });
+    if (Object.prototype.hasOwnProperty.call(input, 'employeeNumber')) {
+      patch.employeeNumber = String(input.employeeNumber || '').trim();
+      if (!patch.employeeNumber) errors.push('Le matricule interne est obligatoire.');
+      if (employees.some(function (item) { return item && item.id !== employeeId && String(item.employeeNumber || item.id).toLocaleLowerCase() === patch.employeeNumber.toLocaleLowerCase(); })) errors.push('Ce matricule existe déjà dans le dossier test.');
+    }
+    if (Object.prototype.hasOwnProperty.call(input, 'displayName')) {
+      patch.displayName = String(input.displayName || '').trim().replace(/\s+/g, ' ');
+      if (!patch.displayName) errors.push('Le nom d’affichage fictif est obligatoire.');
+    }
+    if (Object.prototype.hasOwnProperty.call(input, 'photoDataUrl')) {
+      var photoDataUrl = String(input.photoDataUrl || '');
+      if (photoDataUrl && (!/^data:image\/(?:jpeg|png|webp);base64,/.test(photoDataUrl) || photoDataUrl.length > 1500000)) {
+        errors.push('La photo doit être un fichier JPEG, PNG ou WebP de test inférieur à environ 1 Mo.');
+      } else patch.photoDataUrl = photoDataUrl;
+    }
+    if (errors.length) return { ok: false, errors: errors };
+    Object.keys(patch).forEach(function (key) { employee[key] = patch[key]; });
+    employee.updatedAt = new Date().toISOString();
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la fiche dans le stockage local de test.'] };
+    return { ok: true, errors: [], employee: clone(employee) };
+  }
+
+  function deleteEmployee(dossierId, employeeId) {
+    dossierId = String(dossierId || '');
+    employeeId = String(employeeId || '');
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La suppression est réservée au dossier fictif PRH-TEST-2026.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var employees = dossier && Array.isArray(dossier.demoEmployees) ? dossier.demoEmployees : [];
+    var employee = employees.find(function (item) { return item && item.id === employeeId && item.dossierId === dossierId && item.status === 'test-only'; });
+    if (!employee) return { ok: false, errors: ['La fiche fictive est introuvable dans le dossier actif.'] };
+    if (employees.length <= 2) return { ok: false, errors: ['Il faut conserver au moins deux fiches fictives pour garder le dossier de test valide.'] };
+    var linkedCollections = ['organizationAssignments', 'internalMissions', 'leaveAbsenceRecords', 'payrollVariableReferences'];
+    if (linkedCollections.some(function (name) {
+      return Array.isArray(dossier[name]) && dossier[name].some(function (record) { return record && record.employeeId === employeeId; });
+    })) return { ok: false, errors: ['Cette fiche est référencée par un autre élément de test ; supprimez d’abord la référence associée.'] };
+    dossier.demoEmployees = employees.filter(function (item) { return item && item.id !== employeeId; });
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible de supprimer la fiche du stockage local de test.'] };
+    return { ok: true, errors: [], deletedEmployeeId: employeeId };
+  }
+
   function organizationUnits(dossierId) {
     dossierId = String(dossierId || '');
     var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === dossierId; });
@@ -1198,6 +1284,8 @@
     employees: employees,
     employee: employee,
     createEmployee: createEmployee,
+    updateEmployee: updateEmployee,
+    deleteEmployee: deleteEmployee,
     organizationUnits: organizationUnits,
     createOrganizationUnit: createOrganizationUnit,
     updateOrganizationUnit: updateOrganizationUnit,
