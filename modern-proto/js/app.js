@@ -579,6 +579,8 @@
       case 'new-payroll-employee-category':
       case 'duplicate-payroll-employee-category':
       case 'seed-payroll-employee-categories':
+      case 'open-payroll-category-classifications':
+      case 'create-payroll-category-classification':
       case 'create-payroll-org-unit':
       case 'create-payroll-hr-tracking':
       case 'create-payroll-organization-assignment':
@@ -607,6 +609,7 @@
       case 'delete-payroll-employee':
       case 'delete-payroll-employee-status':
       case 'delete-payroll-employee-category':
+      case 'delete-payroll-category-classification':
         return { moduleId: 'payroll-hr', actionId: 'record.delete' };
       case 'print-payroll-employee':
         return { moduleId: 'payroll-hr', actionId: 'module.view' };
@@ -20408,6 +20411,7 @@
       if (!confirmation || !confirmation.checked) { toast('Confirmez que cette configuration est fictive.', 'warning'); return; }
       var payload = payrollEmployeeFormValues(employeeCategoryForm, ['code', 'salaryIndex', 'ohadaClassification']);
       payload.linkedPremiumIds = Array.prototype.map.call(employeeCategoryForm.querySelectorAll('input[name="linkedPremiumIds"]:checked'), function (input) { return input.value; });
+      payload.additionalClassificationIds = Array.prototype.map.call(employeeCategoryForm.querySelectorAll('input[name="additionalClassificationIds"]:checked'), function (input) { return input.value; });
       payload.testOnly = true;
       var result = mode === 'create'
         ? PayrollHR.createEmployeeCategory(dossier.id, payload)
@@ -20428,6 +20432,18 @@
       if (!result.ok) { toast(result.errors[0] || 'Positionnement impossible.', 'warning'); return; }
       ui.payrollEmployeeCategoryId = categoryPositionForm.getAttribute('data-category-id');
       toast('Position de la catégorie enregistrée.', 'success'); render();
+    });
+    var categoryClassificationForm = $('#payroll-category-classification-form');
+    if (categoryClassificationForm) categoryClassificationForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('create-payroll-category-classification', null, true)) return;
+      var dossier = PayrollHR.currentDossier();
+      if (!dossier || categoryClassificationForm.getAttribute('data-dossier-id') !== dossier.id || !PayrollHR.isDemoTestDossier(dossier.id)) { toast('Les classifications complémentaires sont réservées à PRH-TEST-2026.', 'warning'); return; }
+      var confirmation = categoryClassificationForm.elements.namedItem('testOnly');
+      if (!confirmation || !confirmation.checked) { toast('Confirmez que cette classification est fictive.', 'warning'); return; }
+      var result = PayrollHR.createEmployeeCategoryAdditionalClassification(dossier.id, { label: categoryClassificationForm.elements.namedItem('label').value, testOnly: true });
+      if (!result.ok) { toast(result.errors[0] || 'Ajout de la classification impossible.', 'warning'); return; }
+      toast('Classification complémentaire ajoutée. Vous pourrez la lier à une catégorie en la modifiant.', 'success'); render();
     });
     var employeeEditForm = $('#payroll-employee-edit-form');
     if (employeeEditForm) employeeEditForm.addEventListener('submit', function (event) {
@@ -21147,7 +21163,9 @@
     var source = mode === 'create' ? draft : selected;
     var classifications = PayrollHR.employeeCategoryClassifications();
     var premiums = PayrollHR.employeeCategoryPremiumCatalog();
+    var additionalClassifications = PayrollHR.employeeCategoryAdditionalClassifications(dossier.id);
     var selectedPremiumIds = source && Array.isArray(source.linkedPremiumIds) ? source.linkedPremiumIds : [];
+    var selectedAdditionalClassificationIds = source && Array.isArray(source.additionalClassificationIds) ? source.additionalClassificationIds : [];
     var rows = categories.map(function (item) {
       var active = mode !== 'create' && selected && item.id === selected.id;
       return '<tr><td><button type="button" class="payroll-status-select' + (active ? ' is-active' : '') + '" data-action="payroll-employee-category-select" data-category-id="' + esc(item.id) + '" aria-pressed="' + (active ? 'true' : 'false') + '"><strong>' + esc(item.code) + '</strong></button></td><td>' + esc(item.salaryIndex || '—') + '</td></tr>';
@@ -21164,19 +21182,28 @@
         ? (checked ? '<tr><td>' + (index + 1) + '</td><td>' + esc(premium.label) + '</td></tr>' : '')
         : '<tr><td>' + (index + 1) + '</td><td><label class="payroll-category-premium-choice"><input type="checkbox" name="linkedPremiumIds" value="' + esc(premium.id) + '"' + (checked ? ' checked' : '') + '><span>' + esc(premium.label) + '</span></label></td></tr>';
     }).join('');
+    var additionalClassificationRows = additionalClassifications.map(function (classification) {
+      var checked = selectedAdditionalClassificationIds.indexOf(classification.id) !== -1;
+      return mode === 'view'
+        ? (checked ? '<span class="payroll-category-classification-chip">' + esc(classification.label) + '</span>' : '')
+        : '<label class="payroll-category-classification-choice"><input type="checkbox" name="additionalClassificationIds" value="' + esc(classification.id) + '"' + (checked ? ' checked' : '') + '><span>' + esc(classification.label) + '</span></label>';
+    }).join('');
+    var additionalClassificationBlock = '<fieldset class="payroll-category-additional-classifications"><legend>Classifications complémentaires · hors OHADA</legend>' + (additionalClassificationRows || '<p class="small muted">Aucune classification complémentaire' + (mode === 'view' ? ' liée' : ' définie') + '.</p>') + '</fieldset>';
+    var categoryClassificationDialog = '<dialog class="payroll-employee-dialog payroll-category-classifications-dialog" id="payroll-category-classifications-dialog" aria-labelledby="payroll-category-classifications-title"><div class="payroll-employee-dialog-head"><div><p class="page-kicker">PARAMÈTRES DU DOSSIER DE TEST</p><h3 id="payroll-category-classifications-title">Classifications complémentaires</h3></div><button type="button" class="icon-btn" data-action="close-payroll-category-classifications" aria-label="Fermer">×</button></div><p class="small muted">Ajoutez des libellés propres au dossier. Ils restent distincts de la classification OHADA.</p><form id="payroll-category-classification-form" data-dossier-id="' + esc(dossier.id) + '"><div class="field"><label for="payroll-new-category-classification">Nouvelle classification</label><input id="payroll-new-category-classification" name="label" type="text" maxlength="80" required></div><label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Classification fictive du dossier de test.</span></label><div class="payroll-employee-dialog-actions"><button type="button" class="btn btn-secondary" data-action="close-payroll-category-classifications">Annuler</button><button type="submit" class="btn btn-primary">Ajouter</button></div></form><h4>Classifications ajoutées (' + additionalClassifications.length + ')</h4><div class="payroll-category-classification-list">' + (additionalClassifications.map(function (classification) { return '<div class="payroll-category-classification-item"><span>' + esc(classification.label) + '</span>' + (canEditPayrollEmployee ? '<button type="button" class="btn btn-danger btn-sm" data-action="delete-payroll-category-classification" data-classification-id="' + esc(classification.id) + '">Supprimer</button>' : '') + '</div>'; }).join('') || '<p class="small muted">Aucune classification ajoutée.</p>') + '</div></dialog>';
     var categoryForm = isTestDossier && source
       ? '<form id="payroll-employee-category-form" data-mode="' + esc(mode) + '" data-dossier-id="' + esc(dossier.id) + '" data-category-id="' + esc(selected ? selected.id : '') + '"><div class="payroll-category-fields">' + categoryField('code', 'Catégorie / Échelon', source.code, true) + categoryField('salaryIndex', 'Salaire indiciaire', source.salaryIndex, false) + '<div class="field"><label for="payroll-category-ohadaClassification">Classification OHADA</label><select id="payroll-category-ohadaClassification" name="ohadaClassification"' + (mode === 'view' ? ' disabled' : '') + '>' + classificationOptions + '</select></div></div>' +
-        '<fieldset class="payroll-category-premiums"><legend>Primes liées à la catégorie</legend><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>N°</th><th>Prime</th></tr></thead><tbody>' + (premiumRows || '<tr><td colspan="2">Aucune prime liée.</td></tr>') + '</tbody></table></div></fieldset>' +
+        additionalClassificationBlock + '<fieldset class="payroll-category-premiums"><legend>Primes liées à la catégorie</legend><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>N°</th><th>Prime</th></tr></thead><tbody>' + (premiumRows || '<tr><td colspan="2">Aucune prime liée.</td></tr>') + '</tbody></table></div></fieldset>' +
         (mode !== 'view' ? '<label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Je confirme que cette catégorie et ses liens sont fictifs.</span></label><div class="payroll-status-actions"><button type="button" class="btn btn-secondary" data-action="cancel-payroll-employee-category-edit">Annuler</button><button type="submit" class="btn btn-primary">Valider</button></div>' : '') + '</form>'
       : '<div class="empty-state"><strong>' + (isTestDossier ? 'Aucune catégorie chargée' : 'Dossier de test requis') + '</strong><span>' + (isTestDossier ? 'Chargez la catégorie C1 telle qu’elle apparaît dans la capture.' : 'Les catégories de démonstration sont réservées à PRH-TEST-2026.') + '</span>' + (isTestDossier && canCreatePayrollEmployee ? '<button type="button" class="btn btn-secondary" data-action="seed-payroll-employee-categories">Charger C1 de la capture</button>' : '') + '</div>';
     var position = selected ? categories.findIndex(function (item) { return item.id === selected.id; }) + 1 : 1;
     var actions = '<div class="payroll-status-actions">' +
       (isTestDossier && canCreatePayrollEmployee ? '<button type="button" class="btn btn-primary" data-action="new-payroll-employee-category">Insérer</button>' : '') +
+      (isTestDossier && canCreatePayrollEmployee && mode === 'view' ? '<button type="button" class="btn btn-secondary" data-action="open-payroll-category-classifications">Classifications +</button>' : '') +
       (selected && isTestDossier && canCreatePayrollEmployee && mode === 'view' ? '<button type="button" class="btn btn-secondary" data-action="duplicate-payroll-employee-category" data-category-id="' + esc(selected.id) + '">Dupliquer</button>' : '') +
       (selected && isTestDossier && canEditPayrollEmployee && mode === 'view' ? '<button type="button" class="btn btn-secondary" data-action="edit-payroll-employee-category" data-category-id="' + esc(selected.id) + '">Modifier</button><button type="button" class="btn btn-danger" data-action="delete-payroll-employee-category" data-category-id="' + esc(selected.id) + '">Supprimer</button>' : '') + '</div>';
     var positionForm = selected && isTestDossier && canEditPayrollEmployee && mode === 'view'
       ? '<form id="payroll-category-position-form" data-dossier-id="' + esc(dossier.id) + '" data-category-id="' + esc(selected.id) + '"><label for="payroll-category-position">Position</label><input id="payroll-category-position" name="position" type="number" min="1" max="' + categories.length + '" step="1" value="' + position + '" required><button type="submit" class="btn btn-secondary">Positionner</button></form>' : '';
-    return '<section class="payroll-status-workspace payroll-category-workspace" aria-label="Catégories et échelons"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · DÉFINITIONS</p><h3>Catégories / Échelons</h3></div><span class="badge draft">' + (isTestDossier ? 'PRH-TEST-2026 · TEST' : 'DOSSIER NON TEST') + '</span></div><div class="alert warning"><div>Référentiel de démonstration stocké localement. Le salaire indiciaire et les primes sont des paramètres, sans calcul ni règle de paie.</div></div><div class="payroll-status-workspace-layout"><aside class="payroll-status-list"><div class="payroll-status-list-head"><h4>Catégories (' + categories.length + ')</h4></div><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Code</th><th>Salaire indiciaire</th></tr></thead><tbody>' + (rows || '<tr><td colspan="2">Aucune catégorie.</td></tr>') + '</tbody></table></div></aside><div class="payroll-status-detail"><div class="payroll-status-detail-head"><h4>' + esc(mode === 'create' ? 'Catégorie / Échelon' : (selected ? selected.code : 'Catégorie / Échelon')) + '</h4>' + actions + '</div>' + positionForm + categoryForm + '</div></div></section>';
+    return '<section class="payroll-status-workspace payroll-category-workspace" aria-label="Catégories et échelons"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · DÉFINITIONS</p><h3>Catégories / Échelons</h3></div><span class="badge draft">' + (isTestDossier ? 'PRH-TEST-2026 · TEST' : 'DOSSIER NON TEST') + '</span></div><div class="alert warning"><div>Référentiel de démonstration stocké localement. Le salaire indiciaire et les primes sont des paramètres, sans calcul ni règle de paie.</div></div><div class="payroll-status-workspace-layout"><aside class="payroll-status-list"><div class="payroll-status-list-head"><h4>Catégories (' + categories.length + ')</h4></div><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Code</th><th>Salaire indiciaire</th></tr></thead><tbody>' + (rows || '<tr><td colspan="2">Aucune catégorie.</td></tr>') + '</tbody></table></div></aside><div class="payroll-status-detail"><div class="payroll-status-detail-head"><h4>' + esc(mode === 'create' ? 'Catégorie / Échelon' : (selected ? selected.code : 'Catégorie / Échelon')) + '</h4>' + actions + '</div>' + positionForm + categoryForm + '</div></div>' + categoryClassificationDialog + '</section>';
   }
 
   function viewPayrollEmployeeStatuses(dossier, canCreatePayrollEmployee, canEditPayrollEmployee) {
@@ -34157,6 +34184,25 @@
         ui.payrollEmployeeCategoryId = '';
         ui.payrollEmployeeCategoryMode = 'view';
         toast('Catégorie fictive supprimée.', 'success'); render();
+        break;
+      }
+      case 'open-payroll-category-classifications': {
+        var categoryClassificationDialog = $('#payroll-category-classifications-dialog');
+        if (categoryClassificationDialog && typeof categoryClassificationDialog.showModal === 'function') categoryClassificationDialog.showModal();
+        break;
+      }
+      case 'close-payroll-category-classifications': {
+        var categoryDialog = trigger.closest('dialog');
+        if (categoryDialog && categoryDialog.open) categoryDialog.close();
+        break;
+      }
+      case 'delete-payroll-category-classification': {
+        var classDossier = PayrollHR.currentDossier();
+        if (!classDossier || !PayrollHR.isDemoTestDossier(classDossier.id)) { toast('Suppression réservée au dossier PRH-TEST-2026.', 'warning'); break; }
+        if (typeof window.confirm === 'function' && !window.confirm('Supprimer cette classification complémentaire ?')) break;
+        var deletedClassification = PayrollHR.deleteEmployeeCategoryAdditionalClassification(classDossier.id, trigger.getAttribute('data-classification-id'));
+        if (!deletedClassification.ok) { toast(deletedClassification.errors[0] || 'Suppression impossible.', 'warning'); break; }
+        toast('Classification complémentaire supprimée.', 'success'); render();
         break;
       }
       case 'payroll-employee-status-select':

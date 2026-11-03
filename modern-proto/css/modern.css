@@ -4146,6 +4146,15 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 #payroll-category-position-form label { margin: 0; font-size: .72rem; font-weight: 700; }
 #payroll-category-position-form input { width: 72px; min-height: 29px; padding: 4px 6px; }
 #payroll-category-position-form .btn { padding: 5px 8px; }
+.payroll-category-additional-classifications { display: flex; flex-wrap: wrap; gap: 8px 14px; min-width: 0; margin: 12px 0; padding: 10px; border: 1px solid #e2e8e3; border-radius: 7px; }
+.payroll-category-additional-classifications legend { padding: 0 5px; color: #596a60; font-size: .72rem; font-weight: 750; }
+.payroll-category-classification-choice { display: inline-flex; align-items: center; gap: 6px; font-size: .74rem; cursor: pointer; }
+.payroll-category-classification-choice input { accent-color: #176ed8; }
+.payroll-category-classification-chip { display: inline-block; padding: 3px 7px; border-radius: 999px; color: #365d4a; background: #e9f3ec; font-size: .72rem; }
+.payroll-category-classifications-dialog { width: min(560px, calc(100vw - 28px)); }
+.payroll-category-classification-list { display: grid; gap: 6px; margin-top: 8px; }
+.payroll-category-classification-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 8px; border: 1px solid #e2e8e3; border-radius: 6px; }
+.payroll-category-classification-item .btn { padding: 4px 7px; font-size: .7rem; }
 @media (max-width: 700px) { .payroll-category-fields { grid-template-columns: 1fr; } }
 
 /* Suivi neutre des candidatures, contrats et intérim — démonstration uniquement */

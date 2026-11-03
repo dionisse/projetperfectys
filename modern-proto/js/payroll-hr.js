@@ -626,6 +626,43 @@
   function employeeCategoryClassifications() { return EMPLOYEE_CATEGORY_CLASSIFICATIONS.slice(); }
   function employeeCategoryPremiumCatalog() { return clone(EMPLOYEE_CATEGORY_PREMIUM_CATALOG); }
 
+  function employeeCategoryAdditionalClassifications(dossierId) {
+    if (!isDemoTestDossier(dossierId)) return [];
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId); });
+    return clone(dossier && Array.isArray(dossier.employeeCategoryAdditionalClassifications) ? dossier.employeeCategoryAdditionalClassifications : []);
+  }
+
+  function createEmployeeCategoryAdditionalClassification(dossierId, input) {
+    dossierId = String(dossierId || ''); input = input || {};
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['Les classifications complémentaires sont réservées au dossier fictif PRH-TEST-2026.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Confirmez que cette classification complémentaire est fictive.'] };
+    var label = String(input.label || '').trim().replace(/\s+/g, ' ');
+    if (!label) return { ok: false, errors: ['Le libellé de classification est obligatoire.'] };
+    if (label.length > 80) return { ok: false, errors: ['Le libellé est limité à 80 caractères.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    dossier.employeeCategoryAdditionalClassifications = Array.isArray(dossier.employeeCategoryAdditionalClassifications) ? dossier.employeeCategoryAdditionalClassifications : [];
+    if (dossier.employeeCategoryAdditionalClassifications.some(function (item) { return String(item.label || '').toLocaleLowerCase() === label.toLocaleLowerCase(); })) return { ok: false, errors: ['Cette classification complémentaire existe déjà.'] };
+    var record = { id: 'category-classification-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), dossierId: dossierId, label: label, status: 'test-only', createdAt: new Date().toISOString() };
+    dossier.employeeCategoryAdditionalClassifications.push(record);
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la classification complémentaire.'] };
+    return { ok: true, errors: [], classification: clone(record) };
+  }
+
+  function deleteEmployeeCategoryAdditionalClassification(dossierId, classificationId) {
+    dossierId = String(dossierId || ''); classificationId = String(classificationId || '');
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La suppression est réservée au dossier fictif PRH-TEST-2026.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var classifications = dossier && Array.isArray(dossier.employeeCategoryAdditionalClassifications) ? dossier.employeeCategoryAdditionalClassifications : [];
+    var classification = classifications.find(function (item) { return item && item.id === classificationId && item.dossierId === dossierId; });
+    if (!classification) return { ok: false, errors: ['La classification complémentaire est introuvable.'] };
+    if ((dossier.employeeCategories || []).some(function (category) { return category && Array.isArray(category.additionalClassificationIds) && category.additionalClassificationIds.indexOf(classificationId) !== -1; })) return { ok: false, errors: ['Cette classification est utilisée par une catégorie et ne peut pas être supprimée.'] };
+    dossier.employeeCategoryAdditionalClassifications = classifications.filter(function (item) { return item && item.id !== classificationId; });
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible de supprimer la classification complémentaire.'] };
+    return { ok: true, errors: [], deletedClassificationId: classificationId };
+  }
+
   function employeeCategories(dossierId) {
     if (!isDemoTestDossier(dossierId)) return [];
     var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId); });
@@ -639,17 +676,18 @@
     var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
     if (Array.isArray(dossier.employeeCategories) && dossier.employeeCategories.length) return { ok: false, errors: ['Des catégories existent déjà ; aucun doublon n’a été ajouté.'] };
     var now = new Date().toISOString();
-    dossier.employeeCategories = [{ id: 'category-test-c1', dossierId: dossierId, code: 'C1', salaryIndex: '', ohadaClassification: 'Cadre supérieur', linkedPremiumIds: ['categorical-salary'], order: 0, status: 'test-only', createdAt: now, updatedAt: now }];
+    dossier.employeeCategories = [{ id: 'category-test-c1', dossierId: dossierId, code: 'C1', salaryIndex: '', ohadaClassification: 'Cadre supérieur', linkedPremiumIds: ['categorical-salary'], additionalClassificationIds: [], order: 0, status: 'test-only', createdAt: now, updatedAt: now }];
     if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la catégorie de test.'] };
     return { ok: true, errors: [], categories: employeeCategories(dossierId) };
   }
 
-  function normalizeEmployeeCategoryInput(input) {
+  function normalizeEmployeeCategoryInput(input, dossier) {
     input = input || {};
     var code = String(input.code || '').trim();
     var salaryIndex = String(input.salaryIndex || '').trim();
     var ohadaClassification = String(input.ohadaClassification || 'Aucune').trim();
     var linkedPremiumIds = Array.isArray(input.linkedPremiumIds) ? Array.from(new Set(input.linkedPremiumIds.map(String))) : [];
+    var additionalClassificationIds = Array.isArray(input.additionalClassificationIds) ? Array.from(new Set(input.additionalClassificationIds.map(String))) : [];
     var position = input.position == null || input.position === '' ? null : Number(input.position);
     var errors = [];
     if (!code) errors.push('Le code catégorie/échelon est obligatoire.');
@@ -660,17 +698,21 @@
     var knownPremiums = Object.create(null);
     EMPLOYEE_CATEGORY_PREMIUM_CATALOG.forEach(function (item) { knownPremiums[item.id] = true; });
     if (linkedPremiumIds.some(function (id) { return !knownPremiums[id]; })) errors.push('La sélection contient une prime inconnue.');
-    return { ok: errors.length === 0, errors: errors, value: { code: code, salaryIndex: salaryIndex, ohadaClassification: ohadaClassification, linkedPremiumIds: linkedPremiumIds, position: position } };
+    var knownClassifications = Object.create(null);
+    (dossier && Array.isArray(dossier.employeeCategoryAdditionalClassifications) ? dossier.employeeCategoryAdditionalClassifications : []).forEach(function (item) { knownClassifications[item.id] = true; });
+    if (additionalClassificationIds.some(function (id) { return !knownClassifications[id]; })) errors.push('La sélection contient une classification complémentaire inconnue.');
+    return { ok: errors.length === 0, errors: errors, value: { code: code, salaryIndex: salaryIndex, ohadaClassification: ohadaClassification, linkedPremiumIds: linkedPremiumIds, additionalClassificationIds: additionalClassificationIds, position: position } };
   }
 
   function createEmployeeCategory(dossierId, input) {
     dossierId = String(dossierId || ''); input = input || {};
     if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La création est réservée au dossier fictif PRH-TEST-2026.'] };
     if (input.testOnly !== true) return { ok: false, errors: ['Confirmez qu’il s’agit d’une catégorie de test.'] };
-    var validation = normalizeEmployeeCategoryInput(input);
-    if (!validation.ok) return { ok: false, errors: validation.errors };
     var catalog = loadDossierCatalog();
     var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    var validation = normalizeEmployeeCategoryInput(input, dossier);
+    if (!validation.ok) return { ok: false, errors: validation.errors };
     dossier.employeeCategories = Array.isArray(dossier.employeeCategories) ? dossier.employeeCategories : [];
     if (dossier.employeeCategories.some(function (item) { return String(item.code || '').toLocaleLowerCase() === validation.value.code.toLocaleLowerCase(); })) return { ok: false, errors: ['Ce code catégorie/échelon existe déjà.'] };
     var now = new Date().toISOString();
@@ -684,13 +726,14 @@
     dossierId = String(dossierId || ''); categoryId = String(categoryId || ''); input = input || {};
     if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La modification est réservée au dossier fictif PRH-TEST-2026.'] };
     if (input.testOnly !== true) return { ok: false, errors: ['Confirmez qu’il s’agit d’une modification fictive.'] };
-    var validation = normalizeEmployeeCategoryInput(input);
-    if (!validation.ok) return { ok: false, errors: validation.errors };
     var catalog = loadDossierCatalog();
     var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
     var categories = Array.isArray(dossier.employeeCategories) ? dossier.employeeCategories : [];
     var record = categories.find(function (item) { return item && item.id === categoryId && item.dossierId === dossierId; });
     if (!record) return { ok: false, errors: ['La catégorie est introuvable.'] };
+    var validation = normalizeEmployeeCategoryInput(input, dossier);
+    if (!validation.ok) return { ok: false, errors: validation.errors };
     if (categories.some(function (item) { return item && item.id !== categoryId && String(item.code || '').toLocaleLowerCase() === validation.value.code.toLocaleLowerCase(); })) return { ok: false, errors: ['Ce code catégorie/échelon existe déjà.'] };
     var nextPosition = validation.value.position == null ? Number(record.order || 0) + 1 : validation.value.position;
     Object.assign(record, validation.value, { order: nextPosition - 1, updatedAt: new Date().toISOString() });
@@ -1642,6 +1685,9 @@
     employeeCategories: employeeCategories,
     employeeCategoryClassifications: employeeCategoryClassifications,
     employeeCategoryPremiumCatalog: employeeCategoryPremiumCatalog,
+    employeeCategoryAdditionalClassifications: employeeCategoryAdditionalClassifications,
+    createEmployeeCategoryAdditionalClassification: createEmployeeCategoryAdditionalClassification,
+    deleteEmployeeCategoryAdditionalClassification: deleteEmployeeCategoryAdditionalClassification,
     seedDemoEmployeeCategories: seedDemoEmployeeCategories,
     createEmployeeCategory: createEmployeeCategory,
     updateEmployeeCategory: updateEmployeeCategory,
