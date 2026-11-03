@@ -4458,3 +4458,10 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .payroll-service-merge-grid small { display: block; margin-top: 5px; color: #66766d; font-size: .7rem; }
 .payroll-service-merge-grid input[readonly] { background: #f4f6f4; }
 @media (max-width: 600px) { .payroll-service-merge-grid { grid-template-columns: 1fr; } }
+.payroll-employee-functions-workspace .payroll-status-detail { display: grid; gap: 10px; }
+.payroll-function-premiums { min-width: 0; margin: 13px 0 10px; padding: 10px; border: 1px solid #e2e8e3; border-radius: 7px; }
+.payroll-function-premiums .exchange-mapping-table th:last-child,
+.payroll-function-premiums .exchange-mapping-table td:last-child { width: 110px; text-align: center; }
+.payroll-function-premium-cell.is-linked { background: #fff4a8; color: #4c3a00; font-weight: 800; }
+.payroll-function-premium-choice { display: flex; min-height: 27px; align-items: center; justify-content: center; cursor: pointer; }
+.payroll-function-premium-choice input { width: 17px; height: 17px; accent-color: #98701a; }

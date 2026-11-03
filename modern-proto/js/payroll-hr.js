@@ -109,6 +109,11 @@
       return item && (item.id === requestedCategoryId || String(item.code || '').toLocaleLowerCase() === requestedCategoryId.toLocaleLowerCase());
     });
     var requestedEmployeeServiceId = String(input.serviceId || input.service || '').trim();
+    var requestedEmployeeFunctionId = String(input.functionId || input.function || '').trim();
+    var availableEmployeeFunctions = Array.isArray(dossier.employeeFunctions) ? dossier.employeeFunctions : [];
+    var matchingEmployeeFunction = availableEmployeeFunctions.find(function (item) {
+      return item && (item.id === requestedEmployeeFunctionId || String(item.code || '').toLocaleLowerCase() === requestedEmployeeFunctionId.toLocaleLowerCase() || String(item.label || '').toLocaleLowerCase() === requestedEmployeeFunctionId.toLocaleLowerCase());
+    });
     var availableEmployeeServices = Array.isArray(dossier.employeeServices) ? dossier.employeeServices : [];
     var matchingEmployeeService = availableEmployeeServices.find(function (item) {
       return item && (item.id === requestedEmployeeServiceId || String(item.code || '').toLocaleLowerCase() === requestedEmployeeServiceId.toLocaleLowerCase() || String(item.label || '').toLocaleLowerCase() === requestedEmployeeServiceId.toLocaleLowerCase());
@@ -126,6 +131,7 @@
     if (availableEmployeeStatuses.length && requestedEmployeeStatus && !matchingEmployeeStatus) errors.push('Choisissez un statut existant dans le dossier de test.');
     if (availableEmployeeCategories.length && requestedCategoryId && !matchingEmployeeCategory) errors.push('Choisissez une catégorie/échelon existant dans le dossier de test.');
     if (availableEmployeeServices.length && requestedEmployeeServiceId && !matchingEmployeeService) errors.push('Choisissez un service existant dans le dossier de test.');
+    if (availableEmployeeFunctions.length && requestedEmployeeFunctionId && !matchingEmployeeFunction) errors.push('Choisissez une fonction existante dans le dossier de test.');
     if (availableGeographicZones.length && requestedGeographicZoneId && !matchingGeographicZone) errors.push('Choisissez une zone géographique existante dans le dossier de test.');
     var current = Array.isArray(dossier.demoEmployees) ? dossier.demoEmployees : [];
     if (employeeNumber && current.some(function (employee) {
@@ -146,6 +152,8 @@
       categoryStep: matchingEmployeeCategory ? matchingEmployeeCategory.code : requestedCategoryId,
       serviceId: matchingEmployeeService ? matchingEmployeeService.id : '',
       service: matchingEmployeeService ? matchingEmployeeService.label : requestedEmployeeServiceId,
+      functionId: matchingEmployeeFunction ? matchingEmployeeFunction.id : '',
+      function: matchingEmployeeFunction ? matchingEmployeeFunction.label : requestedEmployeeFunctionId,
       geographicZoneId: matchingGeographicZone ? matchingGeographicZone.id : '',
       zone: matchingGeographicZone ? matchingGeographicZone.label : requestedGeographicZoneId,
       status: 'test-only',
@@ -160,7 +168,7 @@
     employeeNumber: 40, displayName: 120, sex: 40, maritalStatus: 60, birthplace: 120,
     nationality: 80, socialInsuranceNumber: 80, taxId: 80, supplementaryInsuranceCompany: 120,
     supplementaryInsuranceNumber: 80, degree: 120, profession: 120, employeeStatus: 80,
-    categoryStep: 80, categoryId: 80, geographicZoneId: 80, zone: 120, serviceId: 80, service: 120, function: 120, terminationReason: 160,
+    categoryStep: 80, categoryId: 80, geographicZoneId: 80, zone: 120, serviceId: 80, service: 120, functionId: 80, function: 120, terminationReason: 160,
     paymentMethod: 80, bankName: 120, bankAccountNumber: 100, address: 240, contactPhone: 80, contactEmail: 160,
     miscellaneousLabel: 120, miscellaneousValue: 500
   };
@@ -241,6 +249,18 @@
       else {
         patch.serviceId = matchingService ? matchingService.id : '';
         patch.service = matchingService ? matchingService.label : (availableServices.length ? '' : requestedService);
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(input, 'functionId') || Object.prototype.hasOwnProperty.call(input, 'function')) {
+      var requestedFunction = String(Object.prototype.hasOwnProperty.call(input, 'functionId') ? input.functionId || '' : input.function || '').trim();
+      var availableFunctions = Array.isArray(dossier.employeeFunctions) ? dossier.employeeFunctions : [];
+      var matchingFunction = availableFunctions.find(function (item) {
+        return item && (item.id === requestedFunction || String(item.code || '').toLocaleLowerCase() === requestedFunction.toLocaleLowerCase() || String(item.label || '').toLocaleLowerCase() === requestedFunction.toLocaleLowerCase());
+      });
+      if (availableFunctions.length && requestedFunction && !matchingFunction) errors.push('Choisissez une fonction existante dans le dossier de test.');
+      else {
+        patch.functionId = matchingFunction ? matchingFunction.id : '';
+        patch.function = matchingFunction ? matchingFunction.label : (availableFunctions.length ? '' : requestedFunction);
       }
     }
     if (Object.prototype.hasOwnProperty.call(input, 'geographicZoneId')) {
@@ -1051,6 +1071,143 @@
     dossier.employeeServices = services.filter(function (item) { return item && item.id !== sourceServiceId; }).sort(function (left, right) { return Number(left.order || 0) - Number(right.order || 0); }).map(function (item, index) { item.order = index; return item; });
     if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la fusion des services.'] };
     return { ok: true, errors: [], sourceServiceId: sourceServiceId, destinationServiceId: destinationServiceId, reassignedCount: reassignedCount, services: employeeServices(dossierId) };
+  }
+
+  var EMPLOYEE_FUNCTION_PREMIUM_CATALOG = [{ id: 'responsibility-premium', label: 'Prime de responsabilité' }];
+  function employeeFunctionPremiumCatalog() { return clone(EMPLOYEE_FUNCTION_PREMIUM_CATALOG); }
+
+  function employeeFunctions(dossierId) {
+    if (!isDemoTestDossier(dossierId)) return [];
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId); });
+    return clone((dossier && Array.isArray(dossier.employeeFunctions) ? dossier.employeeFunctions : []).slice().sort(function (left, right) { return Number(left.order || 0) - Number(right.order || 0); }));
+  }
+
+  function seedDemoEmployeeFunctions(dossierId) {
+    dossierId = String(dossierId || '');
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['Les fonctions sont réservées au dossier fictif PRH-TEST-2026.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (Array.isArray(dossier.employeeFunctions) && dossier.employeeFunctions.length) return { ok: false, errors: ['Des fonctions existent déjà ; aucun doublon n’a été ajouté.'] };
+    var now = new Date().toISOString();
+    dossier.employeeFunctions = [{ id: 'employee-function-test-dg', dossierId: dossierId, code: 'DG', label: 'Directeur général', linkedPremiumIds: ['responsibility-premium'], order: 0, status: 'test-only', createdAt: now, updatedAt: now }];
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la fonction de test.'] };
+    return { ok: true, errors: [], functions: employeeFunctions(dossierId) };
+  }
+
+  function normalizeEmployeeFunctionInput(input) {
+    input = input || {};
+    var code = String(input.code || '').trim();
+    var label = String(input.label || '').trim().replace(/\\s+/g, ' ');
+    var linkedPremiumIds = Array.isArray(input.linkedPremiumIds) ? Array.from(new Set(input.linkedPremiumIds.map(String))) : [];
+    var knownPremiumIds = {};
+    EMPLOYEE_FUNCTION_PREMIUM_CATALOG.forEach(function (item) { knownPremiumIds[item.id] = true; });
+    var errors = [];
+    if (!code) errors.push('Le code de la fonction est obligatoire.');
+    if (code.length > 24) errors.push('Le code est limité à 24 caractères.');
+    if (!label) errors.push('L’intitulé de la fonction est obligatoire.');
+    if (label.length > 100) errors.push('L’intitulé est limité à 100 caractères.');
+    if (linkedPremiumIds.some(function (id) { return !knownPremiumIds[id]; })) errors.push('La sélection contient une prime inconnue.');
+    return { ok: errors.length === 0, errors: errors, value: { code: code, label: label, linkedPremiumIds: linkedPremiumIds } };
+  }
+
+  function createEmployeeFunction(dossierId, input) {
+    dossierId = String(dossierId || ''); input = input || {};
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La création est réservée au dossier fictif PRH-TEST-2026.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Confirmez qu’il s’agit d’une fonction de test.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    var validation = normalizeEmployeeFunctionInput(input);
+    if (!validation.ok) return { ok: false, errors: validation.errors };
+    dossier.employeeFunctions = Array.isArray(dossier.employeeFunctions) ? dossier.employeeFunctions : [];
+    if (dossier.employeeFunctions.some(function (item) { return String(item.code || '').toLocaleLowerCase() === validation.value.code.toLocaleLowerCase(); })) return { ok: false, errors: ['Ce code de fonction existe déjà.'] };
+    var now = new Date().toISOString();
+    var record = Object.assign({ id: 'employee-function-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), dossierId: dossierId, order: dossier.employeeFunctions.length, status: 'test-only', createdAt: now, updatedAt: now }, validation.value);
+    dossier.employeeFunctions.push(record);
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la fonction de test.'] };
+    return { ok: true, errors: [], employeeFunction: clone(record) };
+  }
+
+  function updateEmployeeFunction(dossierId, functionId, input) {
+    dossierId = String(dossierId || ''); functionId = String(functionId || ''); input = input || {};
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La modification est réservée au dossier fictif PRH-TEST-2026.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Confirmez qu’il s’agit d’une modification fictive.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var functions = dossier && Array.isArray(dossier.employeeFunctions) ? dossier.employeeFunctions : [];
+    var record = functions.find(function (item) { return item && item.id === functionId && item.dossierId === dossierId; });
+    if (!record) return { ok: false, errors: ['La fonction est introuvable.'] };
+    var validation = normalizeEmployeeFunctionInput(input);
+    if (!validation.ok) return { ok: false, errors: validation.errors };
+    if (functions.some(function (item) { return item && item.id !== functionId && String(item.code || '').toLocaleLowerCase() === validation.value.code.toLocaleLowerCase(); })) return { ok: false, errors: ['Ce code de fonction existe déjà.'] };
+    var previousCode = record.code;
+    var previousLabel = record.label;
+    Object.assign(record, validation.value, { updatedAt: new Date().toISOString() });
+    (dossier.demoEmployees || []).forEach(function (employee) {
+      if (employee && (employee.functionId === functionId || employee.function === previousCode || employee.function === previousLabel)) {
+        employee.functionId = functionId;
+        employee.function = record.label;
+      }
+    });
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la modification de la fonction.'] };
+    return { ok: true, errors: [], employeeFunction: clone(record) };
+  }
+
+  function deleteEmployeeFunction(dossierId, functionId) {
+    dossierId = String(dossierId || ''); functionId = String(functionId || '');
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La suppression est réservée au dossier fictif PRH-TEST-2026.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var functions = dossier && Array.isArray(dossier.employeeFunctions) ? dossier.employeeFunctions : [];
+    var record = functions.find(function (item) { return item && item.id === functionId && item.dossierId === dossierId; });
+    if (!record) return { ok: false, errors: ['La fonction est introuvable.'] };
+    if ((dossier.demoEmployees || []).some(function (employee) { return employee && (employee.functionId === functionId || employee.function === record.code || employee.function === record.label); })) return { ok: false, errors: ['Cette fonction est affectée à une fiche employé ; utilisez la fusion vers une autre fonction ou modifiez son affectation.'] };
+    dossier.employeeFunctions = functions.filter(function (item) { return item && item.id !== functionId; }).map(function (item, index) { item.order = index; return item; });
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible de supprimer la fonction.'] };
+    return { ok: true, errors: [], deletedFunctionId: functionId };
+  }
+
+  function positionEmployeeFunction(dossierId, functionId, position) {
+    dossierId = String(dossierId || ''); functionId = String(functionId || ''); position = Number(position);
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['Le positionnement est réservé au dossier fictif PRH-TEST-2026.'] };
+    if (!Number.isInteger(position) || position < 1) return { ok: false, errors: ['La position doit être un entier positif.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var functions = dossier && Array.isArray(dossier.employeeFunctions) ? dossier.employeeFunctions.slice().sort(function (left, right) { return Number(left.order || 0) - Number(right.order || 0); }) : [];
+    var currentIndex = functions.findIndex(function (item) { return item && item.id === functionId && item.dossierId === dossierId; });
+    if (currentIndex === -1) return { ok: false, errors: ['La fonction à positionner est introuvable.'] };
+    if (position > functions.length) return { ok: false, errors: ['La position ne peut pas dépasser le nombre de fonctions.'] };
+    var moved = functions.splice(currentIndex, 1)[0];
+    functions.splice(position - 1, 0, moved);
+    functions.forEach(function (item, index) { item.order = index; });
+    dossier.employeeFunctions = functions;
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer le positionnement de la fonction.'] };
+    return { ok: true, errors: [], functions: clone(functions) };
+  }
+
+  function mergeEmployeeFunctions(dossierId, sourceFunctionId, destinationFunctionId) {
+    dossierId = String(dossierId || ''); sourceFunctionId = String(sourceFunctionId || ''); destinationFunctionId = String(destinationFunctionId || '');
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La fusion est réservée au dossier fictif PRH-TEST-2026.'] };
+    if (!sourceFunctionId || !destinationFunctionId || sourceFunctionId === destinationFunctionId) return { ok: false, errors: ['Choisissez deux fonctions distinctes pour la fusion.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var functions = dossier && Array.isArray(dossier.employeeFunctions) ? dossier.employeeFunctions : [];
+    var source = functions.find(function (item) { return item && item.id === sourceFunctionId && item.dossierId === dossierId; });
+    var destination = functions.find(function (item) { return item && item.id === destinationFunctionId && item.dossierId === dossierId; });
+    if (!source || !destination) return { ok: false, errors: ['La fonction d’origine ou de destination n’existe plus dans ce dossier.'] };
+    var reassignedCount = 0;
+    (dossier.demoEmployees || []).forEach(function (employee) {
+      if (employee && (employee.functionId === sourceFunctionId || employee.function === source.code || employee.function === source.label)) {
+        employee.functionId = destinationFunctionId;
+        employee.function = destination.label;
+        reassignedCount += 1;
+      }
+    });
+    destination.linkedPremiumIds = Array.from(new Set((destination.linkedPremiumIds || []).concat(source.linkedPremiumIds || [])));
+    destination.updatedAt = new Date().toISOString();
+    dossier.employeeFunctions = functions.filter(function (item) { return item && item.id !== sourceFunctionId; }).sort(function (left, right) { return Number(left.order || 0) - Number(right.order || 0); }).map(function (item, index) { item.order = index; return item; });
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la fusion des fonctions.'] };
+    return { ok: true, errors: [], sourceFunctionId: sourceFunctionId, destinationFunctionId: destinationFunctionId, reassignedCount: reassignedCount, functions: employeeFunctions(dossierId) };
   }
 
   function demoOrganizationSeeded(dossierId) {
@@ -1986,6 +2143,14 @@
     deleteEmployeeService: deleteEmployeeService,
     positionEmployeeService: positionEmployeeService,
     mergeEmployeeServices: mergeEmployeeServices,
+    employeeFunctionPremiumCatalog: employeeFunctionPremiumCatalog,
+    employeeFunctions: employeeFunctions,
+    seedDemoEmployeeFunctions: seedDemoEmployeeFunctions,
+    createEmployeeFunction: createEmployeeFunction,
+    updateEmployeeFunction: updateEmployeeFunction,
+    deleteEmployeeFunction: deleteEmployeeFunction,
+    positionEmployeeFunction: positionEmployeeFunction,
+    mergeEmployeeFunctions: mergeEmployeeFunctions,
     organizationUnits: organizationUnits,
     createOrganizationUnit: createOrganizationUnit,
     updateOrganizationUnit: updateOrganizationUnit,
