@@ -4122,6 +4122,19 @@ a.edition-report-card:focus-visible { outline: 2px solid #188679; outline-offset
 .payroll-rubric-row:hover { background: #f5f8fc; }
 @media (max-width: 900px) { .payroll-status-workspace-layout { grid-template-columns: 1fr; } }
 @media (max-width: 600px) { .payroll-status-fields { grid-template-columns: 1fr; } .payroll-status-detail-head { align-items: flex-start; flex-direction: column; } }
+.payroll-status-workspace { font-size: .8rem; }
+.payroll-status-workspace .page-kicker { font-size: .62rem; }
+.payroll-status-workspace h3 { font-size: 1.02rem; }
+.payroll-status-workspace h4 { font-size: .84rem; }
+.payroll-status-workspace .field label, .payroll-status-workspace legend { font-size: .71rem; }
+.payroll-status-workspace .field input, .payroll-status-workspace .field select { min-height: 31px; padding: 5px 7px; font-size: .78rem; }
+.payroll-status-workspace .btn { padding: 6px 9px; font-size: .72rem; }
+.payroll-status-workspace table { font-size: .77rem; }
+.payroll-status-classification-note { display: block; margin-top: 4px; color: #65736a; font-size: .66rem; line-height: 1.2; }
+.payroll-status-rubrics-dialog { font-size: .78rem; }
+.payroll-status-rubrics-dialog .payroll-employee-dialog-head h3 { font-size: .98rem; }
+.payroll-rubric-row { min-height: 25px; padding-top: 2px; padding-bottom: 2px; font-size: .75rem; line-height: 1.15; }
+.payroll-rubric-row[data-level="1"] { padding-left: 28px; }
 
 /* Suivi neutre des candidatures, contrats et intérim — démonstration uniquement */
 .payroll-hr-tracking > .alert { margin: 10px 0 14px; line-height: 1.55; }

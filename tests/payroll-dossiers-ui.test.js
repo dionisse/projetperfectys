@@ -52,6 +52,8 @@ assert.match(app, /var createEmployeeStatusField = employeeStatusCatalog\.length
 assert.match(app, /name="employeeStatus"/);
 assert.match(payroll, /var matchingStatus = availableStatuses\.find/);
 assert.match(app, /option value="Permanent"[\s\S]*option value="Occasionnel"/);
+assert.match(app, /Choix pour chaque statut : Permanent ou Occasionnel/);
+assert.match(css, /\.payroll-status-workspace \{ font-size: \.8rem; \}/);
 assert.match(app, /Jours de congés par mois[\s\S]*Ouvrables[\s\S]*Calendaires/);
 assert.match(payroll, /function employeeStatusDefaults\(\)/);
 assert.match(payroll, /monthlyWorkDays: '21\.66'[\s\S]*monthlyWorkHours: '173\.33'[\s\S]*leaveDaysPerMonth: '2\.00'/);
@@ -230,5 +232,5 @@ assert.match(payroll, /function createDossier\(input\)[\s\S]*'PRH-' \+ clientCod
 assert.match(payroll, /accountingDossierId: accountingDossierId/);
 assert.match(payroll, /function storageKey\(dossierId\)[\s\S]*STORAGE_PREFIX \+ encodeURIComponent/);
 assert.match(css, /\.payroll-dossier-grid[\s\S]*\.payroll-dossier-card/);
-assert.match(worker, /perfecto-static-v229/);
+assert.match(worker, /perfecto-static-v230/);
 console.log('UI Paie & RH : route dossier dédiée, référence PRH, sélection par dossier et association non automatique — OK');

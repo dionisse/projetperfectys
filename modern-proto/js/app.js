@@ -21101,7 +21101,7 @@
     }
     function classificationField(value) {
       value = value || 'Permanent';
-      return '<div class="field"><label for="payroll-status-ohadaClassification">Classification OHADA</label><select id="payroll-status-ohadaClassification" name="ohadaClassification"' + (mode === 'view' ? ' disabled' : ' required') + '><option value="Permanent"' + (value === 'Permanent' ? ' selected' : '') + '>Permanent</option><option value="Occasionnel"' + (value === 'Occasionnel' ? ' selected' : '') + '>Occasionnel</option></select></div>';
+      return '<div class="field payroll-status-classification-field"><label for="payroll-status-ohadaClassification">Classification OHADA</label><select id="payroll-status-ohadaClassification" name="ohadaClassification" aria-describedby="payroll-status-ohada-options"' + (mode === 'view' ? ' disabled' : ' required') + '><option value="Permanent"' + (value === 'Permanent' ? ' selected' : '') + '>Permanent</option><option value="Occasionnel"' + (value === 'Occasionnel' ? ' selected' : '') + '>Occasionnel</option></select><small id="payroll-status-ohada-options" class="payroll-status-classification-note">Choix pour chaque statut : Permanent ou Occasionnel</small></div>';
     }
     var statusRows = statuses.map(function (item) {
       var active = mode !== 'create' && selected && item.id === selected.id;
