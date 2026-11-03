@@ -4450,3 +4450,11 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 #payroll-geographic-zone-position-form label { color: #596a60; font-size: .72rem; font-weight: 700; }
 #payroll-geographic-zone-position-form input { width: 76px; min-height: 31px; padding: 5px 7px; border: 1px solid #cbd7d2; border-radius: 5px; }
 @media (max-width: 600px) { .payroll-geographic-zone-fields { grid-template-columns: 1fr; } }
+.payroll-employee-services-workspace .payroll-status-detail { display: grid; gap: 10px; }
+.payroll-service-merge-dialog { width: min(600px, calc(100vw - 28px)); }
+.payroll-service-merge-dialog > p { margin: 0 0 14px; color: #52645b; font-size: .84rem; }
+.payroll-service-merge-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.payroll-service-merge-grid .field { min-width: 0; margin: 0; }
+.payroll-service-merge-grid small { display: block; margin-top: 5px; color: #66766d; font-size: .7rem; }
+.payroll-service-merge-grid input[readonly] { background: #f4f6f4; }
+@media (max-width: 600px) { .payroll-service-merge-grid { grid-template-columns: 1fr; } }

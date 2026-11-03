@@ -108,6 +108,11 @@
     var matchingEmployeeCategory = availableEmployeeCategories.find(function (item) {
       return item && (item.id === requestedCategoryId || String(item.code || '').toLocaleLowerCase() === requestedCategoryId.toLocaleLowerCase());
     });
+    var requestedEmployeeServiceId = String(input.serviceId || input.service || '').trim();
+    var availableEmployeeServices = Array.isArray(dossier.employeeServices) ? dossier.employeeServices : [];
+    var matchingEmployeeService = availableEmployeeServices.find(function (item) {
+      return item && (item.id === requestedEmployeeServiceId || String(item.code || '').toLocaleLowerCase() === requestedEmployeeServiceId.toLocaleLowerCase() || String(item.label || '').toLocaleLowerCase() === requestedEmployeeServiceId.toLocaleLowerCase());
+    });
     var requestedGeographicZoneId = String(input.geographicZoneId || input.zone || '').trim();
     var availableGeographicZones = Array.isArray(dossier.employeeGeographicZones) ? dossier.employeeGeographicZones : [];
     var matchingGeographicZone = availableGeographicZones.find(function (item) {
@@ -120,6 +125,7 @@
     if (displayName.length > 120) errors.push('Le nom d’affichage ne peut pas dépasser 120 caractères.');
     if (availableEmployeeStatuses.length && requestedEmployeeStatus && !matchingEmployeeStatus) errors.push('Choisissez un statut existant dans le dossier de test.');
     if (availableEmployeeCategories.length && requestedCategoryId && !matchingEmployeeCategory) errors.push('Choisissez une catégorie/échelon existant dans le dossier de test.');
+    if (availableEmployeeServices.length && requestedEmployeeServiceId && !matchingEmployeeService) errors.push('Choisissez un service existant dans le dossier de test.');
     if (availableGeographicZones.length && requestedGeographicZoneId && !matchingGeographicZone) errors.push('Choisissez une zone géographique existante dans le dossier de test.');
     var current = Array.isArray(dossier.demoEmployees) ? dossier.demoEmployees : [];
     if (employeeNumber && current.some(function (employee) {
@@ -138,6 +144,8 @@
       employeeStatus: matchingEmployeeStatus ? matchingEmployeeStatus.id : requestedEmployeeStatus,
       categoryId: matchingEmployeeCategory ? matchingEmployeeCategory.id : '',
       categoryStep: matchingEmployeeCategory ? matchingEmployeeCategory.code : requestedCategoryId,
+      serviceId: matchingEmployeeService ? matchingEmployeeService.id : '',
+      service: matchingEmployeeService ? matchingEmployeeService.label : requestedEmployeeServiceId,
       geographicZoneId: matchingGeographicZone ? matchingGeographicZone.id : '',
       zone: matchingGeographicZone ? matchingGeographicZone.label : requestedGeographicZoneId,
       status: 'test-only',
@@ -152,7 +160,7 @@
     employeeNumber: 40, displayName: 120, sex: 40, maritalStatus: 60, birthplace: 120,
     nationality: 80, socialInsuranceNumber: 80, taxId: 80, supplementaryInsuranceCompany: 120,
     supplementaryInsuranceNumber: 80, degree: 120, profession: 120, employeeStatus: 80,
-    categoryStep: 80, categoryId: 80, geographicZoneId: 80, zone: 120, service: 120, function: 120, terminationReason: 160,
+    categoryStep: 80, categoryId: 80, geographicZoneId: 80, zone: 120, serviceId: 80, service: 120, function: 120, terminationReason: 160,
     paymentMethod: 80, bankName: 120, bankAccountNumber: 100, address: 240, contactPhone: 80, contactEmail: 160,
     miscellaneousLabel: 120, miscellaneousValue: 500
   };
@@ -221,6 +229,18 @@
       else {
         patch.categoryId = matchingCategory ? matchingCategory.id : requestedCategory;
         patch.categoryStep = matchingCategory ? matchingCategory.code : '';
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(input, 'serviceId') || Object.prototype.hasOwnProperty.call(input, 'service')) {
+      var requestedService = String(Object.prototype.hasOwnProperty.call(input, 'serviceId') ? input.serviceId || '' : input.service || '').trim();
+      var availableServices = Array.isArray(dossier.employeeServices) ? dossier.employeeServices : [];
+      var matchingService = availableServices.find(function (item) {
+        return item && (item.id === requestedService || String(item.code || '').toLocaleLowerCase() === requestedService.toLocaleLowerCase() || String(item.label || '').toLocaleLowerCase() === requestedService.toLocaleLowerCase());
+      });
+      if (availableServices.length && requestedService && !matchingService) errors.push('Choisissez un service existant dans le dossier de test.');
+      else {
+        patch.serviceId = matchingService ? matchingService.id : '';
+        patch.service = matchingService ? matchingService.label : (availableServices.length ? '' : requestedService);
       }
     }
     if (Object.prototype.hasOwnProperty.call(input, 'geographicZoneId')) {
@@ -897,6 +917,140 @@
     dossier.employeeGeographicZones = zones;
     if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer le positionnement.'] };
     return { ok: true, errors: [], zones: clone(zones) };
+  }
+
+  function employeeServices(dossierId) {
+    if (!isDemoTestDossier(dossierId)) return [];
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId); });
+    return clone((dossier && Array.isArray(dossier.employeeServices) ? dossier.employeeServices : []).slice().sort(function (left, right) { return Number(left.order || 0) - Number(right.order || 0); }));
+  }
+
+  function seedDemoEmployeeServices(dossierId) {
+    dossierId = String(dossierId || '');
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['Les services sont réservés au dossier fictif PRH-TEST-2026.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (Array.isArray(dossier.employeeServices) && dossier.employeeServices.length) return { ok: false, errors: ['Des services existent déjà ; aucun doublon n’a été ajouté.'] };
+    var now = new Date().toISOString();
+    dossier.employeeServices = [
+      { code: 'DA', label: 'Direction Administrative' },
+      { code: 'DF', label: 'Direction Financière' },
+      { code: 'DG', label: 'Direction Générale' }
+    ].map(function (item, index) {
+      return Object.assign({ id: 'employee-service-test-' + item.code.toLowerCase(), dossierId: dossierId, order: index, status: 'test-only', createdAt: now, updatedAt: now }, item);
+    });
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer les services de test.'] };
+    return { ok: true, errors: [], services: employeeServices(dossierId) };
+  }
+
+  function normalizeEmployeeServiceInput(input) {
+    input = input || {};
+    var code = String(input.code || '').trim();
+    var label = String(input.label || '').trim().replace(/\\s+/g, ' ');
+    var errors = [];
+    if (!code) errors.push('Le code du service est obligatoire.');
+    if (code.length > 24) errors.push('Le code est limité à 24 caractères.');
+    if (!label) errors.push('L’intitulé du service est obligatoire.');
+    if (label.length > 100) errors.push('L’intitulé est limité à 100 caractères.');
+    return { ok: errors.length === 0, errors: errors, value: { code: code, label: label } };
+  }
+
+  function createEmployeeService(dossierId, input) {
+    dossierId = String(dossierId || ''); input = input || {};
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La création est réservée au dossier fictif PRH-TEST-2026.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Confirmez qu’il s’agit d’un service de test.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
+    var validation = normalizeEmployeeServiceInput(input);
+    if (!validation.ok) return { ok: false, errors: validation.errors };
+    dossier.employeeServices = Array.isArray(dossier.employeeServices) ? dossier.employeeServices : [];
+    if (dossier.employeeServices.some(function (item) { return String(item.code || '').toLocaleLowerCase() === validation.value.code.toLocaleLowerCase(); })) return { ok: false, errors: ['Ce code de service existe déjà.'] };
+    var now = new Date().toISOString();
+    var record = Object.assign({ id: 'employee-service-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), dossierId: dossierId, order: dossier.employeeServices.length, status: 'test-only', createdAt: now, updatedAt: now }, validation.value);
+    dossier.employeeServices.push(record);
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer le service de test.'] };
+    return { ok: true, errors: [], service: clone(record) };
+  }
+
+  function updateEmployeeService(dossierId, serviceId, input) {
+    dossierId = String(dossierId || ''); serviceId = String(serviceId || ''); input = input || {};
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La modification est réservée au dossier fictif PRH-TEST-2026.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Confirmez qu’il s’agit d’une modification fictive.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var services = dossier && Array.isArray(dossier.employeeServices) ? dossier.employeeServices : [];
+    var record = services.find(function (item) { return item && item.id === serviceId && item.dossierId === dossierId; });
+    if (!record) return { ok: false, errors: ['Le service est introuvable.'] };
+    var validation = normalizeEmployeeServiceInput(input);
+    if (!validation.ok) return { ok: false, errors: validation.errors };
+    if (services.some(function (item) { return item && item.id !== serviceId && String(item.code || '').toLocaleLowerCase() === validation.value.code.toLocaleLowerCase(); })) return { ok: false, errors: ['Ce code de service existe déjà.'] };
+    var previousCode = record.code;
+    var previousLabel = record.label;
+    Object.assign(record, validation.value, { updatedAt: new Date().toISOString() });
+    (dossier.demoEmployees || []).forEach(function (employee) {
+      if (employee && (employee.serviceId === serviceId || employee.service === previousCode || employee.service === previousLabel)) {
+        employee.serviceId = serviceId;
+        employee.service = record.label;
+      }
+    });
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la modification du service.'] };
+    return { ok: true, errors: [], service: clone(record) };
+  }
+
+  function deleteEmployeeService(dossierId, serviceId) {
+    dossierId = String(dossierId || ''); serviceId = String(serviceId || '');
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La suppression est réservée au dossier fictif PRH-TEST-2026.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var services = dossier && Array.isArray(dossier.employeeServices) ? dossier.employeeServices : [];
+    var service = services.find(function (item) { return item && item.id === serviceId && item.dossierId === dossierId; });
+    if (!service) return { ok: false, errors: ['Le service est introuvable.'] };
+    if ((dossier.demoEmployees || []).some(function (employee) { return employee && (employee.serviceId === serviceId || employee.service === service.code || employee.service === service.label); })) return { ok: false, errors: ['Ce service est affecté à une fiche employé ; utilisez la fusion vers un autre service ou modifiez son affectation.'] };
+    dossier.employeeServices = services.filter(function (item) { return item && item.id !== serviceId; }).map(function (item, index) { item.order = index; return item; });
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible de supprimer le service.'] };
+    return { ok: true, errors: [], deletedServiceId: serviceId };
+  }
+
+  function positionEmployeeService(dossierId, serviceId, position) {
+    dossierId = String(dossierId || ''); serviceId = String(serviceId || ''); position = Number(position);
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['Le positionnement est réservé au dossier fictif PRH-TEST-2026.'] };
+    if (!Number.isInteger(position) || position < 1) return { ok: false, errors: ['La position doit être un entier positif.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var services = dossier && Array.isArray(dossier.employeeServices) ? dossier.employeeServices.slice().sort(function (left, right) { return Number(left.order || 0) - Number(right.order || 0); }) : [];
+    var currentIndex = services.findIndex(function (item) { return item && item.id === serviceId && item.dossierId === dossierId; });
+    if (currentIndex === -1) return { ok: false, errors: ['Le service à positionner est introuvable.'] };
+    if (position > services.length) return { ok: false, errors: ['La position ne peut pas dépasser le nombre de services.'] };
+    var moved = services.splice(currentIndex, 1)[0];
+    services.splice(position - 1, 0, moved);
+    services.forEach(function (item, index) { item.order = index; });
+    dossier.employeeServices = services;
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer le positionnement du service.'] };
+    return { ok: true, errors: [], services: clone(services) };
+  }
+
+  function mergeEmployeeServices(dossierId, sourceServiceId, destinationServiceId) {
+    dossierId = String(dossierId || ''); sourceServiceId = String(sourceServiceId || ''); destinationServiceId = String(destinationServiceId || '');
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La fusion est réservée au dossier fictif PRH-TEST-2026.'] };
+    if (!sourceServiceId || !destinationServiceId || sourceServiceId === destinationServiceId) return { ok: false, errors: ['Choisissez deux services distincts pour la fusion.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var services = dossier && Array.isArray(dossier.employeeServices) ? dossier.employeeServices : [];
+    var source = services.find(function (item) { return item && item.id === sourceServiceId && item.dossierId === dossierId; });
+    var destination = services.find(function (item) { return item && item.id === destinationServiceId && item.dossierId === dossierId; });
+    if (!source || !destination) return { ok: false, errors: ['Le service d’origine ou de destination n’existe plus dans ce dossier.'] };
+    var reassignedCount = 0;
+    (dossier.demoEmployees || []).forEach(function (employee) {
+      if (employee && (employee.serviceId === sourceServiceId || employee.service === source.code || employee.service === source.label)) {
+        employee.serviceId = destinationServiceId;
+        employee.service = destination.label;
+        reassignedCount += 1;
+      }
+    });
+    dossier.employeeServices = services.filter(function (item) { return item && item.id !== sourceServiceId; }).sort(function (left, right) { return Number(left.order || 0) - Number(right.order || 0); }).map(function (item, index) { item.order = index; return item; });
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la fusion des services.'] };
+    return { ok: true, errors: [], sourceServiceId: sourceServiceId, destinationServiceId: destinationServiceId, reassignedCount: reassignedCount, services: employeeServices(dossierId) };
   }
 
   function demoOrganizationSeeded(dossierId) {
@@ -1825,6 +1979,13 @@
     updateEmployeeGeographicZone: updateEmployeeGeographicZone,
     deleteEmployeeGeographicZone: deleteEmployeeGeographicZone,
     positionEmployeeGeographicZone: positionEmployeeGeographicZone,
+    employeeServices: employeeServices,
+    seedDemoEmployeeServices: seedDemoEmployeeServices,
+    createEmployeeService: createEmployeeService,
+    updateEmployeeService: updateEmployeeService,
+    deleteEmployeeService: deleteEmployeeService,
+    positionEmployeeService: positionEmployeeService,
+    mergeEmployeeServices: mergeEmployeeServices,
     organizationUnits: organizationUnits,
     createOrganizationUnit: createOrganizationUnit,
     updateOrganizationUnit: updateOrganizationUnit,
