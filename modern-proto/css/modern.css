@@ -4474,6 +4474,17 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .payroll-employee-function-checklist > label:hover { background: #f1f5f0; }
 .payroll-employee-function-checklist input { flex: 0 0 auto; width: 16px; height: 16px; margin: 2px 0 0; accent-color: #98701a; }
 .payroll-employee-function-field > small { display: block; margin-top: 6px; color: #637168; font-size: .7rem; line-height: 1.45; }
+/* Le formulaire de création est dans la colonne latérale : garder ses champs pleine largeur et empêcher les libellés de liste de déborder. */
+.payroll-employee-list { container-type: inline-size; }
+.payroll-employee-create-grid { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+.payroll-employee-create-grid .payroll-test-confirm { grid-column: auto; }
+.payroll-employee-function-checklist { box-sizing: border-box; min-width: 0; overflow-x: hidden; overflow-y: auto; }
+.payroll-employee-function-checklist > label { box-sizing: border-box; width: 100%; align-items: center; }
+.payroll-employee-function-checklist > label > span { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+@container (min-width: 640px) {
+  .payroll-employee-create-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .payroll-employee-create-grid .payroll-test-confirm { grid-column: 1 / -1; }
+}
 #payroll-employee-function-premium-dialog { width: min(460px, calc(100vw - 28px)); }
 #payroll-employee-function-premium-dialog .field { margin: 0; }
 #payroll-employee-function-premium-dialog input[name="label"] { width: 100%; }
