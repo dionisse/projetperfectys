@@ -21714,11 +21714,13 @@
     var selectableItems = items.filter(function (item) { return !item.disabled; });
     var selectedItem = selectableItems.find(function (item) { return item.id === ui.payrollMenuItem; }) || selectableItems[0] || null;
     var availableDefinitionItems = ['employee-statuses', 'employee-categories', 'geographic-zones', 'services', 'functions', 'degrees-qualifications', 'professions', 'complementary-social-funds', 'banks'];
+    var implementedMenuItems = availableDefinitionItems.concat(['employees']);
+    var hasPlannedItems = items.some(function (item) { return !item.disabled && !item.hasChildren && implementedMenuItems.indexOf(item.id) === -1; });
     var tabs = sections.map(function (section, sectionIndex) {
       var heading = section.heading ? '<p class="payroll-subtab-group-heading">' + esc(section.heading) + '</p>' : '';
       var rows = (section.items || []).map(function (item) {
         var selected = selectedItem && item.id === selectedItem.id;
-        var state = item.disabled ? 'Inactif' : (item.hasChildren ? 'Sous-menu' : (availableDefinitionItems.indexOf(item.id) !== -1 ? 'Référentiel test' : 'À construire'));
+        var state = item.disabled ? 'Inactif' : (item.hasChildren ? 'Sous-menu' : (implementedMenuItems.indexOf(item.id) !== -1 ? (item.id === 'employees' ? 'Disponible' : 'Référentiel test') : 'À construire'));
         var disclosure = item.hasChildren ? '<span class="payroll-subtab-chevron" aria-hidden="true">›</span>' : '';
         return '<button type="button" id="payroll-menu-tab-' + esc(item.id) + '" class="accounting-subtab' + (selected ? ' is-active' : '') + (item.disabled ? ' is-disabled' : '') + '" role="tab" aria-controls="payroll-menu-tabpanel" aria-selected="' + (selected ? 'true' : 'false') + '"' + (item.disabled ? ' disabled aria-disabled="true"' : (selected ? ' aria-current="page"' : '')) + ' data-action="payroll-menu-item" data-menu-name="' + esc(activeMenu) + '" data-menu-item="' + esc(item.id) + '"><span class="accounting-subtab-label">' + esc(item.label) + '</span>' + disclosure + '<small class="accounting-subtab-state">' + state + '</small></button>';
       }).join('');
@@ -21743,7 +21745,7 @@
     else if (selectedItem && selectedItem.id === 'complementary-social-funds') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-complementary-social-funds">' + viewPayrollEmployeeDefinitions(dossier, 'socialFunds', canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>';
     else if (selectedItem && selectedItem.id === 'banks') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-banks">' + viewPayrollEmployeeDefinitions(dossier, 'banks', canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>';
     else panel = '<section class="accounting-menu-panel"' + (selectedItem ? ' id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-' + esc(selectedItem.id) + '"' : '') + '><div class="accounting-menu-panel-head"><div><p class="page-kicker">SOUS-MENU · ' + esc(activeMenu.toUpperCase()) + '</p><h3>' + esc(itemHeading) + '</h3></div><span class="badge draft">' + panelStatus + '</span></div><p class="menu-item-reason">' + itemDescription + '</p><div class="alert info"><div>Navigation uniquement : aucune importation, exportation, modification de paie, clôture ou écriture comptable n’est exécutée ici.</div></div></section>';
-    var legend = '<div class="menu-status-legend" aria-label="Légende des statuts"><span><i class="legend-dot legend-dot-planned"></i>À construire</span><span><i class="legend-dot legend-dot-inactive"></i>Inactif dans la capture</span></div>';
+    var legend = hasPlannedItems ? '<div class="menu-status-legend" aria-label="Légende des statuts"><span><i class="legend-dot legend-dot-planned"></i>À construire</span><span><i class="legend-dot legend-dot-inactive"></i>Inactif dans la capture</span></div>' : '';
     return '<section class="accounting-menu-page payroll-menu-page" aria-label="Menu ' + esc(activeMenu) + '"><div class="accounting-menu-heading"><div><p class="page-kicker">PAIE &amp; RH · ' + esc(dossier.reference || '') + '</p><h2>' + esc(activeMenu) + '</h2></div></div><div class="accounting-menu-layout"><nav class="accounting-subtabs" role="tablist" aria-orientation="vertical" aria-label="Sous-menus ' + esc(activeMenu) + '">' + (tabs || '<p class="small muted payroll-menu-empty">Aucun élément de menu n’a été fourni.</p>') + '</nav><div class="accounting-menu-detail">' + (selectedItem && selectedItem.id === 'employees' ? '' : legend) + panel + '</div></div></section>';
   }
 
