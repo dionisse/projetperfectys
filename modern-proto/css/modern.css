@@ -4474,8 +4474,8 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .payroll-employee-function-checklist > label:hover { background: #f1f5f0; }
 .payroll-employee-function-checklist input { flex: 0 0 auto; width: 16px; height: 16px; margin: 2px 0 0; accent-color: #98701a; }
 .payroll-employee-function-field > small { display: block; margin-top: 6px; color: #637168; font-size: .7rem; line-height: 1.45; }
-/* Le formulaire de création est dans la colonne latérale : garder ses champs pleine largeur et empêcher les libellés de liste de déborder. */
-.payroll-employee-list { container-type: inline-size; }
+/* Le formulaire de création occupe la largeur sous la liste et la fiche sélectionnée. */
+.payroll-employee-create-form { container-type: inline-size; margin-top: 14px; }
 .payroll-employee-create-grid { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
 .payroll-employee-create-grid .payroll-test-confirm { grid-column: auto; }
 .payroll-employee-function-checklist { box-sizing: border-box; min-width: 0; overflow-x: hidden; overflow-y: auto; }
