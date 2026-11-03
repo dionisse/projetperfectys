@@ -256,6 +256,48 @@ assert.equal(PayrollHR.deleteEmployee(testDossier.dossier.id, addedTestEmployee.
 assert.equal(PayrollHR.employee(testDossier.dossier.id, addedTestEmployee.employee.id), null);
 assert.equal(PayrollHR.isDemoTestDossier(testDossier.dossier.id), true, 'le dossier test reste valide après suppression d’une fiche non liée');
 assert.equal(PayrollHR.isDemoTestDossier(dossier.id), false, 'le préchargement est limité au dossier de démonstration identifié');
+assert.deepEqual(PayrollHR.employeeStatuses(dossier.id), []);
+assert.equal(PayrollHR.seedDemoEmployeeStatuses(dossier.id).ok, false);
+const statusesSeed = PayrollHR.seedDemoEmployeeStatuses(testDossier.dossier.id);
+assert.equal(statusesSeed.ok, true, statusesSeed.errors.join('\\n'));
+assert.deepEqual(statusesSeed.statuses.map(status => [status.code, status.label]), [['A', 'Agent de l’État'], ['C', 'Contractuel'], ['O', 'Occasionnel'], ['S', 'Stagiaire']]);
+assert.equal(statusesSeed.statuses[0].monthlyWorkDays, '21.66');
+assert.equal(statusesSeed.statuses[0].monthlyWorkHours, '173.33');
+assert.equal(statusesSeed.statuses[0].leaveDaysPerMonth, '2.00');
+assert.equal(statusesSeed.statuses[0].leaveDayType, 'ouvrables');
+const rubricCatalog = PayrollHR.employeeRubricCatalog();
+assert.equal(new Set(rubricCatalog.map(item => item.id)).size, rubricCatalog.length, 'chaque rubrique possède un identifiant unique');
+assert.ok(rubricCatalog.some(item => item.label === 'MONTANT À PAYER'));
+assert.ok(rubricCatalog.some(item => item.id === 'advance-9-withheld-month'));
+assert.equal(PayrollHR.seedDemoEmployeeStatuses(testDossier.dossier.id).ok, false, 'le chargement ne crée aucun doublon');
+const statusA = statusesSeed.statuses[0];
+assert.ok(statusA.rubricIds.includes('worked-days-total'));
+assert.ok(!statusA.rubricIds.includes('worked-hours-total'));
+const independentlyConfigurableRubric = rubricCatalog.find(item => !item.selectedByReference);
+assert.ok(independentlyConfigurableRubric);
+const assignedStatus = PayrollHR.updateEmployee(testDossier.dossier.id, testDossier.dossier.demoEmployees[0].id, { employeeStatus: statusA.id });
+assert.equal(assignedStatus.ok, true, assignedStatus.errors.join('\\n'));
+const createdWithStatus = PayrollHR.createEmployee(testDossier.dossier.id, { employeeNumber: 'TEST-STATUS-01', displayName: 'Employé lié au statut', employeeStatus: statusA.id, testOnly: true });
+assert.equal(createdWithStatus.ok, true, createdWithStatus.errors.join('\\n'));
+assert.equal(createdWithStatus.employee.employeeStatus, statusA.id);
+assert.equal(PayrollHR.deleteEmployee(testDossier.dossier.id, createdWithStatus.employee.id).ok, true);
+assert.equal(PayrollHR.deleteEmployeeStatus(testDossier.dossier.id, statusA.id).ok, false, 'un statut attribué à un employé ne peut pas être supprimé');
+assert.equal(PayrollHR.updateEmployee(testDossier.dossier.id, testDossier.dossier.demoEmployees[1].id, { employeeStatus: 'missing-status' }).ok, false, 'un employé ne peut pas être lié à un statut absent');
+const customStatus = PayrollHR.createEmployeeStatus(testDossier.dossier.id, {
+  code: 'X', label: 'Statut fictif X', monthlyWorkDays: '20.5', leaveDayType: 'calendaires',
+  rubricIds: [independentlyConfigurableRubric.id, independentlyConfigurableRubric.id], testOnly: true
+});
+assert.equal(customStatus.ok, true, customStatus.errors.join('\\n'));
+assert.deepEqual(customStatus.employeeStatus.rubricIds, [independentlyConfigurableRubric.id], 'la sélection de rubriques est dédoublonnée');
+assert.ok(!statusA.rubricIds.includes(independentlyConfigurableRubric.id), 'la sélection est propre à chaque statut');
+assert.equal(PayrollHR.createEmployeeStatus(testDossier.dossier.id, { code: 'x', label: 'Code déjà pris', testOnly: true }).ok, false);
+const updatedStatus = PayrollHR.updateEmployeeStatus(testDossier.dossier.id, customStatus.employeeStatus.id, {
+  code: 'X', label: 'Statut fictif modifié', ohadaClassification: 'Test', monthlyWorkDays: '21.25',
+  monthlyWorkHours: '170', leaveDaysPerMonth: '1.5', leaveDayType: 'ouvrables', rubricIds: rubricCatalog.slice(0, 2).map(item => item.id), testOnly: true
+});
+assert.equal(updatedStatus.ok, true, updatedStatus.errors.join('\\n'));
+assert.equal(PayrollHR.deleteEmployeeStatus(testDossier.dossier.id, customStatus.employeeStatus.id).ok, true);
+assert.equal(PayrollHR.deleteEmployeeStatus(testDossier.dossier.id, statusesSeed.statuses[1].id).ok, true);
 const mockSeed = PayrollHR.seedDemoOrganizationData(testDossier.dossier.id);
 assert.equal(mockSeed.ok, true, mockSeed.errors.join('\\n'));
 assert.equal(mockSeed.organizationUnits.length, 2);

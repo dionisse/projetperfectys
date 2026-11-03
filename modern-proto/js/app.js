@@ -172,6 +172,9 @@
     payrollMainMenu: 'Fichier',
     payrollMenuItem: 'export-files',
     payrollEmployeeId: '',
+    payrollEmployeeStatusId: '',
+    payrollEmployeeStatusMode: 'view',
+    payrollEmployeeStatusDraft: null,
     fixedAssets: { q: '', status: 'all', assetType: 'all' },
     financialFramework: { q: '' },
     financialResult: { asOfDate: '' },
@@ -567,6 +570,9 @@
       case 'save-payroll-accounting-link':
         return { moduleId: 'organization', actionId: 'organization.manageDossiers' };
       case 'create-payroll-test-employee':
+      case 'new-payroll-employee-status':
+      case 'duplicate-payroll-employee-status':
+      case 'seed-payroll-employee-statuses':
       case 'create-payroll-org-unit':
       case 'create-payroll-hr-tracking':
       case 'create-payroll-organization-assignment':
@@ -585,9 +591,13 @@
       case 'edit-payroll-org-unit':
       case 'archive-payroll-org-unit':
       case 'edit-payroll-employee':
+      case 'edit-payroll-employee-status':
+      case 'open-payroll-employee-rubrics':
+      case 'save-payroll-employee-rubrics':
       case 'delete-payroll-employee-photo':
         return { moduleId: 'payroll-hr', actionId: 'record.edit' };
       case 'delete-payroll-employee':
+      case 'delete-payroll-employee-status':
         return { moduleId: 'payroll-hr', actionId: 'record.delete' };
       case 'print-payroll-employee':
         return { moduleId: 'payroll-hr', actionId: 'module.view' };
@@ -20324,12 +20334,57 @@
       var result = PayrollHR.createEmployee(dossier.id, {
         employeeNumber: ($('#payroll-employee-number', employeeForm) || {}).value || '',
         displayName: ($('#payroll-employee-display-name', employeeForm) || {}).value || '',
+        employeeStatus: ($('#payroll-employee-create-status', employeeForm) || {}).value || '',
         testOnly: confirmed
       });
       if (!result.ok) { toast(result.errors[0] || 'Création de la fiche de test impossible.', 'warning'); return; }
       ui.payrollEmployeeId = result.employee.id;
       toast('Fiche fictive créée dans PRH-TEST-2026.', 'success');
       render();
+    });
+    var employeeStatusForm = $('#payroll-employee-status-form');
+    if (employeeStatusForm) employeeStatusForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var mode = employeeStatusForm.getAttribute('data-mode') || 'view';
+      var statusAction = mode === 'create' ? 'new-payroll-employee-status' : 'edit-payroll-employee-status';
+      if (!canPerformDemoAction(statusAction, null, true)) return;
+      var dossier = PayrollHR.currentDossier();
+      if (!dossier || !PayrollHR.isDemoTestDossier(dossier.id)) { toast('Les statuts de test sont réservés à PRH-TEST-2026.', 'warning'); return; }
+      var statusTestConfirmation = employeeStatusForm.elements.namedItem('testOnly');
+      if (!statusTestConfirmation || !statusTestConfirmation.checked) { toast('Confirmez que le paramétrage est fictif.', 'warning'); return; }
+      var payload = payrollEmployeeFormValues(employeeStatusForm, ['code', 'label', 'ohadaClassification', 'monthlyWorkDays', 'monthlyWorkHours', 'leaveDaysPerMonth', 'leaveDayType']);
+      payload.testOnly = true;
+      if (mode === 'create') payload.rubricIds = ui.payrollEmployeeStatusDraft && ui.payrollEmployeeStatusDraft.rubricIds || [];
+      else {
+        var currentStatus = PayrollHR.employeeStatuses(dossier.id).find(function (item) { return item.id === employeeStatusForm.getAttribute('data-status-id'); });
+        payload.rubricIds = currentStatus ? currentStatus.rubricIds || [] : [];
+      }
+      var result = mode === 'create'
+        ? PayrollHR.createEmployeeStatus(dossier.id, payload)
+        : PayrollHR.updateEmployeeStatus(dossier.id, employeeStatusForm.getAttribute('data-status-id'), payload);
+      if (!result.ok) { toast(result.errors[0] || 'Enregistrement du statut impossible.', 'warning'); return; }
+      ui.payrollEmployeeStatusId = result.employeeStatus.id;
+      ui.payrollEmployeeStatusMode = 'view';
+      ui.payrollEmployeeStatusDraft = null;
+      toast(mode === 'create' ? 'Statut fictif créé.' : 'Statut fictif modifié.', 'success'); render();
+    });
+    var employeeRubricsForm = $('#payroll-status-rubrics-form');
+    if (employeeRubricsForm) employeeRubricsForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!canPerformDemoAction('open-payroll-employee-rubrics', null, true)) return;
+      var dossier = PayrollHR.currentDossier();
+      if (!dossier || employeeRubricsForm.getAttribute('data-dossier-id') !== dossier.id || !PayrollHR.isDemoTestDossier(dossier.id)) { toast('La sélection de rubriques est réservée à PRH-TEST-2026.', 'warning'); return; }
+      var rubricTestConfirmation = employeeRubricsForm.elements.namedItem('testOnly');
+      if (!rubricTestConfirmation || !rubricTestConfirmation.checked) { toast('Confirmez qu’il s’agit d’une sélection fictive.', 'warning'); return; }
+      var currentStatus = PayrollHR.employeeStatuses(dossier.id).find(function (item) { return item.id === employeeRubricsForm.getAttribute('data-status-id'); });
+      if (!currentStatus) { toast('Le statut n’existe plus dans le dossier actif.', 'warning'); return; }
+      var selectedRubricIds = Array.prototype.map.call(employeeRubricsForm.querySelectorAll('input[name="rubricIds"]:checked'), function (input) { return input.value; });
+      var payload = Object.assign({}, currentStatus, { rubricIds: selectedRubricIds, testOnly: true });
+      var result = PayrollHR.updateEmployeeStatus(dossier.id, currentStatus.id, payload);
+      if (!result.ok) { toast(result.errors[0] || 'Enregistrement des rubriques impossible.', 'warning'); return; }
+      ui.payrollEmployeeStatusMode = 'view';
+      ui.payrollEmployeeStatusDraft = null;
+      toast('Rubriques enregistrées pour ce statut. Aucun calcul n’a été exécuté.', 'success'); render();
     });
     var employeeEditForm = $('#payroll-employee-edit-form');
     if (employeeEditForm) employeeEditForm.addEventListener('submit', function (event) {
@@ -20984,6 +21039,7 @@
     var isTestDossier = PayrollHR.isDemoTestDossier(dossier.id);
     var canEditEmployee = isTestDossier && hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'record.edit', payrollAccessContext(dossier));
     var employees = isTestDossier ? dossierEmployees : [];
+    var employeeStatusCatalog = isTestDossier ? PayrollHR.employeeStatuses(dossier.id) : [];
     var selected = employees.find(function (employee) { return employee.id === ui.payrollEmployeeId; }) || employees[0] || null;
     if (selected) ui.payrollEmployeeId = selected.id;
     function textField(name, label, type, value, maxLength) {
@@ -20993,10 +21049,16 @@
       var active = selected && selected.id === employee.id;
       return '<tr><td><button type="button" class="payroll-employee-select' + (active ? ' is-active' : '') + '" data-action="payroll-employee-select" data-employee-id="' + esc(employee.id) + '" aria-pressed="' + (active ? 'true' : 'false') + '"><strong>' + esc(employee.employeeNumber || employee.id) + '</strong></button></td><td>' + esc(employee.displayName || 'Employé fictif') + '</td></tr>';
     }).join('');
+    var employeeStatusField = employeeStatusCatalog.length
+      ? '<div class="field"><label for="payroll-employee-field-employeeStatus">Statut</label><select id="payroll-employee-field-employeeStatus" name="employeeStatus"><option value="">— Non défini —</option>' + employeeStatusCatalog.map(function (status) { return '<option value="' + esc(status.id) + '"' + (selected && selected.employeeStatus === status.id ? ' selected' : '') + '>' + esc(status.code + ' · ' + status.label) + '</option>'; }).join('') + '</select></div>'
+      : textField('employeeStatus', 'Statut', 'text', selected && selected.employeeStatus, 80);
+    var createEmployeeStatusField = employeeStatusCatalog.length
+      ? '<div class="field"><label for="payroll-employee-create-status">Statut</label><select id="payroll-employee-create-status"><option value="">— Non défini —</option>' + employeeStatusCatalog.map(function (status) { return '<option value="' + esc(status.id) + '">' + esc(status.code + ' · ' + status.label) + '</option>'; }).join('') + '</select></div>'
+      : '';
     var createForm = isTestDossier && canCreatePayrollEmployee
       ? '<form id="payroll-employee-create-form" class="payroll-employee-create-form" data-dossier-id="' + esc(dossier.id) + '"><p class="small"><strong>Ajouter une fiche fictive</strong></p><div class="payroll-employee-create-grid">' +
         '<div class="field"><label for="payroll-employee-number">Matricule interne *</label><input id="payroll-employee-number" type="text" maxlength="40" required autocomplete="off"></div>' +
-        '<div class="field"><label for="payroll-employee-display-name">Nom d’affichage fictif *</label><input id="payroll-employee-display-name" type="text" maxlength="120" required autocomplete="off"></div>' +
+        '<div class="field"><label for="payroll-employee-display-name">Nom d’affichage fictif *</label><input id="payroll-employee-display-name" type="text" maxlength="120" required autocomplete="off"></div>' + createEmployeeStatusField +
         '<label class="payroll-test-confirm"><input id="payroll-test-data-confirmation" type="checkbox" required><span>Fiche fictive de test uniquement.</span></label>' +
         '<button type="submit" class="btn btn-primary">＋ Ajouter</button></div></form>'
       : (isTestDossier ? '<p class="small muted">Création indisponible pour ce profil.</p>' : '<div class="alert info"><div>La saisie de test est réservée au dossier fictif <strong>PRH-TEST-2026</strong>. Ouvrez ce dossier depuis <a href="#/payroll-dossiers">Dossiers RH</a>. Aucune donnée d’un autre dossier n’est affichée ici.</div></div>');
@@ -21007,7 +21069,7 @@
         '<fieldset><legend>Embauche et situation</legend><div class="payroll-employee-field-grid">' + textField('firstHireDate', 'Première embauche', 'date', selected.firstHireDate) + textField('seniorityMonthsToDeduct', 'Ancienneté à déduire · mois', 'number', selected.seniorityMonthsToDeduct) + textField('seniorityReferenceDate', 'Référence ancienneté au', 'date', selected.seniorityReferenceDate) + textField('vpsExemptionEndDate', 'Fin exonération V.P.S.', 'date', selected.vpsExemptionEndDate) + textField('terminationDate', 'Débauchage', 'date', selected.terminationDate) + textField('terminationReason', 'Motif', 'text', selected.terminationReason, 160) + textField('rehireDate', 'Dernière réembauche', 'date', selected.rehireDate) + '</div></fieldset>' +
         '<fieldset><legend>Identité et situation personnelle</legend><div class="payroll-employee-field-grid">' + textField('birthDate', 'Date de naissance', 'date', selected.birthDate) + textField('sex', 'Sexe', 'text', selected.sex, 40) + textField('maritalStatus', 'Situation matrimoniale', 'text', selected.maritalStatus, 60) + textField('childrenCount', 'Enfants', 'number', selected.childrenCount) + textField('birthplace', 'Lieu de naissance', 'text', selected.birthplace, 120) + textField('nationality', 'Pays de nationalité', 'text', selected.nationality, 80) + '</div></fieldset>' +
         '<fieldset><legend>Identifiants et assurance complémentaire</legend><div class="payroll-employee-field-grid">' + textField('socialInsuranceNumber', 'N° d’assuré social', 'text', selected.socialInsuranceNumber, 80) + textField('taxId', 'Numéro IFU', 'text', selected.taxId, 80) + textField('supplementaryInsuranceCompany', 'Compagnie', 'text', selected.supplementaryInsuranceCompany, 120) + textField('supplementaryInsuranceNumber', 'Numéro d’assuré', 'text', selected.supplementaryInsuranceNumber, 80) + '</div></fieldset>' +
-        '<fieldset><legend>Parcours et affectation</legend><div class="payroll-employee-field-grid">' + textField('degree', 'Diplôme', 'text', selected.degree, 120) + textField('profession', 'Profession', 'text', selected.profession, 120) + textField('employeeStatus', 'Statut', 'text', selected.employeeStatus, 80) + textField('categoryStep', 'Catégorie / échelon', 'text', selected.categoryStep, 80) + textField('effectiveDate', 'Date d’effet', 'date', selected.effectiveDate) + textField('zone', 'Zone', 'text', selected.zone, 120) + textField('service', 'Service', 'text', selected.service, 120) + textField('function', 'Fonction', 'text', selected.function, 120) + '</div></fieldset>' +
+        '<fieldset><legend>Parcours et affectation</legend><div class="payroll-employee-field-grid">' + textField('degree', 'Diplôme', 'text', selected.degree, 120) + textField('profession', 'Profession', 'text', selected.profession, 120) + employeeStatusField + textField('categoryStep', 'Catégorie / échelon', 'text', selected.categoryStep, 80) + textField('effectiveDate', 'Date d’effet', 'date', selected.effectiveDate) + textField('zone', 'Zone', 'text', selected.zone, 120) + textField('service', 'Service', 'text', selected.service, 120) + textField('function', 'Fonction', 'text', selected.function, 120) + '</div></fieldset>' +
         '<fieldset><legend>Règlement des salaires</legend><div class="payroll-employee-field-grid">' + textField('paymentMethod', 'Mode de règlement', 'text', selected.paymentMethod, 80) + textField('bankName', 'Banque', 'text', selected.bankName, 120) + textField('bankAccountNumber', 'N° de compte', 'text', selected.bankAccountNumber, 100) + '</div></fieldset>' +
         '</div><label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Je confirme que les valeurs de cette fiche sont fictives et réservées au test.</span></label>' +
         '<div class="payroll-employee-edit-actions"><button type="button" class="btn btn-danger" data-action="delete-payroll-employee" data-employee-id="' + esc(selected.id) + '">Supprimer</button><button type="reset" class="btn btn-secondary">Annuler</button><button type="submit" class="btn btn-primary">Enregistrer la fiche</button></div></form>'
@@ -21025,7 +21087,47 @@
       '<div class="payroll-employee-detail"><div class="payroll-employee-detail-head"><div><h4>' + esc(selected ? selected.displayName : 'Aucune fiche sélectionnée') + '</h4><p class="small muted">' + (selected ? 'Matricule ' + esc(selected.employeeNumber || selected.id) + ' · fiche de test' : 'Sélectionnez ou ajoutez une fiche fictive') + '</p></div><div class="payroll-employee-actions"><button type="button" class="btn btn-secondary" data-action="open-payroll-employee-info" aria-haspopup="dialog" aria-controls="payroll-employee-info-dialog"' + (selected ? '' : ' disabled') + '>Informations diverses</button><button type="button" class="btn btn-secondary" data-action="open-payroll-employee-photo" aria-haspopup="dialog" aria-controls="payroll-employee-photo-dialog"' + (selected ? '' : ' disabled') + '>Photo</button><button type="button" class="btn btn-secondary" data-action="print-payroll-employee"' + (selected ? '' : ' disabled') + '>Imprimer</button></div></div>' + editForm + '</div></div>' + infoDialog + photoDialog + '</section>';
   }
 
-  function viewPayrollMainMenu(dossier, dossierEmployees, canCreatePayrollEmployee) {
+  function viewPayrollEmployeeStatuses(dossier, canCreatePayrollEmployee, canEditPayrollEmployee) {
+    var isTestDossier = PayrollHR.isDemoTestDossier(dossier.id);
+    var statuses = isTestDossier ? PayrollHR.employeeStatuses(dossier.id) : [];
+    var selected = statuses.find(function (item) { return item.id === ui.payrollEmployeeStatusId; }) || statuses[0] || null;
+    var mode = ui.payrollEmployeeStatusMode || 'view';
+    if (selected && mode === 'view') ui.payrollEmployeeStatusId = selected.id;
+    var draft = ui.payrollEmployeeStatusDraft || {};
+    var displayed = mode === 'create' ? draft : selected;
+    var rubricCatalog = PayrollHR.employeeRubricCatalog();
+    function statusField(name, label, value, type) {
+      return '<div class="field"><label for="payroll-status-' + name + '">' + esc(label) + '</label><input id="payroll-status-' + name + '" name="' + name + '" type="' + (type || 'text') + '" value="' + esc(value || '') + '"' + (mode === 'view' ? ' readonly' : '') + (mode !== 'view' && (name === 'code' || name === 'label') ? ' required' : '') + (type === 'number' ? ' step="any" min="0"' : '') + '></div>';
+    }
+    var statusRows = statuses.map(function (item) {
+      var active = mode !== 'create' && selected && item.id === selected.id;
+      return '<tr><td><button type="button" class="payroll-status-select' + (active ? ' is-active' : '') + '" data-action="payroll-employee-status-select" data-status-id="' + esc(item.id) + '" aria-pressed="' + (active ? 'true' : 'false') + '"><strong>' + esc(item.code) + '</strong></button></td><td>' + esc(item.label) + '</td></tr>';
+    }).join('');
+    var source = displayed || {};
+    var editable = mode === 'edit' || mode === 'create';
+    var controls = '<div class="payroll-status-actions">' +
+      (isTestDossier && canCreatePayrollEmployee ? '<button type="button" class="btn btn-primary" data-action="new-payroll-employee-status">＋ Nouveau</button>' : '') +
+      (selected && canCreatePayrollEmployee && mode === 'view' ? '<button type="button" class="btn btn-secondary" data-action="duplicate-payroll-employee-status" data-status-id="' + esc(selected.id) + '">Dupliquer</button>' : '') +
+      (selected && canEditPayrollEmployee && mode === 'view' ? '<button type="button" class="btn btn-secondary" data-action="edit-payroll-employee-status" data-status-id="' + esc(selected.id) + '">Modifier</button><button type="button" class="btn btn-danger" data-action="delete-payroll-employee-status" data-status-id="' + esc(selected.id) + '">Supprimer</button>' : '') +
+      (selected && canEditPayrollEmployee && mode === 'view' ? '<button type="button" class="btn btn-secondary" data-action="open-payroll-employee-rubrics" data-status-id="' + esc(selected.id) + '">Rubriques (' + ((selected.rubricIds || []).length) + ')</button>' : '') + '</div>';
+    var statusForm = isTestDossier && displayed
+      ? '<form id="payroll-employee-status-form" class="payroll-employee-status-form" data-mode="' + esc(mode) + '" data-status-id="' + esc(selected ? selected.id : '') + '"><div class="payroll-status-fields">' +
+        statusField('code', 'Code', source.code, 'text') + statusField('label', 'Intitulé', source.label, 'text') + statusField('ohadaClassification', 'Classification OHADA', source.ohadaClassification, 'text') + '</div>' +
+        '<fieldset><legend>Base mensuelle de travail</legend><div class="payroll-status-fields">' + statusField('monthlyWorkDays', 'En jours', source.monthlyWorkDays, 'number') + statusField('monthlyWorkHours', 'En heures', source.monthlyWorkHours, 'number') + '</div></fieldset>' +
+        '<fieldset><legend>Jours de congés par mois</legend><div class="payroll-status-fields">' + statusField('leaveDaysPerMonth', 'Jours acquis', source.leaveDaysPerMonth, 'number') + '</div><div class="payroll-status-radio"><label><input type="radio" name="leaveDayType" value="ouvrables"' + (source.leaveDayType === 'ouvrables' ? ' checked' : '') + (mode === 'view' ? ' disabled' : '') + '> Ouvrables</label><label><input type="radio" name="leaveDayType" value="calendaires"' + (source.leaveDayType === 'calendaires' ? ' checked' : '') + (mode === 'view' ? ' disabled' : '') + '> Calendaires</label></div></fieldset>' +
+        (editable ? '<label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Je confirme qu’il s’agit d’un paramétrage fictif du dossier de test.</span></label><div class="payroll-status-actions"><button type="button" class="btn btn-secondary" data-action="cancel-payroll-employee-status-edit">Annuler</button><button type="submit" class="btn btn-primary">Valider</button></div>' : '') + '</form>'
+      : '<div class="empty-state"><strong>' + (isTestDossier ? 'Aucun statut de test chargé' : 'Dossier de test requis') + '</strong><span>' + (isTestDossier ? 'Chargez une fois les quatre statuts relevés de la capture.' : 'Les statuts de démonstration sont réservés à PRH-TEST-2026.') + '</span>' + (isTestDossier && canCreatePayrollEmployee ? '<button type="button" class="btn btn-secondary" data-action="seed-payroll-employee-statuses">Charger les statuts de la capture</button>' : '') + '</div>';
+    var selectedRubrics = selected && Array.isArray(selected.rubricIds) ? selected.rubricIds : [];
+    var rubricRows = rubricCatalog.map(function (rubric) {
+      var checked = selectedRubrics.indexOf(rubric.id) !== -1;
+      return '<label class="payroll-rubric-row' + (rubric.heading ? ' is-heading' : '') + '" data-level="' + rubric.level + '"><input type="checkbox" name="rubricIds" value="' + esc(rubric.id) + '"' + (checked ? ' checked' : '') + '><span>' + esc(rubric.label) + '</span></label>';
+    }).join('');
+    var rubricDialog = '<dialog class="payroll-employee-dialog payroll-status-rubrics-dialog" id="payroll-status-rubrics-dialog" aria-labelledby="payroll-status-rubrics-title"><div class="payroll-employee-dialog-head"><div><p class="page-kicker">STATUT · ' + esc(selected ? selected.code + ' · ' + selected.label : '') + '</p><h3 id="payroll-status-rubrics-title">Rubriques à retenir</h3></div><button type="button" class="icon-btn" data-action="close-payroll-status-rubrics" aria-label="Fermer">×</button></div>' +
+      (selected ? '<form id="payroll-status-rubrics-form" data-dossier-id="' + esc(dossier.id) + '" data-status-id="' + esc(selected.id) + '"><p class="small muted">Cochez ou décochez les éléments associés à ce statut. Cette sélection ne déclenche aucun calcul et chaque rubrique est identifiée sans doublon.</p><div class="payroll-rubric-list">' + rubricRows + '</div><label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Je confirme qu’il s’agit d’une sélection fictive du dossier de test.</span></label><div class="payroll-employee-dialog-actions"><button type="button" class="btn btn-secondary" data-action="close-payroll-status-rubrics">Annuler</button><button type="submit" class="btn btn-primary">Valider la sélection</button></div></form>' : '<p>Aucun statut sélectionné.</p>') + '</dialog>';
+    return '<section class="payroll-status-workspace" aria-label="Statuts des employés"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · DÉFINITIONS</p><h3>Statuts</h3></div><span class="badge draft">' + (isTestDossier ? 'PRH-TEST-2026 · TEST' : 'DOSSIER NON TEST') + '</span></div><div class="alert warning"><div>Configuration locale de démonstration uniquement. Les rubriques ne déclenchent aucun calcul; le stockage navigateur n’est pas adapté aux données réelles.</div></div><div class="payroll-status-workspace-layout"><aside class="payroll-status-list"><div class="payroll-status-list-head"><h4>Statuts (' + statuses.length + ')</h4>' + (statuses.length && isTestDossier && canCreatePayrollEmployee ? '<button type="button" class="btn btn-primary btn-sm" data-action="new-payroll-employee-status">＋</button>' : '') + '</div><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Code</th><th>Intitulé</th></tr></thead><tbody>' + (statusRows || '<tr><td colspan="2">Aucun statut.</td></tr>') + '</tbody></table></div></aside><div class="payroll-status-detail"><div class="payroll-status-detail-head"><h4>' + esc(mode === 'create' ? 'Nouveau statut' : (selected ? selected.label : 'Statut')) + '</h4>' + controls + '</div>' + statusForm + '</div></div>' + rubricDialog + '</section>';
+  }
+
+  function viewPayrollMainMenu(dossier, dossierEmployees, canCreatePayrollEmployee, canEditPayrollEmployee) {
     var activeMenu = ui.payrollMainMenu || 'Fichier';
     var sections = payrollMenuSections(activeMenu);
     var items = sections.reduce(function (all, section) { return all.concat(section.items || []); }, []);
@@ -21050,7 +21152,9 @@
     var panelStatus = !selectedItem ? 'À définir' : (selectedItem.hasChildren ? 'Sous-menu à préciser' : 'À construire');
     var panel = selectedItem && selectedItem.id === 'employees'
       ? '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-employees">' + viewPayrollEmployeeDetails(dossier, dossierEmployees || [], canCreatePayrollEmployee === true) + '</div>'
-      : '<section class="accounting-menu-panel"' + (selectedItem ? ' id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-' + esc(selectedItem.id) + '"' : '') + '><div class="accounting-menu-panel-head"><div><p class="page-kicker">SOUS-MENU · ' + esc(activeMenu.toUpperCase()) + '</p><h3>' + esc(itemHeading) + '</h3></div><span class="badge draft">' + panelStatus + '</span></div><p class="menu-item-reason">' + itemDescription + '</p><div class="alert info"><div>Navigation uniquement : aucune importation, exportation, modification de paie, clôture ou écriture comptable n’est exécutée ici.</div></div></section>';
+      : (selectedItem && selectedItem.id === 'employee-statuses'
+        ? '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-employee-statuses">' + viewPayrollEmployeeStatuses(dossier, canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>'
+        : '<section class="accounting-menu-panel"' + (selectedItem ? ' id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-' + esc(selectedItem.id) + '"' : '') + '><div class="accounting-menu-panel-head"><div><p class="page-kicker">SOUS-MENU · ' + esc(activeMenu.toUpperCase()) + '</p><h3>' + esc(itemHeading) + '</h3></div><span class="badge draft">' + panelStatus + '</span></div><p class="menu-item-reason">' + itemDescription + '</p><div class="alert info"><div>Navigation uniquement : aucune importation, exportation, modification de paie, clôture ou écriture comptable n’est exécutée ici.</div></div></section>');
     var legend = '<div class="menu-status-legend" aria-label="Légende des statuts"><span><i class="legend-dot legend-dot-planned"></i>À construire</span><span><i class="legend-dot legend-dot-inactive"></i>Inactif dans la capture</span></div>';
     return '<section class="accounting-menu-page payroll-menu-page" aria-label="Menu ' + esc(activeMenu) + '"><div class="accounting-menu-heading"><div><p class="page-kicker">PAIE &amp; RH · ' + esc(dossier.reference || '') + '</p><h2>' + esc(activeMenu) + '</h2></div></div><div class="accounting-menu-layout"><nav class="accounting-subtabs" role="tablist" aria-orientation="vertical" aria-label="Sous-menus ' + esc(activeMenu) + '">' + (tabs || '<p class="small muted payroll-menu-empty">Aucun élément de menu n’a été fourni.</p>') + '</nav><div class="accounting-menu-detail">' + (selectedItem && selectedItem.id === 'employees' ? '' : legend) + panel + '</div></div></section>';
   }
@@ -21085,7 +21189,7 @@
       ? '<section class="exchange-card payroll-accounting-link-card"><p class="page-kicker">ASSOCIATION COMPTABLE FACULTATIVE</p><h3>Destination éventuelle des centralisations</h3><p>Ce choix explicite est indépendant du code client et de l’exercice. Sans association, aucune centralisation vers la Comptabilité n’est proposée.</p><form id="payroll-accounting-link-form" class="payroll-accounting-link-form"><div class="field"><label for="payroll-accounting-dossier-link">Dossier comptable associé</label><select id="payroll-accounting-dossier-link"><option value="">Aucun lien comptable</option>' + accountingFolders.map(function (accounting) { return '<option value="' + esc(accounting.id) + '"' + (accounting.id === dossier.accountingDossierId ? ' selected' : '') + '>' + esc(accounting.clientName + ' · ' + accounting.reference) + '</option>'; }).join('') + '</select></div><button type="submit" class="btn btn-secondary">Enregistrer l’association</button></form></section>'
       : '<div class="alert info"><div>' + (linkedAccountingDossier ? 'Association comptable explicite : ' + esc(linkedAccountingDossier.reference) + '.' : (storedAccountingAssociation ? 'Une association comptable existe, mais votre profil ne peut pas consulter ce dossier.' : 'Aucune association à un dossier comptable. Les lots restent en Paie & RH.')) + '</div></div>';
     return '<div class="payroll-module-workspace">' +
-      viewPayrollMainMenu(dossier, dossierEmployees, canCreatePayrollEmployee) + '<details class="payroll-legacy-views"><summary>Fonctionnalités déjà développées — à reclasser dans les menus</summary>' +
+      viewPayrollMainMenu(dossier, dossierEmployees, canCreatePayrollEmployee, canEditPayrollRecords) + '<details class="payroll-legacy-views"><summary>Fonctionnalités déjà développées — à reclasser dans les menus</summary>' +
       '<div class="alert warning"><div><strong>Prototype local — données synthétiques uniquement.</strong><br>Le stockage navigateur n’est pas adapté à des données réelles. Les calculs de paie et fonctions de production restent bloqués tant que les sources, règles et protections ne sont pas validées.</div></div>' +
       accountingLinkPanel + viewPayrollOrganizationUnits(dossier, organizationUnits, canCreatePayrollEmployee, canEditPayrollRecords) + viewPayrollAssignmentsMissions(dossier, dossierEmployees, organizationUnits, organizationAssignments, internalMissions, canCreatePayrollEmployee) + viewPayrollHRTracking(dossier, hrTrackingRecords, canCreatePayrollEmployee) + viewPayrollLeaveAbsences(dossier, dossierEmployees, leaveAbsenceRecords, canCreatePayrollEmployee) + viewPayrollComponentsAndReferences(dossier, dossierEmployees, payrollComponents, payrollVariableReferences, canCreatePayrollEmployee) + viewPayrollCountryRulePacks(dossier, countryRulePacks, countryRuleCandidates, canCreatePayrollEmployee) + viewPayrollBatchPreparations(dossier, countryRulePacks, payrollBatchPreparations, canCreatePayrollEmployee) +
       '<section class="exchange-card"><p class="page-kicker">CYCLE DE PAIE</p><h3>Lots du dossier</h3>' +
@@ -33905,6 +34009,67 @@
         ui.payrollEmployeeId = trigger.getAttribute('data-employee-id') || '';
         render();
         break;
+      case 'payroll-employee-status-select':
+        ui.payrollEmployeeStatusId = trigger.getAttribute('data-status-id') || '';
+        ui.payrollEmployeeStatusMode = 'view';
+        ui.payrollEmployeeStatusDraft = null;
+        render();
+        break;
+      case 'new-payroll-employee-status':
+        ui.payrollEmployeeStatusId = '';
+        ui.payrollEmployeeStatusMode = 'create';
+        ui.payrollEmployeeStatusDraft = { code: '', label: '', ohadaClassification: '', monthlyWorkDays: '', monthlyWorkHours: '', leaveDaysPerMonth: '', leaveDayType: '', rubricIds: [] };
+        render();
+        break;
+      case 'duplicate-payroll-employee-status': {
+        var duplicateStatus = PayrollHR.employeeStatuses((PayrollHR.currentDossier() || {}).id).find(function (item) { return item.id === trigger.getAttribute('data-status-id'); });
+        if (!duplicateStatus) { toast('Le statut à dupliquer est introuvable.', 'warning'); break; }
+        ui.payrollEmployeeStatusMode = 'create';
+        ui.payrollEmployeeStatusDraft = Object.assign({}, duplicateStatus, { code: '', label: '', rubricIds: (duplicateStatus.rubricIds || []).slice() });
+        render();
+        break;
+      }
+      case 'edit-payroll-employee-status':
+        ui.payrollEmployeeStatusId = trigger.getAttribute('data-status-id') || ui.payrollEmployeeStatusId;
+        ui.payrollEmployeeStatusMode = 'edit';
+        ui.payrollEmployeeStatusDraft = null;
+        render();
+        break;
+      case 'cancel-payroll-employee-status-edit':
+        ui.payrollEmployeeStatusMode = 'view';
+        ui.payrollEmployeeStatusDraft = null;
+        render();
+        break;
+      case 'seed-payroll-employee-statuses': {
+        var statusDossier = PayrollHR.currentDossier();
+        var seededStatuses = PayrollHR.seedDemoEmployeeStatuses(statusDossier && statusDossier.id);
+        if (!seededStatuses.ok) { toast(seededStatuses.errors[0] || 'Chargement des statuts impossible.', 'warning'); break; }
+        ui.payrollEmployeeStatusId = seededStatuses.statuses[0] && seededStatuses.statuses[0].id || '';
+        ui.payrollEmployeeStatusMode = 'view';
+        toast('Les quatre statuts de la capture sont chargés dans PRH-TEST-2026.', 'success'); render();
+        break;
+      }
+      case 'open-payroll-employee-rubrics': {
+        var rubricDialog = $('#payroll-status-rubrics-dialog');
+        if (rubricDialog && typeof rubricDialog.showModal === 'function') rubricDialog.showModal();
+        break;
+      }
+      case 'close-payroll-status-rubrics': {
+        var statusRubricsDialog = trigger.closest('dialog');
+        if (statusRubricsDialog && statusRubricsDialog.open) statusRubricsDialog.close();
+        break;
+      }
+      case 'delete-payroll-employee-status': {
+        var deleteStatusDossier = PayrollHR.currentDossier();
+        if (!deleteStatusDossier || !PayrollHR.isDemoTestDossier(deleteStatusDossier.id)) { toast('Suppression réservée au dossier PRH-TEST-2026.', 'warning'); break; }
+        if (typeof window.confirm === 'function' && !window.confirm('Supprimer ce statut fictif ?')) break;
+        var deletedStatus = PayrollHR.deleteEmployeeStatus(deleteStatusDossier.id, trigger.getAttribute('data-status-id'));
+        if (!deletedStatus.ok) { toast(deletedStatus.errors[0] || 'Suppression impossible.', 'warning'); break; }
+        ui.payrollEmployeeStatusId = '';
+        ui.payrollEmployeeStatusMode = 'view';
+        toast('Statut fictif supprimé.', 'success'); render();
+        break;
+      }
       case 'open-payroll-employee-info':
         if ($('#payroll-employee-info-dialog') && typeof $('#payroll-employee-info-dialog').showModal === 'function') $('#payroll-employee-info-dialog').showModal();
         break;

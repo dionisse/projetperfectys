@@ -98,11 +98,17 @@
     if (input.testOnly !== true) return { ok: false, errors: ['Cette version locale accepte uniquement des fiches synthétiques de test.'] };
     var employeeNumber = String(input.employeeNumber || '').trim();
     var displayName = String(input.displayName || '').trim().replace(/\s+/g, ' ');
+    var requestedEmployeeStatus = String(input.employeeStatus || '').trim();
+    var availableEmployeeStatuses = Array.isArray(dossier.employeeStatuses) ? dossier.employeeStatuses : [];
+    var matchingEmployeeStatus = availableEmployeeStatuses.find(function (item) {
+      return item && (item.id === requestedEmployeeStatus || String(item.code || '').toLocaleLowerCase() === requestedEmployeeStatus.toLocaleLowerCase() || String(item.label || '').toLocaleLowerCase() === requestedEmployeeStatus.toLocaleLowerCase());
+    });
     var errors = [];
     if (!employeeNumber) errors.push('Le numéro employé interne est obligatoire.');
     if (employeeNumber.length > 40) errors.push('Le numéro employé ne peut pas dépasser 40 caractères.');
     if (!displayName) errors.push('Le nom d’affichage est obligatoire pour cette fiche de test.');
     if (displayName.length > 120) errors.push('Le nom d’affichage ne peut pas dépasser 120 caractères.');
+    if (availableEmployeeStatuses.length && requestedEmployeeStatus && !matchingEmployeeStatus) errors.push('Choisissez un statut existant dans le dossier de test.');
     var current = Array.isArray(dossier.demoEmployees) ? dossier.demoEmployees : [];
     if (employeeNumber && current.some(function (employee) {
       return String(employee && (employee.employeeNumber || employee.id) || '').trim().toLocaleLowerCase() === employeeNumber.toLocaleLowerCase();
@@ -117,6 +123,7 @@
       dossierId: dossierId,
       employeeNumber: employeeNumber,
       displayName: displayName,
+      employeeStatus: matchingEmployeeStatus ? matchingEmployeeStatus.id : requestedEmployeeStatus,
       status: 'test-only',
       createdAt: new Date().toISOString()
     };
@@ -178,6 +185,15 @@
     if (Object.prototype.hasOwnProperty.call(input, 'displayName')) {
       patch.displayName = String(input.displayName || '').trim().replace(/\s+/g, ' ');
       if (!patch.displayName) errors.push('Le nom d’affichage fictif est obligatoire.');
+    }
+    if (Object.prototype.hasOwnProperty.call(input, 'employeeStatus')) {
+      var requestedStatus = String(input.employeeStatus || '').trim();
+      var availableStatuses = Array.isArray(dossier.employeeStatuses) ? dossier.employeeStatuses : [];
+      var matchingStatus = availableStatuses.find(function (item) {
+        return item && (item.id === requestedStatus || String(item.code || '').toLocaleLowerCase() === requestedStatus.toLocaleLowerCase() || String(item.label || '').toLocaleLowerCase() === requestedStatus.toLocaleLowerCase());
+      });
+      if (availableStatuses.length && requestedStatus && !matchingStatus) errors.push('Choisissez un statut existant dans le dossier de test.');
+      else patch.employeeStatus = matchingStatus ? matchingStatus.id : requestedStatus;
     }
     if (Object.prototype.hasOwnProperty.call(input, 'photoDataUrl')) {
       var photoDataUrl = String(input.photoDataUrl || '');
@@ -382,6 +398,181 @@
       dossier.demoEmployees.length >= 2 && dossier.demoEmployees.every(function (employee) {
         return employee && employee.dossierId === dossier.id && employee.status === 'test-only' && /^EMP-TEST-/.test(employee.id || '');
       }));
+  }
+
+  var EMPLOYEE_RUBRIC_CATALOG = [];
+  function addEmployeeRubric(id, label, selectedByReference, level, heading) {
+    EMPLOYEE_RUBRIC_CATALOG.push({ id: id, label: label, selectedByReference: selectedByReference === true, level: level || 0, heading: heading === true });
+  }
+  addEmployeeRubric('leave-days-total', 'JOURS DE CONGÉS', true, 0, true);
+  addEmployeeRubric('leave-carry-forward', 'Report', true, 1);
+  addEmployeeRubric('leave-accrued-month', 'Acquis ce mois', true, 1);
+  addEmployeeRubric('leave-extra-days', 'Jours supplémentaires accordés', true, 1);
+  addEmployeeRubric('leave-taken-month', 'Pris ce mois', true, 1);
+  addEmployeeRubric('worked-days-total', 'JOURS TRAVAILLÉS', true, 0, true);
+  addEmployeeRubric('worked-days-statutory', 'Base statutaire', true, 1);
+  addEmployeeRubric('worked-days-unpaid-absence', 'Jours d’absence non payés', true, 1);
+  addEmployeeRubric('worked-days-paid', 'Jours payés', true, 1);
+  addEmployeeRubric('worked-hours-total', 'HEURES TRAVAILLÉES', false, 0, true);
+  addEmployeeRubric('worked-hours-statutory', 'Base statutaire', false, 1);
+  addEmployeeRubric('worked-hours-unpaid-absence', 'Heures d’absence non payées', false, 1);
+  addEmployeeRubric('worked-hours-paid', 'Heures payées', false, 1);
+  addEmployeeRubric('base-category', 'Base catégorielle', true);
+  addEmployeeRubric('base-convention', 'Base conventionnelle', false);
+  addEmployeeRubric('shift-premium', 'Prime de poste', true);
+  addEmployeeRubric('seniority-premium', 'Prime d’ancienneté', false);
+  addEmployeeRubric('base-elements-total', 'TOTAL DES ÉLÉMENTS DE BASE', true, 0, true);
+  addEmployeeRubric('coefficient-worked-days', 'Coefficient/Jours travaillés', true);
+  addEmployeeRubric('salary-base-total', 'SALAIRE DE BASE', true, 0, true);
+  addEmployeeRubric('travel-allowance', 'Indemnité de déplacement', true);
+  addEmployeeRubric('housing-allowance', 'Indemnité de logement', true);
+  for (var fixedAllowance = 3; fixedAllowance <= 9; fixedAllowance++) addEmployeeRubric('fixed-allowance-' + fixedAllowance, 'Indemnité fixe ' + fixedAllowance, false);
+  addEmployeeRubric('fixed-premiums-total', 'TOTAL PRIMES FIXES', true, 0, true);
+  for (var exceptionalPremium = 1; exceptionalPremium <= 19; exceptionalPremium++) addEmployeeRubric('exceptional-premium-' + exceptionalPremium, 'Prime exceptionnelle ' + exceptionalPremium, exceptionalPremium <= 2);
+  addEmployeeRubric('exceptional-premiums-total', 'TOTAL PRIMES EXCEPTIONNELLES', true, 0, true);
+  [12, 35, 50, 100].forEach(function (rate) {
+    addEmployeeRubric('overtime-base-' + rate, 'Base H.S. à ' + rate + '%', true);
+    addEmployeeRubric('overtime-count-' + rate, "Nombre d’H.S. à " + rate + '%', true);
+    addEmployeeRubric('overtime-hours-' + rate, 'Heures supplémentaires à ' + rate + '%', true);
+  });
+  addEmployeeRubric('overtime-total', 'TOTAL H.S.', true, 0, true);
+  addEmployeeRubric('leave-pay-base', 'Base congé', true);
+  addEmployeeRubric('leave-pay-coefficient', 'Coefficient/Jours de congé', true);
+  addEmployeeRubric('leave-pay-indemnity', 'Indemnité de congé', true);
+  addEmployeeRubric('gross-salary', 'SALAIRE BRUT', true, 0, true);
+  addEmployeeRubric('fnr-base', 'Base F.N.R.', false);
+  addEmployeeRubric('fnr-contribution', 'Cotisation F.N.R.', false);
+  addEmployeeRubric('cnss-base', 'Base C.N.S.S.', true);
+  addEmployeeRubric('cnss-contributions', 'Cotisations C.N.S.S.', true);
+  addEmployeeRubric('supp-insurance-base', 'Base de l’assurance complémentaire', true);
+  addEmployeeRubric('supp-insurance-rate', 'Taux d’assurance complémentaire', true);
+  addEmployeeRubric('supp-insurance', 'Assurance complémentaire', true);
+  addEmployeeRubric('social-contributions-total', 'TOTAL COTISATIONS SOCIALES', true, 0, true);
+  addEmployeeRubric('benefit-housing', 'Logement', true);
+  addEmployeeRubric('benefit-vehicle', 'Véhicule', true);
+  addEmployeeRubric('benefits-kind-total', 'TOTAL AVANTAGES EN NATURE', true, 0, true);
+  addEmployeeRubric('ipts-base', 'Base I.P.T.S.', true);
+  addEmployeeRubric('ipts', 'I.P.T.S.', true);
+  addEmployeeRubric('taxes-total', 'TOTAL IMPÔTS', true, 0, true);
+  addEmployeeRubric('union-contribution', 'Cotisation syndicale', true);
+  addEmployeeRubric('mutual-contribution', 'Cotisation mutuelle', true);
+  addEmployeeRubric('other-mandatory-deductions-total', 'TOTAL AUTRES RETENUES OBLIGATOIRES', true, 0, true);
+  addEmployeeRubric('net-salary', 'SALAIRE NET', true, 0, true);
+  addEmployeeRubric('advance-1', 'AVANCE SUR SALAIRE', true, 0, true);
+  for (var advanceNumber = 1; advanceNumber <= 9; advanceNumber++) {
+    var advanceSelected = advanceNumber <= 2;
+    if (advanceNumber > 1) addEmployeeRubric('advance-' + advanceNumber, 'AVANCE ' + advanceNumber, advanceSelected, 0, true);
+    addEmployeeRubric('advance-' + advanceNumber + '-carry-forward', 'Report', advanceSelected, 1);
+    addEmployeeRubric('advance-' + advanceNumber + '-increase-month', 'Augmentation ce mois', advanceSelected, 1);
+    addEmployeeRubric('advance-' + advanceNumber + '-withheld-month', 'Retenue ce mois', advanceSelected, 1);
+  }
+  addEmployeeRubric('advances-loans-total', 'TOTAL AVANCES ET PRÊTS', true, 0, true);
+  addEmployeeRubric('professional-expense-reimbursement-1', 'Remboursement frais professionnels 1', true);
+  addEmployeeRubric('professional-expense-reimbursement-2', 'Remboursement frais professionnels 2', true);
+  addEmployeeRubric('professional-expenses-total', 'TOTAL REMBOURSEMENT DE FRAIS', true, 0, true);
+  addEmployeeRubric('amount-payable', 'MONTANT À PAYER', true, 0, true);
+
+  function employeeRubricCatalog() { return clone(EMPLOYEE_RUBRIC_CATALOG); }
+
+  function employeeStatuses(dossierId) {
+    if (!isDemoTestDossier(dossierId)) return [];
+    var dossier = loadDossierCatalog().dossiers.find(function (item) { return item.id === String(dossierId); });
+    return clone(dossier && Array.isArray(dossier.employeeStatuses) ? dossier.employeeStatuses : []);
+  }
+
+  function seedDemoEmployeeStatuses(dossierId) {
+    dossierId = String(dossierId || '');
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['Les statuts issus de la capture sont réservés au dossier PRH-TEST-2026.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    if (Array.isArray(dossier.employeeStatuses) && dossier.employeeStatuses.length) return { ok: false, errors: ['Des statuts existent déjà dans ce dossier ; aucun doublon n’a été ajouté.'] };
+    var now = new Date().toISOString();
+    var defaults = [
+      { code: 'A', label: 'Agent de l’État', ohadaClassification: 'Permanent', monthlyWorkDays: '21.66', monthlyWorkHours: '173.33', leaveDaysPerMonth: '2.00', leaveDayType: 'ouvrables', rubricIds: EMPLOYEE_RUBRIC_CATALOG.filter(function (item) { return item.selectedByReference; }).map(function (item) { return item.id; }) },
+      { code: 'C', label: 'Contractuel', ohadaClassification: '', monthlyWorkDays: '', monthlyWorkHours: '', leaveDaysPerMonth: '', leaveDayType: '', rubricIds: [] },
+      { code: 'O', label: 'Occasionnel', ohadaClassification: '', monthlyWorkDays: '', monthlyWorkHours: '', leaveDaysPerMonth: '', leaveDayType: '', rubricIds: [] },
+      { code: 'S', label: 'Stagiaire', ohadaClassification: '', monthlyWorkDays: '', monthlyWorkHours: '', leaveDaysPerMonth: '', leaveDayType: '', rubricIds: [] }
+    ];
+    dossier.employeeStatuses = defaults.map(function (item, index) {
+      return Object.assign({ id: 'status-test-' + item.code.toLowerCase(), dossierId: dossierId, status: 'test-only', createdAt: now, updatedAt: now, order: index }, item);
+    });
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer les statuts fictifs dans le stockage local.'] };
+    return { ok: true, errors: [], statuses: employeeStatuses(dossierId) };
+  }
+
+  function normalizeEmployeeStatusInput(input) {
+    input = input || {};
+    var code = String(input.code || '').trim();
+    var label = String(input.label || '').trim().replace(/\s+/g, ' ');
+    var ohadaClassification = String(input.ohadaClassification || '').trim().replace(/\s+/g, ' ');
+    var monthlyWorkDays = String(input.monthlyWorkDays || '').trim();
+    var monthlyWorkHours = String(input.monthlyWorkHours || '').trim();
+    var leaveDaysPerMonth = String(input.leaveDaysPerMonth || '').trim();
+    var leaveDayType = String(input.leaveDayType || '').trim();
+    var rubricIds = Array.isArray(input.rubricIds) ? Array.from(new Set(input.rubricIds.map(String))) : [];
+    var errors = [];
+    if (!code) errors.push('Le code du statut est obligatoire.');
+    if (code.length > 24) errors.push('Le code est limité à 24 caractères.');
+    if (!label) errors.push('L’intitulé du statut est obligatoire.');
+    if (label.length > 120 || ohadaClassification.length > 80) errors.push('Un texte dépasse la longueur autorisée.');
+    [monthlyWorkDays, monthlyWorkHours, leaveDaysPerMonth].forEach(function (value) {
+      if (value && (!/^\d+(?:[.,]\d+)?$/.test(value) || !Number.isFinite(Number(value.replace(',', '.'))))) errors.push('Les bases et jours acquis doivent être des nombres positifs ou vides.');
+    });
+    if (leaveDayType && ['ouvrables', 'calendaires'].indexOf(leaveDayType) === -1) errors.push('Choisissez Ouvrables ou Calendaires.');
+    var validRubricIds = Object.create(null);
+    EMPLOYEE_RUBRIC_CATALOG.forEach(function (item) { validRubricIds[item.id] = true; });
+    if (rubricIds.some(function (id) { return !validRubricIds[id]; })) errors.push('La sélection contient une rubrique inconnue.');
+    return { ok: errors.length === 0, errors: errors, value: { code: code, label: label, ohadaClassification: ohadaClassification,
+      monthlyWorkDays: monthlyWorkDays, monthlyWorkHours: monthlyWorkHours, leaveDaysPerMonth: leaveDaysPerMonth,
+      leaveDayType: leaveDayType, rubricIds: rubricIds } };
+  }
+
+  function createEmployeeStatus(dossierId, input) {
+    dossierId = String(dossierId || '');
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La création est réservée au dossier fictif PRH-TEST-2026.'] };
+    if (!input || input.testOnly !== true) return { ok: false, errors: ['Confirmez qu’il s’agit d’un statut de test.'] };
+    var validation = normalizeEmployeeStatusInput(input);
+    if (!validation.ok) return { ok: false, errors: validation.errors };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    dossier.employeeStatuses = Array.isArray(dossier.employeeStatuses) ? dossier.employeeStatuses : [];
+    if (dossier.employeeStatuses.some(function (item) { return String(item.code).toLocaleLowerCase() === validation.value.code.toLocaleLowerCase(); })) return { ok: false, errors: ['Ce code existe déjà dans le dossier test.'] };
+    var record = Object.assign({ id: 'status-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), dossierId: dossierId, status: 'test-only', createdAt: new Date().toISOString() }, validation.value);
+    dossier.employeeStatuses.push(record);
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer le statut de test.'] };
+    return { ok: true, errors: [], employeeStatus: clone(record) };
+  }
+
+  function updateEmployeeStatus(dossierId, statusId, input) {
+    dossierId = String(dossierId || ''); statusId = String(statusId || ''); input = input || {};
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La modification est réservée au dossier fictif PRH-TEST-2026.'] };
+    if (input.testOnly !== true) return { ok: false, errors: ['Confirmez qu’il s’agit de valeurs de test.'] };
+    var validation = normalizeEmployeeStatusInput(input);
+    if (!validation.ok) return { ok: false, errors: validation.errors };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var records = Array.isArray(dossier.employeeStatuses) ? dossier.employeeStatuses : [];
+    var record = records.find(function (item) { return item && item.id === statusId && item.dossierId === dossierId; });
+    if (!record) return { ok: false, errors: ['Le statut de test est introuvable.'] };
+    if (records.some(function (item) { return item && item.id !== statusId && String(item.code).toLocaleLowerCase() === validation.value.code.toLocaleLowerCase(); })) return { ok: false, errors: ['Ce code existe déjà dans le dossier test.'] };
+    Object.keys(validation.value).forEach(function (key) { record[key] = validation.value[key]; });
+    record.updatedAt = new Date().toISOString();
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer les modifications du statut.'] };
+    return { ok: true, errors: [], employeeStatus: clone(record) };
+  }
+
+  function deleteEmployeeStatus(dossierId, statusId) {
+    dossierId = String(dossierId || ''); statusId = String(statusId || '');
+    if (!isDemoTestDossier(dossierId)) return { ok: false, errors: ['La suppression est réservée au dossier fictif PRH-TEST-2026.'] };
+    var catalog = loadDossierCatalog();
+    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
+    var statuses = dossier && Array.isArray(dossier.employeeStatuses) ? dossier.employeeStatuses : [];
+    var statusRecord = statuses.find(function (item) { return item && item.id === statusId && item.dossierId === dossierId; });
+    if (!statusRecord) return { ok: false, errors: ['Le statut de test est introuvable.'] };
+    if ((dossier.demoEmployees || []).some(function (employee) { return employee && employee.employeeStatus === statusId; })) return { ok: false, errors: ['Ce statut est attribué à une fiche employé et ne peut pas être supprimé.'] };
+    dossier.employeeStatuses = statuses.filter(function (item) { return item && item.id !== statusId; });
+    if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible de supprimer le statut de test.'] };
+    return { ok: true, errors: [], deletedStatusId: statusId };
   }
 
   function demoOrganizationSeeded(dossierId) {
@@ -1286,6 +1477,12 @@
     createEmployee: createEmployee,
     updateEmployee: updateEmployee,
     deleteEmployee: deleteEmployee,
+    employeeStatuses: employeeStatuses,
+    employeeRubricCatalog: employeeRubricCatalog,
+    seedDemoEmployeeStatuses: seedDemoEmployeeStatuses,
+    createEmployeeStatus: createEmployeeStatus,
+    updateEmployeeStatus: updateEmployeeStatus,
+    deleteEmployeeStatus: deleteEmployeeStatus,
     organizationUnits: organizationUnits,
     createOrganizationUnit: createOrganizationUnit,
     updateOrganizationUnit: updateOrganizationUnit,
