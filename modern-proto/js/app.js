@@ -20515,6 +20515,13 @@
   }
 
   function bindPayrollModuleView() {
+    var attendanceWorkspace = $('#payroll-attendance-workspace');
+    if (attendanceWorkspace && window.PayrollAttendance && window.PayrollPayslipWorkspace) {
+      var attendanceDossier = PayrollHR.currentDossier();
+      if (attendanceDossier) window.PayrollAttendance.mount(attendanceWorkspace, { hr: PayrollHR, dossier: attendanceDossier, tools: window.PayrollPayslipWorkspace,
+        canEdit: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'record.edit', payrollAccessContext(attendanceDossier)); },
+        onClose: function () { ui.payrollMainMenu = 'Fichier'; ui.payrollMenuItem = ''; render(); } });
+    }
     var supplementaryWorkspace = $('#payroll-supplementary-workspace');
     if (supplementaryWorkspace && window.PayrollSupplementaryPayslips && window.PayrollPayslipWorkspace) {
       var supplementaryDossier = PayrollHR.currentDossier();
@@ -22040,13 +22047,13 @@
     var selectableItems = items.filter(function (item) { return !item.disabled; });
     var selectedItem = selectableItems.find(function (item) { return item.id === ui.payrollMenuItem; }) || selectableItems[0] || null;
     var availableDefinitionItems = ['employee-statuses', 'employee-categories', 'geographic-zones', 'services', 'functions', 'degrees-qualifications', 'professions', 'social-security-funds', 'complementary-social-funds', 'banks'];
-    var implementedMenuItems = availableDefinitionItems.concat(['employees', 'payslips', 'post-hire-payslips']);
+    var implementedMenuItems = availableDefinitionItems.concat(['employees', 'payslips', 'post-hire-payslips', 'attendance-hours']);
     var hasPlannedItems = items.some(function (item) { return !item.disabled && !item.hasChildren && implementedMenuItems.indexOf(item.id) === -1; });
     var tabs = sections.map(function (section, sectionIndex) {
       var heading = section.heading ? '<p class="payroll-subtab-group-heading">' + esc(section.heading) + '</p>' : '';
       var rows = (section.items || []).map(function (item) {
         var selected = selectedItem && item.id === selectedItem.id;
-        var state = item.disabled ? 'Inactif' : (item.hasChildren ? 'Sous-menu' : (implementedMenuItems.indexOf(item.id) !== -1 ? (item.id === 'employees' ? 'Disponible' : (item.id === 'payslips' || item.id === 'post-hire-payslips' ? 'Brouillon test' : 'Référentiel test')) : 'À construire'));
+        var state = item.disabled ? 'Inactif' : (item.hasChildren ? 'Sous-menu' : (implementedMenuItems.indexOf(item.id) !== -1 ? (item.id === 'employees' ? 'Disponible' : (item.id === 'payslips' || item.id === 'post-hire-payslips' || item.id === 'attendance-hours' ? 'Brouillon test' : 'Référentiel test')) : 'À construire'));
         var disclosure = item.hasChildren ? '<span class="payroll-subtab-chevron" aria-hidden="true">›</span>' : '';
         return '<button type="button" id="payroll-menu-tab-' + esc(item.id) + '" class="accounting-subtab' + (selected ? ' is-active' : '') + (item.disabled ? ' is-disabled' : '') + '" role="tab" aria-controls="payroll-menu-tabpanel" aria-selected="' + (selected ? 'true' : 'false') + '"' + (item.disabled ? ' disabled aria-disabled="true"' : (selected ? ' aria-current="page"' : '')) + ' data-action="payroll-menu-item" data-menu-name="' + esc(activeMenu) + '" data-menu-item="' + esc(item.id) + '"><span class="accounting-subtab-label">' + esc(item.label) + '</span>' + disclosure + '<small class="accounting-subtab-state">' + state + '</small></button>';
       }).join('');
@@ -22063,6 +22070,7 @@
     if (selectedItem && selectedItem.id === 'employees') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-employees">' + viewPayrollEmployeeDetails(dossier, dossierEmployees || [], canCreatePayrollEmployee === true) + '</div>';
     else if (selectedItem && selectedItem.id === 'payslips') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-payslips"><div id="payroll-payslip-workspace"></div></div>';
     else if (selectedItem && selectedItem.id === 'post-hire-payslips') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-post-hire-payslips"><div id="payroll-supplementary-workspace"></div></div>';
+    else if (selectedItem && selectedItem.id === 'attendance-hours') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-attendance-hours"><div id="payroll-attendance-workspace"></div></div>';
     else if (selectedItem && selectedItem.id === 'employee-statuses') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-employee-statuses">' + viewPayrollEmployeeStatuses(dossier, canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>';
     else if (selectedItem && selectedItem.id === 'employee-categories') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-employee-categories">' + viewPayrollEmployeeCategories(dossier, canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>';
     else if (selectedItem && selectedItem.id === 'geographic-zones') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-geographic-zones">' + viewPayrollEmployeeGeographicZones(dossier, canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>';

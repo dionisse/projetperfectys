@@ -275,6 +275,11 @@ assert.equal(PayrollHR.employee(testDossier.dossier.id, addedTestEmployee.employ
 assert.equal(PayrollHR.updateEmployee(testDossier.dossier.id, addedTestEmployee.employee.id, { birthDate: '2026-02-31' }).ok, false, 'les dates de saisie sont contrôlées');
 assert.equal(PayrollHR.updateEmployee(testDossier.dossier.id, addedTestEmployee.employee.id, { photoDataUrl: 'data:image/svg+xml;base64,PHN2Zz4=' }).ok, false, 'les photos sont limitées aux formats raster autorisés');
 assert.equal(PayrollHR.updateEmployee(dossier.id, created.employee.id, { displayName: 'hors dossier test' }).ok, false, 'modification impossible hors PRH-TEST-2026');
+const attendanceStorageKey = 'perfecto.payroll.attendance.v1.' + encodeURIComponent(testDossier.dossier.id);
+localStorage.setItem(attendanceStorageKey, JSON.stringify({version:1, employees:{[addedTestEmployee.employee.id]:{'2026-01-05':{start1:'08:00',end1:'12:00'}}}}));
+assert.equal(PayrollHR.deleteEmployee(testDossier.dossier.id, addedTestEmployee.employee.id).ok, false, 'les pointages protègent la fiche contre une suppression orpheline');
+assert.ok(PayrollHR.employee(testDossier.dossier.id, addedTestEmployee.employee.id));
+localStorage.removeItem(attendanceStorageKey);
 assert.equal(PayrollHR.deleteEmployee(testDossier.dossier.id, addedTestEmployee.employee.id).ok, true);
 assert.equal(PayrollHR.employee(testDossier.dossier.id, addedTestEmployee.employee.id), null);
 assert.equal(PayrollHR.isDemoTestDossier(testDossier.dossier.id), true, 'le dossier test reste valide après suppression d’une fiche non liée');

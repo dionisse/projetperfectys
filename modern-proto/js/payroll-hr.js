@@ -420,6 +420,17 @@
     if (linkedCollections.some(function (name) {
       return Array.isArray(dossier[name]) && dossier[name].some(function (record) { return record && record.employeeId === employeeId; });
     })) return { ok: false, errors: ['Cette fiche est référencée par un autre élément de test ; supprimez d’abord la référence associée.'] };
+    // Les présences sont stockées séparément pour partager les jours entre les mois.
+    // Ne pas supprimer une fiche dont les pointages deviendraient orphelins.
+    try {
+      var attendanceRaw = root.localStorage && root.localStorage.getItem('perfecto.payroll.attendance.v1.' + encodeURIComponent(dossierId));
+      if (attendanceRaw) {
+        var attendance = JSON.parse(attendanceRaw);
+        if (!attendance || attendance.version !== 1 || !attendance.employees || typeof attendance.employees !== 'object' || Array.isArray(attendance.employees)) return { ok: false, errors: ['Les présences sont illisibles ; la suppression est bloquée pour protéger les données.'] };
+        var employeeAttendance = attendance.employees[employeeId];
+        if (employeeAttendance && Object.keys(employeeAttendance).length) return { ok: false, errors: ['Cette fiche possède des heures de présence ; effacez ses horaires de test avant de la supprimer.'] };
+      }
+    } catch (err) { return { ok: false, errors: ['Les présences sont illisibles ; la suppression est bloquée pour protéger les données.'] }; }
     dossier.demoEmployees = employees.filter(function (item) { return item && item.id !== employeeId; });
     if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible de supprimer la fiche du stockage local de test.'] };
     return { ok: true, errors: [], deletedEmployeeId: employeeId };

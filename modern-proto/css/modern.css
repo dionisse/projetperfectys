@@ -4665,3 +4665,28 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .payroll-supp-detail label.payroll-slip-checkbox { display:flex; align-items:center; gap:7px; margin:10px 0; }
 @media(max-width:1100px) { .payroll-supp-layout { grid-template-columns:repeat(2,minmax(0,1fr)); } .payroll-supp-detail { grid-column:1 / -1; } }
 @media(max-width:600px) { .payroll-supp-layout, .payroll-supp-fields { grid-template-columns:1fr; } .payroll-supp-detail { grid-column:auto; } }
+
+/* Heures de présence : grille hebdomadaire et saisie des créneaux. */
+.attendance-layout { display:grid; grid-template-columns:minmax(235px,.7fr) minmax(0,1.7fr); gap:16px; margin-top:16px; }
+.attendance-layout > * { min-width:0; }
+.attendance-filters { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.attendance-workspace label { display:grid; gap:4px; color:#43534a; font-size:.78rem; }
+.attendance-workspace input:not([type="checkbox"]), .attendance-workspace select { box-sizing:border-box; width:100%; min-width:0; padding:7px; border:1px solid #cbd7d2; border-radius:6px; background:#fff; }
+.attendance-workspace label.attendance-checkbox { display:flex; align-items:center; gap:7px; grid-column:1 / -1; }
+.attendance-workspace table { width:100%; border-collapse:collapse; font-size:.76rem; }
+.attendance-workspace th,.attendance-workspace td { text-align:left; padding:6px; border-bottom:1px solid #e6ece7; }
+.attendance-workspace thead { background:#f2f6f3; }
+.attendance-layout td > button[data-att-employee] { width:100%; border:0; background:transparent; display:grid; grid-template-columns:minmax(60px,.5fr) 1fr; gap:8px; text-align:left; padding:6px; cursor:pointer; }
+.attendance-layout td > button[aria-current="true"] { background:#e4f2e8; font-weight:700; }
+.attendance-top { display:flex; align-items:end; gap:15px; flex-wrap:wrap; }
+.attendance-table { max-height:620px; }
+.attendance-table table { min-width:770px; }
+.attendance-table th:first-child { min-width:190px; }
+.attendance-table td:not(:last-child) { min-width:100px; }
+.attendance-table small { display:block; font-size:.66rem; font-weight:400; color:#647269; }
+.attendance-workspace label.attendance-next { display:flex; align-items:center; gap:4px; margin-top:4px; font-size:.65rem; }
+.attendance-week-total th,.attendance-week-total td { background:#e8eee9; font-weight:700; }
+.attendance-outside { background:#f5f5f5; color:#858d87; }
+.attendance-leave-note { color:#9a650e !important; }
+@media(max-width:850px){.attendance-layout{grid-template-columns:1fr;}}
+@media(max-width:460px){.attendance-filters{grid-template-columns:1fr;}}

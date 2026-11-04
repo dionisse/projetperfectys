@@ -104,6 +104,7 @@ const APP_SHELL = [
   './js/payroll-hr.js',
   './js/payroll-payslip-workspace.js',
   './js/payroll-supplementary-payslips.js',
+  './js/payroll-attendance.js',
   './js/payroll-centralization.js',
   './js/sales-stock-invoicing.js',
   './js/sales-centralization.js',
