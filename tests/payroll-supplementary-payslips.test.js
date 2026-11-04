@@ -22,6 +22,8 @@ const worker=fs.readFileSync(path.join(root,'modern-proto/service-worker.js'),'u
 assert.match(app,/selectedItem\.id === 'post-hire-payslips'[\s\S]*payroll-supplementary-workspace/);
 assert.match(html,/payroll-supplementary-payslips\.js/);
 assert.match(worker,/payroll-supplementary-payslips\.js/);
+assert.match(source, /var selectionResult=selection\(employee\)/, 'le référentiel complet reste visible avant la sélection');
+assert.match(source, /r\.retained\?'Cochée':'Non cochée'/);
 assert.match(source,/filter\(isRecruitedElsewhere\)/);
 assert.match(source,/validEmployee\(\)/);
 assert.match(source,/options\.canDelete\(\)/);
