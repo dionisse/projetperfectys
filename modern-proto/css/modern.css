@@ -4643,3 +4643,25 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .payroll-slip-rubric-state { display: inline-block; margin-left: 5px; color: #536d5b; font-size: .65rem; font-weight: 600; white-space: nowrap; }
 .payroll-slip-rubrics .is-not-retained .payroll-slip-rubric-state { color: #7b6952; }
 .payroll-slip-rubrics .is-not-retained:not(.payroll-slip-rubric-heading) th { color: #65736a; }
+
+/* Bulletins complémentaires, réservés aux recrutements depuis une autre entreprise. */
+.payroll-supp-layout { display:grid; grid-template-columns:minmax(220px,1fr) minmax(150px,.65fr) minmax(320px,1.2fr); gap:14px; margin-top:16px; align-items:start; }
+.payroll-supp-layout > * { min-width:0; }
+.payroll-supp-layout h4 { margin:0 0 8px; }
+.payroll-supp-layout label, .payroll-supp-detail label { display:grid; gap:4px; font-size:.78rem; color:#43534a; }
+.payroll-supp-layout input:not([type="checkbox"]), .payroll-supp-layout select { box-sizing:border-box; width:100%; min-width:0; padding:7px; border:1px solid #cbd7d2; border-radius:6px; background:#fff; }
+.payroll-supp-layout table { width:100%; border-collapse:collapse; font-size:.78rem; }
+.payroll-supp-layout th, .payroll-supp-layout td { padding:7px; border-bottom:1px solid #e6ece7; text-align:left; }
+.payroll-supp-layout thead { background:#f2f6f3; }
+.payroll-supp-layout td button { border:0; background:transparent; text-align:left; cursor:pointer; padding:5px; }
+.payroll-supp-layout td button[aria-current="true"] { background:#e4f2e8; font-weight:700; }
+.payroll-supp-layout .payroll-slip-actions { margin:0 0 10px; }
+.payroll-supp-rubrics { max-height:570px; }
+.payroll-supp-rubrics th { width:65%; }
+.payroll-supp-rubrics .payroll-slip-rubric-heading th { background:#f2f6f3; }
+.payroll-supp-rubrics th.payroll-slip-rubric-child { padding-left:25px; font-weight:500; }
+.payroll-supp-rubrics .is-not-retained .payroll-slip-rubric-state { color:#7b6952; }
+.payroll-supp-fields { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+.payroll-supp-detail label.payroll-slip-checkbox { display:flex; align-items:center; gap:7px; margin:10px 0; }
+@media(max-width:1100px) { .payroll-supp-layout { grid-template-columns:repeat(2,minmax(0,1fr)); } .payroll-supp-detail { grid-column:1 / -1; } }
+@media(max-width:600px) { .payroll-supp-layout, .payroll-supp-fields { grid-template-columns:1fr; } .payroll-supp-detail { grid-column:auto; } }

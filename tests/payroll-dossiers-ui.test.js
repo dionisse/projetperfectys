@@ -158,7 +158,7 @@ assert.match(app, /additionalClassificationIds/);
 assert.match(payroll, /function createEmployeeCategoryAdditionalClassification\(dossierId, input\)/);
 assert.match(payroll, /function deleteEmployeeCategoryAdditionalClassification\(dossierId, classificationId\)/);
 assert.ok(app.includes('function viewPayrollMainMenu(dossier, dossierEmployees, canCreatePayrollEmployee, canEditPayrollEmployee)'));
-assert.match(app, /var implementedMenuItems = availableDefinitionItems\.concat\(\['employees', 'payslips'\]\)/);
+assert.match(app, /var implementedMenuItems = availableDefinitionItems\.concat\(\['employees', 'payslips', 'post-hire-payslips'\]\)/);
 assert.match(app, /var hasPlannedItems = items\.some\([\s\S]*implementedMenuItems\.indexOf\(item\.id\) === -1/);
 assert.match(app, /var legend = hasPlannedItems \?/);
 assert.match(app, /selectedItem\.id === 'employee-statuses'[\s\S]*viewPayrollEmployeeStatuses/);
