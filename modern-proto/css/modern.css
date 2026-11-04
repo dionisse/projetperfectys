@@ -4541,3 +4541,64 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .payroll-insurance-row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; gap: 9px; align-items: end; margin: 0 0 10px; }
 .payroll-insurance-row .field { min-width: 0; margin: 0; display: grid; gap: 5px; font-size: .76rem; font-weight: 650; }
 @media (max-width: 650px) { .payroll-insurance-row { grid-template-columns: 1fr; } .payroll-insurance-row button { justify-self: start; } }
+
+/* Les libellés des qualifications et des fonctions disposent de toute la largeur. */
+.payroll-employee-field-grid > .payroll-employee-function-field { grid-column: 1 / -1; }
+.payroll-employee-function-checklist { grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr)); }
+.payroll-employee-function-checklist > label { align-items: center; }
+.payroll-employee-function-checklist > label > span { overflow-wrap: break-word; }
+
+/* Aperçu des employés : une fenêtre couvrant le viewport, sans API plein écran du navigateur. */
+.payroll-employee-overview-button { width: 100%; justify-content: center; margin: 0 0 8px; }
+.payroll-employee-overview { position: fixed; inset: 0; box-sizing: border-box; width: 100vw; max-width: none; height: 100vh; height: 100dvh; max-height: none; margin: 0; padding: 0; border: 0; color: #263a32; background: #f5f7f4; }
+.payroll-employee-overview::backdrop { background: rgba(25, 33, 29, .55); }
+.payroll-employee-overview-shell { box-sizing: border-box; min-height: 100%; padding: clamp(18px, 3vw, 42px); }
+.payroll-employee-overview-head { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; }
+.payroll-employee-overview-head h2 { margin: 0; }
+.payroll-employee-overview-head p:not(.page-kicker) { color: #5b6a61; margin: 7px 0 0; }
+.payroll-employee-overview-tools { display: flex; align-items: end; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin: 25px 0 14px; }
+.payroll-employee-overview-tools .field { width: min(100%, 480px); margin: 0; }
+.payroll-employee-overview-tools p { margin: 0; color: #65736a; font-size: .8rem; }
+.payroll-employee-overview-table { border: 1px solid #e2e8e3; border-radius: 9px; background: #fff; }
+.payroll-employee-overview-table table { width: 100%; }
+.payroll-employee-overview-table td { vertical-align: middle; }
+.payroll-employee-overview-table tr[hidden], .payroll-employee-overview-empty[hidden] { display: none; }
+.payroll-employee-overview-empty { padding: 20px; color: #65736a; }
+@media (max-width: 600px) {
+  .payroll-employee-overview-shell { padding: 16px; }
+  .payroll-employee-overview-table table { min-width: 680px; }
+}
+.payroll-employee-list .exchange-table-wrap { max-height: 360px; overflow: auto; }
+.payroll-employee-readonly-summary { display: grid; grid-template-columns: minmax(120px, .5fr) minmax(0, 1fr); gap: 8px 14px; margin: 14px 0; font-size: .8rem; }
+.payroll-employee-readonly-summary dt { color: #627168; font-weight: 700; }
+.payroll-employee-readonly-summary dd { margin: 0; overflow-wrap: anywhere; }
+
+/* Sélection multiple dans une liste repliable, en création comme en modification. */
+.payroll-employee-choice-list { min-width: 0; }
+.payroll-employee-choice-list > summary { box-sizing: border-box; width: 100%; padding: 9px 12px; border: 1px solid #cbd7d2; border-radius: 7px; color: #33473b; background: #fff; cursor: pointer; overflow-wrap: anywhere; }
+.payroll-employee-choice-list > summary:focus-visible { outline: 3px solid #b99048; outline-offset: 2px; }
+.payroll-employee-choice-list[open] > summary { border-color: #9b6b1e; border-radius: 7px 7px 0 0; }
+.payroll-employee-choice-list .payroll-employee-function-checklist { border-top: 0; border-radius: 0 0 7px 7px; }
+
+/* Aperçu descriptif : aucune donnée n’est éditable tant que Modifier n’est pas choisi. */
+.payroll-employee-preview { display: grid; gap: 10px; }
+.payroll-employee-preview-section { min-width: 0; padding: 12px; border: 1px solid #e3e9e4; border-radius: 8px; background: #fcfdfb; }
+.payroll-employee-preview-section h5 { margin: 0 0 10px; color: #43534a; font-size: .8rem; }
+.payroll-employee-preview-section dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 11px 16px; margin: 0; }
+.payroll-employee-preview-section dl > div { min-width: 0; }
+.payroll-employee-preview-section dt { color: #65736a; font-size: .7rem; }
+.payroll-employee-preview-section dd { margin: 3px 0 0; color: #263a32; font-size: .8rem; font-weight: 600; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media print { .payroll-employee-preview-section { break-inside: avoid; } }
+
+/* Diplômes : toute la largeur de la fiche pour lire les intitulés longs. */
+@media (min-width: 981px) {
+  .payroll-employee-layout { grid-template-columns: minmax(190px, 240px) minmax(0, 1fr); }
+}
+.payroll-employee-qualification-field { box-sizing: border-box; width: 100%; }
+.payroll-employee-qualification-field .payroll-employee-choice-list { width: 100%; }
+.payroll-employee-qualification-field .payroll-employee-function-checklist { grid-template-columns: minmax(0, 1fr); }
+.payroll-employee-qualification-field .payroll-employee-function-checklist > label { width: 100%; }
+/* L’aperçu aussi donne toute sa largeur aux diplômes enregistrés. */
+.payroll-employee-preview-section dl > .payroll-employee-preview-wide { grid-column: 1 / -1; }
+.payroll-employee-preview-values { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; margin: 0; padding: 0; list-style: none; }
+.payroll-employee-preview-values li { min-width: 0; overflow-wrap: anywhere; }
