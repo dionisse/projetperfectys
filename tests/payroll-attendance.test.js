@@ -30,3 +30,12 @@ assert.match(src,/isDemoTestDossier\(id\)/);
 assert.match(src,/testOnly\.checked/);
 assert.match(src,/hasDepartedAtPeriod/);
 assert.match(src,/validateRecords\(updated,dossier\.cycleEnd,dossier\.cycleStart\)/);
+// La présentation compacte conserve les libellés et ne réintroduit pas de largeur minimale fixe.
+const css=fs.readFileSync(path.join(root,'modern-proto/css/modern.css'),'utf8');
+assert.match(src,/data-label="Début '\+i\+'"/);
+assert.match(src,/data-label="Fin '\+i\+'"/);
+assert.match(src,/data-label="Durée" data-att-duration/);
+assert.match(css,/\.attendance-detail\s*\{\s*container-type:\s*inline-size/);
+assert.match(css,/@container\s*\(max-width:\s*620px\)/);
+assert.match(css,/\.attendance-table table\s*\{[^}]*table-layout:\s*fixed/);
+assert.doesNotMatch(css,/\.attendance-table table\s*\{[^}]*min-width:\s*770px/);

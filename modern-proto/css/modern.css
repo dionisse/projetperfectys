@@ -4679,10 +4679,36 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .attendance-layout td > button[data-att-employee] { width:100%; border:0; background:transparent; display:grid; grid-template-columns:minmax(60px,.5fr) 1fr; gap:8px; text-align:left; padding:6px; cursor:pointer; }
 .attendance-layout td > button[aria-current="true"] { background:#e4f2e8; font-weight:700; }
 .attendance-top { display:flex; align-items:end; gap:15px; flex-wrap:wrap; }
-.attendance-table { max-height:620px; }
-.attendance-table table { min-width:770px; }
-.attendance-table th:first-child { min-width:190px; }
-.attendance-table td:not(:last-child) { min-width:100px; }
+.attendance-detail { container-type:inline-size; }
+.attendance-top > strong { min-width:0; overflow-wrap:anywhere; }
+.attendance-layout aside .payroll-slip-scroll { overflow-x:hidden; }
+.attendance-layout aside table { table-layout:fixed; }
+.attendance-layout td > button[data-att-employee] { grid-template-columns:minmax(0,.5fr) minmax(0,1fr); }
+.attendance-layout td > button[data-att-employee] span { min-width:0; overflow-wrap:anywhere; }
+.attendance-table { max-height:620px; overflow-x:hidden; overflow-y:auto; }
+.attendance-table table { width:100%; min-width:0; table-layout:fixed; font-size:.72rem; }
+.attendance-table th, .attendance-table td { min-width:0; padding:4px 3px; overflow-wrap:anywhere; }
+.attendance-table th:first-child { width:29%; min-width:0; }
+.attendance-table th:not(:first-child):not(:last-child) { width:14%; }
+.attendance-table th:last-child { width:15%; }
+.attendance-table input[type="time"] { min-width:0; max-width:100%; padding:4px 1px; font-size:.7rem; }
+.attendance-table td::before { display:none; }
+/* Une présentation en fiches garde les horaires lisibles lorsque le panneau est étroit. */
+@container (max-width:620px) {
+  .attendance-table table, .attendance-table tbody { display:block; width:100%; }
+  .attendance-table thead { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
+  .attendance-table tr[data-att-date] { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 8px; padding:6px; border-bottom:1px solid #e6ece7; }
+  .attendance-table tr[data-att-date] > th { grid-column:1 / -1; width:auto; border:0; }
+  .attendance-table tr[data-att-date] > td { min-width:0; border:0; }
+  .attendance-table tr[data-att-date] > td::before { display:block; content:attr(data-label); margin-bottom:2px; color:#647269; font-size:.66rem; font-weight:700; }
+  .attendance-table tr[data-att-date] > td[data-att-duration] { grid-column:1 / -1; }
+  .attendance-table tr.attendance-week-total { display:grid; grid-template-columns:minmax(0,1fr) auto; }
+  .attendance-table tr.attendance-week-total > th { width:auto; }
+  .attendance-table tr.attendance-week-total > td { white-space:nowrap; }
+}
+@container (max-width:300px) {
+  .attendance-table tr[data-att-date] { grid-template-columns:minmax(0,1fr); }
+}
 .attendance-table small { display:block; font-size:.66rem; font-weight:400; color:#647269; }
 .attendance-workspace label.attendance-next { display:flex; align-items:center; gap:4px; margin-top:4px; font-size:.65rem; }
 .attendance-week-total th,.attendance-week-total td { background:#e8eee9; font-weight:700; }
