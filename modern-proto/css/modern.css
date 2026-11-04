@@ -4716,3 +4716,26 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .attendance-leave-note { color:#9a650e !important; }
 @media(max-width:850px){.attendance-layout{grid-template-columns:1fr;}}
 @media(max-width:460px){.attendance-filters{grid-template-columns:1fr;}}
+
+/* Salaires · natures des avances et prêts */
+.loan-nature-workspace { min-width:0; }
+.loan-nature-toolbar, .loan-nature-actions { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0; }
+.loan-nature-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(125px,170px); gap:14px; }
+.loan-nature-list { min-width:0; max-height:460px; overflow:auto; border:1px solid #dce5df; border-radius:6px; }
+.loan-nature-list table { width:100%; table-layout:fixed; border-collapse:collapse; }
+.loan-nature-list th { text-align:left; background:#f2f6f3; padding:9px; }
+.loan-nature-list th:first-child { width:28%; }
+.loan-nature-list td { border-top:1px solid #e6ece7; padding:0; }
+.loan-nature-list tr:nth-child(even) td { background:#fafbf5; }
+.loan-nature-list button { display:grid; grid-template-columns:minmax(0,28fr) minmax(0,72fr); width:100%; border:0; padding:9px; gap:8px; background:transparent; text-align:left; cursor:pointer; }
+.loan-nature-list button span { min-width:0; overflow-wrap:anywhere; }
+.loan-nature-list button[aria-pressed="true"] { background:#dcefe5; color:#095f53; font-weight:700; }
+.loan-nature-side { display:flex; flex-direction:column; gap:8px; align-items:stretch; }
+.loan-nature-detail { margin-top:14px; padding:14px; border:1px solid #dce5df; border-radius:6px; }
+.loan-nature-fields { display:grid; grid-template-columns:minmax(100px, 1fr) minmax(0,3fr); gap:12px; }
+.loan-nature-workspace label:not(.loan-nature-confirm) { display:grid; gap:5px; font-size:.8rem; color:#43534a; }
+.loan-nature-workspace input:not([type=checkbox]), .loan-nature-workspace select { box-sizing:border-box; width:100%; min-width:0; padding:8px; border:1px solid #cbd7d2; border-radius:6px; background:white; }
+.loan-nature-workspace input[readonly] { background:#f6f8f6; }
+.loan-nature-confirm { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:.8rem; }
+.loan-nature-detail form[data-nature-replace] { margin-top:18px; padding-top:12px; border-top:1px solid #dce5df; }
+@media(max-width:600px) { .loan-nature-layout { grid-template-columns:minmax(0,1fr); } .loan-nature-side { flex-direction:row; flex-wrap:wrap; } .loan-nature-fields { grid-template-columns:minmax(0,1fr); } }
