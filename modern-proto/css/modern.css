@@ -4640,3 +4640,6 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .payroll-slip-source { margin: 10px 0 0; font-size: .76rem; color: #53665a; }
 .payroll-slip-rubrics .payroll-slip-rubric-heading th { font-weight: 800; background: #f2f6f3; }
 .payroll-slip-rubrics th.payroll-slip-rubric-child { padding-left: 25px; font-weight: 500; }
+.payroll-slip-rubric-state { display: inline-block; margin-left: 5px; color: #536d5b; font-size: .65rem; font-weight: 600; white-space: nowrap; }
+.payroll-slip-rubrics .is-not-retained .payroll-slip-rubric-state { color: #7b6952; }
+.payroll-slip-rubrics .is-not-retained:not(.payroll-slip-rubric-heading) th { color: #65736a; }
