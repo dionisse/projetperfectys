@@ -333,6 +333,10 @@ Le sous-menu de centralisation auxiliaire reste **désactivé** jusqu’à l’i
 
 Le format pivot `PERFECTO-AUXILIAIRE` v1 décrit un échange de mouvements auxiliaires, mais il n’est pas accepté comme source de centralisation dans l’application. Son analyse et son agrégateur sont conservés comme travaux de modèle/tests pour cadrer l’interopérabilité future, sans parcours utilisateur actif. Les adaptateurs natifs et le grand livre auxiliaire intégré restent également à construire.
 
+### Création d’une fiche employé fictive
+
+Dans le dossier de test PRH-TEST-2026, l’assistant utilise les référentiels du dossier pour les statuts, catégories, zones, services, diplômes, fonctions, professions, caisses complémentaires et banques. Si un référentiel est vide, il faut d’abord le renseigner dans Définitions. Les professions, caisses et banques choisies sont conservées par identifiant ; les anciennes valeurs libres restent visibles sans rapprochement automatique. La caisse sociale (par exemple la CNSS au Bénin) est choisie dans un référentiel distinct ; son numéro d’assuré social est indépendant des assurances complémentaires. Plusieurs assurances complémentaires peuvent être ajoutées, chacune avec une compagnie du référentiel et son propre numéro. Les anciennes données d’assurance non classées restent visibles sans migration automatique. Le parcours permet de cocher plusieurs fonctions du référentiel. Le règlement propose « Virement Bancaire », « Mobile Money », « Chèque » et « Autres » ; la banque est choisie parmi les banques définies dans le dossier. Les modes de règlement anciens restent visibles. Ces données demeurent fictives : aucun calcul de paie ni paiement n’est déclenché.
+
 ### Paie & RH et centralisation des salaires — étape partielle
 
 Les centralisations **entre modules PERFECTO** utilisent exclusivement les données des modules maison. Les formats CSV/Excel et adaptateurs tiers restent des parcours d’interopérabilité distincts.

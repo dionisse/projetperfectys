@@ -4462,6 +4462,7 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .payroll-employee-function-checklist > label { display: flex; align-items: flex-start; gap: 8px; min-width: 0; padding: 5px 7px; border-radius: 5px; color: #405148; cursor: pointer; }
 .payroll-employee-function-checklist > label:hover { background: #f1f5f0; }
 .payroll-employee-function-checklist input { flex: 0 0 auto; width: 16px; height: 16px; margin: 2px 0 0; accent-color: #98701a; }
+.payroll-employee-function-empty { padding: 9px; border: 1px dashed #c6d2ca; border-radius: 7px; color: #637168; font-size: .76rem; }
 .payroll-employee-function-field > small { display: block; margin-top: 6px; color: #637168; font-size: .7rem; line-height: 1.45; }
 /* La création d’une fiche reprend le même panneau Parcours et affectation que l’édition. */
 .payroll-employee-list h4 { font-size: .78rem; }
@@ -4532,3 +4533,11 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .payroll-bank-merge-fields input[name="destinationBankCode"] { background: #fff200; }
 .payroll-bank-merge-delete-note { margin: 24px 0 14px; color: #37463d; font-size: .86rem; }
 @media (max-width: 560px) { .payroll-bank-merge-fields { grid-template-columns: 1fr; gap: 6px; } }
+
+/* Caisse sociale et contrats d’assurance complémentaire distincts. */
+.payroll-supplementary-insurances { margin-top: 14px; padding-top: 12px; border-top: 1px solid #e3e9e4; }
+.payroll-supplementary-insurances h4 { margin: 0 0 5px; font-size: .82rem; }
+.payroll-supplementary-insurances > p { margin: 5px 0 10px; }
+.payroll-insurance-row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; gap: 9px; align-items: end; margin: 0 0 10px; }
+.payroll-insurance-row .field { min-width: 0; margin: 0; display: grid; gap: 5px; font-size: .76rem; font-weight: 650; }
+@media (max-width: 650px) { .payroll-insurance-row { grid-template-columns: 1fr; } .payroll-insurance-row button { justify-self: start; } }

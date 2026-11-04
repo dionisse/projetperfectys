@@ -89,6 +89,49 @@
     return match ? clone(Object.assign({}, match, { employeeNumber: match.employeeNumber || match.id || '' })) : null;
   }
 
+  // Les identifiants référencent uniquement les définitions du dossier actif ; les
+  // libellés restent disponibles pour les fiches historiques et les affichages.
+  var EMPLOYEE_REFERENCE_FIELDS = [
+    { id: 'professionId', text: 'profession', catalog: 'employeeProfessions', label: 'profession' },
+    { id: 'socialSecurityFundId', text: 'socialSecurityFundName', catalog: 'employeeSocialSecurityFunds', label: 'caisse sociale' },
+    { id: 'socialFundId', text: 'supplementaryInsuranceCompany', catalog: 'employeeComplementarySocialFunds', label: 'caisse complémentaire' },
+    { id: 'bankId', text: 'bankName', catalog: 'employeeBanks', label: 'banque' }
+  ];
+
+  function applyEmployeeReferences(dossier, input, patch, errors) {
+    EMPLOYEE_REFERENCE_FIELDS.forEach(function (field) {
+      if (!Object.prototype.hasOwnProperty.call(input, field.id)) {
+        // Une modification explicite de l'ancien champ texte retire le lien devenu périmé.
+        if (Object.prototype.hasOwnProperty.call(input, field.text)) patch[field.id] = '';
+        return;
+      }
+      var id = String(input[field.id] || '').trim();
+      var items = Array.isArray(dossier[field.catalog]) ? dossier[field.catalog] : [];
+      var item = id && items.find(function (record) { return record && record.id === id && record.dossierId === dossier.id; });
+      if (id && !item) { errors.push('Choisissez une ' + field.label + ' existante dans le dossier de test.'); return; }
+      patch[field.id] = id;
+      patch[field.text] = item ? item.label : '';
+    });
+  }
+
+  function applySupplementaryInsurances(dossier, input, patch, errors) {
+    if (!Object.prototype.hasOwnProperty.call(input, 'supplementaryInsurances')) return;
+    if (!Array.isArray(input.supplementaryInsurances)) {
+      errors.push('La liste des assurances complémentaires est invalide.'); return;
+    }
+    var available = Array.isArray(dossier.employeeComplementarySocialFunds) ? dossier.employeeComplementarySocialFunds : [];
+    var entries = [];
+    input.supplementaryInsurances.forEach(function (row) {
+      var id = String(row && row.insurerId || '').trim();
+      var number = String(row && row.insuranceNumber || '').trim().replace(/\s+/g, ' ');
+      var insurer = available.find(function (item) { return item && item.id === id && item.dossierId === dossier.id; });
+      if (!insurer) { errors.push('Choisissez une compagnie complémentaire existante dans le dossier de test.'); return; }
+      if (number.length > 80) { errors.push('Le numéro d’assurance complémentaire ne peut pas dépasser 80 caractères.'); return; }
+      entries.push({ insurerId: insurer.id, insuranceNumber: number });
+    });
+    patch.supplementaryInsurances = entries;
+  }
+
   function createEmployee(dossierId, input) {
     input = input || {};
     dossierId = String(dossierId || '');
@@ -143,7 +186,7 @@
     if (availableEmployeeStatuses.length && requestedEmployeeStatus && !matchingEmployeeStatus) errors.push('Choisissez un statut existant dans le dossier de test.');
     if (availableEmployeeCategories.length && requestedCategoryId && !matchingEmployeeCategory) errors.push('Choisissez une catégorie/échelon existant dans le dossier de test.');
     if (availableEmployeeServices.length && requestedEmployeeServiceId && !matchingEmployeeService) errors.push('Choisissez un service existant dans le dossier de test.');
-    if (availableEmployeeFunctions.length && matchingEmployeeFunctions.some(function (item) { return !item; })) errors.push('Choisissez des fonctions existantes dans le dossier de test.');
+    if ((Array.isArray(input.functionIds) || availableEmployeeFunctions.length) && matchingEmployeeFunctions.some(function (item) { return !item; })) errors.push('Choisissez des fonctions existantes dans le dossier de test.');
     if (new Set(requestedEmployeeFunctionValues).size !== requestedEmployeeFunctionValues.length) errors.push('Une fonction ne peut être sélectionnée qu’une seule fois sur la fiche.');
     if (requestedQualificationIds.some(function (id, index) { return !matchingQualifications[index]; })) errors.push('Choisissez des diplômes ou qualifications existants dans le dossier de test.');
     if (new Set(requestedQualificationIds).size !== requestedQualificationIds.length) errors.push('Un diplôme ou une qualification ne peut être sélectionné qu’une seule fois.');
@@ -169,6 +212,8 @@
       if (value && (!/^\d+$/.test(value) || Number(value) > 9999)) errors.push('Le champ numérique « ' + key + ' » doit être un entier positif de test.');
       else extraProfile[key] = value;
     });
+    applyEmployeeReferences(dossier, input, extraProfile, errors);
+    applySupplementaryInsurances(dossier, input, extraProfile, errors);
     if (errors.length) return { ok: false, errors: errors };
     var id;
     do {
@@ -309,7 +354,7 @@
           return item && (item.id === requestedFunction || String(item.code || '').toLocaleLowerCase() === requestedFunction.toLocaleLowerCase() || String(item.label || '').toLocaleLowerCase() === requestedFunction.toLocaleLowerCase());
         });
       });
-      if (availableFunctions.length && matchingFunctions.some(function (item) { return !item; })) errors.push('Choisissez des fonctions existantes dans le dossier de test.');
+      if ((Array.isArray(input.functionIds) || availableFunctions.length) && matchingFunctions.some(function (item) { return !item; })) errors.push('Choisissez des fonctions existantes dans le dossier de test.');
       if (new Set(requestedFunctions).size !== requestedFunctions.length) errors.push('Une fonction ne peut être sélectionnée qu’une seule fois sur la fiche.');
       patch.functionIds = matchingFunctions.filter(Boolean).map(function (item) { return item.id; });
       patch.functionId = patch.functionIds.length === 1 ? patch.functionIds[0] : '';
@@ -336,6 +381,8 @@
         patch.zone = matchingGeographicZone ? matchingGeographicZone.label : '';
       }
     }
+    applyEmployeeReferences(dossier, input, patch, errors);
+    applySupplementaryInsurances(dossier, input, patch, errors);
     if (Object.prototype.hasOwnProperty.call(input, 'photoDataUrl')) {
       var photoDataUrl = String(input.photoDataUrl || '');
       if (photoDataUrl && (!/^data:image\/(?:jpeg|png|webp);base64,/.test(photoDataUrl) || photoDataUrl.length > 1500000)) {
@@ -1150,6 +1197,11 @@
         { code: '7', label: 'Apprenti' }
       ]
     },
+    socialSecurityFunds: {
+      storageKey: 'employeeSocialSecurityFunds', plural: 'funds', noun: 'caisses sociales',
+      fields: ['label', 'address'], codeRequired: false,
+      seed: [{ label: 'CNSS', address: '' }]
+    },
     socialFunds: {
       storageKey: 'employeeComplementarySocialFunds', plural: 'funds', noun: 'caisses complémentaires',
       fields: ['label', 'address'], codeRequired: false,
@@ -1256,6 +1308,10 @@
     });
     if (duplicate) return { ok: false, errors: ['Cette définition existe déjà dans le dossier de test.'] };
     Object.assign(record, validation.value, { updatedAt: new Date().toISOString() });
+    var referenceField = EMPLOYEE_REFERENCE_FIELDS.find(function (field) { return field.catalog === config.storageKey; });
+    if (referenceField) (dossier.demoEmployees || []).forEach(function (employee) {
+      if (employee && employee[referenceField.id] === itemId) employee[referenceField.text] = record.label;
+    });
     if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la modification.'] };
     return { ok: true, errors: [], item: clone(record) };
   }
@@ -1270,6 +1326,9 @@
     var items = dossier && Array.isArray(dossier[config.storageKey]) ? dossier[config.storageKey] : [];
     var record = items.find(function (item) { return item && item.id === itemId && item.dossierId === dossierId; });
     if (!record) return { ok: false, errors: ['La définition est introuvable.'] };
+    var referenceField = EMPLOYEE_REFERENCE_FIELDS.find(function (field) { return field.catalog === config.storageKey; });
+    if (referenceField && (dossier.demoEmployees || []).some(function (employee) { return employee && employee[referenceField.id] === itemId; })) return { ok: false, errors: ['Cette définition est affectée à une fiche employé et ne peut pas être supprimée.'] };
+    if (kind === 'socialFunds' && (dossier.demoEmployees || []).some(function (employee) { return employee && Array.isArray(employee.supplementaryInsurances) && employee.supplementaryInsurances.some(function (entry) { return entry && entry.insurerId === itemId; }); })) return { ok: false, errors: ['Cette compagnie est affectée à une fiche employé et ne peut pas être supprimée.'] };
     if (kind === 'qualifications' && (dossier.demoEmployees || []).some(function (employee) { return employee && Array.isArray(employee.qualificationIds) && employee.qualificationIds.indexOf(itemId) !== -1; })) return { ok: false, errors: ['Cette qualification est affectée à un employé et ne peut pas être supprimée.'] };
     dossier[config.storageKey] = items.filter(function (item) { return item && item.id !== itemId; }).map(function (item, index) { item.order = index; return item; });
     if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible de supprimer la définition.'] };
@@ -1318,7 +1377,7 @@
         if (!record || seenRecords.has(record)) return;
         seenRecords.add(record);
         if (record.bankId !== sourceBankId && record.bankReferenceId !== sourceBankId) return;
-        if (record.bankId === sourceBankId) record.bankId = destinationBankId;
+        if (record.bankId === sourceBankId) { record.bankId = destinationBankId; if (record.dossierId === dossierId && (dossier.demoEmployees || []).indexOf(record) !== -1) record.bankName = destination.label; }
         if (record.bankReferenceId === sourceBankId) record.bankReferenceId = destinationBankId;
         reassignedCount += 1;
       });

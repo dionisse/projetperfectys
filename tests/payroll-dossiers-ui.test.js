@@ -206,7 +206,7 @@ assert.match(app, /data-action=.{1}payroll-menu-item/);
 assert.match(app, /Fonctionnalités déjà développées — à reclasser dans les menus/);
 for (const menuItem of [
   'Employés', 'Statuts', 'Catégories', 'Zones géographiques', 'Services', 'Fonctions', 'Diplômes et Qualifications', 'Professions',
-  "Caisses complémentaires d'assurance sociales", 'Banques', 'Bulletins de salaire', 'Bulletins complémentaires après débauchage',
+  'Compagnies d’assurance complémentaire', 'Banques', 'Bulletins de salaire', 'Bulletins complémentaires après débauchage',
   'Heures de présence', 'Natures des Avances et Prêts', 'Indemnité de licenciement', 'Indemnité de départ en retraite',
   'Etats sur la paie du mois en cours', 'Déclarations C.N.S.S., I.P.T.S. et F.N.R.', 'Etat des versements aux caisses complémentaires',
   'Etats personnalisés sur les salaires', 'Etats sur le Personnel', 'Tableau 11 des tableaux financiers OHADA', 'Définitions et Paramètres',

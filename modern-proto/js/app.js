@@ -368,7 +368,7 @@
       { items: [{ id: 'employees', label: 'Employés' }] },
       { items: [{ id: 'employee-statuses', label: 'Statuts' }, { id: 'employee-categories', label: 'Catégories' }, { id: 'geographic-zones', label: 'Zones géographiques' }, { id: 'services', label: 'Services' }, { id: 'functions', label: 'Fonctions' }] },
       { items: [{ id: 'degrees-qualifications', label: 'Diplômes et Qualifications' }, { id: 'professions', label: 'Professions' }] },
-      { items: [{ id: 'complementary-social-funds', label: "Caisses complémentaires d'assurance sociales" }, { id: 'banks', label: 'Banques' }] }
+      { items: [{ id: 'social-security-funds', label: 'Caisses sociales' }, { id: 'complementary-social-funds', label: "Compagnies d’assurance complémentaire" }, { id: 'banks', label: 'Banques' }] }
     ];
     var salaries = [
       { items: [{ id: 'payslips', label: 'Bulletins de salaire' }, { id: 'post-hire-payslips', label: 'Bulletins complémentaires après débauchage' }] },
@@ -20348,6 +20348,42 @@
     return values;
   }
 
+  function payrollSupplementaryInsuranceValues(form) {
+    return Array.prototype.map.call(form.querySelectorAll('[data-payroll-insurance-row]'), function (row) {
+      return { insurerId: row.querySelector('[data-payroll-insurer]').value, insuranceNumber: row.querySelector('[data-payroll-insurance-number]').value };
+    });
+  }
+
+  function validatePayrollSupplementaryInsuranceRows(form) {
+    var selects = form.querySelectorAll('[data-payroll-insurance-row] [data-payroll-insurer]');
+    var empty = Array.prototype.find.call(selects, function (select) { return !select.value; });
+    if (!empty) return true;
+    toast('Choisissez une compagnie pour chaque assurance complémentaire ou retirez la ligne vide.', 'warning');
+    empty.focus();
+    return false;
+  }
+
+  function bindPayrollSupplementaryInsurances(form) {
+    if (!form) return;
+    var rows = form.querySelector('[data-payroll-insurance-rows]');
+    var template = form.querySelector('template[data-payroll-insurance-template]');
+    if (!rows || !template) return;
+    var initialRows = rows.innerHTML;
+    form.addEventListener('click', function (event) {
+      var add = event.target.closest('[data-payroll-insurance-add]');
+      var remove = event.target.closest('[data-payroll-insurance-remove]');
+      if (add && !add.disabled) {
+        rows.appendChild(template.content.cloneNode(true));
+        var all = rows.querySelectorAll('[data-payroll-insurer]');
+        if (all.length) all[all.length - 1].focus();
+      } else if (remove) {
+        var row = remove.closest('[data-payroll-insurance-row]');
+        if (row) row.remove();
+      }
+    });
+    form.addEventListener('reset', function () { window.setTimeout(function () { rows.innerHTML = initialRows; }, 0); });
+  }
+
   function validPayrollEmployeeFormTarget(form) {
     var dossier = PayrollHR.currentDossier();
     return !!(dossier && form && form.getAttribute('data-dossier-id') === dossier.id && PayrollHR.isDemoTestDossier(dossier.id));
@@ -20386,6 +20422,7 @@
     var currentStep = Number(form.getAttribute('data-current-step')) || 1;
     var nextStep = Math.max(1, Math.min(panels.length, Number(requestedStep) || 1));
     if (nextStep > currentStep) {
+      if (currentStep === 5 && !validatePayrollSupplementaryInsuranceRows(form)) return;
       var currentPanel = panels[currentStep - 1];
       var invalidControl = currentPanel && currentPanel.querySelector('input:invalid, select:invalid, textarea:invalid');
       if (invalidControl) {
@@ -20431,6 +20468,7 @@
     });
     var employeeForm = $('#payroll-employee-create-form');
     if (employeeForm) {
+      bindPayrollSupplementaryInsurances(employeeForm);
       employeeForm.addEventListener('input', function () {
         if (Number(employeeForm.getAttribute('data-current-step')) === 7) updatePayrollEmployeeCreateReview(employeeForm);
       });
@@ -20444,7 +20482,9 @@
         if (!dossier || employeeForm.getAttribute('data-dossier-id') !== dossier.id || !PayrollHR.isDemoTestDossier(dossier.id)) {
           toast('Création refusée : les fiches fictives sont réservées au dossier PRH-TEST-2026 actif.', 'warning'); return;
         }
-        var employeeProfile = payrollEmployeeFormValues(employeeForm, ['employeeNumber', 'lastName', 'firstName', 'firstHireDate', 'seniorityMonthsToDeduct', 'seniorityReferenceDate', 'vpsExemptionEndDate', 'terminationDate', 'terminationReason', 'rehireDate', 'birthDate', 'sex', 'maritalStatus', 'childrenCount', 'birthplace', 'nationality', 'socialInsuranceNumber', 'taxId', 'supplementaryInsuranceCompany', 'supplementaryInsuranceNumber', 'profession', 'employeeStatus', 'categoryId', 'effectiveDate', 'geographicZoneId', 'serviceId', 'qualificationIds', 'functionIds', 'paymentMethod', 'bankName', 'bankAccountNumber', 'address', 'contactPhone', 'contactEmail', 'miscellaneousLabel', 'miscellaneousValue']);
+        var employeeProfile = payrollEmployeeFormValues(employeeForm, ['employeeNumber', 'lastName', 'firstName', 'firstHireDate', 'seniorityMonthsToDeduct', 'seniorityReferenceDate', 'vpsExemptionEndDate', 'terminationDate', 'terminationReason', 'rehireDate', 'birthDate', 'sex', 'maritalStatus', 'childrenCount', 'birthplace', 'nationality', 'socialInsuranceNumber', 'socialSecurityFundId', 'taxId', 'supplementaryInsuranceCompany', 'socialFundId', 'supplementaryInsuranceNumber', 'profession', 'professionId', 'employeeStatus', 'categoryId', 'effectiveDate', 'geographicZoneId', 'serviceId', 'qualificationIds', 'functionIds', 'paymentMethod', 'bankName', 'bankId', 'bankAccountNumber', 'address', 'contactPhone', 'contactEmail', 'miscellaneousLabel', 'miscellaneousValue']);
+        if (!validatePayrollSupplementaryInsuranceRows(employeeForm)) return;
+        employeeProfile.supplementaryInsurances = payrollSupplementaryInsuranceValues(employeeForm);
         employeeProfile.qualificationIds = Array.prototype.map.call(employeeForm.querySelectorAll('input[name="qualificationIds"]:checked'), function (input) { return input.value; });
         employeeProfile.functionIds = Array.prototype.map.call(employeeForm.querySelectorAll('input[name="functionIds"]:checked'), function (input) { return input.value; });
         employeeProfile.testOnly = !!($('#payroll-test-data-confirmation', employeeForm) || {}).checked;
@@ -20767,15 +20807,21 @@
       toast('Classification complémentaire ajoutée. Vous pourrez la lier à une catégorie en la modifiant.', 'success'); render();
     });
     var employeeEditForm = $('#payroll-employee-edit-form');
+    if (employeeEditForm) bindPayrollSupplementaryInsurances(employeeEditForm);
     if (employeeEditForm) employeeEditForm.addEventListener('submit', function (event) {
       event.preventDefault();
       if (!canPerformDemoAction('edit-payroll-employee', employeeEditForm, true)) return;
       if (!validPayrollEmployeeFormTarget(employeeEditForm)) { toast('Modification refusée : ouvrez la fiche dans PRH-TEST-2026.', 'warning'); return; }
       if (!employeeEditForm.elements.namedItem('testOnly').checked) { toast('Confirmez que les valeurs saisies sont fictives.', 'warning'); return; }
-      var profileFields = ['employeeNumber', 'displayName', 'lastName', 'firstName', 'firstHireDate', 'seniorityMonthsToDeduct', 'seniorityReferenceDate', 'vpsExemptionEndDate', 'terminationDate', 'terminationReason', 'rehireDate', 'birthDate', 'sex', 'maritalStatus', 'childrenCount', 'birthplace', 'nationality', 'socialInsuranceNumber', 'taxId', 'supplementaryInsuranceCompany', 'supplementaryInsuranceNumber', 'degree', 'profession', 'employeeStatus', 'categoryId', 'categoryStep', 'effectiveDate', 'geographicZoneId', 'zone', 'serviceId', 'service', 'function', 'paymentMethod', 'bankName', 'bankAccountNumber'];
+      var profileFields = ['employeeNumber', 'displayName', 'lastName', 'firstName', 'firstHireDate', 'seniorityMonthsToDeduct', 'seniorityReferenceDate', 'vpsExemptionEndDate', 'terminationDate', 'terminationReason', 'rehireDate', 'birthDate', 'sex', 'maritalStatus', 'childrenCount', 'birthplace', 'nationality', 'socialInsuranceNumber', 'socialSecurityFundId', 'taxId', 'supplementaryInsuranceCompany', 'socialFundId', 'supplementaryInsuranceNumber', 'degree', 'profession', 'professionId', 'employeeStatus', 'categoryId', 'categoryStep', 'effectiveDate', 'geographicZoneId', 'zone', 'serviceId', 'service', 'function', 'paymentMethod', 'bankName', 'bankId', 'bankAccountNumber'];
+      if (!validatePayrollSupplementaryInsuranceRows(employeeEditForm)) return;
       var employeeProfile = payrollEmployeeFormValues(employeeEditForm, profileFields);
+      employeeProfile.supplementaryInsurances = payrollSupplementaryInsuranceValues(employeeEditForm);
+      ['professionId', 'socialSecurityFundId', 'socialFundId', 'bankId', 'employeeStatus', 'categoryId', 'geographicZoneId', 'serviceId'].forEach(function (name) { if (employeeProfile[name] === '__legacy__') delete employeeProfile[name]; });
       if (employeeEditForm.querySelector('input[name="functionIds"]')) employeeProfile.functionIds = Array.prototype.map.call(employeeEditForm.querySelectorAll('input[name="functionIds"]:checked'), function (input) { return input.value; });
       if (employeeEditForm.querySelector('input[name="qualificationIds"]')) employeeProfile.qualificationIds = Array.prototype.map.call(employeeEditForm.querySelectorAll('input[name="qualificationIds"]:checked'), function (input) { return input.value; });
+      if (employeeEditForm.getAttribute('data-legacy-function') === 'true' && employeeProfile.functionIds && !employeeProfile.functionIds.length) delete employeeProfile.functionIds;
+      if (employeeEditForm.getAttribute('data-legacy-qualification') === 'true' && employeeProfile.qualificationIds && !employeeProfile.qualificationIds.length) delete employeeProfile.qualificationIds;
       var result = PayrollHR.updateEmployee(PayrollHR.currentDossier().id, employeeEditForm.getAttribute('data-employee-id'), employeeProfile);
       if (!result.ok) { toast(result.errors[0] || 'Enregistrement de test impossible.', 'warning'); return; }
       toast('Fiche fictive mise à jour dans PRH-TEST-2026.', 'success'); render();
@@ -21428,56 +21474,102 @@
     var employeeServiceCatalog = isTestDossier ? PayrollHR.employeeServices(dossier.id) : [];
     var employeeFunctionCatalog = isTestDossier ? PayrollHR.employeeFunctions(dossier.id) : [];
     var employeeQualificationCatalog = isTestDossier ? PayrollHR.employeeDefinitionItems(dossier.id, 'qualifications') : [];
+    var employeeProfessionCatalog = isTestDossier ? PayrollHR.employeeDefinitionItems(dossier.id, 'professions') : [];
+    var employeeSocialFundCatalog = isTestDossier ? PayrollHR.employeeDefinitionItems(dossier.id, 'socialFunds') : [];
+    var employeeSocialSecurityCatalog = isTestDossier ? PayrollHR.employeeDefinitionItems(dossier.id, 'socialSecurityFunds') : [];
+    var employeeBankCatalog = isTestDossier ? PayrollHR.employeeDefinitionItems(dossier.id, 'banks') : [];
     var createMode = ui.payrollEmployeeCreateMode === true || (!ui.payrollEmployeeId && isTestDossier && canCreatePayrollEmployee === true);
     var selected = createMode ? null : (employees.find(function (employee) { return employee.id === ui.payrollEmployeeId; }) || employees[0] || null);
     if (selected) ui.payrollEmployeeId = selected.id;
     function textField(name, label, type, value, maxLength) {
       return '<div class="field"><label for="payroll-employee-field-' + name + '">' + esc(label) + '</label><input id="payroll-employee-field-' + name + '" name="' + name + '" type="' + (type || 'text') + '"' + (maxLength ? ' maxlength="' + maxLength + '"' : '') + (['employeeNumber', 'displayName', 'lastName', 'firstName'].indexOf(name) !== -1 ? ' required' : '') + ' value="' + esc(value || '') + '"></div>';
     }
+    function employeeReferenceField(name, label, catalog, textName, isCreate) {
+      var id = 'payroll-employee-' + (isCreate ? 'create-' : 'field-') + name;
+      var currentId = !isCreate && selected ? selected[name] || '' : '';
+      var currentText = !isCreate && selected ? selected[textName] || '' : '';
+      var hasCurrent = catalog.some(function (item) { return item.id === currentId; });
+      // Ne rattache pas automatiquement les anciennes valeurs libres à une définition.
+      var legacy = !isCreate && !hasCurrent && (currentId || currentText);
+      var options = '<option value="">' + (name === 'bankId' ? '— Sélectionner une banque —' : '— Non défini —') + '</option>' +
+        (legacy ? '<option value="__legacy__" selected>' + esc(currentText || currentId) + ' · valeur enregistrée hors référentiel</option>' : '') +
+        catalog.map(function (item) { return '<option value="' + esc(item.id) + '"' + (hasCurrent && item.id === currentId ? ' selected' : '') + '>' + esc((item.code ? item.code + ' · ' : '') + item.label) + '</option>'; }).join('');
+      return '<div class="field"><label for="' + esc(id) + '">' + esc(label) + '</label><select id="' + esc(id) + '" name="' + esc(name) + '">' + options + '</select>' + (!catalog.length ? '<small>Aucune définition dans le référentiel du dossier. Ajoutez-en dans Définitions' + (name === 'bankId' ? ' → Banques' : (name === 'socialSecurityFundId' ? ' → Caisses sociales' : '')) + '.</small>' : '') + '</div>';
+    }
+    function employeeCatalogField(name, label, catalog, currentValue, display) {
+      var id = 'payroll-employee-field-' + name;
+      var value = String(currentValue || '');
+      var match = value && catalog.find(function (item) { return item.id === value || item.code === value || item.label === value; });
+      var options = '<option value="">— Non défini —</option>' +
+        (value && !match ? '<option value="__legacy__" selected>' + esc(value) + ' · valeur enregistrée hors référentiel</option>' : '') +
+        catalog.map(function (item) { return '<option value="' + esc(item.id) + '"' + (match && item.id === match.id ? ' selected' : '') + '>' + esc(display(item)) + '</option>'; }).join('');
+      return '<div class="field"><label for="' + esc(id) + '">' + esc(label) + '</label><select id="' + esc(id) + '" name="' + esc(name) + '">' + options + '</select>' + (!catalog.length ? '<small>Aucune définition dans le référentiel du dossier. Ajoutez-en dans Définitions.</small>' : '') + '</div>';
+    }
+    function employeePaymentMethodField(isCreate) {
+      var id = 'payroll-employee-' + (isCreate ? 'create-' : 'field-') + 'paymentMethod';
+      var current = !isCreate && selected ? selected.paymentMethod || '' : '';
+      var methods = ['Virement Bancaire', 'Mobile Money', 'Chèque', 'Autres'];
+      var options = '<option value="">— Sélectionner un mode de règlement —</option>' +
+        (current && methods.indexOf(current) === -1 ? '<option value="' + esc(current) + '" selected>' + esc(current) + ' · valeur enregistrée</option>' : '') +
+        methods.map(function (method) { return '<option value="' + esc(method) + '"' + (method === current ? ' selected' : '') + '>' + esc(method) + '</option>'; }).join('');
+      return '<div class="field"><label for="' + esc(id) + '">Mode de règlement</label><select id="' + esc(id) + '" name="paymentMethod">' + options + '</select></div>';
+    }
+    function supplementaryInsuranceRow(entry) {
+      entry = entry || {};
+      var insurerId = entry.insurerId || '';
+      var exists = employeeSocialFundCatalog.some(function (item) { return item.id === insurerId; });
+      var options = '<option value="">— Sélectionner une compagnie —</option>' +
+        (insurerId && !exists ? '<option value="' + esc(insurerId) + '" selected>Compagnie enregistrée introuvable · ' + esc(insurerId) + '</option>' : '') +
+        employeeSocialFundCatalog.map(function (item) { return '<option value="' + esc(item.id) + '"' + (item.id === insurerId ? ' selected' : '') + '>' + esc(item.label) + '</option>'; }).join('');
+      return '<div class="payroll-insurance-row" data-payroll-insurance-row><label class="field">Compagnie d’assurance complémentaire<select data-payroll-insurer>' + options + '</select></label><label class="field">N° d’assuré complémentaire<input type="text" data-payroll-insurance-number maxlength="80" value="' + esc(entry.insuranceNumber || '') + '"></label><button type="button" class="btn btn-secondary" data-payroll-insurance-remove aria-label="Retirer cette assurance complémentaire">Retirer</button></div>';
+    }
+    function supplementaryInsuranceFields(isCreate) {
+      var entries = !isCreate && selected && Array.isArray(selected.supplementaryInsurances) ? selected.supplementaryInsurances : [];
+      var legacy = !isCreate && selected && (selected.supplementaryInsuranceCompany || selected.supplementaryInsuranceNumber || selected.socialFundId);
+      return '<section class="payroll-supplementary-insurances" aria-label="Assurances complémentaires"><h4>Assurances complémentaires</h4><p class="small muted">Ajoutez une ligne par assurance. Les compagnies proviennent du référentiel du dossier.</p>' +
+        (legacy ? '<div class="alert info"><div><strong>Données d’assurance antérieures non classées :</strong> ' + esc(selected.supplementaryInsuranceCompany || selected.socialFundId || 'Compagnie non renseignée') + (selected.supplementaryInsuranceNumber ? ' · N° ' + esc(selected.supplementaryInsuranceNumber) : '') + '. Conservées séparément, sans rattachement automatique.</div></div>' : '') +
+        '<div data-payroll-insurance-rows>' + entries.map(supplementaryInsuranceRow).join('') + '</div><template data-payroll-insurance-template>' + supplementaryInsuranceRow(null) + '</template>' +
+        '<button type="button" class="btn btn-secondary" data-payroll-insurance-add' + (employeeSocialFundCatalog.length ? '' : ' disabled') + '>＋ Ajouter une assurance complémentaire</button>' +
+        (employeeSocialFundCatalog.length ? '' : '<p class="small muted">Aucune compagnie disponible. Ajoutez-en dans Définitions → Compagnies d’assurance complémentaire.</p>') + '</section>';
+    }
     var rows = employees.map(function (employee) {
       var active = selected && selected.id === employee.id;
       return '<tr><td><button type="button" class="payroll-employee-select' + (active ? ' is-active' : '') + '" data-action="payroll-employee-select" data-employee-id="' + esc(employee.id) + '" aria-pressed="' + (active ? 'true' : 'false') + '"><strong>' + esc(employee.employeeNumber || employee.id) + '</strong></button></td><td>' + esc(employee.displayName || 'Employé fictif') + '</td></tr>';
     }).join('');
-    var employeeStatusField = employeeStatusCatalog.length
-      ? '<div class="field"><label for="payroll-employee-field-employeeStatus">Statut</label><select id="payroll-employee-field-employeeStatus" name="employeeStatus"><option value="">— Non défini —</option>' + employeeStatusCatalog.map(function (status) { return '<option value="' + esc(status.id) + '"' + (selected && selected.employeeStatus === status.id ? ' selected' : '') + '>' + esc(status.code + ' · ' + status.label) + '</option>'; }).join('') + '</select></div>'
-      : textField('employeeStatus', 'Statut', 'text', selected && selected.employeeStatus, 80);
+    var employeeStatusField = employeeCatalogField('employeeStatus', 'Statut', employeeStatusCatalog, selected && selected.employeeStatus, function (item) { return item.code + ' · ' + item.label; });
     var createEmployeeStatusField = employeeStatusCatalog.length
       ? '<div class="field"><label for="payroll-employee-create-status">Statut</label><select id="payroll-employee-create-status" name="employeeStatus"><option value="">— Non défini —</option>' + employeeStatusCatalog.map(function (status) { return '<option value="' + esc(status.id) + '">' + esc(status.code + ' · ' + status.label) + '</option>'; }).join('') + '</select></div>'
-      : '';
-    var employeeCategoryField = employeeCategoryCatalog.length
-      ? '<div class="field"><label for="payroll-employee-field-categoryId">Catégorie / échelon</label><select id="payroll-employee-field-categoryId" name="categoryId"><option value="">— Non défini —</option>' + employeeCategoryCatalog.map(function (category) { return '<option value="' + esc(category.id) + '"' + (selected && (selected.categoryId === category.id || selected.categoryStep === category.code) ? ' selected' : '') + '>' + esc(category.code + ' · ' + category.ohadaClassification) + '</option>'; }).join('') + '</select></div>'
-      : textField('categoryStep', 'Catégorie / échelon', 'text', selected && selected.categoryStep, 80);
+      : '<div class="field"><label for="payroll-employee-create-status">Statut</label><select id="payroll-employee-create-status" name="employeeStatus"><option value="">— Non défini —</option></select><small>Aucune définition dans le référentiel du dossier. Ajoutez-en dans Définitions.</small></div>';
+    var employeeCategoryField = employeeCatalogField('categoryId', 'Catégorie / échelon', employeeCategoryCatalog, selected && (selected.categoryId || selected.categoryStep), function (item) { return item.code + ' · ' + item.ohadaClassification; });
     var createEmployeeCategoryField = employeeCategoryCatalog.length
       ? '<div class="field"><label for="payroll-employee-create-category">Catégorie / échelon</label><select id="payroll-employee-create-category" name="categoryId"><option value="">— Non défini —</option>' + employeeCategoryCatalog.map(function (category) { return '<option value="' + esc(category.id) + '">' + esc(category.code + ' · ' + category.ohadaClassification) + '</option>'; }).join('') + '</select></div>'
-      : '';
-    var employeeGeographicZoneField = employeeGeographicZoneCatalog.length
-      ? '<div class="field"><label for="payroll-employee-field-geographicZoneId">Zone géographique</label><select id="payroll-employee-field-geographicZoneId" name="geographicZoneId"><option value="">— Non définie —</option>' + employeeGeographicZoneCatalog.map(function (zone) { return '<option value="' + esc(zone.id) + '"' + (selected && (selected.geographicZoneId === zone.id || selected.zone === zone.code || selected.zone === zone.label) ? ' selected' : '') + '>' + esc(zone.code + ' · ' + zone.label) + '</option>'; }).join('') + '</select></div>'
-      : textField('zone', 'Zone géographique', 'text', selected && selected.zone, 120);
+      : '<div class="field"><label for="payroll-employee-create-category">Catégorie / échelon</label><select id="payroll-employee-create-category" name="categoryId"><option value="">— Non défini —</option></select><small>Aucune définition dans le référentiel du dossier. Ajoutez-en dans Définitions.</small></div>';
+    var employeeGeographicZoneField = employeeCatalogField('geographicZoneId', 'Zone géographique', employeeGeographicZoneCatalog, selected && (selected.geographicZoneId || selected.zone), function (item) { return item.code + ' · ' + item.label; });
     var createEmployeeGeographicZoneField = employeeGeographicZoneCatalog.length
       ? '<div class="field"><label for="payroll-employee-create-geographic-zone">Zone géographique</label><select id="payroll-employee-create-geographic-zone" name="geographicZoneId"><option value="">— Non définie —</option>' + employeeGeographicZoneCatalog.map(function (zone) { return '<option value="' + esc(zone.id) + '">' + esc(zone.code + ' · ' + zone.label) + '</option>'; }).join('') + '</select></div>'
-      : '';
-    var employeeServiceField = employeeServiceCatalog.length
-      ? '<div class="field"><label for="payroll-employee-field-serviceId">Service</label><select id="payroll-employee-field-serviceId" name="serviceId"><option value="">— Non défini —</option>' + employeeServiceCatalog.map(function (service) { return '<option value="' + esc(service.id) + '"' + (selected && (selected.serviceId === service.id || selected.service === service.code || selected.service === service.label) ? ' selected' : '') + '>' + esc(service.code + ' · ' + service.label) + '</option>'; }).join('') + '</select></div>'
-      : textField('service', 'Service', 'text', selected && selected.service, 120);
+      : '<div class="field"><label for="payroll-employee-create-geographic-zone">Zone géographique</label><select id="payroll-employee-create-geographic-zone" name="geographicZoneId"><option value="">— Non défini —</option></select><small>Aucune définition dans le référentiel du dossier. Ajoutez-en dans Définitions.</small></div>';
+    var employeeServiceField = employeeCatalogField('serviceId', 'Service', employeeServiceCatalog, selected && (selected.serviceId || selected.service), function (item) { return item.code + ' · ' + item.label; });
     var createEmployeeServiceField = employeeServiceCatalog.length
       ? '<div class="field"><label for="payroll-employee-create-service">Service</label><select id="payroll-employee-create-service" name="serviceId"><option value="">— Non défini —</option>' + employeeServiceCatalog.map(function (service) { return '<option value="' + esc(service.id) + '">' + esc(service.code + ' · ' + service.label) + '</option>'; }).join('') + '</select></div>'
-      : '';
+      : '<div class="field"><label for="payroll-employee-create-service">Service</label><select id="payroll-employee-create-service" name="serviceId"><option value="">— Non défini —</option></select><small>Aucune définition dans le référentiel du dossier. Ajoutez-en dans Définitions.</small></div>';
     var selectedQualificationIds = selected && Array.isArray(selected.qualificationIds) ? selected.qualificationIds : [];
+    var legacyQualification = selected && selected.degree && !selectedQualificationIds.length;
     var employeeQualificationField = employeeQualificationCatalog.length
-      ? '<fieldset class="payroll-employee-function-field"><legend>Diplômes et qualifications</legend><div class="payroll-employee-function-checklist">' + employeeQualificationCatalog.map(function (qualification) { return '<label><input type="checkbox" name="qualificationIds" value="' + esc(qualification.id) + '"' + (selectedQualificationIds.indexOf(qualification.id) !== -1 ? ' checked' : '') + '><span>' + esc(qualification.code + ' · ' + qualification.label) + '</span></label>'; }).join('') + '</div><small>Plusieurs diplômes ou qualifications peuvent être associés à une fiche.</small></fieldset>'
+      ? '<fieldset class="payroll-employee-function-field"><legend>Diplômes et qualifications</legend><div class="payroll-employee-function-checklist">' + employeeQualificationCatalog.map(function (qualification) { return '<label><input type="checkbox" name="qualificationIds" value="' + esc(qualification.id) + '"' + (selectedQualificationIds.indexOf(qualification.id) !== -1 ? ' checked' : '') + '><span>' + esc(qualification.code + ' · ' + qualification.label) + '</span></label>'; }).join('') + '</div>' + (legacyQualification ? '<p class="small muted">Valeur antérieure conservée si aucune qualification n’est choisie : ' + esc(selected.degree) + '.</p>' : '') + '<small>Plusieurs diplômes ou qualifications peuvent être associés à une fiche.</small></fieldset>'
       : textField('degree', 'Diplôme', 'text', selected && selected.degree, 120);
     var createEmployeeQualificationField = employeeQualificationCatalog.length
       ? '<div class="field payroll-employee-function-field"><span>Diplômes et qualifications</span><div class="payroll-employee-function-checklist">' + employeeQualificationCatalog.map(function (qualification) { return '<label><input type="checkbox" name="qualificationIds" value="' + esc(qualification.id) + '"><span>' + esc(qualification.code + ' · ' + qualification.label) + '</span></label>'; }).join('') + '</div><small>Plusieurs éléments peuvent être associés à une fiche fictive.</small></div>'
-      : '';
+      : '<div class="field"><span>Diplômes et qualifications</span><small>Aucune définition dans le référentiel du dossier. Ajoutez-en dans Définitions.</small></div>';
     var selectedFunctionIds = selected && Array.isArray(selected.functionIds) ? selected.functionIds : employeeFunctionCatalog.filter(function (employeeFunction) {
       return selected && (selected.functionId === employeeFunction.id || selected.function === employeeFunction.code || selected.function === employeeFunction.label);
     }).map(function (employeeFunction) { return employeeFunction.id; });
+    var legacyFunction = selected && selected.function && !selectedFunctionIds.length;
     var employeeFunctionField = employeeFunctionCatalog.length
-      ? '<div class="field payroll-employee-function-field"><span>Fonctions de l’employé</span><div class="payroll-employee-function-checklist">' + employeeFunctionCatalog.map(function (employeeFunction) { return '<label><input type="checkbox" name="functionIds" value="' + esc(employeeFunction.id) + '"' + (selectedFunctionIds.indexOf(employeeFunction.id) !== -1 ? ' checked' : '') + '><span>' + esc(employeeFunction.code + ' · ' + employeeFunction.label) + '</span></label>'; }).join('') + '</div><small>Plusieurs fonctions peuvent être associées à une même fiche. Aucun cumul ou calcul de paie n’est appliqué automatiquement.</small></div>'
-      : textField('function', 'Fonction', 'text', selected && selected.function, 120);
+      ? '<div class="field payroll-employee-function-field"><span id="payroll-employee-functions-label">Fonctions de l’employé</span><div class="payroll-employee-function-checklist" role="group" aria-labelledby="payroll-employee-functions-label">' + employeeFunctionCatalog.map(function (employeeFunction) { return '<label><input type="checkbox" name="functionIds" value="' + esc(employeeFunction.id) + '"' + (selectedFunctionIds.indexOf(employeeFunction.id) !== -1 ? ' checked' : '') + '><span>' + esc(employeeFunction.code + ' · ' + employeeFunction.label) + '</span></label>'; }).join('') + '</div>' + (legacyFunction ? '<p class="small muted">Valeur antérieure conservée si aucune fonction n’est choisie : ' + esc(selected.function) + '.</p>' : '') + '<small>Cochez une ou plusieurs fonctions du référentiel. Aucun calcul de paie n’est appliqué automatiquement.</small></div>'
+      : '<div class="field payroll-employee-function-field"><span>Fonctions de l’employé</span><div class="payroll-employee-function-empty">Aucune fonction à sélectionner.</div>' + (selected && selected.function ? '<small>Valeur enregistrée : ' + esc(selected.function) + '.</small>' : '') + '<small>Créez d’abord une fonction dans Paie &amp; RH → Définitions → Fonctions, puis revenez à la fiche.</small></div>';
     var createEmployeeFunctionField = employeeFunctionCatalog.length
-      ? '<div class="field payroll-employee-function-field"><span>Fonctions de l’employé</span><div class="payroll-employee-function-checklist">' + employeeFunctionCatalog.map(function (employeeFunction) { return '<label><input type="checkbox" name="functionIds" value="' + esc(employeeFunction.id) + '"><span>' + esc(employeeFunction.code + ' · ' + employeeFunction.label) + '</span></label>'; }).join('') + '</div><small>Plusieurs fonctions peuvent être associées. Aucun calcul de paie n’est exécuté.</small></div>'
-      : '';
+      ? '<div class="field payroll-employee-function-field"><span id="payroll-employee-functions-label">Fonctions de l’employé</span><div class="payroll-employee-function-checklist" role="group" aria-labelledby="payroll-employee-functions-label">' + employeeFunctionCatalog.map(function (employeeFunction) { return '<label><input type="checkbox" name="functionIds" value="' + esc(employeeFunction.id) + '"><span>' + esc(employeeFunction.code + ' · ' + employeeFunction.label) + '</span></label>'; }).join('') + '</div><small>Cochez une ou plusieurs fonctions du référentiel. Aucun calcul de paie n’est exécuté.</small></div>'
+      : '<div class="field payroll-employee-function-field"><span>Fonctions de l’employé</span><div class="payroll-employee-function-empty">Aucune fonction à sélectionner.</div><small>Créez d’abord une fonction dans Paie &amp; RH → Définitions → Fonctions, puis revenez à la fiche.</small></div>';
     function createEmployeeProfileField(name, label, type, maxLength) {
       var inputType = type || 'text';
       return '<div class="field"><label for="payroll-employee-create-' + esc(name) + '">' + esc(label) + '</label><input id="payroll-employee-create-' + esc(name) + '" name="' + esc(name) + '" type="' + esc(inputType) + '"' + (maxLength ? ' maxlength="' + maxLength + '"' : '') + (inputType === 'number' ? ' min="0" max="9999" step="1"' : '') + '></div>';
@@ -21498,9 +21590,9 @@
         createWizardPanel(1, '<div class="payroll-employee-identity"><div class="field"><label for="payroll-employee-number">Matricule interne *</label><input id="payroll-employee-number" name="employeeNumber" type="text" maxlength="40" required autocomplete="off"></div><div class="field"><label for="payroll-employee-last-name">Nom *</label><input id="payroll-employee-last-name" name="lastName" type="text" maxlength="80" required autocomplete="family-name"></div><div class="field"><label for="payroll-employee-first-name">Prénoms *</label><input id="payroll-employee-first-name" name="firstName" type="text" maxlength="120" required autocomplete="given-name"></div></div><p class="small muted">Ces éléments identifient la fiche à laquelle les autres sections seront rattachées.</p>') +
         createWizardPanel(2, '<div class="payroll-employee-field-grid">' + createEmployeeProfileField('firstHireDate', 'Première embauche', 'date') + createEmployeeProfileField('seniorityMonthsToDeduct', 'Ancienneté à déduire · mois', 'number') + createEmployeeProfileField('seniorityReferenceDate', 'Référence ancienneté au', 'date') + createEmployeeProfileField('vpsExemptionEndDate', 'Fin exonération V.P.S.', 'date') + createEmployeeProfileField('terminationDate', 'Débauchage', 'date') + createEmployeeProfileField('terminationReason', 'Motif', 'text', 160) + createEmployeeProfileField('rehireDate', 'Dernière réembauche', 'date') + '</div>') +
         createWizardPanel(3, '<div class="payroll-employee-field-grid">' + createEmployeeProfileField('birthDate', 'Date de naissance', 'date') + createEmployeeProfileField('sex', 'Sexe', 'text', 40) + createEmployeeProfileField('maritalStatus', 'Situation matrimoniale', 'text', 60) + createEmployeeProfileField('childrenCount', 'Enfants', 'number') + createEmployeeProfileField('birthplace', 'Lieu de naissance', 'text', 120) + createEmployeeProfileField('nationality', 'Pays de nationalité', 'text', 80) + '</div>') +
-        createWizardPanel(4, '<div class="payroll-employee-field-grid">' + createEmployeeProfileField('profession', 'Profession', 'text', 120) + createEmployeeStatusField + createEmployeeCategoryField + createEmployeeProfileField('effectiveDate', 'Date d’effet', 'date') + createEmployeeGeographicZoneField + createEmployeeServiceField + createEmployeeQualificationField + createEmployeeFunctionField + '</div>') +
-        createWizardPanel(5, '<div class="payroll-employee-field-grid">' + createEmployeeProfileField('socialInsuranceNumber', 'N° d’assuré social', 'text', 80) + createEmployeeProfileField('taxId', 'Numéro IFU', 'text', 80) + createEmployeeProfileField('supplementaryInsuranceCompany', 'Compagnie', 'text', 120) + createEmployeeProfileField('supplementaryInsuranceNumber', 'Numéro d’assuré', 'text', 80) + '</div>') +
-        createWizardPanel(6, '<div class="payroll-employee-field-grid">' + createEmployeeProfileField('paymentMethod', 'Mode de règlement', 'text', 80) + createEmployeeProfileField('bankName', 'Banque', 'text', 120) + createEmployeeProfileField('bankAccountNumber', 'N° de compte fictif', 'text', 100) + '</div><p class="small muted">N’utilisez que des valeurs inventées pour ce dossier de test. Aucun RIB réel ne doit être saisi.</p>') +
+        createWizardPanel(4, '<div class="payroll-employee-field-grid">' + employeeReferenceField('professionId', 'Profession', employeeProfessionCatalog, 'profession', true) + createEmployeeStatusField + createEmployeeCategoryField + createEmployeeProfileField('effectiveDate', 'Date d’effet', 'date') + createEmployeeGeographicZoneField + createEmployeeServiceField + createEmployeeQualificationField + createEmployeeFunctionField + '</div>') +
+        createWizardPanel(5, '<div class="payroll-employee-field-grid">' + employeeReferenceField('socialSecurityFundId', 'Caisse sociale', employeeSocialSecurityCatalog, 'socialSecurityFundName', true) + createEmployeeProfileField('socialInsuranceNumber', 'N° d’assuré social', 'text', 80) + createEmployeeProfileField('taxId', 'Numéro IFU', 'text', 80) + '</div>' + supplementaryInsuranceFields(true)) +
+        createWizardPanel(6, '<div class="payroll-employee-field-grid">' + employeePaymentMethodField(true) + employeeReferenceField('bankId', 'Banque', employeeBankCatalog, 'bankName', true) + createEmployeeProfileField('bankAccountNumber', 'N° de compte fictif', 'text', 100) + '</div><p class="small muted">N’utilisez que des valeurs inventées pour ce dossier de test. Aucun RIB réel ne doit être saisi.</p>') +
         createWizardPanel(7, '<div class="payroll-employee-field-grid">' + createEmployeeProfileField('address', 'Adresse fictive', 'text', 240) + createEmployeeProfileField('contactPhone', 'Contact · téléphone fictif', 'text', 80) + createEmployeeProfileField('contactEmail', 'Contact · courriel fictif', 'email', 160) + createEmployeeProfileField('miscellaneousLabel', 'Divers · libellé', 'text', 120) + '<div class="field"><label for="payroll-employee-create-miscellaneousValue">Divers · valeur</label><textarea id="payroll-employee-create-miscellaneousValue" name="miscellaneousValue" maxlength="500" rows="3"></textarea></div></div><div class="payroll-employee-create-review" data-payroll-employee-create-review aria-live="polite"><strong>Vérifier la fiche</strong><p>Le récapitulatif des sections renseignées s’affichera ici avant la création.</p></div><label class="payroll-test-confirm"><input id="payroll-test-data-confirmation" name="testOnly" type="checkbox" required><span>Je confirme que cette fiche et ses informations sont fictives, réservées au dossier de test.</span></label><p class="small muted">La photo pourra être ajoutée à la fiche après son enregistrement.</p>') +
         '</div></form>'
       : (isTestDossier ? '<p class="small muted">Création indisponible pour ce profil.</p>' : '<div class="alert info"><div>La saisie de test est réservée au dossier fictif <strong>PRH-TEST-2026</strong>. Ouvrez ce dossier depuis <a href="#/payroll-dossiers">Dossiers RH</a>. Aucune donnée d’un autre dossier n’est affichée ici.</div></div>');
@@ -21508,14 +21600,14 @@
       ? textField('lastName', 'Nom *', 'text', selected.lastName, 80) + textField('firstName', 'Prénoms *', 'text', selected.firstName, 120)
       : textField('displayName', 'Nom et prénoms fictifs *', 'text', selected && selected.displayName, 120);
     var editForm = selected && canEditEmployee
-      ? '<form id="payroll-employee-edit-form" class="payroll-employee-edit-form" data-dossier-id="' + esc(dossier.id) + '" data-employee-id="' + esc(selected.id) + '">' +
+      ? '<form id="payroll-employee-edit-form" class="payroll-employee-edit-form" data-dossier-id="' + esc(dossier.id) + '" data-employee-id="' + esc(selected.id) + '" data-legacy-function="' + (legacyFunction ? 'true' : 'false') + '" data-legacy-qualification="' + (legacyQualification ? 'true' : 'false') + '">' +
         '<div class="payroll-employee-identity">' + textField('employeeNumber', 'Matricule', 'text', selected.employeeNumber || selected.id, 40) + employeeIdentityFields + '</div>' +
         '<div class="payroll-employee-fieldsets">' +
         '<fieldset><legend>Embauche et situation</legend><div class="payroll-employee-field-grid">' + textField('firstHireDate', 'Première embauche', 'date', selected.firstHireDate) + textField('seniorityMonthsToDeduct', 'Ancienneté à déduire · mois', 'number', selected.seniorityMonthsToDeduct) + textField('seniorityReferenceDate', 'Référence ancienneté au', 'date', selected.seniorityReferenceDate) + textField('vpsExemptionEndDate', 'Fin exonération V.P.S.', 'date', selected.vpsExemptionEndDate) + textField('terminationDate', 'Débauchage', 'date', selected.terminationDate) + textField('terminationReason', 'Motif', 'text', selected.terminationReason, 160) + textField('rehireDate', 'Dernière réembauche', 'date', selected.rehireDate) + '</div></fieldset>' +
         '<fieldset><legend>Identité et situation personnelle</legend><div class="payroll-employee-field-grid">' + textField('birthDate', 'Date de naissance', 'date', selected.birthDate) + textField('sex', 'Sexe', 'text', selected.sex, 40) + textField('maritalStatus', 'Situation matrimoniale', 'text', selected.maritalStatus, 60) + textField('childrenCount', 'Enfants', 'number', selected.childrenCount) + textField('birthplace', 'Lieu de naissance', 'text', selected.birthplace, 120) + textField('nationality', 'Pays de nationalité', 'text', selected.nationality, 80) + '</div></fieldset>' +
-        '<fieldset><legend>Identifiants et assurance complémentaire</legend><div class="payroll-employee-field-grid">' + textField('socialInsuranceNumber', 'N° d’assuré social', 'text', selected.socialInsuranceNumber, 80) + textField('taxId', 'Numéro IFU', 'text', selected.taxId, 80) + textField('supplementaryInsuranceCompany', 'Compagnie', 'text', selected.supplementaryInsuranceCompany, 120) + textField('supplementaryInsuranceNumber', 'Numéro d’assuré', 'text', selected.supplementaryInsuranceNumber, 80) + '</div></fieldset>' +
-        '<fieldset><legend>Parcours et affectation</legend><div class="payroll-employee-field-grid">' + textField('profession', 'Profession', 'text', selected.profession, 120) + employeeStatusField + employeeCategoryField + textField('effectiveDate', 'Date d’effet', 'date', selected.effectiveDate) + employeeGeographicZoneField + employeeServiceField + employeeQualificationField + employeeFunctionField + '</div></fieldset>' +
-        '<fieldset><legend>Règlement des salaires</legend><div class="payroll-employee-field-grid">' + textField('paymentMethod', 'Mode de règlement', 'text', selected.paymentMethod, 80) + textField('bankName', 'Banque', 'text', selected.bankName, 120) + textField('bankAccountNumber', 'N° de compte', 'text', selected.bankAccountNumber, 100) + '</div></fieldset>' +
+        '<fieldset><legend>Identifiants et assurance complémentaire</legend><div class="payroll-employee-field-grid">' + employeeReferenceField('socialSecurityFundId', 'Caisse sociale', employeeSocialSecurityCatalog, 'socialSecurityFundName', false) + textField('socialInsuranceNumber', 'N° d’assuré social', 'text', selected.socialInsuranceNumber, 80) + textField('taxId', 'Numéro IFU', 'text', selected.taxId, 80) + '</div>' + supplementaryInsuranceFields(false) + '</fieldset>' +
+        '<fieldset><legend>Parcours et affectation</legend><div class="payroll-employee-field-grid">' + employeeReferenceField('professionId', 'Profession', employeeProfessionCatalog, 'profession', false) + employeeStatusField + employeeCategoryField + textField('effectiveDate', 'Date d’effet', 'date', selected.effectiveDate) + employeeGeographicZoneField + employeeServiceField + employeeQualificationField + employeeFunctionField + '</div></fieldset>' +
+        '<fieldset><legend>Règlement des salaires</legend><div class="payroll-employee-field-grid">' + employeePaymentMethodField(false) + employeeReferenceField('bankId', 'Banque', employeeBankCatalog, 'bankName', false) + textField('bankAccountNumber', 'N° de compte', 'text', selected.bankAccountNumber, 100) + '</div></fieldset>' +
         '</div><label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Je confirme que les valeurs de cette fiche sont fictives et réservées au test.</span></label>' +
         '<div class="payroll-employee-edit-actions"><button type="button" class="btn btn-danger" data-action="delete-payroll-employee" data-employee-id="' + esc(selected.id) + '">Supprimer</button><button type="reset" class="btn btn-secondary">Annuler</button><button type="submit" class="btn btn-primary">Enregistrer la fiche</button></div></form>'
       : (selected ? '<div class="alert info"><div>Cette fiche est consultable, mais ce profil ne possède pas le droit de modification.</div></div>' : '<div class="empty-state"><strong>Aucun employé sélectionné</strong><span>Ajoutez une fiche fictive dans le dossier de test pour commencer.</span></div>');
@@ -21741,7 +21833,8 @@
     var configs = {
       qualifications: { menuId: 'degrees-qualifications', title: 'Diplômes et Qualifications', listTitle: 'Code / Intitulé', columns: ['code', 'label'], fields: ['code', 'label'], labels: { code: 'Code', label: 'Intitulé' }, blank: 'Aucun diplôme ou qualification chargé.', seedText: 'Charger les exemples de la capture', intro: 'Un employé peut être associé à plusieurs diplômes et qualifications.' },
       professions: { menuId: 'professions', title: 'Professions', listTitle: 'Code / Intitulé', columns: ['code', 'label'], fields: ['code', 'label'], labels: { code: 'Code', label: 'Intitulé' }, blank: 'Aucune profession chargée.', seedText: 'Charger les exemples de la capture', intro: 'Référentiel de professions du dossier fictif.' },
-      socialFunds: { menuId: 'complementary-social-funds', title: "Caisses complémentaires d'assurance sociales", listTitle: 'Intitulé', columns: ['label'], fields: ['label', 'address'], labels: { label: 'Intitulé', address: 'Adresse' }, blank: 'Aucune caisse complémentaire chargée.', seedText: 'Charger l’exemple de la capture', intro: 'Référentiel fictif des caisses complémentaires.' },
+      socialSecurityFunds: { menuId: 'social-security-funds', title: 'Caisses sociales', listTitle: 'Intitulé', columns: ['label'], fields: ['label', 'address'], labels: { label: 'Intitulé', address: 'Adresse' }, blank: 'Aucune caisse sociale chargée.', seedText: 'Charger l’exemple CNSS', intro: 'Référentiel fictif de caisses sociales, distinct des compagnies complémentaires.' },
+      socialFunds: { menuId: 'complementary-social-funds', title: "Compagnies d’assurance complémentaire", listTitle: 'Intitulé', columns: ['label'], fields: ['label', 'address'], labels: { label: 'Intitulé', address: 'Adresse' }, blank: 'Aucune compagnie complémentaire chargée.', seedText: 'Charger l’exemple de la capture', intro: 'Référentiel fictif des compagnies d’assurance complémentaire, distinct des caisses sociales.' },
       banks: { menuId: 'banks', title: 'Banques', listTitle: 'Code / Intitulé', columns: ['code', 'label'], fields: ['code', 'label', 'address', 'bankBranchCode', 'accountNumber'], labels: { code: 'Code', label: 'Intitulé', address: 'Adresse', bankBranchCode: 'Code banque / Code guichet', accountNumber: 'N° de compte' }, blank: 'Aucune banque chargée.', seedText: 'Charger les exemples de la capture', intro: 'Référentiel de test uniquement. N’enregistrez aucune donnée bancaire réelle ou sensible; les champs RIB des exemples restent vides.' }
     };
     var config = configs[kind];
@@ -21799,7 +21892,7 @@
     var items = sections.reduce(function (all, section) { return all.concat(section.items || []); }, []);
     var selectableItems = items.filter(function (item) { return !item.disabled; });
     var selectedItem = selectableItems.find(function (item) { return item.id === ui.payrollMenuItem; }) || selectableItems[0] || null;
-    var availableDefinitionItems = ['employee-statuses', 'employee-categories', 'geographic-zones', 'services', 'functions', 'degrees-qualifications', 'professions', 'complementary-social-funds', 'banks'];
+    var availableDefinitionItems = ['employee-statuses', 'employee-categories', 'geographic-zones', 'services', 'functions', 'degrees-qualifications', 'professions', 'social-security-funds', 'complementary-social-funds', 'banks'];
     var implementedMenuItems = availableDefinitionItems.concat(['employees']);
     var hasPlannedItems = items.some(function (item) { return !item.disabled && !item.hasChildren && implementedMenuItems.indexOf(item.id) === -1; });
     var tabs = sections.map(function (section, sectionIndex) {
@@ -21828,6 +21921,7 @@
     else if (selectedItem && selectedItem.id === 'functions') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-functions">' + viewPayrollEmployeeFunctions(dossier, canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>';
     else if (selectedItem && selectedItem.id === 'degrees-qualifications') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-degrees-qualifications">' + viewPayrollEmployeeDefinitions(dossier, 'qualifications', canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>';
     else if (selectedItem && selectedItem.id === 'professions') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-professions">' + viewPayrollEmployeeDefinitions(dossier, 'professions', canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>';
+    else if (selectedItem && selectedItem.id === 'social-security-funds') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-social-security-funds">' + viewPayrollEmployeeDefinitions(dossier, 'socialSecurityFunds', canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>';
     else if (selectedItem && selectedItem.id === 'complementary-social-funds') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-complementary-social-funds">' + viewPayrollEmployeeDefinitions(dossier, 'socialFunds', canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>';
     else if (selectedItem && selectedItem.id === 'banks') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-banks">' + viewPayrollEmployeeDefinitions(dossier, 'banks', canCreatePayrollEmployee === true, canEditPayrollEmployee === true) + '</div>';
     else panel = '<section class="accounting-menu-panel"' + (selectedItem ? ' id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-' + esc(selectedItem.id) + '"' : '') + '><div class="accounting-menu-panel-head"><div><p class="page-kicker">SOUS-MENU · ' + esc(activeMenu.toUpperCase()) + '</p><h3>' + esc(itemHeading) + '</h3></div><span class="badge draft">' + panelStatus + '</span></div><p class="menu-item-reason">' + itemDescription + '</p><div class="alert info"><div>Navigation uniquement : aucune importation, exportation, modification de paie, clôture ou écriture comptable n’est exécutée ici.</div></div></section>';
@@ -34764,7 +34858,7 @@
       }
       case 'new-payroll-definition-item': {
         var newDefinitionKind = trigger.getAttribute('data-kind') || '';
-        var definitionFields = { qualifications: ['code', 'label'], professions: ['code', 'label'], socialFunds: ['label', 'address'], banks: ['code', 'label', 'address', 'bankBranchCode', 'accountNumber'] }[newDefinitionKind] || [];
+        var definitionFields = { qualifications: ['code', 'label'], professions: ['code', 'label'], socialSecurityFunds: ['label', 'address'], socialFunds: ['label', 'address'], banks: ['code', 'label', 'address', 'bankBranchCode', 'accountNumber'] }[newDefinitionKind] || [];
         var definitionDraft = {};
         definitionFields.forEach(function (field) { definitionDraft[field] = ''; });
         ui.payrollDefinitionState[newDefinitionKind] = { id: '', mode: 'create', draft: definitionDraft };
