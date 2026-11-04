@@ -212,6 +212,11 @@
       if (value && (!/^\d+$/.test(value) || Number(value) > 9999)) errors.push('Le champ numérique « ' + key + ' » doit être un entier positif de test.');
       else extraProfile[key] = value;
     });
+    if (Object.prototype.hasOwnProperty.call(input, 'recruitedFromOtherCompany')) {
+      var recruitmentSource = String(input.recruitedFromOtherCompany || '').trim();
+      if (['', 'yes', 'no'].indexOf(recruitmentSource) === -1) errors.push('Indiquez si le recrutement vient d’une autre entreprise.');
+      else extraProfile.recruitedFromOtherCompany = recruitmentSource;
+    }
     applyEmployeeReferences(dossier, input, extraProfile, errors);
     applySupplementaryInsurances(dossier, input, extraProfile, errors);
     if (errors.length) return { ok: false, errors: errors };
@@ -292,6 +297,11 @@
       if (value && (!/^\d+$/.test(value) || Number(value) > 9999)) errors.push('Le champ numérique « ' + key + ' » doit être un entier positif de test.');
       else patch[key] = value;
     });
+    if (Object.prototype.hasOwnProperty.call(input, 'recruitedFromOtherCompany')) {
+      var recruitmentSource = String(input.recruitedFromOtherCompany || '').trim();
+      if (['', 'yes', 'no'].indexOf(recruitmentSource) === -1) errors.push('Indiquez si le recrutement vient d’une autre entreprise.');
+      else patch.recruitedFromOtherCompany = recruitmentSource;
+    }
     if (Object.prototype.hasOwnProperty.call(input, 'employeeNumber')) {
       patch.employeeNumber = String(input.employeeNumber || '').trim();
       if (!patch.employeeNumber) errors.push('Le matricule interne est obligatoire.');

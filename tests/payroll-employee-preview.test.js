@@ -22,11 +22,13 @@ const hr = {isDemoTestDossier:()=>true, employeeStatuses:()=>[{id:'s1',code:'A',
   employeeServices:()=>[{id:'svc1',code:'S1',label:'Service'}], employeeFunctions:()=>[{id:'f1',code:'F1',label:'Direction'},{id:'f2',code:'F2',label:'Gestion'}], employeeDefinitionItems:(id,kind)=>catalogs[kind]||[]};
 const ctx = {PayrollHR:hr, ui:{payrollEmployeeId:'emp',payrollEmployeeCreateMode:false}, hasDemoPermission:()=>canEdit, getActiveDemoMember:()=>({}), payrollAccessContext:()=>({}), esc:value=>String(value == null ? '' : value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')};
 vm.createContext(ctx); vm.runInContext(source.slice(start,end)+source.slice(helperStart,helperEnd),ctx);
-const employee={id:'emp',employeeNumber:'001',displayName:'Doe Jane',lastName:'Doe',firstName:'Jane', firstHireDate:'2021-01-01',seniorityMonthsToDeduct:'2',seniorityReferenceDate:'2021-02-01',vpsExemptionEndDate:'2022-02-01',terminationDate:'2023-01-01',terminationReason:'Motif fictif',rehireDate:'2024-01-01',birthDate:'2000-01-01',sex:'F',maritalStatus:'Célibataire',childrenCount:'0',birthplace:'Cotonou',nationality:'Bénin',socialSecurityFundId:'ss1',socialInsuranceNumber:'SOC-1',taxId:'IFU-1',supplementaryInsurances:[{insurerId:'ins1',insuranceNumber:'A-01'},{insurerId:'ins2',insuranceNumber:'B-02'}],supplementaryInsuranceCompany:'Ancien organisme',supplementaryInsuranceNumber:'V-03',professionId:'p1',employeeStatus:'s1',categoryId:'c1',effectiveDate:'2024-02-01',geographicZoneId:'z1',serviceId:'svc1',qualificationIds:['q1','q2'],functionIds:['f1','f2'],paymentMethod:'Mobile Money',bankId:'b1',bankAccountNumber:'COMPTE',address:'Adresse test',contactPhone:'000',contactEmail:'a@fictif.test',miscellaneousLabel:'Note',miscellaneousValue:'Autre mention <test>'};
+const employee={id:'emp',employeeNumber:'001',displayName:'Doe Jane',lastName:'Doe',firstName:'Jane', firstHireDate:'2021-01-01',seniorityMonthsToDeduct:'2',seniorityReferenceDate:'2021-02-01',vpsExemptionEndDate:'2022-02-01',terminationDate:'2023-01-01',terminationReason:'Motif fictif',recruitedFromOtherCompany:'yes',rehireDate:'2024-01-01',birthDate:'2000-01-01',sex:'F',maritalStatus:'Célibataire',childrenCount:'0',birthplace:'Cotonou',nationality:'Bénin',socialSecurityFundId:'ss1',socialInsuranceNumber:'SOC-1',taxId:'IFU-1',supplementaryInsurances:[{insurerId:'ins1',insuranceNumber:'A-01'},{insurerId:'ins2',insuranceNumber:'B-02'}],supplementaryInsuranceCompany:'Ancien organisme',supplementaryInsuranceNumber:'V-03',professionId:'p1',employeeStatus:'s1',categoryId:'c1',effectiveDate:'2024-02-01',geographicZoneId:'z1',serviceId:'svc1',qualificationIds:['q1','q2'],functionIds:['f1','f2'],paymentMethod:'Mobile Money',bankId:'b1',bankAccountNumber:'COMPTE',address:'Adresse test',contactPhone:'000',contactEmail:'a@fictif.test',miscellaneousLabel:'Note',miscellaneousValue:'Autre mention <test>'};
 const dossier={id:'d'};
 let html=ctx.viewPayrollEmployeeDetails(dossier,[employee],true);
 assert.match(html,/aria-label="Aperçu de la fiche employé"/);
 assert.match(html, /class="payroll-employee-preview-wide"><dt>Diplômes et qualifications<\/dt>/);
+assert.match(html, /Débauchage · départ de l’entreprise/);
+assert.match(html, /Recruté depuis une autre entreprise<\/dt><dd>Oui<\/dd>/);
 assert.doesNotMatch(html,/id="payroll-employee-edit-form"/);
 assert.match(html,/data-action="open-payroll-employee-edit" data-employee-id="emp">Modifier/);
 for(const value of ['001','Doe','Jane','2021-01-01','Motif fictif','2000-01-01','Célibataire','CNSS','SOC-1','IFU-1','Assurance A · N° A-01','Assurance B · N° B-02','Ancien organisme · N° V-03','P1 · Profession','A · Statut','C1 · Cadre','Z1 · Zone','S1 · Service','<li>D1 · Bac</li><li>D2 · BTS</li>','F1 · Direction, F2 · Gestion','Mobile Money','B1 · Banque','COMPTE','Adresse test','a@fictif.test','Autre mention &lt;test&gt;']) assert.ok(html.includes(value),'aperçu : '+value);
@@ -34,6 +36,7 @@ for(const action of ['open-payroll-employee-info','open-payroll-employee-photo',
 ctx.ui.payrollEmployeeEditId='emp';
 html=ctx.viewPayrollEmployeeDetails(dossier,[employee],true);
 assert.match(html,/id="payroll-employee-edit-form"/);
+assert.match(html, /name="recruitedFromOtherCompany"[^>]*>.*value="yes" selected/);
 assert.doesNotMatch(html,/aria-label="Aperçu de la fiche employé"/);
 assert.match(html,/data-action="cancel-payroll-employee-edit"/);
 assert.equal((html.match(/data-payroll-choice-list/g)||[]).length,2);

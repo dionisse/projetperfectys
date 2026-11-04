@@ -245,7 +245,7 @@ const addedTestEmployee = PayrollHR.createEmployee(testDossier.dossier.id, {
   firstHireDate: '2026-01-15', birthDate: '1990-05-12', sex: 'Test', profession: 'Profession fictive',
   socialInsuranceNumber: 'TEST-SS-CREATE-01', paymentMethod: 'Test', bankName: 'Banque fictive',
   bankAccountNumber: 'TEST-ACCOUNT-CREATE-01', address: 'Adresse fictive 1', contactEmail: 'test@example.invalid',
-  miscellaneousLabel: 'Note', miscellaneousValue: 'Donnée de test', testOnly: true
+  miscellaneousLabel: 'Note', miscellaneousValue: 'Donnée de test', recruitedFromOtherCompany: 'yes', testOnly: true
 });
 assert.equal(addedTestEmployee.ok, true, addedTestEmployee.errors.join('\\n'));
 assert.match(addedTestEmployee.employee.id, /^EMP-TEST-/);
@@ -254,6 +254,9 @@ assert.equal(addedTestEmployee.employee.birthDate, '1990-05-12');
 assert.equal(addedTestEmployee.employee.profession, 'Profession fictive');
 assert.equal(addedTestEmployee.employee.contactEmail, 'test@example.invalid');
 assert.equal(addedTestEmployee.employee.miscellaneousValue, 'Donnée de test');
+assert.equal(addedTestEmployee.employee.recruitedFromOtherCompany, 'yes');
+assert.equal(PayrollHR.updateEmployee(testDossier.dossier.id, addedTestEmployee.employee.id, { recruitedFromOtherCompany: 'invalide' }).ok, false);
+assert.equal(PayrollHR.updateEmployee(testDossier.dossier.id, addedTestEmployee.employee.id, { recruitedFromOtherCompany: 'no' }).ok, true);
 assert.equal(addedTestEmployee.employee.bankAccountNumber, 'TEST-ACCOUNT-CREATE-01');
 assert.equal(PayrollHR.createEmployee(testDossier.dossier.id, {
   employeeNumber: 'TEST-ADDED-INVALID-DATE', lastName: 'Employé', firstName: 'Date invalide', birthDate: '2026-02-31', testOnly: true
@@ -266,6 +269,7 @@ const profileUpdate = PayrollHR.updateEmployee(testDossier.dossier.id, addedTest
 });
 assert.equal(profileUpdate.ok, true, profileUpdate.errors.join('\\n'));
 assert.equal(PayrollHR.employee(testDossier.dossier.id, addedTestEmployee.employee.id).birthDate, '1990-05-12');
+assert.equal(PayrollHR.employee(testDossier.dossier.id, addedTestEmployee.employee.id).recruitedFromOtherCompany, 'no', 'une modification non liée conserve l’origine du recrutement');
 assert.equal(PayrollHR.employee(testDossier.dossier.id, addedTestEmployee.employee.id).displayName, 'Employé Fictif mis à jour');
 assert.equal(PayrollHR.employee(testDossier.dossier.id, addedTestEmployee.employee.id).bankAccountNumber, 'TEST-ACCOUNT-0001');
 assert.equal(PayrollHR.updateEmployee(testDossier.dossier.id, addedTestEmployee.employee.id, { birthDate: '2026-02-31' }).ok, false, 'les dates de saisie sont contrôlées');
