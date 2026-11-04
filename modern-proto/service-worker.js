@@ -102,6 +102,7 @@ const APP_SHELL = [
   './js/accounting-balance-recalculation.js',
   './js/accounting-database-repair.js',
   './js/payroll-hr.js',
+  './js/payroll-payslip-workspace.js',
   './js/payroll-centralization.js',
   './js/sales-stock-invoicing.js',
   './js/sales-centralization.js',

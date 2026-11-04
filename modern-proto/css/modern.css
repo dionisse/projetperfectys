@@ -4602,3 +4602,37 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .payroll-employee-preview-section dl > .payroll-employee-preview-wide { grid-column: 1 / -1; }
 .payroll-employee-preview-values { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; margin: 0; padding: 0; list-style: none; }
 .payroll-employee-preview-values li { min-width: 0; overflow-wrap: anywhere; }
+
+/* Bulletins de salaire fictifs et groupes de saisie. */
+.payroll-slip { min-width: 0; }
+.payroll-slip-layout { display: grid; grid-template-columns: minmax(250px, .75fr) minmax(0, 1.6fr); gap: 16px; margin-top: 16px; }
+.payroll-slip-layout > * { min-width: 0; }
+.payroll-slip-filters { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.payroll-slip label, .payroll-slip-dialog label { display: grid; gap: 4px; font-size: .78rem; color: #43534a; }
+.payroll-slip input, .payroll-slip select, .payroll-slip-dialog input, .payroll-slip-dialog select { box-sizing: border-box; min-width: 0; width: 100%; padding: 7px; border: 1px solid #cbd7d2; border-radius: 6px; background: #fff; }
+.payroll-slip-scroll { overflow: auto; max-height: 420px; margin-top: 12px; border: 1px solid #e0e8e2; border-radius: 6px; }
+.payroll-slip table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+.payroll-slip th, .payroll-slip td { padding: 7px; border-bottom: 1px solid #e6ece7; text-align: left; }
+.payroll-slip thead { background: #f2f6f3; }
+.payroll-slip-scroll td > button[data-slip-employee] { width: 100%; border: 0; background: transparent; display: grid; grid-template-columns: minmax(70px,.5fr) 1fr; gap: 8px; text-align: left; cursor: pointer; padding: 6px; }
+.payroll-slip-scroll td > button[aria-current="true"] { background: #e4f2e8; font-weight: 700; }
+.payroll-slip-details { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; font-size: .75rem; }
+.payroll-slip-details dt { color: #65736a; }
+.payroll-slip-details dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.payroll-slip-top, .payroll-slip-actions { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+.payroll-slip-rubrics { max-height: 570px; }
+.payroll-slip-rubrics table { min-width: 520px; }
+.payroll-slip-rubrics th:first-child { width: 43%; }
+.payroll-slip-rubrics td { width: 19%; }
+.payroll-slip-rubrics input { width: 100%; }
+.payroll-slip-actions { margin-top: 12px; }
+.payroll-slip-dialog { width: min(850px, calc(100vw - 28px)); max-height: calc(100dvh - 28px); overflow: auto; }
+.payroll-slip-dialog form { display: grid; gap: 10px; margin: 12px 0; }
+.payroll-slip-members { max-height: 200px; overflow: auto; display: grid; gap: 5px; }
+.payroll-slip-members label { display: flex; align-items: center; gap: 7px; }
+.payroll-slip-members input { width: auto; }
+.payroll-calc-table td:first-child { width: 65px; }
+@media(max-width: 850px) { .payroll-slip-layout { grid-template-columns: 1fr; } }
+@media(max-width: 460px) { .payroll-slip-filters { grid-template-columns: 1fr; } }
+.payroll-slip label.payroll-slip-checkbox { display: flex; align-items: center; gap: 7px; margin-top: 9px; }
+.payroll-slip-checkbox input { width: auto; }
