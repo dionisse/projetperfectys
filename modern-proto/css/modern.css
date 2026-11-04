@@ -4636,3 +4636,4 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 @media(max-width: 460px) { .payroll-slip-filters { grid-template-columns: 1fr; } }
 .payroll-slip label.payroll-slip-checkbox { display: flex; align-items: center; gap: 7px; margin-top: 9px; }
 .payroll-slip-checkbox input { width: auto; }
+.payroll-slip-search-count { margin: 10px 0 0; color: #65736a; font-size: .72rem; }
