@@ -351,3 +351,6 @@ assert.match(payroll, /function storageKey\(dossierId\)[\s\S]*STORAGE_PREFIX \+ 
 assert.match(css, /\.payroll-dossier-grid[\s\S]*\.payroll-dossier-card/);
 assert.match(worker, /perfecto-static-v232/);
 console.log('UI Paie & RH : route dossier dédiée, référence PRH, sélection par dossier et association non automatique — OK');
+
+// Éditions commence par le bulletin ordinaire, avant les trois entrées exceptionnelles inactives.
+assert.match(app, /var editions = \[\s*\{ items: \[\s*\{ id: 'payslip-edition', label: 'Bulletin de salaires' \},\s*\{ id: 'exceptional-payslip-1'[^}]*disabled: true \},\s*\{ id: 'exceptional-payslip-2'[^}]*disabled: true \},\s*\{ id: 'exceptional-payslip-3'[^}]*disabled: true \}/);

@@ -378,7 +378,8 @@
       { items: [{ id: 'dismissal-compensation', label: 'Indemnité de licenciement' }, { id: 'retirement-compensation', label: 'Indemnité de départ en retraite' }] }
     ];
     var editions = [
-      { heading: 'Bulletins de salaire', items: [
+      { items: [
+        { id: 'payslip-edition', label: 'Bulletin de salaires' },
         { id: 'exceptional-payslip-1', label: '1 - Bulletins exceptionnels de salaire', disabled: true },
         { id: 'exceptional-payslip-2', label: '2 - Bulletins exceptionnels de salaire', disabled: true },
         { id: 'exceptional-payslip-3', label: '3 - Bulletins exceptionnels de salaire', disabled: true }
