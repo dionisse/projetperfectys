@@ -23,3 +23,4 @@
 .slip-payment-history { margin-top:12px; font-size:.8rem; }
 .slip-payment-history summary { cursor:pointer; font-weight:600; }
 .slip-payment-history li { margin:6px 0; overflow-wrap:anywhere; }
+.slip-edition-page-label { max-width:900px; margin:16px auto 0; color:#526a5d; font-size:.78rem; font-weight:700; }

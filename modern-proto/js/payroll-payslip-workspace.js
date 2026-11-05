@@ -13,6 +13,17 @@
     return data;
   }
   function save(id, data) { root.localStorage.setItem(key(id), JSON.stringify(data)); }
+  // Chargement unique pour les éditions groupées, sans relecture par employé.
+  function readPeriodDrafts(id, period) {
+    var month=load(id).drafts[period];
+    if (month==null) return {};
+    if (typeof month!=='object' || Array.isArray(month)) throw new Error('Brouillons de la période illisibles.');
+    Object.keys(month).forEach(function(employeeId) {
+      var record=month[employeeId];
+      if(!record || typeof record!=='object' || Array.isArray(record)) throw new Error('Brouillon du bulletin illisible.');
+    });
+    return copy(month);
+  }
   // Lecture seule du brouillon enregistré : distingue l’absence de brouillon d’un brouillon vide.
   function readDraft(id, period, employeeId) {
     var data = load(id), periods = data.drafts, month = periods[period];
@@ -188,7 +199,7 @@
     observer.observe(root.document.documentElement, {childList:true, subtree:true});
     render();
   }
-  var api={mount:mount,readDraft:readDraft,calculate:calculate,numbers:numbers,monthList:monthList,matchesEmployee:matchesEmployee,resolveRubrics:resolveRubrics,isValidDate:isValidDate,hasDepartedAtPeriod:hasDepartedAtPeriod};
+  var api={mount:mount,readDraft:readDraft,readPeriodDrafts:readPeriodDrafts,calculate:calculate,numbers:numbers,monthList:monthList,matchesEmployee:matchesEmployee,resolveRubrics:resolveRubrics,isValidDate:isValidDate,hasDepartedAtPeriod:hasDepartedAtPeriod};
   if (typeof module !== 'undefined' && module.exports) module.exports=api;
   root.PayrollPayslipWorkspace=api;
 })(typeof window !== 'undefined' ? window : globalThis);
