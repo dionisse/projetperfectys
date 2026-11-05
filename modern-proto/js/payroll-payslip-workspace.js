@@ -13,6 +13,16 @@
     return data;
   }
   function save(id, data) { root.localStorage.setItem(key(id), JSON.stringify(data)); }
+  // Lecture seule du brouillon enregistré : distingue l’absence de brouillon d’un brouillon vide.
+  function readDraft(id, period, employeeId) {
+    var data = load(id), periods = data.drafts, month = periods[period];
+    if (month == null) return null;
+    if (typeof month !== 'object' || Array.isArray(month)) throw new Error('Brouillons de la période illisibles.');
+    if (!Object.prototype.hasOwnProperty.call(month, employeeId)) return null;
+    var record = month[employeeId];
+    if (!record || typeof record !== 'object' || Array.isArray(record)) throw new Error('Brouillon du bulletin illisible.');
+    return copy(record);
+  }
   function numbers(value) {
     var text = String(value == null ? '' : value).trim();
     if (!text) return '';
@@ -178,7 +188,7 @@
     observer.observe(root.document.documentElement, {childList:true, subtree:true});
     render();
   }
-  var api={mount:mount,calculate:calculate,numbers:numbers,monthList:monthList,matchesEmployee:matchesEmployee,resolveRubrics:resolveRubrics,isValidDate:isValidDate,hasDepartedAtPeriod:hasDepartedAtPeriod};
+  var api={mount:mount,readDraft:readDraft,calculate:calculate,numbers:numbers,monthList:monthList,matchesEmployee:matchesEmployee,resolveRubrics:resolveRubrics,isValidDate:isValidDate,hasDepartedAtPeriod:hasDepartedAtPeriod};
   if (typeof module !== 'undefined' && module.exports) module.exports=api;
   root.PayrollPayslipWorkspace=api;
 })(typeof window !== 'undefined' ? window : globalThis);

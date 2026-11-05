@@ -20516,6 +20516,20 @@
   }
 
   function bindPayrollModuleView() {
+    var editionWorkspace = $('#payroll-slip-edition-workspace');
+    if (editionWorkspace && window.PayrollSlipEdition && window.PayrollPayslipWorkspace) {
+      var editionDossier = PayrollHR.currentDossier();
+      if (editionDossier) window.PayrollSlipEdition.mount(editionWorkspace, { hr: PayrollHR, dossier: editionDossier, tools: window.PayrollPayslipWorkspace,
+        canView: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'module.view', payrollAccessContext(editionDossier)); },
+        licenseOwner: function () {
+          // Le paramétrage comptable est propre à un dossier : pas de lecture du dossier actif par défaut.
+          var linked = permittedDemoDossiers(getActiveDemoMember()).find(function (item) { return item.id === editionDossier.accountingDossierId; });
+          var rows = linked && linked.printedReportInformationConfiguration && linked.printedReportInformationConfiguration.rows || [];
+          var owner = rows.find(function (row) { return row && row.id === 'company-name'; });
+          return owner && String(owner.value || '').trim() || 'Non renseigné ou non accessible';
+        }
+      });
+    }
     var loanNatureWorkspace = $('#payroll-loan-nature-workspace');
     if (loanNatureWorkspace && window.PayrollLoanNatures) {
       var loanNatureDossier = PayrollHR.currentDossier();
@@ -22056,13 +22070,13 @@
     var selectableItems = items.filter(function (item) { return !item.disabled; });
     var selectedItem = selectableItems.find(function (item) { return item.id === ui.payrollMenuItem; }) || selectableItems[0] || null;
     var availableDefinitionItems = ['employee-statuses', 'employee-categories', 'geographic-zones', 'services', 'functions', 'degrees-qualifications', 'professions', 'social-security-funds', 'complementary-social-funds', 'banks'];
-    var implementedMenuItems = availableDefinitionItems.concat(['employees', 'payslips', 'post-hire-payslips', 'attendance-hours', 'advances-loans']);
+    var implementedMenuItems = availableDefinitionItems.concat(['employees', 'payslips', 'post-hire-payslips', 'attendance-hours', 'advances-loans', 'payslip-edition']);
     var hasPlannedItems = items.some(function (item) { return !item.disabled && !item.hasChildren && implementedMenuItems.indexOf(item.id) === -1; });
     var tabs = sections.map(function (section, sectionIndex) {
       var heading = section.heading ? '<p class="payroll-subtab-group-heading">' + esc(section.heading) + '</p>' : '';
       var rows = (section.items || []).map(function (item) {
         var selected = selectedItem && item.id === selectedItem.id;
-        var state = item.disabled ? 'Inactif' : (item.hasChildren ? 'Sous-menu' : (implementedMenuItems.indexOf(item.id) !== -1 ? (item.id === 'employees' ? 'Disponible' : (item.id === 'payslips' || item.id === 'post-hire-payslips' || item.id === 'attendance-hours' ? 'Brouillon test' : 'Référentiel test')) : 'À construire'));
+        var state = item.disabled ? 'Inactif' : (item.hasChildren ? 'Sous-menu' : (implementedMenuItems.indexOf(item.id) !== -1 ? (item.id === 'employees' ? 'Disponible' : (item.id === 'payslips' || item.id === 'post-hire-payslips' || item.id === 'attendance-hours' || item.id === 'payslip-edition' ? 'Brouillon test' : 'Référentiel test')) : 'À construire'));
         var disclosure = item.hasChildren ? '<span class="payroll-subtab-chevron" aria-hidden="true">›</span>' : '';
         return '<button type="button" id="payroll-menu-tab-' + esc(item.id) + '" class="accounting-subtab' + (selected ? ' is-active' : '') + (item.disabled ? ' is-disabled' : '') + '" role="tab" aria-controls="payroll-menu-tabpanel" aria-selected="' + (selected ? 'true' : 'false') + '"' + (item.disabled ? ' disabled aria-disabled="true"' : (selected ? ' aria-current="page"' : '')) + ' data-action="payroll-menu-item" data-menu-name="' + esc(activeMenu) + '" data-menu-item="' + esc(item.id) + '"><span class="accounting-subtab-label">' + esc(item.label) + '</span>' + disclosure + '<small class="accounting-subtab-state">' + state + '</small></button>';
       }).join('');
@@ -22077,6 +22091,7 @@
     var panelStatus = !selectedItem ? 'À définir' : (selectedItem.hasChildren ? 'Sous-menu à préciser' : 'À construire');
     var panel;
     if (selectedItem && selectedItem.id === 'employees') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-employees">' + viewPayrollEmployeeDetails(dossier, dossierEmployees || [], canCreatePayrollEmployee === true) + '</div>';
+    else if (selectedItem && selectedItem.id === 'payslip-edition') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-payslip-edition"><div id="payroll-slip-edition-workspace"></div></div>';
     else if (selectedItem && selectedItem.id === 'payslips') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-payslips"><div id="payroll-payslip-workspace"></div></div>';
     else if (selectedItem && selectedItem.id === 'post-hire-payslips') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-post-hire-payslips"><div id="payroll-supplementary-workspace"></div></div>';
     else if (selectedItem && selectedItem.id === 'advances-loans') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-advances-loans"><div id="payroll-loan-nature-workspace"></div></div>';
