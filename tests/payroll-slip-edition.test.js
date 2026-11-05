@@ -93,3 +93,15 @@ test('modèles exceptionnels : désignation explicite, présentation et données
  assert.equal(model.record.salary.amount,'1350');
  const printed=edition.printDocument({documents:[first,second],count:2});assert.match(printed,/slip-edition-exceptional-1/);assert.match(printed,/slip-edition-exceptional-2/);assert.match(printed,/#365d96/);assert.match(printed,/#8b455f/);assert.equal((printed.match(/class="slip-print-page"/g)||[]).length,2);
 });
+
+test('modèles exceptionnels : un seul employé désigné, jamais la sélection *',()=>{
+ const people=[{id:'cadre',executivePayEligible:true},{id:'directeur',executivePayEligible:true},{id:'autre',function:'Directeur'}];
+ for(const variant of ['exceptional-1','exceptional-2']){
+  assert.deepEqual(edition.selectedForEdition(people,'*',variant),[]);
+  assert.deepEqual(edition.selectedForEdition(people,'',variant),[]);
+  assert.deepEqual(edition.selectedForEdition(people,'autre',variant),[]);
+  assert.deepEqual(edition.selectedForEdition(people,'cadre',variant).map(e=>e.id),['cadre']);
+  assert.deepEqual(edition.selectedForEdition(people,'directeur',variant).map(e=>e.id),['directeur']);
+ }
+ assert.deepEqual(edition.selectedForEdition(people,'*','ordinary').map(e=>e.id),['cadre','directeur','autre']);
+});
