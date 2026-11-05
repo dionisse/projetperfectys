@@ -12,3 +12,9 @@ test('déclaration, prévention des doublons et conservation des annulations',()
  localStorage.setItem('perfecto.payroll.payslip-drafts.v1.d',JSON.stringify({version:1,drafts:{'2026-01':{e:{'amount-payable':{amount:'200'}}}},groups:[]}));assert.throws(()=>payments.declare(args,deps),/changé/);assert.equal(payments.load('d').events.length,2);
  localStorage.setItem('perfecto.payroll.payment-declarations.v1.d','invalide');assert.throws(()=>payments.load('d'),/illisible/);assert.throws(()=>payments.declare({...args,snapshot:{'amount-payable':{amount:'200'}}},deps),/illisible/);
 });
+
+test('le mode espèces peut être déclaré et annulé sans opération réelle',()=>{
+ storage.clear();const dossier={id:'d',cycleStart:'2026-01-01',cycleEnd:'2026-12-31'},employee={id:'e'},hr={currentDossier:()=>dossier,isDemoTestDossier:()=>true,employees:()=>[employee]},deps={hr,tools,canValidate:()=>true};
+ const snapshot={'amount-payable':{amount:'25'}};localStorage.setItem('perfecto.payroll.payslip-drafts.v1.d',JSON.stringify({version:1,drafts:{'2026-01':{e:snapshot}},groups:[]}));
+ const args={dossierId:'d',employeeId:'e',period:'2026-01',snapshot,date:'2026-01-05',method:'Espèces',testOnly:true};let entry=payments.declare(args,deps);assert.equal(entry.method,'Espèces');assert.equal(entry.accountingStatus,'not-implemented');payments.cancel({...args,paidId:entry.id,reason:'Erreur'},deps);assert.equal(payments.active(payments.load('d'),'e','2026-01'),null);
+});

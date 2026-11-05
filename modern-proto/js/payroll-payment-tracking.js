@@ -23,7 +23,7 @@
   function declare(args,deps){
     authorize(args,deps);if(args.testOnly!==true)throw new Error('Confirmez la déclaration de règlement fictif.');
     if(!deps.tools.isValidDate(args.date)||args.date>localToday())throw new Error('Indiquez une date de règlement valide, non future.');
-    if(['Virement Bancaire','Mobile Money','Chèque','Autres'].indexOf(args.method)<0)throw new Error('Choisissez le mode de règlement effectué.');
+    if(['Virement Bancaire','Mobile Money','Chèque','Espèces','Autres'].indexOf(args.method)<0)throw new Error('Choisissez le mode de règlement effectué.');
     var reference=String(args.reference||'').trim();if(reference.length>120)throw new Error('La référence est limitée à 120 caractères.');
     var draft=deps.tools.readDraft(args.dossierId,args.period,args.employeeId);
     if(!draft||canonical(draft)!==canonical(args.snapshot))throw new Error('Le brouillon a changé ou est absent. Réactualisez l’aperçu avant de confirmer.');

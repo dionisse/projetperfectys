@@ -355,7 +355,15 @@ Le document affiche séparément le titulaire de licence et l’entreprise du do
 
 ### Éditions — États sur la paie du mois en cours
 
-Le sous-menu expose les 15 états de la capture, groupés en livres de paie, paiements, avances, cumuls et variations. Les **livres de paie détaillé et cumulé** sont disponibles en lecture seule de test ; les 13 autres états restent à construire et ne produisent ni état, ni fichier, ni opération. Les brouillons de bulletins, les fiches et le suivi fictif de règlement déjà en place pourront servir de sources après définition des règles propres à chaque état. Les natures d’avances existantes ne constituent pas un registre des avances ou remboursements ; les ordres de virement ne sont pas implémentés et aucun paiement ne peut être exécuté ici. Les règles des autres états, leurs périodes, les historiques et les formats bancaires restent à préciser.
+Le sous-menu expose les 15 états de la capture, groupés en livres de paie, paiements, avances, cumuls et variations. Les **livres de paie détaillé et cumulé** et les **états de préparation des espèces et chèques** sont disponibles en lecture seule de test ; les 11 autres états restent à construire et ne produisent ni état, ni fichier, ni opération. Les brouillons de bulletins, les fiches et le suivi fictif de règlement déjà en place pourront servir de sources après définition des règles propres à chaque état. Les natures d’avances existantes ne constituent pas un registre des avances ou remboursements ; les ordres de virement ne sont pas implémentés et aucun paiement ne peut être exécuté ici. Les règles des autres états, leurs périodes, les historiques et les formats bancaires restent à préciser.
+
+### États de préparation des espèces et chèques
+
+Les états sélectionnent un mois et présentent deux colonnes facultatives, Employé et Montant à payer. Ils utilisent le mode de règlement **actuel** de la fiche : « Espèces » ou « Chèque » explicitement choisi. Les modes vides, « Autres » et non reconnus ne sont attribués à aucun des deux états et sont comptés à vérifier. L’option Espèces est aussi disponible dans le suivi fictif de règlement.
+
+Le montant est celui du brouillon ordinaire du mois, sans calcul. Les lignes sans brouillon ou sans montant restent visibles et signalées, sans zéro inventé. Une déclaration de règlement fictif active et correspondant au brouillon actuel exclut la ligne, quel que soit le mode déclaré ; si le brouillon a changé ou disparu, la ligne est marquée à vérifier et ne doit pas entraîner un nouveau règlement sans vérification. Les montants non positifs sont également marqués à vérifier. Une annulation rend la ligne de nouveau disponible. La consultation ne crée ni chèque, ni paiement, ni écriture comptable. Le mode actuel n’est pas un historique de la période.
+
+Comme pour les livres de paie, un aperçu plein écran précède l’export et l’impression ; le navigateur garde le choix final de l’imprimante ou du PDF, des pages et de la parité.
 
 ### Livre de paie détaillé — données fictives
 
