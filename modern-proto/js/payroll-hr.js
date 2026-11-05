@@ -176,6 +176,7 @@
       return item && (item.id === requestedGeographicZoneId || String(item.code || '').toLocaleLowerCase() === requestedGeographicZoneId.toLocaleLowerCase() || String(item.label || '').toLocaleLowerCase() === requestedGeographicZoneId.toLocaleLowerCase());
     });
     var errors = [];
+    if (Object.prototype.hasOwnProperty.call(input, 'executivePayEligible') && typeof input.executivePayEligible !== 'boolean') errors.push('La désignation cadre dirigeant ou directeur doit être Oui ou Non.');
     if (!employeeNumber) errors.push('Le numéro employé interne est obligatoire.');
     if (employeeNumber.length > 40) errors.push('Le numéro employé ne peut pas dépasser 40 caractères.');
     if (!lastName) errors.push('Le nom de l’employé est obligatoire.');
@@ -232,6 +233,7 @@
       firstName: firstName,
       displayName: displayName,
       employeeStatus: matchingEmployeeStatus ? matchingEmployeeStatus.id : requestedEmployeeStatus,
+      executivePayEligible: input.executivePayEligible === true,
       categoryId: matchingEmployeeCategory ? matchingEmployeeCategory.id : '',
       categoryStep: matchingEmployeeCategory ? matchingEmployeeCategory.code : requestedCategoryId,
       serviceId: matchingEmployeeService ? matchingEmployeeService.id : '',
@@ -280,6 +282,10 @@
       patch[key] = value;
     });
     var errors = [];
+    if (Object.prototype.hasOwnProperty.call(input, 'executivePayEligible')) {
+      if (typeof input.executivePayEligible !== 'boolean') errors.push('La désignation cadre dirigeant ou directeur doit être Oui ou Non.');
+      else patch.executivePayEligible = input.executivePayEligible;
+    }
     Object.keys(EMPLOYEE_PROFILE_TEXT_LIMITS).forEach(function (key) {
       if (Object.prototype.hasOwnProperty.call(input, key) && String(input[key] || '').trim().length > EMPLOYEE_PROFILE_TEXT_LIMITS[key]) {
         errors.push('Le champ « ' + key + ' » dépasse sa longueur maximale de test.');

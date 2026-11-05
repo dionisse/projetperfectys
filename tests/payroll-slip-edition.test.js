@@ -81,3 +81,15 @@ test('aperçu plein écran : modale intégrée et styles du bulletin conservés'
  assert.match(shell,/slip-fullscreen-title/);assert.match(shell,/id="slip-fullscreen-content"/);assert.match(shell,/data-fullscreen-close/);assert.doesNotMatch(shell,/<html|<body/);
  assert.match(source,/dialog\.showModal\(\)/);assert.match(source,/data-fullscreen-selection/);assert.match(source,/registerCloseGuard/);assert.match(css,/\.slip-edition-fullscreen/);assert.match(css,/height:100dvh/);assert.match(css,/\.slip-edition-document \.slip-edition-table/);
 });
+
+test('modèles exceptionnels : désignation explicite, présentation et données communes',()=>{
+ const unmarked={id:'old',function:'Directeur',employeeStatus:'Cadre'}, marked={id:'a',executivePayEligible:true};
+ for(const v of ['exceptional-1','exceptional-2']){assert.equal(edition.employeeEligible(unmarked,v),false);assert.equal(edition.employeeEligible({...unmarked,executivePayEligible:'true'},v),false);assert.equal(edition.employeeEligible(marked,v),true);}
+ assert.equal(edition.employeeEligible(unmarked,'ordinary'),true);
+ const model={dossier:{clientName:'Test'},employee:marked,period:'2026-01',refs:{status:[],category:[],service:[],functions:[],zone:[]},selection:{isDefaultPreview:false,rows:[{id:'salary',label:'Salaire',retained:true}]},record:{salary:{amount:'1350'},'amount-payable':{amount:'1350'}},payment:{date:'2026-01-02',amount:'1350',method:'Chèque'},paymentStatus:'paid'};
+ const ordinary=edition.report(model), first=edition.report({...model,variant:'exceptional-1'}),second=edition.report({...model,variant:'exceptional-2'});
+ assert.match(ordinary,/<h2>Bulletin de salaire<\/h2>/);assert.doesNotMatch(ordinary,/slip-edition-exceptional/);
+ for(const [index,text] of [[1,first],[2,second]]){assert.match(text,new RegExp('slip-edition-exceptional-'+index));assert.match(text,new RegExp('Bulletin exceptionnel de salaire · '+index));assert.match(text,/1350/);assert.match(text,/mêmes données et même suivi de règlement/);assert.match(text,/Payé · déclaration fictive/);assert.match(text,/>Salaire/);}
+ assert.equal(model.record.salary.amount,'1350');
+ const printed=edition.printDocument({documents:[first,second],count:2});assert.match(printed,/slip-edition-exceptional-1/);assert.match(printed,/slip-edition-exceptional-2/);assert.match(printed,/#365d96/);assert.match(printed,/#8b455f/);assert.equal((printed.match(/class="slip-print-page"/g)||[]).length,2);
+});

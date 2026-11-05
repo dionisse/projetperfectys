@@ -249,6 +249,15 @@ const addedTestEmployee = PayrollHR.createEmployee(testDossier.dossier.id, {
 });
 assert.equal(addedTestEmployee.ok, true, addedTestEmployee.errors.join('\\n'));
 assert.match(addedTestEmployee.employee.id, /^EMP-TEST-/);
+assert.equal(addedTestEmployee.employee.executivePayEligible, false, 'nouvelle fiche non désignée par défaut');
+assert.equal(testDossier.dossier.demoEmployees[0].executivePayEligible, undefined, 'ancienne fiche sans désignation');
+assert.equal(PayrollHR.createEmployee(testDossier.dossier.id, { employeeNumber:'EXEC-BAD', lastName:'Test', firstName:'Erreur', executivePayEligible:'true', testOnly:true }).ok, false);
+const executiveCreated = PayrollHR.createEmployee(testDossier.dossier.id, { employeeNumber:'EXEC-OK', lastName:'Directeur', firstName:'Fictif', executivePayEligible:true, testOnly:true });
+assert.equal(executiveCreated.ok, true);
+assert.equal(executiveCreated.employee.executivePayEligible, true);
+assert.equal(PayrollHR.updateEmployee(testDossier.dossier.id, executiveCreated.employee.id, { executivePayEligible:'false' }).ok, false);
+assert.equal(PayrollHR.updateEmployee(testDossier.dossier.id, executiveCreated.employee.id, { contactPhone:'Test' }).employee.executivePayEligible, true, 'une mise à jour partielle conserve la désignation');
+assert.equal(PayrollHR.updateEmployee(testDossier.dossier.id, executiveCreated.employee.id, { executivePayEligible:false }).employee.executivePayEligible, false, 'le retrait explicite est conservé');
 assert.equal(addedTestEmployee.employee.firstHireDate, '2026-01-15');
 assert.equal(addedTestEmployee.employee.birthDate, '1990-05-12');
 assert.equal(addedTestEmployee.employee.profession, 'Profession fictive');

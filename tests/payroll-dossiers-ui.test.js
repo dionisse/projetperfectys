@@ -158,7 +158,7 @@ assert.match(app, /additionalClassificationIds/);
 assert.match(payroll, /function createEmployeeCategoryAdditionalClassification\(dossierId, input\)/);
 assert.match(payroll, /function deleteEmployeeCategoryAdditionalClassification\(dossierId, classificationId\)/);
 assert.ok(app.includes('function viewPayrollMainMenu(dossier, dossierEmployees, canCreatePayrollEmployee, canEditPayrollEmployee)'));
-assert.match(app, /var implementedMenuItems = availableDefinitionItems\.concat\(\['employees', 'payslips', 'post-hire-payslips', 'attendance-hours', 'advances-loans', 'payslip-edition'\]\)/);
+assert.match(app, /var implementedMenuItems = availableDefinitionItems\.concat\(\['employees', 'payslips', 'post-hire-payslips', 'attendance-hours', 'advances-loans', 'payslip-edition', 'exceptional-payslip-1', 'exceptional-payslip-2'\]\)/);
 assert.match(app, /var hasPlannedItems = items\.some\([\s\S]*implementedMenuItems\.indexOf\(item\.id\) === -1/);
 assert.match(app, /var legend = hasPlannedItems \?/);
 assert.match(app, /selectedItem\.id === 'employee-statuses'[\s\S]*viewPayrollEmployeeStatuses/);
@@ -352,5 +352,10 @@ assert.match(css, /\.payroll-dossier-grid[\s\S]*\.payroll-dossier-card/);
 assert.match(worker, /perfecto-static-v232/);
 console.log('UI Paie & RH : route dossier dédiée, référence PRH, sélection par dossier et association non automatique — OK');
 
-// Éditions commence par le bulletin ordinaire, avant les trois entrées exceptionnelles inactives.
-assert.match(app, /var editions = \[\s*\{ items: \[\s*\{ id: 'payslip-edition', label: 'Bulletin de salaires' \},\s*\{ id: 'exceptional-payslip-1'[^}]*disabled: true \},\s*\{ id: 'exceptional-payslip-2'[^}]*disabled: true \},\s*\{ id: 'exceptional-payslip-3'[^}]*disabled: true \}/);
+// Éditions commence par le bulletin ordinaire ; seuls les modèles 1 et 2 sont actifs.
+assert.match(app, /var editions = \[\s*\{ items: \[\s*\{ id: 'payslip-edition', label: 'Bulletin de salaires' \},\s*\{ id: 'exceptional-payslip-1'[^}]* \},\s*\{ id: 'exceptional-payslip-2'[^}]* \},\s*\{ id: 'exceptional-payslip-3'[^}]*disabled: true \}/);
+
+assert.doesNotMatch(app, /id: 'exceptional-payslip-[12]'[^}]*disabled: true/);
+assert.match(app, /data-edition-variant/);
+assert.match(app, /employeeExecutivePayField\(true\)/);
+assert.match(app, /employeeExecutivePayField\(false\)/);
