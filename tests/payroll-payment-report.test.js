@@ -9,3 +9,9 @@ test('intégration des états et du mode espèces dans la fiche et le suivi',()=
 test('déclaration suivie d’un brouillon supprimé : à vérifier, jamais payée à nouveau implicitement',()=>{
  let d=data();delete d.drafts.c;let r=report.build(d,tools,tracking);assert.equal(r.rows.length,4);assert.equal(r.rows[1].values.payable,'');assert.equal(r.rows[1].review,true);let out=shared.reportHtml(r);assert.match(out,/brouillon modifié ou absent depuis la déclaration/);assert.match(out,/brouillon absent/);assert.match(out,/ne pas préparer un nouveau règlement sans vérification/);
 });
+
+test('aperçu compact réservé aux états espèces et chèques',()=>{
+ let js=fs.readFileSync('modern-proto/js/payroll-detailed-book.js','utf8'),css=fs.readFileSync('modern-proto/css/payroll-detailed-book.css','utf8');
+ assert.match(js,/dialog\.className=payment\?'payroll-book-compact':'payroll-book-fullscreen'/);
+ assert.match(js,/payment\?'Un aperçu est toujours présenté/);assert.match(css,/\.payroll-book-compact\s*\{[^}]*width:min\(860px/);assert.match(css,/\.payroll-book-compact\s*\{[^}]*overflow:auto/);
+});

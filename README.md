@@ -363,7 +363,7 @@ Les états sélectionnent un mois et présentent deux colonnes facultatives, Emp
 
 Le montant est celui du brouillon ordinaire du mois, sans calcul. Les lignes sans brouillon ou sans montant restent visibles et signalées, sans zéro inventé. Une déclaration de règlement fictif active et correspondant au brouillon actuel exclut la ligne, quel que soit le mode déclaré ; si le brouillon a changé ou disparu, la ligne est marquée à vérifier et ne doit pas entraîner un nouveau règlement sans vérification. Les montants non positifs sont également marqués à vérifier. Une annulation rend la ligne de nouveau disponible. La consultation ne crée ni chèque, ni paiement, ni écriture comptable. Le mode actuel n’est pas un historique de la période.
 
-Comme pour les livres de paie, un aperçu plein écran précède l’export et l’impression ; le navigateur garde le choix final de l’imprimante ou du PDF, des pages et de la parité.
+Un aperçu compact précède l’export et l’impression ; le navigateur garde le choix final de l’imprimante ou du PDF, des pages et de la parité.
 
 ### Livre de paie détaillé — données fictives
 
