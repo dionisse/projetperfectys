@@ -15,7 +15,7 @@ test('lecture du brouillon isolée par employé, période et dossier',()=>{
 test('aperçu : informations actuelles, valeurs saisies et rubriques non cochées conservées',()=>{
  const model={dossier:{clientName:'Entreprise <test>',reference:'PRH',address:'Adresse',ifu:'123'},employee:{id:'e1',displayName:'Alice <test>',employeeStatus:'s',categoryId:'c',serviceId:'sv',geographicZoneId:'z',functionIds:['f']},period:'2026-01',licenseOwner:'Titulaire',refs:{status:[{id:'s',code:'S',label:'Cadre'}],category:[{id:'c',code:'C1',ohadaClassification:'Cadre'}],service:[{id:'sv',label:'Finances'}],functions:[{id:'f',label:'Directrice'}],zone:[{id:'z',label:'Siège'}]},selection:{isDefaultPreview:false,rows:[{id:'x',label:'Salaire',retained:true},{id:'y',label:'Retenue',retained:false},{id:'amount-payable',label:'À payer',retained:true}]},record:{x:{base:'100',qty:'0',amount:'95'},y:{amount:'3'},'amount-payable':{amount:'92'},old:{amount:'7'}}};
  const out=edition.report(model);
- for(const expected of ['Titulaire','Entreprise &lt;test&gt;','Alice &lt;test&gt;','Cadre','C1','Finances','Directrice','Siège','janvier 2026','Date de paiement','Non renseignée','Cochée','Non cochée','Rubrique hors référentiel · old','92','actuellement enregistrées']) assert.ok(out.includes(expected),expected);
+ for(const expected of ['Titulaire','Entreprise &lt;test&gt;','Alice &lt;test&gt;','Cadre','C1','Finances','Directrice','Siège','janvier 2026','Date de paiement','Non renseignée','Gains','Retenues','Autre montant','Rubrique hors référentiel · old','92','actuellement enregistrées']) assert.ok(out.includes(expected),expected);
  assert.match(edition.report({...model,licenseOwner:''}),/Titulaire indisponible dans la démonstration/);
  assert.ok(!out.includes('Entreprise <test>'));assert.ok(!out.includes('Alice <test>'));
 });
@@ -34,7 +34,21 @@ test('étoile : tous les services et employés, sans restreindre par la recherch
 });
 test('document groupé : une feuille par bulletin et valeurs renseignées seulement',()=>{
  const model={dossier:{clientName:'Client'},employee:{id:'a',displayName:'Alice'},period:'2026-01',refs:{status:[],category:[],service:[],functions:[],zone:[]},selection:{rows:[{id:'blank',label:'Vide',retained:true},{id:'zero',label:'Zéro',retained:false}],isDefaultPreview:true},record:{zero:{amount:'0'},ancien:{amount:'7'}},printCompact:true,grouped:true};
- const html=edition.report(model);assert.doesNotMatch(html,/>Vide </);assert.match(html,/>Zéro /);assert.match(html,/>0<\/td>/);assert.match(html,/Rubrique hors référentiel · ancien/);assert.doesNotMatch(html,/id="slip-edition-document"/);
+ const html=edition.report(model);assert.doesNotMatch(html,/>Vide </);assert.match(html,/>Zéro</);assert.match(html,/>0<\/td>/);assert.match(html,/Rubrique hors référentiel · ancien/);assert.doesNotMatch(html,/id="slip-edition-document"/);
  const batch=edition.printDocument({count:2,documents:[html,edition.report({...model,employee:{id:'b',displayName:'Bob'},record:{},noDraft:true})]});
  assert.equal((batch.match(/class="slip-print-page"/g)||[]).length,2);assert.match(batch,/break-after:page/);assert.match(batch,/AUCUN BROUILLON ENREGISTRÉ/);assert.ok(batch.indexOf('Alice')<batch.indexOf('Bob'));
+});
+test('édition : lignes cochées du statut ou renseignées, avec retrait réversible',()=>{
+ const selection={isDefaultPreview:false,rows:[{id:'required',label:'Cochée vide',retained:true},{id:'empty',label:'Non cochée vide',retained:false},{id:'zero',label:'Zéro',retained:false}]};
+ const model={dossier:{},employee:{id:'a'},period:'2026-01',refs:{status:[],category:[],service:[],functions:[],zone:[]},selection,record:{zero:{amount:'0'},legacy:{qty:'2'}}};
+ assert.deepEqual(edition.eligibleRows(model.record,selection).map(r=>r.id),['required','zero','legacy']);
+ const text=edition.report(model);assert.match(text,/Cochée vide/);assert.doesNotMatch(text,/Non cochée vide/);assert.match(text,/Zéro/);assert.match(text,/Rubrique hors référentiel · legacy/);
+ const prefs={excluded:new Set(['required']),natures:new Map()};const edited=edition.report({...model,preferences:prefs});assert.doesNotMatch(edited,/Cochée vide/);assert.match(edited,/1 ligne\(s\) retirée/);assert.equal(model.record.zero.amount,'0');
+ prefs.excluded.clear();assert.match(edition.report({...model,preferences:prefs}),/Cochée vide/);
+ assert.deepEqual(edition.eligibleRows({}, {...selection,isDefaultPreview:true}),[]);
+});
+test('gains et retenues suggérés ou confirmés, autres montants conservés',()=>{
+ const model={dossier:{},employee:{id:'a'},period:'2026-01',refs:{status:[],category:[],service:[],functions:[],zone:[]},selection:{isDefaultPreview:false,rows:[{id:'shift-premium',label:'Prime',retained:true},{id:'cnss-contributions',label:'CNSS',retained:true},{id:'gross-salary',label:'Brut',retained:true},{id:'ipts',label:'Impôt négatif',retained:true}]},record:{'shift-premium':{amount:'100'},'cnss-contributions':{amount:'20'},'gross-salary':{amount:'1000'},ipts:{amount:'-5'}}};
+ const out=edition.report(model);assert.match(out,/Prime <small>Suggestion à vérifier<\/small><\/th><td>—<\/td><td>—<\/td><td>100<\/td><td>—<\/td><td>—<\/td>/);assert.match(out,/CNSS <small>Suggestion à vérifier<\/small><\/th><td>—<\/td><td>—<\/td><td>—<\/td><td>20<\/td>/);assert.match(out,/>Brut<\/th><td>—<\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>1000<\/td>/);assert.match(out,/>Impôt négatif<\/th><td>—<\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>-5<\/td>/);
+ const prefs={excluded:new Set(),natures:new Map([['cnss-contributions','gain']])};assert.match(edition.report({...model,preferences:prefs}),/>CNSS<\/th><td>—<\/td><td>—<\/td><td>20<\/td>/);
 });
