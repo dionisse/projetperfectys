@@ -70,14 +70,14 @@ test('statut ancien reconnu seulement si son code ou son libellé est unique',()
  assert.equal(tools.resolveRubrics({employeeStatus:'C'},[...statuses,{id:'s3',code:'Z',label:'C',rubricIds:[]}],catalog).isDefaultPreview,true);
  assert.equal(tools.resolveRubrics({employeeStatus:'s2'},statuses,catalog).rows[0].retained,false);
 });
-test('l’aperçu est séparé uniquement à partir de six bulletins',()=>{assert.equal(edition.needsSeparateWindow(5),false);assert.equal(edition.needsSeparateWindow(6),true);});
+test('l’aperçu est séparé uniquement à partir de six bulletins',()=>{assert.equal(edition.needsFullscreen(5),false);assert.equal(edition.needsFullscreen(6),true);});
 test('sans brouillon ni statut, le modèle indicatif apparaît sans montants inventés',()=>{
  const selection=tools.resolveRubrics({id:'a'},[],[{id:'salary',label:'Salaire indicatif',selectedByReference:true},{id:'empty',label:'Rubrique non cochée',selectedByReference:false}]);
  const model={dossier:{},employee:{id:'a'},period:'2026-01',refs:{status:[],category:[],service:[],functions:[],zone:[]},selection,record:{},noDraft:true,preferences:{excluded:new Set(['salary']),natures:new Map()}};
  const out=edition.report(model);assert.match(out,/AUCUN BROUILLON ENREGISTRÉ/);assert.match(out,/Salaire indicatif/);assert.match(out,/modèle par défaut sont indicatives/);assert.doesNotMatch(out,/>Rubrique non cochée</);assert.match(out,/Montant à payer · valeur saisie<\/span><strong>—/);
 });
-test('fenêtre d’aperçu : cadre dédié et styles du bulletin conservés',()=>{
- const shell=edition.previewShell(),source=fs.readFileSync('modern-proto/js/payroll-slip-edition.js','utf8'),css=fs.readFileSync('modern-proto/css/payroll-slip-edition.css','utf8');
- assert.match(shell,/<!doctype html><html lang="fr">/);assert.match(shell,/slip-window-header/);assert.match(shell,/id="slip-window"/);assert.match(shell,/Chargement de l’aperçu/);
- assert.doesNotMatch(shell,/body\s*\{[^}]*font\s*:/);assert.match(source,/item\.cloneNode\(true\)/);assert.match(source,/Promise\.all\(localStyles\)/);assert.match(source,/data-window-selection/);assert.match(source,/data-edition-action="close-window"/);assert.match(css,/body\.slip-preview-window/);assert.match(css,/\.slip-edition-document \.slip-edition-table/);
+test('aperçu plein écran : modale intégrée et styles du bulletin conservés',()=>{
+ const shell=edition.fullscreenShell(),source=fs.readFileSync('modern-proto/js/payroll-slip-edition.js','utf8'),css=fs.readFileSync('modern-proto/css/payroll-slip-edition.css','utf8');
+ assert.match(shell,/slip-fullscreen-title/);assert.match(shell,/id="slip-fullscreen-content"/);assert.match(shell,/data-fullscreen-close/);assert.doesNotMatch(shell,/<html|<body/);
+ assert.match(source,/dialog\.showModal\(\)/);assert.match(source,/data-fullscreen-selection/);assert.match(source,/registerCloseGuard/);assert.match(css,/\.slip-edition-fullscreen/);assert.match(css,/height:100dvh/);assert.match(css,/\.slip-edition-document \.slip-edition-table/);
 });
