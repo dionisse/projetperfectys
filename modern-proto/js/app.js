@@ -171,6 +171,7 @@
     payrollRegisters: { dossierId: '', registry: 'all', period: '', employeeId: '', query: '' },
     payrollMainMenu: 'Fichier',
     payrollMenuItem: 'export-files',
+    payrollCurrentReportId: '',
     payrollEmployeeId: '',
     payrollEmployeeCreateMode: false,
     payrollEmployeeEditId: '',
@@ -354,6 +355,37 @@
     return parseHash().route === 'analytics'
       ? analyticalMenuHash(analyticGroup, analyticItem)
       : accountingMenuHash(accountingGroup, accountingTab, accountingChild);
+  }
+
+  // Sous-éléments relevés de la capture ; les traitements seront définis séparément.
+  function payrollCurrentMonthReportSections() {
+    return [
+      { title: 'Livres de paie', note: 'Les bulletins existants sont des brouillons de test. Le contenu et les règles de cumul de ces livres restent à définir.', items: [
+        { id: 'payroll-book-detail', label: 'Livre de paie détaillé' },
+        { id: 'payroll-book-cumulative', label: 'Livre de paie cumulé' }
+      ] },
+      { title: 'Paiements', note: 'Le suivi existant ne fait que déclarer des règlements fictifs. Aucun ordre bancaire ni paiement ne peut être exécuté ici.', items: [
+        { id: 'cash-payments', label: 'Etat des paiements en espèces' },
+        { id: 'cheques-to-issue', label: 'Etat des chèques à établir' },
+        { id: 'single-transfer-order', label: 'Ordre unique de virements' },
+        { id: 'multiple-transfers-cheque', label: 'Ordres multiples de virements avec chèque joint' },
+        { id: 'multiple-transfers-debit', label: 'Ordres multiples de virements par débit de notre compte' },
+        { id: 'multiple-transfers-text', label: 'Ordres multiples de virement par fichier-texte' }
+      ] },
+      { title: 'Avances', note: 'Les natures et les rubriques de bulletin existent, mais il n’existe pas encore de registre lié des avances et remboursements.', items: [
+        { id: 'advances-granted', label: 'Avances accordées' },
+        { id: 'advances-by-employee', label: 'Suivi des avances par employés' },
+        { id: 'advances-by-nature', label: 'Suivi des avances par nature' },
+        { id: 'advances-evolution', label: 'Evolution des avances de chaque employé' }
+      ] },
+      { title: 'Cumuls', note: 'Les services et zones de la fiche employé sont les valeurs actuelles ; les règles de regroupement et de période restent à définir.', items: [
+        { id: 'salary-components-by-service', label: 'Cumul par Services des rubriques de salaire' },
+        { id: 'salary-components-by-zone', label: 'Cumul par zones des rubriques de salaire' }
+      ] },
+      { title: 'Variations', note: 'Les règles de comparaison et la source historique des éléments fixes restent à définir.', items: [
+        { id: 'fixed-elements-variations', label: 'Variations des éléments fixes' }
+      ] }
+    ];
   }
 
   function payrollMenuSections(menu) {
@@ -584,6 +616,7 @@
         return { moduleId: requestedModuleId === 'analytics' ? 'accounting' : requestedModuleId, actionId: 'module.view' };
       }
       case 'open-payroll-dossier':
+      case 'payroll-current-report-select':
         return { moduleId: 'payroll-hr', actionId: 'module.view' };
       case 'create-payroll-dossier':
       case 'create-payroll-test-dossier':
@@ -22072,6 +22105,22 @@
     return '<section class="payroll-status-workspace payroll-definition-reference-workspace" aria-label="' + esc(config.title) + '"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · DÉFINITIONS</p><h3>' + esc(config.title) + '</h3></div><span class="badge draft">' + (isTestDossier ? 'PRH-TEST-2026 · TEST' : 'DOSSIER NON TEST') + '</span></div><div class="alert warning"><div>' + esc(config.intro) + (kind === 'banks' ? ' Ne saisissez aucune donnée bancaire réelle ou sensible.' : '') + ' Aucune donnée de paie n’est calculée par ces référentiels.</div></div><div class="payroll-status-workspace-layout"><aside class="payroll-status-list"><div class="payroll-status-list-head"><h4>' + esc(config.title) + ' (' + items.length + ')</h4></div><div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr>' + config.columns.map(function (field) { return '<th>' + esc(config.labels[field]) + '</th>'; }).join('') + '</tr></thead><tbody>' + (rows || '<tr><td colspan="' + config.columns.length + '">' + esc(config.blank) + '</td></tr>') + '</tbody></table></div></aside><div class="payroll-status-detail"><div class="payroll-status-detail-head"><h4>' + esc(mode === 'create' ? 'Nouvelle définition' : (selected ? selected.label : config.title)) + '</h4>' + actions + '</div>' + positionForm + itemForm + '</div></div>' + mergeDialog + '</section>';
   }
 
+  function viewPayrollCurrentMonthReports() {
+    var sections = payrollCurrentMonthReportSections();
+    var selectedSection = sections.find(function (section) { return section.items.some(function (item) { return item.id === ui.payrollCurrentReportId; }); });
+    var selected = selectedSection && selectedSection.items.find(function (item) { return item.id === ui.payrollCurrentReportId; });
+    var list = sections.map(function (section) {
+      return '<section class="payroll-current-report-group"><h4>' + esc(section.title) + '</h4><ul>' + section.items.map(function (item) {
+        var active = selected && selected.id === item.id;
+        return '<li><button type="button" class="payroll-current-report-item' + (active ? ' is-selected' : '') + '" data-action="payroll-current-report-select" data-report-id="' + esc(item.id) + '" aria-pressed="' + (active ? 'true' : 'false') + '"><span>' + esc(item.label) + '</span><small>À construire</small></button></li>';
+      }).join('') + '</ul></section>';
+    }).join('');
+    var detail = selected
+      ? '<div class="payroll-current-report-detail" aria-live="polite"><p class="page-kicker">ÉTAT SÉLECTIONNÉ</p><h4>' + esc(selected.label) + '</h4><p>' + esc(selectedSection.note) + '</p><p><strong>À construire :</strong> aucun état, fichier ou opération n’est produit par cette entrée pour le moment.</p></div>'
+      : '<div class="payroll-current-report-detail" aria-live="polite"><h4>Sélectionnez un état</h4><p>Les 15 éléments de la capture sont présentés dans l’ordre. Leur contenu et leurs règles sont à construire.</p></div>';
+    return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-current-month-payroll-reports" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Etats sur la paie du mois en cours</h3></div><span class="badge draft">À CONSTRUIRE</span></div><div class="alert info"><div>Navigation des états issue de la capture. Les traitements ne sont pas encore disponibles ; aucune donnée ou opération n’est créée.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="États sur la paie du mois en cours">' + list + '</nav>' + detail + '</div></section>';
+  }
+
   function viewPayrollMainMenu(dossier, dossierEmployees, canCreatePayrollEmployee, canEditPayrollEmployee) {
     var activeMenu = ui.payrollMainMenu || 'Fichier';
     var sections = payrollMenuSections(activeMenu);
@@ -22100,6 +22149,7 @@
     var panelStatus = !selectedItem ? 'À définir' : (selectedItem.hasChildren ? 'Sous-menu à préciser' : 'À construire');
     var panel;
     if (selectedItem && selectedItem.id === 'employees') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-employees">' + viewPayrollEmployeeDetails(dossier, dossierEmployees || [], canCreatePayrollEmployee === true) + '</div>';
+    else if (selectedItem && selectedItem.id === 'current-month-payroll-reports') panel = viewPayrollCurrentMonthReports();
     else if (selectedItem && selectedItem.id === 'payslip-edition') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-payslip-edition"><div id="payroll-slip-edition-workspace"></div></div>';
     else if (selectedItem && (selectedItem.id === 'exceptional-payslip-1' || selectedItem.id === 'exceptional-payslip-2')) panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-' + esc(selectedItem.id) + '"><div id="payroll-slip-edition-workspace" data-edition-variant="' + (selectedItem.id === 'exceptional-payslip-1' ? 'exceptional-1' : 'exceptional-2') + '"></div></div>';
     else if (selectedItem && selectedItem.id === 'payslips') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-payslips"><div id="payroll-payslip-workspace"></div></div>';
@@ -35439,6 +35489,17 @@
         var printDossier = PayrollHR.currentDossier();
         if (!printDossier || !PayrollHR.isDemoTestDossier(printDossier.id)) { toast('Impression réservée à la fiche fictive PRH-TEST-2026.', 'warning'); break; }
         printPayrollEmployee();
+        break;
+      }
+      case 'payroll-current-report-select': {
+        if (ui.payrollMainMenu !== 'Editions' || ui.payrollMenuItem !== 'current-month-payroll-reports') break;
+        var reportId = trigger.getAttribute('data-report-id') || '';
+        var knownReport = payrollCurrentMonthReportSections().some(function (section) { return section.items.some(function (item) { return item.id === reportId; }); });
+        if (!knownReport) break;
+        ui.payrollCurrentReportId = reportId;
+        render();
+        var selectedReportButton = $('[data-action="payroll-current-report-select"][aria-pressed="true"]');
+        if (selectedReportButton) selectedReportButton.focus({ preventScroll: true });
         break;
       }
       case 'payroll-menu-item':
