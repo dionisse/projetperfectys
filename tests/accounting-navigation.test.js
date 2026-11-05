@@ -407,7 +407,7 @@ assert.match(configurationCss, /\.report-preview-overlay,[\s\S]*position:\s*fixe
   'la fenêtre générique occupe tout l’écran avec une zone de rapport défilable');
 assert.match(configurationCss, /body\.report-preview-printing \.report-preview-sheet[\s\S]*position:\s*absolute/,
   'l’impression de l’aperçu commun isole le document du reste de l’application');
-assert.match(appSource, /function journalLinesReportIdentity[\s\S]*id === 'company-name'[\s\S]*Dossier concerné/,
+assert.match(appSource, /function journalLinesReportIdentity[\s\S]*licenseOwnerName\(\)[\s\S]*Dossier concerné/,
   'l’aperçu reprend le titulaire de licence puis le dossier concerné');
 assert.match(appSource, /Organisation · propriétaire de la licence[\s\S]*Dossier concerné/,
   'le même en-tête d’identification est inclus dans la zone d’aperçu et d’impression');

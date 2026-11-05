@@ -487,6 +487,10 @@
     return demoMembers.find(function (member) { return member.id === activeDemoMemberId; }) || demoMembers[0] || null;
   }
 
+  // Aucune identité de licence réelle n'est encore connectée dans ce prototype.
+  // Ne jamais déduire son titulaire du dossier client ou d'un profil simulé.
+  function licenseOwnerName() { return ''; }
+
   function isConfidentialAccountsSupervisor(member) {
     member = member || getActiveDemoMember();
     return !!member && member.role === 'supervisor' && String(member.organizationId || '') === DEMO_ORGANIZATION_ID;
@@ -1550,7 +1554,7 @@
       '<div class="report-preview-identity-dossier"><span>Dossier concerné</span><strong>' + esc(identity.dossierName) + '</strong>' +
         (identity.reference ? '<small>Référence : ' + esc(identity.reference) + '</small>' : '') +
       '</div>' +
-      (!identity.ownerConfigured ? '<p class="alert warning report-preview-identity-warning">Le titulaire de la licence n’est pas renseigné dans les informations communes du dossier.</p>' : '') +
+      (!identity.ownerConfigured ? '<p class="alert warning report-preview-identity-warning">L’identité du titulaire de la licence n’est pas connectée dans cette démonstration.</p>' : '') +
     '</div>';
   }
 
@@ -20523,13 +20527,7 @@
         canValidate: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'record.validate', payrollAccessContext(editionDossier)); },
         actorId: function () { var member = getActiveDemoMember(); return member && member.id || ''; },
         canView: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'module.view', payrollAccessContext(editionDossier)); },
-        licenseOwner: function () {
-          // Le paramétrage comptable est propre à un dossier : pas de lecture du dossier actif par défaut.
-          var linked = permittedDemoDossiers(getActiveDemoMember()).find(function (item) { return item.id === editionDossier.accountingDossierId; });
-          var rows = linked && linked.printedReportInformationConfiguration && linked.printedReportInformationConfiguration.rows || [];
-          var owner = rows.find(function (row) { return row && row.id === 'company-name'; });
-          return owner && String(owner.value || '').trim() || 'Non renseigné ou non accessible';
-        }
+        licenseOwner: licenseOwnerName
       });
     }
     var loanNatureWorkspace = $('#payroll-loan-nature-workspace');
@@ -30106,13 +30104,10 @@
   }
 
   function journalLinesReportIdentity(dossier) {
-    var configuration = S.printedReportInformationConfiguration();
-    var rows = configuration && Array.isArray(configuration.rows) ? configuration.rows : [];
-    var licenseOwnerRow = rows.find(function (row) { return row && row.id === 'company-name'; });
-    var licenseOwner = String(licenseOwnerRow && licenseOwnerRow.value || '').trim();
+    var licenseOwner = licenseOwnerName();
     var dossierName = String(dossier && (dossier.clientName || dossier.name) || '').trim();
     return {
-      licenseOwner: licenseOwner || 'Nom du propriétaire de la licence non renseigné',
+      licenseOwner: licenseOwner || 'Titulaire indisponible dans la démonstration',
       ownerConfigured: !!licenseOwner,
       dossierName: dossierName || 'Nom du dossier non renseigné',
       reference: String(dossier && dossier.reference || '').trim()
@@ -30236,7 +30231,7 @@
           '</div>' +
           '<div class="journal-lines-print-period"><span>' + esc(periodLabel) + '</span><strong>' + esc(dateLabel(session.filters.from)) + ' — ' + esc(dateLabel(session.filters.to)) + '</strong></div>' +
         '</div>' +
-        (!identity.ownerConfigured ? '<div class="alert warning journal-lines-owner-warning journal-lines-no-print"><div>Le nom du titulaire de la licence n’est pas renseigné. Complétez « Raison sociale (nom de la licence) » dans Paramètres → Informations communes aux états imprimés.</div></div>' : '') +
+        (!identity.ownerConfigured ? '<div class="alert warning journal-lines-owner-warning journal-lines-no-print"><div>L’identité du titulaire de la licence n’est pas connectée dans cette démonstration.</div></div>' : '') +
         (groupsHtml || empty) +
       '</div>';
   }
@@ -30946,7 +30941,7 @@
     var printAction = '<button type="button" class="btn btn-primary" data-journal-allocation-sheet-print>Imprimer / Enregistrer en PDF</button>';
     return '<div class="journal-allocation-sheet-view">' + backLink +
       pageHeader('Fiche d’imputation', 'Modèle vierge au format A4 : trois fiches par page, avec six lignes d’imputation au maximum par fiche.', printAction) +
-      (!identity.ownerConfigured ? '<div class="alert warning journal-allocation-sheet-owner-warning"><div>Le titulaire de licence n’est pas renseigné. Complétez « Raison sociale (nom de la licence) » dans Paramètres → Informations communes aux états imprimés.</div></div>' : '') +
+      (!identity.ownerConfigured ? '<div class="alert warning journal-allocation-sheet-owner-warning"><div>L’identité du titulaire de la licence n’est pas connectée dans cette démonstration.</div></div>' : '') +
       '<div class="alert info journal-allocation-sheet-print-note"><div>Les champs de pièce, date et journal ainsi que les lignes restent vierges ; cette fiche ne crée aucune écriture dans le dossier. Cliquez sur <strong>Imprimer / Enregistrer en PDF</strong> ; dans la boîte du navigateur, choisissez l’imprimante ou « Enregistrer au format PDF ». L’aperçu ci-dessous correspond aux trois fiches qui seront imprimées sur une page A4.</div></div>' +
       '<div class="journal-allocation-sheet-page" aria-label="Aperçu de trois fiches d’imputation sur une page A4">' + forms + '</div>' +
     '</div>';

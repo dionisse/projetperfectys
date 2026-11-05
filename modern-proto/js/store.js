@@ -1639,7 +1639,7 @@
 
   function defaultPrintedReportInformationRows() {
     return [
-      { id: 'company-name', label: 'Raison sociale (nom de la licence)', value: '' },
+      { id: 'company-name', label: 'Raison sociale du dossier', value: '' },
       { id: 'business-name', label: 'Sigle/Enseigne commerciale', value: '' },
       { id: 'phone', label: 'Téléphone', value: '' },
       { id: 'insae-number', label: 'Numéro INSAE', value: '' },

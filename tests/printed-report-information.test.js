@@ -61,7 +61,7 @@ assert.equal(initial.rows.filter(row => row.separator).length, 4, 'les cinq sect
 assert.equal(new Set(ids).size, ids.length, 'chaque ligne, séparateurs compris, a un identifiant unique');
 assert.equal(new Set(labels.map(label => label.toLocaleLowerCase('fr'))).size, labels.length, 'aucune rubrique n’est dupliquée');
 assert.deepEqual(labels.slice(0, 10), [
-  'Raison sociale (nom de la licence)', 'Sigle/Enseigne commerciale', 'Téléphone', 'Numéro INSAE',
+  'Raison sociale du dossier', 'Sigle/Enseigne commerciale', 'Téléphone', 'Numéro INSAE',
   'Numéro IFU', 'Greffe', 'Numéro Registre du Commerce', 'Code Activité', 'Activité principale', 'Code importateur'
 ]);
 assert.deepEqual(labels.slice(10, 16), ['Adresse - Siège', 'Et secondaire 1', 'Et secondaire 2', 'Code BP', 'Boîte postale', 'Ville BP']);
