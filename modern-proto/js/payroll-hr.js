@@ -431,6 +431,15 @@
         if (employeeAttendance && Object.keys(employeeAttendance).length) return { ok: false, errors: ['Cette fiche possède des heures de présence ; effacez ses horaires de test avant de la supprimer.'] };
       }
     } catch (err) { return { ok: false, errors: ['Les présences sont illisibles ; la suppression est bloquée pour protéger les données.'] }; }
+    // L'historique de règlements déclarés, y compris les annulations, doit rester rattaché à sa fiche.
+    try {
+      var paymentRaw = root.localStorage && root.localStorage.getItem('perfecto.payroll.payment-declarations.v1.' + encodeURIComponent(dossierId));
+      if (paymentRaw) {
+        var paymentData = JSON.parse(paymentRaw);
+        if (!paymentData || paymentData.version !== 1 || !Array.isArray(paymentData.events) || paymentData.events.some(function (item) { return !item || typeof item.employeeId !== 'string'; })) return { ok: false, errors: ['Historique des règlements illisible ; suppression bloquée.'] };
+        if (paymentData.events.some(function (item) { return item.employeeId === employeeId; })) return { ok: false, errors: ['Cette fiche possède un historique de règlements déclarés et ne peut pas être supprimée.'] };
+      }
+    } catch (err) { return { ok: false, errors: ['Historique des règlements illisible ; suppression bloquée.'] }; }
     dossier.demoEmployees = employees.filter(function (item) { return item && item.id !== employeeId; });
     if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible de supprimer la fiche du stockage local de test.'] };
     return { ok: true, errors: [], deletedEmployeeId: employeeId };

@@ -20517,9 +20517,11 @@
 
   function bindPayrollModuleView() {
     var editionWorkspace = $('#payroll-slip-edition-workspace');
-    if (editionWorkspace && window.PayrollSlipEdition && window.PayrollPayslipWorkspace) {
+    if (editionWorkspace && window.PayrollSlipEdition && window.PayrollPayslipWorkspace && window.PayrollPaymentTracking) {
       var editionDossier = PayrollHR.currentDossier();
-      if (editionDossier) window.PayrollSlipEdition.mount(editionWorkspace, { hr: PayrollHR, dossier: editionDossier, tools: window.PayrollPayslipWorkspace,
+      if (editionDossier) window.PayrollSlipEdition.mount(editionWorkspace, { hr: PayrollHR, dossier: editionDossier, tools: window.PayrollPayslipWorkspace, payments: window.PayrollPaymentTracking,
+        canValidate: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'record.validate', payrollAccessContext(editionDossier)); },
+        actorId: function () { var member = getActiveDemoMember(); return member && member.id || ''; },
         canView: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'module.view', payrollAccessContext(editionDossier)); },
         licenseOwner: function () {
           // Le paramétrage comptable est propre à un dossier : pas de lecture du dossier actif par défaut.
@@ -21553,7 +21555,7 @@
       return '<tr data-register="' + esc(row.registry) + '" data-source-id="' + esc(row.sourceId) + '" data-dossier-id="' + esc(dossier.id) + '"><td>' + esc(registryLabels[row.registry]) + '</td><td><strong>' + esc(row.sourceId) + '</strong><br>' + esc(row.label) + '</td><td>' + esc(row.employeeLabel) + '</td><td>' + esc(row.period || '—') + '</td><td>' + esc(row.type) + '</td><td>' + esc(row.status) + '</td></tr>';
     }).join('');
     var emptyReason = filters.registry === 'payslips' ? 'Les bulletins ne sont pas disponibles : aucun lot calculé, approuvé et verrouillé.'
-      : filters.registry === 'payments' ? 'Aucun paiement ni preuve n’est enregistré ; ce parcours est désactivé.'
+      : filters.registry === 'payments' ? 'Aucun paiement ni preuve vérifiée dans ce registre de production. Les déclarations fictives locales sont consultables dans Éditions → Bulletin de salaires.'
       : filters.registry === 'transfers' ? 'Le registre des transferts comptables reste séparé et n’est pas exposé dans cette vue sans contrôle explicite de l’accès au dossier comptable.'
       : 'Aucune ligne ne correspond aux filtres dans le dossier RH actif.';
     var selectedEmployee = data.employees.find(function (employee) { return employee.id === filters.employeeId; });
@@ -21574,10 +21576,10 @@
     var readiness = PayrollHR.payslipAndPaymentReadiness(dossier.id);
     var reasons = readiness.reasons.map(function (reason) { return '<li>' + esc(reason) + '</li>'; }).join('');
     return '<section class="exchange-card payroll-payslips-payments"><p class="page-kicker">ÉTAPE 14 · DOCUMENTS ET PAIEMENTS BLOQUÉS</p><h3>Bulletins et suivi des paiements</h3>' +
-      '<div class="alert warning"><div><strong>Aucun bulletin ni suivi de paiement n’est disponible.</strong> La génération exige un lot calculé, contrôlé, approuvé et verrouillé. Un paiement ne peut être confirmé sans source et preuve vérifiables. Cette interface ne reçoit aucune donnée bancaire ni preuve réelle.</div></div>' +
+      '<div class="alert warning"><div><strong>Aucun bulletin final ni suivi de paiement vérifié n’est disponible.</strong> La génération exige un lot calculé, contrôlé, approuvé et verrouillé. Un paiement ne peut être confirmé sans source et preuve vérifiables. Cette interface ne reçoit aucune donnée bancaire ni preuve réelle. Les déclarations fictives de règlement dans Éditions → Bulletin de salaires restent séparées de ce parcours.</div></div>' +
       '<details open><summary>Prérequis non satisfaits (' + reasons.length + ')</summary><ul>' + reasons + '</ul></details>' +
       '<div class="payroll-payslip-actions"><button class="btn btn-secondary" type="button" disabled>Prévisualiser (non disponible)</button><button class="btn btn-secondary" type="button" disabled>Émettre un bulletin</button><button class="btn btn-secondary" type="button" disabled>Enregistrer une preuve de paiement</button></div>' +
-      '<p class="small muted">Aucun document, montant, devise, référence de transaction, statut payé, paiement bancaire ou écriture comptable n’est créé. Aucun format d’impression/export n’est proposé à cette étape.</p></section>';
+      '<p class="small muted">Ce parcours historique ne crée aucun bulletin final, justificatif vérifié, paiement bancaire ou écriture comptable. Les déclarations fictives sont conservées séparément dans le navigateur.</p></section>';
   }
 
   function viewPayrollEmployeeDetails(dossier, dossierEmployees, canCreatePayrollEmployee) {

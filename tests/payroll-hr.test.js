@@ -280,6 +280,12 @@ localStorage.setItem(attendanceStorageKey, JSON.stringify({version:1, employees:
 assert.equal(PayrollHR.deleteEmployee(testDossier.dossier.id, addedTestEmployee.employee.id).ok, false, 'les pointages protègent la fiche contre une suppression orpheline');
 assert.ok(PayrollHR.employee(testDossier.dossier.id, addedTestEmployee.employee.id));
 localStorage.removeItem(attendanceStorageKey);
+const paymentKey = 'perfecto.payroll.payment-declarations.v1.' + encodeURIComponent(testDossier.dossier.id);
+global.localStorage.setItem(paymentKey, JSON.stringify({version:1,events:[{employeeId:addedTestEmployee.employee.id}]}));
+assert.equal(PayrollHR.deleteEmployee(testDossier.dossier.id, addedTestEmployee.employee.id).ok, false, 'un historique de règlement protège la fiche');
+global.localStorage.setItem(paymentKey, '{invalide');
+assert.equal(PayrollHR.deleteEmployee(testDossier.dossier.id, addedTestEmployee.employee.id).ok, false, 'un historique illisible bloque la suppression');
+global.localStorage.removeItem(paymentKey);
 assert.equal(PayrollHR.deleteEmployee(testDossier.dossier.id, addedTestEmployee.employee.id).ok, true);
 assert.equal(PayrollHR.employee(testDossier.dossier.id, addedTestEmployee.employee.id), null);
 assert.equal(PayrollHR.isDemoTestDossier(testDossier.dossier.id), true, 'le dossier test reste valide après suppression d’une fiche non liée');

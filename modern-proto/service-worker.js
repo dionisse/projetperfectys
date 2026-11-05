@@ -104,6 +104,7 @@ const APP_SHELL = [
   './js/accounting-database-repair.js',
   './js/payroll-hr.js',
   './js/payroll-payslip-workspace.js',
+  './js/payroll-payment-tracking.js',
   './js/payroll-slip-edition.js',
   './js/payroll-supplementary-payslips.js',
   './js/payroll-attendance.js',
