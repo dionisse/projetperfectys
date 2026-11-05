@@ -46,3 +46,22 @@
 
 .slip-edition-external { padding:16px; margin:12px 0; background:#fff; border:1px solid #dbe7e0; border-radius:8px; }
 .slip-edition-external p { line-height:1.5; }
+
+/* Fenêtre d’aperçu : un cadre distinct, sans modifier le style des bulletins. */
+body.slip-preview-window { margin:0; padding:clamp(12px, 3vw, 28px); background:#f3f6f4; }
+.slip-window-header, #slip-window { max-width:1250px; margin-left:auto; margin-right:auto; }
+.slip-window-header { margin-bottom:18px; padding:20px 24px; border:1px solid #dbe7e0; border-radius:12px; background:#fff; box-shadow:0 6px 24px rgba(26,60,45,.06); }
+.slip-window-kicker { color:#167461; font-size:.68rem; font-weight:700; letter-spacing:.14em; }
+.slip-window-header h1 { margin:5px 0; font-size:clamp(1.25rem, 2vw, 1.75rem); line-height:1.25; }
+.slip-window-header p { margin:0; color:#667c70; font-size:.85rem; }
+.slip-window-selection { margin:12px 0; border:1px solid #dbe7e0; border-radius:9px; background:#fff; }
+.slip-window-selection summary { padding:12px 16px; cursor:pointer; font-weight:700; }
+.slip-window-selection .slip-edition-selection { margin:0 16px 16px; }
+@media(max-width:600px) {
+  .slip-window-header { padding:16px; }
+  .slip-window-selection .slip-edition-selection { margin:0 10px 10px; }
+  /* Le design system général ne doit pas tronquer les colonnes sur téléphone. */
+  .slip-edition-document .slip-edition-table { font-size:10px !important; }
+  .slip-edition-document .slip-edition-table :is(th,td) { padding:5px 2px !important; white-space:normal !important; overflow-wrap:anywhere; }
+  .slip-edition-document .slip-edition-table thead th { height:auto !important; }
+}
