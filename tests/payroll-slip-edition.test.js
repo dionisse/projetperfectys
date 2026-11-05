@@ -43,12 +43,23 @@ test('édition : lignes cochées du statut ou renseignées, avec retrait révers
  const model={dossier:{},employee:{id:'a'},period:'2026-01',refs:{status:[],category:[],service:[],functions:[],zone:[]},selection,record:{zero:{amount:'0'},legacy:{qty:'2'}}};
  assert.deepEqual(edition.eligibleRows(model.record,selection).map(r=>r.id),['required','zero','legacy']);
  const text=edition.report(model);assert.match(text,/Cochée vide/);assert.doesNotMatch(text,/Non cochée vide/);assert.match(text,/Zéro/);assert.match(text,/Rubrique hors référentiel · legacy/);
- const prefs={excluded:new Set(['required']),natures:new Map()};const edited=edition.report({...model,preferences:prefs});assert.doesNotMatch(edited,/Cochée vide/);assert.match(edited,/1 ligne\(s\) retirée/);assert.equal(model.record.zero.amount,'0');
- prefs.excluded.clear();assert.match(edition.report({...model,preferences:prefs}),/Cochée vide/);
+ const prefs={excluded:new Set(['required','zero']),natures:new Map()};const edited=edition.report({...model,preferences:prefs});assert.match(edited,/Cochée vide/);assert.doesNotMatch(edited,/>Zéro</);assert.match(edited,/1 ligne\(s\) non cochée\(s\) retirée/);assert.equal(model.record.zero.amount,'0');
+ prefs.excluded.clear();assert.match(edition.report({...model,preferences:prefs}),/>Zéro</);
+ const unknown=edition.report({...model,selection:{...selection,isDefaultPreview:true},preferences:{excluded:new Set(['zero']),natures:new Map()}});assert.match(unknown,/>Zéro</);
  assert.deepEqual(edition.eligibleRows({}, {...selection,isDefaultPreview:true}),[]);
 });
 test('gains et retenues suggérés ou confirmés, autres montants conservés',()=>{
  const model={dossier:{},employee:{id:'a'},period:'2026-01',refs:{status:[],category:[],service:[],functions:[],zone:[]},selection:{isDefaultPreview:false,rows:[{id:'shift-premium',label:'Prime',retained:true},{id:'cnss-contributions',label:'CNSS',retained:true},{id:'gross-salary',label:'Brut',retained:true},{id:'ipts',label:'Impôt négatif',retained:true}]},record:{'shift-premium':{amount:'100'},'cnss-contributions':{amount:'20'},'gross-salary':{amount:'1000'},ipts:{amount:'-5'}}};
  const out=edition.report(model);assert.match(out,/Prime <small>Suggestion à vérifier<\/small><\/th><td>—<\/td><td>—<\/td><td>100<\/td><td>—<\/td><td>—<\/td>/);assert.match(out,/CNSS <small>Suggestion à vérifier<\/small><\/th><td>—<\/td><td>—<\/td><td>—<\/td><td>20<\/td>/);assert.match(out,/>Brut<\/th><td>—<\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>1000<\/td>/);assert.match(out,/>Impôt négatif<\/th><td>—<\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>-5<\/td>/);
  const prefs={excluded:new Set(),natures:new Map([['cnss-contributions','gain']])};assert.match(edition.report({...model,preferences:prefs}),/>CNSS<\/th><td>—<\/td><td>—<\/td><td>20<\/td>/);
+});
+test('visibilité groupée : ciblage explicite, obligations individuelles et statut inconnu',()=>{
+ const rows=[{id:'x',label:'X',retained:false},{id:'y',label:'Y',retained:false},{id:'required',label:'Obligatoire',retained:true}],sel={isDefaultPreview:false,rows};
+ const source={employee:{id:'a'},selection:sel,record:{x:{amount:'1'},y:{amount:'2'}},preferences:{excluded:new Set(['x']),natures:new Map()}};
+ const target=(id,selection,record)=>({employee:{id},selection,record,preferences:{excluded:new Set(['y']),natures:new Map([['y','gain']])}});
+ const targets=[target('b',sel,{x:{amount:'3'},y:{amount:'4'}}),target('c',{...sel,rows:rows.map(r=>r.id==='x'?{...r,retained:true}:r)},{x:{amount:'5'}}),target('d',{...sel,isDefaultPreview:true},{x:{amount:'6'}})];
+ const plan=edition.visibilityPlan(source,targets,new Set(['x','y']));
+ assert.deepEqual(plan.operations,[{employeeId:'b',rowId:'x',hide:true},{employeeId:'b',rowId:'y',hide:false}]);assert.equal(plan.mandatory,1);assert.equal(plan.missing,1);assert.equal(plan.unknown,1);
+ assert.equal(targets[0].record.x.amount,'3');assert.deepEqual([...targets[0].preferences.excluded],['y']);assert.equal(targets[0].preferences.natures.get('y'),'gain');
+ assert.throws(()=>edition.visibilityPlan(source,targets,new Set(['required'])),/sélection des rubriques a changé/);
 });
