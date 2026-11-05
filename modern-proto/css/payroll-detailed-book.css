@@ -1,0 +1,48 @@
+/* Livre de paie détaillé · sélection, mise en page et aperçu intégré. */
+.payroll-book-back { margin-bottom:16px; }
+.payroll-book-workspace { min-width:0; }
+.payroll-book-workspace form > fieldset { min-width:0; margin:16px 0; padding:16px; border:1px solid #dce5df; border-radius:8px; }
+.payroll-book-workspace legend { padding:0 5px; font-weight:700; color:#40584c; }
+.payroll-book-filters { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+.payroll-book-filters label,.payroll-book-layout-grid > label,.payroll-book-layout-grid fieldset label { display:grid; gap:5px; font-size:.75rem; font-weight:650; }
+.payroll-book-filters select,.payroll-book-layout-grid select,.payroll-book-layout-grid input[type=number] { box-sizing:border-box; width:100%; min-width:0; padding:9px; border:1px solid #cbd7d2; border-radius:6px; background:#fff; }
+.payroll-book-columns { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px 15px; }
+.payroll-book-columns label { min-width:0; overflow-wrap:anywhere; display:flex; align-items:flex-start; gap:6px; font-size:.72rem; line-height:1.35; }
+.payroll-book-columns input { flex:none; margin-top:2px; accent-color:#a77924; }
+.payroll-book-columns small { color:#826528; }
+.payroll-book-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:12px 0; }
+.payroll-book-layout-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.payroll-book-layout-grid > label,.payroll-book-layout-grid fieldset { min-width:0; margin:0; padding:12px; border:1px solid #e0e8e2; border-radius:8px; }
+.payroll-book-layout-grid fieldset label { display:flex; align-items:center; margin:6px 0; }
+.payroll-book-layout-grid fieldset label:has(input[type=number]) { display:grid; }
+.payroll-book-destinations { grid-column:1/-1; }
+.payroll-book-fullscreen { position:fixed; inset:0; box-sizing:border-box; width:100vw; max-width:none; height:100vh; height:100dvh; max-height:none; margin:0; padding:0; border:0; overflow:auto; color:#243b31; background:#f2f5f3; font:inherit; }
+.payroll-book-fullscreen::backdrop { background:rgba(25,33,29,.55); }
+.payroll-book-preview-frame { box-sizing:border-box; min-height:100%; padding:clamp(12px,2.5vw,28px); }
+.payroll-book-preview-header { position:sticky; top:0; z-index:2; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; padding:14px 20px; margin-bottom:16px; border:1px solid #dce5df; border-radius:10px; background:#fff; }
+.payroll-book-preview-header h2 { margin:3px 0; font-size:1.25rem; }
+.payroll-book-preview-header p { margin:0; }
+.payroll-book-report { box-sizing:border-box; padding:24px; background:#fff; border:1px solid #dce5df; border-radius:10px; }
+.payroll-book-report-head { display:flex; justify-content:space-between; flex-wrap:wrap; gap:16px; padding-bottom:14px; border-bottom:2px solid #a77924; }
+.payroll-book-report-head div { min-width:0; max-width:32%; overflow-wrap:anywhere; }
+.payroll-book-report-head small,.payroll-book-report-head strong,.payroll-book-report-head span { display:block; }
+.payroll-book-report-head small { color:#87631d; font-size:.62rem; font-weight:700; }
+.payroll-book-report-head h2 { margin:4px 0; font-size:1.2rem; }
+.payroll-book-context { font-size:.75rem; }
+.payroll-book-notes { padding:8px 12px; margin:12px 0; border-left:3px solid #c89d46; background:#fdf8eb; font-size:.7rem; line-height:1.45; overflow-wrap:anywhere; }
+.payroll-book-notes p { margin:4px 0; }
+.payroll-book-table-wrap { max-width:100%; overflow:auto; }
+.payroll-book-table { width:100%; min-width:max-content; border-collapse:collapse; font-size:.7rem; }
+.payroll-book-table th,.payroll-book-table td { min-width:105px; max-width:220px; padding:8px; border:1px solid #dde6df; text-align:left; vertical-align:top; overflow-wrap:anywhere; }
+.payroll-book-table th { background:#f4f0e7; color:#5e4b25; }
+@media(max-width:800px){.payroll-book-filters,.payroll-book-columns{grid-template-columns:repeat(2,minmax(0,1fr));}.payroll-book-report-head div{max-width:100%;}}
+@media(max-width:500px){.payroll-book-filters,.payroll-book-columns,.payroll-book-layout-grid{grid-template-columns:minmax(0,1fr);}.payroll-book-report{padding:14px;}.payroll-book-destinations{grid-column:auto;}}
+
+/* L’aperçu reflète le style typographique choisi pour l’impression. */
+.payroll-book-report.is-mono { font:8pt Arial,sans-serif; color:#111; }
+.payroll-book-report.is-color { font:10pt Arial,sans-serif; color:#111; }
+.payroll-book-report.is-mono .payroll-book-table,.payroll-book-report.is-color .payroll-book-table { font-size:inherit; }
+.payroll-book-report.is-mono .payroll-book-report-head { border-color:#333; }
+.payroll-book-report.is-mono .payroll-book-report-head small { color:#333; }
+.payroll-book-report.is-mono .payroll-book-table th { background:#eee; color:#111; }
+.payroll-book-report.is-mono .payroll-book-notes { background:#f6f6f6; border-color:#777; }

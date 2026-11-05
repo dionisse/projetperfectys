@@ -15,8 +15,8 @@ test('les 15 états du mois reprennent les libellés et les groupes de la captur
 });
 test('navigation clairement provisoire et ne lançant aucune opération',()=>{
  assert.match(app,/selectedItem\.id === 'current-month-payroll-reports'\) panel = viewPayrollCurrentMonthReports\(\)/);
- assert.match(app,/data-action="payroll-current-report-select"/);assert.match(app,/case 'payroll-current-report-select':\s*return \{ moduleId: 'payroll-hr', actionId: 'module.view' \}/);
- assert.match(app,/Aucun état, fichier ou opération/i);assert.match(app,/Aucun ordre bancaire ni paiement ne peut être exécuté/);assert.match(app,/n’existe pas encore de registre lié des avances/);
+ assert.match(app,/data-action="payroll-current-report-select"/);assert.match(app,/case 'payroll-current-report-select':[\s\S]*?return \{ moduleId: 'payroll-hr', actionId: 'module.view' \}/);
+ assert.match(app,/Aucun état, fichier ou opération/i); assert.equal(sections[0].items[0].ready,true);assert.match(app,/Aucun ordre bancaire ni paiement ne peut être exécuté/);assert.match(app,/n’existe pas encore de registre lié des avances/);
  assert.doesNotMatch(source,/localStorage|\.setItem|fetch\(|window\.open/);
 });
 
