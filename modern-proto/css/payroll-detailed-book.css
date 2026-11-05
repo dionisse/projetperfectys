@@ -46,3 +46,5 @@
 .payroll-book-report.is-mono .payroll-book-report-head small { color:#333; }
 .payroll-book-report.is-mono .payroll-book-table th { background:#eee; color:#111; }
 .payroll-book-report.is-mono .payroll-book-notes { background:#f6f6f6; border-color:#777; }
+
+.payroll-book-table tr.payroll-book-total td { font-weight:700; border-top:2px solid #8d743b; background:#f6f3ec; }

@@ -360,9 +360,9 @@
   // Sous-éléments relevés de la capture ; les traitements seront définis séparément.
   function payrollCurrentMonthReportSections() {
     return [
-      { title: 'Livres de paie', note: 'Le livre cumulé reste à définir. Le livre détaillé utilise les brouillons de test existants.', items: [
+      { title: 'Livres de paie', note: 'Les livres détaillé et cumulé utilisent les brouillons de test existants.', items: [
         { id: 'payroll-book-detail', label: 'Livre de paie détaillé', ready: true },
-        { id: 'payroll-book-cumulative', label: 'Livre de paie cumulé' }
+        { id: 'payroll-book-cumulative', label: 'Livre de paie cumulé', ready: true }
       ] },
       { title: 'Paiements', note: 'Le suivi existant ne fait que déclarer des règlements fictifs. Aucun ordre bancaire ni paiement ne peut être exécuté ici.', items: [
         { id: 'cash-payments', label: 'Etat des paiements en espèces' },
@@ -20557,7 +20557,7 @@
     var payrollBookWorkspace = $('#payroll-detailed-book-workspace');
     if (payrollBookWorkspace && window.PayrollDetailedBook && window.PayrollPayslipWorkspace) {
       var payrollBookDossier = PayrollHR.currentDossier();
-      if (payrollBookDossier) window.PayrollDetailedBook.mount(payrollBookWorkspace, { hr: PayrollHR, dossier: payrollBookDossier, tools: window.PayrollPayslipWorkspace, exchange: AccountingExchange,
+      if (payrollBookDossier && (payrollBookWorkspace.getAttribute('data-book-mode') !== 'cumulative' || window.PayrollCumulativeBook)) window.PayrollDetailedBook.mount(payrollBookWorkspace, { hr: PayrollHR, dossier: payrollBookDossier, tools: window.PayrollPayslipWorkspace, exchange: AccountingExchange, mode: payrollBookWorkspace.getAttribute('data-book-mode'), cumulative: window.PayrollCumulativeBook,
         canView: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'module.view', payrollAccessContext(payrollBookDossier)); }, licenseOwner: licenseOwnerName });
     }
     var editionWorkspace = $('#payroll-slip-edition-workspace');
@@ -22122,11 +22122,11 @@
         return '<li><button type="button" class="payroll-current-report-item' + (active ? ' is-selected' : '') + '" data-action="payroll-current-report-select" data-report-id="' + esc(item.id) + '" aria-pressed="' + (active ? 'true' : 'false') + '"><span>' + esc(item.label) + '</span><small>' + (item.ready ? 'Brouillon test' : 'À construire') + '</small></button></li>';
       }).join('') + '</ul></section>';
     }).join('');
-    if (selected && selected.id === 'payroll-book-detail') return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-current-month-payroll-reports"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-current-report-back">← Retour aux états</button><div id="payroll-detailed-book-workspace"></div></section>';
+    if (selected && (selected.id === 'payroll-book-detail' || selected.id === 'payroll-book-cumulative')) return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-current-month-payroll-reports"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-current-report-back">← Retour aux états</button><div id="payroll-detailed-book-workspace" data-book-mode="' + (selected.id === 'payroll-book-cumulative' ? 'cumulative' : 'detail') + '"></div></section>';
     var detail = selected
       ? '<div class="payroll-current-report-detail" aria-live="polite"><p class="page-kicker">ÉTAT SÉLECTIONNÉ</p><h4>' + esc(selected.label) + '</h4><p>' + esc(selectedSection.note) + '</p><p><strong>À construire :</strong> aucun état, fichier ou opération n’est produit par cette entrée pour le moment.</p></div>'
-      : '<div class="payroll-current-report-detail" aria-live="polite"><h4>Sélectionnez un état</h4><p>Les 15 éléments de la capture sont présentés dans l’ordre. Le livre détaillé est disponible en brouillon test ; les autres états restent à construire.</p></div>';
-    return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-current-month-payroll-reports" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Etats sur la paie du mois en cours</h3></div><span class="badge draft">14 ÉTATS À CONSTRUIRE</span></div><div class="alert info"><div>Navigation des états issue de la capture. Le livre détaillé est disponible en lecture seule de test ; les autres états restent à construire.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="États sur la paie du mois en cours">' + list + '</nav>' + detail + '</div></section>';
+      : '<div class="payroll-current-report-detail" aria-live="polite"><h4>Sélectionnez un état</h4><p>Les 15 éléments de la capture sont présentés dans l’ordre. Les deux livres de paie sont disponibles en brouillon test ; les autres états restent à construire.</p></div>';
+    return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-current-month-payroll-reports" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Etats sur la paie du mois en cours</h3></div><span class="badge draft">13 ÉTATS À CONSTRUIRE</span></div><div class="alert info"><div>Navigation des états issue de la capture. Les deux livres de paie sont disponibles en lecture seule de test ; les autres états restent à construire.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="États sur la paie du mois en cours">' + list + '</nav>' + detail + '</div></section>';
   }
 
   function viewPayrollMainMenu(dossier, dossierEmployees, canCreatePayrollEmployee, canEditPayrollEmployee) {
