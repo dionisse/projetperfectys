@@ -34,7 +34,7 @@ test('étoile : tous les services et employés, sans restreindre par la recherch
 });
 test('document groupé : une feuille par bulletin et valeurs renseignées seulement',()=>{
  const model={dossier:{clientName:'Client'},employee:{id:'a',displayName:'Alice'},period:'2026-01',refs:{status:[],category:[],service:[],functions:[],zone:[]},selection:{rows:[{id:'blank',label:'Vide',retained:true},{id:'zero',label:'Zéro',retained:false}],isDefaultPreview:true},record:{zero:{amount:'0'},ancien:{amount:'7'}},printCompact:true,grouped:true};
- const html=edition.report(model);assert.doesNotMatch(html,/>Vide </);assert.match(html,/>Zéro</);assert.match(html,/>0<\/td>/);assert.match(html,/Rubrique hors référentiel · ancien/);assert.doesNotMatch(html,/id="slip-edition-document"/);
+ const html=edition.report(model);assert.match(html,/>Vide<\/th>/);assert.match(html,/>Zéro</);assert.match(html,/>0<\/td>/);assert.match(html,/Rubrique hors référentiel · ancien/);assert.doesNotMatch(html,/id="slip-edition-document"/);
  const batch=edition.printDocument({count:2,documents:[html,edition.report({...model,employee:{id:'b',displayName:'Bob'},record:{},noDraft:true})]});
  assert.equal((batch.match(/class="slip-print-page"/g)||[]).length,2);assert.match(batch,/break-after:page/);assert.match(batch,/AUCUN BROUILLON ENREGISTRÉ/);assert.ok(batch.indexOf('Alice')<batch.indexOf('Bob'));
 });
@@ -46,7 +46,7 @@ test('édition : lignes cochées du statut ou renseignées, avec retrait révers
  const prefs={excluded:new Set(['required','zero']),natures:new Map()};const edited=edition.report({...model,preferences:prefs});assert.match(edited,/Cochée vide/);assert.doesNotMatch(edited,/>Zéro</);assert.match(edited,/1 ligne\(s\) non cochée\(s\) retirée/);assert.equal(model.record.zero.amount,'0');
  prefs.excluded.clear();assert.match(edition.report({...model,preferences:prefs}),/>Zéro</);
  const unknown=edition.report({...model,selection:{...selection,isDefaultPreview:true},preferences:{excluded:new Set(['zero']),natures:new Map()}});assert.match(unknown,/>Zéro</);
- assert.deepEqual(edition.eligibleRows({}, {...selection,isDefaultPreview:true}),[]);
+ assert.deepEqual(edition.eligibleRows({}, {...selection,isDefaultPreview:true}).map(r=>r.id),['required']);
 });
 test('gains et retenues suggérés ou confirmés, autres montants conservés',()=>{
  const model={dossier:{},employee:{id:'a'},period:'2026-01',refs:{status:[],category:[],service:[],functions:[],zone:[]},selection:{isDefaultPreview:false,rows:[{id:'shift-premium',label:'Prime',retained:true},{id:'cnss-contributions',label:'CNSS',retained:true},{id:'gross-salary',label:'Brut',retained:true},{id:'ipts',label:'Impôt négatif',retained:true}]},record:{'shift-premium':{amount:'100'},'cnss-contributions':{amount:'20'},'gross-salary':{amount:'1000'},ipts:{amount:'-5'}}};
@@ -62,4 +62,17 @@ test('visibilité groupée : ciblage explicite, obligations individuelles et sta
  assert.deepEqual(plan.operations,[{employeeId:'b',rowId:'x',hide:true},{employeeId:'b',rowId:'y',hide:false}]);assert.equal(plan.mandatory,1);assert.equal(plan.missing,1);assert.equal(plan.unknown,1);
  assert.equal(targets[0].record.x.amount,'3');assert.deepEqual([...targets[0].preferences.excluded],['y']);assert.equal(targets[0].preferences.natures.get('y'),'gain');
  assert.throws(()=>edition.visibilityPlan(source,targets,new Set(['required'])),/sélection des rubriques a changé/);
+});
+test('statut ancien reconnu seulement si son code ou son libellé est unique',()=>{
+ const catalog=[{id:'x',label:'Salaire',selectedByReference:true}], statuses=[{id:'s1',code:'C',label:'Contractuel',rubricIds:['x']},{id:'s2',code:'S',label:'Stagiaire',rubricIds:[]}];
+ for(const status of ['s1','c',' contractuel ']){const r=tools.resolveRubrics({employeeStatus:status},statuses,catalog);assert.equal(r.status.id,'s1');assert.equal(r.rows[0].retained,true);}
+ assert.equal(tools.resolveRubrics({employeeStatus:''},statuses,catalog).isDefaultPreview,true);
+ assert.equal(tools.resolveRubrics({employeeStatus:'C'},[...statuses,{id:'s3',code:'Z',label:'C',rubricIds:[]}],catalog).isDefaultPreview,true);
+ assert.equal(tools.resolveRubrics({employeeStatus:'s2'},statuses,catalog).rows[0].retained,false);
+});
+test('l’aperçu est séparé uniquement à partir de six bulletins',()=>{assert.equal(edition.needsSeparateWindow(5),false);assert.equal(edition.needsSeparateWindow(6),true);});
+test('sans brouillon ni statut, le modèle indicatif apparaît sans montants inventés',()=>{
+ const selection=tools.resolveRubrics({id:'a'},[],[{id:'salary',label:'Salaire indicatif',selectedByReference:true},{id:'empty',label:'Rubrique non cochée',selectedByReference:false}]);
+ const model={dossier:{},employee:{id:'a'},period:'2026-01',refs:{status:[],category:[],service:[],functions:[],zone:[]},selection,record:{},noDraft:true,preferences:{excluded:new Set(['salary']),natures:new Map()}};
+ const out=edition.report(model);assert.match(out,/AUCUN BROUILLON ENREGISTRÉ/);assert.match(out,/Salaire indicatif/);assert.match(out,/modèle par défaut sont indicatives/);assert.doesNotMatch(out,/>Rubrique non cochée</);assert.match(out,/Montant à payer · valeur saisie<\/span><strong>—/);
 });

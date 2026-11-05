@@ -43,3 +43,6 @@
 .slip-edition-bulk-list { max-height:16rem; overflow:auto; margin-top:8px; }
 .slip-edition-bulk-list label { display:block; padding:5px 0; overflow-wrap:anywhere; }
 @media(max-width:650px) { .slip-edition-bulk-columns { grid-template-columns:minmax(0,1fr); } .slip-edition-bulk-list { max-height:10rem; } }
+
+.slip-edition-external { padding:16px; margin:12px 0; background:#fff; border:1px solid #dbe7e0; border-radius:8px; }
+.slip-edition-external p { line-height:1.5; }

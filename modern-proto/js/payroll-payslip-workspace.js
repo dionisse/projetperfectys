@@ -100,7 +100,14 @@
   // Les cases du statut font foi, y compris une sélection volontairement vide.
   // Sans statut identifié, on affiche le catalogue complet avec la sélection par défaut, sans attribuer de statut.
   function resolveRubrics(employee, statuses, catalog) {
-    var status = employee && statuses.find(function(s) { return s && s.id === employee.employeeStatus; });
+    var requested=String(employee && employee.employeeStatus || '').trim(), status=null;
+    if(requested){
+      status=statuses.find(function(s){return s && s.id===requested;}) || null;
+      if(!status){
+        var matches=statuses.filter(function(s){return s && [s.code,s.label].some(function(value){return value && String(value).trim().toLocaleLowerCase()===requested.toLocaleLowerCase();});});
+        if(matches.length===1) status=matches[0];
+      }
+    }
     var ids = status && Array.isArray(status.rubricIds) ? status.rubricIds : null;
     return {
       status: status || null,
