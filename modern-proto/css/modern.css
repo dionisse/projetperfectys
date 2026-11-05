@@ -4743,13 +4743,13 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 /* Navigation des états sur la paie : libellés relevés, traitements non construits. */
 .payroll-current-report-layout { display:grid; grid-template-columns:minmax(0, 1.2fr) minmax(220px, .8fr); gap:20px; margin-top:18px; align-items:start; }
 .payroll-current-report-list { min-width:0; padding:6px 16px; border:1px solid #e2e9e4; border-radius:10px; background:#fff; }
-.payroll-current-report-group { padding:10px 0; }
+.payroll-current-report-group { padding:6px 0; }
 .payroll-current-report-group + .payroll-current-report-group { border-top:1px solid #dde5df; }
 .payroll-current-report-group h4 { margin:0 0 5px; color:#6c7b72; font-size:.66rem; text-transform:uppercase; letter-spacing:.07em; }
 .payroll-current-report-group ul { list-style:none; padding:0; margin:0; }
-.payroll-current-report-item { display:flex; justify-content:space-between; align-items:center; gap:12px; width:100%; padding:10px 8px; border:0; border-radius:6px; background:transparent; color:#263e33; text-align:left; font:inherit; cursor:pointer; }
+.payroll-current-report-item { display:flex; justify-content:space-between; align-items:center; gap:12px; width:100%; padding:6px 8px; border:0; border-radius:6px; background:transparent; color:#263e33; text-align:left; font-family:inherit; font-size:.72rem; font-weight:700; line-height:1.3; cursor:pointer; }
 .payroll-current-report-item span { min-width:0; overflow-wrap:anywhere; }
-.payroll-current-report-item small { flex:none; color:#78867d; font-size:.65rem; }
+.payroll-current-report-item small { flex:none; color:#78867d; font-size:.57rem; font-weight:650; }
 .payroll-current-report-item:hover,.payroll-current-report-item.is-selected { background:#f9f3e7; color:#785216; }
 .payroll-current-report-item:focus-visible { outline:2px solid #956a21; outline-offset:1px; }
 .payroll-current-report-detail { min-width:0; padding:20px; border:1px solid #e2e9e4; border-radius:10px; background:#fff; line-height:1.5; }
@@ -4757,4 +4757,5 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .payroll-current-report-detail p { margin:0 0 12px; }
 .payroll-current-report-detail p:last-child { margin-bottom:0; }
 @media (max-width:900px) { .payroll-current-report-layout { grid-template-columns:minmax(0,1fr); } }
+@media (max-width:700px) { .payroll-current-report-item { font-size:.68rem; } }
 @media (max-width:400px) { .payroll-current-report-item { align-items:flex-start; flex-direction:column; gap:2px; } }

@@ -19,3 +19,10 @@ test('navigation clairement provisoire et ne lançant aucune opération',()=>{
  assert.match(app,/Aucun état, fichier ou opération/i);assert.match(app,/Aucun ordre bancaire ni paiement ne peut être exécuté/);assert.match(app,/n’existe pas encore de registre lié des avances/);
  assert.doesNotMatch(source,/localStorage|\.setItem|fetch\(|window\.open/);
 });
+
+test('typographie des sous-éléments harmonisée avec les sous-menus',()=>{
+ const css=fs.readFileSync('modern-proto/css/modern.css','utf8');
+ assert.match(css,/\.accounting-subtab \{[^}]*font-size: \.72rem;[^}]*font-weight: 700;/);
+ assert.match(css,/\.payroll-current-report-item \{[^}]*font-family:inherit; font-size:\.72rem; font-weight:700; line-height:1\.3;/);
+ assert.match(css,/@media \(max-width:700px\) \{ \.payroll-current-report-item \{ font-size:\.68rem;/);
+});
