@@ -355,7 +355,7 @@ Le document affiche séparément le titulaire de licence et l’entreprise du do
 
 ### Éditions — États sur la paie du mois en cours
 
-Le sous-menu expose les 15 états de la capture, groupés en livres de paie, paiements, avances, cumuls et variations. Les livres détaillé et cumulé, les états de préparation espèces et chèques, les quatre modèles d’ordres de virement, les quatre états d’avances et les cumuls par service et zone sont disponibles en lecture seule de test. L’**état de variations** reste à construire ; aucun paiement ne peut être exécuté ici. Les règles des états restants et les formats bancaires restent à préciser.
+Le sous-menu expose les 15 états de la capture, groupés en livres de paie, paiements, avances, cumuls et variations. Les livres détaillé et cumulé, les états de préparation espèces et chèques, les quatre modèles d’ordres de virement, les quatre états d’avances, les cumuls par service et zone et les variations des éléments fixes sont disponibles en lecture seule de test. Aucun paiement ne peut être exécuté ici ; les formats bancaires restent à préciser.
 
 ### Cumuls des rubriques par service et par zone
 
@@ -639,3 +639,9 @@ les exports PDF/Excel et les états financiers SYSCOHADA complets restent à con
 Le lettrage et le pointage disponibles constituent des registres séparés, sans écriture
 comptable. Le prototype valide le parcours avant la
 conception du stockage partagé et de l'authentification.
+
+### Variations des éléments fixes
+
+Pour les prochains écrans Paie & RH, privilégier la présentation structurée des sélections de cumuls : cartes numérotées pour le périmètre et les rubriques, puis lignes et colonnes regroupées, avec une mise en page adaptative.
+
+L’état compare le mois choisi au mois calendaire précédent, par employé (`*` ou sélection multiple). Les rubriques de salaire sont choisies dans le référentiel avec leur cellule Montant, Base ou Quantité ; leurs valeurs proviennent des brouillons fictifs ordinaires. Statut, catégorie/échelon, service et zone utilisent un historique de déclarations explicites : l’utilisateur choisit les changements datés (valeur en fin de mois, reportée jusqu’à la déclaration suivante) ou les relevés mensuels (sans report). Il peut déclarer un instantané depuis la modification de fiche ou saisir les quatre valeurs dans l’espace historique de l’état, avec le droit de modification. Les deux sources sont indépendantes ; les changements non déclarés ne sont pas pris en compte, et les périodes antérieures inconnues ne sont pas reconstituées. Une valeur explicitement déclarée « Non renseigné » est distincte d’un historique manquant. L’utilisateur choisit toutes les comparaisons ou les seules variations ; les comparaisons incomplètes restent visibles. Colonnes, mise en page, aperçu, PDF, Excel et texte utilisent les fonctions communes ; les exports vérifient la fraîcheur des données. Aucun calcul de paie ni paiement n’est effectué.

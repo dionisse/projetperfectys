@@ -407,9 +407,62 @@
     }
     if (errors.length) return { ok: false, errors: errors };
     Object.keys(patch).forEach(function (key) { employee[key] = patch[key]; });
+    if (input.fixedHistory) {
+      try {
+        fixedHistory(dossierId);
+        var historyInput = input.fixedHistory, historyIds = {};
+        FIXED_HISTORY_FIELDS.forEach(function (f) { historyIds[f.key] = String(employee[f.key] || ''); });
+        putFixedHistory(dossier, employeeId, historyInput.mode, historyInput.at, historyIds);
+      } catch (error) { return {ok:false, errors:[error.message]}; }
+    }
     employee.updatedAt = new Date().toISOString();
     if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer la fiche dans le stockage local de test.'] };
     return { ok: true, errors: [], employee: clone(employee) };
+  }
+
+  // Déclarations historiques explicites : les fiches actuelles ne constituent pas un historique.
+  var FIXED_HISTORY_FIELDS = [
+    { key: 'employeeStatus', label: 'Statut', catalog: 'employeeStatuses' },
+    { key: 'categoryId', label: 'Catégorie / échelon', catalog: 'employeeCategories' },
+    { key: 'serviceId', label: 'Service', catalog: 'employeeServices' },
+    { key: 'geographicZoneId', label: 'Zone géographique', catalog: 'employeeGeographicZones' }
+  ];
+  function fixedHistory(dossierId) {
+    var dossier = dossierById(dossierId);
+    if (!dossier || !isDemoTestDossier(dossierId)) throw new Error('Dossier fictif indisponible.');
+    if (dossier.fixedHistory == null) return [];
+    if (!Array.isArray(dossier.fixedHistory) || dossier.fixedHistory.some(function (r) {
+      return !r || ['dated','monthly'].indexOf(r.mode) < 0 || typeof r.employeeId !== 'string' || !r.employeeId || typeof r.at !== 'string' || (r.mode === 'dated' ? !dateParts(r.at) : !/^\d{4}-(0[1-9]|1[0-2])$/.test(r.at) || !dateParts(r.at+'-01')) || !r.values || typeof r.values !== 'object' || Array.isArray(r.values) || FIXED_HISTORY_FIELDS.some(function(f) { var v=r.values[f.key]; return !v || typeof v.id !== 'string' || typeof v.label !== 'string'; });
+    })) throw new Error('Historique des éléments fixes illisible.');
+    return clone(dossier.fixedHistory);
+  }
+  function putFixedHistory(dossier, employeeId, mode, at, ids) {
+    var employee=(dossier.demoEmployees||[]).find(function(e){return e.id===employeeId && e.dossierId===dossier.id;});
+    if (!employee || !ids || typeof ids !== 'object') throw new Error('Employé ou valeurs indisponibles.');
+    if ((mode==='dated' && !dateParts(at)) || (mode==='monthly' && (!/^\d{4}-(0[1-9]|1[0-2])$/.test(at) || !dateParts(at+'-01'))) || ['dated','monthly'].indexOf(mode)<0) throw new Error('Date ou mois invalide.');
+    var values={}, error='';
+    FIXED_HISTORY_FIELDS.forEach(function(f){
+      if (!Object.prototype.hasOwnProperty.call(ids,f.key) || typeof ids[f.key] !== 'string') {error='Renseignez explicitement les quatre rubriques.';return;}
+      var id=ids[f.key], ref=(dossier[f.catalog]||[]).find(function(x){return x && x.id===id;});
+      if (id && !ref) {error='Une valeur ne figure plus dans le référentiel.';return;}
+      values[f.key]={id:id,label:ref ? [ref.code,ref.label].filter(Boolean).join(' · ') : 'Non renseigné'};
+    });
+    if(error)throw new Error(error);
+    dossier.fixedHistory=Array.isArray(dossier.fixedHistory)?dossier.fixedHistory:[];
+    var index=dossier.fixedHistory.findIndex(function(r){return r.employeeId===employeeId && r.mode===mode && r.at===at;});
+    var entry={employeeId:employeeId,mode:mode,at:at,values:values,recordedAt:new Date().toISOString()};
+    if(index<0)dossier.fixedHistory.push(entry);else dossier.fixedHistory[index]=entry;
+    return entry;
+  }
+  function recordFixedHistory(dossierId, employeeId, mode, at, ids) {
+    if (!isDemoTestDossier(dossierId)) return {ok:false,errors:['Dossier fictif indisponible.']};
+    try {
+      fixedHistory(dossierId);
+      var catalog=loadDossierCatalog(), dossier=catalog.dossiers.find(function(d){return d.id===dossierId;});
+      var entry=putFixedHistory(dossier,employeeId,mode,at,ids);
+      if(!saveDossierCatalog(catalog))throw new Error('Impossible d’enregistrer l’historique.');
+      return {ok:true,errors:[],entry:clone(entry)};
+    } catch (error) { return {ok:false,errors:[error.message]}; }
   }
 
   function deleteEmployee(dossierId, employeeId) {
@@ -422,6 +475,7 @@
     var employee = employees.find(function (item) { return item && item.id === employeeId && item.dossierId === dossierId && item.status === 'test-only'; });
     if (!employee) return { ok: false, errors: ['La fiche fictive est introuvable dans le dossier actif.'] };
     if (employees.length <= 2) return { ok: false, errors: ['Il faut conserver au moins deux fiches fictives pour garder le dossier de test valide.'] };
+    try { if (fixedHistory(dossierId).some(function(r) { return r.employeeId === employeeId; })) return { ok: false, errors: ['Cette fiche possède un historique des éléments fixes et ne peut pas être supprimée.'] }; } catch (error) { return {ok:false,errors:[error.message]}; }
     var linkedCollections = ['organizationAssignments', 'internalMissions', 'leaveAbsenceRecords', 'payrollVariableReferences'];
     if (linkedCollections.some(function (name) {
       return Array.isArray(dossier[name]) && dossier[name].some(function (record) { return record && record.employeeId === employeeId; });
@@ -2490,6 +2544,9 @@
     createEmployee: createEmployee,
     updateEmployee: updateEmployee,
     deleteEmployee: deleteEmployee,
+    fixedHistory: fixedHistory,
+    recordFixedHistory: recordFixedHistory,
+    fixedHistoryFields: function () { return clone(FIXED_HISTORY_FIELDS); },
     employeeStatuses: employeeStatuses,
     employeeRubricCatalog: employeeRubricCatalog,
     employeeStatusDefaults: employeeStatusDefaults,

@@ -382,8 +382,8 @@
         { id: 'salary-components-by-service', label: 'Cumul par Services des rubriques de salaire', ready: true },
         { id: 'salary-components-by-zone', label: 'Cumul par zones des rubriques de salaire', ready: true }
       ] },
-      { title: 'Variations', note: 'Les règles de comparaison et la source historique des éléments fixes restent à définir.', items: [
-        { id: 'fixed-elements-variations', label: 'Variations des éléments fixes' }
+      { title: 'Variations', note: 'Comparaison des brouillons et des déclarations historiques des fiches.', items: [
+        { id: 'fixed-elements-variations', label: 'Variations des éléments fixes', ready: true }
       ] }
     ];
   }
@@ -20565,6 +20565,11 @@
       var rubricCumulativeDossier = PayrollHR.currentDossier();
       if (rubricCumulativeDossier) window.PayrollRubricCumulative.mount(rubricCumulativeWorkspace, { hr: PayrollHR, dossier: rubricCumulativeDossier, tools: window.PayrollPayslipWorkspace, book: window.PayrollDetailedBook, math: window.PayrollCumulativeBook, exchange: AccountingExchange, mode: rubricCumulativeWorkspace.getAttribute('data-rubric-mode'), canView: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'module.view', payrollAccessContext(rubricCumulativeDossier)); }, licenseOwner: licenseOwnerName });
     }
+    var fixedVariationWorkspace = $('#payroll-fixed-variations-workspace');
+    if (fixedVariationWorkspace && window.PayrollFixedVariations && window.PayrollDetailedBook && window.PayrollCumulativeBook && window.PayrollPayslipWorkspace) {
+      var fixedVariationDossier = PayrollHR.currentDossier();
+      if (fixedVariationDossier) window.PayrollFixedVariations.mount(fixedVariationWorkspace, {hr:PayrollHR,dossier:fixedVariationDossier,tools:window.PayrollPayslipWorkspace,book:window.PayrollDetailedBook,math:window.PayrollCumulativeBook,exchange:AccountingExchange,canView:function(){return hasDemoPermission(getActiveDemoMember(),'payroll-hr','module.view',payrollAccessContext(fixedVariationDossier));},canEdit:function(){return hasDemoPermission(getActiveDemoMember(),'payroll-hr','record.edit',payrollAccessContext(fixedVariationDossier));},licenseOwner:licenseOwnerName});
+    }
     var payrollAdvanceWorkspace = $('#payroll-advances-workspace');
     if (payrollAdvanceWorkspace && window.PayrollAdvanceReports && window.PayrollDetailedBook && window.PayrollPayslipWorkspace) {
       var payrollAdvanceDossier = PayrollHR.currentDossier();
@@ -20981,6 +20986,13 @@
     });
     var employeeEditForm = $('#payroll-employee-edit-form');
     if (employeeEditForm) { bindPayrollSupplementaryInsurances(employeeEditForm); trackPayrollEmployeeDraft(employeeEditForm); bindPayrollEmployeeChoiceLists(employeeEditForm); }
+    if (employeeEditForm) {
+      var historyChoice = employeeEditForm.elements.namedItem('fixedHistoryMode');
+      historyChoice.addEventListener('change', function () {
+        employeeEditForm.querySelector('[data-fixed-history-date]').hidden = historyChoice.value !== 'dated';
+        employeeEditForm.querySelector('[data-fixed-history-month]').hidden = historyChoice.value !== 'monthly';
+      });
+    }
     if (employeeEditForm) employeeEditForm.addEventListener('submit', function (event) {
       event.preventDefault();
       if (!canPerformDemoAction('edit-payroll-employee', employeeEditForm, true)) return;
@@ -20996,6 +21008,15 @@
       if (employeeEditForm.querySelector('input[name="qualificationIds"]')) employeeProfile.qualificationIds = Array.prototype.map.call(employeeEditForm.querySelectorAll('input[name="qualificationIds"]:checked'), function (input) { return input.value; });
       if (employeeEditForm.getAttribute('data-legacy-function') === 'true' && employeeProfile.functionIds && !employeeProfile.functionIds.length) delete employeeProfile.functionIds;
       if (employeeEditForm.getAttribute('data-legacy-qualification') === 'true' && employeeProfile.qualificationIds && !employeeProfile.qualificationIds.length) delete employeeProfile.qualificationIds;
+      var historyMode = employeeEditForm.elements.namedItem('fixedHistoryMode').value;
+      if (historyMode !== 'none') {
+        var historyAt = employeeEditForm.elements.namedItem(historyMode === 'dated' ? 'fixedHistoryDate' : 'fixedHistoryMonth').value;
+        if (!historyAt) { toast('Précisez la date ou le mois de la déclaration historique.', 'warning'); return; }
+        try {
+          if (PayrollHR.fixedHistory(PayrollHR.currentDossier().id).some(function (entry) { return entry.employeeId === employeeEditForm.getAttribute('data-employee-id') && entry.mode === historyMode && entry.at === historyAt; }) && !window.confirm('Remplacer la déclaration historique existante pour cette date ?')) return;
+        } catch (error) { toast(error.message, 'warning'); return; }
+        employeeProfile.fixedHistory = {mode: historyMode, at: historyAt};
+      }
       var result = PayrollHR.updateEmployee(PayrollHR.currentDossier().id, employeeEditForm.getAttribute('data-employee-id'), employeeProfile);
       if (!result.ok) { toast(result.errors[0] || 'Enregistrement de test impossible.', 'warning'); return; }
       ui.payrollEmployeeEditId = '';
@@ -21849,6 +21870,7 @@
         '<fieldset><legend>Identifiants et assurance complémentaire</legend><div class="payroll-employee-field-grid">' + employeeReferenceField('socialSecurityFundId', 'Caisse sociale', employeeSocialSecurityCatalog, 'socialSecurityFundName', false) + textField('socialInsuranceNumber', 'N° d’assuré social', 'text', selected.socialInsuranceNumber, 80) + textField('taxId', 'Numéro IFU', 'text', selected.taxId, 80) + '</div>' + supplementaryInsuranceFields(false) + '</fieldset>' +
         '<fieldset><legend>Parcours et affectation</legend><div class="payroll-employee-field-grid">' + employeeReferenceField('professionId', 'Profession', employeeProfessionCatalog, 'profession', false) + employeeStatusField + employeeCategoryField + textField('effectiveDate', 'Date d’effet', 'date', selected.effectiveDate) + employeeGeographicZoneField + employeeServiceField + employeeQualificationField + employeeFunctionField + employeeExecutivePayField(false) + '</div></fieldset>' +
         '<fieldset><legend>Règlement des salaires</legend><div class="payroll-employee-field-grid">' + employeePaymentMethodField(false) + employeeReferenceField('bankId', 'Banque', employeeBankCatalog, 'bankName', false) + textField('bankAccountNumber', 'N° de compte', 'text', selected.bankAccountNumber, 100) + '</div></fieldset>' +
+        '<fieldset><legend>Historique des éléments fixes · facultatif</legend><p class="small muted">Déclarez les quatre affectations de cette fiche à une date ou pour un mois. Sans déclaration, les anciennes périodes restent indisponibles ; une déclaration datée reste valable jusqu’à la suivante.</p><div class="payroll-employee-field-grid"><label>Mode<select name="fixedHistoryMode"><option value="none">Ne pas déclarer</option><option value="dated">Changement daté</option><option value="monthly">Relevé mensuel</option></select></label><label data-fixed-history-date hidden>Date d’effet<input name="fixedHistoryDate" type="date"></label><label data-fixed-history-month hidden>Mois<input name="fixedHistoryMonth" type="month"></label></div></fieldset>' +
         '</div><label class="payroll-test-confirm"><input name="testOnly" type="checkbox" required><span>Je confirme que les valeurs de cette fiche sont fictives et réservées au test.</span></label>' +
         '<div class="payroll-employee-edit-actions"><button type="button" class="btn btn-danger" data-action="delete-payroll-employee" data-employee-id="' + esc(selected.id) + '">Supprimer</button><button type="button" class="btn btn-secondary" data-action="cancel-payroll-employee-edit">Annuler</button><button type="submit" class="btn btn-primary">Enregistrer la fiche</button></div></form>'
       : (selected ? employeePreview : '<div class="empty-state"><strong>Aucun employé sélectionné</strong><span>Ajoutez une fiche fictive dans le dossier de test pour commencer.</span></div>');
@@ -22137,14 +22159,15 @@
         return '<li><button type="button" class="payroll-current-report-item' + (active ? ' is-selected' : '') + '" data-action="payroll-current-report-select" data-report-id="' + esc(item.id) + '" aria-pressed="' + (active ? 'true' : 'false') + '"><span>' + esc(item.label) + '</span><small>' + (item.ready ? 'Brouillon test' : 'À construire') + '</small></button></li>';
       }).join('') + '</ul></section>';
     }).join('');
+    if (selected && selected.id === 'fixed-elements-variations') return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-current-month-payroll-reports"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-current-report-back">← Retour aux états</button><div id="payroll-fixed-variations-workspace"></div></section>';
     if (selected && ['salary-components-by-service','salary-components-by-zone'].indexOf(selected.id) >= 0) return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-current-month-payroll-reports"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-current-report-back">← Retour aux états</button><div id="payroll-rubric-cumulative-workspace" data-rubric-mode="' + (selected.id === 'salary-components-by-service' ? 'service' : 'zone') + '"></div></section>';
     if (selected && ['advances-granted','advances-by-employee','advances-by-nature','advances-evolution'].indexOf(selected.id) >= 0) return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-current-month-payroll-reports"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-current-report-back">← Retour aux états</button><div id="payroll-advances-workspace" data-advance-mode="' + esc(selected.id) + '"></div></section>';
     if (selected && selected.id === 'multiple-transfers-text') return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-current-month-payroll-reports"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-current-report-back">← Retour aux états</button><div id="payroll-text-transfer-workspace"></div></section>';
     if (selected && (selected.id === 'payroll-book-detail' || selected.id === 'payroll-book-cumulative' || selected.id === 'cash-payments' || selected.id === 'cheques-to-issue' || selected.id === 'single-transfer-order' || selected.id === 'multiple-transfers-cheque' || selected.id === 'multiple-transfers-debit')) return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-current-month-payroll-reports"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-current-report-back">← Retour aux états</button><div id="payroll-detailed-book-workspace" data-book-mode="' + (selected.id === 'payroll-book-cumulative' ? 'cumulative' : selected.id === 'cash-payments' ? 'cash' : selected.id === 'cheques-to-issue' ? 'cheque' : selected.id === 'single-transfer-order' ? 'transfer' : selected.id === 'multiple-transfers-cheque' ? 'multiple-cheque' : selected.id === 'multiple-transfers-debit' ? 'multiple-debit' : 'detail') + '"></div></section>';
     var detail = selected
       ? '<div class="payroll-current-report-detail" aria-live="polite"><p class="page-kicker">ÉTAT SÉLECTIONNÉ</p><h4>' + esc(selected.label) + '</h4><p>' + esc(selectedSection.note) + '</p><p><strong>À construire :</strong> aucun état, fichier ou opération n’est produit par cette entrée pour le moment.</p></div>'
-      : '<div class="payroll-current-report-detail" aria-live="polite"><h4>Sélectionnez un état</h4><p>Les 15 éléments de la capture sont présentés dans l’ordre. Les livres, les états espèces et chèques, quatre modèles d’ordres de virements, les états d’avances et les cumuls par service et zone sont disponibles en brouillon test ; les variations restent à construire.</p></div>';
-    return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-current-month-payroll-reports" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Etats sur la paie du mois en cours</h3></div><span class="badge draft">1 ÉTAT À CONSTRUIRE</span></div><div class="alert info"><div>Navigation des états issue de la capture. Les livres, les états espèces et chèques, quatre ordres de virements, les états d’avances et les cumuls par service et zone sont disponibles en lecture seule de test ; les variations restent à construire.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="États sur la paie du mois en cours">' + list + '</nav>' + detail + '</div></section>';
+      : '<div class="payroll-current-report-detail" aria-live="polite"><h4>Sélectionnez un état</h4><p>Les 15 éléments de la capture sont présentés dans l’ordre. Les livres, les états espèces et chèques, quatre modèles d’ordres de virements, les états d’avances et les cumuls par service et zone sont disponibles en brouillon test ; les variations sont disponibles en lecture seule de test.</p></div>';
+    return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-current-month-payroll-reports" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Etats sur la paie du mois en cours</h3></div><span class="badge draft">15 ÉTATS · TEST</span></div><div class="alert info"><div>Navigation des états issue de la capture. Les livres, les états espèces et chèques, quatre ordres de virements, les états d’avances et les cumuls par service et zone sont disponibles en lecture seule de test ; les variations sont disponibles en lecture seule de test.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="États sur la paie du mois en cours">' + list + '</nav>' + detail + '</div></section>';
   }
 
   function viewPayrollMainMenu(dossier, dossierEmployees, canCreatePayrollEmployee, canEditPayrollEmployee) {

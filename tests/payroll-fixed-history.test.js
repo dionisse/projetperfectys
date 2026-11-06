@@ -1,0 +1,22 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const storage=new Map();global.localStorage={getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,String(v)),removeItem:k=>storage.delete(k)};
+const hr=require('../modern-proto/js/payroll-hr.js');
+test('historique explicite, isolé, atomique et sans reconstruction du passé',()=>{
+ const d=hr.createTestDossier().dossier,e=d.demoEmployees[0],services=hr.seedDemoEmployeeServices(d.id).services;
+ const values={employeeStatus:'',categoryId:'',serviceId:services[0].id,geographicZoneId:''};
+ assert.deepEqual(hr.fixedHistory(d.id),[]);
+ assert.equal(hr.recordFixedHistory(d.id,e.id,'dated','2026-02-30',values).ok,false);
+ assert.equal(hr.recordFixedHistory(d.id,e.id,'monthly','2026-13',values).ok,false);
+ assert.equal(hr.recordFixedHistory(d.id,e.id,'monthly','2026-02',{...values,serviceId:'bad'}).ok,false);
+ assert.equal(hr.recordFixedHistory(d.id,e.id,'dated','2026-01-15',values).ok,true);
+ assert.equal(hr.fixedHistory(d.id)[0].values.serviceId.id,services[0].id);
+ assert.equal(hr.recordFixedHistory(d.id,e.id,'monthly','2026-01',values).ok,true);
+ assert.equal(hr.fixedHistory(d.id).length,2);
+ let before=hr.employee(d.id,e.id).serviceId;
+ let bad=hr.updateEmployee(d.id,e.id,{serviceId:services[1].id,fixedHistory:{mode:'dated',at:'bad'}});
+ assert.equal(bad.ok,false);assert.equal(hr.employee(d.id,e.id).serviceId,before);
+ let good=hr.updateEmployee(d.id,e.id,{serviceId:services[1].id,fixedHistory:{mode:'dated',at:'2026-02-01'}});
+ assert.equal(good.ok,true,good.errors.join());assert.equal(hr.fixedHistory(d.id).length,3);assert.equal(hr.fixedHistory(d.id).at(-1).values.serviceId.id,services[1].id);
+ assert.equal(hr.deleteEmployee(d.id,e.id).ok,false);
+});
