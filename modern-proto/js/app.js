@@ -372,11 +372,11 @@
         { id: 'multiple-transfers-debit', label: 'Ordres multiples de virements par débit de notre compte', ready: true },
         { id: 'multiple-transfers-text', label: 'Ordres multiples de virement par fichier-texte', ready: true }
       ] },
-      { title: 'Avances', note: 'Les natures et les rubriques de bulletin existent, mais il n’existe pas encore de registre lié des avances et remboursements.', items: [
-        { id: 'advances-granted', label: 'Avances accordées' },
-        { id: 'advances-by-employee', label: 'Suivi des avances par employés' },
-        { id: 'advances-by-nature', label: 'Suivi des avances par nature' },
-        { id: 'advances-evolution', label: 'Evolution des avances de chaque employé' }
+      { title: 'Avances', note: 'Registre fictif synchronisé avec les rubriques de bulletin, sans paiement ni retenue réelle.', items: [
+        { id: 'advances-granted', label: 'Avances accordées', ready: true },
+        { id: 'advances-by-employee', label: 'Suivi des avances par employés', ready: true },
+        { id: 'advances-by-nature', label: 'Suivi des avances par nature', ready: true },
+        { id: 'advances-evolution', label: 'Evolution des avances de chaque employé', ready: true }
       ] },
       { title: 'Cumuls', note: 'Les services et zones de la fiche employé sont les valeurs actuelles ; les règles de regroupement et de période restent à définir.', items: [
         { id: 'salary-components-by-service', label: 'Cumul par Services des rubriques de salaire' },
@@ -20560,6 +20560,11 @@
       if (payrollBookDossier && ((payrollBookWorkspace.getAttribute('data-book-mode') !== 'cumulative' || window.PayrollCumulativeBook) && (['cash', 'cheque'].indexOf(payrollBookWorkspace.getAttribute('data-book-mode')) < 0 || (window.PayrollPaymentReport && window.PayrollPaymentTracking)) && (['transfer', 'multiple-cheque', 'multiple-debit'].indexOf(payrollBookWorkspace.getAttribute('data-book-mode')) < 0 || (window.PayrollTransferOrder && window.PayrollPaymentTracking)))) window.PayrollDetailedBook.mount(payrollBookWorkspace, { hr: PayrollHR, dossier: payrollBookDossier, tools: window.PayrollPayslipWorkspace, exchange: AccountingExchange, mode: payrollBookWorkspace.getAttribute('data-book-mode'), cumulative: window.PayrollCumulativeBook, paymentReport: window.PayrollPaymentReport, payments: window.PayrollPaymentTracking, transferOrder: window.PayrollTransferOrder,
         canView: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'module.view', payrollAccessContext(payrollBookDossier)); }, licenseOwner: licenseOwnerName });
     }
+    var payrollAdvanceWorkspace = $('#payroll-advances-workspace');
+    if (payrollAdvanceWorkspace && window.PayrollAdvanceReports && window.PayrollDetailedBook && window.PayrollPayslipWorkspace) {
+      var payrollAdvanceDossier = PayrollHR.currentDossier();
+      if (payrollAdvanceDossier) window.PayrollAdvanceReports.mount(payrollAdvanceWorkspace, { hr: PayrollHR, dossier: payrollAdvanceDossier, tools: window.PayrollPayslipWorkspace, book: window.PayrollDetailedBook, exchange: AccountingExchange, mode: payrollAdvanceWorkspace.getAttribute('data-advance-mode'), canView: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'module.view', payrollAccessContext(payrollAdvanceDossier)); }, licenseOwner: licenseOwnerName });
+    }
     var payrollTextWorkspace = $('#payroll-text-transfer-workspace');
     if (payrollTextWorkspace && window.PayrollTextTransfer && window.PayrollPayslipWorkspace && window.PayrollPaymentTracking) {
       var payrollTextDossier = PayrollHR.currentDossier();
@@ -22127,12 +22132,13 @@
         return '<li><button type="button" class="payroll-current-report-item' + (active ? ' is-selected' : '') + '" data-action="payroll-current-report-select" data-report-id="' + esc(item.id) + '" aria-pressed="' + (active ? 'true' : 'false') + '"><span>' + esc(item.label) + '</span><small>' + (item.ready ? 'Brouillon test' : 'À construire') + '</small></button></li>';
       }).join('') + '</ul></section>';
     }).join('');
+    if (selected && ['advances-granted','advances-by-employee','advances-by-nature','advances-evolution'].indexOf(selected.id) >= 0) return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-current-month-payroll-reports"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-current-report-back">← Retour aux états</button><div id="payroll-advances-workspace" data-advance-mode="' + esc(selected.id) + '"></div></section>';
     if (selected && selected.id === 'multiple-transfers-text') return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-current-month-payroll-reports"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-current-report-back">← Retour aux états</button><div id="payroll-text-transfer-workspace"></div></section>';
     if (selected && (selected.id === 'payroll-book-detail' || selected.id === 'payroll-book-cumulative' || selected.id === 'cash-payments' || selected.id === 'cheques-to-issue' || selected.id === 'single-transfer-order' || selected.id === 'multiple-transfers-cheque' || selected.id === 'multiple-transfers-debit')) return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-current-month-payroll-reports"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-current-report-back">← Retour aux états</button><div id="payroll-detailed-book-workspace" data-book-mode="' + (selected.id === 'payroll-book-cumulative' ? 'cumulative' : selected.id === 'cash-payments' ? 'cash' : selected.id === 'cheques-to-issue' ? 'cheque' : selected.id === 'single-transfer-order' ? 'transfer' : selected.id === 'multiple-transfers-cheque' ? 'multiple-cheque' : selected.id === 'multiple-transfers-debit' ? 'multiple-debit' : 'detail') + '"></div></section>';
     var detail = selected
       ? '<div class="payroll-current-report-detail" aria-live="polite"><p class="page-kicker">ÉTAT SÉLECTIONNÉ</p><h4>' + esc(selected.label) + '</h4><p>' + esc(selectedSection.note) + '</p><p><strong>À construire :</strong> aucun état, fichier ou opération n’est produit par cette entrée pour le moment.</p></div>'
-      : '<div class="payroll-current-report-detail" aria-live="polite"><h4>Sélectionnez un état</h4><p>Les 15 éléments de la capture sont présentés dans l’ordre. Les livres, les états espèces et chèques et quatre modèles d’ordres de virements sont disponibles en brouillon test ; les autres états restent à construire.</p></div>';
-    return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-current-month-payroll-reports" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Etats sur la paie du mois en cours</h3></div><span class="badge draft">7 ÉTATS À CONSTRUIRE</span></div><div class="alert info"><div>Navigation des états issue de la capture. Les livres, les états espèces et chèques et quatre ordres de virements sont disponibles en lecture seule de test ; les autres états restent à construire.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="États sur la paie du mois en cours">' + list + '</nav>' + detail + '</div></section>';
+      : '<div class="payroll-current-report-detail" aria-live="polite"><h4>Sélectionnez un état</h4><p>Les 15 éléments de la capture sont présentés dans l’ordre. Les livres, les états espèces et chèques, quatre modèles d’ordres de virements et les états d’avances sont disponibles en brouillon test ; les autres états restent à construire.</p></div>';
+    return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-current-month-payroll-reports" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Etats sur la paie du mois en cours</h3></div><span class="badge draft">3 ÉTATS À CONSTRUIRE</span></div><div class="alert info"><div>Navigation des états issue de la capture. Les livres, les états espèces et chèques, quatre ordres de virements et les états d’avances sont disponibles en lecture seule de test ; les autres états restent à construire.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="États sur la paie du mois en cours">' + list + '</nav>' + detail + '</div></section>';
   }
 
   function viewPayrollMainMenu(dossier, dossierEmployees, canCreatePayrollEmployee, canEditPayrollEmployee) {

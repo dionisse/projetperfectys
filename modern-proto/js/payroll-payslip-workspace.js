@@ -12,7 +12,9 @@
     if (!data || data.version !== 1 || !data.drafts || typeof data.drafts !== 'object' || Array.isArray(data.drafts) || !Array.isArray(data.groups)) throw new Error('Données de bulletins illisibles : aucune modification effectuée.');
     return data;
   }
-  function save(id, data) { root.localStorage.setItem(key(id), JSON.stringify(data)); }
+  function save(id, data) { if(root.PayrollAdvanceReports) data.advanceLedger=root.PayrollAdvanceReports.snapshot(data.drafts); root.localStorage.setItem(key(id), JSON.stringify(data)); }
+  // Projection distincte, synchronisée à chaque enregistrement ; les anciens brouillons sont reconstruits sans écriture.
+  function readAdvanceLedger(id) { if(!root.PayrollAdvanceReports) throw new Error('Registre des avances indisponible.'); return root.PayrollAdvanceReports.snapshot(load(id).drafts); }
   // Chargement unique pour les éditions groupées, sans relecture par employé.
   function readPeriodDrafts(id, period) {
     var month=load(id).drafts[period];
@@ -206,7 +208,7 @@
     observer.observe(root.document.documentElement, {childList:true, subtree:true});
     render();
   }
-  var api={mount:mount,readDraft:readDraft,readPeriodDrafts:readPeriodDrafts,calculate:calculate,numbers:numbers,monthList:monthList,matchesEmployee:matchesEmployee,resolveRubrics:resolveRubrics,isValidDate:isValidDate,hasDepartedAtPeriod:hasDepartedAtPeriod};
+  var api={mount:mount,readDraft:readDraft,readPeriodDrafts:readPeriodDrafts,readAdvanceLedger:readAdvanceLedger,calculate:calculate,numbers:numbers,monthList:monthList,matchesEmployee:matchesEmployee,resolveRubrics:resolveRubrics,isValidDate:isValidDate,hasDepartedAtPeriod:hasDepartedAtPeriod};
   if (typeof module !== 'undefined' && module.exports) module.exports=api;
   root.PayrollPayslipWorkspace=api;
 })(typeof window !== 'undefined' ? window : globalThis);

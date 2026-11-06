@@ -83,7 +83,7 @@
     return result;
   }
   function periodLabel(period){return new Intl.DateTimeFormat('fr-FR',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(period+'-01T00:00:00Z'));}
-  function title(report){return '<header class="payroll-book-report-head"><div><small>TITULAIRE DE LA LICENCE</small><strong>'+esc(report.licenseOwner || 'Titulaire indisponible dans la démonstration')+'</strong></div><div><small>ENTREPRISE GÉRÉE</small><strong>'+esc(report.dossier.clientName || report.dossier.name || 'Non renseignée')+'</strong><span>'+esc(report.dossier.reference||'')+'</span></div><div><small>BROUILLON FICTIF · LECTURE SEULE</small><h2>'+esc(report.title||'Livre de paie détaillé')+'</h2><span>'+esc(periodLabel(report.period))+'</span></div></header><p class="payroll-book-context">'+(report.transferReport?'Préparation du mois · Lignes générées : '+report.rows.length:report.paymentReport?'Mode : '+esc(report.method)+' · Lignes générées : '+report.rows.length:'Services : '+esc(report.serviceLabel)+(report.cumulative?' · Cumuls par service':' · Employés : '+esc(report.employeeLabel)+' · '+report.rows.length+' employé(s)'))+'</p>';}
+  function title(report){return '<header class="payroll-book-report-head"><div><small>TITULAIRE DE LA LICENCE</small><strong>'+esc(report.licenseOwner || 'Titulaire indisponible dans la démonstration')+'</strong></div><div><small>ENTREPRISE GÉRÉE</small><strong>'+esc(report.dossier.clientName || report.dossier.name || 'Non renseignée')+'</strong><span>'+esc(report.dossier.reference||'')+'</span></div><div><small>BROUILLON FICTIF · LECTURE SEULE</small><h2>'+esc(report.title||'Livre de paie détaillé')+'</h2><span>'+esc(periodLabel(report.period))+'</span></div></header><p class="payroll-book-context">'+(report.transferReport?'Préparation du mois · Lignes générées : '+report.rows.length:report.paymentReport?(report.advanceReport?'Période : ':'Mode : ')+esc(report.method)+' · Lignes générées : '+report.rows.length:'Services : '+esc(report.serviceLabel)+(report.cumulative?' · Cumuls par service':' · Employés : '+esc(report.employeeLabel)+' · '+report.rows.length+' employé(s)'))+'</p>';}
   function cellValue(row,column){var raw=row.values[column.key],quality=row.quality&&row.quality[column.key];return display(raw)+((row.review||(quality&&quality.count<quality.total))?' *':'');}
   function table(report,columns){
     var heading='<thead><tr>'+columns.map(function(c){return '<th scope="col">'+esc(c.label)+'</th>';}).join('')+'</tr></thead>';
@@ -100,7 +100,7 @@
   }
   // Découpage horizontal : toutes les colonnes sont conservées ; les identifiants choisis sont répétés.
   function columnBands(columns,orientation){
-    var identity=columns.filter(function(c){return c.key==='number'||c.key==='name'||c.key==='centre'||c.key==='label'||c.key==='employee';});
+    var identity=columns.filter(function(c){return c.kind==='identity'||c.key==='number'||c.key==='name'||c.key==='centre'||c.key==='label'||c.key==='employee';});
     var rest=columns.filter(function(c){return identity.indexOf(c)===-1;}),perBand=orientation==='portrait'?4:6;
     if(!rest.length)return [identity];
     var bands=[];for(var i=0;i<rest.length;i+=perBand)bands.push(identity.concat(rest.slice(i,i+perBand)));

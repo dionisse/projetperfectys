@@ -83,3 +83,13 @@
 .payroll-text-confirm { display:flex; gap:8px; align-items:flex-start; font-size:.8rem; }
 @media(max-width:1000px){.payroll-text-filters { grid-template-columns:repeat(2,minmax(0,1fr)); }}
 @media(max-width:500px){.payroll-text-filters { grid-template-columns:minmax(0,1fr); }}
+
+/* Sélection multiple pour les états d'avances fictifs. */
+.payroll-advance-employees { display:grid; gap:8px; margin-top:12px; font-size:.78rem; }
+.payroll-advance-employees > label { display:flex; align-items:center; gap:6px; }
+.payroll-advance-employees details { padding:10px; border:1px solid #dce5df; border-radius:8px; }
+.payroll-advance-employees details > label { display:grid; gap:5px; margin:10px 0; }
+.payroll-advance-employees input[type=search] { width:100%; max-width:320px; padding:7px; border:1px solid #cbd7d2; border-radius:6px; }
+.payroll-advance-employees [data-advance-employee-list] { display:grid; gap:5px; max-height:220px; overflow:auto; }
+.payroll-advance-employees [data-advance-employee-row] { align-items:center; gap:6px; }
+.payroll-advance-employees [data-advance-employee-row]:not([hidden]) { display:flex; }
