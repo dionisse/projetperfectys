@@ -365,7 +365,7 @@ Le filtre Nature propose « Toutes » par défaut et les neuf rubriques AVANCE i
 
 Pour chaque nature, l’avance accordée reprend la cellule montant de la rubrique principale ; le suivi reprend les cellules Report, Augmentation ce mois et Retenue ce mois. Le report initial est explicite dans le bulletin. À défaut, le reste du mois précédent est repris uniquement s’il est complet et consécutif. Un report saisi différent du reste précédent est utilisé mais signalé et ne se propage pas automatiquement. Le total dû est report + augmentation ; la diminution désigne la même valeur que la retenue et le reste est total dû − retenue **une seule fois**. Les calculs restent vides si une donnée nécessaire manque et les valeurs négatives ou incohérences sont signalées. La saisie d’une avance accordée ne prouve pas que son montant égale l’augmentation.
 
-Les colonnes proposées suivent les modèles de la capture, avec identifiants de groupe ajoutés pour les sélections multiples. La mise en page précède un aperçu compact, l’export Excel ou texte tabulé et l’impression/PDF ; les droits et données sont revérifiés avant export. Aucune avance, retenue ou écriture réelle n’est créée.
+Les colonnes proposées suivent les modèles de la capture, avec identifiants de groupe ajoutés pour les sélections multiples. La mise en page précède un aperçu compact, ajusté à la largeur disponible, avec une option plein écran, ainsi que l’export Excel ou texte tabulé et l’impression/PDF ; les droits et données sont revérifiés avant export. Aucune avance, retenue ou écriture réelle n’est créée.
 
 ### États de préparation des espèces et chèques
 

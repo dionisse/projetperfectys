@@ -93,3 +93,8 @@
 .payroll-advance-employees [data-advance-employee-list] { display:grid; gap:5px; max-height:220px; overflow:auto; }
 .payroll-advance-employees [data-advance-employee-row] { align-items:center; gap:6px; }
 .payroll-advance-employees [data-advance-employee-row]:not([hidden]) { display:flex; }
+
+/* États d’avances : colonnes adaptées à la fenêtre, sans troncature. */
+.payroll-advance-preview .payroll-book-table-wrap { overflow-x:visible; }
+.payroll-advance-preview .payroll-book-table { width:100%; min-width:0; table-layout:fixed; font-size:.72rem !important; line-height:1.3; }
+.payroll-advance-preview .payroll-book-table th,.payroll-advance-preview .payroll-book-table td { min-width:0; max-width:none; padding:5px 3px !important; white-space:normal; overflow-wrap:anywhere; }

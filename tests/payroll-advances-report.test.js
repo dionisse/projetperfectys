@@ -35,3 +35,13 @@ test('le registre accepte de nouvelles natures individuelles et isole les clés 
  assert.deepEqual(api.natures([{id:'advance-10',label:'AVANCE 10'},{id:'advances-loans-total',label:'TOTAL'}]).map(x=>x.id),['advance-10']);
  assert.equal({}.granted,undefined);
 });
+test('aperçu des avances ajusté et bascule plein écran sans effet sur les autres états',()=>{
+ const source=fs.readFileSync('modern-proto/js/payroll-advances-report.js','utf8'),css=fs.readFileSync('modern-proto/css/payroll-detailed-book.css','utf8');
+ assert.match(source,/payroll-book-compact payroll-advance-preview/);
+ assert.match(source,/data-advance-size aria-pressed="false"/);
+ assert.match(source,/classList\.toggle\('payroll-book-fullscreen'\)/);
+ assert.match(source,/classList\.toggle\('payroll-book-compact',!full\)/);
+ assert.match(source,/dialog\.payroll-advance-preview, a\[download\]/);
+ assert.match(css,/\.payroll-advance-preview \.payroll-book-table \{[^}]*table-layout:fixed/);
+ assert.match(css,/\.payroll-advance-preview \.payroll-book-table th,[^}]*white-space:normal; overflow-wrap:anywhere/);
+});
