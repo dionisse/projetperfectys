@@ -53,7 +53,7 @@
 /* Préparation d'un ordre unique fictif. */
 .payroll-transfer-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
 .payroll-transfer-fields label,.payroll-transfer-signers { display:grid; gap:5px; font-size:.75rem; font-weight:650; }
-.payroll-transfer-fields input,.payroll-transfer-fields select,.payroll-transfer-signers textarea { box-sizing:border-box; width:100%; min-width:0; padding:9px; border:1px solid #cbd7d2; border-radius:6px; background:#fff; font:inherit; }
+.payroll-transfer-fields input,.payroll-transfer-fields select,.payroll-transfer-signers textarea,.payroll-transfer-signers select { box-sizing:border-box; width:100%; min-width:0; padding:9px; border:1px solid #cbd7d2; border-radius:6px; background:#fff; font:inherit; }
 .payroll-transfer-banks { display:flex; flex-wrap:wrap; gap:12px; margin:12px 0; }
 .payroll-transfer-banks label,.payroll-transfer-option,.payroll-transfer-choices label { display:inline-flex; align-items:center; gap:6px; font-size:.75rem; }
 .payroll-transfer-choices { display:flex; flex-wrap:wrap; gap:12px 30px; margin-bottom:12px; }
@@ -63,3 +63,7 @@
 .payroll-transfer-signatures { margin:20px 0; }
 .payroll-transfer-signatures p { margin:12px 0; }
 @media(max-width:500px){.payroll-transfer-fields { grid-template-columns:minmax(0,1fr); }}
+
+.payroll-multiple-summary { padding:12px 16px; margin-bottom:14px; background:#fff; border:1px solid #dce5df; border-radius:10px; }
+.payroll-multiple-summary p { margin:4px 0 0; font-size:.75rem; }
+.payroll-book-preview-frame > .payroll-book-report { margin-bottom:16px; }
