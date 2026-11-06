@@ -172,6 +172,7 @@
     payrollMainMenu: 'Fichier',
     payrollMenuItem: 'export-files',
     payrollCurrentReportId: '',
+    payrollDeclarationId: '',
     payrollEmployeeId: '',
     payrollEmployeeCreateMode: false,
     payrollEmployeeEditId: '',
@@ -385,6 +386,16 @@
       { title: 'Variations', note: 'Comparaison des brouillons et des déclarations historiques des fiches.', items: [
         { id: 'fixed-elements-variations', label: 'Variations des éléments fixes', ready: true }
       ] }
+    ];
+  }
+
+  function payrollDeclarationItems() {
+    return [
+      { id:'cnss-nominative', label:'Déclaration nominative CNSS', ready:true },
+      { id:'cnss-summary', label:'Déclaration récapitulative CNSS' },
+      { id:'its-nominative', label:'Déclaration nominative ITS' },
+      { id:'its-summary', label:'Déclaration récapitulative ITS' },
+      { id:'fnr-nominative', label:'Déclaration nominative au FNR' }
     ];
   }
 
@@ -618,6 +629,8 @@
       case 'open-payroll-dossier':
       case 'payroll-current-report-select':
       case 'payroll-current-report-back':
+      case 'payroll-declaration-select':
+      case 'payroll-declaration-back':
         return { moduleId: 'payroll-hr', actionId: 'module.view' };
       case 'create-payroll-dossier':
       case 'create-payroll-test-dossier':
@@ -20565,6 +20578,11 @@
       var rubricCumulativeDossier = PayrollHR.currentDossier();
       if (rubricCumulativeDossier) window.PayrollRubricCumulative.mount(rubricCumulativeWorkspace, { hr: PayrollHR, dossier: rubricCumulativeDossier, tools: window.PayrollPayslipWorkspace, book: window.PayrollDetailedBook, math: window.PayrollCumulativeBook, exchange: AccountingExchange, mode: rubricCumulativeWorkspace.getAttribute('data-rubric-mode'), canView: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'module.view', payrollAccessContext(rubricCumulativeDossier)); }, licenseOwner: licenseOwnerName });
     }
+    var cnssWorkspace = $('#payroll-cnss-nominative-workspace');
+    if (cnssWorkspace && window.PayrollCnssNominative && window.PayrollDetailedBook && window.PayrollCumulativeBook && window.PayrollPayslipWorkspace) {
+      var cnssDossier = PayrollHR.currentDossier();
+      if (cnssDossier) window.PayrollCnssNominative.mount(cnssWorkspace, {hr:PayrollHR,dossier:cnssDossier,tools:window.PayrollPayslipWorkspace,book:window.PayrollDetailedBook,math:window.PayrollCumulativeBook,exchange:AccountingExchange,canView:function(){return hasDemoPermission(getActiveDemoMember(),'payroll-hr','module.view',payrollAccessContext(cnssDossier));},licenseOwner:licenseOwnerName});
+    }
     var fixedVariationWorkspace = $('#payroll-fixed-variations-workspace');
     if (fixedVariationWorkspace && window.PayrollFixedVariations && window.PayrollDetailedBook && window.PayrollCumulativeBook && window.PayrollPayslipWorkspace) {
       var fixedVariationDossier = PayrollHR.currentDossier();
@@ -22170,6 +22188,14 @@
     return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-current-month-payroll-reports" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Etats sur la paie du mois en cours</h3></div><span class="badge draft">15 ÉTATS · TEST</span></div><div class="alert info"><div>Navigation des états issue de la capture. Les livres, les états espèces et chèques, quatre ordres de virements, les états d’avances et les cumuls par service et zone sont disponibles en lecture seule de test ; les variations sont disponibles en lecture seule de test.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="États sur la paie du mois en cours">' + list + '</nav>' + detail + '</div></section>';
   }
 
+  function viewPayrollDeclarations() {
+    var items=payrollDeclarationItems(), selected=items.find(function(item){return item.id===ui.payrollDeclarationId;});
+    if(selected && selected.id==='cnss-nominative')return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-cnss-ipts-fnr-declarations"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-declaration-back">← Retour aux déclarations</button><div id="payroll-cnss-nominative-workspace"></div></section>';
+    var list=items.map(function(item){return '<li><button type="button" class="payroll-current-report-item'+(selected&&selected.id===item.id?' is-selected':'')+'" data-action="payroll-declaration-select" data-declaration-id="'+esc(item.id)+'" aria-pressed="'+(selected&&selected.id===item.id?'true':'false')+'"><span>'+esc(item.label)+'</span><small>'+(item.ready?'Brouillon test':'À construire')+'</small></button></li>';}).join('');
+    var detail=selected?'<div class="payroll-current-report-detail" aria-live="polite"><p class="page-kicker">ÉTAT SÉLECTIONNÉ</p><h4>'+esc(selected.label)+'</h4><p>À construire : la présentation et les règles de cette déclaration restent à préciser. Aucun document ni dépôt n’est produit.</p></div>':'<div class="payroll-current-report-detail" aria-live="polite"><h4>Sélectionnez une déclaration</h4><p>La nominative CNSS propose un brouillon mensuel ou trimestriel. Les quatre autres états seront précisés séparément.</p></div>';
+    return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-cnss-ipts-fnr-declarations" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Déclarations C.N.S.S., I.P.T.S. et F.N.R.</h3></div><span class="badge draft">TEST · 4 À PRÉCISER</span></div><div class="alert warning"><div>Préparation fictive uniquement. Aucun dépôt officiel, calcul légal ni paiement.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="Déclarations"><section class="payroll-current-report-group"><h4>Déclarations</h4><ul>'+list+'</ul></section></nav>'+detail+'</div></section>';
+  }
+
   function viewPayrollMainMenu(dossier, dossierEmployees, canCreatePayrollEmployee, canEditPayrollEmployee) {
     var activeMenu = ui.payrollMainMenu || 'Fichier';
     var sections = payrollMenuSections(activeMenu);
@@ -22199,6 +22225,7 @@
     var panel;
     if (selectedItem && selectedItem.id === 'employees') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-employees">' + viewPayrollEmployeeDetails(dossier, dossierEmployees || [], canCreatePayrollEmployee === true) + '</div>';
     else if (selectedItem && selectedItem.id === 'current-month-payroll-reports') panel = viewPayrollCurrentMonthReports();
+    else if (selectedItem && selectedItem.id === 'cnss-ipts-fnr-declarations') panel = viewPayrollDeclarations();
     else if (selectedItem && selectedItem.id === 'payslip-edition') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-payslip-edition"><div id="payroll-slip-edition-workspace"></div></div>';
     else if (selectedItem && (selectedItem.id === 'exceptional-payslip-1' || selectedItem.id === 'exceptional-payslip-2')) panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-' + esc(selectedItem.id) + '"><div id="payroll-slip-edition-workspace" data-edition-variant="' + (selectedItem.id === 'exceptional-payslip-1' ? 'exceptional-1' : 'exceptional-2') + '"></div></div>';
     else if (selectedItem && selectedItem.id === 'payslips') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-payslips"><div id="payroll-payslip-workspace"></div></div>';
@@ -35538,6 +35565,20 @@
         var printDossier = PayrollHR.currentDossier();
         if (!printDossier || !PayrollHR.isDemoTestDossier(printDossier.id)) { toast('Impression réservée à la fiche fictive PRH-TEST-2026.', 'warning'); break; }
         printPayrollEmployee();
+        break;
+      }
+      case 'payroll-declaration-back':
+        ui.payrollDeclarationId = '';
+        render();
+        break;
+      case 'payroll-declaration-select': {
+        if (ui.payrollMainMenu !== 'Editions' || ui.payrollMenuItem !== 'cnss-ipts-fnr-declarations') break;
+        var declarationId=trigger.getAttribute('data-declaration-id') || '';
+        if (!payrollDeclarationItems().some(function(item){return item.id===declarationId;})) break;
+        ui.payrollDeclarationId=declarationId;
+        render();
+        var selectedDeclarationButton=$('[data-action="payroll-declaration-select"][aria-pressed="true"]');
+        if(selectedDeclarationButton)selectedDeclarationButton.focus({preventScroll:true});
         break;
       }
       case 'payroll-current-report-back':
