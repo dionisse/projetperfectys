@@ -26,6 +26,13 @@
     });
     return copy(month);
   }
+  // Chargement unique de plusieurs mois, sans relecture du stockage pour chaque période.
+  function readPeriodRangeDrafts(id, periods) {
+    if(!Array.isArray(periods)||new Set(periods).size!==periods.length)throw new Error('Périodes invalides.');
+    var data=load(id).drafts,out=Object.create(null);
+    periods.forEach(function(period){var month=data[period];if(month==null){out[period]={};return;}if(typeof month!=='object'||Array.isArray(month))throw new Error('Brouillons de la période illisibles.');Object.keys(month).forEach(function(employeeId){var rec=month[employeeId];if(!rec||typeof rec!=='object'||Array.isArray(rec))throw new Error('Brouillon du bulletin illisible.');});out[period]=copy(month);});
+    return out;
+  }
   // Lecture seule du brouillon enregistré : distingue l’absence de brouillon d’un brouillon vide.
   function readDraft(id, period, employeeId) {
     var data = load(id), periods = data.drafts, month = periods[period];
@@ -208,7 +215,7 @@
     observer.observe(root.document.documentElement, {childList:true, subtree:true});
     render();
   }
-  var api={mount:mount,readDraft:readDraft,readPeriodDrafts:readPeriodDrafts,readAdvanceLedger:readAdvanceLedger,calculate:calculate,numbers:numbers,monthList:monthList,matchesEmployee:matchesEmployee,resolveRubrics:resolveRubrics,isValidDate:isValidDate,hasDepartedAtPeriod:hasDepartedAtPeriod};
+  var api={mount:mount,readDraft:readDraft,readPeriodDrafts:readPeriodDrafts,readPeriodRangeDrafts:readPeriodRangeDrafts,readAdvanceLedger:readAdvanceLedger,calculate:calculate,numbers:numbers,monthList:monthList,matchesEmployee:matchesEmployee,resolveRubrics:resolveRubrics,isValidDate:isValidDate,hasDepartedAtPeriod:hasDepartedAtPeriod};
   if (typeof module !== 'undefined' && module.exports) module.exports=api;
   root.PayrollPayslipWorkspace=api;
 })(typeof window !== 'undefined' ? window : globalThis);

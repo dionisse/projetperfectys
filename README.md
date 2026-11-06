@@ -355,7 +355,15 @@ Le document affiche séparément le titulaire de licence et l’entreprise du do
 
 ### Éditions — États sur la paie du mois en cours
 
-Le sous-menu expose les 15 états de la capture, groupés en livres de paie, paiements, avances, cumuls et variations. Les livres détaillé et cumulé, les états de préparation espèces et chèques, les quatre modèles d’ordres de virement et les quatre états d’avances sont disponibles en lecture seule de test. Les **3 autres états** restent à construire ; aucun paiement ne peut être exécuté ici. Les règles des états restants et les formats bancaires restent à préciser.
+Le sous-menu expose les 15 états de la capture, groupés en livres de paie, paiements, avances, cumuls et variations. Les livres détaillé et cumulé, les états de préparation espèces et chèques, les quatre modèles d’ordres de virement, les quatre états d’avances et les cumuls par service et zone sont disponibles en lecture seule de test. L’**état de variations** reste à construire ; aucun paiement ne peut être exécuté ici. Les règles des états restants et les formats bancaires restent à préciser.
+
+### Cumuls des rubriques par service et par zone
+
+Les deux états regroupent les brouillons ordinaires par service ou zone géographique du référentiel et sur une plage de mois du cycle, bornes incluses. `*` sélectionne tous les éléments du référentiel et inclut aussi les fiches sans affectation reconnue dans un groupe distinct ; une sélection ciblée permet de choisir plusieurs éléments et ne retient que les fiches qui leur sont explicitement rattachées. Les affectations sont celles des fiches **actuelles**, utilisées pour toute la période et non un historique.
+
+L’utilisateur insère et retire les rubriques du référentiel, puis choisit pour chacune la cellule Montant, Base ou Quantité. Chaque rubrique est additionnée séparément, sans addition entre rubriques ni déduction d’une valeur absente. La somme est exacte à six décimales. Un cumul partiel est marqué `*` et accompagné du nombre de valeurs renseignées sur le nombre de fiches × mois attendus ; un groupe sans employés et une rubrique sans valeur n’inventent pas de zéro. Les colonnes Rubrique et Valeur, ainsi que les lignes de détail et de cumul des groupes sélectionnés, sont configurables ; le groupe reste identifié. Aucun nom d’employé n’est imprimé.
+
+Les brouillons de la période sont chargés en une seule lecture. La mise en page, l’aperçu compact avec option plein écran, les exports Excel et texte tabulé et l’impression/PDF réutilisent les fonctionnalités existantes ; les droits et données sont revérifiés avant export. Ces états fictifs ne calculent ni paie légale ni règlement et ne modifient pas les fiches ni les bulletins.
 
 ### États et registre synchronisé des avances
 
