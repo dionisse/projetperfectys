@@ -12,6 +12,6 @@ test('déclaration suivie d’un brouillon supprimé : à vérifier, jamais pay�
 
 test('aperçu compact réservé aux états espèces et chèques',()=>{
  let js=fs.readFileSync('modern-proto/js/payroll-detailed-book.js','utf8'),css=fs.readFileSync('modern-proto/css/payroll-detailed-book.css','utf8');
- assert.match(js,/dialog\.className=payment\?'payroll-book-compact':'payroll-book-fullscreen'/);
- assert.match(js,/payment\?'Un aperçu est toujours présenté/);assert.match(css,/\.payroll-book-compact\s*\{[^}]*width:min\(860px/);assert.match(css,/\.payroll-book-compact\s*\{[^}]*overflow:auto/);
+ assert.match(js,/dialog\.className=\(payment\|\|transfer\)\?'payroll-book-compact':'payroll-book-fullscreen'/);
+ assert.match(js,/\(payment\|\|transfer\)\?'Un aperçu est toujours présenté/);assert.match(css,/\.payroll-book-compact\s*\{[^}]*width:min\(860px/);assert.match(css,/\.payroll-book-compact\s*\{[^}]*overflow:auto/);
 });

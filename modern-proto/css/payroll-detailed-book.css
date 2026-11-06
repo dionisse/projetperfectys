@@ -49,3 +49,17 @@
 .payroll-book-report.is-mono .payroll-book-notes { background:#f6f6f6; border-color:#777; }
 
 .payroll-book-table tr.payroll-book-total td { font-weight:700; border-top:2px solid #8d743b; background:#f6f3ec; }
+
+/* Préparation d'un ordre unique fictif. */
+.payroll-transfer-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.payroll-transfer-fields label,.payroll-transfer-signers { display:grid; gap:5px; font-size:.75rem; font-weight:650; }
+.payroll-transfer-fields input,.payroll-transfer-fields select,.payroll-transfer-signers textarea { box-sizing:border-box; width:100%; min-width:0; padding:9px; border:1px solid #cbd7d2; border-radius:6px; background:#fff; font:inherit; }
+.payroll-transfer-banks { display:flex; flex-wrap:wrap; gap:12px; margin:12px 0; }
+.payroll-transfer-banks label,.payroll-transfer-option,.payroll-transfer-choices label { display:inline-flex; align-items:center; gap:6px; font-size:.75rem; }
+.payroll-transfer-choices { display:flex; flex-wrap:wrap; gap:12px 30px; margin-bottom:12px; }
+.payroll-transfer-choices > div { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:.75rem; font-weight:650; }
+.payroll-transfer-letter { margin:18px 0; line-height:1.5; overflow-wrap:anywhere; }
+.payroll-transfer-letter p { margin:7px 0; }
+.payroll-transfer-signatures { margin:20px 0; }
+.payroll-transfer-signatures p { margin:12px 0; }
+@media(max-width:500px){.payroll-transfer-fields { grid-template-columns:minmax(0,1fr); }}
