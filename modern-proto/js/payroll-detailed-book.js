@@ -86,9 +86,23 @@
   function title(report){return '<header class="payroll-book-report-head"><div><small>TITULAIRE DE LA LICENCE</small><strong>'+esc(report.licenseOwner || 'Titulaire indisponible dans la démonstration')+'</strong></div><div><small>ENTREPRISE GÉRÉE</small><strong>'+esc(report.dossier.clientName || report.dossier.name || 'Non renseignée')+'</strong><span>'+esc(report.dossier.reference||'')+'</span></div><div><small>BROUILLON FICTIF · LECTURE SEULE</small><h2>'+esc(report.title||'Livre de paie détaillé')+'</h2><span>'+esc(report.periodDisplay||periodLabel(report.period))+'</span></div></header><p class="payroll-book-context">'+(report.transferReport?'Préparation du mois · Lignes générées : '+report.rows.length:report.paymentReport?(report.advanceReport?'Période : ':'Mode : ')+esc(report.method)+' · Lignes générées : '+report.rows.length:'Services : '+esc(report.serviceLabel)+(report.cumulative?' · Cumuls par service':' · Employés : '+esc(report.employeeLabel)+' · '+report.rows.length+' employé(s)'))+'</p>';}
   function cellValue(row,column){var raw=row.values[column.key],quality=row.quality&&row.quality[column.key];return display(raw)+((row.review||(quality&&quality.count<quality.total))?' *':'');}
   function table(report,columns){
-    var heading='<thead><tr>'+columns.map(function(c){return '<th scope="col">'+esc(c.label)+'</th>';}).join('')+'</tr></thead>';
+    var heading, colgroups='';
+    if(columns.some(function(c){return c.headerGroup;})){
+      // Groupes consécutifs reconstruits pour chaque bande d’impression : aucun mois perdu.
+      var top='',middle='',bottom='',i=0;
+      while(i<columns.length){
+        var col=columns[i];
+        if(!col.headerGroup){colgroups+='<colgroup span="1"></colgroup>';top+='<th scope="col" rowspan="3">'+esc(col.label)+'</th>';i++;continue;}
+        var end=i+1;while(end<columns.length&&columns[end].headerGroup===col.headerGroup)end++;
+        colgroups+='<colgroup span="'+(end-i)+'"></colgroup>';top+='<th scope="colgroup" colspan="'+(end-i)+'">'+esc(col.headerGroup)+'</th>';
+        for(var j=i;j<end;){var k=j+1;while(k<end&&columns[k].headerSubgroup===columns[j].headerSubgroup)k++;middle+='<th scope="colgroup" colspan="'+(k-j)+'">'+esc(columns[j].headerSubgroup)+'</th>';j=k;}
+        for(var n=i;n<end;n++)bottom+='<th scope="col">'+esc(columns[n].headerLabel||columns[n].label)+'</th>';
+        i=end;
+      }
+      heading='<thead><tr>'+top+'</tr><tr>'+middle+'</tr><tr>'+bottom+'</tr></thead>';
+    } else heading='<thead><tr>'+columns.map(function(c){return '<th scope="col">'+esc(c.label)+'</th>';}).join('')+'</tr></thead>';
     var body=report.rows.map(function(row){return '<tr'+(row.total?' class="payroll-book-total"':'')+'>'+columns.map(function(c){return '<td>'+esc(cellValue(row,c))+'</td>';}).join('')+'</tr>';}).join('');
-    return '<table class="payroll-book-table">'+heading+'<tbody>'+(body||'<tr><td colspan="'+columns.length+'">'+((report.paymentReport||report.transferReport)?'Aucune ligne à préparer pour cette sélection.':'Aucun employé dans cette sélection.')+'</td></tr>')+'</tbody></table>';
+    return '<table class="payroll-book-table">'+colgroups+heading+'<tbody>'+(body||'<tr><td colspan="'+columns.length+'">'+((report.paymentReport||report.transferReport)?'Aucune ligne à préparer pour cette sélection.':'Aucun employé dans cette sélection.')+'</td></tr>')+'</tbody></table>';
   }
   function letterHtml(report){if(!report.transferReport)return '';return '<section class="payroll-transfer-letter">'+report.letterInfo.map(function(text){return '<p>'+esc(text)+'</p>';}).join('')+report.letter.map(function(text){return '<p>'+esc(text)+'</p>';}).join('')+'</section>';}
   function signaturesHtml(report){if(!report.transferReport||!report.signers.length)return '';return '<section class="payroll-transfer-signatures"><h3>Signataires</h3>'+report.signers.map(function(name){return '<p>'+esc(name)+' · signature : ____________________</p>';}).join('')+'</section>';}
