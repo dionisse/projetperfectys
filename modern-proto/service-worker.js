@@ -111,6 +111,7 @@ const APP_SHELL = [
   './js/payroll-cumulative-book.js',
   './js/payroll-payment-report.js',
   './js/payroll-transfer-order.js',
+  './js/payroll-text-transfer.js',
   './js/payroll-supplementary-payslips.js',
   './js/payroll-attendance.js',
   './js/payroll-loan-natures.js',
