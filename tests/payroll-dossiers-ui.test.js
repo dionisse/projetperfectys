@@ -208,7 +208,7 @@ for (const menuItem of [
   'Employés', 'Statuts', 'Catégories', 'Zones géographiques', 'Services', 'Fonctions', 'Diplômes et Qualifications', 'Professions',
   'Compagnies d’assurance complémentaire', 'Banques', 'Bulletins de salaire', 'Bulletins complémentaires après débauchage',
   'Heures de présence', 'Natures des Avances et Prêts', 'Indemnité de licenciement', 'Indemnité de départ en retraite',
-  'Etats sur la paie du mois en cours', 'Déclarations C.N.S.S., I.P.T.S. et F.N.R.', 'Etat des versements aux caisses complémentaires',
+  'Etats sur la paie du mois en cours', 'Déclarations C.N.S.S., ITS et F.N.R.', 'Etat des versements aux caisses complémentaires',
   'Etats personnalisés sur les salaires', 'Etats sur le Personnel', 'Tableau 11 des tableaux financiers OHADA', 'Définitions et Paramètres',
   'Etats spécifiques au dossier', 'Génération du journal de paie :', 'Edition du journal', 'Exportation par fichier-texte',
   'Imputations des rubriques', 'Imputation des remboursements de prêt', 'Imputations auxiliaires', 'Imputations analytiques',

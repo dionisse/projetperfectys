@@ -729,8 +729,8 @@
   addEmployeeRubric('benefit-housing', 'Logement', true);
   addEmployeeRubric('benefit-vehicle', 'Véhicule', true);
   addEmployeeRubric('benefits-kind-total', 'TOTAL AVANTAGES EN NATURE', true, 0, true);
-  addEmployeeRubric('ipts-base', 'Base I.P.T.S.', true);
-  addEmployeeRubric('ipts', 'I.P.T.S.', true);
+  addEmployeeRubric('ipts-base', 'Base ITS', true);
+  addEmployeeRubric('ipts', 'ITS', true);
   addEmployeeRubric('taxes-total', 'TOTAL IMPÔTS', true, 0, true);
   addEmployeeRubric('union-contribution', 'Cotisation syndicale', true);
   addEmployeeRubric('mutual-contribution', 'Cotisation mutuelle', true);
