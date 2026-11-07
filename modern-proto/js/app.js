@@ -394,7 +394,7 @@
       { id:'cnss-nominative', label:'Déclaration nominative CNSS', ready:true },
       { id:'cnss-summary', label:'Déclaration récapitulative CNSS', ready:true },
       { id:'its-nominative', label:'Déclaration nominative ITS', ready:true },
-      { id:'its-summary', label:'Déclaration récapitulative ITS' },
+      { id:'its-summary', label:'Déclaration récapitulative ITS', ready:true },
       { id:'fnr-nominative', label:'Déclaration nominative au FNR' }
     ];
   }
@@ -20580,6 +20580,11 @@
       var rubricCumulativeDossier = PayrollHR.currentDossier();
       if (rubricCumulativeDossier) window.PayrollRubricCumulative.mount(rubricCumulativeWorkspace, { hr: PayrollHR, dossier: rubricCumulativeDossier, tools: window.PayrollPayslipWorkspace, book: window.PayrollDetailedBook, math: window.PayrollCumulativeBook, exchange: AccountingExchange, mode: rubricCumulativeWorkspace.getAttribute('data-rubric-mode'), canView: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'module.view', payrollAccessContext(rubricCumulativeDossier)); }, licenseOwner: licenseOwnerName });
     }
+    var itsSummaryWorkspace = $('#payroll-its-summary-workspace');
+    if (itsSummaryWorkspace && window.PayrollItsSummary && window.PayrollItsNominative && window.PayrollCnssNominative && window.PayrollCnssSummary && window.PayrollTransferOrder && window.PayrollPayslipWorkspace && window.PayrollCumulativeBook && window.PayrollPaymentTracking) {
+      var itsSummaryDossier = PayrollHR.currentDossier();
+      if (itsSummaryDossier) window.PayrollItsSummary.mount(itsSummaryWorkspace,{hr:PayrollHR,dossier:itsSummaryDossier,tools:window.PayrollPayslipWorkspace,math:window.PayrollCumulativeBook,tracking:window.PayrollPaymentTracking,nominative:window.PayrollItsNominative,quarters:window.PayrollCnssNominative.quarters,cnssSummary:window.PayrollCnssSummary,words:window.PayrollTransferOrder.words,exchange:AccountingExchange,canView:function(){return hasDemoPermission(getActiveDemoMember(),'payroll-hr','module.view',payrollAccessContext(itsSummaryDossier));}});
+    }
     var itsNominativeWorkspace = $('#payroll-its-nominative-workspace');
     if (itsNominativeWorkspace && window.PayrollItsNominative && window.PayrollPayslipWorkspace && window.PayrollDetailedBook && window.PayrollCumulativeBook && window.PayrollPaymentTracking && window.PayrollCnssNominative) {
       var itsDossier = PayrollHR.currentDossier();
@@ -22202,12 +22207,13 @@
 
   function viewPayrollDeclarations() {
     var items=payrollDeclarationItems(), selected=items.find(function(item){return item.id===ui.payrollDeclarationId;});
+    if(selected && selected.id==='its-summary')return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-cnss-ipts-fnr-declarations"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-declaration-back">← Retour aux déclarations</button><div id="payroll-its-summary-workspace"></div></section>';
     if(selected && selected.id==='its-nominative')return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-cnss-ipts-fnr-declarations"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-declaration-back">← Retour aux déclarations</button><div id="payroll-its-nominative-workspace"></div></section>';
     if(selected && selected.id==='cnss-summary')return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-cnss-ipts-fnr-declarations"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-declaration-back">← Retour aux déclarations</button><div id="payroll-cnss-summary-workspace"></div></section>';
     if(selected && selected.id==='cnss-nominative')return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-cnss-ipts-fnr-declarations"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-declaration-back">← Retour aux déclarations</button><div id="payroll-cnss-nominative-workspace"></div></section>';
     var list=items.map(function(item){return '<li><button type="button" class="payroll-current-report-item'+(selected&&selected.id===item.id?' is-selected':'')+'" data-action="payroll-declaration-select" data-declaration-id="'+esc(item.id)+'" aria-pressed="'+(selected&&selected.id===item.id?'true':'false')+'"><span>'+esc(item.label)+'</span><small>'+(item.ready?'Brouillon test':'À construire')+'</small></button></li>';}).join('');
-    var detail=selected?'<div class="payroll-current-report-detail" aria-live="polite"><p class="page-kicker">ÉTAT SÉLECTIONNÉ</p><h4>'+esc(selected.label)+'</h4><p>À construire : la présentation et les règles de cette déclaration restent à préciser. Aucun document ni dépôt n’est produit.</p></div>':'<div class="payroll-current-report-detail" aria-live="polite"><h4>Sélectionnez une déclaration</h4><p>Les déclarations CNSS et la nominative ITS proposent un brouillon mensuel ou trimestriel. Les déclarations récapitulative ITS et nominative FNR seront précisées séparément.</p></div>';
-    return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-cnss-ipts-fnr-declarations" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Déclarations C.N.S.S., ITS et F.N.R.</h3></div><span class="badge draft">TEST · 2 À PRÉCISER</span></div><div class="alert warning"><div>Préparation fictive uniquement. Aucun dépôt officiel, calcul légal ni paiement.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="Déclarations"><section class="payroll-current-report-group"><h4>Déclarations</h4><ul>'+list+'</ul></section></nav>'+detail+'</div></section>';
+    var detail=selected?'<div class="payroll-current-report-detail" aria-live="polite"><p class="page-kicker">ÉTAT SÉLECTIONNÉ</p><h4>'+esc(selected.label)+'</h4><p>À construire : la présentation et les règles de cette déclaration restent à préciser. Aucun document ni dépôt n’est produit.</p></div>':'<div class="payroll-current-report-detail" aria-live="polite"><h4>Sélectionnez une déclaration</h4><p>Les déclarations CNSS et ITS proposent des brouillons mensuels ou trimestriels. La nominative FNR sera précisée séparément.</p></div>';
+    return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-cnss-ipts-fnr-declarations" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Déclarations C.N.S.S., ITS et F.N.R.</h3></div><span class="badge draft">TEST · 1 À PRÉCISER</span></div><div class="alert warning"><div>Préparation fictive uniquement. Aucun dépôt officiel, calcul légal ni paiement.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="Déclarations"><section class="payroll-current-report-group"><h4>Déclarations</h4><ul>'+list+'</ul></section></nav>'+detail+'</div></section>';
   }
 
   function viewPayrollMainMenu(dossier, dossierEmployees, canCreatePayrollEmployee, canEditPayrollEmployee) {

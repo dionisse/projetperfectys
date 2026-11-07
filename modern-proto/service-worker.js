@@ -115,6 +115,7 @@ const APP_SHELL = [
   './js/payroll-cnss-nominative.js',
   './js/payroll-cnss-summary.js',
   './js/payroll-its-nominative.js',
+  './js/payroll-its-summary.js',
   './js/payroll-payment-report.js',
   './js/payroll-transfer-order.js',
   './js/payroll-text-transfer.js',
