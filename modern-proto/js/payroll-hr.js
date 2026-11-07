@@ -2404,6 +2404,7 @@
       address: String(input.address || '').trim().slice(0, 240),
       ifu: String(input.ifu || '').trim().slice(0, 40),
       rccm: String(input.rccm || '').trim().slice(0, 60),
+      cnssEmployerNumber: String(input.cnssEmployerNumber || '').trim().slice(0, 80),
       email: String(input.email || '').trim().slice(0, 254),
       phone: String(input.phone || '').trim().slice(0, 40),
       accountingDossierId: accountingDossierId,
@@ -2424,6 +2425,17 @@
       cycleEnd: '2026-12-31',
       includeTenTestEmployees: true
     });
+  }
+
+  function updateCnssEmployerNumber(dossierId, value) {
+    if (!isDemoTestDossier(dossierId)) return {ok:false,errors:['Modification réservée au dossier fictif.']};
+    var number=String(value == null ? '' : value).trim();
+    if(number.length>80)return {ok:false,errors:['Le numéro employeur est limité à 80 caractères.']};
+    var catalog=loadDossierCatalog(),dossier=catalog.dossiers.find(function(d){return d.id===dossierId;});
+    if(!dossier)return {ok:false,errors:['Dossier Paie & RH introuvable.']};
+    dossier.cnssEmployerNumber=number;
+    if(!saveDossierCatalog(catalog))return {ok:false,errors:['Impossible d’enregistrer le numéro employeur.']};
+    return {ok:true,errors:[],dossier:clone(dossier)};
   }
 
   function updateAccountingDossierLink(dossierId, accountingDossierId) {
@@ -2646,6 +2658,7 @@
     createTestDossier: createTestDossier,
     selectDossier: selectDossier,
     updateAccountingDossierLink: updateAccountingDossierLink,
+    updateCnssEmployerNumber: updateCnssEmployerNumber,
     runs: runs,
     getRun: getRun,
     accountingAccountCatalog: accountingAccountCatalog,

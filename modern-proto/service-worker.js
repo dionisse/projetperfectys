@@ -113,6 +113,7 @@ const APP_SHELL = [
   './js/payroll-rubric-cumulative.js',
   './js/payroll-fixed-variations.js',
   './js/payroll-cnss-nominative.js',
+  './js/payroll-cnss-summary.js',
   './js/payroll-payment-report.js',
   './js/payroll-transfer-order.js',
   './js/payroll-text-transfer.js',

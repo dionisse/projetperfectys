@@ -181,3 +181,23 @@
 .payroll-cnss-quarterly .payroll-book-table-wrap { overflow-x:auto; }
 .payroll-cnss-quarterly .payroll-book-table { min-width:1200px; }
 .payroll-cnss-quarterly .cnss-scroll-hint { margin:0 0 10px; color:#52685d; font-size:.74rem; }
+.payroll-cnss-summary [hidden] { display:none !important; }
+.payroll-cnss-summary .cnss-reference { margin-top:16px; font-size:.78rem; }
+.payroll-cnss-summary .cnss-reference summary { cursor:pointer; font-weight:700; }
+.payroll-cnss-summary .cnss-reference form { display:flex; flex-wrap:wrap; align-items:end; gap:10px; }
+.payroll-cnss-summary .cnss-reference label { display:grid; gap:6px; }
+.payroll-cnss-summary .cnss-reference input { padding:8px; border:1px solid #cbd7d2; border-radius:6px; }
+.payroll-cnss-summary-preview .cnss-summary-report { background:#fff; border:1px solid #dce5df; border-radius:10px; padding:clamp(16px,3vw,28px); color:#222; font: .8rem/1.45 Arial,sans-serif; }
+.cnss-summary-report .cnss-summary-banner { padding:8px; background:#fff4d8; border:1px solid #e7c989; font-weight:700; }
+.cnss-summary-report header { text-align:center; margin:20px 0; }
+.cnss-summary-report header h2 { font-size:1rem; margin:10px 0; }
+.cnss-summary-identification { display:flex; flex-wrap:wrap; justify-content:space-between; gap:15px; margin:18px 0; }
+.cnss-summary-identification span,.cnss-summary-identification strong { display:block; overflow-wrap:anywhere; }
+.cnss-summary-report table { width:100%; table-layout:fixed; border-collapse:collapse; }
+.cnss-summary-report th,.cnss-summary-report td { padding:7px; border:1px solid #dce5df; text-align:left; overflow-wrap:anywhere; }
+.cnss-summary-report thead th { background:#f2f5f3; }
+.cnss-summary-report .cnss-summary-total { font-weight:700; background:#f8f3e6; }
+.cnss-summary-signature { margin:22px 0; }
+.cnss-summary-signature small { color:#665b47; }
+.cnss-summary-notes { margin-top:20px; padding:8px 12px; background:#f5f7f5; border-left:3px solid #bba672; font-size:.72rem; overflow-wrap:anywhere; }
+.cnss-summary-notes p { margin:5px 0; }
