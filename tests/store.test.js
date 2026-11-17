@@ -325,9 +325,13 @@ test('ajout de compte avec code unique', () => {
 
 test('export puis import JSON', () => {
   const json = S.exportJson();
-  const imported = S.importJson(json);
-  assert.strictEqual(imported.ok, true, imported.errors.join(' '));
-  assert.strictEqual(S.kpis().debit, S.kpis().credit);
+  const payload = JSON.parse(json);
+  assert.strictEqual(payload.application, 'EMRYS');
+  for (const application of ['EMRYS', 'PERFECTO']) {
+    const imported = S.importJson(JSON.stringify({ ...payload, application }));
+    assert.strictEqual(imported.ok, true, application + ': ' + imported.errors.join(' '));
+    assert.strictEqual(S.kpis().debit, S.kpis().credit);
+  }
 });
 
 test('import d’un fichier invalide refusé', () => {

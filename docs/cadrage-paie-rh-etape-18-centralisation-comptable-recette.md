@@ -32,7 +32,7 @@ Chaque source transmise porte ses identifiants stables RH, de document et de lig
 
 Avant le transfert, l’entreprise configure et approuve les correspondances entre les catégories exactes de lignes source et les codes exacts de comptes existant dans le dossier comptable cible. Pour chaque correspondance, conserver : code de compte exact (jamais un préfixe), libellé affiché, dossier, période, type de ligne RH, sens débit/crédit, dates d’effet, validateur et source de décision.
 
-Les correspondances seront vérifiées à partir du plan de comptes cible : existence, état actif/inactif, période d’usage et autorisation. PERFECTO ne crée pas un compte manquant, n’invente pas une contrepartie et ne choisit pas un compte usuel par son libellé. Les débits et crédits restent séparés et visibles ; aucun solde net ne remplace le détail source. Aucun équilibrage artificiel par compte d’attente ou valeur d’ajustement n’est permis.
+Les correspondances seront vérifiées à partir du plan de comptes cible : existence, état actif/inactif, période d’usage et autorisation. EMRYS ne crée pas un compte manquant, n’invente pas une contrepartie et ne choisit pas un compte usuel par son libellé. Les débits et crédits restent séparés et visibles ; aucun solde net ne remplace le détail source. Aucun équilibrage artificiel par compte d’attente ou valeur d’ajustement n’est permis.
 
 Les liens vers des tiers (employé, organisme social, banque ou autre) ne seront créés que si la source contient l’identifiant auxiliaire approprié et que le mapping est explicitement configuré. Aucun solde par tiers ne sera attribué sans identifiant auxiliaire source validé.
 

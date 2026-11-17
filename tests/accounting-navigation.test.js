@@ -39,7 +39,7 @@ const labels = groups.flatMap(group => group.tabs.flatMap(tab => [
   'Importation d’une balance générale',
   'Centralisation auxiliaire',
   'FEC externe ou d’une autre organisation',
-  'Extraction interne et lots auxiliaires PERFECTO',
+  'Extraction interne et lots auxiliaires EMRYS',
   'Centralisation des salaires depuis Paie et RH',
   'Centralisation des opérations depuis Vente, Stock et Facturation',
   'Annulation d’une centralisation',
@@ -221,7 +221,7 @@ assert.ok(findTab('saisie', 'matching').reason.includes('équilibrées'));
 assert.equal(findTab('saisie', 'reconciliation').status, 'partial');
 assert.ok(findTab('saisie', 'reconciliation').reason.includes('relevés génériques CSV/Excel'));
 assert.ok(findTab('saisie', 'reconciliation').reason.includes('confirmation'));
-assert.ok(findTab('saisie', 'reconciliation').reason.includes('aucune intégration Google Drive organisationnelle n’est connectée dans PERFECTO'));
+assert.ok(findTab('saisie', 'reconciliation').reason.includes('aucune intégration Google Drive organisationnelle n’est connectée dans EMRYS'));
 const analyticalCenters = findTab('definitions', 'responsibility-centers');
 assert.equal(analyticalCenters.status, 'active');
 assert.equal(analyticalCenters.label, 'Centres analytiques');
@@ -372,7 +372,7 @@ assert.match(appSource, /printerHint \+\s*currencyWarning \+/,
   'l’avertissement sur les lignes omises est également repris dans l’aperçu');
 assert.match(appSource, /printer: isAnalyticCenterTotalsReport \|\| isCurrencyTotalsReport \? 'system' : 'pdf'[\s\S]*isAnalyticCenterTotalsReport \|\| isCurrencyTotalsReport \? 'landscape'/,
   'la mise en page devise reprend l’imprimante système, le paysage et l’aperçu de la capture');
-assert.match(appSource, /'PERFECTO-cumul-devises-'[\s\S]*'Cumul par devises'/,
+assert.match(appSource, /'EMRYS-cumul-devises-'[\s\S]*'Cumul par devises'/,
   'les exports du cumul par devises utilisent un nom de fichier et un onglet dédiés');
 assert.match(configurationCss, /journal-lines-filter-grid\.journal-currency-total-filters[\s\S]*journal-lines-column-grid\.journal-currency-total-columns/);
 assert.match(appSource, /includeDrafts: isModifiedReport[\s\S]*modifiedOnly: isModifiedReport[\s\S]*filterByModificationDate: isModifiedReport/,
@@ -795,7 +795,7 @@ assert.match(appSource, /function generalLedgerReportLayoutView\([\s\S]*general-
 assert.match(appSource, /function generalLedgerReportPrintableHtml\([\s\S]*GRAND LIVRE DES COMPTES[\s\S]*reports à nouveau[\s\S]*page-break/);
 assert.match(generalLedgerSource, /priorEntriesIncludedInRunningBalance: true[\s\S]*sourceReferenceOnly: true[\s\S]*noAccountingMutation: true/);
 assert.match(configurationCss, /\.general-ledger-column-grid[\s\S]*\.general-ledger-account-section/);
-assert.match(serviceWorkerSource, /perfecto-static-v232/);
+assert.match(serviceWorkerSource, /emrys-static-v233/);
 assert.equal(nav.getTab('declarations', 'vat-difference').status, 'active');
 assert.match(appSource, /group\.id === 'declarations' && tab\.id === 'vat-difference'[\s\S]*viewVatDifferenceReport/);
 assert.match(appSource, /function vatDifferenceConfigurationKey\([\s\S]*function openVatDifferenceAccountPicker/);
@@ -834,7 +834,7 @@ assert.match(appSource, /menuParams\.t === 'financial-framework'\) bindFinancial
   'la recherche est liée lorsque le sous-menu est ouvert');
 assert.ok(htmlSource.indexOf('js/accounting-framework.js') < htmlSource.indexOf('js/app.js'),
   'le référentiel est chargé avant le routeur de l’application');
-assert.match(serviceWorkerSource, /perfecto-static-v232/);
+assert.match(serviceWorkerSource, /emrys-static-v233/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-framework\.js/);
 assert.match(serviceWorkerSource, /\.\/js\/accounting-centralization\.js/);
 assert.match(htmlSource, /js\/accounting-centralization\.js/);

@@ -1,9 +1,9 @@
 /*
- * PERFECTO · Service worker du prototype statique
+ * EMRYS · Service worker du prototype statique
  * Stratégie : réseau d'abord (contenu toujours à jour), cache en secours hors ligne.
  */
 
-const CACHE_NAME = 'perfecto-static-v232';
+const CACHE_NAME = 'emrys-static-v233';
 const APP_SHELL = [
   './',
   './index.html',

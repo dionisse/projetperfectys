@@ -1,5 +1,5 @@
 /* =========================================================================
-   PERFECTO · Couche de données locale
+   EMRYS · Couche de données locale
    Aucun backend, aucun Blazor : données persistées dans localStorage.
    Règles métier du Lot 1 (plan comptable, journaux, pièces, périodes).
    ========================================================================= */
@@ -29,7 +29,7 @@
     { code: 'OD', label: 'Opérations diverses', type: 'Divers', referencePrefix: 'OD' },
     { code: 'PA', label: 'Paie', type: 'Paie', referencePrefix: 'PA', legacyLabels: ['Journal de paie'] },
     { code: 'ABO', label: 'Abonnements', type: 'Abonnement', operationNature: 'Abonnements', referencePrefix: 'ABO', legacyLabels: ['Journal abonnements'], description: 'Journal spécialisé des abonnements de charges ou de produits. Les schémas de répartition et d’anticipation restent à construire ; aucune écriture n’est générée automatiquement.' },
-    { code: 'CEN', label: 'Centralisations', type: 'Centralisation', operationNature: 'Centralisation', referencePrefix: 'CEN', legacyLabels: ['Journal des Centralisations'], description: 'Journal spécialisé des centralisations comptables entre dossiers PERFECTO. Le transfert, les tableaux de passage et les contrôles de cohérence restent à construire.' }
+    { code: 'CEN', label: 'Centralisations', type: 'Centralisation', operationNature: 'Centralisation', referencePrefix: 'CEN', legacyLabels: ['Journal des Centralisations'], description: 'Journal spécialisé des centralisations comptables entre dossiers EMRYS. Le transfert, les tableaux de passage et les contrôles de cohérence restent à construire.' }
   ];
   var RETIRED_JOURNAL_CODES = ['RAN', 'AC', 'VE'];
   var JOURNAL_OPERATION_NATURES = [
@@ -4187,16 +4187,19 @@
           }
           return state;
         }
-        recoveryIssue = { kind: 'corrupt', raw: raw, message: 'Le fichier comptable stocké est illisible ou sa structure est incomplète. PERFECTO l’a conservé sans le remplacer.' };
+        recoveryIssue = { kind: 'corrupt', raw: raw, message: 'Le fichier comptable stocké est illisible ou sa structure est incomplète. EMRYS l’a conservé sans le remplacer.' };
       }
     } catch (err) {
-      if (raw !== null) recoveryIssue = { kind: 'corrupt', raw: raw, message: 'Le fichier comptable stocké ne peut pas être lu. PERFECTO l’a conservé sans le remplacer.' };
+      if (raw !== null) recoveryIssue = { kind: 'corrupt', raw: raw, message: 'Le fichier comptable stocké ne peut pas être lu. EMRYS l’a conservé sans le remplacer.' };
     }
     var dossier = folderById(activeFolderId);
     state = initialState(!dossier || dossier.seeded !== false, dossier);
     if (!recoveryIssue) save();
     return state;
   }
+
+  // Les sauvegardes et copies locales historiques restent lisibles après le changement de nom.
+  function isCompatibleBackupApplication(name) { return name === 'EMRYS' || name === 'PERFECTO'; }
 
   function isBackupData(data) {
     return hasReadableAccountingRecords(data) && Array.isArray(data.periods);
@@ -4206,7 +4209,7 @@
     try {
       if (!isBackupData(data)) return false;
       var snapshot = {
-        application: 'PERFECTO',
+        application: 'EMRYS',
         module: 'Comptabilité générale SYSCOHADA',
         version: 1,
         createdAt: new Date().toISOString(),
@@ -7442,7 +7445,7 @@
     var backupPayload = null;
     try { backupPayload = JSON.parse(String(input.backupJson || '')); } catch (backupParseError) { backupPayload = null; }
     var backupMatchesCurrentState = false;
-    if (backupPayload && backupPayload.application === 'PERFECTO' && backupPayload.module === 'Comptabilité générale SYSCOHADA' &&
+    if (backupPayload && isCompatibleBackupApplication(backupPayload.application) && backupPayload.module === 'Comptabilité générale SYSCOHADA' &&
         backupPayload.version === 1 && backupPayload.dossier && backupPayload.dossier.id === activeFolderId && backupPayload.data) {
       try {
         backupMatchesCurrentState = JSON.stringify(backupPayload.data) === JSON.stringify(visibleStateForConfidentialAccounts(st, activeFolderId));
@@ -8529,7 +8532,7 @@
   /* ---------------- Sauvegarde / restauration ---------------- */
   function exportJson() {
     var payload = {
-      application: 'PERFECTO',
+      application: 'EMRYS',
       module: 'Comptabilité générale SYSCOHADA',
       version: 1,
       dossier: currentDossier(),
@@ -8544,7 +8547,7 @@
       var parsed = JSON.parse(text);
       var data = parsed && parsed.data ? parsed.data : parsed;
       if (!data || !Array.isArray(data.accounts) || !Array.isArray(data.journals) || !Array.isArray(data.entries) || !Array.isArray(data.periods) || !hasReadableAccountingRecords(data)) {
-        return { ok: false, errors: ['Fichier invalide : structure PERFECTO attendue.'] };
+        return { ok: false, errors: ['Fichier invalide : structure EMRYS attendue.'] };
       }
       var previousState = clone(load());
       if (recoveryIssue) return { ok: false, errors: ['Restauration bloquée : analysez la base endommagée et préservez d’abord son contenu.'] };
@@ -8638,7 +8641,7 @@
         addUnmapped(unmappedJournals, originalJournal, sourceEntry.journalLabel);
         hasUnknownReference = true;
       } else if (normalizeJournalCode(mappedJournal) === 'CEN' && opts.internalDossierTransfer !== true) {
-        errors.push(prefix + 'Le journal CEN ne peut être alimenté que par le futur transfert interne entre dossiers PERFECTO, pas par un fichier ou un logiciel tiers.');
+        errors.push(prefix + 'Le journal CEN ne peut être alimenté que par le futur transfert interne entre dossiers EMRYS, pas par un fichier ou un logiciel tiers.');
         return;
       } else if (sourceEntry.journalLabel && journal(mappedJournal).label !== sourceEntry.journalLabel) {
         var journalWarningKey = 'journal:' + originalJournal + ':' + mappedJournal;
@@ -8708,10 +8711,10 @@
     });
 
     unmappedAccounts.forEach(function (item) {
-      errors.push('Compte source « ' + item.code + ' » sans correspondance PERFECTO.');
+      errors.push('Compte source « ' + item.code + ' » sans correspondance EMRYS.');
     });
     unmappedJournals.forEach(function (item) {
-      errors.push('Journal source « ' + item.code + ' » sans correspondance PERFECTO.');
+      errors.push('Journal source « ' + item.code + ' » sans correspondance EMRYS.');
     });
 
     return {
@@ -8842,7 +8845,7 @@
       var raw = global.localStorage.getItem(currentBackupStorageKey());
       if (!raw) return null;
       var snapshot = JSON.parse(raw);
-      if (!snapshot || snapshot.application !== 'PERFECTO' || snapshot.version !== 1 || !isBackupData(snapshot.data)) return null;
+      if (!snapshot || !isCompatibleBackupApplication(snapshot.application) || snapshot.version !== 1 || !isBackupData(snapshot.data)) return null;
       return snapshot;
     } catch (err) {
       return null;
@@ -8866,7 +8869,7 @@
       var raw = global.localStorage.getItem(currentRecoveryRawStorageKey());
       if (!raw) return null;
       var copy = JSON.parse(raw);
-      if (!copy || copy.application !== 'PERFECTO' || copy.version !== 1 || typeof copy.raw !== 'string') return null;
+      if (!copy || !isCompatibleBackupApplication(copy.application) || copy.version !== 1 || typeof copy.raw !== 'string') return null;
       return copy;
     } catch (err) {
       return null;
@@ -8877,7 +8880,7 @@
     if (!recoveryIssue || typeof recoveryIssue.raw !== 'string') return false;
     try {
       var copy = {
-        application: 'PERFECTO',
+        application: 'EMRYS',
         version: 1,
         createdAt: new Date().toISOString(),
         dossierId: activeFolderId,
@@ -9167,7 +9170,7 @@
 
   function visibleExportJson() {
     var payload = {
-      application: 'PERFECTO',
+      application: 'EMRYS',
       module: 'Comptabilité générale SYSCOHADA',
       version: 1,
       dossier: visibleCurrentDossier(),

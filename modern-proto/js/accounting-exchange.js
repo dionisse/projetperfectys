@@ -1,5 +1,5 @@
 /* =========================================================================
-   PERFECTO · Formats communs d’échange comptable (v1)
+   EMRYS · Formats communs d’échange comptable (v1)
    CSV UTF-8 à séparateur point-virgule et classeur OOXML .xlsx.
    Aucun envoi réseau : le fichier est lu et généré dans le navigateur.
    ========================================================================= */
@@ -688,6 +688,7 @@
         rows.push({
           FORMAT: FORMAT,
           VERSION: VERSION,
+          // Identifiant historique du producteur : conservé pour les rapprochements et doublons.
           SYSTEME_SOURCE: 'PERFECTO',
           REFERENCE_DOSSIER: dossier.reference || '',
           EXERCICE: dossier.exerciseYear || '',
@@ -868,7 +869,7 @@
       ['Pièce', 'Les lignes d’une même pièce partagent journal, date, référence, libellé et ID_SOURCE.'],
       ['Import', 'Les comptes et journaux doivent être associés au dossier cible ; aucun référentiel n’est créé automatiquement.'],
       ['Sécurité', 'Classeur sans macros ; l’import n’exécute pas les formules Excel.'],
-      ['Statut', 'Le statut de source est informatif ; le mode choisi dans PERFECTO décide brouillon/validée.']
+      ['Statut', 'Le statut de source est informatif ; le mode choisi dans EMRYS décide brouillon/validée.']
     ];
     var dossierRows = [
       ['REFERENCE_DOSSIER', 'NOM_DOSSIER', 'EXERCICE', 'DEBUT_CYCLE', 'FIN_CYCLE', 'DEVISE'],
@@ -925,14 +926,14 @@
     var instructions = [
       ['PERFECTO-BALANCE', 'Version ' + BALANCE_VERSION],
       ['Feuille à importer', 'Balance'],
-      ['Dossier', 'Feuille de repère du dossier PERFECTO cible ; renseigner les métadonnées de la source dans la feuille Balance.'],
+      ['Dossier', 'Feuille de repère du dossier EMRYS cible ; renseigner les métadonnées de la source dans la feuille Balance.'],
       ['Périmètre', 'Soldes nets par compte uniquement ; ne pas saisir les mouvements de la période.'],
-      ['Compte', 'Une seule ligne par compte source ; associer les codes au plan du dossier cible dans PERFECTO.'],
+      ['Compte', 'Une seule ligne par compte source ; associer les codes au plan du dossier cible dans EMRYS.'],
       ['Soldes', 'Renseigner un solde débiteur OU créditeur en XOF entiers. Omettre les soldes nuls.'],
       ['Contrôle', 'Le total débiteur doit être égal au total créditeur ; sinon la reprise est refusée.'],
       ['Métadonnées', 'Répéter FORMAT, VERSION, SYSTEME_SOURCE, REFERENCE_DOSSIER, EXERCICE, DATE_BALANCE et REFERENCE_BALANCE sur chaque ligne.'],
       ['ID_SOURCE', 'Facultatif, mais s’il est renseigné, conserver la même valeur sur toutes les lignes pour bloquer un doublon d’import.'],
-      ['Import', 'PERFECTO ajoutera une seule pièce au journal et à la date choisis ; les données du dossier ne seront pas remplacées.'],
+      ['Import', 'EMRYS ajoutera une seule pièce au journal et à la date choisis ; les données du dossier ne seront pas remplacées.'],
       ['Sécurité', 'Classeur sans macros ; les formules sont refusées dans la feuille Balance.']
     ];
     var dossierRows = [
@@ -970,7 +971,7 @@
       ['Contreparties', 'Les autres lignes générales de la pièce source sont à inclure dans le lot pour conserver son équilibre.'],
       ['Montants', 'XOF entiers sans séparateur ni décimale ; un seul côté par ligne.'],
       ['ID_SOURCE', 'Identifiant unique et obligatoire pour chaque mouvement source.'],
-      ['Import', 'PERFECTO regroupera les lignes par compte cible dans une pièce de centralisation ; le lot source n’est pas remplacé.'],
+      ['Import', 'EMRYS regroupera les lignes par compte cible dans une pièce de centralisation ; le lot source n’est pas remplacé.'],
       ['Sécurité', 'Classeur sans macros ; les formules sont refusées dans la feuille Auxiliaire.']
     ];
     var dossierRows = [

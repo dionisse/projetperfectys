@@ -1,8 +1,8 @@
 {
-  "name": "perfecto-static-prototype",
+  "name": "emrys-static-prototype",
   "version": "0.3.0-preview.1",
   "private": true,
-  "description": "Serveur statique sans build pour l’aperçu PERFECTO et Bolt AI.",
+  "description": "Serveur statique sans build pour l’aperçu EMRYS et Bolt AI.",
   "scripts": {
     "dev": "node scripts/static-server.js",
     "start": "node scripts/static-server.js",

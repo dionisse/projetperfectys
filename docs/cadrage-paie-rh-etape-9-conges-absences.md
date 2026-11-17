@@ -71,7 +71,7 @@ Une paie ne modifiera pas l’enregistrement source du congé ou de l’absence.
 - Quelles règles officielles et conventionnelles s’appliquent à chaque type de congé au Bénin, selon la catégorie de l’employé ?
 - Quelle unité de saisie et de décompte utiliser, et comment traiter les périodes partielles et les dates de début/fin ?
 - Quels rôles peuvent demander, approuver, annuler, corriger et consulter les justificatifs ? Une validation à plusieurs niveaux est-elle nécessaire ?
-- Faut-il gérer les droits acquis et soldes dans PERFECTO ? Si oui, quelle source certifiée fournir pour les soldes initiaux et l’historique antérieur ?
+- Faut-il gérer les droits acquis et soldes dans EMRYS ? Si oui, quelle source certifiée fournir pour les soldes initiaux et l’historique antérieur ?
 - Quelles pièces sont exigées pour maladie, maternité, paternité ou accident, et quelles informations médicales doivent être exclues ?
 - Comment distinguer et traiter accident du travail et accident non professionnel conformément aux textes applicables ?
 - Quelles règles de conservation, de confidentialité, d’archivage et de consultation appliquer aux demandes et pièces ?

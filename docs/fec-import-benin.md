@@ -2,7 +2,7 @@
 
 ## Portée
 
-Cette fonction lit un **fichier FEC choisi manuellement** et propose son import dans le dossier PERFECTO actif. Elle ne se connecte pas au logiciel comptable d’origine et ne constitue pas un adaptateur Sage, PERFECTO, HYPERSOFT, ODOO ou autre.
+Cette fonction lit un **fichier FEC choisi manuellement** et propose son import dans le dossier EMRYS actif. Elle ne se connecte pas au logiciel comptable d’origine et ne constitue pas un adaptateur Sage, PERFECTO historique, HYPERSOFT, ODOO ou autre.
 
 La référence fonctionnelle est l’arrêté béninois du 23 avril 2020 transmis pour le projet. L’exemple fourni a servi à vérifier uniquement les caractéristiques structurelles (en-tête, nombre de champs, tabulations, fins de ligne et encodage), pas les valeurs ni les montants comptables. Le libellé de son champ 12 est interprété comme `MontDebit`, conformément à la correction confirmée par l’utilisateur.
 
@@ -36,7 +36,7 @@ Le hash du fichier bloque sa réimportation dans le même dossier. Le fichier or
 
 Le prototype garde les données et le contenu source dans le stockage local du navigateur et dans les sauvegardes locales. **Ce stockage n’est pas Google Drive, n’est pas partagé entre utilisateurs et n’est pas un archivage organisationnel.** Aucune donnée n’est transmise à un serveur par ce parcours. Les droits de démonstration contrôlent l’interface, mais ne constituent pas une sécurité serveur.
 
-Les champs auxiliaires, de lettrage, de devise et de règlement sont gardés dans la provenance source; cette version ne génère pas de tiers, de taux de change, de rapprochement ou d’écriture complémentaire. La centralisation interne des modules PERFECTO reste un parcours séparé.
+Les champs auxiliaires, de lettrage, de devise et de règlement sont gardés dans la provenance source; cette version ne génère pas de tiers, de taux de change, de rapprochement ou d’écriture complémentaire. La centralisation interne des modules EMRYS reste un parcours séparé.
 
 ## Tests
 

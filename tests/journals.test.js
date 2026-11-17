@@ -256,7 +256,7 @@ test('les journaux ABO et CEN ne sont plus verrouill√©s comme des journaux syst√
         sourceId: 'ext-cen-001'
       })], 'draft', { sourceSystem: 'EXCEL' });
       assert.equal(externalFileImport.ok, false);
-      assert.match(externalFileImport.errors.join(' '), /transfert interne entre dossiers PERFECTO/);
+      assert.match(externalFileImport.errors.join(' '), /transfert interne entre dossiers EMRYS/);
     }
   });
 });

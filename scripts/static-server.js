@@ -112,7 +112,7 @@ const server = http.createServer((request, response) => {
 });
 
 server.listen(port, host, () => {
-  console.log('Serveur d’aperçu PERFECTO prêt sur le port ' + port + ' (sans étape de build).');
+  console.log('Serveur d’aperçu EMRYS prêt sur le port ' + port + ' (sans étape de build).');
 });
 
 server.on('error', (error) => {

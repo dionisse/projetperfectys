@@ -6,7 +6,7 @@
 
 ## 1. Sens et objectif
 
-Dans PERFECTO, **« débauchage » désigne la sortie de l’employé de l’entreprise**, que ce soit par licenciement ou pour toute autre raison. Le terme couvre donc le processus général de départ et ne préjuge pas de son motif ni de sa qualification juridique.
+Dans EMRYS, **« débauchage » désigne la sortie de l’employé de l’entreprise**, que ce soit par licenciement ou pour toute autre raison. Le terme couvre donc le processus général de départ et ne préjuge pas de son motif ni de sa qualification juridique.
 
 L’étape vise à tracer la décision et sa date d’effet, les validations et pièces, la fermeture des accès appropriés et les éléments de clôture restant à traiter, tout en conservant l’historique de la personne, de ses contrats et de ses paies. Elle ne supprime pas la fiche employé.
 
@@ -54,7 +54,7 @@ Les motifs pourront être configurés par l’entreprise. Des exemples comme dé
 
 ## 5. Clôture des accès et conservation
 
-Le statut de départ et la révocation des accès sont deux actions liées mais distinctes. À la date applicable et selon les droits, les responsables désignés pourront révoquer les accès à PERFECTO ou demander la clôture des accès externes, par exemple aux outils de l’entreprise. Le module ne prétendra pas désactiver un compte ou un badge d’un système externe sans intégration réelle et confirmée.
+Le statut de départ et la révocation des accès sont deux actions liées mais distinctes. À la date applicable et selon les droits, les responsables désignés pourront révoquer les accès à EMRYS ou demander la clôture des accès externes, par exemple aux outils de l’entreprise. Le module ne prétendra pas désactiver un compte ou un badge d’un système externe sans intégration réelle et confirmée.
 
 La révocation ne supprimera pas la fiche ni les contrats, historiques d’affectation, événements ou bulletins. Après le départ, l’employé pourra passer en consultation restreinte ou être masqué des listes actives ; les documents et données seront conservés, anonymisés ou supprimés uniquement selon la politique et les durées validées. Les informations sensibles resteront soumises à des permissions adaptées.
 

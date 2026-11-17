@@ -106,7 +106,7 @@
     return '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bulletins individuels fictifs</title><style>'+printCss+variantCss+pageCss+'</style></head><body><div class="slip-print-notice">'+batch.count+' bulletin(s), une page par employé · rubriques cochées du statut ou renseignées, sauf retrait volontaire.<p id="slip-scale-warning" class="slip-print-warning"></p><button id="slip-print-button" class="slip-edition-print-action" type="button">Imprimer / enregistrer en PDF</button></div>'+batch.documents.map(function(doc){return '<section class="slip-print-page">'+doc+'</section>';}).join('')+script+'</body></html>';
   }
   function fullscreenShell() {
-    return '<div class="slip-fullscreen-frame"><header class="slip-window-header"><div><span class="slip-window-kicker">PERFECTO · PAIE &amp; RH</span><h2 id="slip-fullscreen-title" tabindex="-1">Aperçu des bulletins de salaire</h2><p>Un bulletin individuel par employé · brouillons de test</p></div><button type="button" class="btn btn-secondary" data-fullscreen-close>Fermer l’aperçu</button></header><main id="slip-fullscreen-content"></main></div>';
+    return '<div class="slip-fullscreen-frame"><header class="slip-window-header"><div><span class="slip-window-kicker">EMRYS · PAIE &amp; RH</span><h2 id="slip-fullscreen-title" tabindex="-1">Aperçu des bulletins de salaire</h2><p>Un bulletin individuel par employé · brouillons de test</p></div><button type="button" class="btn btn-secondary" data-fullscreen-close>Fermer l’aperçu</button></header><main id="slip-fullscreen-content"></main></div>';
   }
   function mount(container,options) {
     var root=container.ownerDocument.defaultView;

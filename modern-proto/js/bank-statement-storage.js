@@ -1,4 +1,4 @@
-/* PERFECTO · Stockage de démonstration des relevés dans IndexedDB du navigateur.
+/* EMRYS · Stockage de démonstration des relevés dans IndexedDB du navigateur.
    Aucun envoi au serveur. Ce stockage local n'est pas un Drive organisationnel. */
 (function (root) {
   'use strict';
@@ -34,7 +34,7 @@
         resolve(database);
       };
       request.onerror = function () { databasePromise = null; reject(request.error || new Error('Ouverture du stockage local impossible.')); };
-      request.onblocked = function () { databasePromise = null; reject(new Error('Le stockage des relevés est bloqué par un autre onglet PERFECTO.')); };
+      request.onblocked = function () { databasePromise = null; reject(new Error('Le stockage des relevés est bloqué par un autre onglet EMRYS.')); };
     });
     return databasePromise;
   }

@@ -1,4 +1,4 @@
-/* PERFECTO · Justificatifs de pièces en stockage navigateur pour la phase de test.
+/* EMRYS · Justificatifs de pièces en stockage navigateur pour la phase de test.
    Le mode démo conserve les blobs dans IndexedDB sur cet appareil ; aucun transfert Drive/serveur. */
 (function (root) {
   'use strict';
@@ -56,7 +56,7 @@
         resolve(database);
       };
       request.onerror = function () { databasePromise = null; reject(request.error || new Error('Ouverture du stockage local des justificatifs impossible.')); };
-      request.onblocked = function () { databasePromise = null; reject(new Error('Le stockage des justificatifs est bloqué par un autre onglet PERFECTO.')); };
+      request.onblocked = function () { databasePromise = null; reject(new Error('Le stockage des justificatifs est bloqué par un autre onglet EMRYS.')); };
     });
     return databasePromise;
   }

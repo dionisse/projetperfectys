@@ -1,5 +1,5 @@
 /* =========================================================================
-   PERFECTO · Prototype statique — application comptable SYSCOHADA
+   EMRYS · Prototype statique — application comptable SYSCOHADA
    JavaScript natif, aucun framework, aucun build. Données locales.
    ========================================================================= */
 (function () {
@@ -119,7 +119,7 @@
   var ROUTES = ['login', 'launcher', 'organization', 'payroll', 'payroll-dossiers', 'sales', 'analytics', 'analytics-dossiers', 'dossiers', 'dashboard', 'accounts', 'journals', 'entry', 'entries', 'balance', 'journal', 'ledger', 'periods', 'financial-result', 'settings', 'menu'];
 
   var TITLES = {
-    login: ['Connexion', 'Accès à votre espace PERFECTO'],
+    login: ['Connexion', 'Accès à votre espace EMRYS'],
     launcher: ['Launcher', 'Modules de votre organisation'],
     organization: ['Organisation & accès', 'Organisation, membres et droits d’accès'],
     payroll: ['Paie & RH', 'Espace RH du dossier client actif'],
@@ -1510,7 +1510,7 @@
       : (route === 'sales'
         ? 'CABINET GOBEX · Ventes, stock & facturation'
         : ((route === 'analytics' || route === 'analytics-dossiers') ? 'CABINET GOBEX · Suivi Analytique' : 'CABINET GOBEX · Comptabilité générale'));
-    document.title = 'PERFECTO · ' + title[0];
+    document.title = 'EMRYS · ' + title[0];
 
     $$('[data-route]').forEach(function (link) {
       var active = link.getAttribute('data-route') === route;
@@ -1746,7 +1746,7 @@
     var variantClass = variant ? ' ' + esc(variant) : '';
     return '<div class="page-header' + variantClass + '">' +
       '<div class="page-header-copy">' +
-        '<p class="page-kicker"><span class="page-kicker-rule" aria-hidden="true"></span> CABINET GOBEX · PERFECTO</p>' +
+        '<p class="page-kicker"><span class="page-kicker-rule" aria-hidden="true"></span> CABINET GOBEX · EMRYS</p>' +
         '<h2>' + esc(title) + '</h2><p class="page-description">' + subtitle + '</p>' +
       '</div>' +
       (actions ? '<div class="page-header-actions">' + actions + '</div>' : '') +
@@ -1757,9 +1757,9 @@
     return `
       <div class="suite-screen login-screen">
         <header class="suite-header">
-          <a class="suite-brand" href="#/login" aria-label="PERFECTO, accueil">
-            <span class="suite-mark">P<span>.</span></span>
-            <span class="suite-brand-copy"><strong>PERFECTO</strong><small>SUITE DE GESTION</small></span>
+          <a class="suite-brand" href="#/login" aria-label="EMRYS, accueil">
+            <span class="suite-mark">E<span>.</span></span>
+            <span class="suite-brand-copy"><strong>EMRYS</strong><small>SUITE DE GESTION</small></span>
           </a>
           <div class="suite-header-note"><span class="suite-live-dot"></span>VERSION WEB · PROTOTYPE</div>
         </header>
@@ -1783,10 +1783,10 @@
             <div class="login-preview-field"><span>Mot de passe</span><span class="preview-placeholder">Non demandé en démonstration</span></div>
             <button type="button" class="suite-primary-button" data-action="demo-login">Ouvrir la démonstration <span aria-hidden="true">→</span></button>
             <p class="prototype-note"><strong>Prototype uniquement.</strong> Aucun compte ni mot de passe n’est demandé, enregistré ou transmis.</p>
-            <div class="login-card-divider"><span></span>PERFECTO<span></span></div>
+            <div class="login-card-divider"><span></span>EMRYS<span></span></div>
           </section>
         </main>
-        <footer class="suite-footer"><span>PERFECTO · SUITE DE GESTION</span><span>Connexion réelle et Google Drive à configurer ensemble</span></footer>
+        <footer class="suite-footer"><span>EMRYS · SUITE DE GESTION</span><span>Connexion réelle et Google Drive à configurer ensemble</span></footer>
       </div>`;
   }
 
@@ -1844,9 +1844,9 @@
     return `
       <div class="suite-screen launcher-screen">
         <header class="suite-header launcher-header">
-          <a class="suite-brand" href="#/launcher" aria-label="PERFECTO, launcher">
-            <span class="suite-mark">P<span>.</span></span>
-            <span class="suite-brand-copy"><strong>PERFECTO</strong><small>SUITE DE GESTION</small></span>
+          <a class="suite-brand" href="#/launcher" aria-label="EMRYS, launcher">
+            <span class="suite-mark">E<span>.</span></span>
+            <span class="suite-brand-copy"><strong>EMRYS</strong><small>SUITE DE GESTION</small></span>
           </a>
           <div class="launcher-nav"><span class="launcher-nav-active">LANCEUR</span><span>ESPACE DE TRAVAIL</span></div>
           <button type="button" class="launcher-icon-button" data-action="launcher-info" aria-label="État du stockage" title="État du stockage">☁</button>
@@ -1864,7 +1864,7 @@
             <div><p class="suite-kicker">VOTRE ESPACE DE TRAVAIL</p><h1>Vos applications</h1><p>Ouvrez un module accordé au profil simulé. Les accès non accordés sont refusés par défaut.</p></div>
             <div class="launcher-count"><strong>${availableLabel}</strong><span>${availableNoun}<br>sur ${String(stats.total).padStart(2, '0')} annoncés</span></div>
           </section>
-          <div class="launcher-section-heading"><h2>Modules PERFECTO</h2><span>${stats.total} modules · ${stats.available} ${availableText}</span></div>
+          <div class="launcher-section-heading"><h2>Modules EMRYS</h2><span>${stats.total} modules · ${stats.available} ${availableText}</span></div>
           <div class="launcher-tools">
             <div class="launcher-filters" role="group" aria-label="Filtrer les modules">
               <button type="button" class="launcher-filter is-active" data-action="launcher-filter" data-filter-value="all" aria-pressed="true">Tous <span>${String(stats.total).padStart(2, '0')}</span></button>
@@ -1886,7 +1886,7 @@
           <p class="launcher-empty-state" id="launcher-empty-state" hidden>Aucun module ne correspond à cette recherche ou à ce filtre.</p>
           <div class="launcher-notice"><span class="launcher-notice-icon">i</span><span>Profil simulé uniquement : les contrôles d’accès servent à valider la logique et ne remplacent pas une authentification ou une sécurité serveur.</span></div>
         </main>
-        <footer class="suite-footer launcher-footer"><span>PERFECTO · ESPACE DE DÉMONSTRATION</span><button type="button" data-action="logout-demo">Retour à l’écran de connexion</button></footer>
+        <footer class="suite-footer launcher-footer"><span>EMRYS · ESPACE DE DÉMONSTRATION</span><button type="button" data-action="logout-demo">Retour à l’écran de connexion</button></footer>
       </div>`;
   }
 
@@ -1996,7 +1996,7 @@
         '</form></section>';
     } else {
       html += '<div class="dossier-create-restricted"><span>i</span><p>' + (mobileReadOnly
-        ? 'Sur téléphone, PERFECTO est limité à la consultation des éditions. La création de dossiers se fait sur ordinateur ou tablette.'
+        ? 'Sur téléphone, EMRYS est limité à la consultation des éditions. La création de dossiers se fait sur ordinateur ou tablette.'
         : 'La création d’un dossier client n’est pas accordée à ce profil de démonstration.') + '</p></div>';
     }
     html += '<p class="dossiers-storage-footnote">Ce prototype conserve les données dans le navigateur de cet appareil. Il ne se connecte ni à Google Drive ni à un service cloud.</p>';
@@ -2081,9 +2081,9 @@
     return `
       <div class="suite-screen organization-screen">
         <header class="suite-header launcher-header">
-          <a class="suite-brand" href="#/launcher" aria-label="Retour au launcher PERFECTO">
-            <span class="suite-mark">P<span>.</span></span>
-            <span class="suite-brand-copy"><strong>PERFECTO</strong><small>SUITE DE GESTION</small></span>
+          <a class="suite-brand" href="#/launcher" aria-label="Retour au launcher EMRYS">
+            <span class="suite-mark">E<span>.</span></span>
+            <span class="suite-brand-copy"><strong>EMRYS</strong><small>SUITE DE GESTION</small></span>
           </a>
           <div class="launcher-nav"><span class="launcher-nav-active">ORGANISATION &amp; ACCÈS</span></div>
           <a class="org-back-link" href="#/launcher">← Retour aux modules</a>
@@ -2137,7 +2137,7 @@
             <div class="access-scope-note"><span class="launcher-notice-icon">i</span><p>Les droits sont évalués côté client pour éprouver les parcours. Ils ne protègent pas les données et ne sont liés ni à une authentification réelle ni à Google Drive.</p></div>
           </section>
         </main>
-        <footer class="suite-footer launcher-footer"><span>PERFECTO · ESPACE DE DÉMONSTRATION</span><span>Authentification et droits réels à implémenter après validation</span></footer>
+        <footer class="suite-footer launcher-footer"><span>EMRYS · ESPACE DE DÉMONSTRATION</span><span>Authentification et droits réels à implémenter après validation</span></footer>
       </div>`;
   }
 
@@ -4523,7 +4523,7 @@
       pageHeader('Mise en page', 'Choisissez le style, l’orientation, les marges, les pages et la destination.', '') +
       '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(resultSummary) + '. Aucune écriture ne sera modifiée.</div></div>' +
       '<form id="general-balance-layout-form" novalidate><div class="journal-lines-settings-grid general-balance-settings-grid">' +
-        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="general-balance-printer">Imprimante</label><select id="general-balance-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select><span class="hint">PERFECTO ouvre la boîte d’impression ; le navigateur garde le choix final du périphérique ou du PDF.</span></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="general-balance-printer">Imprimante</label><select id="general-balance-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select><span class="hint">EMRYS ouvre la boîte d’impression ; le navigateur garde le choix final du périphérique ou du PDF.</span></div></div></section>' +
         '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="general-balance-style">Style du rapport</label><select id="general-balance-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option></select></div></div></section>' +
         '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('general-balance-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('general-balance-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
         '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('general-balance-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('general-balance-margins', 'binding', 'Reliure à gauche', session.layout.margins === 'binding', false) + '</div></div></section>' +
@@ -4532,17 +4532,17 @@
         '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('general-balance-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('general-balance-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('general-balance-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('general-balance-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('general-balance-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section>' +
-      '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire.</strong> PERFECTO ne peut pas préconfigurer la plage de pages ni la parité dans la boîte du navigateur : réglez-les là si votre navigateur le propose. Le choix final de l’imprimante ou du PDF reste également dans le navigateur.</div></div>' +
+      '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire.</strong> EMRYS ne peut pas préconfigurer la plage de pages ni la parité dans la boîte du navigateur : réglez-les là si votre navigateur le propose. Le choix final de l’imprimante ou du PDF reste également dans le navigateur.</div></div>' +
       '<div class="journal-lines-form-errors" id="general-balance-layout-errors" role="alert" aria-live="polite"></div>' +
       '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-general-balance-back-selection>Retour à la sélection</button><button type="submit" class="btn btn-primary">Valider</button></div></form>';
   }
 
   function generalBalanceReportPreviewView(session) {
     var report = session.report || buildGeneralBalanceReport(session);
-    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans PERFECTO';
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans EMRYS';
     return generalBalanceReportSteps('preview') +
       pageHeader('Aperçu de la balance générale', 'Vérifiez le résultat avant l’impression ou l’enregistrement PDF.',
         '<button type="button" class="btn btn-primary" data-general-balance-open-preview>Ouvrir l’aperçu avant impression</button>') +
@@ -4840,7 +4840,7 @@
       '<div class="alert info aged-balance-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(summary) + '. Le solde suit la règle confirmée : total dû moins avances enregistrées.</div></div>' +
       (report.invalidItemCount || report.invalidSettlementCount ? '<div class="alert warning"><div><strong>Registre à contrôler :</strong> ' + report.invalidItemCount + ' pièce(s) et ' + report.invalidSettlementCount + ' règlement(s) invalide(s) sont ignorés. Corrigez ces données avant l’édition.</div></div>' : '') +
       '<form id="aged-balance-layout-form" novalidate><div class="journal-lines-settings-grid aged-balance-settings-grid">' +
-        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="aged-balance-printer">Imprimante</label><select id="aged-balance-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select><span class="hint">PERFECTO ouvre l’aperçu ; le navigateur garde le choix final du périphérique ou du PDF.</span></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="aged-balance-printer">Imprimante</label><select id="aged-balance-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select><span class="hint">EMRYS ouvre l’aperçu ; le navigateur garde le choix final du périphérique ou du PDF.</span></div></div></section>' +
         '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="aged-balance-style">Style du rapport</label><select id="aged-balance-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option></select></div></div></section>' +
         '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('aged-balance-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('aged-balance-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
         '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('aged-balance-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('aged-balance-margins', 'binding', 'Reliure à gauche', session.layout.margins === 'binding', false) + '</div></div></section>' +
@@ -4849,11 +4849,11 @@
         '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('aged-balance-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', !canExport) +
           generalBalanceReportRadio('aged-balance-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', !canExport) +
-          generalBalanceReportRadio('aged-balance-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('aged-balance-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('aged-balance-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section>' +
       '</div>' +
-      '<div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire.</strong> PERFECTO ne peut pas préconfigurer la plage de pages ni la parité dans la boîte du navigateur : réglez-les là si votre navigateur le propose. Le choix final de l’imprimante ou du PDF reste également dans le navigateur.</div></div>' +
+      '<div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire.</strong> EMRYS ne peut pas préconfigurer la plage de pages ni la parité dans la boîte du navigateur : réglez-les là si votre navigateur le propose. Le choix final de l’imprimante ou du PDF reste également dans le navigateur.</div></div>' +
       '<section class="card aged-balance-inline-preview"><div class="panel"><div class="journal-lines-section-heading"><h3>Aperçu du résultat</h3></div>' + agedBalancePrintableHtml(session, report) + '</div></section>' +
       '<div class="journal-lines-form-errors" id="aged-balance-layout-errors" role="alert" aria-live="polite"></div>' +
       '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-aged-balance-back-selection>Retour à la sélection</button><button type="submit" class="btn btn-primary">Valider la destination</button></div></form>';
@@ -5795,7 +5795,7 @@
         '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('currency-balance-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('currency-balance-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('currency-balance-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('currency-balance-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('currency-balance-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section>' +
       '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> La plage et la parité indiquées ne peuvent pas être préconfigurées dans la boîte d’impression ; réglez-les dans le navigateur si celui-ci le permet.</div></div>' +
@@ -5884,7 +5884,7 @@
 
   function currencyBalanceReportPreviewView(session) {
     var report = session.report || buildCurrencyBalanceReport(session);
-    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu plein écran obligatoire' : 'Aperçu dans PERFECTO';
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu plein écran obligatoire' : 'Aperçu dans EMRYS';
     return generalBalanceReportSteps('layout', 'Étapes de préparation de la Balance des comptes en devises') +
       pageHeader('Aperçu — Balance des comptes en devises', 'Vérifiez la sélection avant impression ou export.', '<button type="button" class="btn btn-primary" data-currency-balance-open-preview>Ouvrir l’aperçu plein écran</button>') +
       '<div class="alert info"><div><strong>Destination choisie :</strong> ' + esc(destination) + '. La boîte d’impression du navigateur ne s’ouvrira qu’après votre action depuis l’aperçu plein écran.</div></div>' +
@@ -6237,7 +6237,7 @@
         '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('currency-supp-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('currency-supp-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('currency-supp-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('currency-supp-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('currency-supp-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section>' +
       '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> Les pages et la parité ne peuvent pas être préconfigurées dans la boîte d’impression ; réglez-les dans le navigateur si celui-ci le permet.</div></div>' +
@@ -6281,7 +6281,7 @@
   }
 
   function currencySupplementaryPreviewView(session, report, definition) {
-    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu plein écran obligatoire' : 'Aperçu dans PERFECTO';
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu plein écran obligatoire' : 'Aperçu dans EMRYS';
     return generalBalanceReportSteps('layout', 'Étapes de préparation de ' + definition.title) +
       pageHeader('Aperçu — ' + definition.title, 'Vérifiez les sources avant impression ou export.', '<button type="button" class="btn btn-primary" data-currency-supp-open-preview>Ouvrir l’aperçu plein écran</button>') +
       '<div class="alert info"><div><strong>Destination choisie :</strong> ' + esc(destination) + '. La boîte d’impression du navigateur ne s’ouvrira qu’après votre action depuis l’aperçu plein écran.</div></div>' +
@@ -6719,7 +6719,7 @@
         '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('budget-report-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('budget-report-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('budget-report-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('budget-report-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('budget-report-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section></div>' +
         '<div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> Les pages et la parité se règlent dans le navigateur si celui-ci le permet.</div></div>' +
@@ -6765,7 +6765,7 @@
   function budgetReportPreviewView(session, report, definition) {
     return generalBalanceReportSteps('layout', 'Étapes de préparation de ' + definition.title) +
       pageHeader('Aperçu — ' + definition.title, 'Vérifiez l’état et les sources disponibles avant impression ou export.', '<button type="button" class="btn btn-primary" data-budget-report-open-preview>Ouvrir l’aperçu plein écran</button>') +
-      '<div class="alert info"><div><strong>Destination choisie :</strong> ' + (session.layout.destination === 'printer' ? 'Imprimante · aperçu plein écran obligatoire' : 'Aperçu dans PERFECTO') + '. Aucun montant ne sera ajouté en l’absence de source budgétaire.</div></div>' +
+      '<div class="alert info"><div><strong>Destination choisie :</strong> ' + (session.layout.destination === 'printer' ? 'Imprimante · aperçu plein écran obligatoire' : 'Aperçu dans EMRYS') + '. Aucun montant ne sera ajouté en l’absence de source budgétaire.</div></div>' +
       budgetReportPrintableHtml(session, report, definition) +
       '<div class="general-balance-preview-actions"><button type="button" class="btn btn-ghost" data-budget-report-back-layout>Modifier la mise en page</button><button type="button" class="btn btn-ghost" data-budget-report-back-selection>Modifier la sélection</button></div>';
   }
@@ -7121,7 +7121,7 @@
         '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('matching-edition-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('matching-edition-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('matching-edition-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('matching-edition-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('matching-edition-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section></div>' +
         '<div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> Les pages et la parité se règlent dans le navigateur si celui-ci le permet.</div></div>' +
@@ -7671,7 +7671,7 @@
         '<section class="card journal-lines-card pointing-edition-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('pointing-edition-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('pointing-edition-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('pointing-edition-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('pointing-edition-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('pointing-edition-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section></div>' +
         '<div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> Les pages et la parité se règlent dans le navigateur si celui-ci le permet.</div></div>' +
@@ -8133,7 +8133,7 @@
         '<section class="card journal-lines-card fixed-asset-depreciation-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('fixed-asset-depreciation-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('fixed-asset-depreciation-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('fixed-asset-depreciation-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('fixed-asset-depreciation-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('fixed-asset-depreciation-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section></div>' +
         '<div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> Les pages et la parité se règlent dans le navigateur si celui-ci le permet.</div></div>' +
@@ -8523,7 +8523,7 @@
         '<section class="card journal-lines-card fixed-asset-overview-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('fixed-asset-overview-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('fixed-asset-overview-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('fixed-asset-overview-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('fixed-asset-overview-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('fixed-asset-overview-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section></div>' +
         '<div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> Les pages et la parité se règlent dans le navigateur si celui-ci le permet.</div></div>' +
@@ -8873,7 +8873,7 @@
         '<section class="card journal-lines-card fixed-asset-additional-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           fixedAssetAdditionalRadio(id + '-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table') +
           fixedAssetAdditionalRadio(id + '-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file') +
-          fixedAssetAdditionalRadio(id + '-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview') +
+          fixedAssetAdditionalRadio(id + '-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview') +
           fixedAssetAdditionalRadio(id + '-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer') +
         '</div></div></section></div>' +
         '<div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> Le choix final de l’imprimante ou du PDF reste dans la boîte du navigateur.</div></div>' +
@@ -9510,17 +9510,17 @@
         '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('third-party-balance-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('third-party-balance-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('third-party-balance-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('third-party-balance-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('third-party-balance-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section>' +
-      '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire.</strong> PERFECTO ne peut pas préconfigurer la plage de pages ni la parité dans la boîte du navigateur : réglez-les là si votre navigateur le propose. Le choix final de l’imprimante ou du PDF reste également dans le navigateur.</div></div>' +
+      '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire.</strong> EMRYS ne peut pas préconfigurer la plage de pages ni la parité dans la boîte du navigateur : réglez-les là si votre navigateur le propose. Le choix final de l’imprimante ou du PDF reste également dans le navigateur.</div></div>' +
       '<div class="journal-lines-form-errors" id="third-party-balance-layout-errors" role="alert" aria-live="polite"></div>' +
       '<div class="journal-lines-form-actions"><button type="button" class="btn btn-ghost" data-third-party-balance-back-selection>Retour à la sélection</button><button type="submit" class="btn btn-primary">Valider</button></div></form>';
   }
 
   function thirdPartyBalanceReportPreviewView(session) {
     var report = session.report || buildThirdPartyBalanceReport(session);
-    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans PERFECTO';
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans EMRYS';
     var pageRange = session.layout.pageFirst || session.layout.pageLast
       ? 'Plage demandée : ' + (session.layout.pageFirst || '1') + ' à ' + (session.layout.pageLast || 'fin')
       : 'Toutes les pages';
@@ -10078,7 +10078,7 @@
         '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('third-party-ledger-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('third-party-ledger-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('third-party-ledger-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('third-party-ledger-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('third-party-ledger-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section>' +
       '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> La plage de pages et la parité se règlent dans la boîte d’impression du navigateur si celui-ci les propose ; le choix final de l’imprimante ou du PDF reste dans le navigateur.</div></div>' +
@@ -10166,7 +10166,7 @@
 
   function thirdPartyLedgerReportPreviewView(session) {
     var report = session.report || buildThirdPartyLedgerReport(session);
-    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu plein écran obligatoire' : 'Aperçu dans PERFECTO';
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu plein écran obligatoire' : 'Aperçu dans EMRYS';
     var pageRange = session.layout.pageFirst || session.layout.pageLast
       ? 'Plage demandée : ' + (session.layout.pageFirst || '1') + ' à ' + (session.layout.pageLast || 'fin')
       : 'Toutes les pages';
@@ -10531,7 +10531,7 @@
         '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('third-party-statement-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('third-party-statement-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('third-party-statement-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('third-party-statement-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('third-party-statement-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section>' +
       '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> La plage de pages et la parité s’appliquent depuis la boîte d’impression du navigateur si celui-ci les propose ; le choix final de l’imprimante ou du PDF reste dans le navigateur.</div></div>' +
@@ -10619,7 +10619,7 @@
 
   function thirdPartyStatementReportPreviewView(session) {
     var report = session.report || buildThirdPartyStatementReport(session);
-    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu plein écran obligatoire' : 'Aperçu dans PERFECTO';
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu plein écran obligatoire' : 'Aperçu dans EMRYS';
     var pageRange = session.layout.pageFirst || session.layout.pageLast
       ? 'Plage demandée : ' + (session.layout.pageFirst || '1') + ' à ' + (session.layout.pageLast || 'fin')
       : 'Toutes les pages';
@@ -10974,7 +10974,7 @@
         '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('third-party-balance-justification-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('third-party-balance-justification-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('third-party-balance-justification-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('third-party-balance-justification-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('third-party-balance-justification-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section>' +
       '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> La plage de pages et la parité se règlent dans la boîte d’impression du navigateur si celui-ci les propose ; le choix final de l’imprimante ou du PDF reste dans le navigateur.</div></div>' +
@@ -11062,7 +11062,7 @@
 
   function thirdPartyBalanceJustificationReportPreviewView(session) {
     var report = session.report || buildThirdPartyBalanceJustificationReport(session);
-    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu plein écran obligatoire' : 'Aperçu dans PERFECTO';
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu plein écran obligatoire' : 'Aperçu dans EMRYS';
     var pageRange = session.layout.pageFirst || session.layout.pageLast
       ? 'Plage demandée : ' + (session.layout.pageFirst || '1') + ' à ' + (session.layout.pageLast || 'fin')
       : 'Toutes les pages';
@@ -11372,7 +11372,7 @@
         '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('third-party-opening-balance-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('third-party-opening-balance-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('third-party-opening-balance-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('third-party-opening-balance-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('third-party-opening-balance-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section>' +
       '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire et en plein écran.</strong> La plage de pages et la parité ne peuvent pas être préconfigurées dans la boîte d’impression du navigateur ; réglez-les là si le navigateur le propose. Le choix final de l’imprimante ou du PDF reste dans le navigateur.</div></div>' +
@@ -11382,7 +11382,7 @@
 
   function thirdPartyOpeningBalanceReportPreviewView(session) {
     var report = session.report || buildThirdPartyOpeningBalanceReport(session);
-    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans PERFECTO';
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans EMRYS';
     return generalBalanceReportSteps('preview', 'Étapes de préparation de la Balance d’ouverture des tiers') +
       pageHeader('Aperçu de la Balance d’ouverture des tiers', 'Vérifiez les montants attribués avant impression ou export PDF.',
         '<button type="button" class="btn btn-primary" data-third-party-opening-balance-open-preview>Ouvrir l’aperçu plein écran</button>') +
@@ -11790,7 +11790,7 @@
         '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('third-party-account-situation-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('third-party-account-situation-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('third-party-account-situation-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('third-party-account-situation-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('third-party-account-situation-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section>' +
       '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire et en plein écran.</strong> La plage de pages et la parité sont à régler dans la boîte d’impression du navigateur si elles y sont proposées. Le choix final de l’imprimante ou du PDF reste dans le navigateur.</div></div>' +
@@ -11800,7 +11800,7 @@
 
   function thirdPartyAccountSituationPreviewView(session) {
     var report = session.report || buildThirdPartyAccountSituationReport(session);
-    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans PERFECTO';
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans EMRYS';
     return generalBalanceReportSteps('preview', 'Étapes de préparation de la Situation des comptes tiers') +
       pageHeader('Position des tiers', 'Vérifiez la situation à la date choisie avant impression ou enregistrement PDF.',
         '<button type="button" class="btn btn-primary" data-third-party-account-situation-open-preview>Ouvrir l’aperçu plein écran</button>') +
@@ -12226,7 +12226,7 @@
         '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('third-party-nature-breakdown-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('third-party-nature-breakdown-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('third-party-nature-breakdown-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('third-party-nature-breakdown-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('third-party-nature-breakdown-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section>' +
       '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire et en plein écran.</strong> La plage de pages et la parité sont à régler dans la boîte d’impression du navigateur si elles y sont proposées. Le choix final de l’imprimante ou du PDF reste dans le navigateur.</div></div>' +
@@ -12236,7 +12236,7 @@
 
   function thirdPartyNatureBreakdownPreviewView(session) {
     var report = session.report || buildThirdPartyNatureBreakdownReport(session);
-    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans PERFECTO';
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans EMRYS';
     return generalBalanceReportSteps('preview', 'Étapes de préparation de la Décomposition des soldes des tiers') +
       pageHeader('Décomposition des soldes de tiers par nature', 'Vérifiez le classement et les montants avant impression ou export PDF.',
         '<button type="button" class="btn btn-primary" data-third-party-nature-breakdown-open-preview>Ouvrir l’aperçu plein écran</button>') +
@@ -12646,7 +12646,7 @@
       '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(resultSummary) + '. Aucune écriture ne sera modifiée.</div></div>' +
       openingBalanceReportWarningsHtml(report) +
       '<form id="opening-balance-layout-form" novalidate><div class="journal-lines-settings-grid general-balance-settings-grid">' +
-        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="opening-balance-printer">Imprimante</label><select id="opening-balance-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select><span class="hint">PERFECTO ouvre la boîte d’impression ; le navigateur garde le choix final du périphérique ou du PDF.</span></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="opening-balance-printer">Imprimante</label><select id="opening-balance-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select><span class="hint">EMRYS ouvre la boîte d’impression ; le navigateur garde le choix final du périphérique ou du PDF.</span></div></div></section>' +
         '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="opening-balance-style">Style du rapport</label><select id="opening-balance-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option></select></div></div></section>' +
         '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('opening-balance-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('opening-balance-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
         '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('opening-balance-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('opening-balance-margins', 'binding', 'Reliure à gauche', session.layout.margins === 'binding', false) + '</div></div></section>' +
@@ -12655,7 +12655,7 @@
         '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('opening-balance-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('opening-balance-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('opening-balance-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('opening-balance-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('opening-balance-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section>' +
       '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire.</strong> La plage de pages et la parité ne peuvent pas être préconfigurées dans la boîte d’impression du navigateur ; réglez-les là si le navigateur le propose. Le choix final de l’imprimante ou du PDF reste dans le navigateur.</div></div>' +
@@ -12665,7 +12665,7 @@
 
   function openingBalanceReportPreviewView(session) {
     var report = session.report || buildOpeningBalanceReport(session);
-    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans PERFECTO';
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans EMRYS';
     return generalBalanceReportSteps('preview', 'Étapes de préparation de la Balance d’ouverture') +
       pageHeader('Aperçu de la Balance d’ouverture', 'Vérifiez le résultat avant l’impression ou l’enregistrement PDF.',
         '<button type="button" class="btn btn-primary" data-opening-balance-open-preview>Ouvrir l’aperçu avant impression</button>') +
@@ -13013,7 +13013,7 @@
         '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('opening-journal-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('opening-journal-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('opening-journal-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('opening-journal-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('opening-journal-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section>' +
       '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire.</strong> La plage de pages et la parité sont à appliquer dans la boîte d’impression du navigateur si elles y sont proposées. Le choix final de l’imprimante ou du PDF reste dans le navigateur.</div></div>' +
@@ -13023,7 +13023,7 @@
 
   function openingBalanceJournalReportPreviewView(session) {
     var report = session.report || buildOpeningBalanceJournalReport(session);
-    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans PERFECTO';
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans EMRYS';
     return generalBalanceReportSteps('preview', 'Étapes de préparation du Journal des reports') +
       pageHeader('Aperçu du Journal des reports', 'Vérifiez les lignes du registre avant impression ou enregistrement PDF.',
         '<button type="button" class="btn btn-primary" data-opening-journal-open-preview>Ouvrir l’aperçu avant impression</button>') +
@@ -13410,7 +13410,7 @@
       '<div class="alert info journal-lines-layout-summary"><div><strong>Résultat de la sélection :</strong> ' + esc(resultSummary) + '. Aucune écriture ne sera modifiée.</div></div>' +
       accountSituationReportWarningsHtml(report) +
       '<form id="account-situation-layout-form" novalidate><div class="journal-lines-settings-grid general-balance-settings-grid">' +
-        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="account-situation-printer">Imprimante</label><select id="account-situation-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select><span class="hint">PERFECTO ouvre la boîte d’impression ; le navigateur garde le choix final du périphérique ou du PDF.</span></div></div></section>' +
+        '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Imprimante</h3></div><div class="field"><label for="account-situation-printer">Imprimante</label><select id="account-situation-printer"><option value="system"' + (session.layout.printer === 'system' ? ' selected' : '') + '>Imprimante (choix final dans le navigateur)</option><option value="pdf"' + (session.layout.printer === 'pdf' ? ' selected' : '') + '>PDF (à choisir dans le navigateur)</option></select><span class="hint">EMRYS ouvre la boîte d’impression ; le navigateur garde le choix final du périphérique ou du PDF.</span></div></div></section>' +
         '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Style</h3></div><div class="field"><label for="account-situation-style">Style du rapport</label><select id="account-situation-style"><option value="plain8"' + (session.layout.style === 'plain8' ? ' selected' : '') + '>Sans couleurs, 8 points</option><option value="color10"' + (session.layout.style === 'color10' ? ' selected' : '') + '>Avec couleurs, 10 points</option></select></div></div></section>' +
         '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Orientation</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('account-situation-orientation', 'portrait', 'Portrait', session.layout.orientation === 'portrait', false) + generalBalanceReportRadio('account-situation-orientation', 'landscape', 'Paysage', session.layout.orientation === 'landscape', false) + '</div></div></section>' +
         '<section class="card journal-lines-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Marges</h3></div><div class="journal-lines-radio-list">' + generalBalanceReportRadio('account-situation-margins', 'standard', 'Standard', session.layout.margins === 'standard', false) + generalBalanceReportRadio('account-situation-margins', 'binding', 'Reliure à gauche', session.layout.margins === 'binding', false) + '</div></div></section>' +
@@ -13419,7 +13419,7 @@
         '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('account-situation-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('account-situation-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('account-situation-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('account-situation-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('account-situation-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section>' +
       '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire.</strong> La plage de pages et la parité ne peuvent pas être préconfigurées dans la boîte d’impression du navigateur ; réglez-les là si le navigateur le propose.</div></div>' +
@@ -13429,7 +13429,7 @@
 
   function accountSituationReportPreviewView(session) {
     var report = session.report || buildAccountSituationReport(session);
-    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans PERFECTO';
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans EMRYS';
     return generalBalanceReportSteps('preview', 'Étapes de préparation de la Situation des comptes') +
       pageHeader('Aperçu de la Situation des comptes', 'Vérifiez la position à date avant l’impression ou l’enregistrement PDF.',
         '<button type="button" class="btn btn-primary" data-account-situation-open-preview>Ouvrir l’aperçu avant impression</button>') +
@@ -13886,7 +13886,7 @@
         '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('general-ledger-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('general-ledger-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('general-ledger-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('general-ledger-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('general-ledger-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section>' +
       '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire.</strong> La plage de pages et la parité se règlent dans la boîte d’impression du navigateur si celui-ci les propose.</div></div>' +
@@ -14283,7 +14283,7 @@
         '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('counterpart-detail-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('counterpart-detail-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('counterpart-detail-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('counterpart-detail-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('counterpart-detail-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section>' +
       '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire.</strong> La plage de pages et la parité sont à régler dans la boîte d’impression du navigateur si celui-ci les propose. Le choix final de l’imprimante reste dans le navigateur.</div></div>' +
@@ -14293,7 +14293,7 @@
 
   function generalCounterpartDetailReportPreviewView(session) {
     var report = session.report || buildGeneralCounterpartDetailReport(session);
-    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans PERFECTO';
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans EMRYS';
     return generalBalanceReportSteps('preview', 'Étapes de préparation du Détail des contreparties d’un compte') +
       pageHeader('Aperçu du Détail des contreparties d’un compte', 'Vérifiez les mouvements et leurs comptes associés avant l’impression ou l’enregistrement PDF.',
         '<button type="button" class="btn btn-primary" data-general-counterpart-detail-open-preview>Ouvrir l’aperçu avant impression</button>') +
@@ -14678,7 +14678,7 @@
         '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('counterpart-total-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('counterpart-total-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('counterpart-total-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('counterpart-total-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('counterpart-total-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section>' +
       '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire.</strong> La plage de pages et la parité sont à régler dans la boîte d’impression du navigateur si celui-ci les propose. Le choix final de l’imprimante reste dans le navigateur.</div></div>' +
@@ -14688,7 +14688,7 @@
 
   function generalCounterpartTotalReportPreviewView(session) {
     var report = session.report || buildGeneralCounterpartTotalReport(session);
-    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans PERFECTO';
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans EMRYS';
     return generalBalanceReportSteps('preview', 'Étapes de préparation du Cumul des contreparties d’un compte') +
       pageHeader('Aperçu du Cumul des contreparties d’un compte', 'Vérifiez les cumuls des comptes de contrepartie avant impression ou export PDF.',
         '<button type="button" class="btn btn-primary" data-general-counterpart-total-open-preview>Ouvrir l’aperçu avant impression</button>') +
@@ -15010,7 +15010,7 @@
       : '';
     return generalBalanceReportSteps('selection', 'Étapes de préparation de l’Historique des comptes sur plusieurs exercices') +
       pageHeader('Historique des comptes sur plusieurs exercices', 'Choisissez les comptes, l’exercice de début et les colonnes à imprimer.', '') +
-      '<div class="alert info multi-year-history-source-note"><div><strong>Lecture seule, sans basculer de dossier.</strong> PERFECTO lit les dossiers accessibles du même client et du même type comptable. Seules les écritures validées sont reprises. Le report à nouveau enregistré dans chaque exercice initialise le solde progressif de cet exercice ; il n’est pas ajouté comme mouvement.</div></div>' +
+      '<div class="alert info multi-year-history-source-note"><div><strong>Lecture seule, sans basculer de dossier.</strong> EMRYS lit les dossiers accessibles du même client et du même type comptable. Seules les écritures validées sont reprises. Le report à nouveau enregistré dans chaque exercice initialise le solde progressif de cet exercice ; il n’est pas ajouté comme mouvement.</div></div>' +
       sourceWarningHtml +
       '<form id="multi-year-history-selection-form" novalidate>' +
         '<section class="card journal-lines-card"><div class="panel">' +
@@ -15163,7 +15163,7 @@
         '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('multi-year-history-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('multi-year-history-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('multi-year-history-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('multi-year-history-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('multi-year-history-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section>' +
       '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire.</strong> La plage de pages et la parité se règlent dans la boîte d’impression du navigateur si celui-ci les propose.</div></div>' +
@@ -15490,7 +15490,7 @@
         '<section class="card journal-lines-card journal-lines-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('general-summary-balance-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('general-summary-balance-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('general-summary-balance-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('general-summary-balance-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('general-summary-balance-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section>' +
       '</div><div class="alert info journal-lines-print-note"><div><strong>Aperçu avant impression obligatoire.</strong> Le navigateur garde le choix final de l’imprimante ou de l’enregistrement PDF ; réglez-y la plage de pages et la parité si elles sont disponibles.</div></div>' +
@@ -15500,7 +15500,7 @@
 
   function generalSummaryBalanceReportPreviewView(session) {
     var report = session.report || buildGeneralSummaryBalanceReport(session);
-    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans PERFECTO';
+    var destination = session.layout.destination === 'printer' ? 'Imprimante · aperçu obligatoire' : 'Aperçu dans EMRYS';
     return generalBalanceReportSteps('preview', 'Étapes de préparation de la Balance de synthèse') +
       pageHeader('Aperçu de la balance de synthèse', 'Vérifiez le regroupement et les montants avant l’impression ou l’enregistrement PDF.',
         '<button type="button" class="btn btn-primary" data-general-summary-balance-open-preview>Ouvrir l’aperçu avant impression</button>') +
@@ -15994,7 +15994,7 @@
         '<input id="import-file" type="file" accept="application/json,.json" class="sr-only">' +
         '<button type="button" class="btn btn-danger" data-action="reset-data">↺ Réinitialiser la démo</button>' +
       '</div>' +
-      '<p class="small muted mt-8">La sauvegarde JSON PERFECTO est distincte des fichiers d’échange Excel/CSV. Sa restauration remplace les données comptables du dossier actif.</p>' +
+      '<p class="small muted mt-8">La sauvegarde JSON EMRYS est distincte des fichiers d’échange Excel/CSV. Sa restauration remplace les données comptables du dossier actif.</p>' +
       '<div class="local-backup-box"><div class="local-backup-heading"><span>RESTAURATION LOCALE</span><b>1 point</b></div>' + backupMarkup +
       '<p class="small muted">Ce point reste dans ce navigateur et conserve uniquement l’état précédent. Il ne remplace pas une copie exportée sur un support indépendant.</p></div>' +
     '</section>';
@@ -16004,8 +16004,8 @@
       '<div class="alert ' + (swReady ? 'success' : 'info') + '">' +
         (swReady ? '✅ Service worker actif : l’application peut fonctionner hors ligne.' : 'ℹ️ Le service worker s’active après le premier chargement complet.') +
       '</div>' +
-      '<p class="small muted">PERFECTO est une page statique : HTML, CSS et JavaScript natifs. Elle peut être installée depuis le menu du navigateur (« Installer » ou « Ajouter à l’écran d’accueil »).</p>' +
-      '<div class="mt-16"><button type="button" class="btn btn-accent" data-action="install-app" hidden>📲 Installer PERFECTO</button></div>' +
+      '<p class="small muted">EMRYS est une page statique : HTML, CSS et JavaScript natifs. Elle peut être installée depuis le menu du navigateur (« Installer » ou « Ajouter à l’écran d’accueil »).</p>' +
+      '<div class="mt-16"><button type="button" class="btn btn-accent" data-action="install-app" hidden>📲 Installer EMRYS</button></div>' +
     '</section>';
 
     html += '</div>';
@@ -16770,7 +16770,7 @@
         '<section class="card journal-lines-card financial-framework-edition-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('financial-framework-edition-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('financial-framework-edition-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('financial-framework-edition-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('financial-framework-edition-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('financial-framework-edition-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section></div>' +
         '<div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> Le choix final de l’imprimante ou du PDF, des pages et de la parité reste dans la boîte du navigateur.</div></div>' +
@@ -17108,7 +17108,7 @@
         '<section class="card journal-lines-card accounting-plan-edition-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('accounting-plan-edition-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('accounting-plan-edition-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('accounting-plan-edition-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('accounting-plan-edition-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('accounting-plan-edition-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section></div>' +
         '<div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> Le choix final de l’imprimante ou du PDF, des pages et de la parité reste dans la boîte du navigateur.</div></div>' +
@@ -17799,7 +17799,7 @@
         '<section class="card journal-lines-card balance-items-edition-destination-card"><div class="panel"><div class="journal-lines-section-heading"><h3>Destination</h3></div><div class="journal-lines-destinations">' +
           generalBalanceReportRadio('balance-items-edition-destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table', false) +
           generalBalanceReportRadio('balance-items-edition-destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file', false) +
-          generalBalanceReportRadio('balance-items-edition-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans PERFECTO avant impression</small>', session.layout.destination === 'preview', false) +
+          generalBalanceReportRadio('balance-items-edition-destination', 'preview', '<strong>Aperçu</strong><small>Afficher dans EMRYS avant impression</small>', session.layout.destination === 'preview', false) +
           generalBalanceReportRadio('balance-items-edition-destination', 'printer', '<strong>Imprimante</strong><small>Aperçu plein écran obligatoire avant impression</small>', session.layout.destination === 'printer', false) +
         '</div></div></section></div>' +
         '<div class="alert info journal-lines-print-note"><div><strong>Aperçu plein écran avant impression obligatoire.</strong> Le choix final de l’imprimante ou du PDF, des pages et de la parité reste dans la boîte du navigateur.</div></div>' +
@@ -18246,7 +18246,7 @@
       '<div class="accounting-bridge-operation-list">' + accountingBridgeOperationCard('centralize-sales') + accountingBridgeOperationCard('centralize-payroll') + accountingBridgeOperationCard('centralize-auxiliary') + '</div>' +
       '<p class="small muted">Les opérations Paie & RH et Ventes, stock & facturation chargent ces correspondances comme point de départ ; leur aperçu demande toujours une confirmation. Les corrections faites dans l’aperçu ne modifient pas ce paramétrage.</p></section>';
     return '<div class="exchange-workspace accounting-bridge-workspace">' +
-      '<div class="alert info accounting-bridge-intro"><div><strong>Paramètres = configuration · Fichier = opérationnalisation</strong><br>Configurez les comptes source d’un module PERFECTO vers les comptes généraux existants du dossier cible actif. Les réglages sont séparés par opération source et par dossier cible ; ils ne concernent pas la comptabilité analytique.</div></div>' +
+      '<div class="alert info accounting-bridge-intro"><div><strong>Paramètres = configuration · Fichier = opérationnalisation</strong><br>Configurez les comptes source d’un module EMRYS vers les comptes généraux existants du dossier cible actif. Les réglages sont séparés par opération source et par dossier cible ; ils ne concernent pas la comptabilité analytique.</div></div>' +
       permissionNote +
       '<div class="field accounting-bridge-source-field"><label for="accounting-bridge-source-module">Opération de centralisation à paramétrer</label><select id="accounting-bridge-source-module"' + (sources.length ? '' : ' disabled') + '>' + sourceOptions + '</select><span class="hint">Dossier cible actif : ' + esc(targetDossier.clientName) + ' · ' + esc(targetDossier.reference) + '.</span></div>' +
       summary + sourceState + loadError + pendingNote +
@@ -18550,11 +18550,11 @@
   function viewExchangeFormatGuide() {
     var columns = [
       ['FORMAT / VERSION', 'Valeurs fixes : PERFECTO-ECHANGE / 1.'],
-      ['SYSTEME_SOURCE', 'Origine déclarée : EXCEL, SAGE, PERFECTO, HYPERSOFT, ODOO ou autre libellé.'],
+      ['SYSTEME_SOURCE', 'Origine déclarée : EXCEL, SAGE, EMRYS, HYPERSOFT, ODOO ou autre libellé.'],
       ['REFERENCE_DOSSIER / EXERCICE', 'Dossier et exercice source ; identiques sur toutes les lignes du fichier.'],
       ['CODE_JOURNAL / LIBELLE_JOURNAL', 'Code du journal source et libellé ; le code est associé à un journal du dossier actif.'],
       ['DATE / REFERENCE_PIECE / LIBELLE_PIECE', 'Date AAAA-MM-JJ, référence unique de la pièce et libellé. Les lignes d’une pièce partagent ces valeurs.'],
-      ['CODE_COMPTE / LIBELLE_COMPTE', 'Code et libellé du compte source ; le code est associé à un compte existant du plan PERFECTO.'],
+      ['CODE_COMPTE / LIBELLE_COMPTE', 'Code et libellé du compte source ; le code est associé à un compte existant du plan EMRYS.'],
       ['CLASSE_COMPTE / NATURE_COMPTE', 'Informations de contexte sur le compte source ; elles ne créent ni ne modifient le plan.'],
       ['DEBIT_XOF / CREDIT_XOF', 'Montants XOF entiers, sans séparateurs de milliers ni décimales ; renseigner un seul côté par ligne.'],
       ['STATUT_SOURCE', 'VALIDEE ou BROUILLON ; le statut appliqué à l’import est toujours celui choisi dans l’écran.'],
@@ -18574,7 +18574,7 @@
     var lineCount = entries.reduce(function (count, entry) { return count + entry.lines.length; }, 0);
     var drafts = S.entries().filter(function (entry) { return entry.status === 'draft'; }).length;
     var systems = [
-      { label: 'Classeur Excel + CSV PERFECTO v1', state: 'Disponible', ready: true },
+      { label: 'Classeur Excel + CSV EMRYS v1', state: 'Disponible', ready: true },
       { label: 'Sage Comptabilité', state: 'Adaptateur à construire', ready: false },
       { label: 'PERFECTO historique', state: 'Adaptateur à construire', ready: false },
       { label: 'HYPERSOFT', state: 'Adaptateur à construire', ready: false },
@@ -18633,9 +18633,9 @@
   function viewAccountingFecImport() {
     var dossierPrecision = S.accountingConfiguration().decimalPlaces;
     return '<div class="exchange-workspace fec-import-workspace">' +
-      '<div class="alert info"><div><strong>Centralisation par FEC · logiciel externe ou PERFECTO d’une autre organisation</strong><br>Le transfert se fait par fichier manuel, sans connecteur au logiciel source. Le FEC est contrôlé dans ce navigateur selon l’arrêté du 23 avril 2020, puis converti vers le plan comptable général du dossier cible après confirmation. L’aperçu permet de corriger les écritures cibles et regroupe les totaux par compte collectif confirmé ; chaque pièce source, ses identifiants auxiliaires et le fichier original restent traçables. Ce parcours ne crée pas encore de mouvements individuels de tiers.</div></div>' +
+      '<div class="alert info"><div><strong>Centralisation par FEC · logiciel externe ou EMRYS d’une autre organisation</strong><br>Le transfert se fait par fichier manuel, sans connecteur au logiciel source. Le FEC est contrôlé dans ce navigateur selon l’arrêté du 23 avril 2020, puis converti vers le plan comptable général du dossier cible après confirmation. L’aperçu permet de corriger les écritures cibles et regroupe les totaux par compte collectif confirmé ; chaque pièce source, ses identifiants auxiliaires et le fichier original restent traçables. Ce parcours ne crée pas encore de mouvements individuels de tiers.</div></div>' +
       '<div class="alert warning"><div><strong>Stockage de cette version</strong><br>Le fichier original et sa trace seront conservés dans le stockage local de ce navigateur et dans les sauvegardes du dossier. Ce n’est pas un archivage Google Drive ni un espace partagé de l’organisation ; exportez une sauvegarde indépendante.</div></div>' +
-      '<div class="alert info"><div><strong>Précision active : ' + Number(dossierPrecision) + ' décimale(s)</strong><br>Les montants FEC plus précis que le paramétrage du dossier bloquent l’import. PERFECTO n’arrondit pas silencieusement ; ajustez la précision dans Paramètres → Configuration de la Comptabilité, puis rechargez le fichier.</div></div>' +
+      '<div class="alert info"><div><strong>Précision active : ' + Number(dossierPrecision) + ' décimale(s)</strong><br>Les montants FEC plus précis que le paramétrage du dossier bloquent l’import. EMRYS n’arrondit pas silencieusement ; ajustez la précision dans Paramètres → Configuration de la Comptabilité, puis rechargez le fichier.</div></div>' +
       '<div class="exchange-import-controls fec-import-controls">' +
         '<div class="field"><label for="fec-import-file">Fichier FEC (.txt ou .csv)</label>' +
           '<input id="fec-import-file" type="file" accept=".txt,.csv,text/plain,text/csv" hidden>' +
@@ -18647,7 +18647,7 @@
         '<div class="field"><label for="fec-import-delimiter">Séparateur de champs</label>' +
           '<select id="fec-import-delimiter"><option value="auto" selected>Détection de l’en-tête</option><option value="tab">Tabulation</option><option value="pipe">Caractère |</option></select>' +
           '<span class="hint">L’exemple transmis utilise la tabulation et des fins de ligne CRLF.</span></div>' +
-        '<div class="field"><label for="fec-import-mode">Statut dans PERFECTO</label>' +
+        '<div class="field"><label for="fec-import-mode">Statut dans EMRYS</label>' +
           '<select id="fec-import-mode"><option value="draft" selected>Créer des brouillons (recommandé)</option><option value="posted">Importer comme écritures validées</option></select>' +
           '<span class="hint">La source FEC est validée ; l’import reste un brouillon par défaut. Le choix « validées » exige les droits de validation.</span></div>' +
       '</div>' +
@@ -19334,7 +19334,7 @@
         '<td><input class="numeric" type="number" min="0" step="' + esc(amountStep) + '" value="' + esc(String(lineValue.credit)) + '" aria-label="Crédit de la ligne ' + (index + 1) + '" data-fec-edit-line="' + index + '" data-fec-edit-field="credit"></td></tr>';
     }).join('');
     var lineEditor = lineSearch + '<div class="exchange-table-wrap fec-edit-lines"><table class="exchange-mapping-table"><thead><tr><th>Ligne FEC d’origine</th><th>Compte cible</th><th class="numeric">Débit cible</th><th class="numeric">Crédit cible</th></tr></thead><tbody>' + (lineRows || '<tr><td colspan="4">Aucune ligne ne correspond à cette recherche.</td></tr>') + '</tbody></table></div>';
-    var rules = '<div class="alert info fec-edit-rules"><div>Après chaque modification, PERFECTO relance les contrôles de compte, journal, période, précision et équilibre. Une écriture non équilibrée peut rester en brouillon si le mode brouillon est choisi ; elle ne pourra pas être importée comme validée. Aucun compte n’est créé automatiquement.</div></div>';
+    var rules = '<div class="alert info fec-edit-rules"><div>Après chaque modification, EMRYS relance les contrôles de compte, journal, période, précision et équilibre. Une écriture non équilibrée peut rester en brouillon si le mode brouillon est choisi ; elle ne pourra pas être importée comme validée. Aucun compte n’est créé automatiquement.</div></div>';
     return '<section class="exchange-card fec-entry-editor">' + title + status + search + selector + headerFields + lineEditor + rules + '</section>';
   }
 
@@ -19784,9 +19784,9 @@
     var hasUnmapped = codes.some(function (code) { return !sourceMap[code]; });
     return '<details class="exchange-mapping"' + (hasUnmapped ? ' open' : '') + '><summary>Correspondance des ' + label + ' (' + codes.length + ' codes source)</summary>' +
       '<p class="small muted">' + (isAccount
-        ? 'Associez chaque code source à un compte du plan PERFECTO. Aucun compte n’est créé automatiquement.'
+        ? 'Associez chaque code source à un compte du plan EMRYS. Aucun compte n’est créé automatiquement.'
         : 'Associez chaque journal source à un journal du dossier.') + '</p>' +
-      '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Code source</th><th>Libellé source</th><th>Correspondance PERFECTO</th></tr></thead><tbody>' +
+      '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Code source</th><th>Libellé source</th><th>Correspondance EMRYS</th></tr></thead><tbody>' +
       codes.map(function (code) {
         var mappedCode = sourceMap[code] || '';
         var sourceLabel = catalog[code] || '';
@@ -19996,8 +19996,8 @@
     var accounts = postingAccounts();
     var hasUnmapped = codes.some(function (code) { return !session.accountMap[code]; });
     return '<details class="exchange-mapping"' + (hasUnmapped ? ' open' : '') + '><summary>Correspondance des comptes (' + codes.length + ' codes source)</summary>' +
-      '<p class="small muted">Associez chaque compte source au plan comptable PERFECTO. Les comptes inconnus ne seront pas créés et plusieurs comptes ne sont associés qu’après votre choix explicite.</p>' +
-      '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Code source</th><th>Libellé source</th><th>Correspondance PERFECTO</th></tr></thead><tbody>' +
+      '<p class="small muted">Associez chaque compte source au plan comptable EMRYS. Les comptes inconnus ne seront pas créés et plusieurs comptes ne sont associés qu’après votre choix explicite.</p>' +
+      '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Code source</th><th>Libellé source</th><th>Correspondance EMRYS</th></tr></thead><tbody>' +
       codes.map(function (code) {
         var mappedCode = session.accountMap[code] || '';
         var options = '<option value="">— Choisir une correspondance —</option>' + accounts.map(function (account) {
@@ -23172,7 +23172,7 @@
     }
 
     return '<div class="exchange-workspace centralization-cancellation-workspace">' +
-      '<div class="alert info"><div><strong>Annulation réservée aux centralisations PERFECTO internes.</strong><br>Le périmètre couvre les transferts auxiliaires du dossier actif, Paie & RH et Ventes, stock & facturation. Les FEC et logiciels tiers ne sont pas sélectionnables.</div></div>' +
+      '<div class="alert info"><div><strong>Annulation réservée aux centralisations EMRYS internes.</strong><br>Le périmètre couvre les transferts auxiliaires du dossier actif, Paie & RH et Ventes, stock & facturation. Les FEC et logiciels tiers ne sont pas sélectionnables.</div></div>' +
       '<section class="exchange-card"><p class="page-kicker">HISTORIQUE DES CENTRALISATIONS INTERNES</p><h4>' + entries.length + ' pièce(s) accessible(s)</h4>' + empty +
         (entries.length ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Pièce d’origine / module source</th><th>Date et montant</th><th>État de l’annulation</th><th>Action</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '') +
       '</section>' + controls + preview +
@@ -23434,9 +23434,9 @@
 
   function viewAccountingAuxiliaryOverview() {
     return '<div class="exchange-workspace auxiliary-centralization-workspace">' +
-      '<div class="alert info"><div><strong>Centralisation auxiliaire en Comptabilité générale.</strong><br>La voie interne extrait automatiquement, sans fichier d’entrée, les lignes déjà validées qui portent une référence auxiliaire explicite et produit un état Excel, CSV ou TXT en lecture seule. Si les écritures sont déjà au grand livre, aucun nouveau mouvement n’est reposté. Un lot source PERFECTO non encore comptabilisé peut toujours être contrôlé puis préparé en brouillon. La voie externe FEC reste un import manuel distinct, proposé en brouillon après aperçu et confirmation ; aucun connecteur tiers ni traitement analytique n’est utilisé.</div></div>' +
-      '<section class="exchange-card auxiliary-centralization-choice"><p class="page-kicker">VOIE INTERNE · EXTRACTION AUTOMATIQUE</p><h4>Données validées du dossier actif — sans fichier d’entrée</h4><p>PERFECTO recherche les écritures validées rattachées explicitement à un auxiliaire, regroupe et trace les mouvements par compte collectif, puis permet un export Excel, CSV ou TXT. Les brouillons, exemples et centralisations antérieures sont exclus. Les comptes collectifs 401/411 sans identifiant de tiers ne sont jamais ventilés par supposition.</p><a class="btn btn-primary btn-sm" href="' + esc(accountingMenuHash('fichier', 'centralize-auxiliary', 'centralize-auxiliary-perfecto')) + '">Ouvrir l’extraction interne <span aria-hidden="true">→</span></a><p class="small muted">L’export automatique est un état de contrôle en lecture seule, pas une nouvelle écriture au grand livre ; il évite tout doublon de comptabilisation.</p></section>' +
-      '<section class="exchange-card auxiliary-centralization-choice"><p class="page-kicker">VOIE INTERNE · LOT SOURCE NON COMPTABILISÉ</p><h4>Préparer un lot PERFECTO en brouillon</h4><p>En complément, transférez un lot réel CSV/XLSX au format PERFECTO-AUXILIAIRE v1 lorsqu’il n’est pas déjà comptabilisé dans le grand livre. PERFECTO contrôle le dossier et l’exercice déclarés, l’équilibre des pièces, les correspondances vers des comptes existants et les totaux avant confirmation.</p><a class="btn btn-primary btn-sm" href="' + esc(accountingMenuHash('fichier', 'centralize-auxiliary', 'centralize-auxiliary-perfecto')) + '">Ouvrir les parcours internes <span aria-hidden="true">→</span></a><p class="small muted">Le fichier déclare son producteur mais n’est pas signé ; l’export direct des modules PERFECTO n’est pas attesté. Aucun transfert tiers n’est permis ici.</p></section>' +
+      '<div class="alert info"><div><strong>Centralisation auxiliaire en Comptabilité générale.</strong><br>La voie interne extrait automatiquement, sans fichier d’entrée, les lignes déjà validées qui portent une référence auxiliaire explicite et produit un état Excel, CSV ou TXT en lecture seule. Si les écritures sont déjà au grand livre, aucun nouveau mouvement n’est reposté. Un lot source EMRYS non encore comptabilisé peut toujours être contrôlé puis préparé en brouillon. La voie externe FEC reste un import manuel distinct, proposé en brouillon après aperçu et confirmation ; aucun connecteur tiers ni traitement analytique n’est utilisé.</div></div>' +
+      '<section class="exchange-card auxiliary-centralization-choice"><p class="page-kicker">VOIE INTERNE · EXTRACTION AUTOMATIQUE</p><h4>Données validées du dossier actif — sans fichier d’entrée</h4><p>EMRYS recherche les écritures validées rattachées explicitement à un auxiliaire, regroupe et trace les mouvements par compte collectif, puis permet un export Excel, CSV ou TXT. Les brouillons, exemples et centralisations antérieures sont exclus. Les comptes collectifs 401/411 sans identifiant de tiers ne sont jamais ventilés par supposition.</p><a class="btn btn-primary btn-sm" href="' + esc(accountingMenuHash('fichier', 'centralize-auxiliary', 'centralize-auxiliary-perfecto')) + '">Ouvrir l’extraction interne <span aria-hidden="true">→</span></a><p class="small muted">L’export automatique est un état de contrôle en lecture seule, pas une nouvelle écriture au grand livre ; il évite tout doublon de comptabilisation.</p></section>' +
+      '<section class="exchange-card auxiliary-centralization-choice"><p class="page-kicker">VOIE INTERNE · LOT SOURCE NON COMPTABILISÉ</p><h4>Préparer un lot EMRYS en brouillon</h4><p>En complément, transférez un lot réel CSV/XLSX au format PERFECTO-AUXILIAIRE v1 lorsqu’il n’est pas déjà comptabilisé dans le grand livre. EMRYS contrôle le dossier et l’exercice déclarés, l’équilibre des pièces, les correspondances vers des comptes existants et les totaux avant confirmation.</p><a class="btn btn-primary btn-sm" href="' + esc(accountingMenuHash('fichier', 'centralize-auxiliary', 'centralize-auxiliary-perfecto')) + '">Ouvrir les parcours internes <span aria-hidden="true">→</span></a><p class="small muted">Le fichier déclare son producteur mais n’est pas signé ; l’export direct des modules EMRYS n’est pas attesté. Aucun transfert tiers n’est permis ici.</p></section>' +
       '<section class="exchange-card auxiliary-centralization-choice"><p class="page-kicker">VOIE EXTERNE · IMPORT MANUEL</p><h4>FEC d’un logiciel externe ou d’une autre organisation</h4><p>Corrigez les écritures cibles dans l’aperçu, confirmez la conversion vers le plan comptable général et contrôlez les totaux par compte collectif avant l’ajout.</p><a class="btn btn-primary btn-sm" href="' + esc(accountingMenuHash('fichier', 'centralize-auxiliary', 'centralize-auxiliary-fec')) + '">Ouvrir le parcours FEC <span aria-hidden="true">→</span></a><p class="small muted">Le FEC original, les pièces source et les identifiants auxiliaires restent traçables ; aucun connecteur ni mouvement auxiliaire individuel n’est créé.</p></section>' +
     '</div>';
   }
@@ -23474,12 +23474,12 @@
       } else {
         state = '<span class="badge">État à contrôler</span><small>Aucune pièce liée retrouvée</small>';
       }
-      return '<tr><td><strong>' + esc(source.fileName || 'Lot auxiliaire') + '</strong><br><span class="small muted">' + esc(source.sourceProducer || 'Module PERFECTO déclaré') + ' · lot ' + esc(source.sourceBatchReference || '—') + '</span><br><small class="internal-auxiliary-hash">SHA-256 · ' + esc(source.sha256 || '—') + '</small></td>' +
+      return '<tr><td><strong>' + esc(source.fileName || 'Lot auxiliaire') + '</strong><br><span class="small muted">' + esc(source.sourceProducer || 'Module EMRYS déclaré') + ' · lot ' + esc(source.sourceBatchReference || '—') + '</span><br><small class="internal-auxiliary-hash">SHA-256 · ' + esc(source.sha256 || '—') + '</small></td>' +
         '<td>' + esc(source.sourceDossierReference || dossier.reference || '') + '<br><span class="small muted">Exercice ' + esc(source.sourceExercise || dossier.exerciseYear || '') + ' · ' + Number(source.documentCount || 0) + ' pièce(s), ' + Number(source.sourceMovementCount || source.lineCount || 0) + ' mouvement(s)</span></td>' +
         '<td class="numeric">' + esc(amount(source.totalDebit || 0)) + ' / ' + esc(amount(source.totalCredit || 0)) + ' XOF</td>' +
         '<td>' + state + '</td><td><div class="internal-auxiliary-history-actions">' + action + '</div></td></tr>';
     }).join('');
-    return '<div class="exchange-table-wrap"><table class="exchange-mapping-table internal-auxiliary-history-table"><thead><tr><th>Fichier / lot source</th><th>Dossier et contenu</th><th>Totaux source débit / crédit</th><th>État PERFECTO</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    return '<div class="exchange-table-wrap"><table class="exchange-mapping-table internal-auxiliary-history-table"><thead><tr><th>Fichier / lot source</th><th>Dossier et contenu</th><th>Totaux source débit / crédit</th><th>État EMRYS</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
 
   function internalAuxiliaryExtractionHtml(dossier) {
@@ -23508,7 +23508,7 @@
         : ' Aucun identifiant de tiers ou autre référence auxiliaire explicite n’est disponible dans les lignes admissibles du dossier.';
       var moduleLimitation = ' Les écritures agrégées des lots Paie & RH et Ventes, stock & facturation ne portent actuellement pas d’identifiant auxiliaire par ligne ; elles ne sont donc pas ventilées par tiers dans cet état.';
       return '<section class="exchange-card internal-auxiliary-extraction"><p class="page-kicker">EXTRACTION AUTOMATIQUE · SANS FICHIER D’ENTRÉE</p><h4>Depuis les écritures validées de ' + esc(dossier.reference) + '</h4>' +
-        '<p>PERFECTO lit le grand livre du dossier actif et recherche uniquement les lignes d’un compte marqué auxiliaire qui portent un identifiant individuel explicite dans la ligne ou ses métadonnées source.</p>' + warningHtml + errorHtml +
+        '<p>EMRYS lit le grand livre du dossier actif et recherche uniquement les lignes d’un compte marqué auxiliaire qui portent un identifiant individuel explicite dans la ligne ou ses métadonnées source.</p>' + warningHtml + errorHtml +
         '<div class="empty-state"><strong>Aucune ligne validée rattachée explicitement à un auxiliaire</strong><span>' + esc(limitation + moduleLimitation) + ' Les brouillons et les écritures d’exemple sont exclus ; aucun mouvement, tiers ni montant n’est inventé et aucun fichier vide ne sera proposé.</span></div>' +
         '<p class="small muted">Les données utilisables apparaîtront ici automatiquement dès qu’une écriture validée du dossier contiendra une référence auxiliaire fiable. Les écritures ainsi exportées sont déjà comptabilisées au grand livre : l’export ne crée pas une seconde pièce.</p></section>';
     }
@@ -23562,7 +23562,7 @@
       : '<div class="alert warning">Consultation seule : un droit explicite « data.import » est requis pour charger et créer un brouillon.</div>';
     var controls = isPhoneViewport() ? '' :
       '<section class="exchange-card internal-auxiliary-controls"><p class="page-kicker">OPTION · LOT SOURCE PAS ENCORE COMPTABILISÉ</p><h4>Préparer un brouillon depuis un lot auxiliaire source</h4><p class="small muted">Utilisez ce transfert uniquement si le lot n’est pas déjà inscrit au grand livre. Pour extraire les écritures validées existantes sans fichier d’entrée, utilisez l’édition automatique ci-dessus.</p>' +
-        '<div class="field internal-auxiliary-file-field"><label for="internal-auxiliary-file">Fichier auxiliaire CSV ou Excel (.xlsx)</label><input id="internal-auxiliary-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden><label id="internal-auxiliary-file-label" class="btn btn-primary exchange-file-picker" for="internal-auxiliary-file">↑ Choisir un lot CSV / XLSX</label><span class="hint">PERFECTO lit le fichier dans ce navigateur. Limite locale : 1 Mio. Le transfert ne modifie aucune écriture avant confirmation.</span></div>' +
+        '<div class="field internal-auxiliary-file-field"><label for="internal-auxiliary-file">Fichier auxiliaire CSV ou Excel (.xlsx)</label><input id="internal-auxiliary-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden><label id="internal-auxiliary-file-label" class="btn btn-primary exchange-file-picker" for="internal-auxiliary-file">↑ Choisir un lot CSV / XLSX</label><span class="hint">EMRYS lit le fichier dans ce navigateur. Limite locale : 1 Mio. Le transfert ne modifie aucune écriture avant confirmation.</span></div>' +
         '<div class="exchange-button-row"><button type="button" class="btn btn-primary" data-action="download-internal-auxiliary-workbook-template">↓ Modèle Excel (.xlsx)</button><button type="button" class="btn btn-ghost" data-action="download-internal-auxiliary-csv-template">↓ Modèle CSV</button></div>' +
         '<div class="exchange-import-controls internal-auxiliary-target-controls">' +
           '<div class="field"><label for="internal-auxiliary-date">Date de la pièce générale</label><input id="internal-auxiliary-date" type="date" min="' + esc(dossier.cycleStart) + '" max="' + esc(dossier.cycleEnd) + '" value="' + esc(session && session.targetDate || '') + '"><span class="hint">À choisir dans le cycle et une période ouverte du dossier.</span></div>' +
@@ -23581,7 +23581,7 @@
     return '<div class="exchange-workspace auxiliary-centralization-workspace internal-auxiliary-workspace">' +
       '<div class="alert info"><div><strong>Extraction et centralisation internes · Comptabilité générale</strong><br>L’extraction automatique ci-dessous lit les écritures validées portant une référence auxiliaire explicite et produit un état Excel, CSV ou TXT sans fichier d’entrée. Comme ces mouvements figurent déjà au grand livre, cet export est en lecture seule et ne crée pas de seconde écriture. Le parcours de brouillon sur lot source reste réservé aux opérations non encore comptabilisées.</div></div>' +
       internalAuxiliaryExtractionHtml(dossier) +
-      '<div class="alert warning"><div><strong>Provenance déclarative du parcours par fichier, pas de connecteur.</strong><br>Le lot facultatif doit provenir des mouvements réellement enregistrés dans Paie & RH ou Ventes, stock & facturation pour le dossier actif. Le contrôle vérifie les métadonnées et l’équilibre, mais le producteur n’est pas authentifié par signature technique et l’export direct des modules PERFECTO n’est pas attesté dans cette version. Ne transférez pas de fichier tiers dans ce parcours.</div></div>' +
+      '<div class="alert warning"><div><strong>Provenance déclarative du parcours par fichier, pas de connecteur.</strong><br>Le lot facultatif doit provenir des mouvements réellement enregistrés dans Paie & RH ou Ventes, stock & facturation pour le dossier actif. Le contrôle vérifie les métadonnées et l’équilibre, mais le producteur n’est pas authentifié par signature technique et l’export direct des modules EMRYS n’est pas attesté dans cette version. Ne transférez pas de fichier tiers dans ce parcours.</div></div>' +
       phoneNotice + importNotice + controls + formatGuide +
       '<div id="internal-auxiliary-preview" class="exchange-preview" aria-live="polite"><div class="empty-state"><strong>Aucun lot analysé</strong><span>Le fichier facultatif ne sert qu’à préparer un brouillon à partir d’un lot source non comptabilisé. L’aperçu, les correspondances et les confirmations apparaîtront avant toute écriture.</span></div></div>' +
       '<section class="exchange-card internal-auxiliary-history"><p class="page-kicker">HISTORIQUE ET SOURCE ORIGINALE</p><h4>Lots auxiliaires de ' + esc(dossier.reference) + '</h4>' + internalAuxiliaryHistoryHtml(dossier) + '</section>' +
@@ -23725,7 +23725,7 @@
         ? '<div class="alert success"><div><strong>Aperçu équilibré et prêt à confirmer.</strong><br>Une seule pièce générale sera créée en brouillon avec ' + Number(analysis.lineCount || 0) + ' ligne(s). Le grand livre ne changera pas avant validation.</div></div>'
         : '<div class="alert info"><div><strong>Les opérations source sont équilibrées.</strong><br>Renseignez la date, le journal et la référence de la pièce cible pour vérifier les règles du dossier.</div></div>');
     var provenanceConfirmation = sourceContext.ok
-      ? '<label class="exchange-context-confirm"><input id="internal-auxiliary-confirm-source" type="checkbox"' + (session.sourceConfirmed ? ' checked' : '') + '> Je confirme que ce lot provient des mouvements réellement enregistrés dans un module PERFECTO du dossier actif. Cette confirmation utilisateur ne constitue pas une signature technique.</label>'
+      ? '<label class="exchange-context-confirm"><input id="internal-auxiliary-confirm-source" type="checkbox"' + (session.sourceConfirmed ? ' checked' : '') + '> Je confirme que ce lot provient des mouvements réellement enregistrés dans un module EMRYS du dossier actif. Cette confirmation utilisateur ne constitue pas une signature technique.</label>'
       : '';
     var operationConfirmation = analysis && analysis.ok
       ? '<label class="exchange-context-confirm"><input id="internal-auxiliary-confirm-operation" type="checkbox"' + (session.operationConfirmed ? ' checked' : '') + '> Je confirme la création d’un brouillon à partir des totaux et correspondances affichés. Aucune écriture source ou existante ne sera remplacée.</label>'
@@ -23977,7 +23977,7 @@
     if (!window.confirm('Exporter ' + extraction.stats.eligibleMovementCount + ' mouvement(s) auxiliaire(s) validé(s) en ' + formatLabel + ' ? Le fichier sera une édition de contrôle en lecture seule. Ces mouvements étant déjà au grand livre, aucune nouvelle écriture ne sera créée.')) return;
     try {
       var filePart = safeFilePart(dossier.reference);
-      var filename = 'PERFECTO-auxiliaires-valides-' + filePart + '-' + dossier.exerciseYear + '.' + selectedFormat;
+      var filename = 'EMRYS-auxiliaires-valides-' + filePart + '-' + dossier.exerciseYear + '.' + selectedFormat;
       var content;
       var mime;
       if (selectedFormat === 'xlsx') {
@@ -24006,9 +24006,9 @@
     var filePart = safeFilePart(dossier.reference);
     if (workbook) {
       var xlsx = AccountingExchange.templateAuxiliaryWorkbook({ dossier: dossier, accounts: S.accounts(), journals: S.journals() });
-      downloadFile('PERFECTO-AUXILIAIRE-v1-' + filePart + '.xlsx', xlsx, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      downloadFile('EMRYS-AUXILIAIRE-v1-' + filePart + '.xlsx', xlsx, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     } else {
-      downloadFile('PERFECTO-AUXILIAIRE-v1-' + filePart + '.csv', AccountingExchange.templateAuxiliary(), 'text/csv;charset=utf-8');
+      downloadFile('EMRYS-AUXILIAIRE-v1-' + filePart + '.csv', AccountingExchange.templateAuxiliary(), 'text/csv;charset=utf-8');
     }
     toast('Modèle vide téléchargé ; aucune opération ni aucun montant d’exemple n’a été ajouté.', 'success');
   }
@@ -24023,7 +24023,7 @@
       toast('Fichier source auxiliaire introuvable dans le dossier actif.', 'error');
       return;
     }
-    downloadFile(source.fileName || 'PERFECTO-AUXILIAIRE-source.csv', fecBase64ToBytes(source.contentBase64), source.mimeType || 'text/csv');
+    downloadFile(source.fileName || 'EMRYS-AUXILIAIRE-source.csv', fecBase64ToBytes(source.contentBase64), source.mimeType || 'text/csv');
     toast('Fichier auxiliaire original téléchargé depuis le stockage local.', 'success');
   }
 
@@ -24099,15 +24099,15 @@
   function consolidationSourceSummary(source) {
     var details = [];
     var moduleLabels = {
-      'payroll-hr': 'Paie & RH (module PERFECTO)',
-      'sales-stock-invoicing': 'Ventes, stock & facturation (module PERFECTO)'
+      'payroll-hr': 'Paie & RH (module EMRYS)',
+      'sales-stock-invoicing': 'Ventes, stock & facturation (module EMRYS)'
     };
     if (source.sourceModule) details.push('module : ' + (moduleLabels[source.sourceModule] || source.sourceModule));
     if (source.sourceRunReference) details.push('lot : ' + source.sourceRunReference);
     if (source.sourceReference) details.push('référence source : ' + source.sourceReference);
     if (source.sourceId) details.push('ID source : ' + source.sourceId);
     if (source.originalReference) details.push('pièce d’origine : ' + source.originalReference);
-    return details.length ? details.join(' · ') : 'Origine PERFECTO · pièce comptable source';
+    return details.length ? details.join(' · ') : 'Origine EMRYS · pièce comptable source';
   }
 
   function renderAccountingConsolidationPreview(stage) {
@@ -24144,7 +24144,7 @@
 
     var rows = result.rows.map(function (row) {
       var provenanceRows = row.provenance.map(function (source) {
-        var sourceSystem = source.sourceSystem || 'PERFECTO · saisie comptable';
+        var sourceSystem = source.sourceSystem || 'EMRYS · saisie comptable';
         var pieceReference = source.reference || source.entryId || 'Pièce sans référence';
         return '<tr>' +
           '<td>' + esc(dateLabel(source.date)) + '</td>' +
@@ -24269,7 +24269,7 @@
           source.description,
           source.debit,
           source.credit,
-          source.sourceSystem || 'PERFECTO · saisie comptable',
+          source.sourceSystem || 'EMRYS · saisie comptable',
           source.sourceReference,
           source.sourceId,
           source.sourceModule,
@@ -24279,7 +24279,7 @@
       });
     });
     rows.push([], ['TOTAL_JOURNAL_GROUPE', '', '', '', '', '', '', '', result.totalDebit, result.totalCredit]);
-    var fileName = 'perfecto-' + safeFilePart(dossier.reference) + '-consolidation-' + stageOptions.filePart + '-' + result.dateStart + '-' + result.dateEnd + '.csv';
+    var fileName = 'emrys-' + safeFilePart(dossier.reference) + '-consolidation-' + stageOptions.filePart + '-' + result.dateStart + '-' + result.dateEnd + '.csv';
     downloadFile(fileName, toCsv(rows), 'text/csv;charset=utf-8');
     toast(stageOptions.successMessage, 'success');
   }
@@ -24305,7 +24305,7 @@
         '<p class="page-kicker">CONTRÔLE DES SOLDES · DOSSIER ACTIF</p>' +
         '<h4 id="balance-recalculation-heading">Recalcul du solde des comptes</h4>' +
         '<p>Reconstituer les débits, crédits et soldes nets à partir des écritures validées du cycle comptable, puis comparer le résultat au calcul actuel de la balance générale.</p>' +
-        '<div class="alert info"><div><strong>Opération sans écriture.</strong> PERFECTO ne conserve pas de cache de soldes séparé : le recalcul relit les mouvements validés et n’enregistre aucune modification. Les brouillons sont exclus ; les pièces hors cycle sont signalées.</div></div>' +
+        '<div class="alert info"><div><strong>Opération sans écriture.</strong> EMRYS ne conserve pas de cache de soldes séparé : le recalcul relit les mouvements validés et n’enregistre aucune modification. Les brouillons sont exclus ; les pièces hors cycle sont signalées.</div></div>' +
         '<div class="exchange-preview-footer"><button type="button" class="btn btn-primary" data-action="recalculate-account-balances">↻ Recalculer les soldes</button></div>' +
       '</section>' +
       '<div id="balance-recalculation-output" aria-live="polite">' + renderBalanceRecalculationPreview() + '</div>' +
@@ -24331,7 +24331,7 @@
 
     var comparison = session.comparison || { ok: false, differences: [] };
     var checkMessage = comparison.ok
-      ? '<div class="alert success"><div><strong>Concordance vérifiée.</strong> Les soldes recalculés correspondent à la balance générale calculée actuellement par PERFECTO.</div></div>'
+      ? '<div class="alert success"><div><strong>Concordance vérifiée.</strong> Les soldes recalculés correspondent à la balance générale calculée actuellement par EMRYS.</div></div>'
       : '<div class="alert warning"><div><strong>Écart détecté par compte.</strong> Le recalcul indépendant ne correspond pas à la balance générale courante pour ' + comparison.differences.length + ' compte(s).</div></div>';
     var totalsMessage = result.balanced
       ? '<div class="alert success"><div><strong>Balance équilibrée.</strong> Total débit = total crédit = ' + esc(money(result.totalDebit)) + '.</div></div>'
@@ -24441,7 +24441,7 @@
     rows.push([], ['ALERTES'], ['TYPE', 'DETAIL']);
     result.warnings.forEach(function (warning) { rows.push(['AVERTISSEMENT', warning]); });
     rows.push([], ['TOTAL_RECALCULE', '', result.totalDebit, result.totalCredit]);
-    downloadFile('perfecto-' + safeFilePart(dossier.reference) + '-recalcul-soldes-' + result.cycleStart + '-' + result.cycleEnd + '.csv', toCsv(rows), 'text/csv;charset=utf-8');
+    downloadFile('emrys-' + safeFilePart(dossier.reference) + '-recalcul-soldes-' + result.cycleStart + '-' + result.cycleEnd + '.csv', toCsv(rows), 'text/csv;charset=utf-8');
     toast('Recalcul des soldes exporté. Aucune écriture n’a été ajoutée au grand livre.', 'success');
   }
 
@@ -24590,7 +24590,7 @@
       ? 'Aucun fournisseur ne correspond à cette recherche et à ce filtre.'
       : 'Aucun fournisseur n’est encore enregistré dans ce dossier. Utilisez « Nouveau fournisseur » pour créer la première fiche.';
     return '<div class="exchange-workspace supplier-workspace" id="supplier-workspace">' +
-      '<div class="alert info"><div><strong>Référentiel local du dossier client.</strong> Les fournisseurs, coordonnées et comptes de rattachement restent isolés dans ce dossier et sur cet appareil. Modifier ou archiver une fiche ne réécrit aucune écriture historique. Ce référentiel ne crée pas de facture, règlement, mouvement auxiliaire, lettrage ou centralisation : les échanges de fichiers restent des échanges, et les centralisations sont réservées aux lots des modules PERFECTO internes.</div></div>' +
+      '<div class="alert info"><div><strong>Référentiel local du dossier client.</strong> Les fournisseurs, coordonnées et comptes de rattachement restent isolés dans ce dossier et sur cet appareil. Modifier ou archiver une fiche ne réécrit aucune écriture historique. Ce référentiel ne crée pas de facture, règlement, mouvement auxiliaire, lettrage ou centralisation : les échanges de fichiers restent des échanges, et les centralisations sont réservées aux lots des modules EMRYS internes.</div></div>' +
       '<div class="exchange-summary-grid supplier-summary-grid" aria-label="Résumé du référentiel fournisseurs">' +
         '<div><small>Fournisseurs actifs</small><strong>' + activeCount + '</strong></div>' +
         '<div><small>Fournisseurs archivés</small><strong>' + archivedCount + '</strong></div>' +
@@ -24611,7 +24611,7 @@
         '</div>' +
         '<div id="supplier-list-empty" class="empty-state supplier-empty"' + (visibleCount ? ' hidden' : '') + '><span class="empty-state-icon">⌕</span><h3>Aucun résultat</h3><p>' + esc(emptyMessage) + '</p></div>' +
       '</section>' +
-      '<p class="exchange-footnote">La sauvegarde et l’export JSON de la base comptable incluent ce référentiel local. Aucun service PERFECTO distant ne reçoit ces données.</p>' +
+      '<p class="exchange-footnote">La sauvegarde et l’export JSON de la base comptable incluent ce référentiel local. Aucun service EMRYS distant ne reçoit ces données.</p>' +
     '</div>';
   }
 
@@ -24701,7 +24701,7 @@
       ? 'Aucun client ne correspond à cette recherche.'
       : 'Aucun client n’est encore enregistré pour l’entreprise de ce dossier. Utilisez « Nouveau client » pour créer la première fiche.';
     return '<div class="exchange-workspace client-workspace" id="client-workspace">' +
-      '<div class="alert info"><div><strong>Répertoire des clients de l’entreprise suivie.</strong> Il est distinct de la liste des dossiers clients du cabinet. Les fiches et leurs codes sont isolés dans le dossier comptable actif. Elles ne créent ni facture, ni règlement, ni écriture ou centralisation ; les centralisations restent alimentées par les modules PERFECTO internes.</div></div>' +
+      '<div class="alert info"><div><strong>Répertoire des clients de l’entreprise suivie.</strong> Il est distinct de la liste des dossiers clients du cabinet. Les fiches et leurs codes sont isolés dans le dossier comptable actif. Elles ne créent ni facture, ni règlement, ni écriture ou centralisation ; les centralisations restent alimentées par les modules EMRYS internes.</div></div>' +
       '<div class="exchange-summary-grid client-summary-grid" aria-label="Résumé du répertoire clients">' +
         '<div><small>Clients enregistrés</small><strong>' + records.length + '</strong></div>' +
         '<div><small>Résultats affichés</small><strong id="client-visible-count">' + visibleCount + '</strong></div>' +
@@ -25011,7 +25011,7 @@
       ? 'Aucun tiers ne correspond à cette recherche et à ce filtre.'
       : 'Aucun débiteur ou créditeur divers n’est encore enregistré. Utilisez « Nouveau tiers divers » pour créer une fiche.';
     return '<div class="exchange-workspace other-party-workspace" id="other-party-workspace">' +
-      '<div class="alert info"><div><strong>Répertoire des débiteurs et créditeurs divers du dossier actif.</strong> Le type sert à distinguer la nature du tiers ; le compte collectif de classe 4/famille 47 est choisi sur la fiche. Aucun mouvement, règlement ou lettrage n’est généré et les centralisations restent réservées aux modules PERFECTO internes.</div></div>' +
+      '<div class="alert info"><div><strong>Répertoire des débiteurs et créditeurs divers du dossier actif.</strong> Le type sert à distinguer la nature du tiers ; le compte collectif de classe 4/famille 47 est choisi sur la fiche. Aucun mouvement, règlement ou lettrage n’est généré et les centralisations restent réservées aux modules EMRYS internes.</div></div>' +
       '<div class="exchange-summary-grid client-summary-grid" aria-label="Résumé des débiteurs et créditeurs divers">' +
         '<div><small>Tiers enregistrés</small><strong>' + records.length + '</strong></div>' +
         '<div><small>Débiteurs divers</small><strong>' + debtorCount + '</strong></div>' +
@@ -27136,7 +27136,7 @@
     return '<section class="exchange-card bank-statement-import-card"><div class="supplier-directory-head"><div><h4>Importer un relevé bancaire</h4><p>Fichier tabulaire générique CSV ou Excel (.xlsx), sans profil bancaire présumé. Le contenu est lu dans ce navigateur et n’est pas transmis au serveur.</p></div>' +
       '<button type="button" class="btn btn-primary" data-action="choose-bank-statement-file"' + (storageUnavailable || !accounts.length ? ' disabled' : '') + '>＋ Choisir un fichier</button></div>' +
       '<input id="bank-statement-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>' +
-      '<div class="alert warning bank-statement-storage-note"><div><strong>Stockage de démonstration uniquement.</strong> L’original et les lignes sont conservés dans IndexedDB sur cet appareil, séparément par dossier. Ce prototype n’est pas relié aux comptes PERFECTO ni au Google Drive de l’organisation ; ce stockage local n’est pas une sauvegarde cloud.</div></div>' +
+      '<div class="alert warning bank-statement-storage-note"><div><strong>Stockage de démonstration uniquement.</strong> L’original et les lignes sont conservés dans IndexedDB sur cet appareil, séparément par dossier. Ce prototype n’est pas relié aux comptes EMRYS ni au Google Drive de l’organisation ; ce stockage local n’est pas une sauvegarde cloud.</div></div>' +
       (storageUnavailable ? '<div class="alert error">Le stockage local du navigateur est indisponible ; le relevé ne peut pas être conservé.</div>' : '') +
       '<p class="small muted">CSV UTF-8 ou classeur .xlsx sans macros · 5 Mo maximum · aperçu et choix des colonnes avant enregistrement · aucune écriture comptable créée ou modifiée.</p>' +
       errorMarkup + progressMarkup + previewMarkup + '</section>';
@@ -30209,7 +30209,7 @@
             '<div class="journal-lines-destinations">' +
               journalLinesReportRadio('destination', 'table', '<strong>Table</strong><small>Télécharger un classeur Excel (.xlsx)</small>', session.layout.destination === 'table') +
               journalLinesReportRadio('destination', 'file', '<strong>Fichier</strong><small>Télécharger un fichier texte tabulé (.txt)</small>', session.layout.destination === 'file') +
-              journalLinesReportRadio('destination', 'preview', '<strong>Aperçu</strong><small>Afficher le tableau dans PERFECTO</small>', session.layout.destination === 'preview') +
+              journalLinesReportRadio('destination', 'preview', '<strong>Aperçu</strong><small>Afficher le tableau dans EMRYS</small>', session.layout.destination === 'preview') +
               journalLinesReportRadio('destination', 'printer', '<strong>Imprimante</strong><small>Aperçu obligatoire avant impression</small>', session.layout.destination === 'printer') +
             '</div>' +
           '</div></section>' +
@@ -30498,20 +30498,20 @@
     var start = String(session.filters.from || '').replace(/-/g, '');
     var end = String(session.filters.to || '').replace(/-/g, '');
     var prefix = session.mode === 'modified'
-      ? 'PERFECTO-pieces-modifiees-apres-premiere-saisie-'
+      ? 'EMRYS-pieces-modifiees-apres-premiere-saisie-'
       : (session.mode === 'unbalanced'
-        ? 'PERFECTO-pieces-desequilibrees-'
+        ? 'EMRYS-pieces-desequilibrees-'
         : (session.mode === 'totals'
-          ? 'PERFECTO-cumul-pieces-saisies-'
+          ? 'EMRYS-cumul-pieces-saisies-'
           : (session.mode === 'account-totals'
-            ? 'PERFECTO-cumul-comptes-individuels-'
+            ? 'EMRYS-cumul-comptes-individuels-'
             : (session.mode === 'summary-account-totals'
-              ? 'PERFECTO-cumul-comptes-synthese-'
+              ? 'EMRYS-cumul-comptes-synthese-'
               : (session.mode === 'third-party-totals'
-                ? 'PERFECTO-cumul-tiers-'
+                ? 'EMRYS-cumul-tiers-'
                 : (session.mode === 'currency-totals'
-                  ? 'PERFECTO-cumul-devises-'
-                  : (session.mode === 'analytic-center-totals' ? 'PERFECTO-cumul-centres-analytiques-' : 'PERFECTO-detail-lignes-journaux-')))))));
+                  ? 'EMRYS-cumul-devises-'
+                  : (session.mode === 'analytic-center-totals' ? 'EMRYS-cumul-centres-analytiques-' : 'EMRYS-detail-lignes-journaux-')))))));
     return prefix + start + '-' + end + '.' + extension;
   }
 
@@ -30817,7 +30817,7 @@
     $('[data-analytical-consistency-export]').addEventListener('click', function () {
       var report = run();
       if (report.errors && report.errors.length) return;
-      downloadFile('PERFECTO-controle-coherence-analytique-' + currentFilters().from.replace(/-/g, '') + '-' + currentFilters().to.replace(/-/g, '') + '.tsv', JournalLinesReport.toTsv(report), 'text/tab-separated-values;charset=utf-8');
+      downloadFile('EMRYS-controle-coherence-analytique-' + currentFilters().from.replace(/-/g, '') + '-' + currentFilters().to.replace(/-/g, '') + '.tsv', JournalLinesReport.toTsv(report), 'text/tab-separated-values;charset=utf-8');
     });
     $('[data-analytical-consistency-print]').addEventListener('click', function () { window.print(); });
   }
@@ -30970,7 +30970,7 @@
     $('[data-analytical-statement-export]').addEventListener('click', function () {
       var report = refresh();
       if (!report || report.errors && report.errors.length) return;
-      var name = 'PERFECTO-' + form.getAttribute('data-report-type') + '-' + String(currentFilters().from).replace(/-/g, '') + '-' + String(currentFilters().to).replace(/-/g, '') + '.tsv';
+      var name = 'EMRYS-' + form.getAttribute('data-report-type') + '-' + String(currentFilters().from).replace(/-/g, '') + '-' + String(currentFilters().to).replace(/-/g, '') + '.tsv';
       downloadFile(name, JournalLinesReport.toTsv(report), 'text/tab-separated-values;charset=utf-8');
     });
     $('[data-analytical-statement-print]').addEventListener('click', function () { window.print(); });
@@ -36543,7 +36543,7 @@
       case 'export-corrupt-database': {
         var rawDatabase = S.corruptDatabaseContents();
         if (rawDatabase == null) { toast('Aucune donnée brute de récupération n’est disponible.', 'warning'); break; }
-        downloadFile('perfecto-' + safeFilePart(S.currentDossier().reference) + '-base-brute-recovery.json', rawDatabase, 'application/json;charset=utf-8');
+        downloadFile('emrys-' + safeFilePart(S.currentDossier().reference) + '-base-brute-recovery.json', rawDatabase, 'application/json;charset=utf-8');
         toast('Copie brute de récupération téléchargée sans modification.', 'success');
         break;
       }
@@ -36560,7 +36560,7 @@
         break;
       case 'export-accounting-workbook': {
         var workbookDossier = S.currentDossier();
-        var workbookStem = 'perfecto-' + safeFilePart(workbookDossier.reference) + '-' + S.exercise();
+        var workbookStem = 'emrys-' + safeFilePart(workbookDossier.reference) + '-' + S.exercise();
         try {
           var workbookBytes = AccountingExchange.exportWorkbook({
             dossier: workbookDossier,
@@ -36577,7 +36577,7 @@
       }
       case 'export-accounting-exchange': {
         var exchangeDossier = S.currentDossier();
-        var exchangeStem = 'perfecto-' + safeFilePart(exchangeDossier.reference) + '-' + S.exercise();
+        var exchangeStem = 'emrys-' + safeFilePart(exchangeDossier.reference) + '-' + S.exercise();
         try {
           var exchangeCsv = AccountingExchange.exportEntries({
             dossier: exchangeDossier,
@@ -36600,7 +36600,7 @@
             accounts: S.accounts(),
             journals: S.journals()
           });
-          downloadFile('perfecto-balance-v1-modele-' + safeFilePart(balanceTemplateDossier.reference) + '.xlsx', balanceWorkbookTemplate, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+          downloadFile('emrys-balance-v1-modele-' + safeFilePart(balanceTemplateDossier.reference) + '.xlsx', balanceWorkbookTemplate, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
           toast('Modèle Excel de balance PERFECTO-BALANCE v1 téléchargé.', 'success');
         } catch (balanceTemplateError) {
           toast(balanceTemplateError.message || 'Modèle Excel de balance impossible à générer.', 'error');
@@ -36609,7 +36609,7 @@
       }
       case 'download-accounting-balance-template': {
         var balanceCsvDossier = S.currentDossier();
-        downloadFile('perfecto-balance-v1-modele-' + safeFilePart(balanceCsvDossier.reference) + '.csv', AccountingExchange.templateBalance(), 'text/csv;charset=utf-8');
+        downloadFile('emrys-balance-v1-modele-' + safeFilePart(balanceCsvDossier.reference) + '.csv', AccountingExchange.templateBalance(), 'text/csv;charset=utf-8');
         toast('Modèle CSV de balance PERFECTO-BALANCE v1 téléchargé.', 'success');
         break;
       }
@@ -36621,7 +36621,7 @@
             accounts: S.accounts(),
             journals: S.journals()
           });
-          downloadFile('perfecto-echange-v1-modele-' + safeFilePart(workbookTemplateDossier.reference) + '.xlsx', workbookTemplate, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+          downloadFile('emrys-echange-v1-modele-' + safeFilePart(workbookTemplateDossier.reference) + '.xlsx', workbookTemplate, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
           toast('Modèle Excel PERFECTO-ÉCHANGE v1 téléchargé.', 'success');
         } catch (templateError) {
           toast(templateError.message || 'Modèle Excel impossible à générer.', 'error');
@@ -36630,19 +36630,19 @@
       }
       case 'download-accounting-exchange-template': {
         var templateDossier = S.currentDossier();
-        downloadFile('perfecto-echange-v1-modele-' + safeFilePart(templateDossier.reference) + '.csv', AccountingExchange.template({ dossier: templateDossier }), 'text/csv;charset=utf-8');
+        downloadFile('emrys-echange-v1-modele-' + safeFilePart(templateDossier.reference) + '.csv', AccountingExchange.template({ dossier: templateDossier }), 'text/csv;charset=utf-8');
         toast('Modèle CSV Excel téléchargé.', 'success');
         break;
       }
       case 'export-accounting-chart': {
         var chartDossier = S.currentDossier();
-        downloadFile('perfecto-' + safeFilePart(chartDossier.reference) + '-plan-comptable.csv', AccountingExchange.exportAccounts(S.accounts()), 'text/csv;charset=utf-8');
+        downloadFile('emrys-' + safeFilePart(chartDossier.reference) + '-plan-comptable.csv', AccountingExchange.exportAccounts(S.accounts()), 'text/csv;charset=utf-8');
         toast('Plan comptable exporté au format CSV Excel.', 'success');
         break;
       }
       case 'export-accounting-journals': {
         var journalsDossier = S.currentDossier();
-        downloadFile('perfecto-' + safeFilePart(journalsDossier.reference) + '-journaux.csv', AccountingExchange.exportJournals(S.journals()), 'text/csv;charset=utf-8');
+        downloadFile('emrys-' + safeFilePart(journalsDossier.reference) + '-journaux.csv', AccountingExchange.exportJournals(S.journals()), 'text/csv;charset=utf-8');
         toast('Journaux exportés au format CSV Excel.', 'success');
         break;
       }
@@ -36652,7 +36652,7 @@
         if (!entriesPreflight.canFinalize) { toast('Traitez d’abord les contrôles affichés avant de créer les fichiers de sauvegarde.', 'warning'); render(); break; }
         var entriesSnapshot = S.exportJson();
         var entriesFingerprint = definitiveCloseBackupFingerprint(entriesSnapshot);
-        var entriesFileName = 'perfecto-' + safeFilePart(entriesDossier.reference) + '-exercice-' + String(entriesPreflight.cycleStart).slice(0, 4) + '-ecritures-completes.csv';
+        var entriesFileName = 'emrys-' + safeFilePart(entriesDossier.reference) + '-exercice-' + String(entriesPreflight.cycleStart).slice(0, 4) + '-ecritures-completes.csv';
         try {
           var entriesCsv = AccountingExchange.exportEntries({ dossier: entriesDossier, accounts: S.accounts(), journals: S.journals(), analyticalCenters: S.analyticalCenters() }, S.entries());
           downloadFile(entriesFileName, entriesCsv, 'text/csv;charset=utf-8');
@@ -36677,7 +36677,7 @@
         var closeDossier = S.currentDossier();
         var closePreflight = S.definitiveClosePreflight();
         if (!closePreflight.canFinalize || !definitiveCloseBackup.entriesDownloaded) { toast('Téléchargez d’abord le fichier complet des écritures de l’exercice.', 'warning'); render(); break; }
-        var closeBackupFileName = 'perfecto-' + safeFilePart(closeDossier.reference) + '-sauvegarde-avant-arret-definitif-' + S.todayIso() + '.json';
+        var closeBackupFileName = 'emrys-' + safeFilePart(closeDossier.reference) + '-sauvegarde-avant-arret-definitif-' + S.todayIso() + '.json';
         try {
           var closeBackupJson = S.exportJson();
           var currentCloseFingerprint = definitiveCloseBackupFingerprint(closeBackupJson);
@@ -36718,7 +36718,7 @@
           break;
         }
         if (!window.confirm('Dernière confirmation : sceller irréversiblement les comptes du cycle ? Le calcul du résultat et les états financiers ne sont pas effectués par cette action.')) break;
-        var closeFileName = 'perfecto-' + safeFilePart(S.currentDossier().reference) + '-sauvegarde-avant-arret-definitif-' + S.todayIso() + '.json';
+        var closeFileName = 'emrys-' + safeFilePart(S.currentDossier().reference) + '-sauvegarde-avant-arret-definitif-' + S.todayIso() + '.json';
         var closeResult = S.finalizeDefinitiveClose({ backupDownloaded: definitiveCloseBackup.backupDownloaded, backupAcknowledged: closeAck.checked, backupFileName: closeFileName, backupJson: definitiveCloseBackup.backupJson, entriesDownloaded: definitiveCloseBackup.entriesDownloaded, exerciseEntriesFileName: definitiveCloseBackup.entriesFileName, exerciseEntriesCount: S.definitiveClosePreflight().postedEntryCount, confirmation: closeConfirmation.value });
         if (!closeResult.ok) { toast(closeResult.errors[0] || 'Arrêt définitif impossible.', 'error'); render(); break; }
         toast('Arrêt définitif enregistré. Le dossier est désormais scellé et ne peut pas être réouvert.', 'success');
@@ -36726,12 +36726,12 @@
         break;
       }
       case 'export-json':
-        downloadFile('perfecto-comptabilite-' + S.todayIso() + '.json', S.exportJson(), 'application/json;charset=utf-8');
+        downloadFile('emrys-comptabilite-' + S.todayIso() + '.json', S.exportJson(), 'application/json;charset=utf-8');
         toast('Export JSON généré.', 'success');
         break;
       case 'export-accounts-csv': {
         var chartDossier = S.currentDossier();
-        downloadFile('perfecto-' + safeFilePart(chartDossier.reference) + '-plan-comptable.csv', AccountingExchange.exportAccounts(S.accounts()), 'text/csv;charset=utf-8');
+        downloadFile('emrys-' + safeFilePart(chartDossier.reference) + '-plan-comptable.csv', AccountingExchange.exportAccounts(S.accounts()), 'text/csv;charset=utf-8');
         toast('Plan comptable complet exporté avec classes, sous-classes et utilisations.', 'success');
         break;
       }
@@ -36740,7 +36740,7 @@
         S.balance().forEach(function (r) {
           csv.push([r.code, r.label, r.cls, r.debit, r.credit, r.debit - r.credit]);
         });
-        downloadFile('perfecto-balance.csv', toCsv(csv), 'text/csv;charset=utf-8');
+        downloadFile('emrys-balance.csv', toCsv(csv), 'text/csv;charset=utf-8');
         toast('Balance exportée.', 'success');
         break;
       }
@@ -36752,7 +36752,7 @@
         if (deferredInstallPrompt) {
           deferredInstallPrompt.prompt();
           deferredInstallPrompt.userChoice.then(function (choice) {
-            if (choice && choice.outcome === 'accepted') toast('PERFECTO installée.', 'success');
+            if (choice && choice.outcome === 'accepted') toast('EMRYS installée.', 'success');
             deferredInstallPrompt = null;
             var btn = $('[data-action="install-app"]');
             if (btn) btn.hidden = true;

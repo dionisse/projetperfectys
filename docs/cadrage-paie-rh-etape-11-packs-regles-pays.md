@@ -9,7 +9,7 @@ Le prototype permet uniquement de créer des cadres de test et des fiches candid
 
 ## 1. Objectif et limites
 
-Définir comment PERFECTO organisera des règles de paie par pays, domaine, catégorie de personnel et période d’effet, avec provenance, validation, tests et version immuable. Le Bénin est le premier pack à instruire. Cette étape cadre l’architecture et le processus de validation ; elle ne fournit pas de taux, plafonds, bases, formules ou interprétations juridiques et ne met pas en œuvre le moteur de calcul.
+Définir comment EMRYS organisera des règles de paie par pays, domaine, catégorie de personnel et période d’effet, avec provenance, validation, tests et version immuable. Le Bénin est le premier pack à instruire. Cette étape cadre l’architecture et le processus de validation ; elle ne fournit pas de taux, plafonds, bases, formules ou interprétations juridiques et ne met pas en œuvre le moteur de calcul.
 
 Le pilote est mensuel. L’applicabilité d’une convention collective dépend de la catégorie de l’employé, comme confirmé, mais les catégories, le secteur et les conventions précises restent à établir et valider. Le CGI béninois 2026 fourni par l’utilisateur, indiqué comme mis à jour par la loi n° 2025-22 du 8 décembre 2025, est une source à analyser ; son applicabilité aux retenues salariales et aux rubriques concernées n’est pas encore vérifiée.
 
@@ -38,7 +38,7 @@ Chaque règle active devra être décrite par un enregistrement structuré conte
 
 - identifiant stable, intitulé, description et domaine ;
 - pays, régime, catégorie d’employé, type de contrat ou autre condition d’applicabilité ;
-- période de validité légale et date de prise d’effet dans PERFECTO, distinguées si nécessaire ;
+- période de validité légale et date de prise d’effet dans EMRYS, distinguées si nécessaire ;
 - source exacte : titre, numéro/version, autorité, article/section/page, date de publication, lien ou référence documentaire ;
 - interprétation métier validée, responsable de la validation et date de validation ;
 - base, formule, taux, seuil, plafond, limite, arrondi, unité, devise ou part concernée uniquement si la source et le valideur les établissent ;
@@ -85,7 +85,7 @@ Toute règle indispensable manquante bloque le calcul concerné et affiche clair
 
 Les sources doivent être conservées avec suffisamment de références pour qu’un réviseur puisse retrouver l’article ou le passage invoqué. Le registre distinguera : texte officiel, convention collective et avenant, instruction d’organisme, décision ou validation interne. Une source secondaire ou un tableau non officiel pourra aider à l’analyse mais ne remplacera pas la source faisant autorité.
 
-En cas de texte incomplet, de contradiction, de doute sur l’application, de modification ou de source manquante, la règle reste en revue ou bloquée. PERFECTO ne choisira pas automatiquement entre des sources contradictoires. La décision et l’autorité de validation doivent être consignées.
+En cas de texte incomplet, de contradiction, de doute sur l’application, de modification ou de source manquante, la règle reste en revue ou bloquée. EMRYS ne choisira pas automatiquement entre des sources contradictoires. La décision et l’autorité de validation doivent être consignées.
 
 Les responsabilités de saisie, de revue juridique, de validation métier, d’approbation et d’activation devront être attribuées à des rôles distincts ou explicitement autorisés. Les accès, exportations et changements de règle seront journalisés. L’activation d’un pack est une opération contrôlée, séparée de sa rédaction.
 

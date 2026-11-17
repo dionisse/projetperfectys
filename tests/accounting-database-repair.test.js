@@ -114,7 +114,13 @@ assert.equal(initialized.ok, true, initialized.errors && initialized.errors.join
 assert.equal(corruptStore.store.databaseStorageStatus().recoveryRequired, false);
 const rawRecoveryKey = [...corruptStore.values.keys()].find(key => key.endsWith('.recovery.raw.v1'));
 assert.ok(rawRecoveryKey);
-assert.equal(JSON.parse(corruptStore.values.get(rawRecoveryKey)).raw, corruptText, 'la donnée brute est préservée avant réinitialisation');
+const rawCopy = JSON.parse(corruptStore.values.get(rawRecoveryKey));
+assert.equal(rawCopy.application, 'EMRYS');
+assert.equal(rawCopy.raw, corruptText, 'la donnée brute est préservée avant réinitialisation');
+rawCopy.application = 'PERFECTO';
+corruptStore.values.set(rawRecoveryKey, JSON.stringify(rawCopy));
+assert.equal(corruptStore.store.databaseStorageStatus().recoveryCopyAvailable, true, 'une copie brute historique reste disponible');
+assert.equal(corruptStore.store.corruptDatabaseContents(), corruptText);
 
 const backupStore = createStore();
 backupStore.store.getState();
@@ -123,6 +129,11 @@ const savedEntry = backupStore.store.createEntry({
   lines: [{ account: '601100', debit: 500, credit: 0 }, { account: '401100', debit: 0, credit: 500 }]
 }, 'posted');
 assert.equal(savedEntry.ok, true);
+const backupKey = [...backupStore.values.keys()].find(key => key.includes('backup') && JSON.parse(backupStore.values.get(key)).application === 'EMRYS');
+assert.ok(backupKey, 'le point local utilise le nom EMRYS');
+const legacyBackup = JSON.parse(backupStore.values.get(backupKey));
+legacyBackup.application = 'PERFECTO';
+backupStore.values.set(backupKey, JSON.stringify(legacyBackup));
 backupStore.values.set('perfecto.lot1.v1', 'corruption');
 const reloadedBackupStore = createStore(backupStore.values);
 reloadedBackupStore.store.getState();

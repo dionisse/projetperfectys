@@ -1,5 +1,5 @@
 /*
- * PERFECTO · Règles pures de centralisation auxiliaire interne.
+ * EMRYS · Règles pures de centralisation auxiliaire interne.
  * Agrège les lots PERFECTO-AUXILIAIRE v1 et extrait en lecture seule les lignes
  * validées explicitement rattachées à un auxiliaire. Le parcours par lot prépare
  * un brouillon ; l’extraction automatique ne modifie jamais le dossier.
@@ -427,7 +427,7 @@
       errors.push('Le format source doit être PERFECTO-AUXILIAIRE v1.');
     }
     if (INTERNAL_PRODUCERS.indexOf(String(metadata.sourceSystem || '')) === -1) {
-      errors.push('Le producteur déclaré doit être Paie & RH ou Ventes, stock & facturation dans PERFECTO ; les logiciels tiers et lots déjà centralisés sont refusés.');
+      errors.push('Le producteur déclaré doit être Paie & RH ou Ventes, stock & facturation dans EMRYS ; les logiciels tiers et lots déjà centralisés sont refusés.');
     }
     if (!dossier.reference || String(metadata.dossierReference || '') !== String(dossier.reference)) {
       errors.push('Le dossier source déclaré ne correspond pas au dossier actif ; aucun transfert entre dossiers n’est permis ici.');

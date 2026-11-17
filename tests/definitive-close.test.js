@@ -83,6 +83,16 @@ const missingEntriesFile = S.finalizeDefinitiveClose({
 assert.equal(missingEntriesFile.ok, false, 'le fichier complet des écritures est une condition obligatoire distincte du JSON');
 assert.match(missingEntriesFile.errors.join(' '), /fichier complet des écritures/);
 
+const legacyCurrentBackup = JSON.parse(S.exportJson());
+assert.equal(legacyCurrentBackup.application, 'EMRYS');
+legacyCurrentBackup.application = 'PERFECTO';
+const legacyPreflight = S.finalizeDefinitiveClose({
+  backupDownloaded: true, backupAcknowledged: true, backupFileName: 'ancienne-sauvegarde.json', backupJson: JSON.stringify(legacyCurrentBackup), confirmation: 'ARRET DEFINITIF DES COMPTES'
+});
+assert.equal(legacyPreflight.ok, false);
+assert.match(legacyPreflight.errors.join(' '), /fichier complet des écritures/);
+assert.doesNotMatch(legacyPreflight.errors.join(' '), /copie JSON complète et à jour/, 'une sauvegarde historique à jour est acceptée');
+
 h.blockStorageWrites(true);
 const failedSave = S.finalizeDefinitiveClose({
   backupDownloaded: true, backupAcknowledged: true, backupFileName: 'dossier.json', backupJson: S.exportJson(), entriesDownloaded: true, exerciseEntriesFileName: 'ecritures-exercice.csv', exerciseEntriesCount: S.definitiveClosePreflight().postedEntryCount, confirmation: 'ARRET DEFINITIF DES COMPTES'

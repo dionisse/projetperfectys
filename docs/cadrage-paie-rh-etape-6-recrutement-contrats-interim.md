@@ -74,7 +74,7 @@ Créer un registre distinct des relations avec les agences et des mises à dispo
 - les dates prévues et réelles, le poste ou besoin, l’unité d’accueil, le responsable et les pièces ;
 - l’accord ou document de mise à disposition, son statut et les validations internes.
 
-Il faudra décider si un intérimaire doit être représenté comme employé PERFECTO dans le dossier RH de l’entreprise utilisatrice, comme personne liée à une agence, ou selon les deux cas. Aucune duplication de fiche ne sera faite implicitement. Le lien à la paie de l’agence ou à une rémunération directe ne sera pas présumé : les parties responsables, les pièces, la facturation, les paiements et les règles applicables doivent être confirmés avant tout automatisme.
+Il faudra décider si un intérimaire doit être représenté comme employé EMRYS dans le dossier RH de l’entreprise utilisatrice, comme personne liée à une agence, ou selon les deux cas. Aucune duplication de fiche ne sera faite implicitement. Le lien à la paie de l’agence ou à une rémunération directe ne sera pas présumé : les parties responsables, les pièces, la facturation, les paiements et les règles applicables doivent être confirmés avant tout automatisme.
 
 Les missions d’intérim et les missions opérationnelles internes restent des objets distincts. Une mission ne modifie pas le contrat ou la rémunération et ne déclenche aucun calcul automatique.
 
