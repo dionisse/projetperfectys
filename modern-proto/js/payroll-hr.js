@@ -718,8 +718,8 @@
   addEmployeeRubric('leave-pay-coefficient', 'Coefficient/Jours de congé', true);
   addEmployeeRubric('leave-pay-indemnity', 'Indemnité de congé', true);
   addEmployeeRubric('gross-salary', 'SALAIRE BRUT', true, 0, true);
-  addEmployeeRubric('fnr-base', 'Base F.N.R.', false);
-  addEmployeeRubric('fnr-contribution', 'Cotisation F.N.R.', false);
+  addEmployeeRubric('fnr-base', 'Base F.N.R.B.', false);
+  addEmployeeRubric('fnr-contribution', 'Cotisation F.N.R.B.', false);
   addEmployeeRubric('cnss-base', 'Base C.N.S.S.', true);
   addEmployeeRubric('cnss-contributions', 'Cotisations C.N.S.S.', true);
   addEmployeeRubric('supp-insurance-base', 'Base de l’assurance complémentaire', true);

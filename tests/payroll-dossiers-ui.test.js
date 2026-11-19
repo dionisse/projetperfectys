@@ -208,7 +208,7 @@ for (const menuItem of [
   'Employés', 'Statuts', 'Catégories', 'Zones géographiques', 'Services', 'Fonctions', 'Diplômes et Qualifications', 'Professions',
   'Compagnies d’assurance complémentaire', 'Banques', 'Bulletins de salaire', 'Bulletins complémentaires après débauchage',
   'Heures de présence', 'Natures des Avances et Prêts', 'Indemnité de licenciement', 'Indemnité de départ en retraite',
-  'Etats sur la paie du mois en cours', 'Déclarations C.N.S.S., ITS et F.N.R.', 'Etat des versements aux caisses complémentaires',
+  'Etats sur la paie du mois en cours', 'Déclarations C.N.S.S., ITS et F.N.R.B.', 'Etat des versements aux caisses complémentaires',
   'Etats personnalisés sur les salaires', 'Etats sur le Personnel', 'Tableau 11 des tableaux financiers OHADA', 'Définitions et Paramètres',
   'Etats spécifiques au dossier', 'Génération du journal de paie :', 'Edition du journal', 'Exportation par fichier-texte',
   'Imputations des rubriques', 'Imputation des remboursements de prêt', 'Imputations auxiliaires', 'Imputations analytiques',
@@ -349,7 +349,7 @@ assert.match(payroll, /function createDossier\(input\)[\s\S]*'PRH-' \+ clientCod
 assert.match(payroll, /accountingDossierId: accountingDossierId/);
 assert.match(payroll, /function storageKey\(dossierId\)[\s\S]*STORAGE_PREFIX \+ encodeURIComponent/);
 assert.match(css, /\.payroll-dossier-grid[\s\S]*\.payroll-dossier-card/);
-assert.match(worker, /emrys-static-v233/);
+assert.match(worker, /emrys-static-v234/);
 console.log('UI Paie & RH : route dossier dédiée, référence PRH, sélection par dossier et association non automatique — OK');
 
 // Éditions commence par le bulletin ordinaire ; seuls les modèles 1 et 2 sont actifs.
