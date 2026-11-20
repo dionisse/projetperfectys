@@ -394,7 +394,7 @@
   function payrollPersonnelReportSections() {
     return [
       { items: [
-        { id: 'personnel-list', label: 'Liste du Personnel' },
+        { id: 'personnel-list', label: 'Liste du Personnel', ready: true },
         { id: 'personnel-cumulative', label: 'Etat cumulé du Personnel' }
       ] },
       { items: [
@@ -648,6 +648,7 @@
       }
       case 'open-payroll-dossier':
       case 'payroll-personnel-report-select':
+      case 'payroll-personnel-report-back':
       case 'payroll-current-report-select':
       case 'payroll-current-report-back':
       case 'payroll-declaration-select':
@@ -20616,6 +20617,11 @@
       var cnssSummaryDossier = PayrollHR.currentDossier();
       if (cnssSummaryDossier) window.PayrollCnssSummary.mount(cnssSummaryWorkspace,{hr:PayrollHR,dossier:cnssSummaryDossier,tools:window.PayrollPayslipWorkspace,math:window.PayrollCumulativeBook,tracking:window.PayrollPaymentTracking,nominative:window.PayrollCnssNominative,words:window.PayrollTransferOrder.words,exchange:AccountingExchange,canView:function(){return hasDemoPermission(getActiveDemoMember(),'payroll-hr','module.view',payrollAccessContext(cnssSummaryDossier));},canManage:function(){return hasDemoPermission(getActiveDemoMember(),'organization','organization.manageDossiers',demoAccessContext('organization'));}});
     }
+    var personnelListWorkspace = $('#payroll-personnel-list-workspace');
+    if (personnelListWorkspace && window.PayrollPersonnelList && window.PayrollDetailedBook && window.PayrollPayslipWorkspace) {
+      var personnelListDossier = PayrollHR.currentDossier();
+      if (personnelListDossier) window.PayrollPersonnelList.mount(personnelListWorkspace, {hr:PayrollHR,dossier:personnelListDossier,tools:window.PayrollPayslipWorkspace,book:window.PayrollDetailedBook,exchange:AccountingExchange,canView:function(){return hasDemoPermission(getActiveDemoMember(),'payroll-hr','module.view',payrollAccessContext(personnelListDossier));},licenseOwner:licenseOwnerName,onClose:function(){ui.payrollPersonnelReportId='';render();}});
+    }
     var customPayrollBookWorkspace = $('#payroll-custom-book-workspace');
     if (customPayrollBookWorkspace && window.PayrollCustomBook && window.PayrollDetailedBook && window.PayrollCumulativeBook && window.PayrollPayslipWorkspace) {
       var customPayrollBookDossier = PayrollHR.currentDossier();
@@ -22245,16 +22251,17 @@
     var sections = payrollPersonnelReportSections();
     var items = sections.reduce(function (all, section) { return all.concat(section.items); }, []);
     var selected = items.find(function (item) { return item.id === ui.payrollPersonnelReportId; });
+    if (selected && selected.id === 'personnel-list') return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-personnel-reports"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-personnel-report-back">← Retour aux états du personnel</button><div id="payroll-personnel-list-workspace"></div></section>';
     var list = sections.map(function (section) {
       return '<section class="payroll-current-report-group"><ul>' + section.items.map(function (item) {
         var active = !!selected && selected.id === item.id;
-        return '<li><button type="button" class="payroll-current-report-item' + (active ? ' is-selected' : '') + '" data-action="payroll-personnel-report-select" data-personnel-report-id="' + esc(item.id) + '" aria-pressed="' + (active ? 'true' : 'false') + '"><span>' + esc(item.label) + '</span><small>À construire</small></button></li>';
+        return '<li><button type="button" class="payroll-current-report-item' + (active ? ' is-selected' : '') + '" data-action="payroll-personnel-report-select" data-personnel-report-id="' + esc(item.id) + '" aria-pressed="' + (active ? 'true' : 'false') + '"><span>' + esc(item.label) + '</span><small>' + (item.ready ? 'Brouillon test' : 'À construire') + '</small></button></li>';
       }).join('') + '</ul></section>';
     }).join('');
     var detail = selected
       ? '<div class="payroll-current-report-detail" aria-live="polite"><p class="page-kicker">ÉTAT SÉLECTIONNÉ</p><h4>' + esc(selected.label) + '</h4><p><strong>À construire :</strong> les critères et la présentation restent à définir. Aucun état ni fichier n’est produit pour le moment.</p></div>'
-      : '<div class="payroll-current-report-detail" aria-live="polite"><h4>Sélectionnez un état</h4><p>Les sept sous-éléments de la capture sont disponibles pour la navigation. Leurs traitements restent à construire.</p></div>';
-    return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-personnel-reports" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Etats sur le Personnel</h3></div><span class="badge draft">7 ÉTATS · À CONSTRUIRE</span></div><div class="alert info"><div>Navigation uniquement : aucune donnée du personnel n’est éditée ou exportée par ces entrées.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="États sur le personnel">' + list + '</nav>' + detail + '</div></section>';
+      : '<div class="payroll-current-report-detail" aria-live="polite"><h4>Sélectionnez un état</h4><p>La liste du personnel est disponible en brouillon test. Les six autres traitements restent à construire.</p></div>';
+    return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-personnel-reports" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Etats sur le Personnel</h3></div><span class="badge draft">7 ÉTATS · 1 BROUILLON TEST</span></div><div class="alert info"><div>La liste du personnel est disponible en lecture seule de test ; les autres états restent à construire.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="États sur le personnel">' + list + '</nav>' + detail + '</div></section>';
   }
 
   function viewPayrollDeclarations() {
@@ -35657,6 +35664,10 @@
         if(selectedDeclarationButton)selectedDeclarationButton.focus({preventScroll:true});
         break;
       }
+      case 'payroll-personnel-report-back':
+        ui.payrollPersonnelReportId = '';
+        render();
+        break;
       case 'payroll-personnel-report-select': {
         if (ui.payrollMainMenu !== 'Editions' || ui.payrollMenuItem !== 'personnel-reports') break;
         var personnelReportId = trigger.getAttribute('data-personnel-report-id') || '';

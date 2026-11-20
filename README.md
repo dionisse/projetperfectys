@@ -680,4 +680,8 @@ Les colonnes usuelles reposent sur les fiches et brouillons disponibles ; des ru
 
 ### Sous-menu des états sur le personnel
 
-Dans **Paie & RH → Éditions → États sur le Personnel**, les sept entrées de la capture sont accessibles et regroupées selon ses séparateurs. Elles servent pour le moment à la navigation : les critères, traitements, impressions et exports de ces états restent à définir et à construire.
+Dans **Paie & RH → Éditions → États sur le Personnel**, les sept entrées de la capture sont regroupées selon ses séparateurs. La **Liste du Personnel** est un état en lecture seule réservé au dossier fictif PRH-TEST-2026 et au droit de consultation. Les six autres entrées restent à construire.
+
+La liste propose huit classements (diplômes, professions, statuts, catégories/échelons, services, fonctions, zones et banques), `*` ou une sélection multiple dans le référentiel choisi, le mois du cycle et 24 colonnes sélectionnables. L’aperçu permet l’impression/PDF, Excel et texte tabulé. Les employés multi-diplômés ou multi-fonctions peuvent apparaître dans plusieurs groupes ; les lignes ne constituent pas un effectif dédoublonné. `*` inclut les fiches sans affectation reconnue dans un groupe signalé.
+
+La présence s’appuie sur le chevauchement du mois avec les dates d’embauche et de départ, avec réembauche lorsqu’elle est cohérente. Dates manquantes ou incohérentes et réembauches sont signalées pour vérification ; les cas clairement hors période sont exclus. Les fiches et affectations restent actuelles, pas des photographies historiques. Le numéro de contrat de travail n’existe pas dans les fiches et reste vide : il n’est pas remplacé par le numéro d’assuré. La colonne vide est réellement vide. Les données de test ne sont jamais assimilées à des données réelles.

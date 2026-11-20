@@ -245,3 +245,6 @@
 .payroll-custom-book .custom-columns label { display:flex; align-items:flex-start; gap:8px; font-size:.76rem; line-height:1.4; }
 .payroll-custom-book .rubric-add-row { grid-template-columns:minmax(0,2fr) minmax(120px,1fr) auto; }
 @media(max-width:700px) { .payroll-custom-book .rubric-add-row { grid-template-columns:minmax(0,1fr); } }
+.payroll-rubric-cumulative [data-personnel-choices] { display:grid; gap:8px; max-height:220px; overflow:auto; }
+.payroll-rubric-cumulative [data-personnel-choices] label { display:flex; align-items:flex-start; gap:8px; line-height:1.4; }
+.payroll-rubric-cumulative [data-personnel-choices] label[hidden] { display:none; }

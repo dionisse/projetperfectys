@@ -349,7 +349,7 @@ assert.match(payroll, /function createDossier\(input\)[\s\S]*'PRH-' \+ clientCod
 assert.match(payroll, /accountingDossierId: accountingDossierId/);
 assert.match(payroll, /function storageKey\(dossierId\)[\s\S]*STORAGE_PREFIX \+ encodeURIComponent/);
 assert.match(css, /\.payroll-dossier-grid[\s\S]*\.payroll-dossier-card/);
-assert.match(worker, /emrys-static-v237/);
+assert.match(worker, /emrys-static-v238/);
 console.log('UI Paie & RH : route dossier dédiée, référence PRH, sélection par dossier et association non automatique — OK');
 
 // Éditions commence par le bulletin ordinaire ; seuls les modèles 1 et 2 sont actifs.
