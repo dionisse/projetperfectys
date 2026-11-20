@@ -415,7 +415,7 @@
       { items: [{id:'statuses',label:'Statuts'}, {id:'categories',label:'Catégories/Échelons'}] },
       { items: [{id:'services',label:'Services'}, {id:'functions',label:'Fonctions'}, {id:'geographic-zones',label:'Zones géographiques'}] },
       { items: [{id:'banks',label:'Banques'}] },
-      { items: [{id:'salary-components',label:'Rubriques de salaire'}, {id:'event-natures',label:'Natures des événements'}] },
+      { items: [{id:'salary-components',label:'Rubriques de salaire'}] },
       { items: [{id:'operators-rights',label:'Opérateurs et droits d’accès'}] }
     ];
   }
@@ -22327,10 +22327,10 @@
     if (selected) return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-definitions-settings-reports"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-definition-report-back">← Retour aux définitions et paramètres</button><div id="payroll-definition-reports-workspace" data-definition-report-kind="' + esc(selected.id) + '"></div></section>';
     var list = sections.map(function (section) {
       return '<section class="payroll-current-report-group"><ul>' + section.items.map(function (item) {
-        return '<li><button type="button" class="payroll-current-report-item" data-action="payroll-definition-report-select" data-definition-report-id="' + esc(item.id) + '" aria-pressed="false"><span>' + esc(item.label) + '</span><small>' + (item.id === 'event-natures' ? 'Source indisponible' : 'Brouillon test') + '</small></button></li>';
+        return '<li><button type="button" class="payroll-current-report-item" data-action="payroll-definition-report-select" data-definition-report-id="' + esc(item.id) + '" aria-pressed="false"><span>' + esc(item.label) + '</span><small>' + 'Brouillon test' + '</small></button></li>';
       }).join('') + '</ul></section>';
     }).join('');
-    return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-definitions-settings-reports" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Définitions et Paramètres</h3></div><span class="badge draft">11 ENTRÉES · TEST</span></div><div class="alert info"><div>Éditions en lecture seule des référentiels fictifs. Les natures des événements restent indisponibles faute de référentiel.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="Éditions des définitions et paramètres">' + list + '</nav><div class="payroll-current-report-detail"><h4>Sélectionnez une édition</h4><p>Les opérateurs et droits nécessitent également la gestion des membres.</p></div></div></section>';
+    return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-definitions-settings-reports" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Définitions et Paramètres</h3></div><span class="badge draft">10 ENTRÉES · TEST</span></div><div class="alert info"><div>Éditions en lecture seule des référentiels fictifs.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="Éditions des définitions et paramètres">' + list + '</nav><div class="payroll-current-report-detail"><h4>Sélectionnez une édition</h4><p>Les opérateurs et droits nécessitent également la gestion des membres.</p></div></div></section>';
   }
 
   function viewPayrollDeclarations() {

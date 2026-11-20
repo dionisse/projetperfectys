@@ -11,13 +11,11 @@
     'geographic-zones':{title:'Zones géographiques',ref:'zones',columns:[['code','Code',1],['label','Intitulé',1]]},
     banks:{title:'Banques',ref:'banks',columns:[['code','Code',1],['label','Intitulé',1],['address','Adresse',1]]},
     'salary-components':{title:'Rubriques de salaire',ref:'rubrics',columns:[['order','N° d’ordre',1],['code','Code',1],['label','Intitulé',1],['type','Type'],['formula','Formule de calcul'],['carry','Formule de report'],['posting','Imputation comptable']]},
-    'event-natures':{title:'Natures des événements',ref:'events',columns:[['code','Code',1],['label','Intitulé',1],['employees','Employés',1],['events','Événements',1]]},
     'operators-rights':{title:'Opérateurs et droits d’accès',ref:'operators',columns:[['code','Code',1],['label','Intitulé',1],['rights','Droits']]}
   };
   function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
   function list(hr,id,kind,options){
     var cfg=configs[kind];if(!cfg)throw new Error('Édition inconnue.');
-    if(kind==='event-natures')return [];
     if(kind==='operators-rights')return options.operators();
     if(kind==='salary-components')return hr.employeeRubricCatalog().map(function(r,i){return {id:r.id,code:r.id,label:r.label,order:i+1,source:'status'};}).concat(hr.payrollComponents(id).map(function(r){return {id:'component:'+r.id,code:r.code,label:r.label,type:r.natureLabel||'',source:'descriptive'};}));
     if(kind==='statuses')return hr.employeeStatuses(id);
@@ -28,7 +26,7 @@
     return hr.employeeDefinitionItems(id,cfg.ref);
   }
   function build(input,personnel){
-    var cfg=configs[input.kind];if(!cfg)throw new Error('Édition inconnue.');if(input.kind==='event-natures')throw new Error('Référentiel des natures d’événements indisponible : aucun état ne peut être produit.');
+    var cfg=configs[input.kind];if(!cfg)throw new Error('Édition inconnue.');
     var cat=input.items||[],ids=new Set(cat.map(function(x){return x.id;})),scope=input.selected,keys=input.columns||[],keySet=new Set(keys);
     if(ids.size!==cat.length||cat.some(function(x){return !x.id;}))throw new Error('Référentiel invalide ou identifiants dupliqués.');
     if(scope!=='*'&&(!Array.isArray(scope)||!scope.length||new Set(scope).size!==scope.length||scope.some(function(x){return !ids.has(x);})))throw new Error('Sélectionnez au moins une référence valide.');
@@ -56,7 +54,6 @@
     if(!cfg){container.textContent='Édition inconnue.';return;}
     function allowed(){var d=hr.currentDossier();return !!(d&&d.id===id&&hr.isDemoTestDossier(id)&&options.canView()&&(kind!=='operators-rights'||options.canManage()));}
     if(!allowed()){container.textContent=kind==='operators-rights'?'Édition réservée au dossier fictif et aux personnes autorisées à gérer les membres de l’organisation.':'Édition réservée au dossier fictif PRH-TEST-2026 avec droit de consultation.';return;}
-    if(kind==='event-natures'){container.innerHTML='<section class="payroll-book-workspace"><h3>Natures des événements</h3><div class="alert warning">Le référentiel des natures d’événements et ses liaisons employés / événements ne sont pas encore disponibles. Aucun état ne peut être produit sans cette source.</div><button type="button" class="btn btn-secondary" data-def-cancel>Retour</button></section>';container.querySelector('[data-def-cancel]').onclick=options.onClose;return;}
     var items=list(hr,id,kind,options),statuses=kind==='salary-components'?hr.employeeStatuses(id):[];
     var choices=items.map(function(x){return '<label><input type="checkbox" name="selected" value="'+esc(x.id)+'"> '+esc([x.code,x.label||x.ohadaClassification].filter(Boolean).join(' · ')||x.id)+'</label>';}).join('');
     container.innerHTML='<section class="payroll-book-workspace payroll-rubric-cumulative"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">ÉDITIONS · DÉFINITIONS ET PARAMÈTRES</p><h3>'+esc(cfg.title)+'</h3></div><span class="badge draft">BROUILLON TEST</span></div><div class="alert warning">Données fictives actuelles en lecture seule ; aucun état officiel. Les informations non disponibles sont signalées dans l’aperçu.</div><form class="rubric-setup" data-def-form><fieldset class="rubric-card"><legend><span class="rubric-step">01</span> Sélection</legend><label>Références <select name="scope"><option value="all">Toutes (*)</option><option value="some">Choisir dans le référentiel</option></select></label><details data-def-picker><summary>Parcourir les références ('+items.length+')</summary><div class="rubric-checks">'+(choices||'<p>Référentiel vide.</p>')+'</div></details>'+(kind==='salary-components'?'<label>Statut <select name="status"><option value="*">Tous les statuts</option>'+statuses.map(function(s){return '<option value="'+esc(s.id)+'">'+esc(s.code+' · '+s.label)+'</option>';}).join('')+'</select></label>':'')+'</fieldset><fieldset class="rubric-card"><legend><span class="rubric-step">02</span> Colonnes à imprimer</legend><div class="rubric-checks">'+cfg.columns.map(function(c){return '<label><input type="checkbox" name="columns" value="'+esc(c[0])+'"'+(c[2]?' checked':'')+'> '+esc(c[1])+'</label>';}).join('')+'</div></fieldset>'+(kind==='services'?'<fieldset class="rubric-card"><legend><span class="rubric-step">03</span> Lignes à imprimer</legend><div class="rubric-checks"><label><input type="checkbox" name="withEmployees" checked> Services avec salariés</label><label><input type="checkbox" name="withoutEmployees" checked> Services sans salariés</label></div></fieldset>':'')+'<div class="rubric-form-footer"><p>Les choix sont temporaires.</p><div><button type="button" class="btn btn-secondary" data-def-cancel>Annuler</button> <button class="btn btn-primary" type="submit">Valider · aperçu</button></div></div></form><div data-def-result hidden></div></section>';
