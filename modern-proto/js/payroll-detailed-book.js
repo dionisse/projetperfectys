@@ -105,7 +105,7 @@
     return '<table class="payroll-book-table">'+colgroups+heading+'<tbody>'+(body||'<tr><td colspan="'+columns.length+'">'+((report.paymentReport||report.transferReport)?'Aucune ligne à préparer pour cette sélection.':'Aucun employé dans cette sélection.')+'</td></tr>')+'</tbody></table>';
   }
   function letterHtml(report){if(!report.transferReport)return '';return '<section class="payroll-transfer-letter">'+report.letterInfo.map(function(text){return '<p>'+esc(text)+'</p>';}).join('')+report.letter.map(function(text){return '<p>'+esc(text)+'</p>';}).join('')+'</section>';}
-  function signaturesHtml(report){if(!report.transferReport||!report.signers.length)return '';return '<section class="payroll-transfer-signatures"><h3>Signataires</h3>'+report.signers.map(function(name){return '<p>'+esc(name)+' · signature : ____________________</p>';}).join('')+'</section>';}
+  function signaturesHtml(report){if(!Array.isArray(report.signers)||!report.signers.length)return '';return '<section class="payroll-transfer-signatures"><h3>Signataires</h3>'+report.signers.map(function(name){return '<p>'+esc(name)+' · signature : ____________________</p>';}).join('')+'</section>';}
   function reportHtml(report,layout){
     if(report.multipleTransferReport){var documents=report.reports.length?report.reports:[report.emptyReport];return '<div class="payroll-multiple-summary"><strong>'+report.reports.length+' ordre(s) par banque · brouillons fictifs</strong><p>'+(report.multipleKind==='debit'?'Aucun débit ni paiement n’est exécuté.':'Aucun chèque n’est créé ou joint, aucun paiement exécuté.')+'</p></div>'+documents.map(function(doc){return reportHtml(doc,layout);}).join('');}
     var style=layout && layout.style==='color10'?'is-color':'is-mono';
@@ -131,7 +131,7 @@
   function matrix(report){
     if(report.multipleTransferReport){var headers=report.columns.map(function(c){return c.label;}),rows=[];var docs=report.reports.length?report.reports:[report.emptyReport];docs.forEach(function(doc,index){var m=matrix(doc);rows.push([report.reports.length?'Ordre '+(index+1)+' · '+(doc.letterInfo.find(function(line){return line.indexOf('Banque destinataire : ')===0;})||'Banque non renseignée'):'Aucun ordre à préparer']);rows.push(m.headers);m.rows.forEach(function(row){rows.push(row);});rows.push([]);});return {headers:headers,rows:rows};}
     var headers=report.columns.map(function(c){return c.label;}),rows=report.rows.map(function(row){return report.columns.map(function(c){return (report.cumulative||report.paymentReport||report.transferReport) ? cellValue(row,c) : row.values[c.key];});});
-    rows.push([]);if(report.transferReport){report.letterInfo.concat(report.letter).forEach(function(line){rows.push([line]);});if(report.signers.length)rows.push(['Signataires : '+report.signers.join(' ; ')]);rows.push([]);}notes(report).forEach(function(note){rows.push([note]);});
+    rows.push([]);if(report.transferReport){report.letterInfo.concat(report.letter).forEach(function(line){rows.push([line]);});if(report.signers.length)rows.push(['Signataires : '+report.signers.join(' ; ')]);rows.push([]);}else if(Array.isArray(report.signers)&&report.signers.length){rows.push(['Signataires : '+report.signers.join(' ; ')]);rows.push([]);}notes(report).forEach(function(note){rows.push([note]);});
     return {headers:headers,rows:rows};
   }
   function safeTsvCell(value){var text=String(value==null?'':value).replace(/[\t\r\n]+/g,' ');return /^[\s]*[=+\-@]/.test(text)?"'"+text:text;}
