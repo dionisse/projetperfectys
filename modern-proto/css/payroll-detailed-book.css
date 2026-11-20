@@ -256,3 +256,10 @@
 .payroll-rubric-cumulative [data-step-management] li { margin:6px 0; overflow-wrap:anywhere; }
 .payroll-rubric-cumulative [data-step-management] form { display:grid; gap:10px; margin:12px 0; }
 .payroll-rubric-cumulative [data-step-management] form > button { justify-self:start; }
+
+/* Tableau annuel OHADA : qualification manuelle des populations. */
+.payroll-rubric-cumulative [data-ohada11-admin] { margin-top:18px; }
+.payroll-rubric-cumulative [data-ohada11-management] > summary { cursor:pointer; color:#304e40; }
+.payroll-rubric-cumulative [data-ohada11-management] li { margin:6px 0; overflow-wrap:anywhere; }
+.payroll-rubric-cumulative [data-ohada11-management] form { display:grid; gap:10px; margin:12px 0; }
+.payroll-rubric-cumulative [data-ohada11-management] form > button { justify-self:start; }

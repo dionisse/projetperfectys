@@ -20615,6 +20615,11 @@
       var cnssSummaryDossier = PayrollHR.currentDossier();
       if (cnssSummaryDossier) window.PayrollCnssSummary.mount(cnssSummaryWorkspace,{hr:PayrollHR,dossier:cnssSummaryDossier,tools:window.PayrollPayslipWorkspace,math:window.PayrollCumulativeBook,tracking:window.PayrollPaymentTracking,nominative:window.PayrollCnssNominative,words:window.PayrollTransferOrder.words,exchange:AccountingExchange,canView:function(){return hasDemoPermission(getActiveDemoMember(),'payroll-hr','module.view',payrollAccessContext(cnssSummaryDossier));},canManage:function(){return hasDemoPermission(getActiveDemoMember(),'organization','organization.manageDossiers',demoAccessContext('organization'));}});
     }
+    var ohadaTable11Workspace = $('#payroll-ohada-table11-workspace');
+    if (ohadaTable11Workspace && window.PayrollOhadaTable11 && window.PayrollPersonnelList && window.PayrollDetailedBook && window.PayrollPayslipWorkspace && window.PayrollCumulativeBook && window.PayrollPaymentTracking) {
+      var ohadaTable11Dossier = PayrollHR.currentDossier();
+      if (ohadaTable11Dossier) window.PayrollOhadaTable11.mount(ohadaTable11Workspace, {hr:PayrollHR,dossier:ohadaTable11Dossier,personnel:window.PayrollPersonnelList,tools:window.PayrollPayslipWorkspace,book:window.PayrollDetailedBook,math:window.PayrollCumulativeBook,tracking:window.PayrollPaymentTracking,exchange:AccountingExchange,canView:function(){return hasDemoPermission(getActiveDemoMember(),'payroll-hr','module.view',payrollAccessContext(ohadaTable11Dossier));},canEdit:function(){return hasDemoPermission(getActiveDemoMember(),'payroll-hr','record.edit',payrollAccessContext(ohadaTable11Dossier));},licenseOwner:licenseOwnerName,onClose:function(){ui.payrollMainMenu='Fichier';ui.payrollMenuItem='';render();}});
+    }
     var personnelStepChangesWorkspace = $('#payroll-personnel-step-changes-workspace');
     if (personnelStepChangesWorkspace && window.PayrollPersonnelStepChanges && window.PayrollPersonnelList && window.PayrollDetailedBook) {
       var personnelStepChangesDossier = PayrollHR.currentDossier();
@@ -22305,13 +22310,13 @@
     var selectableItems = items.filter(function (item) { return !item.disabled; });
     var selectedItem = selectableItems.find(function (item) { return item.id === ui.payrollMenuItem; }) || selectableItems[0] || null;
     var availableDefinitionItems = ['employee-statuses', 'employee-categories', 'geographic-zones', 'services', 'functions', 'degrees-qualifications', 'professions', 'social-security-funds', 'complementary-social-funds', 'banks'];
-    var implementedMenuItems = availableDefinitionItems.concat(['employees', 'payslips', 'post-hire-payslips', 'attendance-hours', 'advances-loans', 'payslip-edition', 'exceptional-payslip-1', 'exceptional-payslip-2', 'complementary-fund-payments', 'custom-salary-reports']);
+    var implementedMenuItems = availableDefinitionItems.concat(['employees', 'payslips', 'post-hire-payslips', 'attendance-hours', 'advances-loans', 'payslip-edition', 'exceptional-payslip-1', 'exceptional-payslip-2', 'complementary-fund-payments', 'custom-salary-reports', 'ohada-table-11']);
     var hasPlannedItems = items.some(function (item) { return !item.disabled && !item.hasChildren && implementedMenuItems.indexOf(item.id) === -1; });
     var tabs = sections.map(function (section, sectionIndex) {
       var heading = section.heading ? '<p class="payroll-subtab-group-heading">' + esc(section.heading) + '</p>' : '';
       var rows = (section.items || []).map(function (item) {
         var selected = selectedItem && item.id === selectedItem.id;
-        var state = item.disabled ? 'Inactif' : (item.hasChildren ? 'Sous-menu' : (implementedMenuItems.indexOf(item.id) !== -1 ? (item.id === 'employees' ? 'Disponible' : (item.id === 'payslips' || item.id === 'post-hire-payslips' || item.id === 'attendance-hours' || item.id === 'payslip-edition' || item.id === 'exceptional-payslip-1' || item.id === 'exceptional-payslip-2' || item.id === 'complementary-fund-payments' || item.id === 'custom-salary-reports' ? 'Brouillon test' : 'Référentiel test')) : 'À construire'));
+        var state = item.disabled ? 'Inactif' : (item.hasChildren ? 'Sous-menu' : (implementedMenuItems.indexOf(item.id) !== -1 ? (item.id === 'employees' ? 'Disponible' : (item.id === 'payslips' || item.id === 'post-hire-payslips' || item.id === 'attendance-hours' || item.id === 'payslip-edition' || item.id === 'exceptional-payslip-1' || item.id === 'exceptional-payslip-2' || item.id === 'complementary-fund-payments' || item.id === 'custom-salary-reports' || item.id === 'ohada-table-11' ? 'Brouillon test' : 'Référentiel test')) : 'À construire'));
         var disclosure = item.hasChildren ? '<span class="payroll-subtab-chevron" aria-hidden="true">›</span>' : '';
         return '<button type="button" id="payroll-menu-tab-' + esc(item.id) + '" class="accounting-subtab' + (selected ? ' is-active' : '') + (item.disabled ? ' is-disabled' : '') + '" role="tab" aria-controls="payroll-menu-tabpanel" aria-selected="' + (selected ? 'true' : 'false') + '"' + (item.disabled ? ' disabled aria-disabled="true"' : (selected ? ' aria-current="page"' : '')) + ' data-action="payroll-menu-item" data-menu-name="' + esc(activeMenu) + '" data-menu-item="' + esc(item.id) + '"><span class="accounting-subtab-label">' + esc(item.label) + '</span>' + disclosure + '<small class="accounting-subtab-state">' + state + '</small></button>';
       }).join('');
@@ -22329,6 +22334,7 @@
     else if (selectedItem && selectedItem.id === 'current-month-payroll-reports') panel = viewPayrollCurrentMonthReports();
     else if (selectedItem && selectedItem.id === 'cnss-ipts-fnr-declarations') panel = viewPayrollDeclarations();
     else if (selectedItem && selectedItem.id === 'personnel-reports') panel = viewPayrollPersonnelReports();
+    else if (selectedItem && selectedItem.id === 'ohada-table-11') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-ohada-table-11"><div id="payroll-ohada-table11-workspace"></div></div>';
     else if (selectedItem && selectedItem.id === 'custom-salary-reports') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-custom-salary-reports"><div id="payroll-custom-book-workspace"></div></div>';
     else if (selectedItem && selectedItem.id === 'complementary-fund-payments') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-complementary-fund-payments"><div id="payroll-complementary-funds-workspace"></div></div>';
     else if (selectedItem && selectedItem.id === 'payslip-edition') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-payslip-edition"><div id="payroll-slip-edition-workspace"></div></div>';

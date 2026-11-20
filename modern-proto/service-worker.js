@@ -3,7 +3,7 @@
  * Stratégie : réseau d'abord (contenu toujours à jour), cache en secours hors ligne.
  */
 
-const CACHE_NAME = 'emrys-static-v244';
+const CACHE_NAME = 'emrys-static-v245';
 const APP_SHELL = [
   './',
   './index.html',
@@ -121,6 +121,7 @@ const APP_SHELL = [
   './js/payroll-personnel-movements.js',
   './js/payroll-personnel-payment-methods.js',
   './js/payroll-personnel-step-changes.js',
+  './js/payroll-ohada-table11.js',
   './js/payroll-cnss-summary.js',
   './js/payroll-its-nominative.js',
   './js/payroll-its-summary.js',
