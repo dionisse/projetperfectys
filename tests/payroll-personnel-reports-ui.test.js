@@ -51,3 +51,12 @@ test('chaque choix identifie l’état sans prétendre le produire', () => {
   assert.match(app, /ui\.payrollMainMenu !== 'Editions' \|\| ui\.payrollMenuItem !== 'personnel-reports'/);
   assert.match(app, /if \(!knownPersonnelReport\) break/);
 });
+
+test('chaque formulaire disponible numérote ses sections dans le même ordre', () => {
+  for (const name of ['list', 'cumulative', 'movements', 'payment-methods']) {
+    const source = fs.readFileSync(path.join(__dirname, '../modern-proto/js/payroll-personnel-' + name + '.js'), 'utf8');
+    assert.match(source, /<legend><span class="rubric-step">01<\/span> Sélection<\/legend>/, name);
+    assert.match(source, /<legend><span class="rubric-step">02<\/span> Colonnes à imprimer<\/legend>/, name);
+    assert.ok(source.indexOf('rubric-step">01') < source.indexOf('rubric-step">02'), name);
+  }
+});
