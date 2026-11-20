@@ -47,7 +47,7 @@ assert.match(reportSource, /explicitThirdPartyReferenceRequired: true[\s\S]*unli
 assert.ok(htmlSource.indexOf('js/opening-balance-report.js') < htmlSource.indexOf('js/third-party-opening-balance-report.js'));
 assert.ok(htmlSource.indexOf('js/third-party-opening-balance-report.js') < htmlSource.indexOf('js/app.js'));
 assert.match(serviceWorkerSource, /\.\/js\/third-party-opening-balance-report\.js/);
-assert.match(serviceWorkerSource, /emrys-static-v241/);
+assert.match(serviceWorkerSource, /emrys-static-v242/);
 assert.match(cssSource, /\.report-preview-overlay\s*,[\s\S]*position:\s*fixed[\s\S]*inset:\s*0/);
 assert.match(cssSource, /\.third-party-opening-balance-filter-grid[\s\S]*\.third-party-opening-balance-column-grid[\s\S]*\.third-party-opening-balance-table/);
 

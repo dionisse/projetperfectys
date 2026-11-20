@@ -29,7 +29,7 @@ test('les six entrées regroupent les deux états de mouvements', () => {
   const html = context.viewPayrollPersonnelReports();
   assert.equal((html.match(/data-action="payroll-personnel-report-select"/g) || []).length, 6);
   assert.equal((html.match(/class="payroll-current-report-group"/g) || []).length, 3);
-  assert.match(html, /liste, l’état cumulé et les mouvements du personnel sont disponibles en brouillon test/i);
+  assert.match(html, /liste, l’état cumulé, les mouvements et les modes de règlement sont disponibles en brouillon test/i);
   assert.match(app, /selectedItem\.id === 'personnel-reports'\) panel = viewPayrollPersonnelReports\(\)/);
 });
 
@@ -40,6 +40,7 @@ test('chaque choix identifie l’état sans prétendre le produire', () => {
     const html = context.viewPayrollPersonnelReports();
     if (item.id === 'personnel-list') { assert.match(html, /payroll-personnel-list-workspace/); continue; }
     if (item.id === 'personnel-cumulative') { assert.match(html, /payroll-personnel-cumulative-workspace/); continue; }
+    if (item.id === 'payment-methods') { assert.match(html, /payroll-personnel-payment-methods-workspace/); continue; }
     if (item.id === 'personnel-movements') { assert.match(html, /payroll-personnel-movements-workspace/); assert.match(html, /data-movement-mode="hires"/); continue; }
     assert.match(html, new RegExp('data-personnel-report-id="' + item.id + '" aria-pressed="true"'));
     assert.equal((html.match(/aria-pressed="true"/g) || []).length, 1);
