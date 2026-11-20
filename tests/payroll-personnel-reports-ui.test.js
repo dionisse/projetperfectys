@@ -29,7 +29,7 @@ test('les sept éléments et leurs séparateurs suivent la capture', () => {
   const html = context.viewPayrollPersonnelReports();
   assert.equal((html.match(/data-action="payroll-personnel-report-select"/g) || []).length, 7);
   assert.equal((html.match(/class="payroll-current-report-group"/g) || []).length, 3);
-  assert.match(html, /liste et l’état cumulé du personnel sont disponibles en brouillon test/i);
+  assert.match(html, /liste, l’état cumulé et les mouvements du personnel sont disponibles en brouillon test/i);
   assert.match(app, /selectedItem\.id === 'personnel-reports'\) panel = viewPayrollPersonnelReports\(\)/);
 });
 
@@ -40,6 +40,7 @@ test('chaque choix identifie l’état sans prétendre le produire', () => {
     const html = context.viewPayrollPersonnelReports();
     if (item.id === 'personnel-list') { assert.match(html, /payroll-personnel-list-workspace/); continue; }
     if (item.id === 'personnel-cumulative') { assert.match(html, /payroll-personnel-cumulative-workspace/); continue; }
+    if (item.id === 'recent-hires' || item.id === 'recent-departures') { assert.match(html, /payroll-personnel-movements-workspace/); assert.match(html, new RegExp('data-movement-mode="' + (item.id === 'recent-hires' ? 'hires' : 'departures') + '"')); continue; }
     assert.match(html, new RegExp('data-personnel-report-id="' + item.id + '" aria-pressed="true"'));
     assert.equal((html.match(/aria-pressed="true"/g) || []).length, 1);
     assert.ok(html.includes('<h4>' + context.esc(item.label) + '</h4>'));

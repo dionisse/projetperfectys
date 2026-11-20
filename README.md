@@ -680,7 +680,7 @@ Les colonnes usuelles reposent sur les fiches et brouillons disponibles ; des ru
 
 ### Sous-menu des états sur le personnel
 
-Dans **Paie & RH → Éditions → États sur le Personnel**, les sept entrées de la capture sont regroupées selon ses séparateurs. La **Liste du Personnel** et l’**État cumulé du Personnel** sont des états en lecture seule réservés au dossier fictif PRH-TEST-2026 et au droit de consultation. Les cinq autres entrées restent à construire.
+Dans **Paie & RH → Éditions → États sur le Personnel**, les sept entrées de la capture sont regroupées selon ses séparateurs. La **Liste du Personnel**, l’**État cumulé du Personnel** et les états d’embauches/débauchages sont en lecture seule, réservés au dossier fictif PRH-TEST-2026 et au droit de consultation. Les trois autres entrées restent à construire.
 
 La liste propose huit classements (diplômes, professions, statuts, catégories/échelons, services, fonctions, zones et banques), `*` ou une sélection multiple dans le référentiel choisi, le mois du cycle et 24 colonnes sélectionnables. L’aperçu permet l’impression/PDF, Excel et texte tabulé. Les employés multi-diplômés ou multi-fonctions peuvent apparaître dans plusieurs groupes ; les lignes ne constituent pas un effectif dédoublonné. `*` inclut les fiches sans affectation reconnue dans un groupe signalé.
 
@@ -689,3 +689,9 @@ La présence s’appuie sur le chevauchement du mois avec les dates d’embauche
 ### État cumulé du personnel
 
 L’état cumulé réutilise les huit classements et la même règle de présence indicative que la liste. Il compte les fiches distinctes de chaque groupe ayant au moins une fiche, avec une ligne distincte pour les affectations absentes ou non reconnues. Une fiche ayant plusieurs diplômes ou fonctions, ou une affectation connue et une autre inconnue, peut figurer dans plusieurs groupes : la somme des lignes ne constitue pas un effectif dédoublonné. Le nombre de fiches distinctes et les contrôles de présence sont indiqués dans les notes. Les colonnes Code, Intitulé et Nombre d’employés peuvent être sélectionnées ; aperçu, impression/PDF, Excel et texte sont disponibles. Les données restent fictives et les affectations sont celles des fiches actuelles, non historiques.
+
+### Dernières embauches et derniers débauchages
+
+Les deux entrées ouvrent un écran commun, initialisé sur l’état choisi. Il permet de changer d’état, de choisir un classement parmi les huit référentiels, `*` ou une sélection multiple, une période inclusive et les colonnes propres à chaque état. L’aperçu, l’impression/PDF et les exports Excel/texte réutilisent le moteur d’édition existant.
+
+Pour les embauches, la date de dernière réembauche est utilisée si elle est renseignée, sinon la première embauche. Pour les débauchages, la date de départ inscrite sur la fiche est utilisée ; la colonne Embauche reprend la dernière embauche connue avant le départ, ou la première embauche avec un avertissement si une réembauche est postérieure au départ. Les dates absentes ou incohérentes sont signalées et ne sont pas inventées. Une date de départ absente ne signifie pas nécessairement une anomalie. Les fiches et affectations sont actuelles : elles ne forment pas un historique complet, et une fiche avec plusieurs diplômes ou fonctions peut produire plusieurs lignes.
