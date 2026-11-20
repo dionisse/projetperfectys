@@ -18,16 +18,16 @@ const context = vm.createContext({
 });
 vm.runInContext(functionSource('payrollPersonnelReportSections', 'payrollDeclarationItems') + functionSource('viewPayrollPersonnelReports', 'viewPayrollDeclarations'), context);
 
-test('les sept éléments et leurs séparateurs suivent la capture', () => {
+test('les six entrées regroupent les deux états de mouvements', () => {
   const groups = JSON.parse(JSON.stringify(context.payrollPersonnelReportSections()));
   assert.deepEqual(groups.map(group => group.items.map(item => item.label)), [
     ['Liste du Personnel', 'Etat cumulé du Personnel'],
-    ['Dernières Embauches', 'Derniers Débauchages'],
+    ['Dernières embauches et derniers débauchages'],
     ['Modes de règlement', "Changements d'échelon à effectuer", "Retards de changement d'échelons"]
   ]);
-  assert.equal(new Set(groups.flatMap(group => group.items.map(item => item.id))).size, 7);
+  assert.equal(new Set(groups.flatMap(group => group.items.map(item => item.id))).size, 6);
   const html = context.viewPayrollPersonnelReports();
-  assert.equal((html.match(/data-action="payroll-personnel-report-select"/g) || []).length, 7);
+  assert.equal((html.match(/data-action="payroll-personnel-report-select"/g) || []).length, 6);
   assert.equal((html.match(/class="payroll-current-report-group"/g) || []).length, 3);
   assert.match(html, /liste, l’état cumulé et les mouvements du personnel sont disponibles en brouillon test/i);
   assert.match(app, /selectedItem\.id === 'personnel-reports'\) panel = viewPayrollPersonnelReports\(\)/);
@@ -40,7 +40,7 @@ test('chaque choix identifie l’état sans prétendre le produire', () => {
     const html = context.viewPayrollPersonnelReports();
     if (item.id === 'personnel-list') { assert.match(html, /payroll-personnel-list-workspace/); continue; }
     if (item.id === 'personnel-cumulative') { assert.match(html, /payroll-personnel-cumulative-workspace/); continue; }
-    if (item.id === 'recent-hires' || item.id === 'recent-departures') { assert.match(html, /payroll-personnel-movements-workspace/); assert.match(html, new RegExp('data-movement-mode="' + (item.id === 'recent-hires' ? 'hires' : 'departures') + '"')); continue; }
+    if (item.id === 'personnel-movements') { assert.match(html, /payroll-personnel-movements-workspace/); assert.match(html, /data-movement-mode="hires"/); continue; }
     assert.match(html, new RegExp('data-personnel-report-id="' + item.id + '" aria-pressed="true"'));
     assert.equal((html.match(/aria-pressed="true"/g) || []).length, 1);
     assert.ok(html.includes('<h4>' + context.esc(item.label) + '</h4>'));

@@ -46,6 +46,6 @@ sourceHas(exchange, /analyticSplits: analyticSplits/, 'exchange source contract'
 sourceHas(navigation, /reprend d’abord les ventilations explicites enregistrées sur les lignes validées/, 'navigation source contract');
 sourceHas(css, /\.entry-analytic-editor/, 'css source contract');
 sourceHas(css, /\.entry-analytic-allocation/, 'css source contract');
-sourceHas(worker, /emrys-static-v240/, 'worker source contract');
+sourceHas(worker, /emrys-static-v241/, 'worker source contract');
 
 console.log('Saisie analytique : champs multi-axes, modes, contrôle d’écart, persistance, cumul et export intégrés — OK');
