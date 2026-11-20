@@ -3,7 +3,7 @@
  * Stratégie : réseau d'abord (contenu toujours à jour), cache en secours hors ligne.
  */
 
-const CACHE_NAME = 'emrys-static-v245';
+const CACHE_NAME = 'emrys-static-v246';
 const APP_SHELL = [
   './',
   './index.html',
