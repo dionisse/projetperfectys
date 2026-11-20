@@ -18,18 +18,18 @@ const context = vm.createContext({
 });
 vm.runInContext(functionSource('payrollPersonnelReportSections', 'payrollDeclarationItems') + functionSource('viewPayrollPersonnelReports', 'viewPayrollDeclarations'), context);
 
-test('les six entrées regroupent les deux états de mouvements', () => {
+test('les cinq entrées regroupent les mouvements et les changements d’échelon', () => {
   const groups = JSON.parse(JSON.stringify(context.payrollPersonnelReportSections()));
   assert.deepEqual(groups.map(group => group.items.map(item => item.label)), [
     ['Liste du Personnel', 'Etat cumulé du Personnel'],
     ['Dernières embauches et derniers débauchages'],
-    ['Modes de règlement', "Changements d'échelon à effectuer", "Retards de changement d'échelons"]
+    ['Modes de règlement', 'Changements et retards d’échelon']
   ]);
-  assert.equal(new Set(groups.flatMap(group => group.items.map(item => item.id))).size, 6);
+  assert.equal(new Set(groups.flatMap(group => group.items.map(item => item.id))).size, 5);
   const html = context.viewPayrollPersonnelReports();
-  assert.equal((html.match(/data-action="payroll-personnel-report-select"/g) || []).length, 6);
+  assert.equal((html.match(/data-action="payroll-personnel-report-select"/g) || []).length, 5);
   assert.equal((html.match(/class="payroll-current-report-group"/g) || []).length, 3);
-  assert.match(html, /liste, l’état cumulé, les mouvements et les modes de règlement sont disponibles en brouillon test/i);
+  assert.match(html, /Les cinq états du personnel sont disponibles en brouillon test/i);
   assert.match(app, /selectedItem\.id === 'personnel-reports'\) panel = viewPayrollPersonnelReports\(\)/);
 });
 
@@ -40,6 +40,7 @@ test('chaque choix identifie l’état sans prétendre le produire', () => {
     const html = context.viewPayrollPersonnelReports();
     if (item.id === 'personnel-list') { assert.match(html, /payroll-personnel-list-workspace/); continue; }
     if (item.id === 'personnel-cumulative') { assert.match(html, /payroll-personnel-cumulative-workspace/); continue; }
+    if (item.id === 'step-changes') { assert.match(html, /payroll-personnel-step-changes-workspace/); continue; }
     if (item.id === 'payment-methods') { assert.match(html, /payroll-personnel-payment-methods-workspace/); continue; }
     if (item.id === 'personnel-movements') { assert.match(html, /payroll-personnel-movements-workspace/); assert.match(html, /data-movement-mode="hires"/); continue; }
     assert.match(html, new RegExp('data-personnel-report-id="' + item.id + '" aria-pressed="true"'));
@@ -53,7 +54,7 @@ test('chaque choix identifie l’état sans prétendre le produire', () => {
 });
 
 test('chaque formulaire disponible numérote ses sections dans le même ordre', () => {
-  for (const name of ['list', 'cumulative', 'movements', 'payment-methods']) {
+  for (const name of ['list', 'cumulative', 'movements', 'payment-methods', 'step-changes']) {
     const source = fs.readFileSync(path.join(__dirname, '../modern-proto/js/payroll-personnel-' + name + '.js'), 'utf8');
     assert.match(source, /<legend><span class="rubric-step">01<\/span> Sélection<\/legend>/, name);
     assert.match(source, /<legend><span class="rubric-step">02<\/span> Colonnes à imprimer<\/legend>/, name);

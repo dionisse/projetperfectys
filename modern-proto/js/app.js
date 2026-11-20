@@ -402,8 +402,7 @@
       ] },
       { items: [
         { id: 'payment-methods', label: 'Modes de règlement', ready: true },
-        { id: 'step-changes-due', label: "Changements d'échelon à effectuer" },
-        { id: 'overdue-step-changes', label: "Retards de changement d'échelons" }
+        { id: 'step-changes', label: 'Changements et retards d’échelon', ready: true }
       ] }
     ];
   }
@@ -20616,6 +20615,11 @@
       var cnssSummaryDossier = PayrollHR.currentDossier();
       if (cnssSummaryDossier) window.PayrollCnssSummary.mount(cnssSummaryWorkspace,{hr:PayrollHR,dossier:cnssSummaryDossier,tools:window.PayrollPayslipWorkspace,math:window.PayrollCumulativeBook,tracking:window.PayrollPaymentTracking,nominative:window.PayrollCnssNominative,words:window.PayrollTransferOrder.words,exchange:AccountingExchange,canView:function(){return hasDemoPermission(getActiveDemoMember(),'payroll-hr','module.view',payrollAccessContext(cnssSummaryDossier));},canManage:function(){return hasDemoPermission(getActiveDemoMember(),'organization','organization.manageDossiers',demoAccessContext('organization'));}});
     }
+    var personnelStepChangesWorkspace = $('#payroll-personnel-step-changes-workspace');
+    if (personnelStepChangesWorkspace && window.PayrollPersonnelStepChanges && window.PayrollPersonnelList && window.PayrollDetailedBook) {
+      var personnelStepChangesDossier = PayrollHR.currentDossier();
+      if (personnelStepChangesDossier) window.PayrollPersonnelStepChanges.mount(personnelStepChangesWorkspace, {hr:PayrollHR,dossier:personnelStepChangesDossier,personnel:window.PayrollPersonnelList,book:window.PayrollDetailedBook,exchange:AccountingExchange,canView:function(){return hasDemoPermission(getActiveDemoMember(),'payroll-hr','module.view',payrollAccessContext(personnelStepChangesDossier));},canEdit:function(){return hasDemoPermission(getActiveDemoMember(),'payroll-hr','record.edit',payrollAccessContext(personnelStepChangesDossier));},licenseOwner:licenseOwnerName,onClose:function(){ui.payrollPersonnelReportId='';render();}});
+    }
     var personnelPaymentMethodsWorkspace = $('#payroll-personnel-payment-methods-workspace');
     if (personnelPaymentMethodsWorkspace && window.PayrollPersonnelPaymentMethods && window.PayrollPersonnelList && window.PayrollDetailedBook) {
       var personnelPaymentMethodsDossier = PayrollHR.currentDossier();
@@ -22268,6 +22272,7 @@
     if (selected && selected.id === 'personnel-list') return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-personnel-reports"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-personnel-report-back">← Retour aux états du personnel</button><div id="payroll-personnel-list-workspace"></div></section>';
     if (selected && selected.id === 'personnel-cumulative') return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-personnel-reports"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-personnel-report-back">← Retour aux états du personnel</button><div id="payroll-personnel-cumulative-workspace"></div></section>';
     if (selected && selected.id === 'personnel-movements') return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-personnel-reports"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-personnel-report-back">← Retour aux états du personnel</button><div id="payroll-personnel-movements-workspace" data-movement-mode="hires"></div></section>';
+    if (selected && selected.id === 'step-changes') return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-personnel-reports"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-personnel-report-back">← Retour aux états du personnel</button><div id="payroll-personnel-step-changes-workspace"></div></section>';
     if (selected && selected.id === 'payment-methods') return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-personnel-reports"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-personnel-report-back">← Retour aux états du personnel</button><div id="payroll-personnel-payment-methods-workspace"></div></section>';
     var list = sections.map(function (section) {
       return '<section class="payroll-current-report-group"><ul>' + section.items.map(function (item) {
@@ -22277,8 +22282,8 @@
     }).join('');
     var detail = selected
       ? '<div class="payroll-current-report-detail" aria-live="polite"><p class="page-kicker">ÉTAT SÉLECTIONNÉ</p><h4>' + esc(selected.label) + '</h4><p><strong>À construire :</strong> les critères et la présentation restent à définir. Aucun état ni fichier n’est produit pour le moment.</p></div>'
-      : '<div class="payroll-current-report-detail" aria-live="polite"><h4>Sélectionnez un état</h4><p>La liste, l’état cumulé, les mouvements et les modes de règlement sont disponibles en brouillon test. Les deux autres traitements restent à construire.</p></div>';
-    return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-personnel-reports" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Etats sur le Personnel</h3></div><span class="badge draft">6 ENTRÉES · 4 BROUILLONS TEST</span></div><div class="alert info"><div>La liste, le cumul, les mouvements et les modes de règlement sont disponibles en lecture seule de test ; les autres états restent à construire.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="États sur le personnel">' + list + '</nav>' + detail + '</div></section>';
+      : '<div class="payroll-current-report-detail" aria-live="polite"><h4>Sélectionnez un état</h4><p>Les cinq états du personnel sont disponibles en brouillon test. Les changements d’échelon nécessitent des règles ou des dérogations explicites.</p></div>';
+    return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-personnel-reports" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Etats sur le Personnel</h3></div><span class="badge draft">5 ENTRÉES · 5 BROUILLONS TEST</span></div><div class="alert info"><div>Les états du personnel sont disponibles en test. Les règles, dérogations et confirmations d’échelon nécessitent le droit de modification.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="États sur le personnel">' + list + '</nav>' + detail + '</div></section>';
   }
 
   function viewPayrollDeclarations() {

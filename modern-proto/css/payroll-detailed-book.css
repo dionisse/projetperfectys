@@ -248,3 +248,11 @@
 .payroll-rubric-cumulative [data-personnel-choices] { display:grid; gap:8px; max-height:220px; overflow:auto; }
 .payroll-rubric-cumulative [data-personnel-choices] label { display:flex; align-items:flex-start; gap:8px; line-height:1.4; }
 .payroll-rubric-cumulative [data-personnel-choices] label[hidden] { display:none; }
+
+/* Paramétrage fictif des changements d'échelon. */
+.payroll-rubric-cumulative [data-step-admin] { margin-top:18px; }
+.payroll-rubric-cumulative [data-step-management] > summary { cursor:pointer; color:#304e40; }
+.payroll-rubric-cumulative [data-step-management] h4 { margin:22px 0 8px; }
+.payroll-rubric-cumulative [data-step-management] li { margin:6px 0; overflow-wrap:anywhere; }
+.payroll-rubric-cumulative [data-step-management] form { display:grid; gap:10px; margin:12px 0; }
+.payroll-rubric-cumulative [data-step-management] form > button { justify-self:start; }
