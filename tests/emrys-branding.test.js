@@ -16,7 +16,7 @@ assert.match(manifest.name, /^EMRYS/);
 assert.equal((app.match(/class="suite-mark">E<span>/g) || []).length, 3);
 assert.match(app, /document\.title = 'EMRYS/);
 assert.match(app, /'emrys-comptabilite-' \+ S\.todayIso\(\) \+ '\.json'/);
-assert.match(read('modern-proto/service-worker.js'), /const CACHE_NAME = 'emrys-static-v236'/);
+assert.match(read('modern-proto/service-worker.js'), /const CACHE_NAME = 'emrys-static-v237'/);
 assert.match(read('modern-proto/js/store.js'), /STORAGE_KEY = 'perfecto\.lot1\.v1'/);
 const exchange = read('modern-proto/js/accounting-exchange.js');
 assert.match(exchange, /SYSTEME_SOURCE: 'PERFECTO'/);

@@ -172,6 +172,7 @@
     payrollMainMenu: 'Fichier',
     payrollMenuItem: 'export-files',
     payrollCurrentReportId: '',
+    payrollPersonnelReportId: '',
     payrollDeclarationId: '',
     payrollEmployeeId: '',
     payrollEmployeeCreateMode: false,
@@ -385,6 +386,25 @@
       ] },
       { title: 'Variations', note: 'Comparaison des brouillons et des déclarations historiques des fiches.', items: [
         { id: 'fixed-elements-variations', label: 'Variations des éléments fixes', ready: true }
+      ] }
+    ];
+  }
+
+  // Libellés et séparateurs relevés de la capture des états du personnel.
+  function payrollPersonnelReportSections() {
+    return [
+      { items: [
+        { id: 'personnel-list', label: 'Liste du Personnel' },
+        { id: 'personnel-cumulative', label: 'Etat cumulé du Personnel' }
+      ] },
+      { items: [
+        { id: 'recent-hires', label: 'Dernières Embauches' },
+        { id: 'recent-departures', label: 'Derniers Débauchages' }
+      ] },
+      { items: [
+        { id: 'payment-methods', label: 'Modes de règlement' },
+        { id: 'step-changes-due', label: "Changements d'échelon à effectuer" },
+        { id: 'overdue-step-changes', label: "Retards de changement d'échelons" }
       ] }
     ];
   }
@@ -627,6 +647,7 @@
         return { moduleId: requestedModuleId === 'analytics' ? 'accounting' : requestedModuleId, actionId: 'module.view' };
       }
       case 'open-payroll-dossier':
+      case 'payroll-personnel-report-select':
       case 'payroll-current-report-select':
       case 'payroll-current-report-back':
       case 'payroll-declaration-select':
@@ -22220,6 +22241,22 @@
     return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-current-month-payroll-reports" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Etats sur la paie du mois en cours</h3></div><span class="badge draft">15 ÉTATS · TEST</span></div><div class="alert info"><div>Navigation des états issue de la capture. Les livres, les états espèces et chèques, quatre ordres de virements, les états d’avances et les cumuls par service et zone sont disponibles en lecture seule de test ; les variations sont disponibles en lecture seule de test.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="États sur la paie du mois en cours">' + list + '</nav>' + detail + '</div></section>';
   }
 
+  function viewPayrollPersonnelReports() {
+    var sections = payrollPersonnelReportSections();
+    var items = sections.reduce(function (all, section) { return all.concat(section.items); }, []);
+    var selected = items.find(function (item) { return item.id === ui.payrollPersonnelReportId; });
+    var list = sections.map(function (section) {
+      return '<section class="payroll-current-report-group"><ul>' + section.items.map(function (item) {
+        var active = !!selected && selected.id === item.id;
+        return '<li><button type="button" class="payroll-current-report-item' + (active ? ' is-selected' : '') + '" data-action="payroll-personnel-report-select" data-personnel-report-id="' + esc(item.id) + '" aria-pressed="' + (active ? 'true' : 'false') + '"><span>' + esc(item.label) + '</span><small>À construire</small></button></li>';
+      }).join('') + '</ul></section>';
+    }).join('');
+    var detail = selected
+      ? '<div class="payroll-current-report-detail" aria-live="polite"><p class="page-kicker">ÉTAT SÉLECTIONNÉ</p><h4>' + esc(selected.label) + '</h4><p><strong>À construire :</strong> les critères et la présentation restent à définir. Aucun état ni fichier n’est produit pour le moment.</p></div>'
+      : '<div class="payroll-current-report-detail" aria-live="polite"><h4>Sélectionnez un état</h4><p>Les sept sous-éléments de la capture sont disponibles pour la navigation. Leurs traitements restent à construire.</p></div>';
+    return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-personnel-reports" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Etats sur le Personnel</h3></div><span class="badge draft">7 ÉTATS · À CONSTRUIRE</span></div><div class="alert info"><div>Navigation uniquement : aucune donnée du personnel n’est éditée ou exportée par ces entrées.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="États sur le personnel">' + list + '</nav>' + detail + '</div></section>';
+  }
+
   function viewPayrollDeclarations() {
     var items=payrollDeclarationItems(), selected=items.find(function(item){return item.id===ui.payrollDeclarationId;});
     if(selected && selected.id==='its-summary')return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-cnss-ipts-fnr-declarations"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-declaration-back">← Retour aux déclarations</button><div id="payroll-its-summary-workspace"></div></section>';
@@ -22262,6 +22299,7 @@
     if (selectedItem && selectedItem.id === 'employees') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-employees">' + viewPayrollEmployeeDetails(dossier, dossierEmployees || [], canCreatePayrollEmployee === true) + '</div>';
     else if (selectedItem && selectedItem.id === 'current-month-payroll-reports') panel = viewPayrollCurrentMonthReports();
     else if (selectedItem && selectedItem.id === 'cnss-ipts-fnr-declarations') panel = viewPayrollDeclarations();
+    else if (selectedItem && selectedItem.id === 'personnel-reports') panel = viewPayrollPersonnelReports();
     else if (selectedItem && selectedItem.id === 'custom-salary-reports') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-custom-salary-reports"><div id="payroll-custom-book-workspace"></div></div>';
     else if (selectedItem && selectedItem.id === 'complementary-fund-payments') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-complementary-fund-payments"><div id="payroll-complementary-funds-workspace"></div></div>';
     else if (selectedItem && selectedItem.id === 'payslip-edition') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-payslip-edition"><div id="payroll-slip-edition-workspace"></div></div>';
@@ -35617,6 +35655,17 @@
         render();
         var selectedDeclarationButton=$('[data-action="payroll-declaration-select"][aria-pressed="true"]');
         if(selectedDeclarationButton)selectedDeclarationButton.focus({preventScroll:true});
+        break;
+      }
+      case 'payroll-personnel-report-select': {
+        if (ui.payrollMainMenu !== 'Editions' || ui.payrollMenuItem !== 'personnel-reports') break;
+        var personnelReportId = trigger.getAttribute('data-personnel-report-id') || '';
+        var knownPersonnelReport = payrollPersonnelReportSections().some(function (section) { return section.items.some(function (item) { return item.id === personnelReportId; }); });
+        if (!knownPersonnelReport) break;
+        ui.payrollPersonnelReportId = personnelReportId;
+        render();
+        var selectedPersonnelReport = $('[data-action="payroll-personnel-report-select"][aria-pressed="true"]');
+        if (selectedPersonnelReport) selectedPersonnelReport.focus({ preventScroll: true });
         break;
       }
       case 'payroll-current-report-back':

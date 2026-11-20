@@ -677,3 +677,7 @@ La retenue globale d’assurance du bulletin est proposée comme part employé u
 Dans **Paie & RH → Éditions → États personnalisés sur les salaires**, le livre permet de choisir une plage de mois, tous les services ou une sélection multiple, puis le détail par employé et par mois ou le cumul par employé. Les lignes de détail et les sous-totaux par service sont indépendamment sélectionnables ; les sous-totaux couvrent toute la période. Les fiches sans service reconnu sont incluses avec `*` dans un groupe distinct.
 
 Les colonnes usuelles reposent sur les fiches et brouillons disponibles ; des rubriques du référentiel peuvent être ajoutées avec la cellule **Montant**, **Base** ou **Quantité**. Chaque cellule est additionnée séparément : sélectionner à la fois un total et ses composants ne les additionne pas entre eux. Les données absentes sont signalées et ne valent pas zéro ; `*` indique une valeur ou un cumul incomplet. Les affectations et informations de fiche sont actuelles, non historiques. Des signataires peuvent être indiqués, sans validation de paiement. L’aperçu plein écran, l’impression/PDF et les exports Excel/texte réutilisent le moteur de livres existant ; aucun bulletin ni paiement n’est créé ou modifié.
+
+### Sous-menu des états sur le personnel
+
+Dans **Paie & RH → Éditions → États sur le Personnel**, les sept entrées de la capture sont accessibles et regroupées selon ses séparateurs. Elles servent pour le moment à la navigation : les critères, traitements, impressions et exports de ces états restent à définir et à construire.
