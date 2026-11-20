@@ -29,7 +29,7 @@ test('les sept éléments et leurs séparateurs suivent la capture', () => {
   const html = context.viewPayrollPersonnelReports();
   assert.equal((html.match(/data-action="payroll-personnel-report-select"/g) || []).length, 7);
   assert.equal((html.match(/class="payroll-current-report-group"/g) || []).length, 3);
-  assert.match(html, /liste du personnel est disponible en brouillon test/i);
+  assert.match(html, /liste et l’état cumulé du personnel sont disponibles en brouillon test/i);
   assert.match(app, /selectedItem\.id === 'personnel-reports'\) panel = viewPayrollPersonnelReports\(\)/);
 });
 
@@ -39,6 +39,7 @@ test('chaque choix identifie l’état sans prétendre le produire', () => {
     context.ui.payrollPersonnelReportId = item.id;
     const html = context.viewPayrollPersonnelReports();
     if (item.id === 'personnel-list') { assert.match(html, /payroll-personnel-list-workspace/); continue; }
+    if (item.id === 'personnel-cumulative') { assert.match(html, /payroll-personnel-cumulative-workspace/); continue; }
     assert.match(html, new RegExp('data-personnel-report-id="' + item.id + '" aria-pressed="true"'));
     assert.equal((html.match(/aria-pressed="true"/g) || []).length, 1);
     assert.ok(html.includes('<h4>' + context.esc(item.label) + '</h4>'));
