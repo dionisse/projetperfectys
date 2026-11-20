@@ -408,7 +408,7 @@
     ];
   }
 
-  // Sous-éléments d’édition de définitions : navigation seule en attendant les modèles d’état.
+  // Sous-éléments d’édition des référentiels.
   function payrollDefinitionReportSections() {
     return [
       { items: [{id:'degrees-qualifications',label:'Diplômes et Qualifications'}, {id:'professions',label:'Professions'}] },
@@ -659,6 +659,7 @@
       }
       case 'open-payroll-dossier':
       case 'payroll-definition-report-select':
+      case 'payroll-definition-report-back':
       case 'payroll-personnel-report-select':
       case 'payroll-personnel-report-back':
       case 'payroll-current-report-select':
@@ -20629,6 +20630,21 @@
       var cnssSummaryDossier = PayrollHR.currentDossier();
       if (cnssSummaryDossier) window.PayrollCnssSummary.mount(cnssSummaryWorkspace,{hr:PayrollHR,dossier:cnssSummaryDossier,tools:window.PayrollPayslipWorkspace,math:window.PayrollCumulativeBook,tracking:window.PayrollPaymentTracking,nominative:window.PayrollCnssNominative,words:window.PayrollTransferOrder.words,exchange:AccountingExchange,canView:function(){return hasDemoPermission(getActiveDemoMember(),'payroll-hr','module.view',payrollAccessContext(cnssSummaryDossier));},canManage:function(){return hasDemoPermission(getActiveDemoMember(),'organization','organization.manageDossiers',demoAccessContext('organization'));}});
     }
+    var definitionReportsWorkspace = $('#payroll-definition-reports-workspace');
+    if (definitionReportsWorkspace && window.PayrollDefinitionReports) {
+      var definitionReportsDossier = PayrollHR.currentDossier();
+      if (definitionReportsDossier) window.PayrollDefinitionReports.mount(definitionReportsWorkspace, {
+        hr: PayrollHR, dossier: definitionReportsDossier, kind: definitionReportsWorkspace.getAttribute('data-definition-report-kind'),
+        personnel: window.PayrollPersonnelList, book: window.PayrollDetailedBook, exchange: AccountingExchange,
+        canView: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'module.view', payrollAccessContext(definitionReportsDossier)); },
+        canManage: function () { return hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageMembers', demoAccessContext('organization')); },
+        operators: function () { return demoMembers.map(function (member) {
+          var rights = Object.keys(member.grants || {}).sort().map(function (moduleId) { return demoGrantList(member, moduleId).map(function (grant) { return moduleId + ' · ' + (grant.scope && grant.scope.type || 'portée non précisée') + (grant.scope && Array.isArray(grant.scope.dossiers) && grant.scope.dossiers.length ? ' · ' + grant.scope.dossiers.join(', ') : '') + ' : ' + (Array.isArray(grant.actions) ? grant.actions.join(', ') : 'aucune action'); }).join(' ; '); }).filter(Boolean).join(' ; ');
+          return { id: member.id, code: member.id, label: member.name, rights: (member.role === 'supervisor' ? 'Superviseur · droits implicites' : 'Rôle : ' + member.role) + (rights ? ' ; ' + rights : ' ; aucun grant explicite') };
+        }); },
+        licenseOwner: licenseOwnerName, onClose: function () { ui.payrollDefinitionReportId = ''; render(); }
+      });
+    }
     var ohadaTable11Workspace = $('#payroll-ohada-table11-workspace');
     if (ohadaTable11Workspace && window.PayrollOhadaTable11 && window.PayrollPersonnelList && window.PayrollDetailedBook && window.PayrollPayslipWorkspace && window.PayrollCumulativeBook && window.PayrollPaymentTracking) {
       var ohadaTable11Dossier = PayrollHR.currentDossier();
@@ -22308,16 +22324,13 @@
   function viewPayrollDefinitionReports() {
     var sections = payrollDefinitionReportSections();
     var selected = sections.reduce(function (all, group) { return all.concat(group.items); }, []).find(function (item) { return item.id === ui.payrollDefinitionReportId; });
+    if (selected) return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-definitions-settings-reports"><button type="button" class="btn btn-secondary payroll-book-back" data-action="payroll-definition-report-back">← Retour aux définitions et paramètres</button><div id="payroll-definition-reports-workspace" data-definition-report-kind="' + esc(selected.id) + '"></div></section>';
     var list = sections.map(function (section) {
       return '<section class="payroll-current-report-group"><ul>' + section.items.map(function (item) {
-        var active = !!selected && selected.id === item.id;
-        return '<li><button type="button" class="payroll-current-report-item' + (active ? ' is-selected' : '') + '" data-action="payroll-definition-report-select" data-definition-report-id="' + esc(item.id) + '" aria-pressed="' + (active ? 'true' : 'false') + '"><span>' + esc(item.label) + '</span><small>À construire</small></button></li>';
+        return '<li><button type="button" class="payroll-current-report-item" data-action="payroll-definition-report-select" data-definition-report-id="' + esc(item.id) + '" aria-pressed="false"><span>' + esc(item.label) + '</span><small>' + (item.id === 'event-natures' ? 'Source indisponible' : 'Brouillon test') + '</small></button></li>';
       }).join('') + '</ul></section>';
     }).join('');
-    var detail = selected
-      ? '<div class="payroll-current-report-detail" aria-live="polite"><p class="page-kicker">ÉTAT SÉLECTIONNÉ</p><h4>' + esc(selected.label) + '</h4><p><strong>À construire :</strong> les critères et la présentation de cette édition restent à définir. Aucun état ni fichier n’est produit pour le moment.</p></div>'
-      : '<div class="payroll-current-report-detail" aria-live="polite"><h4>Sélectionnez une édition</h4><p>Les sous-éléments suivent la capture. Leurs critères et présentations restent à définir.</p></div>';
-    return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-definitions-settings-reports" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Définitions et Paramètres</h3></div><span class="badge draft">11 ENTRÉES · À CONSTRUIRE</span></div><div class="alert info"><div>Navigation uniquement : ces entrées ne produisent pas encore d’édition et ne modifient aucun référentiel ni droit d’accès.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="Éditions des définitions et paramètres">' + list + '</nav>' + detail + '</div></section>';
+    return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-definitions-settings-reports" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Définitions et Paramètres</h3></div><span class="badge draft">11 ENTRÉES · TEST</span></div><div class="alert info"><div>Éditions en lecture seule des référentiels fictifs. Les natures des événements restent indisponibles faute de référentiel.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="Éditions des définitions et paramètres">' + list + '</nav><div class="payroll-current-report-detail"><h4>Sélectionnez une édition</h4><p>Les opérateurs et droits nécessitent également la gestion des membres.</p></div></div></section>';
   }
 
   function viewPayrollDeclarations() {
@@ -35722,6 +35735,10 @@
         if(selectedDeclarationButton)selectedDeclarationButton.focus({preventScroll:true});
         break;
       }
+      case 'payroll-definition-report-back':
+        ui.payrollDefinitionReportId = '';
+        render();
+        break;
       case 'payroll-definition-report-select': {
         if (ui.payrollMainMenu !== 'Editions' || ui.payrollMenuItem !== 'definitions-settings-reports') break;
         var definitionReportId = trigger.getAttribute('data-definition-report-id') || '';
