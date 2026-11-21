@@ -158,7 +158,7 @@ assert.match(app, /additionalClassificationIds/);
 assert.match(payroll, /function createEmployeeCategoryAdditionalClassification\(dossierId, input\)/);
 assert.match(payroll, /function deleteEmployeeCategoryAdditionalClassification\(dossierId, classificationId\)/);
 assert.ok(app.includes('function viewPayrollMainMenu(dossier, dossierEmployees, canCreatePayrollEmployee, canEditPayrollEmployee)'));
-assert.match(app, /var implementedMenuItems = availableDefinitionItems\.concat\(\['employees', 'payslips', 'post-hire-payslips', 'attendance-hours', 'advances-loans', 'payslip-edition', 'exceptional-payslip-1', 'exceptional-payslip-2', 'complementary-fund-payments', 'custom-salary-reports', 'ohada-table-11', 'component-postings', 'loan-repayment-postings', 'auxiliary-postings'\]\)/);
+assert.match(app, /var implementedMenuItems = availableDefinitionItems\.concat\(\['employees', 'payslips', 'post-hire-payslips', 'attendance-hours', 'advances-loans', 'payslip-edition', 'exceptional-payslip-1', 'exceptional-payslip-2', 'complementary-fund-payments', 'custom-salary-reports', 'ohada-table-11', 'component-postings', 'loan-repayment-postings', 'auxiliary-postings', 'analytic-postings'\]\)/);
 assert.match(app, /var hasPlannedItems = items\.some\([\s\S]*implementedMenuItems\.indexOf\(item\.id\) === -1/);
 assert.match(app, /var legend = hasPlannedItems \?/);
 assert.match(app, /selectedItem\.id === 'employee-statuses'[\s\S]*viewPayrollEmployeeStatuses/);
@@ -349,7 +349,7 @@ assert.match(payroll, /function createDossier\(input\)[\s\S]*'PRH-' \+ clientCod
 assert.match(payroll, /accountingDossierId: accountingDossierId/);
 assert.match(payroll, /function storageKey\(dossierId\)[\s\S]*STORAGE_PREFIX \+ encodeURIComponent/);
 assert.match(css, /\.payroll-dossier-grid[\s\S]*\.payroll-dossier-card/);
-assert.match(worker, /emrys-static-v256/);
+assert.match(worker, /emrys-static-v257/);
 console.log('UI Paie & RH : route dossier dédiée, référence PRH, sélection par dossier et association non automatique — OK');
 
 // Éditions commence par le bulletin ordinaire ; seuls les modèles 1 et 2 sont actifs.

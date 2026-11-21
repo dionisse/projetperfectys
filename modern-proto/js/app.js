@@ -20630,6 +20630,17 @@
       var cnssSummaryDossier = PayrollHR.currentDossier();
       if (cnssSummaryDossier) window.PayrollCnssSummary.mount(cnssSummaryWorkspace,{hr:PayrollHR,dossier:cnssSummaryDossier,tools:window.PayrollPayslipWorkspace,math:window.PayrollCumulativeBook,tracking:window.PayrollPaymentTracking,nominative:window.PayrollCnssNominative,words:window.PayrollTransferOrder.words,exchange:AccountingExchange,canView:function(){return hasDemoPermission(getActiveDemoMember(),'payroll-hr','module.view',payrollAccessContext(cnssSummaryDossier));},canManage:function(){return hasDemoPermission(getActiveDemoMember(),'organization','organization.manageDossiers',demoAccessContext('organization'));}});
     }
+    var analyticPostingsWorkspace = $('#payroll-analytic-postings-workspace');
+    if (analyticPostingsWorkspace && window.PayrollAnalyticPostings) {
+      var analyticPostingsDossier = PayrollHR.currentDossier();
+      if (analyticPostingsDossier) window.PayrollAnalyticPostings.mount(analyticPostingsWorkspace, {
+        hr: PayrollHR, dossier: analyticPostingsDossier, context: payrollAnalyticContext,
+        canView: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'module.view', payrollAccessContext(analyticPostingsDossier)); },
+        canEdit: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'record.edit', payrollAccessContext(analyticPostingsDossier)); },
+        canDelete: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'record.delete', payrollAccessContext(analyticPostingsDossier)); },
+        onClose: function () { ui.payrollMainMenu = 'Comptabilisations'; ui.payrollMenuItem = ''; render(); }
+      });
+    }
     var auxiliaryPostingsWorkspace = $('#payroll-auxiliary-postings-workspace');
     if (auxiliaryPostingsWorkspace && window.PayrollAuxiliaryPostings) {
       var auxiliaryPostingsDossier = PayrollHR.currentDossier();
@@ -22406,6 +22417,16 @@
     return { chart: plan.chart, personnel: snapshot.state.personnel, notice: plan.notice };
   }
 
+  function payrollAnalyticContext(dossier) {
+    var plan = payrollJournalPlan(dossier);
+    if (!plan.chart || !dossier.accountingDossierId) return { chart: null, centers: null, notice: plan.notice };
+    var current = S.currentDossier();
+    if (current && current.id === dossier.accountingDossierId) return { chart: plan.chart, centers: S.analyticalCenters(), notice: plan.notice };
+    var snapshot = S.readDossierStateSnapshot(dossier.accountingDossierId);
+    if (!snapshot || !snapshot.ok || !Array.isArray(snapshot.state.analyticalCenters)) return { chart: null, centers: null, notice: 'Référentiel des centres du dossier lié indisponible ou non initialisé ; ouvrez ou vérifiez ce dossier comptable.' };
+    return { chart: plan.chart, centers: snapshot.state.analyticalCenters, notice: plan.notice };
+  }
+
   function viewPayrollJournalGeneration(dossier) {
     var testDossier = dossier && PayrollHR.isDemoTestDossier(dossier.id);
     var rules = window.PayrollJournalRules;
@@ -22442,7 +22463,7 @@
     var selectableItems = items.filter(function (item) { return !item.disabled; });
     var selectedItem = selectableItems.find(function (item) { return item.id === ui.payrollMenuItem; }) || selectableItems[0] || null;
     var availableDefinitionItems = ['employee-statuses', 'employee-categories', 'geographic-zones', 'services', 'functions', 'degrees-qualifications', 'professions', 'social-security-funds', 'complementary-social-funds', 'banks'];
-    var implementedMenuItems = availableDefinitionItems.concat(['employees', 'payslips', 'post-hire-payslips', 'attendance-hours', 'advances-loans', 'payslip-edition', 'exceptional-payslip-1', 'exceptional-payslip-2', 'complementary-fund-payments', 'custom-salary-reports', 'ohada-table-11', 'component-postings', 'loan-repayment-postings', 'auxiliary-postings']);
+    var implementedMenuItems = availableDefinitionItems.concat(['employees', 'payslips', 'post-hire-payslips', 'attendance-hours', 'advances-loans', 'payslip-edition', 'exceptional-payslip-1', 'exceptional-payslip-2', 'complementary-fund-payments', 'custom-salary-reports', 'ohada-table-11', 'component-postings', 'loan-repayment-postings', 'auxiliary-postings', 'analytic-postings']);
     var hasPlannedItems = items.some(function (item) { return !item.disabled && !item.hasChildren && implementedMenuItems.indexOf(item.id) === -1; });
     var tabs = sections.map(function (section, sectionIndex) {
       var heading = section.heading ? '<p class="payroll-subtab-group-heading">' + esc(section.heading) + '</p>' : '';
@@ -22466,6 +22487,7 @@
     else if (selectedItem && selectedItem.id === 'payroll-journal-generation') panel = viewPayrollJournalGeneration(dossier);
     else if (selectedItem && selectedItem.id === 'component-postings') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-component-postings"><div id="payroll-rubric-postings-workspace"></div></div>';
     else if (selectedItem && selectedItem.id === 'loan-repayment-postings') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-loan-repayment-postings"><div id="payroll-loan-postings-workspace"></div></div>';
+    else if (selectedItem && selectedItem.id === 'analytic-postings') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-analytic-postings"><div id="payroll-analytic-postings-workspace"></div></div>';
     else if (selectedItem && selectedItem.id === 'auxiliary-postings') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-auxiliary-postings"><div id="payroll-auxiliary-postings-workspace"></div></div>';
     else if (selectedItem && selectedItem.id === 'current-month-payroll-reports') panel = viewPayrollCurrentMonthReports();
     else if (selectedItem && selectedItem.id === 'cnss-ipts-fnr-declarations') panel = viewPayrollDeclarations();
