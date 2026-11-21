@@ -466,7 +466,7 @@
       { items: [{ id: 'dossier-specific-reports', label: 'Etats spécifiques au dossier' }] }
     ];
     var accounting = [
-      { heading: 'Génération du journal de paie :', items: [{ id: 'payroll-journal-edition', label: 'Edition du journal' }, { id: 'payroll-text-export', label: 'Exportation par fichier-texte' }] },
+      { items: [{ id: 'payroll-journal-generation', label: 'Génération du journal de paie', hasChildren: true }] },
       { items: [{ id: 'component-postings', label: 'Imputations des rubriques' }, { id: 'loan-repayment-postings', label: 'Imputation des remboursements de prêt' }, { id: 'auxiliary-postings', label: 'Imputations auxiliaires' }, { id: 'analytic-postings', label: 'Imputations analytiques' }] },
       { items: [{ id: 'general-accounts-file-location', label: 'Emplacement du fichier des comptes généraux' }] }
     ];
@@ -22345,6 +22345,20 @@
     return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-cnss-ipts-fnr-declarations" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Déclarations C.N.S.S., ITS et F.N.R.B.</h3></div><span class="badge draft">5 ÉTATS · TEST</span></div><div class="alert warning"><div>Préparation fictive uniquement. Aucun dépôt officiel, calcul légal ni paiement.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="Déclarations"><section class="payroll-current-report-group"><h4>Déclarations</h4><ul>'+list+'</ul></section></nav>'+detail+'</div></section>';
   }
 
+  function viewPayrollJournalGeneration(dossier) {
+    var testDossier = dossier && PayrollHR.isDemoTestDossier(dossier.id);
+    return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-payroll-journal-generation" class="payroll-current-reports">' +
+      '<div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · COMPTABILISATIONS</p><h3>Génération du journal de paie</h3></div><span class="badge draft">EN ATTENTE · TEST</span></div>' +
+      (!testDossier ? '<div class="alert warning">Ce parcours de préparation est réservé au dossier fictif PRH-TEST-2026.</div>' :
+        '<div class="alert warning"><div><strong>Génération indisponible.</strong> Aucun traitement de paie approuvé et verrouillé n’est actuellement produit par le prototype ; les règles de comptabilisation doivent encore être fournies et validées. Les bulletins brouillons et paiements déclaratifs ne sont pas utilisés comme paie approuvée.</div></div>') +
+      '<div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="Journal de paie"><section class="payroll-current-report-group"><ul>' +
+      '<li><button type="button" class="payroll-current-report-item is-disabled" disabled aria-disabled="true"><span>Edition du journal</span><small>Journal non généré</small></button></li>' +
+      '<li><button type="button" class="payroll-current-report-item is-disabled" disabled aria-disabled="true"><span>Exportation par fichier-texte</span><small>Journal non généré</small></button></li>' +
+      '</ul></section></nav><div class="payroll-current-report-detail"><h4>Prérequis de génération</h4><ol><li>Disposer d’une paie traitée, approuvée et verrouillée, traçable par période.</li><li>Fournir et valider les règles de comptabilisation et comptes associés aux opérations de paie.</li></ol>' +
+      '<p>La future génération proposera des écritures contrôlables et modifiables avant validation interne ; elle ne transférera rien automatiquement en Comptabilité générale. Le journal interne pourra être rouvert avant transfert. Après transfert, les corrections devront être tracées par contrepassation.</p>' +
+      '<p><strong>Aucun journal, aucune écriture, validation ou export n’est créé à ce stade.</strong></p></div></div></section>';
+  }
+
   function viewPayrollMainMenu(dossier, dossierEmployees, canCreatePayrollEmployee, canEditPayrollEmployee) {
     var activeMenu = ui.payrollMainMenu || 'Fichier';
     var sections = payrollMenuSections(activeMenu);
@@ -22373,6 +22387,7 @@
     var panelStatus = !selectedItem ? 'À définir' : (selectedItem.hasChildren ? 'Sous-menu à préciser' : 'À construire');
     var panel;
     if (selectedItem && selectedItem.id === 'employees') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-employees">' + viewPayrollEmployeeDetails(dossier, dossierEmployees || [], canCreatePayrollEmployee === true) + '</div>';
+    else if (selectedItem && selectedItem.id === 'payroll-journal-generation') panel = viewPayrollJournalGeneration(dossier);
     else if (selectedItem && selectedItem.id === 'current-month-payroll-reports') panel = viewPayrollCurrentMonthReports();
     else if (selectedItem && selectedItem.id === 'cnss-ipts-fnr-declarations') panel = viewPayrollDeclarations();
     else if (selectedItem && selectedItem.id === 'personnel-reports') panel = viewPayrollPersonnelReports();
