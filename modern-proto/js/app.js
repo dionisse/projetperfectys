@@ -22347,16 +22347,46 @@
 
   function viewPayrollJournalGeneration(dossier) {
     var testDossier = dossier && PayrollHR.isDemoTestDossier(dossier.id);
+    var rules = window.PayrollJournalRules;
+    var planNotice = 'Associez explicitement un dossier comptable accessible pour rapprocher les comptes proposés de son plan.';
+    var chart = null, target = null;
+    if (testDossier && dossier.accountingDossierId) {
+      target = permittedDemoDossiers(getActiveDemoMember()).find(function (item) { return item.id === dossier.accountingDossierId; }) || null;
+      if (!target) planNotice = 'Le dossier comptable associé est introuvable ou inaccessible à ce profil.';
+      else {
+        var current = S.currentDossier();
+        if (current && current.id === target.id) chart = S.accounts();
+        else {
+          var snapshot = S.readDossierStateSnapshot(target.id);
+          if (snapshot && snapshot.ok && Array.isArray(snapshot.state.accounts)) chart = snapshot.state.accounts;
+          else planNotice = 'Le plan du dossier associé ne peut pas être lu ; ouvrez ou vérifiez le dossier comptable.';
+        }
+        if (chart) planNotice = 'Plan du dossier associé : ' + (target.reference || target.name || target.id) + '. Comparaison des codes exacts visibles uniquement ; aucune correspondance n’est appliquée automatiquement.';
+      }
+    }
+    var ruleInfo = '';
+    if (testDossier && rules) {
+      var ruleGroups = rules.rules.map(function (rule) {
+        return '<section class="payroll-current-report-group"><h4>' + esc(rule.title) + '</h4><p><strong>Événement requis :</strong> ' + esc(rule.trigger) + '</p><ul>' + rule.lines.map(function (line) { return '<li>' + esc(line) + '</li>'; }).join('') + '</ul></section>';
+      }).join('');
+      var auditRows = chart ? rules.audit(chart).map(function (row) {
+        return '<tr><td>' + esc(row.code) + '</td><td>' + esc(row.usage) + '</td><td>' + esc(row.label || '—') + '</td><td>' + esc(row.state) + '</td></tr>';
+      }).join('') : '';
+      ruleInfo = '<details class="rubric-card"><summary>Règles fournies · consulter les opérations et le plan</summary><p>Schémas indicatifs fournis par l’utilisateur, sans calcul de taux ni montants. L’affectation effective devra être confirmée par rapport au plan du dossier et aux sources approuvées.</p>' + ruleGroups +
+        '<p>Les primes ventilées en 6612 font partie du brut : ne pas les ajouter une seconde fois. La retenue d’assurance enregistrée séparément ne doit pas déjà être déduite du crédit 422 initial. Les règlements ne découlent pas automatiquement d’une déclaration ou d’un bulletin.</p>' +
+        '<div class="alert warning">Le plan standard du logiciel libelle 4311 « Prestations familiales », tandis que la règle reçue l’utilise pour la CNSS salariale. Le code 4286 est proposé pour l’assureur mais doit être vérifié dans le plan du dossier. Aucune substitution n’est décidée automatiquement.</div>' +
+        '<p>' + esc(planNotice) + '</p>' + (chart ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Code proposé</th><th>Usage proposé</th><th>Libellé du plan</th><th>État du compte exact</th></tr></thead><tbody>' + auditRows + '</tbody></table></div><p>« Non disponible » peut signifier absent ou non visible. Les comptes inactifs ou non imputables ne peuvent pas être utilisés ; aucun compte de remplacement n’est choisi ici.</p>' : '') + '</details>';
+    }
     return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-payroll-journal-generation" class="payroll-current-reports">' +
       '<div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · COMPTABILISATIONS</p><h3>Génération du journal de paie</h3></div><span class="badge draft">EN ATTENTE · TEST</span></div>' +
       (!testDossier ? '<div class="alert warning">Ce parcours de préparation est réservé au dossier fictif PRH-TEST-2026.</div>' :
-        '<div class="alert warning"><div><strong>Génération indisponible.</strong> Aucun traitement de paie approuvé et verrouillé n’est actuellement produit par le prototype ; les règles de comptabilisation doivent encore être fournies et validées. Les bulletins brouillons et paiements déclaratifs ne sont pas utilisés comme paie approuvée.</div></div>') +
+        '<div class="alert warning"><div><strong>Génération indisponible.</strong> Aucun traitement de paie approuvé et verrouillé n’est actuellement produit par le prototype ; les règles fournies doivent être rapprochées du plan et finalisées. Les bulletins brouillons et paiements déclaratifs ne sont pas utilisés comme paie approuvée.</div></div>') +
       '<div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="Journal de paie"><section class="payroll-current-report-group"><ul>' +
       '<li><button type="button" class="payroll-current-report-item is-disabled" disabled aria-disabled="true"><span>Edition du journal</span><small>Journal non généré</small></button></li>' +
       '<li><button type="button" class="payroll-current-report-item is-disabled" disabled aria-disabled="true"><span>Exportation par fichier-texte</span><small>Journal non généré</small></button></li>' +
-      '</ul></section></nav><div class="payroll-current-report-detail"><h4>Prérequis de génération</h4><ol><li>Disposer d’une paie traitée, approuvée et verrouillée, traçable par période.</li><li>Fournir et valider les règles de comptabilisation et comptes associés aux opérations de paie.</li></ol>' +
+      '</ul></section></nav><div class="payroll-current-report-detail"><h4>Prérequis de génération</h4><ol><li>Disposer d’une paie traitée, approuvée et verrouillée, traçable par période.</li><li>Valider les correspondances exactes avec le plan du dossier comptable.</li><li>Disposer des événements de règlement qualifiés pour les écritures de paiement.</li></ol>' +
       '<p>La future génération proposera des écritures contrôlables et modifiables avant validation interne ; elle ne transférera rien automatiquement en Comptabilité générale. Le journal interne pourra être rouvert avant transfert. Après transfert, les corrections devront être tracées par contrepassation.</p>' +
-      '<p><strong>Aucun journal, aucune écriture, validation ou export n’est créé à ce stade.</strong></p></div></div></section>';
+      '<p><strong>Aucun journal, aucune écriture, validation ou export n’est créé à ce stade.</strong></p></div></div>' + ruleInfo + '</section>';
   }
 
   function viewPayrollMainMenu(dossier, dossierEmployees, canCreatePayrollEmployee, canEditPayrollEmployee) {
