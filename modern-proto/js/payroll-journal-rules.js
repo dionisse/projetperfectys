@@ -3,9 +3,9 @@
   'use strict';
   var accounts=[
     {code:'6611',usage:'Salaire et appointements'}, {code:'6612',usage:'Primes et gratifications'},
-    {code:'422',usage:'Rémunérations dues'}, {code:'4311',usage:'CNSS · part salariale',warning:'Dans le référentiel standard du logiciel, 4311 est intitulé « Prestations familiales » : utilisation pour la part salariale à confirmer.'},
-    {code:'431',usage:'CNSS · dette sociale'}, {code:'447',usage:'ITS retenue'}, {code:'664',usage:'Charges sociales patronales'},
-    {code:'521',usage:'Banque'}, {code:'571',usage:'Caisse'}, {code:'4286',usage:'Dette envers l’assureur · proposition à vérifier'},
+    {code:'422',usage:'Rémunérations dues'}, {code:'4311',usage:'CNSS · part salariale'},
+    {code:'431',usage:'CNSS · dette sociale'}, {code:'4312',usage:'Accidents de travail'}, {code:'4313',usage:'Retraite obligatoire'}, {code:'4314',usage:'Retraite facultative'}, {code:'4318',usage:'Autres cotisations sociales'}, {code:'447',usage:'ITS retenue'}, {code:'664',usage:'Charges sociales patronales'}, {code:'6641',usage:'Charges sociales · personnel national'}, {code:'6642',usage:'Charges sociales · personnel non national'},
+    {code:'521',usage:'Banque'}, {code:'571',usage:'Caisse'}, {code:'428',usage:'Charges à payer et produits à recevoir'}, {code:'4281',usage:'Congés à payer'}, {code:'4286',usage:'Dette envers l’assureur'}, {code:'4287',usage:'Produits à recevoir'},
     {code:'6685',usage:'Assurance santé · part employeur'}, {code:'6686',usage:'Assurance retraite · part employeur'}, {code:'668',usage:'Autre assurance · part employeur'}
   ];
   var rules=[

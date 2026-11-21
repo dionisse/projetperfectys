@@ -73,9 +73,9 @@ assert.equal(dossierReport.rows.find(row => row.code === '601100').origin, 'Comp
 assert.equal(dossierReport.rows.find(row => row.code === '601100').posting, 'Historique');
 
 const defaultPlan = Edition.buildReport({ accountFilter: '*', records: Chart.defaultAccounts() });
-assert.equal(defaultPlan.sourceRowCount, 1405);
-assert.equal(defaultPlan.referenceAccountCount, 1400);
-assert.equal(defaultPlan.userProvidedAccountCount, 5);
+assert.equal(defaultPlan.sourceRowCount, 1409);
+assert.equal(defaultPlan.referenceAccountCount, 1398);
+assert.equal(defaultPlan.userProvidedAccountCount, 11);
 assert.equal(defaultPlan.rows.find(row => row.code === '447803').origin, 'Complément fourni par l’utilisateur');
 assert.equal(defaultPlan.rows.find(row => row.code === '447803').userProvided, true);
 

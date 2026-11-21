@@ -133,6 +133,12 @@
       var existing = currentByCode[account.code];
       chartByCode[account.code] = true;
       if (!existing) return account;
+      // Les nouveaux codes fournis ne doivent jamais absorber un compte personnalisé
+      // ni l’ancien compte 664 « Pertes de change » d’un plan historique.
+      var oldConflicting664 = account.code === '664' && existing.label === 'Pertes de change';
+      if (account.userProvided && (existing.standard !== true || oldConflicting664)) {
+        return Object.assign({}, existing, { code: String(existing.code), standard: false, legacy: oldConflicting664 || !!existing.legacy });
+      }
       var previousDefault = ACCOUNTING_CHART.previousVersionOneAccount
         ? ACCOUNTING_CHART.previousVersionOneAccount(account.code)
         : null;
@@ -150,6 +156,17 @@
         if (existing.label === previousDefault.label) merged.label = account.label;
         if (existing.nature === previousDefault.nature) merged.nature = account.nature;
         if (existing.usage === previousDefault.usage) merged.usage = account.usage;
+      }
+      var previousProvidedLabel = ACCOUNTING_CHART.previousUserProvidedLabel && ACCOUNTING_CHART.previousUserProvidedLabel(account.code);
+      if (existing.standard === true && previousProvidedLabel && existing.label === previousProvidedLabel) {
+        merged.label = account.label;
+        merged.sourceType = account.sourceType;
+        merged.userProvided = true;
+        merged.sourcePage = null;
+      } else if (previousProvidedLabel && existing.label && existing.label !== account.label) {
+        // Le libellé personnalisé n’est pas attribué à la modification fournie.
+        merged.userProvided = !!existing.userProvided;
+        if (existing.sourceType) merged.sourceType = existing.sourceType; else delete merged.sourceType;
       }
       merged.postable = account.postable;
       merged.legacy = false;

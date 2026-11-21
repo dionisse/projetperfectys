@@ -12,7 +12,7 @@
 })(typeof window !== 'undefined' ? window : globalThis, function () {
   'use strict';
 
-  var VERSION = 3;
+  var VERSION = 4;
   var METADATA = Object.freeze({
     sourceFile: 'NOMENCLATURE-DES-COMPTES-SYSCOHADA-FINAL-1.pdf',
     sourcePdfSha256: '3d90abdfc6c741cfa0f2a3168ad1b696d3dd7d3d40bd1669119a7883f1c5f43c',
@@ -1638,8 +1638,12 @@
     return 'Actif';
   }
 
-  // Sous-comptes AIB communiqués par l’utilisateur, distincts du PDF de référence.
+  // Compléments communiqués par l’utilisateur, distincts du PDF de référence.
   var USER_SUPPLEMENTAL_ROWS = Object.freeze([
+    ['4286', 'Autres charges à payer'],
+    ['4287', 'Produits à recevoir'],
+    ['664', 'Charges sociales'],
+    ['6641', 'Charges sociales sur rémunération du personnel national'],
     ['447800', 'AIB sur vente'],
     ['447801', 'AIB sur achat'],
     ['447802', 'AIB sur vente'],
@@ -1677,8 +1681,26 @@
   }
 
   function accounts() { return ROWS.map(accountFromRow); }
+  // Ancien libellé exact du PDF et libellé adapté, explicitement fourni par l’utilisateur.
+  var USER_LABEL_OVERRIDES = Object.freeze({
+    '4311': { previous: 'Prestations familiales', label: 'Prestations familiales / Part Salariale CNSS' },
+    '4313': { previous: 'Caisse de retraite obligatoire (Caisse Nationale de Sécurité Sociale)', label: 'Caisse de retraite obligatoire' }
+  });
+  function previousUserProvidedLabel(code) {
+    var override = USER_LABEL_OVERRIDES[String(code)];
+    return override ? override.previous : null;
+  }
   function defaultAccounts() {
-    return accounts().concat(USER_SUPPLEMENTAL_ROWS.map(function (row) {
+    return accounts().map(function (account) {
+      var override = USER_LABEL_OVERRIDES[account.code];
+      if (override) {
+        account.label = override.label;
+        account.sourcePage = null;
+        account.sourceType = 'user-provided';
+        account.userProvided = true;
+      }
+      return account;
+    }).concat(USER_SUPPLEMENTAL_ROWS.map(function (row) {
       var account = accountFromRow([row[0], row[1], null]);
       account.sourcePage = null;
       account.sourceType = 'user-provided';
@@ -1701,6 +1723,7 @@
     classLabel: classLabel,
     accountCount: function () { return ROWS.length; },
     defaultAccountCount: function () { return ROWS.length + USER_SUPPLEMENTAL_ROWS.length; },
-    previousVersionOneAccount: previousVersionOneAccount
+    previousVersionOneAccount: previousVersionOneAccount,
+    previousUserProvidedLabel: previousUserProvidedLabel
   });
 });

@@ -22358,8 +22358,8 @@
         if (current && current.id === target.id) chart = S.accounts();
         else {
           var snapshot = S.readDossierStateSnapshot(target.id);
-          if (snapshot && snapshot.ok && Array.isArray(snapshot.state.accounts)) chart = snapshot.state.accounts;
-          else planNotice = 'Le plan du dossier associé ne peut pas être lu ; ouvrez ou vérifiez le dossier comptable.';
+          if (snapshot && snapshot.ok && Array.isArray(snapshot.state.accounts) && window.PerfectoAccountingChart && Number(snapshot.state.accountChartVersion) === window.PerfectoAccountingChart.VERSION) chart = snapshot.state.accounts;
+          else planNotice = 'Le plan du dossier associé ne peut pas être lu ou n’est pas à jour ; ouvrez ou vérifiez ce dossier comptable avant le rapprochement.';
         }
         if (chart) planNotice = 'Plan du dossier associé : ' + (target.reference || target.name || target.id) + '. Comparaison des codes exacts visibles uniquement ; aucune correspondance n’est appliquée automatiquement.';
       }
@@ -22374,7 +22374,7 @@
       }).join('') : '';
       ruleInfo = '<details class="rubric-card"><summary>Règles fournies · consulter les opérations et le plan</summary><p>Schémas indicatifs fournis par l’utilisateur, sans calcul de taux ni montants. L’affectation effective devra être confirmée par rapport au plan du dossier et aux sources approuvées.</p>' + ruleGroups +
         '<p>Les primes ventilées en 6612 font partie du brut : ne pas les ajouter une seconde fois. La retenue d’assurance enregistrée séparément ne doit pas déjà être déduite du crédit 422 initial. Les règlements ne découlent pas automatiquement d’une déclaration ou d’un bulletin.</p>' +
-        '<div class="alert warning">Le plan standard du logiciel libelle 4311 « Prestations familiales », tandis que la règle reçue l’utilise pour la CNSS salariale. Le code 4286 est proposé pour l’assureur mais doit être vérifié dans le plan du dossier. Aucune substitution n’est décidée automatiquement.</div>' +
+        '<div class="alert info">Selon les indications fournies, 4311 est un sous-compte de 431 utilisé pour la part salariale CNSS ; 4286 est un sous-compte de 428. Les correspondances effectives restent à confirmer dans le plan du dossier.</div>' +
         '<p>' + esc(planNotice) + '</p>' + (chart ? '<div class="exchange-table-wrap"><table class="exchange-mapping-table"><thead><tr><th>Code proposé</th><th>Usage proposé</th><th>Libellé du plan</th><th>État du compte exact</th></tr></thead><tbody>' + auditRows + '</tbody></table></div><p>« Non disponible » peut signifier absent ou non visible. Les comptes inactifs ou non imputables ne peuvent pas être utilisés ; aucun compte de remplacement n’est choisi ici.</p>' : '') + '</details>';
     }
     return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-payroll-journal-generation" class="payroll-current-reports">' +

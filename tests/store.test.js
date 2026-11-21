@@ -62,8 +62,8 @@ function test(name, fn) {
 }
 
 console.log('Référentiel de démonstration');
-test('1 405 comptes standards, dont cinq sous-comptes AIB, 18 comptes historiques, 8 journaux standards et 2 journaux système', () => {
-  assert.strictEqual(STANDARD_ACCOUNT_COUNT, 1405);
+test('1 409 comptes standards, dont les compléments AIB et paie, 18 comptes historiques, 8 journaux standards et 2 journaux système', () => {
+  assert.strictEqual(STANDARD_ACCOUNT_COUNT, 1409);
   assert.strictEqual(S.accounts().length, STANDARD_ACCOUNT_COUNT + 18);
   assert.strictEqual(S.journals().length, 10);
   assert.strictEqual(S.journals().filter((journal) => journal.isStandard).length, 8);
