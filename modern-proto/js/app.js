@@ -20630,6 +20630,16 @@
       var cnssSummaryDossier = PayrollHR.currentDossier();
       if (cnssSummaryDossier) window.PayrollCnssSummary.mount(cnssSummaryWorkspace,{hr:PayrollHR,dossier:cnssSummaryDossier,tools:window.PayrollPayslipWorkspace,math:window.PayrollCumulativeBook,tracking:window.PayrollPaymentTracking,nominative:window.PayrollCnssNominative,words:window.PayrollTransferOrder.words,exchange:AccountingExchange,canView:function(){return hasDemoPermission(getActiveDemoMember(),'payroll-hr','module.view',payrollAccessContext(cnssSummaryDossier));},canManage:function(){return hasDemoPermission(getActiveDemoMember(),'organization','organization.manageDossiers',demoAccessContext('organization'));}});
     }
+    var rubricPostingsWorkspace = $('#payroll-rubric-postings-workspace');
+    if (rubricPostingsWorkspace && window.PayrollRubricPostings) {
+      var rubricPostingsDossier = PayrollHR.currentDossier();
+      if (rubricPostingsDossier) window.PayrollRubricPostings.mount(rubricPostingsWorkspace, {
+        hr: PayrollHR, dossier: rubricPostingsDossier, plan: payrollJournalPlan,
+        canView: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'module.view', payrollAccessContext(rubricPostingsDossier)); },
+        canEdit: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'record.edit', payrollAccessContext(rubricPostingsDossier)); },
+        canDelete: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'record.delete', payrollAccessContext(rubricPostingsDossier)); }
+      });
+    }
     var definitionReportsWorkspace = $('#payroll-definition-reports-workspace');
     if (definitionReportsWorkspace && window.PayrollDefinitionReports) {
       var definitionReportsDossier = PayrollHR.currentDossier();
@@ -22345,12 +22355,10 @@
     return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-cnss-ipts-fnr-declarations" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Déclarations C.N.S.S., ITS et F.N.R.B.</h3></div><span class="badge draft">5 ÉTATS · TEST</span></div><div class="alert warning"><div>Préparation fictive uniquement. Aucun dépôt officiel, calcul légal ni paiement.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="Déclarations"><section class="payroll-current-report-group"><h4>Déclarations</h4><ul>'+list+'</ul></section></nav>'+detail+'</div></section>';
   }
 
-  function viewPayrollJournalGeneration(dossier) {
-    var testDossier = dossier && PayrollHR.isDemoTestDossier(dossier.id);
-    var rules = window.PayrollJournalRules;
+  function payrollJournalPlan(dossier) {
     var planNotice = 'Associez explicitement un dossier comptable accessible pour rapprocher les comptes proposés de son plan.';
     var chart = null, target = null;
-    if (testDossier && dossier.accountingDossierId) {
+    if (dossier && PayrollHR.isDemoTestDossier(dossier.id) && dossier.accountingDossierId) {
       target = permittedDemoDossiers(getActiveDemoMember()).find(function (item) { return item.id === dossier.accountingDossierId; }) || null;
       if (!target) planNotice = 'Le dossier comptable associé est introuvable ou inaccessible à ce profil.';
       else {
@@ -22364,6 +22372,13 @@
         if (chart) planNotice = 'Plan du dossier associé : ' + (target.reference || target.name || target.id) + '. Comparaison des codes exacts visibles uniquement ; aucune correspondance n’est appliquée automatiquement.';
       }
     }
+    return { chart: chart, notice: planNotice };
+  }
+
+  function viewPayrollJournalGeneration(dossier) {
+    var testDossier = dossier && PayrollHR.isDemoTestDossier(dossier.id);
+    var rules = window.PayrollJournalRules;
+    var plan = payrollJournalPlan(dossier), chart = plan.chart, planNotice = plan.notice;
     var ruleInfo = '';
     if (testDossier && rules) {
       var ruleGroups = rules.rules.map(function (rule) {
@@ -22396,7 +22411,7 @@
     var selectableItems = items.filter(function (item) { return !item.disabled; });
     var selectedItem = selectableItems.find(function (item) { return item.id === ui.payrollMenuItem; }) || selectableItems[0] || null;
     var availableDefinitionItems = ['employee-statuses', 'employee-categories', 'geographic-zones', 'services', 'functions', 'degrees-qualifications', 'professions', 'social-security-funds', 'complementary-social-funds', 'banks'];
-    var implementedMenuItems = availableDefinitionItems.concat(['employees', 'payslips', 'post-hire-payslips', 'attendance-hours', 'advances-loans', 'payslip-edition', 'exceptional-payslip-1', 'exceptional-payslip-2', 'complementary-fund-payments', 'custom-salary-reports', 'ohada-table-11']);
+    var implementedMenuItems = availableDefinitionItems.concat(['employees', 'payslips', 'post-hire-payslips', 'attendance-hours', 'advances-loans', 'payslip-edition', 'exceptional-payslip-1', 'exceptional-payslip-2', 'complementary-fund-payments', 'custom-salary-reports', 'ohada-table-11', 'component-postings']);
     var hasPlannedItems = items.some(function (item) { return !item.disabled && !item.hasChildren && implementedMenuItems.indexOf(item.id) === -1; });
     var tabs = sections.map(function (section, sectionIndex) {
       var heading = section.heading ? '<p class="payroll-subtab-group-heading">' + esc(section.heading) + '</p>' : '';
@@ -22418,6 +22433,7 @@
     var panel;
     if (selectedItem && selectedItem.id === 'employees') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-employees">' + viewPayrollEmployeeDetails(dossier, dossierEmployees || [], canCreatePayrollEmployee === true) + '</div>';
     else if (selectedItem && selectedItem.id === 'payroll-journal-generation') panel = viewPayrollJournalGeneration(dossier);
+    else if (selectedItem && selectedItem.id === 'component-postings') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-component-postings"><div id="payroll-rubric-postings-workspace"></div></div>';
     else if (selectedItem && selectedItem.id === 'current-month-payroll-reports') panel = viewPayrollCurrentMonthReports();
     else if (selectedItem && selectedItem.id === 'cnss-ipts-fnr-declarations') panel = viewPayrollDeclarations();
     else if (selectedItem && selectedItem.id === 'personnel-reports') panel = viewPayrollPersonnelReports();
