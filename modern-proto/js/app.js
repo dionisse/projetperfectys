@@ -20630,6 +20630,14 @@
       var cnssSummaryDossier = PayrollHR.currentDossier();
       if (cnssSummaryDossier) window.PayrollCnssSummary.mount(cnssSummaryWorkspace,{hr:PayrollHR,dossier:cnssSummaryDossier,tools:window.PayrollPayslipWorkspace,math:window.PayrollCumulativeBook,tracking:window.PayrollPaymentTracking,nominative:window.PayrollCnssNominative,words:window.PayrollTransferOrder.words,exchange:AccountingExchange,canView:function(){return hasDemoPermission(getActiveDemoMember(),'payroll-hr','module.view',payrollAccessContext(cnssSummaryDossier));},canManage:function(){return hasDemoPermission(getActiveDemoMember(),'organization','organization.manageDossiers',demoAccessContext('organization'));}});
     }
+    var journalSimulationWorkspace = $('#payroll-journal-simulation-workspace');
+    if (journalSimulationWorkspace && window.PayrollJournalSimulation && window.PayrollPayslipWorkspace && window.PayrollCumulativeBook) {
+      var journalSimulationDossier = PayrollHR.currentDossier();
+      if (journalSimulationDossier) window.PayrollJournalSimulation.mount(journalSimulationWorkspace, {
+        hr: PayrollHR, dossier: journalSimulationDossier, tools: window.PayrollPayslipWorkspace, math: window.PayrollCumulativeBook,
+        plan: payrollJournalPlan, canView: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'module.view', payrollAccessContext(journalSimulationDossier)); }
+      });
+    }
     var definitionReportsWorkspace = $('#payroll-definition-reports-workspace');
     if (definitionReportsWorkspace && window.PayrollDefinitionReports) {
       var definitionReportsDossier = PayrollHR.currentDossier();
@@ -22345,12 +22353,10 @@
     return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-cnss-ipts-fnr-declarations" class="payroll-current-reports"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · ÉDITIONS</p><h3>Déclarations C.N.S.S., ITS et F.N.R.B.</h3></div><span class="badge draft">5 ÉTATS · TEST</span></div><div class="alert warning"><div>Préparation fictive uniquement. Aucun dépôt officiel, calcul légal ni paiement.</div></div><div class="payroll-current-report-layout"><nav class="payroll-current-report-list" aria-label="Déclarations"><section class="payroll-current-report-group"><h4>Déclarations</h4><ul>'+list+'</ul></section></nav>'+detail+'</div></section>';
   }
 
-  function viewPayrollJournalGeneration(dossier) {
-    var testDossier = dossier && PayrollHR.isDemoTestDossier(dossier.id);
-    var rules = window.PayrollJournalRules;
+  function payrollJournalPlan(dossier) {
     var planNotice = 'Associez explicitement un dossier comptable accessible pour rapprocher les comptes proposés de son plan.';
     var chart = null, target = null;
-    if (testDossier && dossier.accountingDossierId) {
+    if (dossier && PayrollHR.isDemoTestDossier(dossier.id) && dossier.accountingDossierId) {
       target = permittedDemoDossiers(getActiveDemoMember()).find(function (item) { return item.id === dossier.accountingDossierId; }) || null;
       if (!target) planNotice = 'Le dossier comptable associé est introuvable ou inaccessible à ce profil.';
       else {
@@ -22364,6 +22370,13 @@
         if (chart) planNotice = 'Plan du dossier associé : ' + (target.reference || target.name || target.id) + '. Comparaison des codes exacts visibles uniquement ; aucune correspondance n’est appliquée automatiquement.';
       }
     }
+    return { chart: chart, notice: planNotice };
+  }
+
+  function viewPayrollJournalGeneration(dossier) {
+    var testDossier = dossier && PayrollHR.isDemoTestDossier(dossier.id);
+    var rules = window.PayrollJournalRules;
+    var plan = payrollJournalPlan(dossier), chart = plan.chart, planNotice = plan.notice;
     var ruleInfo = '';
     if (testDossier && rules) {
       var ruleGroups = rules.rules.map(function (rule) {
@@ -22386,7 +22399,7 @@
       '<li><button type="button" class="payroll-current-report-item is-disabled" disabled aria-disabled="true"><span>Exportation par fichier-texte</span><small>Journal non généré</small></button></li>' +
       '</ul></section></nav><div class="payroll-current-report-detail"><h4>Prérequis de génération</h4><ol><li>Disposer d’une paie traitée, approuvée et verrouillée, traçable par période.</li><li>Valider les correspondances exactes avec le plan du dossier comptable.</li><li>Disposer des événements de règlement qualifiés pour les écritures de paiement.</li></ol>' +
       '<p>La future génération proposera des écritures contrôlables et modifiables avant validation interne ; elle ne transférera rien automatiquement en Comptabilité générale. Le journal interne pourra être rouvert avant transfert. Après transfert, les corrections devront être tracées par contrepassation.</p>' +
-      '<p><strong>Aucun journal, aucune écriture, validation ou export n’est créé à ce stade.</strong></p></div></div>' + ruleInfo + '</section>';
+      '<p><strong>Aucun journal, aucune écriture, validation ou export n’est créé à ce stade.</strong></p></div></div>' + (testDossier ? '<div id="payroll-journal-simulation-workspace"></div>' : '') + ruleInfo + '</section>';
   }
 
   function viewPayrollMainMenu(dossier, dossierEmployees, canCreatePayrollEmployee, canEditPayrollEmployee) {
