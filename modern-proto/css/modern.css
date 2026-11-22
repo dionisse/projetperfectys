@@ -4315,6 +4315,18 @@ body.payroll-module-mode .sidebar-nav p.nav-section-heading {
 }
 .payroll-menu-page { margin-top: 0; }
 .payroll-menu-page .accounting-subtab { font-family: inherit; cursor: pointer; }
+
+/* Comptabilisations : même échelle typographique que les autres écrans Paie & RH. */
+.payroll-accounting-menu .accounting-menu-detail { font-family: var(--font); font-size: .8rem; line-height: 1.5; }
+.payroll-accounting-menu .payroll-employee-workspace-head h3 { font-size: 1.02rem; }
+.payroll-accounting-menu .payroll-employee-workspace-head .page-kicker { font-size: .62rem; }
+.payroll-accounting-menu .payroll-book-workspace h4 { font-size: .84rem; }
+.payroll-accounting-menu .accounting-menu-detail input:not([type="checkbox"]):not([type="radio"]),
+.payroll-accounting-menu .accounting-menu-detail select,
+.payroll-accounting-menu .accounting-menu-detail textarea { font-family: inherit; font-size: .78rem; }
+.payroll-accounting-menu .accounting-menu-detail .btn { font-family: inherit; font-size: .72rem; }
+.payroll-accounting-menu .accounting-menu-detail .exchange-mapping-table { font-size: .77rem; }
+
 .payroll-menu-page .accounting-menu-panel .alert { margin: 13px 0 0; line-height: 1.55; }
 .payroll-menu-empty { padding: 10px; }
 .payroll-legacy-views { margin-top: 18px; border: 1px dashed #cbd7d0; border-radius: 9px; background: #f8faf9; }
