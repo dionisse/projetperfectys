@@ -658,6 +658,7 @@
         return { moduleId: requestedModuleId === 'analytics' ? 'accounting' : requestedModuleId, actionId: 'module.view' };
       }
       case 'open-payroll-dossier':
+      case 'payroll-location-export':
       case 'payroll-definition-report-select':
       case 'payroll-definition-report-back':
       case 'payroll-personnel-report-select':
@@ -20791,6 +20792,40 @@
       var activePayrollDossier = PayrollHR.currentDossier();
       if (activePayrollDossier) window.PayrollPayslipWorkspace.mount(payslipWorkspace, { hr: PayrollHR, dossier: activePayrollDossier, canEdit: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'record.edit', payrollAccessContext(activePayrollDossier)); }, onClose: function () { ui.payrollMainMenu = 'Fichier'; ui.payrollMenuItem = ''; render(); } });
     }
+    var locationForm = $('#payroll-accounts-location-form');
+    if (locationForm) {
+      var initialLocationDossier = locationForm.getAttribute('data-payroll-id');
+      var initialLocationLink = locationForm.getAttribute('data-original-link') || '';
+      var locationDirty = false, profile = $('#demo-active-profile'), initialProfile = profile && profile.value;
+      locationForm.addEventListener('change', function () { locationDirty = true; });
+      locationForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var current = PayrollHR.currentDossier(), selected = locationForm.elements.accountingDossier.value;
+        function valid() {
+          var now = PayrollHR.currentDossier();
+          return !!(now && now.id === initialLocationDossier && PayrollHR.isDemoTestDossier(now.id) &&
+            String(now.accountingDossierId || '') === initialLocationLink &&
+            hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'module.view', payrollAccessContext(now)) &&
+            canPerformDemoAction('save-payroll-accounting-link', null, false) &&
+            (!selected || permittedDemoDossiers(getActiveDemoMember()).some(function (item) { return item.id === selected; })));
+        }
+        if (!current || !valid()) { toast('Dossier, association ou droits modifiés ; rechargez et vérifiez le dossier comptable.', 'warning'); return; }
+        if (selected === initialLocationLink) { locationDirty = false; toast('L’association est déjà enregistrée.', 'info'); return; }
+        if (!window.confirm('Modifier le dossier comptable associé ? Les paramétrages de comptabilisation seront consultés séparément pour chaque dossier lié. Aucun fichier ni écriture ne sera déplacé.')) return;
+        if (!valid()) { toast('Dossier, association ou droits modifiés ; rechargez avant de continuer.', 'warning'); return; }
+        var result = PayrollHR.updateAccountingDossierLink(initialLocationDossier, selected, initialLocationLink);
+        if (!result.ok) { toast(result.errors[0] || 'Modification impossible.', 'error'); return; }
+        locationDirty = false; toast(selected ? 'Dossier comptable associé.' : 'Association comptable retirée.', 'success'); render();
+      });
+      function locationGuard(event) {
+        if (locationDirty && locationForm.isConnected && !locationForm.contains(event.target) && event.target.closest && event.target.closest('a[href],button[data-action]') && !window.confirm('Abandonner le changement de dossier non enregistré ?')) { event.preventDefault(); event.stopImmediatePropagation(); }
+      }
+      function locationProfileGuard(event) { if (locationDirty && locationForm.isConnected && profile && event.target === profile && profile.value !== initialProfile && !window.confirm('Changer de profil ? Le changement de dossier non enregistré sera abandonné.')) { profile.value = initialProfile; event.preventDefault(); event.stopImmediatePropagation(); } }
+      function locationUnload(event) { if (locationDirty && locationForm.isConnected) { event.preventDefault(); event.returnValue = ''; } }
+      document.addEventListener('click', locationGuard, true); document.addEventListener('change', locationProfileGuard, true); window.addEventListener('beforeunload', locationUnload);
+      var locationObserver = new MutationObserver(function () { if (!locationForm.isConnected) { locationObserver.disconnect(); document.removeEventListener('click', locationGuard, true); document.removeEventListener('change', locationProfileGuard, true); window.removeEventListener('beforeunload', locationUnload); } });
+      locationObserver.observe(document.documentElement, { childList: true, subtree: true });
+    }
     var form = $('#payroll-accounting-link-form');
     if (form) form.addEventListener('submit', function (event) {
       event.preventDefault();
@@ -22427,6 +22462,25 @@
     return { chart: plan.chart, centers: snapshot.state.analyticalCenters, notice: plan.notice };
   }
 
+  function viewPayrollAccountsLocation(dossier) {
+    var member = getActiveDemoMember(), folders = permittedDemoDossiers(member);
+    var linked = folders.find(function (item) { return item.id === dossier.accountingDossierId; });
+    var isTest = PayrollHR.isDemoTestDossier(dossier.id);
+    var canView = hasDemoPermission(member, 'payroll-hr', 'module.view', payrollAccessContext(dossier));
+    var canChange = isTest && canView && canPerformDemoAction('save-payroll-accounting-link', null, false);
+    var plan = payrollJournalPlan(dossier);
+    var hiddenLink = dossier.accountingDossierId && !linked;
+    var options = '<option value=""' + (!dossier.accountingDossierId ? ' selected' : '') + '>Aucun dossier comptable lié</option>' +
+      (hiddenLink ? '<option value="' + esc(dossier.accountingDossierId) + '" selected disabled>Association existante inaccessible</option>' : '') +
+      folders.map(function (item) { return '<option value="' + esc(item.id) + '"' + (linked && linked.id === item.id ? ' selected' : '') + '>' + esc(item.clientName + ' · ' + item.reference) + '</option>'; }).join('');
+    var form = canChange ? '<form id="payroll-accounts-location-form" data-payroll-id="' + esc(dossier.id) + '" data-original-link="' + esc(dossier.accountingDossierId || '') + '" class="rubric-card"><label for="payroll-location-accounting">Dossier comptable lié</label> <select id="payroll-location-accounting" name="accountingDossier">' + options + '</select> <button type="submit" class="btn btn-primary">Enregistrer l’association</button></form>' : '<p>La modification du lien est réservée au dossier fictif et nécessite les droits de gestion des dossiers.</p>';
+    return '<section id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-general-accounts-file-location" class="payroll-book-workspace"><div class="payroll-employee-workspace-head"><div><p class="page-kicker">SOUS-MENU · COMPTABILISATIONS</p><h3>Emplacement du fichier des comptes généraux</h3></div><span class="badge draft">PARAMÉTRAGE · TEST</span></div>' +
+      '<div class="alert warning">Prototype local : données fictives uniquement. Aucun fichier de comptes n’est importé ni déplacé ; aucune écriture n’est créée.</div><section class="rubric-card"><h4>Source des comptes généraux</h4><p>Le plan provient du dossier comptable EMRYS associé explicitement, et non d’un chemin de fichier. Changer ce lien n’altère pas les plans comptables.</p><p><strong>Association :</strong> ' + (linked ? esc(linked.clientName + ' · ' + linked.reference) : (hiddenLink ? 'dossier lié inaccessible à ce profil' : 'aucun dossier lié')) + '.</p><p>' + esc(plan.notice) + (plan.chart ? ' ' + plan.chart.length + ' compte(s) visibles dans le plan.' : '') + '</p></section>' + form +
+      '<section class="rubric-card"><h4>Enregistrement local des documents de paie</h4><p>Ouvrez un état, choisissez ses critères, validez l’aperçu puis téléchargez le classeur <strong>Excel (.xlsx)</strong>. Pour le livre, choisissez la destination « Table · classeur Excel » à la mise en page, puis « Télécharger Excel » dans l’aperçu. Le navigateur choisit le dossier de téléchargement ou vous demande où l’enregistrer selon ses réglages. Les options d’impression/PDF et de texte dépendent de chaque état.</p>' +
+      '<div class="payroll-book-actions"><button type="button" class="btn btn-secondary" data-action="payroll-location-export" data-export-report="personnel">Liste du personnel · Excel</button> <button type="button" class="btn btn-secondary" data-action="payroll-location-export" data-export-report="book">Livre de paie détaillé · Excel</button> <button type="button" class="btn btn-secondary" data-action="payroll-location-export" data-export-report="reports">Autres états</button></div><p>Ces fichiers ne constituent pas une sauvegarde restaurable du dossier. Le stockage interne du navigateur n’est ni une sauvegarde indépendante ni un stockage protégé pour des données réelles.</p></section>' +
+      '<section class="rubric-card"><h4>Enregistrement en ligne</h4><p><strong>Indisponible pour le moment.</strong> Aucun envoi ni synchronisation en ligne n’est effectué.</p><button type="button" class="btn btn-secondary" disabled>Enregistrer en ligne · à venir</button></section><p>La génération officielle du journal de paie reste bloquée jusqu’à la validation des sources et protections.</p></section>';
+  }
+
   function viewPayrollJournalGeneration(dossier) {
     var testDossier = dossier && PayrollHR.isDemoTestDossier(dossier.id);
     var rules = window.PayrollJournalRules;
@@ -22463,7 +22517,7 @@
     var selectableItems = items.filter(function (item) { return !item.disabled; });
     var selectedItem = selectableItems.find(function (item) { return item.id === ui.payrollMenuItem; }) || selectableItems[0] || null;
     var availableDefinitionItems = ['employee-statuses', 'employee-categories', 'geographic-zones', 'services', 'functions', 'degrees-qualifications', 'professions', 'social-security-funds', 'complementary-social-funds', 'banks'];
-    var implementedMenuItems = availableDefinitionItems.concat(['employees', 'payslips', 'post-hire-payslips', 'attendance-hours', 'advances-loans', 'payslip-edition', 'exceptional-payslip-1', 'exceptional-payslip-2', 'complementary-fund-payments', 'custom-salary-reports', 'ohada-table-11', 'component-postings', 'loan-repayment-postings', 'auxiliary-postings', 'analytic-postings']);
+    var implementedMenuItems = availableDefinitionItems.concat(['employees', 'payslips', 'post-hire-payslips', 'attendance-hours', 'advances-loans', 'payslip-edition', 'exceptional-payslip-1', 'exceptional-payslip-2', 'complementary-fund-payments', 'custom-salary-reports', 'ohada-table-11', 'component-postings', 'loan-repayment-postings', 'auxiliary-postings', 'analytic-postings', 'general-accounts-file-location']);
     var hasPlannedItems = items.some(function (item) { return !item.disabled && !item.hasChildren && implementedMenuItems.indexOf(item.id) === -1; });
     var tabs = sections.map(function (section, sectionIndex) {
       var heading = section.heading ? '<p class="payroll-subtab-group-heading">' + esc(section.heading) + '</p>' : '';
@@ -22485,6 +22539,7 @@
     var panel;
     if (selectedItem && selectedItem.id === 'employees') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-employees">' + viewPayrollEmployeeDetails(dossier, dossierEmployees || [], canCreatePayrollEmployee === true) + '</div>';
     else if (selectedItem && selectedItem.id === 'payroll-journal-generation') panel = viewPayrollJournalGeneration(dossier);
+    else if (selectedItem && selectedItem.id === 'general-accounts-file-location') panel = viewPayrollAccountsLocation(dossier);
     else if (selectedItem && selectedItem.id === 'component-postings') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-component-postings"><div id="payroll-rubric-postings-workspace"></div></div>';
     else if (selectedItem && selectedItem.id === 'loan-repayment-postings') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-loan-repayment-postings"><div id="payroll-loan-postings-workspace"></div></div>';
     else if (selectedItem && selectedItem.id === 'analytic-postings') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-analytic-postings"><div id="payroll-analytic-postings-workspace"></div></div>';
@@ -35894,6 +35949,16 @@
         render();
         var selectedReportButton = $('[data-action="payroll-current-report-select"][aria-pressed="true"]');
         if (selectedReportButton) selectedReportButton.focus({ preventScroll: true });
+        break;
+      }
+      case 'payroll-location-export': {
+        var kind = trigger.getAttribute('data-export-report');
+        if (ui.payrollMainMenu !== 'Comptabilisations' || ui.payrollMenuItem !== 'general-accounts-file-location' || ['personnel', 'book', 'reports'].indexOf(kind) < 0) break;
+        ui.payrollMainMenu = 'Editions';
+        ui.payrollMenuItem = kind === 'personnel' ? 'personnel-reports' : 'current-month-payroll-reports';
+        if (kind === 'personnel') ui.payrollPersonnelReportId = 'personnel-list';
+        else ui.payrollCurrentReportId = kind === 'book' ? 'payroll-book-detail' : '';
+        render();
         break;
       }
       case 'payroll-menu-item':

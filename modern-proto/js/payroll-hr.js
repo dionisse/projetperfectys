@@ -2438,13 +2438,20 @@
     return {ok:true,errors:[],dossier:clone(dossier)};
   }
 
-  function updateAccountingDossierLink(dossierId, accountingDossierId) {
-    var catalog = loadDossierCatalog();
+  function updateAccountingDossierLink(dossierId, accountingDossierId, expectedLink) {
     dossierId = String(dossierId || '');
     accountingDossierId = String(accountingDossierId || '').trim();
-    var dossier = catalog.dossiers.find(function (item) { return item.id === dossierId; });
-    if (!dossier) return { ok: false, errors: ['Dossier Paie & RH introuvable.'] };
     if (accountingDossierId.length > 160) return { ok: false, errors: ['Identifiant de dossier comptable invalide.'] };
+    var catalog;
+    try {
+      var raw = root.localStorage && root.localStorage.getItem(DOSSIER_CATALOG_KEY);
+      catalog = raw && JSON.parse(raw);
+    } catch (err) { return { ok: false, errors: ['Catalogue de paie illisible ; aucune donnée modifiée.'] }; }
+    if (!catalog || catalog.version !== 1 || !Array.isArray(catalog.dossiers)) return { ok: false, errors: ['Catalogue de paie indisponible ou invalide ; aucune donnée modifiée.'] };
+    var matches = catalog.dossiers.filter(function (item) { return item && item.id === dossierId; });
+    if (matches.length !== 1) return { ok: false, errors: ['Dossier Paie & RH introuvable ou ambigu.'] };
+    var dossier = matches[0];
+    if (expectedLink !== undefined && String(dossier.accountingDossierId || '') !== String(expectedLink || '')) return { ok: false, errors: ['L’association comptable a changé ailleurs ; rechargez avant de réessayer.'] };
     dossier.accountingDossierId = accountingDossierId;
     if (!saveDossierCatalog(catalog)) return { ok: false, errors: ['Impossible d’enregistrer le lien explicite avec la Comptabilité générale.'] };
     return { ok: true, errors: [], dossier: clone(dossier) };
