@@ -4810,3 +4810,26 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .payroll-working-calendar .calendar-days { max-height:420px; overflow:auto; }
 @media(max-width:600px) { .payroll-rubric-cumulative.payroll-working-calendar .rubric-layout-fields { grid-template-columns:1fr; } }
 @media(max-width:700px) { .payroll-working-calendar .calendar-result-grid { grid-template-columns:minmax(0,1fr); } .payroll-working-calendar .calendar-exceptions li { flex-wrap:wrap; } }
+.payroll-working-calendar .calendar-visual[hidden] { display:none; }
+.payroll-working-calendar .calendar-visual { scroll-margin-top:18px; outline:none; }
+.payroll-working-calendar .calendar-visual-heading { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+.payroll-working-calendar .calendar-visual-heading h4 { margin:0 0 5px; font-size:.96rem; color:#214c39; }
+.payroll-working-calendar .calendar-visual-heading p { margin:0; color:#667a70; font-size:.72rem; line-height:1.5; }
+.payroll-working-calendar .calendar-visual-controls { display:flex; align-items:end; gap:6px; }
+.payroll-working-calendar .calendar-visual-controls label { display:grid; gap:3px; font-size:.68rem; color:#526b5c; font-weight:700; }
+.payroll-working-calendar .calendar-visual-controls select { padding:8px; border:1px solid #cbd7d2; border-radius:6px; background:white; color:#304e40; font:inherit; min-width:120px; }
+.payroll-working-calendar .calendar-visual-controls button { min-width:38px; }
+.payroll-working-calendar .calendar-legend { display:flex; gap:12px; flex-wrap:wrap; align-items:center; font-size:.7rem; color:#526b5c; margin:14px 0 10px; }
+.payroll-working-calendar .calendar-legend span::before { content:''; display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; background:#d7efe1; border:1px solid #85bb9b; }
+.payroll-working-calendar .calendar-legend .calendar-legend-off::before { background:#fbe8e4; border-color:#dba295; }
+.payroll-working-calendar .calendar-legend .calendar-legend-exception::before { background:#fff4d4; border-color:#d1a43f; }
+.payroll-working-calendar .calendar-grid-scroll { overflow-x:auto; }
+.payroll-working-calendar .calendar-grid { border-collapse:separate; border-spacing:5px; width:100%; min-width:570px; table-layout:fixed; }
+.payroll-working-calendar .calendar-grid th { text-align:center; color:#526b5c; font-size:.69rem; padding:4px; }
+.payroll-working-calendar .calendar-date { vertical-align:top; height:78px; padding:7px; border-radius:7px; border:1px solid #badcc8; background:#f0faf3; color:#24583b; overflow-wrap:anywhere; }
+.payroll-working-calendar .calendar-date.is-off { border-color:#eac7c0; background:#fff4f1; color:#824538; }
+.payroll-working-calendar .calendar-date.is-exception { box-shadow:inset 0 0 0 2px #d1a43f; }
+.payroll-working-calendar .calendar-date-number { font-size:.89rem; font-weight:800; display:block; }
+.payroll-working-calendar .calendar-date-status { font-size:.65rem; font-weight:700; display:block; }
+.payroll-working-calendar .calendar-date-label { font-size:.64rem; line-height:1.3; display:block; margin-top:4px; }
+.payroll-working-calendar .calendar-sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
