@@ -20621,6 +20621,13 @@
       canManage: function () { return hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageDossiers', demoAccessContext('organization')); },
       onClose: function () { ui.payrollMainMenu = 'Paramètres'; ui.payrollMenuItem = ''; render(); }
     });
+    var overtimeWorkspace = $('#payroll-overtime-settings-workspace');
+    if (overtimeWorkspace && settingsDossier && window.PayrollOvertimeSettings) window.PayrollOvertimeSettings.mount(overtimeWorkspace, {
+      hr: PayrollHR, dossier: settingsDossier,
+      canView: function () { return hasDemoPermission(getActiveDemoMember(), 'payroll-hr', 'module.view', payrollAccessContext(settingsDossier)); },
+      canManage: function () { return hasDemoPermission(getActiveDemoMember(), 'organization', 'organization.manageDossiers', demoAccessContext('organization')); },
+      onClose: function () { ui.payrollMainMenu = 'Paramètres'; ui.payrollMenuItem = ''; render(); }
+    });
     var payrollMenuRoot = $('.payroll-menu-page');
     if (payrollMenuRoot && settingsDossier && PayrollHR.isDemoTestDossier(settingsDossier.id) && window.PayrollGeneralSettings) {
       try { window.PayrollGeneralSettings.localize(payrollMenuRoot, PayrollHR.generalSettings(settingsDossier)); } catch (error) { /* Les données invalides ne sont pas utilisées ni modifiées. */ }
@@ -22537,7 +22544,7 @@
     var selectableItems = items.filter(function (item) { return !item.disabled; });
     var selectedItem = selectableItems.find(function (item) { return item.id === ui.payrollMenuItem; }) || selectableItems[0] || null;
     var availableDefinitionItems = ['employee-statuses', 'employee-categories', 'geographic-zones', 'services', 'functions', 'degrees-qualifications', 'professions', 'social-security-funds', 'complementary-social-funds', 'banks'];
-    var implementedMenuItems = availableDefinitionItems.concat(['employees', 'payslips', 'post-hire-payslips', 'attendance-hours', 'advances-loans', 'payslip-edition', 'exceptional-payslip-1', 'exceptional-payslip-2', 'complementary-fund-payments', 'custom-salary-reports', 'ohada-table-11', 'component-postings', 'loan-repayment-postings', 'auxiliary-postings', 'analytic-postings', 'general-accounts-file-location', 'general-settings', 'working-holidays-calendar']);
+    var implementedMenuItems = availableDefinitionItems.concat(['employees', 'payslips', 'post-hire-payslips', 'attendance-hours', 'advances-loans', 'payslip-edition', 'exceptional-payslip-1', 'exceptional-payslip-2', 'complementary-fund-payments', 'custom-salary-reports', 'ohada-table-11', 'component-postings', 'loan-repayment-postings', 'auxiliary-postings', 'analytic-postings', 'general-accounts-file-location', 'general-settings', 'working-holidays-calendar', 'overtime-calculation-settings']);
     var hasPlannedItems = items.some(function (item) { return !item.disabled && !item.hasChildren && implementedMenuItems.indexOf(item.id) === -1; });
     var tabs = sections.map(function (section, sectionIndex) {
       var heading = section.heading ? '<p class="payroll-subtab-group-heading">' + esc(section.heading) + '</p>' : '';
@@ -22562,6 +22569,7 @@
     else if (selectedItem && selectedItem.id === 'general-accounts-file-location') panel = viewPayrollAccountsLocation(dossier);
     else if (selectedItem && selectedItem.id === 'general-settings') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-general-settings"><div id="payroll-general-settings-workspace"></div></div>';
     else if (selectedItem && selectedItem.id === 'working-holidays-calendar') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-working-holidays-calendar"><div id="payroll-working-calendar-workspace"></div></div>';
+    else if (selectedItem && selectedItem.id === 'overtime-calculation-settings') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-overtime-calculation-settings"><div id="payroll-overtime-settings-workspace"></div></div>';
     else if (selectedItem && selectedItem.id === 'personnel-administration-module') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-personnel-administration-module">' + (window.PayrollPersonnelAdministrationPlan ? window.PayrollPersonnelAdministrationPlan.render() : '<p>Plan temporairement indisponible.</p>') + '</div>';
     else if (selectedItem && selectedItem.id === 'component-postings') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-component-postings"><div id="payroll-rubric-postings-workspace"></div></div>';
     else if (selectedItem && selectedItem.id === 'loan-repayment-postings') panel = '<div id="payroll-menu-tabpanel" role="tabpanel" aria-labelledby="payroll-menu-tab-loan-repayment-postings"><div id="payroll-loan-postings-workspace"></div></div>';

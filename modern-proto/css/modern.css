@@ -4833,3 +4833,10 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .payroll-working-calendar .calendar-date-status { font-size:.65rem; font-weight:700; display:block; }
 .payroll-working-calendar .calendar-date-label { font-size:.64rem; line-height:1.3; display:block; margin-top:4px; }
 .payroll-working-calendar .calendar-sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+
+/* Paramètres indicatifs des heures supplémentaires. */
+.payroll-overtime-settings .overtime-note { margin:12px 0 0; font-size:.74rem; line-height:1.5; }
+.payroll-overtime-settings .overtime-example-button { margin-top:12px; }
+.payroll-overtime-settings .overtime-confirm { display:flex; align-items:flex-start; gap:8px; color:#304e40; font-size:.75rem; line-height:1.5; }
+.payroll-overtime-settings .overtime-confirm input { flex:none; margin-top:3px; }
+@media(max-width:600px) { .payroll-rubric-cumulative.payroll-overtime-settings .rubric-layout-fields { grid-template-columns:1fr; } }
