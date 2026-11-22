@@ -2438,6 +2438,38 @@
     return {ok:true,errors:[],dossier:clone(dossier)};
   }
 
+  // Une seule source pour l'IFU et le numéro employeur CNSS du dossier.
+  function generalSettings(dossier) {
+    if (!dossier || typeof dossier !== 'object') throw Error('Dossier de paie indisponible.');
+    var raw = dossier.generalSettings;
+    if (raw != null && (!raw || typeof raw !== 'object' || Array.isArray(raw) || typeof raw.serviceSingular !== 'string' || typeof raw.servicePlural !== 'string' || !raw.serviceSingular.trim() || !raw.servicePlural.trim())) throw Error('Libellés généraux invalides ; aucune donnée ne sera écrasée.');
+    return { country: 'BÉNIN', insae: String(dossier.insae || ''), ifu: String(dossier.ifu || ''), cnssEmployerNumber: String(dossier.cnssEmployerNumber || ''), serviceSingular: raw ? raw.serviceSingular : 'Service', servicePlural: raw ? raw.servicePlural : 'Services' };
+  }
+  function updateGeneralSettings(dossierId, values, expected) {
+    dossierId = String(dossierId || '');
+    var catalog;
+    try { var raw = root.localStorage && root.localStorage.getItem(DOSSIER_CATALOG_KEY); catalog = raw && JSON.parse(raw); }
+    catch (_) { return { ok:false, errors:['Catalogue de paie illisible ; aucune donnée modifiée.'] }; }
+    if (!catalog || catalog.version !== 1 || !Array.isArray(catalog.dossiers)) return { ok:false, errors:['Catalogue de paie invalide ; aucune donnée modifiée.'] };
+    var matches = catalog.dossiers.filter(function (d) { return d && d.id === dossierId; });
+    if (matches.length !== 1) return { ok:false, errors:['Dossier introuvable ou ambigu.'] };
+    var dossier = matches[0], before;
+    if (!(dossier.reference === 'PRH-TEST-2026' && dossier.clientCode === 'TEST' && dossier.clientName === 'Entreprise fictive de test' && Array.isArray(dossier.demoEmployees) && dossier.demoEmployees.length >= 2 && dossier.demoEmployees.every(function (e) { return e && e.dossierId === dossierId && e.status === 'test-only' && /^EMP-TEST-/.test(e.id || ''); }))) return {ok:false,errors:['Modification réservée au dossier fictif.']};
+    try { before = generalSettings(dossier); } catch (e) { return {ok:false,errors:[e.message]}; }
+    if (!expected || JSON.stringify(before) !== JSON.stringify(expected)) return { ok:false, errors:['Les paramètres ont changé ailleurs ; rechargez avant de réessayer.'] };
+    values = values || {}; var result = {};
+    var limits = { insae:80, ifu:40, cnssEmployerNumber:80, serviceSingular:60, servicePlural:60 };
+    for (var name in limits) {
+      if (typeof values[name] !== 'string' || /[\x00-\x1f\x7f]/.test(values[name])) return {ok:false,errors:['Valeur invalide pour '+name+'.']};
+      result[name] = values[name].trim();
+      if (result[name].length > limits[name] || ((name === 'serviceSingular' || name === 'servicePlural') && !result[name])) return {ok:false,errors:['Libellé obligatoire ou longueur dépassée : '+name+'.']};
+    }
+    dossier.insae = result.insae; dossier.ifu = result.ifu; dossier.cnssEmployerNumber = result.cnssEmployerNumber;
+    dossier.generalSettings = Object.assign({}, dossier.generalSettings || {}, {serviceSingular:result.serviceSingular, servicePlural:result.servicePlural});
+    if (!saveDossierCatalog(catalog)) return {ok:false,errors:['Enregistrement impossible dans le stockage local.']};
+    return {ok:true,errors:[],settings:generalSettings(dossier)};
+  }
+
   function updateAccountingDossierLink(dossierId, accountingDossierId, expectedLink) {
     dossierId = String(dossierId || '');
     accountingDossierId = String(accountingDossierId || '').trim();
@@ -2666,6 +2698,8 @@
     selectDossier: selectDossier,
     updateAccountingDossierLink: updateAccountingDossierLink,
     updateCnssEmployerNumber: updateCnssEmployerNumber,
+    generalSettings: generalSettings,
+    updateGeneralSettings: updateGeneralSettings,
     runs: runs,
     getRun: getRun,
     accountingAccountCatalog: accountingAccountCatalog,
