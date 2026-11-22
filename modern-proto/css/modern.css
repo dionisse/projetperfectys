@@ -4795,3 +4795,18 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .personnel-administration-plan .personnel-plan-principles p { margin:0; color:#71847b; font-size:.72rem; line-height:1.5; }
 .personnel-administration-plan .rubric-helper { margin-top:10px; }
 @media (max-width:600px) { .personnel-administration-plan .personnel-plan-cards,.personnel-administration-plan .personnel-plan-principles { grid-template-columns:1fr; } }
+
+/* Calendrier annuel de travail. */
+.payroll-working-calendar .calendar-context-button { margin-top:12px; }
+.payroll-working-calendar .calendar-week { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:8px; }
+.payroll-working-calendar .calendar-week label { display:flex; align-items:center; gap:7px; padding:9px; border:1px solid #e0e8e2; border-radius:7px; background:#f8faf8; font-size:.74rem; }
+.payroll-working-calendar .calendar-exceptions { margin:12px 0 0; padding:0; list-style:none; display:grid; gap:7px; }
+.payroll-working-calendar .calendar-exceptions li { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; border:1px solid #e0e8e2; border-radius:7px; font-size:.73rem; line-height:1.45; }
+.payroll-working-calendar .calendar-exceptions button { flex:none; font-size:.7rem; }
+.payroll-working-calendar .calendar-month { display:grid; gap:6px; max-width:240px; font-size:.73rem; font-weight:700; }
+.payroll-working-calendar .calendar-month select { width:100%; padding:9px; border:1px solid #cbd7d2; border-radius:6px; font:inherit; }
+.payroll-working-calendar .calendar-result-grid { display:grid; grid-template-columns:minmax(180px,.8fr) minmax(280px,1.2fr); gap:14px; margin-top:12px; }
+.payroll-working-calendar .calendar-result-grid caption { text-align:left; padding:5px 0; color:#304e40; font-weight:700; }
+.payroll-working-calendar .calendar-days { max-height:420px; overflow:auto; }
+@media(max-width:600px) { .payroll-rubric-cumulative.payroll-working-calendar .rubric-layout-fields { grid-template-columns:1fr; } }
+@media(max-width:700px) { .payroll-working-calendar .calendar-result-grid { grid-template-columns:minmax(0,1fr); } .payroll-working-calendar .calendar-exceptions li { flex-wrap:wrap; } }
