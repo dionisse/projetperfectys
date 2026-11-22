@@ -4780,3 +4780,18 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
   .payroll-employee-workspace .payroll-ui-service-label { font-size: 0; }
   .payroll-employee-workspace .payroll-ui-service-label::before { content: attr(data-print-label); font-size: .75rem; }
 }
+
+/* Plan consultatif de l’administration du personnel. */
+.personnel-administration-plan .personnel-plan-cards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+.personnel-administration-plan .personnel-plan-item { min-width:0; border:1px solid #e0e8e2; border-radius:7px; background:#f8faf8; }
+.personnel-administration-plan .personnel-plan-item summary { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:11px; cursor:pointer; color:#304e40; font-size:.74rem; font-weight:700; }
+.personnel-administration-plan .personnel-plan-item summary::before { content:'›'; color:#956a19; font-size:1rem; }
+.personnel-administration-plan .personnel-plan-item[open] summary::before { content:'⌄'; }
+.personnel-administration-plan .personnel-plan-item summary span { flex:1; }
+.personnel-administration-plan .personnel-plan-item summary small { color:#71847b; font-size:.65rem; white-space:nowrap; }
+.personnel-administration-plan .personnel-plan-item p { margin:0; padding:0 11px 11px; color:#64796e; font-size:.73rem; line-height:1.5; }
+.personnel-administration-plan .personnel-plan-principles { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 18px; }
+.personnel-administration-plan .personnel-plan-principles h4 { margin:0 0 5px; color:#304e40; font-size:.76rem; }
+.personnel-administration-plan .personnel-plan-principles p { margin:0; color:#71847b; font-size:.72rem; line-height:1.5; }
+.personnel-administration-plan .rubric-helper { margin-top:10px; }
+@media (max-width:600px) { .personnel-administration-plan .personnel-plan-cards,.personnel-administration-plan .personnel-plan-principles { grid-template-columns:1fr; } }
