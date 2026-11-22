@@ -762,4 +762,6 @@ Les libellés singulier et pluriel personnalisent certains intitulés de navigat
 
 Dans **Paie & RH → Paramètres → Activation du module de l’administration du personnel**, un plan présente des sous-éléments proposés pour l’administration et la carrière, ainsi que les bases à préciser pour la validation, les droits, l’historique et l’articulation avec la paie. Le principe retenu pour la carrière est une validation explicite avant toute application future à la fiche ou à la paie.
 
+Les propositions incluent aussi recrutement et intégration, échéances contractuelles, temps de travail, organigramme, évaluations, succession, alertes, espaces salarié et responsable, liaison contrôlée avec la paie, règles par pays et sauvegardes vérifiées. Un ordre de développement indicatif privilégie les fondations sécurisées, puis dossier et carrière, puis circuits et services.
+
 Ce plan n’enregistre aucun choix, n’active aucun module et ne crée ni ne modifie de fiche, d’événement ou de paie. Les fonctions de test existantes restent inchangées ; les suivis RH synthétiques ne sont pas des contrats individuels et aucune migration ni association automatique n’est réalisée. Le stockage local et les profils simulés ne sont pas adaptés à des données réelles ; les permissions, le stockage sécurisé et les règles propres aux pays devront être conçus avant toute utilisation réelle.

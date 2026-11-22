@@ -25,6 +25,6 @@ for (const id of ['activity-domains', 'expense-categories', 'funding-sources', '
   assert.match(navigation, new RegExp("id: '" + id + "'.*status: 'active'"));
 }
 assert.match(css, /\.analytical-dimension-view/);
-assert.match(worker, /emrys-static-v262/);
+assert.match(worker, /emrys-static-v263/);
 
 console.log('Référentiels analytiques : écrans, suggestions explicites, droits et ressources vérifiés — OK');
