@@ -2438,12 +2438,29 @@
     return {ok:true,errors:[],dossier:clone(dossier)};
   }
 
+  // Référentiel des codes ISO utilisé pour la saisie informative du pays.
+  var GENERAL_COUNTRY_CODES = 'AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW'.split(' ');
+  var GENERAL_UEMOA = [
+    {id:'BJ', label:'Bénin'}, {id:'BF', label:'Burkina Faso'}, {id:'CI', label:'Côte d’Ivoire'},
+    {id:'GW', label:'Guinée-Bissau'}, {id:'ML', label:'Mali'}, {id:'NE', label:'Niger'},
+    {id:'SN', label:'Sénégal'}, {id:'TG', label:'Togo'}
+  ];
+  function generalSettingCountries() {
+    var display = typeof Intl !== 'undefined' && typeof Intl.DisplayNames === 'function' ? new Intl.DisplayNames(['fr'], {type:'region'}) : null;
+    var members = GENERAL_UEMOA.map(function (x) { return {id:x.id,label:x.label}; });
+    var other = GENERAL_COUNTRY_CODES.filter(function (id) { return !members.some(function (x) { return x.id === id; }); }).map(function (id) { return {id:id,label:display ? display.of(id) : id}; });
+    other.sort(function (a,b) { return a.label.localeCompare(b.label,'fr'); });
+    return {uemoa:members, other:other};
+  }
+
   // Une seule source pour l'IFU et le numéro employeur CNSS du dossier.
   function generalSettings(dossier) {
     if (!dossier || typeof dossier !== 'object') throw Error('Dossier de paie indisponible.');
     var raw = dossier.generalSettings;
     if (raw != null && (!raw || typeof raw !== 'object' || Array.isArray(raw) || typeof raw.serviceSingular !== 'string' || typeof raw.servicePlural !== 'string' || !raw.serviceSingular.trim() || !raw.servicePlural.trim())) throw Error('Libellés généraux invalides ; aucune donnée ne sera écrasée.');
-    return { country: 'BÉNIN', insae: String(dossier.insae || ''), ifu: String(dossier.ifu || ''), cnssEmployerNumber: String(dossier.cnssEmployerNumber || ''), serviceSingular: raw ? raw.serviceSingular : 'Service', servicePlural: raw ? raw.servicePlural : 'Services' };
+    var country = raw && Object.prototype.hasOwnProperty.call(raw, 'country') ? raw.country : 'BJ';
+    if (typeof country !== 'string' || GENERAL_COUNTRY_CODES.indexOf(country) < 0) throw Error('Pays enregistré invalide ; aucune donnée ne sera écrasée.');
+    return { country: country, insae: String(dossier.insae || ''), ifu: String(dossier.ifu || ''), cnssEmployerNumber: String(dossier.cnssEmployerNumber || ''), serviceSingular: raw ? raw.serviceSingular : 'Service', servicePlural: raw ? raw.servicePlural : 'Services' };
   }
   function updateGeneralSettings(dossierId, values, expected) {
     dossierId = String(dossierId || '');
@@ -2458,6 +2475,8 @@
     try { before = generalSettings(dossier); } catch (e) { return {ok:false,errors:[e.message]}; }
     if (!expected || JSON.stringify(before) !== JSON.stringify(expected)) return { ok:false, errors:['Les paramètres ont changé ailleurs ; rechargez avant de réessayer.'] };
     values = values || {}; var result = {};
+    if (typeof values.country !== 'string' || GENERAL_COUNTRY_CODES.indexOf(values.country) < 0) return {ok:false,errors:['Sélectionnez un pays disponible.']};
+    result.country = values.country;
     var limits = { insae:80, ifu:40, cnssEmployerNumber:80, serviceSingular:60, servicePlural:60 };
     for (var name in limits) {
       if (typeof values[name] !== 'string' || /[\x00-\x1f\x7f]/.test(values[name])) return {ok:false,errors:['Valeur invalide pour '+name+'.']};
@@ -2465,7 +2484,7 @@
       if (result[name].length > limits[name] || ((name === 'serviceSingular' || name === 'servicePlural') && !result[name])) return {ok:false,errors:['Libellé obligatoire ou longueur dépassée : '+name+'.']};
     }
     dossier.insae = result.insae; dossier.ifu = result.ifu; dossier.cnssEmployerNumber = result.cnssEmployerNumber;
-    dossier.generalSettings = Object.assign({}, dossier.generalSettings || {}, {serviceSingular:result.serviceSingular, servicePlural:result.servicePlural});
+    dossier.generalSettings = Object.assign({}, dossier.generalSettings || {}, {country:result.country, serviceSingular:result.serviceSingular, servicePlural:result.servicePlural});
     if (!saveDossierCatalog(catalog)) return {ok:false,errors:['Enregistrement impossible dans le stockage local.']};
     return {ok:true,errors:[],settings:generalSettings(dossier)};
   }
@@ -2698,6 +2717,7 @@
     selectDossier: selectDossier,
     updateAccountingDossierLink: updateAccountingDossierLink,
     updateCnssEmployerNumber: updateCnssEmployerNumber,
+    generalSettingCountries: generalSettingCountries,
     generalSettings: generalSettings,
     updateGeneralSettings: updateGeneralSettings,
     runs: runs,
