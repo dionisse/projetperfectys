@@ -4848,3 +4848,5 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .payroll-dismissal-settings .dismissal-confirm { display:flex; align-items:flex-start; gap:8px; color:#304e40; font-size:.75rem; line-height:1.5; }
 .payroll-dismissal-settings .dismissal-confirm input { flex:none; margin-top:3px; }
 @media(max-width:600px) { .payroll-rubric-cumulative.payroll-dismissal-settings .rubric-layout-fields { grid-template-columns:1fr; } }
+
+.payroll-dismissal-settings .dismissal-employee-details { margin:10px 0 16px; padding:10px 12px; border:1px solid #dce8df; border-radius:7px; background:#f6faf7; color:#526b5c; font-size:.73rem; line-height:1.5; overflow-wrap:anywhere; }
