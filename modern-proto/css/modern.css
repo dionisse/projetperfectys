@@ -4840,3 +4840,11 @@ body.analytics-module-mode :focus-visible { outline-color: rgba(109, 75, 195, .5
 .payroll-overtime-settings .overtime-confirm { display:flex; align-items:flex-start; gap:8px; color:#304e40; font-size:.75rem; line-height:1.5; }
 .payroll-overtime-settings .overtime-confirm input { flex:none; margin-top:3px; }
 @media(max-width:600px) { .payroll-rubric-cumulative.payroll-overtime-settings .rubric-layout-fields { grid-template-columns:1fr; } }
+
+/* Barème indicatif de licenciement. */
+.payroll-dismissal-settings .dismissal-example-button { margin-top:12px; }
+.payroll-dismissal-settings .dismissal-result { margin-top:12px; font-size:.73rem; line-height:1.5; color:#526b5c; }
+.payroll-dismissal-settings .dismissal-result p { margin:8px 0; }
+.payroll-dismissal-settings .dismissal-confirm { display:flex; align-items:flex-start; gap:8px; color:#304e40; font-size:.75rem; line-height:1.5; }
+.payroll-dismissal-settings .dismissal-confirm input { flex:none; margin-top:3px; }
+@media(max-width:600px) { .payroll-rubric-cumulative.payroll-dismissal-settings .rubric-layout-fields { grid-template-columns:1fr; } }
